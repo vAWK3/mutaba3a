@@ -1,0 +1,78 @@
+/* Badge Component Styles */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+
+/* Sizes */
+.badge-sm {
+  height: 20px;
+  padding: 0 var(--space-1-5);
+  font-size: var(--text-xs);
+}
+
+.badge-md {
+  height: 24px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* Status Variants */
+.badge-paid {
+  background-color: var(--badge-paid-bg);
+  color: var(--badge-paid-text);
+}
+
+.badge-unpaid {
+  background-color: var(--badge-unpaid-bg);
+  color: var(--badge-unpaid-text);
+}
+
+.badge-overdue {
+  background-color: var(--badge-overdue-bg);
+  color: var(--badge-overdue-text);
+}
+
+.badge-neutral {
+  background-color: var(--badge-neutral-bg);
+  color: var(--badge-neutral-text);
+}
+
+/* Semantic Variants */
+.badge-success {
+  background-color: var(--success-subtle);
+  color: var(--success);
+}
+
+.badge-warning {
+  background-color: var(--warning-subtle);
+  color: var(--warning);
+}
+
+.badge-error {
+  background-color: var(--error-subtle);
+  color: var(--error);
+}
+
+.badge-info {
+  background-color: var(--info-subtle);
+  color: var(--info);
+}
+
+.badge-accent {
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .badge {
+    transition: none;
+  }
+}
