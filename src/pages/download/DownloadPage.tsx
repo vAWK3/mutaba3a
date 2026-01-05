@@ -9,13 +9,13 @@ import './DownloadPage.css';
 // Configuration - edit these values as needed
 // ============================================
 const DOWNLOAD_CONFIG = {
-  dmgLatestUrl: 'https://downloads.example.com/mutaba3a-latest.dmg',
-  dmgVersionUrl: 'https://downloads.example.com/mutaba3a-0.1.0-macos.dmg',
-  version: '0.1.0',
-  fileSize: '~120 MB',
-  minMacos: 'macOS 13+',
-  sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-  releaseNotesUrl: 'https://example.com/releases',
+  dmgLatestUrl: 'https://github.com/vAWK3/mutaba3a/commits/v0.0.3',
+  dmgVersionUrl: 'https://github.com/vAWK3/mutaba3a/releases/download/v0.0.3/mutaba3a-v0.0.3-macos-universal.dmg',
+  version: '0.0.3',
+  fileSize: '~5.61 MB',
+  minMacos: 'macOS 12+',
+  sha256: 'fa70a5f6658919cdefe37a58bee46277840dd53e072246de7c6531b2479a54c8',
+  releaseNotesUrl: 'https://github.com/vAWK3/mutaba3a/commits/v0.0.3',
 };
 
 function truncateChecksum(checksum: string): string {
