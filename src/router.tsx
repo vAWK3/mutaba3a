@@ -1,17 +1,29 @@
+import React, { Suspense } from 'react';
 import { createRouter, createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
 import { AppShell } from './components/layout';
 
-// Pages
+// Keep OverviewPage eager (it's the landing page)
 import { OverviewPage } from './pages/overview/OverviewPage';
-import { TransactionsPage } from './pages/transactions/TransactionsPage';
-import { ProjectsPage } from './pages/projects/ProjectsPage';
-import { ProjectDetailPage } from './pages/projects/ProjectDetailPage';
-import { ClientsPage } from './pages/clients/ClientsPage';
-import { ClientDetailPage } from './pages/clients/ClientDetailPage';
-import { ReportsPage } from './pages/reports/ReportsPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-import { DownloadPage } from './pages/download/DownloadPage';
-import { ThemeDemo } from './components/examples/ThemeDemo';
+
+// Simple loading fallback
+const PageLoader = () => (
+  <div style={{ padding: '2rem', opacity: 0.5 }}>Loading...</div>
+);
+
+// Helper for lazy routes with named exports
+function lazyPage(
+  factory: () => Promise<Record<string, React.ComponentType<unknown>>>,
+  exportName: string
+) {
+  const LazyComponent = React.lazy(() =>
+    factory().then((mod) => ({ default: mod[exportName] }))
+  );
+  return () => (
+    <Suspense fallback={<PageLoader />}>
+      <LazyComponent />
+    </Suspense>
+  );
+}
 
 // Root route with AppShell layout
 const rootRoute = createRootRoute({
@@ -33,61 +45,61 @@ const overviewRoute = createRoute({
 const transactionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/transactions',
-  component: TransactionsPage,
+  component: lazyPage(() => import('./pages/transactions/TransactionsPage'), 'TransactionsPage'),
 });
 
 // Projects routes
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projects',
-  component: ProjectsPage,
+  component: lazyPage(() => import('./pages/projects/ProjectsPage'), 'ProjectsPage'),
 });
 
 const projectDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projects/$projectId',
-  component: ProjectDetailPage,
+  component: lazyPage(() => import('./pages/projects/ProjectDetailPage'), 'ProjectDetailPage'),
 });
 
 // Clients routes
 const clientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients',
-  component: ClientsPage,
+  component: lazyPage(() => import('./pages/clients/ClientsPage'), 'ClientsPage'),
 });
 
 const clientDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients/$clientId',
-  component: ClientDetailPage,
+  component: lazyPage(() => import('./pages/clients/ClientDetailPage'), 'ClientDetailPage'),
 });
 
 // Reports route
 const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
-  component: ReportsPage,
+  component: lazyPage(() => import('./pages/reports/ReportsPage'), 'ReportsPage'),
 });
 
 // Settings route
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: SettingsPage,
+  component: lazyPage(() => import('./pages/settings/SettingsPage'), 'SettingsPage'),
 });
 
 // Download route (standalone landing page)
 const downloadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/download',
-  component: DownloadPage,
+  component: lazyPage(() => import('./pages/download/DownloadPage'), 'DownloadPage'),
 });
 
 // Theme demo route (for visual testing)
 const themeDemoRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/theme-demo',
-  component: ThemeDemo,
+  component: lazyPage(() => import('./components/examples/ThemeDemo'), 'ThemeDemo'),
 });
 
 // Create route tree

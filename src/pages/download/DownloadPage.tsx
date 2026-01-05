@@ -3,20 +3,8 @@ import { TopBar } from '../../components/layout';
 import { Card } from '../../components/ui/Card';
 import { Toast } from '../../components/ui/Toast';
 import { copyToClipboard } from '../../lib/utils';
+import { DOWNLOAD_CONFIG } from '../../content/download-config';
 import './DownloadPage.css';
-
-// ============================================
-// Configuration - edit these values as needed
-// ============================================
-const DOWNLOAD_CONFIG = {
-  dmgLatestUrl: 'https://github.com/vAWK3/mutaba3a/commits/v0.0.3',
-  dmgVersionUrl: 'https://github.com/vAWK3/mutaba3a/releases/download/v0.0.3/mutaba3a-v0.0.3-macos-universal.dmg',
-  version: '0.0.3',
-  fileSize: '~5.61 MB',
-  minMacos: 'macOS 12+',
-  sha256: 'fa70a5f6658919cdefe37a58bee46277840dd53e072246de7c6531b2479a54c8',
-  releaseNotesUrl: 'https://github.com/vAWK3/mutaba3a/commits/v0.0.3',
-};
 
 function truncateChecksum(checksum: string): string {
   if (checksum.length <= 20) return checksum;
