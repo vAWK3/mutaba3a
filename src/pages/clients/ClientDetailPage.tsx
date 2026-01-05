@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, CurrencyTabs, StatusSegment, DateRangeControl } from '../../components/filters';
+import { RowActionsMenu } from '../../components/ui';
+import { CheckIcon, CopyIcon } from '../../components/icons';
 import {
   useClient,
   useClientSummary,
@@ -61,11 +63,6 @@ export function ClientDetailPage() {
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
-  };
-
-  const handleMarkPaid = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    await markPaidMutation.mutateAsync(id);
   };
 
   const handleAddTransaction = () => {
@@ -294,12 +291,21 @@ export function ClientDetailPage() {
                             )}
                           </td>
                           <td>
-                            <button
-                              className="btn btn-sm btn-secondary"
-                              onClick={(e) => handleMarkPaid(e, tx.id)}
-                            >
-                              {t('common.markPaid')}
-                            </button>
+                            <RowActionsMenu
+                              actions={[
+                                {
+                                  label: t('common.markPaid'),
+                                  icon: <CheckIcon size={16} />,
+                                  onClick: () => markPaidMutation.mutate(tx.id),
+                                },
+                                {
+                                  label: t('common.duplicate'),
+                                  icon: <CopyIcon size={16} />,
+                                  onClick: () =>
+                                    openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -395,15 +401,25 @@ export function ClientDetailPage() {
                             )}
                           </td>
                           <td>
-                            {isReceivable && (
-                              <button
-                                className="btn btn-sm btn-ghost"
-                                onClick={(e) => handleMarkPaid(e, tx.id)}
-                                title={t('common.markPaid')}
-                              >
-                                <CheckIcon />
-                              </button>
-                            )}
+                            <RowActionsMenu
+                              actions={[
+                                ...(isReceivable
+                                  ? [
+                                      {
+                                        label: t('common.markPaid'),
+                                        icon: <CheckIcon size={16} />,
+                                        onClick: () => markPaidMutation.mutate(tx.id),
+                                      },
+                                    ]
+                                  : []),
+                                {
+                                  label: t('common.duplicate'),
+                                  icon: <CopyIcon size={16} />,
+                                  onClick: () =>
+                                    openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -416,13 +432,5 @@ export function ClientDetailPage() {
         )}
       </div>
     </>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
   );
 }

@@ -15,12 +15,14 @@ import type {
 } from '../types';
 import {
   aggregateTransactionTotals,
+  aggregateTransactionTotalsByCurrency,
   aggregateTransactionTotalsWithActivity,
   filterTransactionsByDateAndCurrency,
   filterTransactionsByEntity,
   filterTransactionsByEntityAndDate,
   createNameMap,
   sortByLastActivity,
+  type TransactionTotalsByCurrency,
 } from './aggregations';
 
 function generateId(): string {
@@ -267,6 +269,16 @@ export const transactionRepo = {
     return aggregateTransactionTotals(filtered);
   },
 
+  async getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string }): Promise<TransactionTotalsByCurrency> {
+    const transactions = await db.transactions.toArray();
+    // Filter by date only, not currency - we want all currencies
+    const filtered = filterTransactionsByDateAndCurrency(transactions, {
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+    });
+    return aggregateTransactionTotalsByCurrency(filtered);
+  },
+
   async getAttentionReceivables(filters: { currency?: Currency }): Promise<TransactionDisplay[]> {
     const today = todayISO();
     const sevenDaysFromNow = new Date();
@@ -317,6 +329,21 @@ export const projectSummaryRepo = {
         const projectTxs = filterTransactionsByEntity(transactions, 'project', p.id, filters?.currency);
         const totals = aggregateTransactionTotalsWithActivity(projectTxs);
 
+        // When no currency filter, also compute per-currency breakdowns
+        let perCurrencyData = {};
+        if (!filters?.currency) {
+          const allProjectTxs = filterTransactionsByEntity(transactions, 'project', p.id);
+          const byCurrency = aggregateTransactionTotalsByCurrency(allProjectTxs);
+          perCurrencyData = {
+            paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
+            paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+            unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
+            unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+            expensesMinorUSD: byCurrency.USD.expensesMinor,
+            expensesMinorILS: byCurrency.ILS.expensesMinor,
+          };
+        }
+
         return {
           id: p.id,
           name: p.name,
@@ -325,6 +352,7 @@ export const projectSummaryRepo = {
           field: p.field,
           ...totals,
           netMinor: totals.paidIncomeMinor - totals.expensesMinor,
+          ...perCurrencyData,
         };
       });
 
@@ -375,6 +403,19 @@ export const clientSummaryRepo = {
         const clientTxs = filterTransactionsByEntity(transactions, 'client', c.id, filters?.currency);
         const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
 
+        // When no currency filter, also compute per-currency breakdowns
+        let perCurrencyData = {};
+        if (!filters?.currency) {
+          const allClientTxs = filterTransactionsByEntity(transactions, 'client', c.id);
+          const byCurrency = aggregateTransactionTotalsByCurrency(allClientTxs);
+          perCurrencyData = {
+            paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
+            paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+            unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
+            unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+          };
+        }
+
         return {
           id: c.id,
           name: c.name,
@@ -383,6 +424,7 @@ export const clientSummaryRepo = {
           unpaidIncomeMinor: totals.unpaidIncomeMinor,
           lastPaymentAt: totals.lastPaymentAt,
           lastActivityAt: totals.lastActivityAt,
+          ...perCurrencyData,
         };
       });
 

@@ -20,6 +20,7 @@ import './index.css';
 import { router } from './router';
 import { initDatabase } from './db';
 import { LanguageProvider } from './lib/i18n';
+import { ToastContainer } from './components/ui/ToastContainer';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')!).render(
     <LanguageProvider>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
+        <ToastContainer />
       </QueryClientProvider>
     </LanguageProvider>
   </StrictMode>

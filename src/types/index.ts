@@ -1,6 +1,15 @@
 // Currency types
 export type Currency = 'USD' | 'ILS';
 
+// Currency mode for reports (BOTH shows separate totals per currency)
+export type CurrencyMode = 'USD' | 'ILS' | 'BOTH';
+
+// Period preset for reports
+export type PeriodPreset = 'month' | 'quarter' | 'year' | 'custom';
+
+// Report types
+export type ReportType = 'summary' | 'by-project' | 'by-client' | 'expenses-by-category' | 'unpaid-aging';
+
 // Transaction types
 export type TxKind = 'income' | 'expense';
 export type TxStatus = 'paid' | 'unpaid';
@@ -97,6 +106,15 @@ export interface OverviewTotals {
   expensesMinor: number;
 }
 
+// Overview totals separated by currency
+export interface OverviewTotalsByCurrency {
+  USD: OverviewTotals;
+  ILS: OverviewTotals;
+}
+
+// FX rate source types
+export type FxSource = 'live' | 'cached' | 'none';
+
 // Project summary for list view
 export interface ProjectSummary {
   id: string;
@@ -109,6 +127,13 @@ export interface ProjectSummary {
   expensesMinor: number;
   netMinor: number;
   lastActivityAt?: string;
+  // Per-currency breakdown (present when currency filter is undefined)
+  paidIncomeMinorUSD?: number;
+  paidIncomeMinorILS?: number;
+  unpaidIncomeMinorUSD?: number;
+  unpaidIncomeMinorILS?: number;
+  expensesMinorUSD?: number;
+  expensesMinorILS?: number;
 }
 
 // Client summary for list view
@@ -120,6 +145,11 @@ export interface ClientSummary {
   unpaidIncomeMinor: number;
   lastPaymentAt?: string;
   lastActivityAt?: string;
+  // Per-currency breakdown (present when currency filter is undefined)
+  paidIncomeMinorUSD?: number;
+  paidIncomeMinorILS?: number;
+  unpaidIncomeMinorUSD?: number;
+  unpaidIncomeMinorILS?: number;
 }
 
 // Transaction with resolved names for display

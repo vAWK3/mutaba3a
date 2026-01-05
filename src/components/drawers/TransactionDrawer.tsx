@@ -15,6 +15,7 @@ import {
 } from '../../hooks/useQueries';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
+import { useToast } from '../../lib/toastStore';
 import type { TxKind, TxStatus, Currency } from '../../types';
 
 type TransactionType = 'income' | 'receivable' | 'expense';
@@ -36,10 +37,12 @@ type FormData = z.infer<typeof schema>;
 
 export function TransactionDrawer() {
   const { transactionDrawer, closeTransactionDrawer } = useDrawerStore();
-  const { mode, transactionId, defaultKind, defaultClientId, defaultProjectId } = transactionDrawer;
+  const { mode, transactionId, defaultKind, defaultClientId, defaultProjectId, duplicateFromId } = transactionDrawer;
   const t = useT();
+  const { showToast } = useToast();
 
   const { data: existingTx, isLoading: txLoading } = useTransaction(transactionId || '');
+  const { data: sourceTx } = useTransaction(duplicateFromId || '');
   const { data: clients = [] } = useClients();
   const { data: projects = [] } = useProjects();
   const { data: incomeCategories = [] } = useCategories('income');
@@ -104,6 +107,28 @@ export function TransactionDrawer() {
     }
   }, [existingTx, reset]);
 
+  // Reset form when duplicating from source transaction
+  useEffect(() => {
+    if (duplicateFromId && sourceTx && mode === 'create') {
+      // For income, always default to 'receivable' (unpaid) - it's a new receivable
+      // For expense, keep as 'expense'
+      const type: TransactionType = sourceTx.kind === 'expense' ? 'expense' : 'receivable';
+
+      reset({
+        type,
+        amount: (sourceTx.amountMinor / 100).toString(),
+        currency: sourceTx.currency,
+        occurredAt: todayISO(), // Always today, not original date
+        clientId: sourceTx.clientId || '',
+        projectId: sourceTx.projectId || '',
+        categoryId: sourceTx.categoryId || '',
+        dueDate: '', // Clear - user sets new due date
+        title: sourceTx.title || '',
+        notes: sourceTx.notes || '',
+      });
+    }
+  }, [duplicateFromId, sourceTx, mode, reset]);
+
   // Filter projects by selected client
   const filteredProjects = selectedClientId
     ? projects.filter((p) => p.clientId === selectedClientId)
@@ -135,7 +160,19 @@ export function TransactionDrawer() {
       if (mode === 'edit' && transactionId) {
         await updateMutation.mutateAsync({ id: transactionId, data: txData });
       } else {
-        await createMutation.mutateAsync(txData);
+        const newTx = await createMutation.mutateAsync(txData);
+        // Show toast with undo for duplicated transactions
+        if (duplicateFromId && newTx) {
+          showToast(t('toast.transactionDuplicated'), {
+            action: {
+              label: t('common.undo'),
+              onClick: () => {
+                deleteMutation.mutate(newTx.id);
+              },
+            },
+            duration: 5000,
+          });
+        }
       }
       closeTransactionDrawer();
     } catch (error) {

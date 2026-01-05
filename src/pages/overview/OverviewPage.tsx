@@ -3,7 +3,8 @@ import { TopBar } from '../../components/layout';
 import { CurrencyTabs, DateRangeControl } from '../../components/filters';
 import { CheckIcon } from '../../components/icons';
 import { TransactionTypeBadge } from '../../components/transactions';
-import { useOverviewTotals, useAttentionReceivables, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
+import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
+import { useOverviewTotals, useOverviewTotalsByCurrency, useAttentionReceivables, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
@@ -23,11 +24,20 @@ export function OverviewPage() {
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
   const [currency, setCurrency] = useState<Currency | undefined>(undefined);
 
-  const { data: totals, isLoading: totalsLoading } = useOverviewTotals(
+  // Use single-currency query when a specific currency is selected
+  const { data: singleCurrencyTotals, isLoading: singleLoading } = useOverviewTotals(
     dateRange.dateFrom,
     dateRange.dateTo,
     currency
   );
+
+  // Use per-currency query when "All" is selected
+  const { data: byCurrencyTotals, isLoading: byCurrencyLoading } = useOverviewTotalsByCurrency(
+    dateRange.dateFrom,
+    dateRange.dateTo
+  );
+
+  const totalsLoading = currency ? singleLoading : byCurrencyLoading;
 
   const { data: attentionItems = [] } = useAttentionReceivables(currency);
 
@@ -39,18 +49,31 @@ export function OverviewPage() {
     sort: { by: 'occurredAt', dir: 'desc' },
   });
 
-  const kpis = useMemo(() => {
-    if (!totals) return null;
-    const net = totals.paidIncomeMinor - totals.expensesMinor;
-    const displayCurrency = currency || 'USD';
-    return {
-      paidIncome: formatAmount(totals.paidIncomeMinor, displayCurrency, locale),
-      unpaid: formatAmount(totals.unpaidIncomeMinor, displayCurrency, locale),
-      expenses: formatAmount(totals.expensesMinor, displayCurrency, locale),
-      net: formatAmount(net, displayCurrency, locale),
-      netValue: net,
-    };
-  }, [totals, currency, locale]);
+  // Prepare KPI data based on whether we're showing single currency or unified
+  const kpiData = useMemo(() => {
+    if (currency) {
+      // Single currency mode - use simple formatting
+      if (!singleCurrencyTotals) return null;
+      const net = singleCurrencyTotals.paidIncomeMinor - singleCurrencyTotals.expensesMinor;
+      return {
+        mode: 'single' as const,
+        currency,
+        paidIncome: formatAmount(singleCurrencyTotals.paidIncomeMinor, currency, locale),
+        unpaid: formatAmount(singleCurrencyTotals.unpaidIncomeMinor, currency, locale),
+        expenses: formatAmount(singleCurrencyTotals.expensesMinor, currency, locale),
+        net: formatAmount(net, currency, locale),
+        netValue: net,
+      };
+    } else {
+      // Multi-currency mode - show unified with breakdown
+      if (!byCurrencyTotals) return null;
+      return {
+        mode: 'unified' as const,
+        usd: byCurrencyTotals.USD,
+        ils: byCurrencyTotals.ILS,
+      };
+    }
+  }, [singleCurrencyTotals, byCurrencyTotals, currency, locale]);
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
@@ -87,25 +110,64 @@ export function OverviewPage() {
               </div>
             ))}
           </div>
-        ) : kpis ? (
+        ) : kpiData?.mode === 'single' ? (
           <div className="kpi-row">
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.paidIncome')}</div>
-              <div className="kpi-value positive">{kpis.paidIncome}</div>
+              <div className="kpi-value positive">{kpiData.paidIncome}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.unpaidReceivables')}</div>
-              <div className="kpi-value warning">{kpis.unpaid}</div>
+              <div className="kpi-value warning">{kpiData.unpaid}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.expenses')}</div>
-              <div className="kpi-value">{kpis.expenses}</div>
+              <div className="kpi-value">{kpiData.expenses}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.net')}</div>
-              <div className={cn('kpi-value', kpis.netValue >= 0 ? 'positive' : 'negative')}>
-                {kpis.net}
+              <div className={cn('kpi-value', kpiData.netValue >= 0 ? 'positive' : 'negative')}>
+                {kpiData.net}
               </div>
+            </div>
+          </div>
+        ) : kpiData?.mode === 'unified' ? (
+          <div className="kpi-row">
+            <div className="kpi-card">
+              <div className="kpi-label">{t('overview.kpi.paidIncome')}</div>
+              <UnifiedAmount
+                usdAmountMinor={kpiData.usd.paidIncomeMinor}
+                ilsAmountMinor={kpiData.ils.paidIncomeMinor}
+                variant="kpi"
+                type="income"
+              />
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">{t('overview.kpi.unpaidReceivables')}</div>
+              <UnifiedAmount
+                usdAmountMinor={kpiData.usd.unpaidIncomeMinor}
+                ilsAmountMinor={kpiData.ils.unpaidIncomeMinor}
+                variant="kpi"
+                type="neutral"
+              />
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">{t('overview.kpi.expenses')}</div>
+              <UnifiedAmount
+                usdAmountMinor={kpiData.usd.expensesMinor}
+                ilsAmountMinor={kpiData.ils.expensesMinor}
+                variant="kpi"
+                type="expense"
+              />
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">{t('overview.kpi.net')}</div>
+              <UnifiedAmount
+                usdAmountMinor={kpiData.usd.paidIncomeMinor - kpiData.usd.expensesMinor}
+                ilsAmountMinor={kpiData.ils.paidIncomeMinor - kpiData.ils.expensesMinor}
+                variant="kpi"
+                type="net"
+              />
             </div>
           </div>
         ) : null}

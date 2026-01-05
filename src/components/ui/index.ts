@@ -5,3 +5,4 @@ export { Badge, PaidBadge, UnpaidBadge, OverdueBadge, TypeBadge, type BadgeProps
 export { Numeric, Amount, type NumericProps, type AmountProps } from './Numeric';
 export { EmptyState } from './EmptyState';
 export { InlineStats } from './InlineStats';
+export { RowActionsMenu, type RowAction } from './RowActionsMenu';

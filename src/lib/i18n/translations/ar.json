@@ -14,7 +14,17 @@
     "noClient": "بدون عميل",
     "noProject": "بدون مشروع",
     "all": "الكل",
-    "markPaid": "تم الدفع"
+    "markPaid": "تم الدفع",
+    "duplicate": "نسخ",
+    "undo": "تراجع",
+    "previous": "السابق",
+    "next": "التالي",
+    "uncategorized": "بدون فئة",
+    "noResults": "لا توجد نتائج"
+  },
+  "toast": {
+    "transactionDuplicated": "تم إنشاء المعاملة",
+    "transactionUndone": "تم التراجع عن المعاملة"
   },
   "nav": {
     "overview": "نظرة عامة",
@@ -159,6 +169,7 @@
     "title": "التقارير",
     "exportCsv": "تصدير CSV",
     "presets": {
+      "summary": "ملخص",
       "thisMonth": "هذا الشهر",
       "thisYear": "هذا العام",
       "byProject": "حسب المشروع",
@@ -166,6 +177,27 @@
       "expensesByCategory": "المصروفات حسب الفئة",
       "unpaidAging": "تقادم المستحقات"
     },
+    "period": {
+      "month": "شهر",
+      "quarter": "ربع سنة",
+      "year": "سنة",
+      "custom": "مخصص"
+    },
+    "currencyMode": {
+      "usd": "دولار",
+      "ils": "شيكل",
+      "both": "الكل"
+    },
+    "drillDown": {
+      "paidIncome": "عرض الإيرادات المحصّلة",
+      "unpaidIncome": "عرض المستحقات غير المحصّلة",
+      "expenses": "عرض المصروفات"
+    },
+    "search": {
+      "project": "بحث في المشاريع...",
+      "client": "بحث في العملاء..."
+    },
+    "selectCurrencyForAmounts": "اختر عملة محددة لعرض المبالغ",
     "sections": {
       "financialSummary": "الملخص المالي",
       "incomeByProject": "الإيرادات حسب المشروع",
@@ -340,5 +372,15 @@
     "yearsAgo": "منذ {years} سنة",
     "daysOverdue": "متأخر {days} يوم",
     "dueInDays": "مستحق خلال {days} يوم"
+  },
+  "fx": {
+    "live": "مباشر",
+    "cached": "مخزن",
+    "none": "غير متوفر",
+    "bannerTitle": "سعر الصرف",
+    "showBanner": "إظهار سعر الصرف",
+    "refresh": "تحديث السعر",
+    "minimize": "تصغير",
+    "drag": "اسحب للتحريك"
   }
 }

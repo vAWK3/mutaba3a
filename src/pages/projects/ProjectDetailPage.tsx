@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, CurrencyTabs, StatusSegment, DateRangeControl } from '../../components/filters';
+import { RowActionsMenu } from '../../components/ui';
+import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useProject, useProjectSummary, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
@@ -45,11 +47,6 @@ export function ProjectDetailPage() {
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
-  };
-
-  const handleMarkPaid = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    await markPaidMutation.mutateAsync(id);
   };
 
   const handleAddTransaction = () => {
@@ -259,15 +256,25 @@ export function ProjectDetailPage() {
                             )}
                           </td>
                           <td>
-                            {isReceivable && (
-                              <button
-                                className="btn btn-sm btn-ghost"
-                                onClick={(e) => handleMarkPaid(e, tx.id)}
-                                title={t('common.markPaid')}
-                              >
-                                <CheckIcon />
-                              </button>
-                            )}
+                            <RowActionsMenu
+                              actions={[
+                                ...(isReceivable
+                                  ? [
+                                      {
+                                        label: t('common.markPaid'),
+                                        icon: <CheckIcon size={16} />,
+                                        onClick: () => markPaidMutation.mutate(tx.id),
+                                      },
+                                    ]
+                                  : []),
+                                {
+                                  label: t('common.duplicate'),
+                                  icon: <CopyIcon size={16} />,
+                                  onClick: () =>
+                                    openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                                },
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -280,13 +287,5 @@ export function ProjectDetailPage() {
         )}
       </div>
     </>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
   );
 }

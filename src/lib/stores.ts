@@ -11,6 +11,7 @@ interface DrawerState {
     defaultKind?: TxKind;
     defaultClientId?: string;
     defaultProjectId?: string;
+    duplicateFromId?: string;
   };
   openTransactionDrawer: (options?: {
     mode?: 'create' | 'edit';
@@ -18,6 +19,7 @@ interface DrawerState {
     defaultKind?: TxKind;
     defaultClientId?: string;
     defaultProjectId?: string;
+    duplicateFromId?: string;
   }) => void;
   closeTransactionDrawer: () => void;
 
@@ -55,6 +57,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         defaultKind: options?.defaultKind,
         defaultClientId: options?.defaultClientId,
         defaultProjectId: options?.defaultProjectId,
+        duplicateFromId: options?.duplicateFromId,
       },
     }),
   closeTransactionDrawer: () =>

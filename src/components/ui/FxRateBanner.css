@@ -1,0 +1,205 @@
+/* FxRateBanner - Floating exchange rate display */
+
+.fx-rate-banner {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  z-index: 99;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  user-select: none;
+  transition: box-shadow 0.15s ease;
+}
+
+.fx-rate-banner.dragging {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  cursor: grabbing;
+}
+
+[dir="rtl"] .fx-rate-banner {
+  right: auto;
+  left: 24px;
+}
+
+/* Drag handle */
+.fx-banner-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: var(--color-text-muted);
+  cursor: grab;
+  border-radius: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.fx-banner-drag-handle:hover {
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-hover);
+}
+
+.fx-rate-banner.dragging .fx-banner-drag-handle {
+  cursor: grabbing;
+}
+
+/* Content area */
+.fx-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fx-banner-rate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fx-banner-formula {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.fx-banner-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.fx-source-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.fx-banner-source.source-live {
+  color: var(--color-success);
+  background-color: var(--color-success-subtle, rgba(34, 197, 94, 0.1));
+}
+
+.fx-banner-source.source-cached {
+  color: var(--color-warning);
+  background-color: var(--color-warning-subtle, rgba(245, 158, 11, 0.1));
+}
+
+.fx-banner-source.source-none {
+  color: var(--color-danger);
+  background-color: var(--color-danger-subtle, rgba(239, 68, 68, 0.1));
+}
+
+.fx-loading {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.fx-banner-updated {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* Action buttons */
+.fx-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fx-banner-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.fx-banner-btn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-hover);
+}
+
+.fx-banner-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fx-banner-btn svg.spinning {
+  animation: fx-spin 1s linear infinite;
+}
+
+@keyframes fx-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Minimized state */
+.fx-banner-minimized {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  z-index: 99;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fx-banner-minimized:hover {
+  color: var(--color-text-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+[dir="rtl"] .fx-banner-minimized {
+  right: auto;
+  left: 24px;
+}
+
+.fx-banner-mini-icon {
+  font-size: 14px;
+}
+
+.fx-banner-mini-rate {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}

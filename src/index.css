@@ -597,12 +597,16 @@ td {
 }
 
 .btn-primary {
-  background: var(--color-primary);
-  color: white;
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  border: 1px solid var(--btn-primary-border);
+  box-shadow: var(--btn-primary-shadow);
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-hover);
+  background: var(--accent-solid-hover);
+  border-color: var(--btn-primary-border-hover);
+  box-shadow: var(--btn-primary-shadow-hover);
 }
 
 .btn-secondary {
@@ -636,12 +640,16 @@ td {
 }
 
 .btn-sm {
-  padding: var(--space-1) var(--space-2);
+  height: 32px;
+  min-width: 32px;
+  padding: 0 var(--space-3);
   font-size: var(--font-size-sm);
 }
 
 .btn-lg {
-  padding: var(--space-3) var(--space-5);
+  height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-5);
   font-size: var(--font-size-md);
 }
 
@@ -733,6 +741,60 @@ td {
 }
 .kpi-value.warning {
   color: var(--color-warning);
+}
+
+/* Clickable KPI Cards */
+.kpi-card.clickable {
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  text-align: inherit;
+  font: inherit;
+  width: 100%;
+}
+
+.kpi-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary-light);
+}
+
+.kpi-card.clickable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.kpi-card.clickable:active {
+  transform: translateY(0);
+}
+
+/* Period Control */
+.period-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.year-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+}
+
+.year-display {
+  font-weight: var(--font-weight-medium);
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Sort Icon */
+.sort-icon {
+  margin-inline-start: var(--space-1);
+  opacity: 0.7;
+  font-size: var(--font-size-xs);
 }
 
 /* Data Table */
@@ -1343,4 +1405,124 @@ td {
   [dir="rtl"] .drawer {
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
   }
+}
+
+/* ========================================
+   UnifiedAmount Component Styles
+   ======================================== */
+
+.unified-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unified-amount-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unified-amount-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.unified-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.unified-amount-kpi .unified-total {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.unified-amount-compact .unified-total {
+  font-weight: 500;
+}
+
+.unified-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.unified-amount-kpi .unified-breakdown {
+  font-size: 13px;
+}
+
+.breakdown-item {
+  white-space: nowrap;
+}
+
+.breakdown-currency {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.breakdown-separator {
+  color: var(--color-text-muted);
+}
+
+.unified-fallback {
+  color: var(--color-text-secondary);
+}
+
+/* FX Source badges */
+.fx-source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border-radius: 4px;
+}
+
+.fx-source-badge.source-live {
+  color: var(--color-success);
+  background-color: var(--color-success-light);
+}
+
+.fx-source-badge.source-cached {
+  color: var(--color-warning);
+  background-color: var(--color-warning-light);
+}
+
+.fx-source-badge.source-none {
+  color: var(--color-danger);
+  background-color: var(--color-danger-light);
+}
+
+.fx-indicator {
+  font-size: 10px;
+  vertical-align: super;
+}
+
+.fx-indicator.source-cached {
+  color: var(--color-warning);
+}
+
+.fx-indicator.source-none {
+  color: var(--color-danger);
+}
+
+/* Amount colors for UnifiedAmount */
+.unified-amount .amount-positive,
+.unified-amount-kpi .amount-positive,
+.unified-amount-compact.amount-positive .unified-total {
+  color: var(--color-success);
+}
+
+.unified-amount .amount-negative,
+.unified-amount-kpi .amount-negative,
+.unified-amount-compact.amount-negative .unified-total {
+  color: var(--color-danger);
 }

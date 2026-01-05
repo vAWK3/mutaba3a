@@ -41,11 +41,28 @@ const overviewRoute = createRoute({
   component: OverviewPage,
 });
 
-// Transactions route
+// Transactions route with search params
+interface TransactionsSearch {
+  dateFrom?: string;
+  dateTo?: string;
+  currency?: 'USD' | 'ILS';
+  kind?: 'income' | 'expense';
+  status?: 'paid' | 'unpaid' | 'overdue';
+}
+
 const transactionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/transactions',
   component: lazyPage(() => import('./pages/transactions/TransactionsPage'), 'TransactionsPage'),
+  validateSearch: (search: Record<string, unknown>): TransactionsSearch => {
+    return {
+      dateFrom: typeof search.dateFrom === 'string' ? search.dateFrom : undefined,
+      dateTo: typeof search.dateTo === 'string' ? search.dateTo : undefined,
+      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
+      kind: search.kind === 'income' || search.kind === 'expense' ? search.kind : undefined,
+      status: search.status === 'paid' || search.status === 'unpaid' || search.status === 'overdue' ? search.status : undefined,
+    };
+  },
 });
 
 // Projects routes

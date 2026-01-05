@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, CurrencyTabs } from '../../components/filters';
+import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
 import { useProjectSummaries } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatRelativeDate } from '../../lib/utils';
@@ -21,7 +22,8 @@ export function ProjectsPage() {
 
   const { data: projects = [], isLoading } = useProjectSummaries(currency, search, field || undefined);
 
-  const displayCurrency = currency || 'USD';
+  // Helper to check if project has per-currency data (when no currency filter)
+  const hasPerCurrencyData = !currency;
 
   return (
     <>
@@ -92,22 +94,61 @@ export function ProjectsPage() {
                     </td>
                     <td className="text-secondary">{project.clientName || '-'}</td>
                     <td className="text-secondary">{project.field || '-'}</td>
-                    <td className="amount-cell amount-positive">
-                      {formatAmount(project.paidIncomeMinor, displayCurrency, locale)}
+                    <td className="amount-cell">
+                      {hasPerCurrencyData && project.paidIncomeMinorUSD !== undefined ? (
+                        <UnifiedAmount
+                          usdAmountMinor={project.paidIncomeMinorUSD}
+                          ilsAmountMinor={project.paidIncomeMinorILS ?? 0}
+                          variant="compact"
+                          type="income"
+                        />
+                      ) : (
+                        <span className="amount-positive">
+                          {formatAmount(project.paidIncomeMinor, currency!, locale)}
+                        </span>
+                      )}
                     </td>
-                    <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>
-                      {formatAmount(project.unpaidIncomeMinor, displayCurrency, locale)}
+                    <td className="amount-cell">
+                      {hasPerCurrencyData && project.unpaidIncomeMinorUSD !== undefined ? (
+                        <UnifiedAmount
+                          usdAmountMinor={project.unpaidIncomeMinorUSD}
+                          ilsAmountMinor={project.unpaidIncomeMinorILS ?? 0}
+                          variant="compact"
+                          type="neutral"
+                        />
+                      ) : (
+                        <span style={{ color: 'var(--color-warning)' }}>
+                          {formatAmount(project.unpaidIncomeMinor, currency!, locale)}
+                        </span>
+                      )}
                     </td>
-                    <td className="amount-cell amount-negative">
-                      {formatAmount(project.expensesMinor, displayCurrency, locale)}
+                    <td className="amount-cell">
+                      {hasPerCurrencyData && project.expensesMinorUSD !== undefined ? (
+                        <UnifiedAmount
+                          usdAmountMinor={project.expensesMinorUSD}
+                          ilsAmountMinor={project.expensesMinorILS ?? 0}
+                          variant="compact"
+                          type="expense"
+                        />
+                      ) : (
+                        <span className="amount-negative">
+                          {formatAmount(project.expensesMinor, currency!, locale)}
+                        </span>
+                      )}
                     </td>
-                    <td
-                      className="amount-cell"
-                      style={{
-                        color: project.netMinor >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-                      }}
-                    >
-                      {formatAmount(project.netMinor, displayCurrency, locale)}
+                    <td className="amount-cell">
+                      {hasPerCurrencyData && project.paidIncomeMinorUSD !== undefined ? (
+                        <UnifiedAmount
+                          usdAmountMinor={(project.paidIncomeMinorUSD ?? 0) - (project.expensesMinorUSD ?? 0)}
+                          ilsAmountMinor={(project.paidIncomeMinorILS ?? 0) - (project.expensesMinorILS ?? 0)}
+                          variant="compact"
+                          type="net"
+                        />
+                      ) : (
+                        <span style={{ color: project.netMinor >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                          {formatAmount(project.netMinor, currency!, locale)}
+                        </span>
+                      )}
                     </td>
                     <td className="text-muted">
                       {project.lastActivityAt ? formatRelativeDate(project.lastActivityAt, t) : '-'}

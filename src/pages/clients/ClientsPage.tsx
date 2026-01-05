@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, CurrencyTabs } from '../../components/filters';
+import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
 import { useClientSummaries } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, formatRelativeDate } from '../../lib/utils';
@@ -18,7 +19,8 @@ export function ClientsPage() {
 
   const { data: clients = [], isLoading } = useClientSummaries(currency, search);
 
-  const displayCurrency = currency || 'USD';
+  // Helper to check if client has per-currency data (when no currency filter)
+  const hasPerCurrencyData = !currency;
 
   return (
     <>
@@ -75,11 +77,33 @@ export function ClientsPage() {
                       </Link>
                     </td>
                     <td className="text-secondary">{client.activeProjectCount}</td>
-                    <td className="amount-cell amount-positive">
-                      {formatAmount(client.paidIncomeMinor, displayCurrency, locale)}
+                    <td className="amount-cell">
+                      {hasPerCurrencyData && client.paidIncomeMinorUSD !== undefined ? (
+                        <UnifiedAmount
+                          usdAmountMinor={client.paidIncomeMinorUSD}
+                          ilsAmountMinor={client.paidIncomeMinorILS ?? 0}
+                          variant="compact"
+                          type="income"
+                        />
+                      ) : (
+                        <span className="amount-positive">
+                          {formatAmount(client.paidIncomeMinor, currency!, locale)}
+                        </span>
+                      )}
                     </td>
-                    <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>
-                      {formatAmount(client.unpaidIncomeMinor, displayCurrency, locale)}
+                    <td className="amount-cell">
+                      {hasPerCurrencyData && client.unpaidIncomeMinorUSD !== undefined ? (
+                        <UnifiedAmount
+                          usdAmountMinor={client.unpaidIncomeMinorUSD}
+                          ilsAmountMinor={client.unpaidIncomeMinorILS ?? 0}
+                          variant="compact"
+                          type="neutral"
+                        />
+                      ) : (
+                        <span style={{ color: 'var(--color-warning)' }}>
+                          {formatAmount(client.unpaidIncomeMinor, currency!, locale)}
+                        </span>
+                      )}
                     </td>
                     <td className="text-muted">
                       {client.lastPaymentAt ? formatDate(client.lastPaymentAt, locale) : '-'}

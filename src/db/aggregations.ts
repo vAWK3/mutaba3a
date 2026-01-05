@@ -12,6 +12,11 @@ export interface TransactionTotals {
   expensesMinor: number;
 }
 
+export interface TransactionTotalsByCurrency {
+  USD: TransactionTotals;
+  ILS: TransactionTotals;
+}
+
 export interface TransactionTotalsWithActivity extends TransactionTotals {
   lastActivityAt?: string;
   lastPaymentAt?: string;
@@ -50,6 +55,36 @@ export function aggregateTransactionTotals(transactions: Transaction[]): Transac
   }
 
   return { paidIncomeMinor, unpaidIncomeMinor, expensesMinor };
+}
+
+/**
+ * Aggregate transaction totals separated by currency.
+ * Returns totals for each currency independently - never mixes currencies.
+ */
+export function aggregateTransactionTotalsByCurrency(
+  transactions: Transaction[]
+): TransactionTotalsByCurrency {
+  const result: TransactionTotalsByCurrency = {
+    USD: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    ILS: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+  };
+
+  for (const tx of transactions) {
+    const currencyTotals = result[tx.currency];
+    if (!currencyTotals) continue; // Skip unknown currencies
+
+    if (tx.kind === 'income') {
+      if (tx.status === 'paid') {
+        currencyTotals.paidIncomeMinor += tx.amountMinor;
+      } else {
+        currencyTotals.unpaidIncomeMinor += tx.amountMinor;
+      }
+    } else {
+      currencyTotals.expensesMinor += tx.amountMinor;
+    }
+  }
+
+  return result;
 }
 
 /**

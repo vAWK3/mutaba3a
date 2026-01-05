@@ -4,6 +4,7 @@ import { TransactionDrawer } from '../drawers/TransactionDrawer';
 import { ClientDrawer } from '../drawers/ClientDrawer';
 import { ProjectDrawer } from '../drawers/ProjectDrawer';
 import { MacDownloadBanner } from '../ui/MacDownloadBanner';
+import { FxRateBanner } from '../ui/FxRateBanner';
 import { useDrawerStore } from '../../lib/stores';
 
 interface AppShellProps {
@@ -22,6 +23,7 @@ export function AppShell({ children }: AppShellProps) {
       {clientDrawer.isOpen && <ClientDrawer />}
       {projectDrawer.isOpen && <ProjectDrawer />}
 
+      <FxRateBanner />
       <MacDownloadBanner />
     </div>
   );

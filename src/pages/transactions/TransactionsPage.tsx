@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearch } from "@tanstack/react-router";
 import { TopBar } from "../../components/layout";
 import {
   SearchInput,
@@ -7,8 +8,8 @@ import {
   TypeSegment,
   DateRangeControl,
 } from "../../components/filters";
-import { EmptyState } from "../../components/ui";
-import { CheckIcon } from "../../components/icons";
+import { EmptyState, RowActionsMenu } from "../../components/ui";
+import { CheckIcon, CopyIcon } from "../../components/icons";
 import { TransactionTypeBadge, TransactionStatusCell } from "../../components/transactions";
 import {
   useTransactions,
@@ -26,6 +27,14 @@ import type { Currency, TxKind, TxStatus, QueryFilters } from "../../types";
 
 type TypeFilter = TxKind | "receivable" | undefined;
 
+interface TransactionsSearchParams {
+  dateFrom?: string;
+  dateTo?: string;
+  currency?: Currency;
+  kind?: TxKind;
+  status?: TxStatus | 'overdue';
+}
+
 export function TransactionsPage() {
   const { openTransactionDrawer } = useDrawerStore();
   const markPaidMutation = useMarkTransactionPaid();
@@ -33,16 +42,40 @@ export function TransactionsPage() {
   const { language } = useLanguage();
   const locale = getLocale(language);
 
-  // Filters state
-  const [dateRange, setDateRange] = useState(() =>
-    getDateRangePreset("this-month")
+  // Read URL search params
+  const searchParams = useSearch({ strict: false }) as TransactionsSearchParams;
+
+  // Initialize filters from URL params or defaults
+  const [dateRange, setDateRange] = useState(() => {
+    if (searchParams.dateFrom && searchParams.dateTo) {
+      return { dateFrom: searchParams.dateFrom, dateTo: searchParams.dateTo };
+    }
+    return getDateRangePreset("this-month");
+  });
+  const [currency, setCurrency] = useState<Currency | undefined>(searchParams.currency);
+
+  // Derive type filter from URL kind+status
+  const initialTypeFilter = useMemo((): TypeFilter => {
+    if (searchParams.kind === 'income' && searchParams.status === 'unpaid') {
+      return 'receivable';
+    }
+    return searchParams.kind;
+  }, [searchParams.kind, searchParams.status]);
+
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(initialTypeFilter);
+  const [statusFilter, setStatusFilter] = useState<TxStatus | "overdue" | undefined>(
+    // Don't set status filter if receivable type since it's implicit
+    initialTypeFilter === 'receivable' ? undefined : searchParams.status
   );
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>(undefined);
-  const [statusFilter, setStatusFilter] = useState<
-    TxStatus | "overdue" | undefined
-  >(undefined);
   const [search, setSearch] = useState("");
+
+  // Clear URL-based filters after initial load (optional - keeps URL clean)
+  const [initialParamsApplied, setInitialParamsApplied] = useState(false);
+  useEffect(() => {
+    if (!initialParamsApplied && (searchParams.dateFrom || searchParams.currency || searchParams.kind)) {
+      setInitialParamsApplied(true);
+    }
+  }, [initialParamsApplied, searchParams]);
 
   // Build query filters
   const queryFilters = useMemo((): QueryFilters => {
@@ -72,11 +105,6 @@ export function TransactionsPage() {
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: "edit", transactionId: id });
-  };
-
-  const handleMarkPaid = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    await markPaidMutation.mutateAsync(id);
   };
 
   return (
@@ -165,21 +193,30 @@ export function TransactionsPage() {
                     <td>
                       <TransactionStatusCell kind={tx.kind} status={tx.status} dueDate={tx.dueDate} />
                     </td>
-                    <td>
-                      {tx.kind === 'income' && tx.status === 'unpaid' && (
-                        <button
-                          className="btn btn-sm btn-ghost"
-                          onClick={(e) => handleMarkPaid(e, tx.id)}
-                          title={t('common.markPaid')}
-                        >
-                          <CheckIcon />
-                        </button>
-                      )}
+                    <td style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <RowActionsMenu
+                        actions={[
+                          ...(tx.kind === 'income' && tx.status === 'unpaid'
+                            ? [
+                                {
+                                  label: t('common.markPaid'),
+                                  icon: <CheckIcon size={16} />,
+                                  onClick: () => markPaidMutation.mutate(tx.id),
+                                },
+                              ]
+                            : []),
+                          {
+                            label: t('common.duplicate'),
+                            icon: <CopyIcon size={16} />,
+                            onClick: () =>
+                              openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                          },
+                        ]}
+                      />
                       {tx.notes && (
                         <span
                           className="note-indicator"
                           title={t('drawer.transaction.notes')}
-                          style={{ marginInlineStart: 8 }}
                         />
                       )}
                     </td>

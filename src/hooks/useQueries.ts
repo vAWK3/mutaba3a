@@ -18,6 +18,7 @@ function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryCli
   queryClient.invalidateQueries({ queryKey: ['transactions'] });
   queryClient.invalidateQueries({ queryKey: ['transaction'] });
   queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
+  queryClient.invalidateQueries({ queryKey: ['overviewTotalsByCurrency'] });
   queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
   queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
   queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
@@ -31,6 +32,8 @@ export const queryKeys = {
   transaction: (id: string) => ['transaction', id] as const,
   overviewTotals: (dateFrom: string, dateTo: string, currency?: Currency) =>
     ['overviewTotals', { dateFrom, dateTo, currency }] as const,
+  overviewTotalsByCurrency: (dateFrom: string, dateTo: string) =>
+    ['overviewTotalsByCurrency', { dateFrom, dateTo }] as const,
   attentionReceivables: (currency?: Currency) => ['attentionReceivables', { currency }] as const,
   clients: () => ['clients'] as const,
   client: (id: string) => ['client', id] as const,
@@ -46,6 +49,7 @@ export const queryKeys = {
     ['projectSummary', id, { dateFrom, dateTo, currency }] as const,
   categories: (kind?: 'income' | 'expense') => ['categories', { kind }] as const,
   settings: () => ['settings'] as const,
+  fxRate: (base: Currency, quote: Currency) => ['fxRate', base, quote] as const,
 };
 
 // Transaction hooks
@@ -68,6 +72,13 @@ export function useOverviewTotals(dateFrom: string, dateTo: string, currency?: C
   return useQuery({
     queryKey: queryKeys.overviewTotals(dateFrom, dateTo, currency),
     queryFn: () => transactionRepo.getOverviewTotals({ dateFrom, dateTo, currency }),
+  });
+}
+
+export function useOverviewTotalsByCurrency(dateFrom: string, dateTo: string) {
+  return useQuery({
+    queryKey: queryKeys.overviewTotalsByCurrency(dateFrom, dateTo),
+    queryFn: () => transactionRepo.getOverviewTotalsByCurrency({ dateFrom, dateTo }),
   });
 }
 

@@ -14,7 +14,17 @@
     "noClient": "No client",
     "noProject": "No project",
     "all": "All",
-    "markPaid": "Mark Paid"
+    "markPaid": "Mark Paid",
+    "duplicate": "Duplicate",
+    "undo": "Undo",
+    "previous": "Previous",
+    "next": "Next",
+    "uncategorized": "Uncategorized",
+    "noResults": "No results found"
+  },
+  "toast": {
+    "transactionDuplicated": "Transaction created",
+    "transactionUndone": "Transaction undone"
   },
   "nav": {
     "overview": "Overview",
@@ -159,6 +169,7 @@
     "title": "Reports",
     "exportCsv": "Export CSV",
     "presets": {
+      "summary": "Summary",
       "thisMonth": "This Month",
       "thisYear": "This Year",
       "byProject": "By Project",
@@ -166,6 +177,27 @@
       "expensesByCategory": "Expenses by Category",
       "unpaidAging": "Unpaid Aging"
     },
+    "period": {
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year",
+      "custom": "Custom"
+    },
+    "currencyMode": {
+      "usd": "USD",
+      "ils": "ILS",
+      "both": "Both"
+    },
+    "drillDown": {
+      "paidIncome": "View paid income transactions",
+      "unpaidIncome": "View unpaid receivables",
+      "expenses": "View expenses"
+    },
+    "search": {
+      "project": "Search projects...",
+      "client": "Search clients..."
+    },
+    "selectCurrencyForAmounts": "Select a specific currency to see amounts",
     "sections": {
       "financialSummary": "Financial Summary",
       "incomeByProject": "Income by Project",
@@ -340,5 +372,15 @@
     "yearsAgo": "{years} years ago",
     "daysOverdue": "{days} days overdue",
     "dueInDays": "Due in {days} days"
+  },
+  "fx": {
+    "live": "Live",
+    "cached": "Cached",
+    "none": "Unavailable",
+    "bannerTitle": "Exchange Rate",
+    "showBanner": "Show exchange rate",
+    "refresh": "Refresh rate",
+    "minimize": "Minimize",
+    "drag": "Drag to move"
   }
 }
