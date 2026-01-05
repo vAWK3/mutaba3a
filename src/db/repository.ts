@@ -68,7 +68,7 @@ export const clientRepo = {
 // Project Repository
 export const projectRepo = {
   async list(filters?: { clientId?: string; includeArchived?: boolean }): Promise<Project[]> {
-    let collection = db.projects.toCollection();
+    const collection = db.projects.toCollection();
 
     const results = await collection.toArray();
     return results
@@ -255,7 +255,7 @@ export const transactionRepo = {
   async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency }): Promise<OverviewTotals> {
     const transactions = await db.transactions.toArray();
 
-    let filtered = transactions.filter((tx) => {
+    const filtered = transactions.filter((tx) => {
       if (tx.deletedAt) return false;
       if (tx.occurredAt < filters.dateFrom) return false;
       if (tx.occurredAt > filters.dateTo + 'T23:59:59') return false;

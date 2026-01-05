@@ -1,4 +1,5 @@
 import { type HTMLAttributes } from 'react';
+import { useLanguage, getLocale } from '../../lib/i18n';
 
 export interface NumericProps extends HTMLAttributes<HTMLSpanElement> {
   value: number | string;
@@ -6,6 +7,8 @@ export interface NumericProps extends HTMLAttributes<HTMLSpanElement> {
   currency?: 'USD' | 'ILS';
   decimals?: number;
   sign?: boolean;
+  /** Override locale (defaults to current language's locale) */
+  locale?: string;
 }
 
 export function Numeric({
@@ -14,16 +17,19 @@ export function Numeric({
   currency = 'USD',
   decimals,
   sign = false,
+  locale: localeProp,
   className = '',
   ...props
 }: NumericProps) {
+  const { language } = useLanguage();
+  const locale = localeProp ?? getLocale(language);
   const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
   let formatted: string;
 
   switch (format) {
     case 'currency': {
-      const formatter = new Intl.NumberFormat('en-US', {
+      const formatter = new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
         minimumFractionDigits: decimals ?? 0,
@@ -33,7 +39,7 @@ export function Numeric({
       break;
     }
     case 'percent': {
-      const formatter = new Intl.NumberFormat('en-US', {
+      const formatter = new Intl.NumberFormat(locale, {
         style: 'percent',
         minimumFractionDigits: decimals ?? 0,
         maximumFractionDigits: decimals ?? 1,
@@ -42,7 +48,7 @@ export function Numeric({
       break;
     }
     default: {
-      const formatter = new Intl.NumberFormat('en-US', {
+      const formatter = new Intl.NumberFormat(locale, {
         minimumFractionDigits: decimals ?? 0,
         maximumFractionDigits: decimals ?? 2,
       });
@@ -67,10 +73,12 @@ export interface AmountProps extends Omit<NumericProps, 'value' | 'format'> {
   showSign?: boolean;
 }
 
-export function Amount({ amountMinor, currency = 'USD', showSign = false, className = '', ...props }: AmountProps) {
+export function Amount({ amountMinor, currency = 'USD', showSign = false, locale: localeProp, className = '', ...props }: AmountProps) {
+  const { language } = useLanguage();
+  const locale = localeProp ?? getLocale(language);
   const amount = amountMinor / 100;
 
-  const formatted = new Intl.NumberFormat('en-US', {
+  const formatted = new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,

@@ -1,4 +1,5 @@
 import { getDateRangePreset } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 type DatePreset = 'this-month' | 'last-month' | 'this-year' | 'all';
 
@@ -9,11 +10,13 @@ interface DateRangeControlProps {
 }
 
 export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeControlProps) {
-  const presets: { value: DatePreset; label: string }[] = [
-    { value: 'this-month', label: 'This Month' },
-    { value: 'last-month', label: 'Last Month' },
-    { value: 'this-year', label: 'This Year' },
-    { value: 'all', label: 'All Time' },
+  const t = useT();
+
+  const presets: { value: DatePreset; labelKey: string }[] = [
+    { value: 'this-month', labelKey: 'filters.thisMonth' },
+    { value: 'last-month', labelKey: 'filters.lastMonth' },
+    { value: 'this-year', labelKey: 'filters.thisYear' },
+    { value: 'all', labelKey: 'filters.allTime' },
   ];
 
   const getCurrentPreset = (): DatePreset | 'custom' => {
@@ -40,11 +43,11 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
     >
       {presets.map((preset) => (
         <option key={preset.value} value={preset.value}>
-          {preset.label}
+          {t(preset.labelKey)}
         </option>
       ))}
       {getCurrentPreset() === 'custom' && (
-        <option value="custom">Custom</option>
+        <option value="custom">{t('filters.custom')}</option>
       )}
     </select>
   );

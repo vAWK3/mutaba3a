@@ -1,0 +1,309 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "archive": "Archive",
+    "add": "Add",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "search": "Search...",
+    "close": "Close",
+    "confirm": "Confirm",
+    "noClient": "No client",
+    "noProject": "No project",
+    "all": "All",
+    "markPaid": "Mark Paid"
+  },
+  "nav": {
+    "overview": "Overview",
+    "projects": "Projects",
+    "clients": "Clients",
+    "transactions": "Transactions",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "addMenu": {
+    "income": "Income",
+    "expense": "Expense",
+    "project": "Project",
+    "client": "Client"
+  },
+  "transactions": {
+    "title": "Transactions",
+    "empty": "No transactions found",
+    "emptySearch": "Try adjusting your search or filters",
+    "emptyHint": "Create your first transaction to get started",
+    "addTransaction": "Add Transaction",
+    "searchPlaceholder": "Search transactions...",
+    "confirmDelete": "Are you sure you want to delete this transaction?",
+    "type": {
+      "income": "Income",
+      "expense": "Expense",
+      "receivable": "Receivable"
+    },
+    "status": {
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "overdue": "{days}d overdue",
+      "dueIn": "Due in {days}d",
+      "dueToday": "Due today"
+    },
+    "columns": {
+      "date": "Date",
+      "type": "Type",
+      "client": "Client",
+      "project": "Project",
+      "category": "Category",
+      "amount": "Amount",
+      "status": "Status"
+    }
+  },
+  "overview": {
+    "title": "Overview",
+    "kpi": {
+      "paidIncome": "Paid Income",
+      "unpaidReceivables": "Unpaid Receivables",
+      "expenses": "Expenses",
+      "net": "Net (Paid - Expenses)"
+    },
+    "needsAttention": "Needs Attention",
+    "noAttention": "No overdue or upcoming receivables",
+    "recentActivity": "Recent Activity",
+    "noRecent": "No recent transactions"
+  },
+  "projects": {
+    "title": "Projects",
+    "empty": "No projects found",
+    "emptySearch": "Try adjusting your search",
+    "emptyHint": "Create your first project to get started",
+    "addProject": "Add Project",
+    "searchPlaceholder": "Search projects...",
+    "allFields": "All fields",
+    "notFound": "Project not found",
+    "notFoundHint": "This project may have been deleted or doesn't exist.",
+    "confirmArchive": "Are you sure you want to archive this project?",
+    "columns": {
+      "project": "Project",
+      "client": "Client",
+      "field": "Field",
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "expenses": "Expenses",
+      "net": "Net",
+      "lastActivity": "Last Activity"
+    },
+    "tabs": {
+      "summary": "Summary",
+      "transactions": "Transactions"
+    },
+    "detail": {
+      "projectDetails": "Project Details",
+      "noTransactions": "No transactions",
+      "noTransactionsHint": "Add your first transaction for this project."
+    },
+    "fields": {
+      "design": "Design",
+      "development": "Development",
+      "consulting": "Consulting",
+      "marketing": "Marketing",
+      "legal": "Legal",
+      "maintenance": "Maintenance",
+      "other": "Other"
+    }
+  },
+  "clients": {
+    "title": "Clients",
+    "empty": "No clients found",
+    "emptySearch": "Try adjusting your search",
+    "emptyHint": "Add your first client to get started",
+    "addClient": "Add Client",
+    "searchPlaceholder": "Search clients...",
+    "notFound": "Client not found",
+    "notFoundHint": "This client may have been deleted or doesn't exist.",
+    "confirmArchive": "Are you sure you want to archive this client?",
+    "columns": {
+      "client": "Client",
+      "activeProjects": "Active Projects",
+      "paidIncome": "Paid Income",
+      "unpaid": "Unpaid",
+      "lastPayment": "Last Payment",
+      "lastActivity": "Last Activity"
+    },
+    "tabs": {
+      "summary": "Summary",
+      "projects": "Projects",
+      "receivables": "Receivables",
+      "transactions": "Transactions"
+    },
+    "detail": {
+      "clientDetails": "Client Details",
+      "email": "Email",
+      "phone": "Phone",
+      "noProjects": "No projects",
+      "noProjectsHint": "Add your first project for this client.",
+      "noReceivables": "No receivables",
+      "noReceivablesHint": "All payments have been received.",
+      "noTransactions": "No transactions",
+      "noTransactionsHint": "Add your first transaction for this client."
+    },
+    "receivables": {
+      "dueDate": "Due Date",
+      "daysOverdue": "Days Overdue",
+      "action": "Action"
+    }
+  },
+  "reports": {
+    "title": "Reports",
+    "exportCsv": "Export CSV",
+    "presets": {
+      "thisMonth": "This Month",
+      "thisYear": "This Year",
+      "byProject": "By Project",
+      "byClient": "By Client",
+      "expensesByCategory": "Expenses by Category",
+      "unpaidAging": "Unpaid Aging"
+    },
+    "sections": {
+      "financialSummary": "Financial Summary",
+      "incomeByProject": "Income by Project",
+      "incomeByClient": "Income by Client",
+      "expensesByCategory": "Expenses by Category",
+      "unpaidAging": "Unpaid Receivables Aging"
+    },
+    "aging": {
+      "current": "Current (not due)",
+      "days1to30": "1-30 days overdue",
+      "days31to60": "31-60 days overdue",
+      "days60plus": "60+ days overdue"
+    },
+    "noExpenses": "No expenses in this period"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": {
+      "title": "Language",
+      "description": "Choose your preferred language"
+    },
+    "currency": {
+      "title": "Currency",
+      "enabled": "Enabled Currencies",
+      "enabledDesc": "Select which currencies to track",
+      "default": "Default Currency",
+      "defaultDesc": "Default selection in filters"
+    },
+    "data": {
+      "title": "Data Management",
+      "export": "Export Data",
+      "exportDesc": "Download a backup of all your data",
+      "exportBtn": "Export JSON",
+      "exporting": "Exporting...",
+      "exported": "Exported successfully!",
+      "exportFailed": "Export failed",
+      "import": "Import Data",
+      "importDesc": "Restore from a backup file (replaces all data)",
+      "importBtn": "Import JSON",
+      "importing": "Importing...",
+      "imported": "Imported successfully! Refreshing...",
+      "importFailed": "Import failed: {error}",
+      "invalidFile": "Invalid backup file format",
+      "reset": "Reset Data",
+      "resetDesc": "Delete all data and load sample data",
+      "resetBtn": "Reset to Sample Data",
+      "resetConfirm": "This will delete all data and reset with sample data. Are you sure?"
+    },
+    "about": {
+      "title": "About",
+      "name": "Mutaba3a - Mini CRM",
+      "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB."
+    }
+  },
+  "drawer": {
+    "transaction": {
+      "new": "New Transaction",
+      "edit": "Edit Transaction",
+      "typeIncome": "Income",
+      "typeIncomeDesc": "Paid",
+      "typeReceivable": "Receivable",
+      "typeReceivableDesc": "Unpaid",
+      "typeExpense": "Expense",
+      "typeExpenseDesc": "Cost",
+      "amount": "Amount",
+      "amountPlaceholder": "0.00",
+      "currency": "Currency",
+      "date": "Date",
+      "dueDate": "Due Date",
+      "client": "Client",
+      "clientPlaceholder": "Select client...",
+      "project": "Project",
+      "projectPlaceholder": "Select project...",
+      "category": "Category",
+      "categoryPlaceholder": "Select category...",
+      "title": "Title",
+      "titlePlaceholder": "Brief description...",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional notes..."
+    },
+    "client": {
+      "new": "New Client",
+      "edit": "Edit Client",
+      "name": "Name",
+      "namePlaceholder": "Client name...",
+      "email": "Email",
+      "emailPlaceholder": "client@example.com",
+      "phone": "Phone",
+      "phonePlaceholder": "+1-555-0100",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional notes about this client..."
+    },
+    "project": {
+      "new": "New Project",
+      "edit": "Edit Project",
+      "name": "Name",
+      "namePlaceholder": "Project name...",
+      "client": "Client",
+      "clientPlaceholder": "Select client...",
+      "field": "Field",
+      "fieldPlaceholder": "Select field...",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional notes about this project..."
+    }
+  },
+  "filters": {
+    "thisMonth": "This Month",
+    "lastMonth": "Last Month",
+    "thisYear": "This Year",
+    "allTime": "All Time",
+    "custom": "Custom",
+    "all": "All",
+    "type": {
+      "all": "All",
+      "income": "Income",
+      "receivable": "Receivable",
+      "expense": "Expense"
+    },
+    "status": {
+      "all": "All",
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "overdue": "Overdue"
+    }
+  },
+  "validation": {
+    "required": "This field is required",
+    "amountRequired": "Amount is required",
+    "dateRequired": "Date is required",
+    "nameRequired": "Name is required"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{days} days ago",
+    "weeksAgo": "{weeks} weeks ago",
+    "monthsAgo": "{months} months ago",
+    "yearsAgo": "{years} years ago",
+    "daysOverdue": "{days} days overdue",
+    "dueInDays": "Due in {days} days"
+  }
+}

@@ -19,6 +19,7 @@ import './index.css';
 
 import { router } from './router';
 import { seedDatabase } from './db';
+import { LanguageProvider } from './lib/i18n';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -33,13 +34,12 @@ const queryClient = new QueryClient({
 // Seed the database on first load
 seedDatabase().catch(console.error);
 
-// Set document language (can be changed dynamically)
-document.documentElement.lang = 'en';
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <LanguageProvider>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </LanguageProvider>
   </StrictMode>
 );

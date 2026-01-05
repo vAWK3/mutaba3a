@@ -1,16 +1,18 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { cn } from "../../lib/utils";
+import { useT } from "../../lib/i18n";
 
 const navItems = [
-  { path: "/", label: "Overview", icon: HomeIcon },
-  { path: "/projects", label: "Projects", icon: FolderIcon },
-  { path: "/clients", label: "Clients", icon: UsersIcon },
-  { path: "/transactions", label: "Transactions", icon: ListIcon },
-  { path: "/reports", label: "Reports", icon: ChartIcon },
-];
+  { path: "/", labelKey: "nav.overview", icon: HomeIcon },
+  { path: "/projects", labelKey: "nav.projects", icon: FolderIcon },
+  { path: "/clients", labelKey: "nav.clients", icon: UsersIcon },
+  { path: "/transactions", labelKey: "nav.transactions", icon: ListIcon },
+  { path: "/reports", labelKey: "nav.reports", icon: ChartIcon },
+] as const;
 
 export function SidebarNav() {
   const location = useLocation();
+  const t = useT();
 
   return (
     <aside className="sidebar">
@@ -47,7 +49,7 @@ export function SidebarNav() {
               className={cn("nav-item", isActive && "active")}
             >
               <Icon className="nav-icon" />
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           );
         })}
@@ -62,7 +64,7 @@ export function SidebarNav() {
           )}
         >
           <SettingsIcon className="nav-icon" />
-          Settings
+          {t("nav.settings")}
         </Link>
       </div>
     </aside>

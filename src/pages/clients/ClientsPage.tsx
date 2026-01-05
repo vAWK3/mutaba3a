@@ -5,10 +5,14 @@ import { SearchInput, CurrencyTabs } from '../../components/filters';
 import { useClientSummaries } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, formatRelativeDate } from '../../lib/utils';
+import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { Currency } from '../../types';
 
 export function ClientsPage() {
   const { openClientDrawer } = useDrawerStore();
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = getLocale(language);
   const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [search, setSearch] = useState('');
 
@@ -19,16 +23,16 @@ export function ClientsPage() {
   return (
     <>
       <TopBar
-        title="Clients"
+        title={t('clients.title')}
         filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginLeft: 24 }}>
+          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24 }}>
             <CurrencyTabs value={currency} onChange={setCurrency} />
           </div>
         }
       />
       <div className="page-content">
         <div className="filters-row">
-          <SearchInput value={search} onChange={setSearch} placeholder="Search clients..." />
+          <SearchInput value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
         </div>
 
         {isLoading ? (
@@ -37,12 +41,12 @@ export function ClientsPage() {
           </div>
         ) : clients.length === 0 ? (
           <div className="empty-state">
-            <h3 className="empty-state-title">No clients found</h3>
+            <h3 className="empty-state-title">{t('clients.empty')}</h3>
             <p className="empty-state-description">
-              {search ? 'Try adjusting your search' : 'Add your first client to get started'}
+              {search ? t('clients.emptySearch') : t('clients.emptyHint')}
             </p>
             <button className="btn btn-primary" onClick={() => openClientDrawer({ mode: 'create' })}>
-              Add Client
+              {t('clients.addClient')}
             </button>
           </div>
         ) : (
@@ -50,12 +54,12 @@ export function ClientsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Client</th>
-                  <th>Active Projects</th>
-                  <th style={{ textAlign: 'right' }}>Paid Income</th>
-                  <th style={{ textAlign: 'right' }}>Unpaid</th>
-                  <th>Last Payment</th>
-                  <th>Last Activity</th>
+                  <th>{t('clients.columns.client')}</th>
+                  <th>{t('clients.columns.activeProjects')}</th>
+                  <th style={{ textAlign: 'end' }}>{t('clients.columns.paidIncome')}</th>
+                  <th style={{ textAlign: 'end' }}>{t('clients.columns.unpaid')}</th>
+                  <th>{t('clients.columns.lastPayment')}</th>
+                  <th>{t('clients.columns.lastActivity')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -72,16 +76,16 @@ export function ClientsPage() {
                     </td>
                     <td className="text-secondary">{client.activeProjectCount}</td>
                     <td className="amount-cell amount-positive">
-                      {formatAmount(client.paidIncomeMinor, displayCurrency)}
+                      {formatAmount(client.paidIncomeMinor, displayCurrency, locale)}
                     </td>
                     <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>
-                      {formatAmount(client.unpaidIncomeMinor, displayCurrency)}
+                      {formatAmount(client.unpaidIncomeMinor, displayCurrency, locale)}
                     </td>
                     <td className="text-muted">
-                      {client.lastPaymentAt ? formatDate(client.lastPaymentAt) : '-'}
+                      {client.lastPaymentAt ? formatDate(client.lastPaymentAt, locale) : '-'}
                     </td>
                     <td className="text-muted">
-                      {client.lastActivityAt ? formatRelativeDate(client.lastActivityAt) : '-'}
+                      {client.lastActivityAt ? formatRelativeDate(client.lastActivityAt, t) : '-'}
                     </td>
                   </tr>
                 ))}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useDrawerStore } from '../../lib/stores';
+import { useT, useDirection } from '../../lib/i18n';
 
 interface Breadcrumb {
   label: string;
@@ -15,6 +16,10 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, breadcrumbs, filterSlot, rightSlot }: TopBarProps) {
+  const direction = useDirection();
+  // Use appropriate separator based on direction
+  const separator = direction === 'rtl' ? ' \\ ' : ' / ';
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -31,7 +36,7 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot }: TopBarProp
                     <span className="breadcrumb-current">{crumb.label}</span>
                   )}
                   {index < breadcrumbs.length - 1 && (
-                    <span className="breadcrumb-separator"> / </span>
+                    <span className="breadcrumb-separator">{separator}</span>
                   )}
                 </span>
               ))}
@@ -53,6 +58,7 @@ function AddMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { openTransactionDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
+  const t = useT();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -90,7 +96,7 @@ function AddMenu() {
     <div className="add-menu-container" ref={containerRef}>
       <button className="btn btn-primary" onClick={() => setIsOpen(!isOpen)}>
         <PlusIcon />
-        Add
+        {t('common.add')}
       </button>
       {isOpen && (
         <div className="add-menu">
@@ -102,7 +108,7 @@ function AddMenu() {
             }}
           >
             <DollarIcon className="nav-icon" />
-            Income
+            {t('addMenu.income')}
           </button>
           <button
             className="add-menu-item"
@@ -112,7 +118,7 @@ function AddMenu() {
             }}
           >
             <MinusIcon className="nav-icon" />
-            Expense
+            {t('addMenu.expense')}
           </button>
           <button
             className="add-menu-item"
@@ -122,7 +128,7 @@ function AddMenu() {
             }}
           >
             <FolderPlusIcon className="nav-icon" />
-            Project
+            {t('addMenu.project')}
           </button>
           <button
             className="add-menu-item"
@@ -132,7 +138,7 @@ function AddMenu() {
             }}
           >
             <UserPlusIcon className="nav-icon" />
-            Client
+            {t('addMenu.client')}
           </button>
         </div>
       )}

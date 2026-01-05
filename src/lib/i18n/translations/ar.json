@@ -1,0 +1,309 @@
+{
+  "common": {
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ...",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "archive": "أرشفة",
+    "add": "إضافة",
+    "edit": "تعديل",
+    "loading": "جارٍ التحميل...",
+    "search": "بحث...",
+    "close": "إغلاق",
+    "confirm": "تأكيد",
+    "noClient": "بدون عميل",
+    "noProject": "بدون مشروع",
+    "all": "الكل",
+    "markPaid": "تم الدفع"
+  },
+  "nav": {
+    "overview": "نظرة عامة",
+    "projects": "المشاريع",
+    "clients": "العملاء",
+    "transactions": "المعاملات",
+    "reports": "التقارير",
+    "settings": "الإعدادات"
+  },
+  "addMenu": {
+    "income": "إيراد",
+    "expense": "مصروف",
+    "project": "مشروع",
+    "client": "عميل"
+  },
+  "transactions": {
+    "title": "المعاملات",
+    "empty": "لا توجد معاملات",
+    "emptySearch": "حاول تعديل البحث أو الفلاتر",
+    "emptyHint": "أنشئ أول معاملة للبدء",
+    "addTransaction": "إضافة معاملة",
+    "searchPlaceholder": "بحث في المعاملات...",
+    "confirmDelete": "هل أنت متأكد من حذف هذه المعاملة؟",
+    "type": {
+      "income": "إيراد",
+      "expense": "مصروف",
+      "receivable": "مستحق"
+    },
+    "status": {
+      "paid": "مدفوع",
+      "unpaid": "غير مدفوع",
+      "overdue": "متأخر {days} يوم",
+      "dueIn": "مستحق خلال {days} يوم",
+      "dueToday": "مستحق اليوم"
+    },
+    "columns": {
+      "date": "التاريخ",
+      "type": "النوع",
+      "client": "العميل",
+      "project": "المشروع",
+      "category": "الفئة",
+      "amount": "المبلغ",
+      "status": "الحالة"
+    }
+  },
+  "overview": {
+    "title": "نظرة عامة",
+    "kpi": {
+      "paidIncome": "الإيرادات المحصّلة",
+      "unpaidReceivables": "المستحقات غير المحصّلة",
+      "expenses": "المصروفات",
+      "net": "الصافي (الإيرادات - المصروفات)"
+    },
+    "needsAttention": "يتطلب الانتباه",
+    "noAttention": "لا توجد مستحقات متأخرة أو قادمة",
+    "recentActivity": "النشاط الأخير",
+    "noRecent": "لا توجد معاملات حديثة"
+  },
+  "projects": {
+    "title": "المشاريع",
+    "empty": "لا توجد مشاريع",
+    "emptySearch": "حاول تعديل البحث",
+    "emptyHint": "أنشئ أول مشروع للبدء",
+    "addProject": "إضافة مشروع",
+    "searchPlaceholder": "بحث في المشاريع...",
+    "allFields": "جميع المجالات",
+    "notFound": "المشروع غير موجود",
+    "notFoundHint": "قد يكون هذا المشروع محذوفاً أو غير موجود.",
+    "confirmArchive": "هل أنت متأكد من أرشفة هذا المشروع؟",
+    "columns": {
+      "project": "المشروع",
+      "client": "العميل",
+      "field": "المجال",
+      "paid": "المحصّل",
+      "unpaid": "غير المحصّل",
+      "expenses": "المصروفات",
+      "net": "الصافي",
+      "lastActivity": "آخر نشاط"
+    },
+    "tabs": {
+      "summary": "ملخص",
+      "transactions": "المعاملات"
+    },
+    "detail": {
+      "projectDetails": "تفاصيل المشروع",
+      "noTransactions": "لا توجد معاملات",
+      "noTransactionsHint": "أضف أول معاملة لهذا المشروع."
+    },
+    "fields": {
+      "design": "تصميم",
+      "development": "تطوير",
+      "consulting": "استشارات",
+      "marketing": "تسويق",
+      "legal": "قانوني",
+      "maintenance": "صيانة",
+      "other": "أخرى"
+    }
+  },
+  "clients": {
+    "title": "العملاء",
+    "empty": "لا يوجد عملاء",
+    "emptySearch": "حاول تعديل البحث",
+    "emptyHint": "أضف أول عميل للبدء",
+    "addClient": "إضافة عميل",
+    "searchPlaceholder": "بحث في العملاء...",
+    "notFound": "العميل غير موجود",
+    "notFoundHint": "قد يكون هذا العميل محذوفاً أو غير موجود.",
+    "confirmArchive": "هل أنت متأكد من أرشفة هذا العميل؟",
+    "columns": {
+      "client": "العميل",
+      "activeProjects": "المشاريع النشطة",
+      "paidIncome": "الإيرادات المحصّلة",
+      "unpaid": "غير المحصّل",
+      "lastPayment": "آخر دفعة",
+      "lastActivity": "آخر نشاط"
+    },
+    "tabs": {
+      "summary": "ملخص",
+      "projects": "المشاريع",
+      "receivables": "المستحقات",
+      "transactions": "المعاملات"
+    },
+    "detail": {
+      "clientDetails": "تفاصيل العميل",
+      "email": "البريد الإلكتروني",
+      "phone": "الهاتف",
+      "noProjects": "لا توجد مشاريع",
+      "noProjectsHint": "أضف أول مشروع لهذا العميل.",
+      "noReceivables": "لا توجد مستحقات",
+      "noReceivablesHint": "تم تحصيل جميع المستحقات.",
+      "noTransactions": "لا توجد معاملات",
+      "noTransactionsHint": "أضف أول معاملة لهذا العميل."
+    },
+    "receivables": {
+      "dueDate": "تاريخ الاستحقاق",
+      "daysOverdue": "أيام التأخير",
+      "action": "إجراء"
+    }
+  },
+  "reports": {
+    "title": "التقارير",
+    "exportCsv": "تصدير CSV",
+    "presets": {
+      "thisMonth": "هذا الشهر",
+      "thisYear": "هذا العام",
+      "byProject": "حسب المشروع",
+      "byClient": "حسب العميل",
+      "expensesByCategory": "المصروفات حسب الفئة",
+      "unpaidAging": "تقادم المستحقات"
+    },
+    "sections": {
+      "financialSummary": "الملخص المالي",
+      "incomeByProject": "الإيرادات حسب المشروع",
+      "incomeByClient": "الإيرادات حسب العميل",
+      "expensesByCategory": "المصروفات حسب الفئة",
+      "unpaidAging": "تقادم المستحقات غير المحصّلة"
+    },
+    "aging": {
+      "current": "الحالية (لم تستحق)",
+      "days1to30": "متأخرة 1-30 يوم",
+      "days31to60": "متأخرة 31-60 يوم",
+      "days60plus": "متأخرة أكثر من 60 يوم"
+    },
+    "noExpenses": "لا توجد مصروفات في هذه الفترة"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "language": {
+      "title": "اللغة",
+      "description": "اختر لغتك المفضلة"
+    },
+    "currency": {
+      "title": "العملة",
+      "enabled": "العملات المفعّلة",
+      "enabledDesc": "اختر العملات التي تريد تتبعها",
+      "default": "العملة الافتراضية",
+      "defaultDesc": "الاختيار الافتراضي في الفلاتر"
+    },
+    "data": {
+      "title": "إدارة البيانات",
+      "export": "تصدير البيانات",
+      "exportDesc": "تنزيل نسخة احتياطية من جميع بياناتك",
+      "exportBtn": "تصدير JSON",
+      "exporting": "جارٍ التصدير...",
+      "exported": "تم التصدير بنجاح!",
+      "exportFailed": "فشل التصدير",
+      "import": "استيراد البيانات",
+      "importDesc": "استعادة من ملف نسخة احتياطية (يستبدل جميع البيانات)",
+      "importBtn": "استيراد JSON",
+      "importing": "جارٍ الاستيراد...",
+      "imported": "تم الاستيراد بنجاح! جارٍ التحديث...",
+      "importFailed": "فشل الاستيراد: {error}",
+      "invalidFile": "صيغة ملف النسخة الاحتياطية غير صالحة",
+      "reset": "إعادة تعيين البيانات",
+      "resetDesc": "حذف جميع البيانات وتحميل بيانات تجريبية",
+      "resetBtn": "إعادة التعيين",
+      "resetConfirm": "سيؤدي هذا إلى حذف جميع البيانات وإعادة التعيين ببيانات تجريبية. هل أنت متأكد؟"
+    },
+    "about": {
+      "title": "حول التطبيق",
+      "name": "متابعة - نظام إدارة مصغّر",
+      "description": "أداة تتبع مالي تعمل محلياً للمستقلين والشركات الصغيرة. بياناتك محفوظة محلياً في متصفحك باستخدام IndexedDB."
+    }
+  },
+  "drawer": {
+    "transaction": {
+      "new": "معاملة جديدة",
+      "edit": "تعديل المعاملة",
+      "typeIncome": "إيراد",
+      "typeIncomeDesc": "مدفوع",
+      "typeReceivable": "مستحق",
+      "typeReceivableDesc": "غير مدفوع",
+      "typeExpense": "مصروف",
+      "typeExpenseDesc": "تكلفة",
+      "amount": "المبلغ",
+      "amountPlaceholder": "0.00",
+      "currency": "العملة",
+      "date": "التاريخ",
+      "dueDate": "تاريخ الاستحقاق",
+      "client": "العميل",
+      "clientPlaceholder": "اختر عميل...",
+      "project": "المشروع",
+      "projectPlaceholder": "اختر مشروع...",
+      "category": "الفئة",
+      "categoryPlaceholder": "اختر فئة...",
+      "title": "العنوان",
+      "titlePlaceholder": "وصف مختصر...",
+      "notes": "ملاحظات",
+      "notesPlaceholder": "ملاحظات إضافية..."
+    },
+    "client": {
+      "new": "عميل جديد",
+      "edit": "تعديل العميل",
+      "name": "الاسم",
+      "namePlaceholder": "اسم العميل...",
+      "email": "البريد الإلكتروني",
+      "emailPlaceholder": "client@example.com",
+      "phone": "الهاتف",
+      "phonePlaceholder": "+966-5X-XXX-XXXX",
+      "notes": "ملاحظات",
+      "notesPlaceholder": "ملاحظات إضافية عن هذا العميل..."
+    },
+    "project": {
+      "new": "مشروع جديد",
+      "edit": "تعديل المشروع",
+      "name": "الاسم",
+      "namePlaceholder": "اسم المشروع...",
+      "client": "العميل",
+      "clientPlaceholder": "اختر عميل...",
+      "field": "المجال",
+      "fieldPlaceholder": "اختر مجال...",
+      "notes": "ملاحظات",
+      "notesPlaceholder": "ملاحظات إضافية عن هذا المشروع..."
+    }
+  },
+  "filters": {
+    "thisMonth": "هذا الشهر",
+    "lastMonth": "الشهر الماضي",
+    "thisYear": "هذا العام",
+    "allTime": "كل الوقت",
+    "custom": "مخصص",
+    "all": "الكل",
+    "type": {
+      "all": "الكل",
+      "income": "إيراد",
+      "receivable": "مستحق",
+      "expense": "مصروف"
+    },
+    "status": {
+      "all": "الكل",
+      "paid": "مدفوع",
+      "unpaid": "غير مدفوع",
+      "overdue": "متأخر"
+    }
+  },
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "amountRequired": "المبلغ مطلوب",
+    "dateRequired": "التاريخ مطلوب",
+    "nameRequired": "الاسم مطلوب"
+  },
+  "time": {
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "daysAgo": "منذ {days} يوم",
+    "weeksAgo": "منذ {weeks} أسبوع",
+    "monthsAgo": "منذ {months} شهر",
+    "yearsAgo": "منذ {years} سنة",
+    "daysOverdue": "متأخر {days} يوم",
+    "dueInDays": "مستحق خلال {days} يوم"
+  }
+}

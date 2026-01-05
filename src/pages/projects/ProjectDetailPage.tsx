@@ -5,12 +5,16 @@ import { SearchInput, CurrencyTabs, StatusSegment, DateRangeControl } from '../.
 import { useProject, useProjectSummary, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { Currency, TxStatus, QueryFilters } from '../../types';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
   const { openTransactionDrawer, openProjectDrawer } = useDrawerStore();
   const markPaidMutation = useMarkTransactionPaid();
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = getLocale(language);
 
   const [activeTab, setActiveTab] = useState<'summary' | 'transactions'>('summary');
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-year'));
@@ -59,7 +63,7 @@ export function ProjectDetailPage() {
   if (projectLoading) {
     return (
       <>
-        <TopBar title="Loading..." breadcrumbs={[{ label: 'Projects', href: '/projects' }]} />
+        <TopBar title={t('common.loading')} breadcrumbs={[{ label: t('nav.projects'), href: '/projects' }]} />
         <div className="page-content">
           <div className="loading">
             <div className="spinner" />
@@ -72,11 +76,11 @@ export function ProjectDetailPage() {
   if (!project) {
     return (
       <>
-        <TopBar title="Project Not Found" breadcrumbs={[{ label: 'Projects', href: '/projects' }]} />
+        <TopBar title={t('projects.notFound')} breadcrumbs={[{ label: t('nav.projects'), href: '/projects' }]} />
         <div className="page-content">
           <div className="empty-state">
-            <h3 className="empty-state-title">Project not found</h3>
-            <p className="empty-state-description">This project may have been deleted or doesn't exist.</p>
+            <h3 className="empty-state-title">{t('projects.notFound')}</h3>
+            <p className="empty-state-description">{t('projects.notFoundHint')}</p>
           </div>
         </div>
       </>
@@ -88,12 +92,12 @@ export function ProjectDetailPage() {
       <TopBar
         title={project.name}
         breadcrumbs={[
-          { label: 'Projects', href: '/projects' },
+          { label: t('nav.projects'), href: '/projects' },
           { label: project.name },
         ]}
         rightSlot={
           <button className="btn btn-ghost" onClick={() => openProjectDrawer({ mode: 'edit', projectId })}>
-            Edit
+            {t('common.edit')}
           </button>
         }
       />
@@ -102,25 +106,25 @@ export function ProjectDetailPage() {
         {summary && (
           <div className="inline-stats" style={{ marginBottom: 24 }}>
             <div className="inline-stat">
-              <span className="inline-stat-label">Paid</span>
+              <span className="inline-stat-label">{t('projects.columns.paid')}</span>
               <span className="inline-stat-value text-success">
-                {formatAmount(summary.paidIncomeMinor, displayCurrency)}
+                {formatAmount(summary.paidIncomeMinor, displayCurrency, locale)}
               </span>
             </div>
             <div className="inline-stat">
-              <span className="inline-stat-label">Unpaid</span>
+              <span className="inline-stat-label">{t('projects.columns.unpaid')}</span>
               <span className="inline-stat-value text-warning">
-                {formatAmount(summary.unpaidIncomeMinor, displayCurrency)}
+                {formatAmount(summary.unpaidIncomeMinor, displayCurrency, locale)}
               </span>
             </div>
             <div className="inline-stat">
-              <span className="inline-stat-label">Expenses</span>
-              <span className="inline-stat-value">{formatAmount(summary.expensesMinor, displayCurrency)}</span>
+              <span className="inline-stat-label">{t('projects.columns.expenses')}</span>
+              <span className="inline-stat-value">{formatAmount(summary.expensesMinor, displayCurrency, locale)}</span>
             </div>
             <div className="inline-stat">
-              <span className="inline-stat-label">Net</span>
+              <span className="inline-stat-label">{t('projects.columns.net')}</span>
               <span className={cn('inline-stat-value', summary.netMinor >= 0 ? 'text-success' : 'text-danger')}>
-                {formatAmount(summary.netMinor, displayCurrency)}
+                {formatAmount(summary.netMinor, displayCurrency, locale)}
               </span>
             </div>
           </div>
@@ -133,13 +137,13 @@ export function ProjectDetailPage() {
               className={cn('tab', activeTab === 'summary' && 'active')}
               onClick={() => setActiveTab('summary')}
             >
-              Summary
+              {t('projects.tabs.summary')}
             </button>
             <button
               className={cn('tab', activeTab === 'transactions' && 'active')}
               onClick={() => setActiveTab('transactions')}
             >
-              Transactions
+              {t('projects.tabs.transactions')}
             </button>
           </div>
         </div>
@@ -147,26 +151,26 @@ export function ProjectDetailPage() {
         {activeTab === 'summary' && (
           <div>
             <div className="card" style={{ marginBottom: 16 }}>
-              <h4 style={{ marginBottom: 12 }}>Project Details</h4>
+              <h4 style={{ marginBottom: 12 }}>{t('projects.detail.projectDetails')}</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 <div>
-                  <div className="text-muted text-sm">Client</div>
+                  <div className="text-muted text-sm">{t('projects.columns.client')}</div>
                   <div>{summary?.clientName || '-'}</div>
                 </div>
                 <div>
-                  <div className="text-muted text-sm">Field</div>
+                  <div className="text-muted text-sm">{t('projects.columns.field')}</div>
                   <div>{project.field || '-'}</div>
                 </div>
               </div>
               {project.notes && (
                 <div style={{ marginTop: 16 }}>
-                  <div className="text-muted text-sm">Notes</div>
+                  <div className="text-muted text-sm">{t('drawer.project.notes')}</div>
                   <div>{project.notes}</div>
                 </div>
               )}
             </div>
             <button className="btn btn-primary" onClick={handleAddTransaction}>
-              Add Transaction
+              {t('transactions.addTransaction')}
             </button>
           </div>
         )}
@@ -181,15 +185,15 @@ export function ProjectDetailPage() {
               />
               <CurrencyTabs value={currency} onChange={setCurrency} />
               <StatusSegment value={statusFilter} onChange={setStatusFilter} />
-              <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              <SearchInput value={search} onChange={setSearch} />
             </div>
 
             {transactions.length === 0 ? (
               <div className="empty-state">
-                <h3 className="empty-state-title">No transactions</h3>
-                <p className="empty-state-description">Add your first transaction for this project.</p>
+                <h3 className="empty-state-title">{t('projects.detail.noTransactions')}</h3>
+                <p className="empty-state-description">{t('projects.detail.noTransactionsHint')}</p>
                 <button className="btn btn-primary" onClick={handleAddTransaction}>
-                  Add Transaction
+                  {t('transactions.addTransaction')}
                 </button>
               </div>
             ) : (
@@ -197,12 +201,12 @@ export function ProjectDetailPage() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Client</th>
-                      <th>Category</th>
-                      <th style={{ textAlign: 'right' }}>Amount</th>
-                      <th>Status</th>
+                      <th>{t('transactions.columns.date')}</th>
+                      <th>{t('transactions.columns.type')}</th>
+                      <th>{t('transactions.columns.client')}</th>
+                      <th>{t('transactions.columns.category')}</th>
+                      <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
+                      <th>{t('transactions.columns.status')}</th>
                       <th style={{ width: 40 }}></th>
                     </tr>
                   </thead>
@@ -214,7 +218,7 @@ export function ProjectDetailPage() {
 
                       return (
                         <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id)}>
-                          <td>{formatDate(tx.occurredAt)}</td>
+                          <td>{formatDate(tx.occurredAt, locale)}</td>
                           <td>
                             <span
                               className={cn(
@@ -224,7 +228,7 @@ export function ProjectDetailPage() {
                                 isReceivable && 'receivable'
                               )}
                             >
-                              {isReceivable ? 'Receivable' : tx.kind === 'income' ? 'Income' : 'Expense'}
+                              {isReceivable ? t('transactions.type.receivable') : tx.kind === 'income' ? t('transactions.type.income') : t('transactions.type.expense')}
                             </span>
                           </td>
                           <td className="text-secondary">{tx.clientName || '-'}</td>
@@ -237,18 +241,18 @@ export function ProjectDetailPage() {
                             )}
                           >
                             {tx.kind === 'expense' ? '-' : ''}
-                            {formatAmount(tx.amountMinor, tx.currency)}
+                            {formatAmount(tx.amountMinor, tx.currency, locale)}
                           </td>
                           <td>
                             {tx.kind === 'income' && (
                               <>
                                 {tx.status === 'paid' ? (
-                                  <span className="status-badge paid">Paid</span>
+                                  <span className="status-badge paid">{t('transactions.status.paid')}</span>
                                 ) : isOverdue ? (
-                                  <span className="status-badge overdue">{Math.abs(daysUntilDue!)}d overdue</span>
+                                  <span className="status-badge overdue">{t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}</span>
                                 ) : (
                                   <span className="status-badge unpaid">
-                                    Due {daysUntilDue === 0 ? 'today' : `in ${daysUntilDue}d`}
+                                    {daysUntilDue === 0 ? t('transactions.status.dueToday') : t('transactions.status.dueIn', { days: daysUntilDue ??0 })}
                                   </span>
                                 )}
                               </>
@@ -259,7 +263,7 @@ export function ProjectDetailPage() {
                               <button
                                 className="btn btn-sm btn-ghost"
                                 onClick={(e) => handleMarkPaid(e, tx.id)}
-                                title="Mark as paid"
+                                title={t('common.markPaid')}
                               >
                                 <CheckIcon />
                               </button>

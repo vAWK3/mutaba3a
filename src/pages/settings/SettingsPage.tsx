@@ -3,11 +3,15 @@ import { TopBar } from '../../components/layout';
 import { useSettings, useUpdateSettings } from '../../hooks/useQueries';
 import { db } from '../../db';
 import { seedDatabase, clearDatabase } from '../../db/seed';
+import { useT, useLanguage } from '../../lib/i18n';
 import type { Currency } from '../../types';
+import type { Language } from '../../lib/i18n/types';
 
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
   const updateMutation = useUpdateSettings();
+  const t = useT();
+  const { language, setLanguage } = useLanguage();
   const [exportStatus, setExportStatus] = useState<string>('');
   const [importStatus, setImportStatus] = useState<string>('');
 
@@ -33,7 +37,7 @@ export function SettingsPage() {
 
   const handleExportData = async () => {
     try {
-      setExportStatus('Exporting...');
+      setExportStatus(t('settings.data.exporting'));
 
       const data = {
         clients: await db.clients.toArray(),
@@ -54,10 +58,10 @@ export function SettingsPage() {
       a.click();
       URL.revokeObjectURL(url);
 
-      setExportStatus('Exported successfully!');
+      setExportStatus(t('settings.data.exported'));
       setTimeout(() => setExportStatus(''), 3000);
     } catch (error) {
-      setExportStatus('Export failed');
+      setExportStatus(t('settings.data.exportFailed'));
       console.error('Export error:', error);
     }
   };
@@ -72,14 +76,14 @@ export function SettingsPage() {
       if (!file) return;
 
       try {
-        setImportStatus('Importing...');
+        setImportStatus(t('settings.data.importing'));
 
         const text = await file.text();
         const data = JSON.parse(text);
 
         // Validate structure
         if (!data.clients || !data.projects || !data.transactions) {
-          throw new Error('Invalid backup file format');
+          throw new Error(t('settings.data.invalidFile'));
         }
 
         // Clear and import
@@ -92,10 +96,10 @@ export function SettingsPage() {
         if (data.fxRates?.length) await db.fxRates.bulkAdd(data.fxRates);
         if (data.settings?.length) await db.settings.bulkAdd(data.settings);
 
-        setImportStatus('Imported successfully! Refreshing...');
+        setImportStatus(t('settings.data.imported'));
         setTimeout(() => window.location.reload(), 1500);
       } catch (error) {
-        setImportStatus('Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        setImportStatus(t('settings.data.importFailed', { error: error instanceof Error ? error.message : 'Unknown error' }));
         console.error('Import error:', error);
       }
     };
@@ -104,7 +108,7 @@ export function SettingsPage() {
   };
 
   const handleResetData = async () => {
-    if (!confirm('This will delete all data and reset with sample data. Are you sure?')) return;
+    if (!confirm(t('settings.data.resetConfirm'))) return;
 
     try {
       await clearDatabase();
@@ -118,7 +122,7 @@ export function SettingsPage() {
   if (isLoading) {
     return (
       <>
-        <TopBar title="Settings" />
+        <TopBar title={t('settings.title')} />
         <div className="page-content">
           <div className="loading">
             <div className="spinner" />
@@ -130,25 +134,47 @@ export function SettingsPage() {
 
   return (
     <>
-      <TopBar title="Settings" />
+      <TopBar title={t('settings.title')} />
       <div className="page-content" style={{ maxWidth: 600 }}>
-        {/* Currency Settings */}
+        {/* Language Settings */}
         <div className="settings-section">
-          <h3 className="settings-section-title">Currency</h3>
+          <h3 className="settings-section-title">{t('settings.language.title')}</h3>
 
           <div className="settings-row">
             <div>
-              <div className="settings-label">Enabled Currencies</div>
-              <div className="settings-description">Select which currencies to track</div>
+              <div className="settings-label">{t('settings.language.description')}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['USD', 'ILS'] as Currency[]).map((currency) => (
+              {(['en', 'ar'] as Language[]).map((lang) => (
                 <button
-                  key={currency}
-                  className={`btn btn-sm ${settings?.enabledCurrencies.includes(currency) ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => handleCurrencyToggle(currency)}
+                  key={lang}
+                  className={`btn btn-sm ${language === lang ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setLanguage(lang)}
                 >
-                  {currency}
+                  {lang === 'en' ? 'English' : 'العربية'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Currency Settings */}
+        <div className="settings-section">
+          <h3 className="settings-section-title">{t('settings.currency.title')}</h3>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">{t('settings.currency.enabled')}</div>
+              <div className="settings-description">{t('settings.currency.enabledDesc')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['USD', 'ILS'] as Currency[]).map((curr) => (
+                <button
+                  key={curr}
+                  className={`btn btn-sm ${settings?.enabledCurrencies.includes(curr) ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => handleCurrencyToggle(curr)}
+                >
+                  {curr}
                 </button>
               ))}
             </div>
@@ -156,8 +182,8 @@ export function SettingsPage() {
 
           <div className="settings-row">
             <div>
-              <div className="settings-label">Default Currency</div>
-              <div className="settings-description">Default selection in filters</div>
+              <div className="settings-label">{t('settings.currency.default')}</div>
+              <div className="settings-description">{t('settings.currency.defaultDesc')}</div>
             </div>
             <select
               className="select"
@@ -175,53 +201,52 @@ export function SettingsPage() {
 
         {/* Data Management */}
         <div className="settings-section">
-          <h3 className="settings-section-title">Data Management</h3>
+          <h3 className="settings-section-title">{t('settings.data.title')}</h3>
 
           <div className="settings-row">
             <div>
-              <div className="settings-label">Export Data</div>
-              <div className="settings-description">Download a backup of all your data</div>
+              <div className="settings-label">{t('settings.data.export')}</div>
+              <div className="settings-description">{t('settings.data.exportDesc')}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {exportStatus && <span className="text-sm text-muted">{exportStatus}</span>}
               <button className="btn btn-secondary" onClick={handleExportData}>
-                Export JSON
+                {t('settings.data.exportBtn')}
               </button>
             </div>
           </div>
 
           <div className="settings-row">
             <div>
-              <div className="settings-label">Import Data</div>
-              <div className="settings-description">Restore from a backup file (replaces all data)</div>
+              <div className="settings-label">{t('settings.data.import')}</div>
+              <div className="settings-description">{t('settings.data.importDesc')}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {importStatus && <span className="text-sm text-muted">{importStatus}</span>}
               <button className="btn btn-secondary" onClick={handleImportData}>
-                Import JSON
+                {t('settings.data.importBtn')}
               </button>
             </div>
           </div>
 
           <div className="settings-row" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 8 }}>
             <div>
-              <div className="settings-label text-danger">Reset Data</div>
-              <div className="settings-description">Delete all data and load sample data</div>
+              <div className="settings-label text-danger">{t('settings.data.reset')}</div>
+              <div className="settings-description">{t('settings.data.resetDesc')}</div>
             </div>
             <button className="btn btn-danger" onClick={handleResetData}>
-              Reset to Sample Data
+              {t('settings.data.resetBtn')}
             </button>
           </div>
         </div>
 
         {/* About */}
         <div className="settings-section">
-          <h3 className="settings-section-title">About</h3>
+          <h3 className="settings-section-title">{t('settings.about.title')}</h3>
           <div className="text-muted">
-            <p>Mutaba3a - Mini CRM</p>
+            <p>{t('settings.about.name')}</p>
             <p className="text-sm" style={{ marginTop: 8 }}>
-              A local-first financial tracking tool for freelancers and small businesses.
-              Your data is stored locally in your browser using IndexedDB.
+              {t('settings.about.description')}
             </p>
           </div>
         </div>

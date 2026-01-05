@@ -3,11 +3,15 @@ import { TopBar } from '../../components/layout';
 import { CurrencyTabs, DateRangeControl } from '../../components/filters';
 import { useTransactions, useProjectSummaries, useClientSummaries } from '../../hooks/useQueries';
 import { formatAmount, getDateRangePreset, cn } from '../../lib/utils';
+import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { Currency, QueryFilters } from '../../types';
 
 type ReportType = 'this-month' | 'this-year' | 'by-project' | 'by-client' | 'expenses-by-category' | 'unpaid-aging';
 
 export function ReportsPage() {
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = getLocale(language);
   const [reportType, setReportType] = useState<ReportType>('this-month');
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
   const [currency, setCurrency] = useState<Currency | undefined>(undefined);
@@ -151,23 +155,23 @@ export function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const reports: { type: ReportType; label: string }[] = [
-    { type: 'this-month', label: 'This Month' },
-    { type: 'this-year', label: 'This Year' },
-    { type: 'by-project', label: 'By Project' },
-    { type: 'by-client', label: 'By Client' },
-    { type: 'expenses-by-category', label: 'Expenses by Category' },
-    { type: 'unpaid-aging', label: 'Unpaid Aging' },
+  const reports: { type: ReportType; labelKey: string }[] = [
+    { type: 'this-month', labelKey: 'reports.presets.thisMonth' },
+    { type: 'this-year', labelKey: 'reports.presets.thisYear' },
+    { type: 'by-project', labelKey: 'reports.presets.byProject' },
+    { type: 'by-client', labelKey: 'reports.presets.byClient' },
+    { type: 'expenses-by-category', labelKey: 'reports.presets.expensesByCategory' },
+    { type: 'unpaid-aging', labelKey: 'reports.presets.unpaidAging' },
   ];
 
   return (
     <>
-      <TopBar title="Reports" />
+      <TopBar title={t('reports.title')} />
       <div className="page-content">
         <div className="reports-layout">
           {/* Sidebar */}
           <div className="reports-sidebar">
-            <div className="reports-sidebar-title">Reports</div>
+            <div className="reports-sidebar-title">{t('reports.title')}</div>
             {reports.map((r) => (
               <button
                 key={r.type}
@@ -181,7 +185,7 @@ export function ReportsPage() {
                   }
                 }}
               >
-                {r.label}
+                {t(r.labelKey)}
               </button>
             ))}
           </div>
@@ -199,31 +203,31 @@ export function ReportsPage() {
               )}
               <CurrencyTabs value={currency} onChange={setCurrency} />
               <button className="btn btn-secondary" onClick={handleExportCSV}>
-                Export CSV
+                {t('reports.exportCsv')}
               </button>
             </div>
 
             {/* Report Content */}
             {(reportType === 'this-month' || reportType === 'this-year') && (
               <div>
-                <h3 style={{ marginBottom: 16 }}>Financial Summary</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.financialSummary')}</h3>
                 <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                   <div className="kpi-card">
-                    <div className="kpi-label">Paid Income</div>
-                    <div className="kpi-value positive">{formatAmount(summaryData.paidIncome, displayCurrency)}</div>
+                    <div className="kpi-label">{t('overview.kpi.paidIncome')}</div>
+                    <div className="kpi-value positive">{formatAmount(summaryData.paidIncome, displayCurrency, locale)}</div>
                   </div>
                   <div className="kpi-card">
-                    <div className="kpi-label">Unpaid Receivables</div>
-                    <div className="kpi-value warning">{formatAmount(summaryData.unpaidIncome, displayCurrency)}</div>
+                    <div className="kpi-label">{t('overview.kpi.unpaidReceivables')}</div>
+                    <div className="kpi-value warning">{formatAmount(summaryData.unpaidIncome, displayCurrency, locale)}</div>
                   </div>
                   <div className="kpi-card">
-                    <div className="kpi-label">Expenses</div>
-                    <div className="kpi-value">{formatAmount(summaryData.expenses, displayCurrency)}</div>
+                    <div className="kpi-label">{t('overview.kpi.expenses')}</div>
+                    <div className="kpi-value">{formatAmount(summaryData.expenses, displayCurrency, locale)}</div>
                   </div>
                   <div className="kpi-card">
-                    <div className="kpi-label">Net</div>
+                    <div className="kpi-label">{t('projects.columns.net')}</div>
                     <div className={cn('kpi-value', summaryData.net >= 0 ? 'positive' : 'negative')}>
-                      {formatAmount(summaryData.net, displayCurrency)}
+                      {formatAmount(summaryData.net, displayCurrency, locale)}
                     </div>
                   </div>
                 </div>
@@ -232,17 +236,17 @@ export function ReportsPage() {
 
             {reportType === 'by-project' && (
               <div>
-                <h3 style={{ marginBottom: 16 }}>Income by Project</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.incomeByProject')}</h3>
                 <div className="data-table">
                   <table>
                     <thead>
                       <tr>
-                        <th>Project</th>
-                        <th>Client</th>
-                        <th style={{ textAlign: 'right' }}>Paid</th>
-                        <th style={{ textAlign: 'right' }}>Unpaid</th>
-                        <th style={{ textAlign: 'right' }}>Expenses</th>
-                        <th style={{ textAlign: 'right' }}>Net</th>
+                        <th>{t('projects.columns.project')}</th>
+                        <th>{t('projects.columns.client')}</th>
+                        <th style={{ textAlign: 'end' }}>{t('projects.columns.paid')}</th>
+                        <th style={{ textAlign: 'end' }}>{t('projects.columns.unpaid')}</th>
+                        <th style={{ textAlign: 'end' }}>{t('projects.columns.expenses')}</th>
+                        <th style={{ textAlign: 'end' }}>{t('projects.columns.net')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -250,11 +254,11 @@ export function ReportsPage() {
                         <tr key={p.id}>
                           <td style={{ fontWeight: 500 }}>{p.name}</td>
                           <td className="text-secondary">{p.clientName || '-'}</td>
-                          <td className="amount-cell amount-positive">{formatAmount(p.paidIncomeMinor, displayCurrency)}</td>
-                          <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>{formatAmount(p.unpaidIncomeMinor, displayCurrency)}</td>
-                          <td className="amount-cell">{formatAmount(p.expensesMinor, displayCurrency)}</td>
+                          <td className="amount-cell amount-positive">{formatAmount(p.paidIncomeMinor, displayCurrency, locale)}</td>
+                          <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>{formatAmount(p.unpaidIncomeMinor, displayCurrency, locale)}</td>
+                          <td className="amount-cell">{formatAmount(p.expensesMinor, displayCurrency, locale)}</td>
                           <td className={cn('amount-cell', p.netMinor >= 0 ? 'amount-positive' : 'amount-negative')}>
-                            {formatAmount(p.netMinor, displayCurrency)}
+                            {formatAmount(p.netMinor, displayCurrency, locale)}
                           </td>
                         </tr>
                       ))}
@@ -266,15 +270,15 @@ export function ReportsPage() {
 
             {reportType === 'by-client' && (
               <div>
-                <h3 style={{ marginBottom: 16 }}>Income by Client</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.incomeByClient')}</h3>
                 <div className="data-table">
                   <table>
                     <thead>
                       <tr>
-                        <th>Client</th>
-                        <th>Projects</th>
-                        <th style={{ textAlign: 'right' }}>Paid</th>
-                        <th style={{ textAlign: 'right' }}>Unpaid</th>
+                        <th>{t('clients.columns.client')}</th>
+                        <th>{t('clients.tabs.projects')}</th>
+                        <th style={{ textAlign: 'end' }}>{t('projects.columns.paid')}</th>
+                        <th style={{ textAlign: 'end' }}>{t('projects.columns.unpaid')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -282,8 +286,8 @@ export function ReportsPage() {
                         <tr key={c.id}>
                           <td style={{ fontWeight: 500 }}>{c.name}</td>
                           <td className="text-secondary">{c.activeProjectCount}</td>
-                          <td className="amount-cell amount-positive">{formatAmount(c.paidIncomeMinor, displayCurrency)}</td>
-                          <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>{formatAmount(c.unpaidIncomeMinor, displayCurrency)}</td>
+                          <td className="amount-cell amount-positive">{formatAmount(c.paidIncomeMinor, displayCurrency, locale)}</td>
+                          <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>{formatAmount(c.unpaidIncomeMinor, displayCurrency, locale)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -294,25 +298,25 @@ export function ReportsPage() {
 
             {reportType === 'expenses-by-category' && (
               <div>
-                <h3 style={{ marginBottom: 16 }}>Expenses by Category</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.expensesByCategory')}</h3>
                 {expensesByCategory.length === 0 ? (
                   <div className="empty-state">
-                    <p className="text-muted">No expenses in this period</p>
+                    <p className="text-muted">{t('reports.noExpenses')}</p>
                   </div>
                 ) : (
                   <div className="data-table">
                     <table>
                       <thead>
                         <tr>
-                          <th>Category</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
+                          <th>{t('transactions.columns.category')}</th>
+                          <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {expensesByCategory.map((e) => (
                           <tr key={e.category}>
                             <td style={{ fontWeight: 500 }}>{e.category}</td>
-                            <td className="amount-cell">{formatAmount(e.amount, displayCurrency)}</td>
+                            <td className="amount-cell">{formatAmount(e.amount, displayCurrency, locale)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -324,23 +328,23 @@ export function ReportsPage() {
 
             {reportType === 'unpaid-aging' && (
               <div>
-                <h3 style={{ marginBottom: 16 }}>Unpaid Receivables Aging</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.unpaidAging')}</h3>
                 <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                   <div className="kpi-card">
-                    <div className="kpi-label">Current (not due)</div>
-                    <div className="kpi-value">{formatAmount(unpaidAging.current, displayCurrency)}</div>
+                    <div className="kpi-label">{t('reports.aging.current')}</div>
+                    <div className="kpi-value">{formatAmount(unpaidAging.current, displayCurrency, locale)}</div>
                   </div>
                   <div className="kpi-card">
-                    <div className="kpi-label">1-30 days overdue</div>
-                    <div className="kpi-value warning">{formatAmount(unpaidAging['1-30'], displayCurrency)}</div>
+                    <div className="kpi-label">{t('reports.aging.days1to30')}</div>
+                    <div className="kpi-value warning">{formatAmount(unpaidAging['1-30'], displayCurrency, locale)}</div>
                   </div>
                   <div className="kpi-card">
-                    <div className="kpi-label">31-60 days overdue</div>
-                    <div className="kpi-value" style={{ color: 'var(--color-danger)' }}>{formatAmount(unpaidAging['31-60'], displayCurrency)}</div>
+                    <div className="kpi-label">{t('reports.aging.days31to60')}</div>
+                    <div className="kpi-value" style={{ color: 'var(--color-danger)' }}>{formatAmount(unpaidAging['31-60'], displayCurrency, locale)}</div>
                   </div>
                   <div className="kpi-card">
-                    <div className="kpi-label">60+ days overdue</div>
-                    <div className="kpi-value negative">{formatAmount(unpaidAging['60+'], displayCurrency)}</div>
+                    <div className="kpi-label">{t('reports.aging.days60plus')}</div>
+                    <div className="kpi-value negative">{formatAmount(unpaidAging['60+'], displayCurrency, locale)}</div>
                   </div>
                 </div>
               </div>

@@ -12,8 +12,9 @@ import {
   useClients,
 } from '../../hooks/useQueries';
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
-const FIELDS = ['Design', 'Development', 'Consulting', 'Marketing', 'Legal', 'Maintenance', 'Other'];
+const FIELD_KEYS = ['design', 'development', 'consulting', 'marketing', 'legal', 'maintenance', 'other'] as const;
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -27,6 +28,7 @@ type FormData = z.infer<typeof schema>;
 export function ProjectDrawer() {
   const { projectDrawer, closeProjectDrawer } = useDrawerStore();
   const { mode, projectId, defaultClientId } = projectDrawer;
+  const t = useT();
 
   const { data: existingProject, isLoading: projectLoading } = useProject(projectId || '');
   const { data: clients = [] } = useClients();
@@ -78,7 +80,7 @@ export function ProjectDrawer() {
 
   const handleArchive = async () => {
     if (!projectId) return;
-    if (!confirm('Are you sure you want to archive this project?')) return;
+    if (!confirm(t('projects.confirmArchive'))) return;
 
     try {
       await archiveMutation.mutateAsync(projectId);
@@ -92,7 +94,7 @@ export function ProjectDrawer() {
 
   if (mode === 'edit' && projectLoading) {
     return (
-      <Drawer title="Loading..." onClose={closeProjectDrawer}>
+      <Drawer title={t('common.loading')} onClose={closeProjectDrawer}>
         <div className="loading">
           <div className="spinner" />
         </div>
@@ -102,7 +104,7 @@ export function ProjectDrawer() {
 
   return (
     <Drawer
-      title={mode === 'edit' ? 'Edit Project' : 'New Project'}
+      title={mode === 'edit' ? t('drawer.project.edit') : t('drawer.project.new')}
       onClose={closeProjectDrawer}
       footer={
         <>
@@ -114,13 +116,13 @@ export function ProjectDrawer() {
                 onClick={handleArchive}
                 disabled={archiveMutation.isPending}
               >
-                Archive
+                {t('common.archive')}
               </button>
             )}
           </div>
           <div className="drawer-footer-right">
             <button type="button" className="btn btn-secondary" onClick={closeProjectDrawer}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -128,7 +130,7 @@ export function ProjectDrawer() {
               className="btn btn-primary"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Saving...' : 'Save'}
+              {isSubmitting ? t('common.saving') : t('common.save')}
             </button>
           </div>
         </>
@@ -136,26 +138,26 @@ export function ProjectDrawer() {
     >
       <form id="project-form" onSubmit={form.handleSubmit(onSubmit)}>
         <div className="form-group">
-          <label className="form-label">Name *</label>
+          <label className="form-label">{t('drawer.project.name')} *</label>
           <input
             type="text"
             className={cn('input', form.formState.errors.name && 'input-error')}
-            placeholder="Project name..."
+            placeholder={t('drawer.project.namePlaceholder')}
             {...form.register('name')}
           />
           {form.formState.errors.name && (
-            <p className="form-error">{form.formState.errors.name.message}</p>
+            <p className="form-error">{t('validation.nameRequired')}</p>
           )}
         </div>
 
         <div className="form-group">
-          <label className="form-label">Client</label>
+          <label className="form-label">{t('drawer.project.client')}</label>
           <Controller
             name="clientId"
             control={form.control}
             render={({ field }) => (
               <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">Select client...</option>
+                <option value="">{t('drawer.project.clientPlaceholder')}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
@@ -167,28 +169,32 @@ export function ProjectDrawer() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Field</label>
+          <label className="form-label">{t('drawer.project.field')}</label>
           <Controller
             name="field"
             control={form.control}
             render={({ field }) => (
               <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">Select field...</option>
-                {FIELDS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
+                <option value="">{t('drawer.project.fieldPlaceholder')}</option>
+                {FIELD_KEYS.map((f) => {
+                  // Capitalize first letter for storage value (e.g., 'design' -> 'Design')
+                  const value = f.charAt(0).toUpperCase() + f.slice(1);
+                  return (
+                    <option key={f} value={value}>
+                      {t(`projects.fields.${f}`)}
+                    </option>
+                  );
+                })}
               </select>
             )}
           />
         </div>
 
         <div className="form-group">
-          <label className="form-label">Notes</label>
+          <label className="form-label">{t('drawer.project.notes')}</label>
           <textarea
             className="textarea"
-            placeholder="Additional notes about this project..."
+            placeholder={t('drawer.project.notesPlaceholder')}
             {...form.register('notes')}
           />
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useT } from '../../lib/i18n';
 
 interface SearchInputProps {
   value: string;
@@ -7,7 +8,9 @@ interface SearchInputProps {
   debounceMs?: number;
 }
 
-export function SearchInput({ value, onChange, placeholder = 'Search...', debounceMs = 200 }: SearchInputProps) {
+export function SearchInput({ value, onChange, placeholder, debounceMs = 200 }: SearchInputProps) {
+  const t = useT();
+  const defaultPlaceholder = placeholder ?? t('common.search');
   const [localValue, setLocalValue] = useState(value);
   const timeoutRef = useRef<number | undefined>(undefined);
 
@@ -42,7 +45,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
         type="text"
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={defaultPlaceholder}
       />
       {localValue && (
         <button

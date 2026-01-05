@@ -14,6 +14,7 @@ import {
   useCategories,
 } from '../../hooks/useQueries';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 import type { TxKind, TxStatus, Currency } from '../../types';
 
 type TransactionType = 'income' | 'receivable' | 'expense';
@@ -36,6 +37,7 @@ type FormData = z.infer<typeof schema>;
 export function TransactionDrawer() {
   const { transactionDrawer, closeTransactionDrawer } = useDrawerStore();
   const { mode, transactionId, defaultKind, defaultClientId, defaultProjectId } = transactionDrawer;
+  const t = useT();
 
   const { data: existingTx, isLoading: txLoading } = useTransaction(transactionId || '');
   const { data: clients = [] } = useClients();
@@ -143,7 +145,7 @@ export function TransactionDrawer() {
 
   const handleDelete = async () => {
     if (!transactionId) return;
-    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    if (!confirm(t('transactions.confirmDelete'))) return;
 
     try {
       await deleteMutation.mutateAsync(transactionId);
@@ -157,7 +159,7 @@ export function TransactionDrawer() {
 
   if (mode === 'edit' && txLoading) {
     return (
-      <Drawer title="Loading..." onClose={closeTransactionDrawer}>
+      <Drawer title={t('common.loading')} onClose={closeTransactionDrawer}>
         <div className="loading">
           <div className="spinner" />
         </div>
@@ -167,7 +169,7 @@ export function TransactionDrawer() {
 
   return (
     <Drawer
-      title={mode === 'edit' ? 'Edit Transaction' : 'New Transaction'}
+      title={mode === 'edit' ? t('drawer.transaction.edit') : t('drawer.transaction.new')}
       onClose={closeTransactionDrawer}
       footer={
         <>
@@ -179,13 +181,13 @@ export function TransactionDrawer() {
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
               >
-                Delete
+                {t('common.delete')}
               </button>
             )}
           </div>
           <div className="drawer-footer-right">
             <button type="button" className="btn btn-secondary" onClick={closeTransactionDrawer}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -193,7 +195,7 @@ export function TransactionDrawer() {
               className="btn btn-primary"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Saving...' : 'Save'}
+              {isSubmitting ? t('common.saving') : t('common.save')}
             </button>
           </div>
         </>
@@ -207,45 +209,45 @@ export function TransactionDrawer() {
             className={cn('type-selector-btn', selectedType === 'income' && 'active')}
             onClick={() => setValue('type', 'income')}
           >
-            <span className="type-selector-label">Income</span>
-            <span className="type-selector-hint">Paid</span>
+            <span className="type-selector-label">{t('drawer.transaction.typeIncome')}</span>
+            <span className="type-selector-hint">{t('drawer.transaction.typeIncomeDesc')}</span>
           </button>
           <button
             type="button"
             className={cn('type-selector-btn', selectedType === 'receivable' && 'active')}
             onClick={() => setValue('type', 'receivable')}
           >
-            <span className="type-selector-label">Receivable</span>
-            <span className="type-selector-hint">Unpaid</span>
+            <span className="type-selector-label">{t('drawer.transaction.typeReceivable')}</span>
+            <span className="type-selector-hint">{t('drawer.transaction.typeReceivableDesc')}</span>
           </button>
           <button
             type="button"
             className={cn('type-selector-btn', selectedType === 'expense' && 'active')}
             onClick={() => setValue('type', 'expense')}
           >
-            <span className="type-selector-label">Expense</span>
-            <span className="type-selector-hint">Cost</span>
+            <span className="type-selector-label">{t('drawer.transaction.typeExpense')}</span>
+            <span className="type-selector-hint">{t('drawer.transaction.typeExpenseDesc')}</span>
           </button>
         </div>
 
         {/* Amount & Currency */}
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Amount *</label>
+            <label className="form-label">{t('drawer.transaction.amount')} *</label>
             <input
               type="number"
               step="0.01"
               min="0"
               className={cn('input', form.formState.errors.amount && 'input-error')}
-              placeholder="0.00"
+              placeholder={t('drawer.transaction.amountPlaceholder')}
               {...form.register('amount')}
             />
             {form.formState.errors.amount && (
-              <p className="form-error">{form.formState.errors.amount.message}</p>
+              <p className="form-error">{t('validation.amountRequired')}</p>
             )}
           </div>
           <div className="form-group">
-            <label className="form-label">Currency *</label>
+            <label className="form-label">{t('drawer.transaction.currency')} *</label>
             <Controller
               name="currency"
               control={form.control}
@@ -261,7 +263,7 @@ export function TransactionDrawer() {
 
         {/* Date */}
         <div className="form-group">
-          <label className="form-label">Date *</label>
+          <label className="form-label">{t('drawer.transaction.date')} *</label>
           <input
             type="date"
             className={cn('input', form.formState.errors.occurredAt && 'input-error')}
@@ -272,20 +274,20 @@ export function TransactionDrawer() {
         {/* Due Date (only for receivables) */}
         {selectedType === 'receivable' && (
           <div className="form-group">
-            <label className="form-label">Due Date</label>
+            <label className="form-label">{t('drawer.transaction.dueDate')}</label>
             <input type="date" className="input" {...form.register('dueDate')} />
           </div>
         )}
 
         {/* Client */}
         <div className="form-group">
-          <label className="form-label">Client</label>
+          <label className="form-label">{t('drawer.transaction.client')}</label>
           <Controller
             name="clientId"
             control={form.control}
             render={({ field }) => (
               <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">Select client...</option>
+                <option value="">{t('drawer.transaction.clientPlaceholder')}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
@@ -298,13 +300,13 @@ export function TransactionDrawer() {
 
         {/* Project */}
         <div className="form-group">
-          <label className="form-label">Project</label>
+          <label className="form-label">{t('drawer.transaction.project')}</label>
           <Controller
             name="projectId"
             control={form.control}
             render={({ field }) => (
               <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">Select project...</option>
+                <option value="">{t('drawer.transaction.projectPlaceholder')}</option>
                 {filteredProjects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
@@ -317,13 +319,13 @@ export function TransactionDrawer() {
 
         {/* Category */}
         <div className="form-group">
-          <label className="form-label">Category</label>
+          <label className="form-label">{t('drawer.transaction.category')}</label>
           <Controller
             name="categoryId"
             control={form.control}
             render={({ field }) => (
               <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">Select category...</option>
+                <option value="">{t('drawer.transaction.categoryPlaceholder')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -336,19 +338,19 @@ export function TransactionDrawer() {
 
         {/* Title */}
         <div className="form-group">
-          <label className="form-label">Title</label>
+          <label className="form-label">{t('drawer.transaction.title')}</label>
           <input
             type="text"
             className="input"
-            placeholder="Brief description..."
+            placeholder={t('drawer.transaction.titlePlaceholder')}
             {...form.register('title')}
           />
         </div>
 
         {/* Notes */}
         <div className="form-group">
-          <label className="form-label">Notes</label>
-          <textarea className="textarea" placeholder="Additional notes..." {...form.register('notes')} />
+          <label className="form-label">{t('drawer.transaction.notes')}</label>
+          <textarea className="textarea" placeholder={t('drawer.transaction.notesPlaceholder')} {...form.register('notes')} />
         </div>
       </form>
     </Drawer>

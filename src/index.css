@@ -1219,3 +1219,128 @@ td {
     transform: rotate(360deg);
   }
 }
+
+/* ============================================
+   RTL (Right-to-Left) Support
+   ============================================ */
+
+/* Icon flipping for directional icons (chevrons, arrows) */
+.icon-flip {
+  display: inline-block;
+}
+
+[dir="rtl"] .icon-flip {
+  transform: scaleX(-1);
+}
+
+/* Sidebar border - use logical properties */
+[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--color-border);
+}
+
+/* Table text alignment - use logical alignment */
+[dir="rtl"] th,
+[dir="rtl"] td {
+  text-align: right;
+}
+
+/* Amount cells should always align to end */
+[dir="rtl"] .data-table .amount-cell {
+  text-align: left;
+}
+
+/* Add menu dropdown - flip positioning */
+[dir="rtl"] .add-menu {
+  right: auto;
+  left: 0;
+}
+
+/* Add menu item text alignment */
+[dir="rtl"] .add-menu-item {
+  text-align: right;
+}
+
+/* Drawer - slide from left in RTL */
+[dir="rtl"] .drawer {
+  right: auto;
+  left: 0;
+  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+  animation: slideInRTL var(--transition-normal);
+}
+
+@keyframes slideInRTL {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Reports sidebar text alignment */
+[dir="rtl"] .report-preset {
+  text-align: right;
+}
+
+/* Form labels alignment */
+[dir="rtl"] .form-label {
+  text-align: right;
+}
+
+/* Breadcrumb separator - use CSS content for flip */
+[dir="rtl"] .breadcrumb-separator {
+  transform: scaleX(-1);
+  display: inline-block;
+}
+
+/* Type selector in drawer */
+[dir="rtl"] .type-selector-btn {
+  text-align: center;
+}
+
+/* Tab alignment */
+[dir="rtl"] .tab {
+  text-align: right;
+}
+
+/* Settings row alignment handled by flexbox - no change needed */
+
+/* Note indicator margin */
+[dir="rtl"] .note-indicator {
+  margin-left: 0;
+  margin-right: var(--space-1);
+}
+
+/* Attention list alignment */
+[dir="rtl"] .attention-info {
+  text-align: right;
+}
+
+/* Inline stats gap - handled by flexbox - no change needed */
+
+/* Search input - keep text direction for input */
+[dir="rtl"] .search-input input {
+  text-align: right;
+}
+
+/* Number inputs should stay LTR for proper digit entry */
+[dir="rtl"] input[type="number"],
+[dir="rtl"] input[type="tel"],
+[dir="rtl"] .num-input {
+  direction: ltr;
+  text-align: right;
+}
+
+/* Currency amounts in inputs should stay LTR */
+[dir="rtl"] .amount-input input {
+  direction: ltr;
+  text-align: right;
+}
+
+/* Dark mode RTL drawer shadow */
+@media (prefers-color-scheme: dark) {
+  [dir="rtl"] .drawer {
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  }
+}

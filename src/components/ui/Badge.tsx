@@ -22,15 +22,17 @@ export function Badge({ variant = 'neutral', size = 'md', children, className = 
 }
 
 // Convenience components for common status badges
-export function PaidBadge({ children = 'Paid', ...props }: Omit<BadgeProps, 'variant'>) {
+type StatusBadgeProps = Omit<BadgeProps, 'variant' | 'children'> & { children?: ReactNode };
+
+export function PaidBadge({ children = 'Paid', ...props }: StatusBadgeProps) {
   return <Badge variant="paid" {...props}>{children}</Badge>;
 }
 
-export function UnpaidBadge({ children = 'Unpaid', ...props }: Omit<BadgeProps, 'variant'>) {
+export function UnpaidBadge({ children = 'Unpaid', ...props }: StatusBadgeProps) {
   return <Badge variant="unpaid" {...props}>{children}</Badge>;
 }
 
-export function OverdueBadge({ children = 'Overdue', ...props }: Omit<BadgeProps, 'variant'>) {
+export function OverdueBadge({ children = 'Overdue', ...props }: StatusBadgeProps) {
   return <Badge variant="overdue" {...props}>{children}</Badge>;
 }
 
