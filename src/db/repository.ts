@@ -13,6 +13,15 @@ import type {
   TransactionDisplay,
   Currency,
 } from '../types';
+import {
+  aggregateTransactionTotals,
+  aggregateTransactionTotalsWithActivity,
+  filterTransactionsByDateAndCurrency,
+  filterTransactionsByEntity,
+  filterTransactionsByEntityAndDate,
+  createNameMap,
+  sortByLastActivity,
+} from './aggregations';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -254,32 +263,8 @@ export const transactionRepo = {
 
   async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency }): Promise<OverviewTotals> {
     const transactions = await db.transactions.toArray();
-
-    const filtered = transactions.filter((tx) => {
-      if (tx.deletedAt) return false;
-      if (tx.occurredAt < filters.dateFrom) return false;
-      if (tx.occurredAt > filters.dateTo + 'T23:59:59') return false;
-      if (filters.currency && tx.currency !== filters.currency) return false;
-      return true;
-    });
-
-    let paidIncomeMinor = 0;
-    let unpaidIncomeMinor = 0;
-    let expensesMinor = 0;
-
-    for (const tx of filtered) {
-      if (tx.kind === 'income') {
-        if (tx.status === 'paid') {
-          paidIncomeMinor += tx.amountMinor;
-        } else {
-          unpaidIncomeMinor += tx.amountMinor;
-        }
-      } else {
-        expensesMinor += tx.amountMinor;
-      }
-    }
-
-    return { paidIncomeMinor, unpaidIncomeMinor, expensesMinor };
+    const filtered = filterTransactionsByDateAndCurrency(transactions, filters);
+    return aggregateTransactionTotals(filtered);
   },
 
   async getAttentionReceivables(filters: { currency?: Currency }): Promise<TransactionDisplay[]> {
@@ -311,9 +296,9 @@ export const projectSummaryRepo = {
     const clients = await db.clients.toArray();
     const transactions = await db.transactions.toArray();
 
-    const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+    const clientMap = createNameMap(clients);
 
-    return projects
+    const summaries = projects
       .filter((p) => {
         if (filters?.search) {
           const searchLower = filters.search.toLowerCase();
@@ -329,31 +314,8 @@ export const projectSummaryRepo = {
         return true;
       })
       .map((p) => {
-        const projectTxs = transactions.filter((tx) => {
-          if (tx.projectId !== p.id || tx.deletedAt) return false;
-          if (filters?.currency && tx.currency !== filters.currency) return false;
-          return true;
-        });
-
-        let paidIncomeMinor = 0;
-        let unpaidIncomeMinor = 0;
-        let expensesMinor = 0;
-        let lastActivityAt: string | undefined;
-
-        for (const tx of projectTxs) {
-          if (tx.kind === 'income') {
-            if (tx.status === 'paid') {
-              paidIncomeMinor += tx.amountMinor;
-            } else {
-              unpaidIncomeMinor += tx.amountMinor;
-            }
-          } else {
-            expensesMinor += tx.amountMinor;
-          }
-          if (!lastActivityAt || tx.occurredAt > lastActivityAt) {
-            lastActivityAt = tx.occurredAt;
-          }
-        }
+        const projectTxs = filterTransactionsByEntity(transactions, 'project', p.id, filters?.currency);
+        const totals = aggregateTransactionTotalsWithActivity(projectTxs);
 
         return {
           id: p.id,
@@ -361,20 +323,12 @@ export const projectSummaryRepo = {
           clientId: p.clientId,
           clientName: p.clientId ? clientMap.get(p.clientId) : undefined,
           field: p.field,
-          paidIncomeMinor,
-          unpaidIncomeMinor,
-          expensesMinor,
-          netMinor: paidIncomeMinor - expensesMinor,
-          lastActivityAt,
+          ...totals,
+          netMinor: totals.paidIncomeMinor - totals.expensesMinor,
         };
-      })
-      .sort((a, b) => {
-        // Sort by last activity, most recent first
-        if (!a.lastActivityAt && !b.lastActivityAt) return 0;
-        if (!a.lastActivityAt) return 1;
-        if (!b.lastActivityAt) return -1;
-        return b.lastActivityAt.localeCompare(a.lastActivityAt);
       });
+
+    return sortByLastActivity(summaries);
   },
 
   async get(projectId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ProjectSummary | undefined> {
@@ -384,33 +338,8 @@ export const projectSummaryRepo = {
     const client = project.clientId ? await clientRepo.get(project.clientId) : undefined;
     const transactions = await db.transactions.toArray();
 
-    const projectTxs = transactions.filter((tx) => {
-      if (tx.projectId !== projectId || tx.deletedAt) return false;
-      if (filters?.currency && tx.currency !== filters.currency) return false;
-      if (filters?.dateFrom && tx.occurredAt < filters.dateFrom) return false;
-      if (filters?.dateTo && tx.occurredAt > filters.dateTo + 'T23:59:59') return false;
-      return true;
-    });
-
-    let paidIncomeMinor = 0;
-    let unpaidIncomeMinor = 0;
-    let expensesMinor = 0;
-    let lastActivityAt: string | undefined;
-
-    for (const tx of projectTxs) {
-      if (tx.kind === 'income') {
-        if (tx.status === 'paid') {
-          paidIncomeMinor += tx.amountMinor;
-        } else {
-          unpaidIncomeMinor += tx.amountMinor;
-        }
-      } else {
-        expensesMinor += tx.amountMinor;
-      }
-      if (!lastActivityAt || tx.occurredAt > lastActivityAt) {
-        lastActivityAt = tx.occurredAt;
-      }
-    }
+    const projectTxs = filterTransactionsByEntityAndDate(transactions, 'project', projectId, filters || {});
+    const totals = aggregateTransactionTotalsWithActivity(projectTxs);
 
     return {
       id: project.id,
@@ -418,11 +347,8 @@ export const projectSummaryRepo = {
       clientId: project.clientId,
       clientName: client?.name,
       field: project.field,
-      paidIncomeMinor,
-      unpaidIncomeMinor,
-      expensesMinor,
-      netMinor: paidIncomeMinor - expensesMinor,
-      lastActivityAt,
+      ...totals,
+      netMinor: totals.paidIncomeMinor - totals.expensesMinor,
     };
   },
 };
@@ -434,7 +360,7 @@ export const clientSummaryRepo = {
     const projects = await db.projects.toArray();
     const transactions = await db.transactions.toArray();
 
-    return clients
+    const summaries = clients
       .filter((c) => {
         if (filters?.search) {
           const searchLower = filters.search.toLowerCase();
@@ -446,50 +372,21 @@ export const clientSummaryRepo = {
       })
       .map((c) => {
         const clientProjects = projects.filter((p) => p.clientId === c.id && !p.archivedAt);
-        const clientTxs = transactions.filter((tx) => {
-          if (tx.clientId !== c.id || tx.deletedAt) return false;
-          if (filters?.currency && tx.currency !== filters.currency) return false;
-          return true;
-        });
-
-        let paidIncomeMinor = 0;
-        let unpaidIncomeMinor = 0;
-        let lastPaymentAt: string | undefined;
-        let lastActivityAt: string | undefined;
-
-        for (const tx of clientTxs) {
-          if (tx.kind === 'income') {
-            if (tx.status === 'paid') {
-              paidIncomeMinor += tx.amountMinor;
-              if (!lastPaymentAt || (tx.paidAt && tx.paidAt > lastPaymentAt)) {
-                lastPaymentAt = tx.paidAt;
-              }
-            } else {
-              unpaidIncomeMinor += tx.amountMinor;
-            }
-          }
-          if (!lastActivityAt || tx.occurredAt > lastActivityAt) {
-            lastActivityAt = tx.occurredAt;
-          }
-        }
+        const clientTxs = filterTransactionsByEntity(transactions, 'client', c.id, filters?.currency);
+        const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
 
         return {
           id: c.id,
           name: c.name,
           activeProjectCount: clientProjects.length,
-          paidIncomeMinor,
-          unpaidIncomeMinor,
-          lastPaymentAt,
-          lastActivityAt,
+          paidIncomeMinor: totals.paidIncomeMinor,
+          unpaidIncomeMinor: totals.unpaidIncomeMinor,
+          lastPaymentAt: totals.lastPaymentAt,
+          lastActivityAt: totals.lastActivityAt,
         };
-      })
-      .sort((a, b) => {
-        // Sort by last activity, most recent first
-        if (!a.lastActivityAt && !b.lastActivityAt) return 0;
-        if (!a.lastActivityAt) return 1;
-        if (!b.lastActivityAt) return -1;
-        return b.lastActivityAt.localeCompare(a.lastActivityAt);
       });
+
+    return sortByLastActivity(summaries);
   },
 
   async get(clientId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ClientSummary | undefined> {
@@ -500,43 +397,17 @@ export const clientSummaryRepo = {
     const transactions = await db.transactions.toArray();
 
     const clientProjects = projects.filter((p) => p.clientId === clientId && !p.archivedAt);
-    const clientTxs = transactions.filter((tx) => {
-      if (tx.clientId !== clientId || tx.deletedAt) return false;
-      if (filters?.currency && tx.currency !== filters.currency) return false;
-      if (filters?.dateFrom && tx.occurredAt < filters.dateFrom) return false;
-      if (filters?.dateTo && tx.occurredAt > filters.dateTo + 'T23:59:59') return false;
-      return true;
-    });
-
-    let paidIncomeMinor = 0;
-    let unpaidIncomeMinor = 0;
-    let lastPaymentAt: string | undefined;
-    let lastActivityAt: string | undefined;
-
-    for (const tx of clientTxs) {
-      if (tx.kind === 'income') {
-        if (tx.status === 'paid') {
-          paidIncomeMinor += tx.amountMinor;
-          if (!lastPaymentAt || (tx.paidAt && tx.paidAt > lastPaymentAt)) {
-            lastPaymentAt = tx.paidAt;
-          }
-        } else {
-          unpaidIncomeMinor += tx.amountMinor;
-        }
-      }
-      if (!lastActivityAt || tx.occurredAt > lastActivityAt) {
-        lastActivityAt = tx.occurredAt;
-      }
-    }
+    const clientTxs = filterTransactionsByEntityAndDate(transactions, 'client', clientId, filters || {});
+    const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
 
     return {
       id: client.id,
       name: client.name,
       activeProjectCount: clientProjects.length,
-      paidIncomeMinor,
-      unpaidIncomeMinor,
-      lastPaymentAt,
-      lastActivityAt,
+      paidIncomeMinor: totals.paidIncomeMinor,
+      unpaidIncomeMinor: totals.unpaidIncomeMinor,
+      lastPaymentAt: totals.lastPaymentAt,
+      lastActivityAt: totals.lastActivityAt,
     };
   },
 };

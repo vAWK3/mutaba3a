@@ -208,10 +208,33 @@
       "imported": "Imported successfully! Refreshing...",
       "importFailed": "Import failed: {error}",
       "invalidFile": "Invalid backup file format",
+      "deleteAll": "Delete All Data",
+      "deleteAllDesc": "Permanently delete all local data",
+      "deleteAllBtn": "Delete All Data",
       "reset": "Reset Data",
-      "resetDesc": "Delete all data and load sample data",
-      "resetBtn": "Reset to Sample Data",
-      "resetConfirm": "This will delete all data and reset with sample data. Are you sure?"
+      "resetDesc": "Reset to sample data for testing",
+      "resetBtn": "Reset Data",
+      "resetConfirm": "Are you sure you want to reset all data? This will replace your data with sample data.",
+      "deleteModal": {
+        "title": "Delete All Data",
+        "warning": "This will permanently delete all your local data including clients, projects, and transactions. This action cannot be undone.",
+        "stepA": {
+          "title": "Step 1: Export Backup",
+          "desc": "You must export a backup of your data before deletion.",
+          "btn": "Export Backup (CSV)",
+          "exporting": "Exporting...",
+          "done": "Backup exported!",
+          "error": "Export failed"
+        },
+        "stepB": {
+          "title": "Step 2: Confirm Deletion",
+          "checkbox": "I have saved my backup files",
+          "btn": "Delete Permanently",
+          "deleting": "Deleting...",
+          "error": "Deletion failed"
+        },
+        "success": "All data deleted successfully"
+      }
     },
     "about": {
       "title": "About",

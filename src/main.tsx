@@ -18,7 +18,7 @@ import './styles/theme.css';
 import './index.css';
 
 import { router } from './router';
-import { seedDatabase } from './db';
+import { initDatabase } from './db';
 import { LanguageProvider } from './lib/i18n';
 
 // Create a client
@@ -31,8 +31,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Seed the database on first load
-seedDatabase().catch(console.error);
+// Initialize database with default settings (no sample data)
+initDatabase().catch(console.error);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

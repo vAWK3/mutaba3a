@@ -3,3 +3,5 @@ export { Card, CardHeader, CardContent, CardFooter, type CardProps, type CardHea
 export { Input, Textarea, Select, type InputProps, type TextareaProps, type SelectProps } from './Input';
 export { Badge, PaidBadge, UnpaidBadge, OverdueBadge, TypeBadge, type BadgeProps, type BadgeVariant, type TypeBadgeVariant, type TypeBadgeProps } from './Badge';
 export { Numeric, Amount, type NumericProps, type AmountProps } from './Numeric';
+export { EmptyState } from './EmptyState';
+export { InlineStats } from './InlineStats';

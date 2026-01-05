@@ -1,4 +1,4 @@
-import { type HTMLAttributes } from 'react';
+import { type HTMLAttributes, useMemo } from 'react';
 import { useLanguage, getLocale } from '../../lib/i18n';
 
 export interface NumericProps extends HTMLAttributes<HTMLSpanElement> {
@@ -25,37 +25,37 @@ export function Numeric({
   const locale = localeProp ?? getLocale(language);
   const numericValue = typeof value === 'string' ? parseFloat(value) : value;
 
-  let formatted: string;
+  // Memoize formatters to avoid recreating Intl.NumberFormat on every render
+  const formatter = useMemo(() => {
+    switch (format) {
+      case 'currency':
+        return new Intl.NumberFormat(locale, {
+          style: 'currency',
+          currency,
+          minimumFractionDigits: decimals ?? 0,
+          maximumFractionDigits: decimals ?? 2,
+        });
+      case 'percent':
+        return new Intl.NumberFormat(locale, {
+          style: 'percent',
+          minimumFractionDigits: decimals ?? 0,
+          maximumFractionDigits: decimals ?? 1,
+        });
+      default:
+        return new Intl.NumberFormat(locale, {
+          minimumFractionDigits: decimals ?? 0,
+          maximumFractionDigits: decimals ?? 2,
+        });
+    }
+  }, [format, locale, currency, decimals]);
 
-  switch (format) {
-    case 'currency': {
-      const formatter = new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: decimals ?? 0,
-        maximumFractionDigits: decimals ?? 2,
-      });
-      formatted = formatter.format(numericValue);
-      break;
-    }
-    case 'percent': {
-      const formatter = new Intl.NumberFormat(locale, {
-        style: 'percent',
-        minimumFractionDigits: decimals ?? 0,
-        maximumFractionDigits: decimals ?? 1,
-      });
-      formatted = formatter.format(numericValue / 100);
-      break;
-    }
-    default: {
-      const formatter = new Intl.NumberFormat(locale, {
-        minimumFractionDigits: decimals ?? 0,
-        maximumFractionDigits: decimals ?? 2,
-      });
-      formatted = formatter.format(numericValue);
-      if (sign && numericValue > 0) {
-        formatted = '+' + formatted;
-      }
+  let formatted: string;
+  if (format === 'percent') {
+    formatted = formatter.format(numericValue / 100);
+  } else {
+    formatted = formatter.format(numericValue);
+    if (sign && numericValue > 0) {
+      formatted = '+' + formatted;
     }
   }
 
@@ -78,13 +78,15 @@ export function Amount({ amountMinor, currency = 'USD', showSign = false, locale
   const locale = localeProp ?? getLocale(language);
   const amount = amountMinor / 100;
 
-  const formatted = new Intl.NumberFormat(locale, {
+  // Memoize formatter to avoid recreating Intl.NumberFormat on every render
+  const formatter = useMemo(() => new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(Math.abs(amount));
+  }), [locale, currency]);
 
+  const formatted = formatter.format(Math.abs(amount));
   const prefix = showSign && amount !== 0 ? (amount > 0 ? '+' : '-') : (amount < 0 ? '-' : '');
 
   return (

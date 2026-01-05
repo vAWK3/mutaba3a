@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { CurrencyTabs, DateRangeControl } from '../../components/filters';
+import { CheckIcon } from '../../components/icons';
+import { TransactionTypeBadge } from '../../components/transactions';
 import { useOverviewTotals, useAttentionReceivables, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
@@ -175,43 +177,31 @@ export function OverviewPage() {
               <div className="data-table" style={{ border: 'none' }}>
                 <table>
                   <tbody>
-                    {recentTransactions.map((tx) => {
-                      const isReceivable = tx.kind === 'income' && tx.status === 'unpaid';
-                      return (
-                        <tr
-                          key={tx.id}
-                          className="clickable"
-                          onClick={() => handleRowClick(tx.id)}
+                    {recentTransactions.map((tx) => (
+                      <tr
+                        key={tx.id}
+                        className="clickable"
+                        onClick={() => handleRowClick(tx.id)}
+                      >
+                        <td style={{ width: 80 }}>{formatDate(tx.occurredAt, locale)}</td>
+                        <td>
+                          <TransactionTypeBadge kind={tx.kind} status={tx.status} />
+                        </td>
+                        <td className="text-secondary" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {tx.clientName || tx.title || '-'}
+                        </td>
+                        <td
+                          className={cn(
+                            'amount-cell',
+                            tx.kind === 'income' && 'amount-positive',
+                            tx.kind === 'expense' && 'amount-negative'
+                          )}
                         >
-                          <td style={{ width: 80 }}>{formatDate(tx.occurredAt, locale)}</td>
-                          <td>
-                            <span
-                              className={cn(
-                                'type-badge',
-                                tx.kind === 'expense' && 'expense',
-                                tx.kind === 'income' && tx.status === 'paid' && 'income',
-                                isReceivable && 'receivable'
-                              )}
-                            >
-                              {isReceivable ? t('transactions.type.receivable') : tx.kind === 'income' ? t('transactions.type.income') : t('transactions.type.expense')}
-                            </span>
-                          </td>
-                          <td className="text-secondary" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {tx.clientName || tx.title || '-'}
-                          </td>
-                          <td
-                            className={cn(
-                              'amount-cell',
-                              tx.kind === 'income' && 'amount-positive',
-                              tx.kind === 'expense' && 'amount-negative'
-                            )}
-                          >
-                            {tx.kind === 'expense' ? '-' : ''}
-                            {formatAmount(tx.amountMinor, tx.currency, locale)}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          {tx.kind === 'expense' ? '-' : ''}
+                          {formatAmount(tx.amountMinor, tx.currency, locale)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -220,13 +210,5 @@ export function OverviewPage() {
         </div>
       </div>
     </>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
   );
 }

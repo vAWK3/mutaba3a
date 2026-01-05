@@ -7,6 +7,9 @@ import {
   TypeSegment,
   DateRangeControl,
 } from "../../components/filters";
+import { EmptyState } from "../../components/ui";
+import { CheckIcon } from "../../components/icons";
+import { TransactionTypeBadge, TransactionStatusCell } from "../../components/transactions";
 import {
   useTransactions,
   useMarkTransactionPaid,
@@ -15,7 +18,6 @@ import { useDrawerStore } from "../../lib/stores";
 import {
   formatAmount,
   formatDate,
-  getDaysUntil,
   getDateRangePreset,
   cn,
 } from "../../lib/utils";
@@ -113,20 +115,14 @@ export function TransactionsPage() {
             <div className="spinner" />
           </div>
         ) : transactions.length === 0 ? (
-          <div className="empty-state">
-            <h3 className="empty-state-title">{t('transactions.empty')}</h3>
-            <p className="empty-state-description">
-              {search
-                ? t('transactions.emptySearch')
-                : t('transactions.emptyHint')}
-            </p>
-            <button
-              className="btn btn-primary"
-              onClick={() => openTransactionDrawer({ mode: "create" })}
-            >
-              {t('transactions.addTransaction')}
-            </button>
-          </div>
+          <EmptyState
+            title={t('transactions.empty')}
+            description={search ? t('transactions.emptySearch') : t('transactions.emptyHint')}
+            action={{
+              label: t('transactions.addTransaction'),
+              onClick: () => openTransactionDrawer({ mode: "create" }),
+            }}
+          />
         ) : (
           <div className="data-table">
             <table>
@@ -143,120 +139,57 @@ export function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => {
-                  const isReceivable =
-                    tx.kind === "income" && tx.status === "unpaid";
-                  const daysUntilDue = tx.dueDate
-                    ? getDaysUntil(tx.dueDate)
-                    : null;
-                  const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
-
-                  return (
-                    <tr
-                      key={tx.id}
-                      className="clickable"
-                      onClick={() => handleRowClick(tx.id)}
+                {transactions.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className="clickable"
+                    onClick={() => handleRowClick(tx.id)}
+                  >
+                    <td>{formatDate(tx.occurredAt, locale)}</td>
+                    <td>
+                      <TransactionTypeBadge kind={tx.kind} status={tx.status} />
+                    </td>
+                    <td className="text-secondary">{tx.clientName || "-"}</td>
+                    <td className="text-secondary">{tx.projectName || "-"}</td>
+                    <td className="text-secondary">{tx.categoryName || "-"}</td>
+                    <td
+                      className={cn(
+                        "amount-cell",
+                        tx.kind === "income" && "amount-positive",
+                        tx.kind === "expense" && "amount-negative"
+                      )}
                     >
-                      <td>{formatDate(tx.occurredAt, locale)}</td>
-                      <td>
-                        <span
-                          className={cn(
-                            "type-badge",
-                            tx.kind === "expense" && "expense",
-                            tx.kind === "income" &&
-                              tx.status === "paid" &&
-                              "income",
-                            isReceivable && "receivable"
-                          )}
+                      {tx.kind === "expense" ? "-" : ""}
+                      {formatAmount(tx.amountMinor, tx.currency, locale)}
+                    </td>
+                    <td>
+                      <TransactionStatusCell kind={tx.kind} status={tx.status} dueDate={tx.dueDate} />
+                    </td>
+                    <td>
+                      {tx.kind === 'income' && tx.status === 'unpaid' && (
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          onClick={(e) => handleMarkPaid(e, tx.id)}
+                          title={t('common.markPaid')}
                         >
-                          {isReceivable
-                            ? t('transactions.type.receivable')
-                            : tx.kind === "income"
-                              ? t('transactions.type.income')
-                              : t('transactions.type.expense')}
-                        </span>
-                      </td>
-                      <td className="text-secondary">{tx.clientName || "-"}</td>
-                      <td className="text-secondary">
-                        {tx.projectName || "-"}
-                      </td>
-                      <td className="text-secondary">
-                        {tx.categoryName || "-"}
-                      </td>
-                      <td
-                        className={cn(
-                          "amount-cell",
-                          tx.kind === "income" && "amount-positive",
-                          tx.kind === "expense" && "amount-negative"
-                        )}
-                      >
-                        {tx.kind === "expense" ? "-" : ""}
-                        {formatAmount(tx.amountMinor, tx.currency, locale)}
-                      </td>
-                      <td>
-                        {tx.kind === "income" && (
-                          <>
-                            {tx.status === "paid" ? (
-                              <span className="status-badge paid">{t('transactions.status.paid')}</span>
-                            ) : isOverdue ? (
-                              <span className="status-badge overdue">
-                                {t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}
-                              </span>
-                            ) : (
-                              <span className="status-badge unpaid">
-                                {daysUntilDue === 0
-                                  ? t('transactions.status.dueToday')
-                                  : t('transactions.status.dueIn', { days: daysUntilDue??0 })}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td>
-                        {isReceivable && (
-                          <button
-                            className="btn btn-sm btn-ghost"
-                            onClick={(e) => handleMarkPaid(e, tx.id)}
-                            title={t('common.markPaid')}
-                          >
-                            <CheckIcon />
-                          </button>
-                        )}
-                        {tx.notes && (
-                          <span
-                            className="note-indicator"
-                            title={t('drawer.transaction.notes')}
-                            style={{ marginInlineStart: 8 }}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                          <CheckIcon />
+                        </button>
+                      )}
+                      {tx.notes && (
+                        <span
+                          className="note-indicator"
+                          title={t('drawer.transaction.notes')}
+                          style={{ marginInlineStart: 8 }}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
     </>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m4.5 12.75 6 6 9-13.5"
-      />
-    </svg>
   );
 }

@@ -10,6 +10,21 @@ import {
 } from '../db';
 import type { QueryFilters, Transaction, Client, Project, Currency } from '../types';
 
+/**
+ * Invalidates all transaction-related queries.
+ * Extracted to avoid repeating 8 invalidation calls in each mutation.
+ */
+function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['transactions'] });
+  queryClient.invalidateQueries({ queryKey: ['transaction'] });
+  queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
+  queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
+  queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
+  queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
+  queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
+  queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
+}
+
 // Query keys
 export const queryKeys = {
   transactions: (filters: QueryFilters) => ['transactions', filters] as const,
@@ -69,15 +84,7 @@ export function useCreateTransaction() {
   return useMutation({
     mutationFn: (data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) =>
       transactionRepo.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
-      queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
-    },
+    onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
 
@@ -87,16 +94,7 @@ export function useUpdateTransaction() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Transaction> }) =>
       transactionRepo.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transaction'] });
-      queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
-      queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
-    },
+    onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
 
@@ -105,16 +103,7 @@ export function useMarkTransactionPaid() {
 
   return useMutation({
     mutationFn: (id: string) => transactionRepo.markPaid(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transaction'] });
-      queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
-      queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
-    },
+    onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
 
@@ -123,15 +112,7 @@ export function useDeleteTransaction() {
 
   return useMutation({
     mutationFn: (id: string) => transactionRepo.softDelete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
-      queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
-    },
+    onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
 

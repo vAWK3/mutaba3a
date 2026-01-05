@@ -1,3 +1,3 @@
 export { db } from './database';
 export * from './repository';
-export { seedDatabase, clearDatabase } from './seed';
+export { initDatabase, deleteAllData, clearDatabase } from './seed';

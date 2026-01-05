@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { useSettings, useUpdateSettings } from '../../hooks/useQueries';
 import { db } from '../../db';
-import { seedDatabase, clearDatabase } from '../../db/seed';
+import { clearDatabase } from '../../db/seed';
 import { useT, useLanguage } from '../../lib/i18n';
+import { DeleteAllDataModal } from '../../components/modals';
 import type { Currency } from '../../types';
 import type { Language } from '../../lib/i18n/types';
 
@@ -11,9 +13,12 @@ export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
   const updateMutation = useUpdateSettings();
   const t = useT();
+  const navigate = useNavigate();
   const { language, setLanguage } = useLanguage();
   const [exportStatus, setExportStatus] = useState<string>('');
   const [importStatus, setImportStatus] = useState<string>('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
 
   const handleCurrencyToggle = (currency: Currency) => {
     if (!settings) return;
@@ -107,16 +112,13 @@ export function SettingsPage() {
     input.click();
   };
 
-  const handleResetData = async () => {
-    if (!confirm(t('settings.data.resetConfirm'))) return;
-
-    try {
-      await clearDatabase();
-      await seedDatabase();
-      window.location.reload();
-    } catch (error) {
-      console.error('Reset error:', error);
-    }
+  const handleDeleteSuccess = () => {
+    setShowDeleteModal(false);
+    setDeleteSuccessMessage(t('settings.data.deleteModal.success'));
+    setTimeout(() => {
+      setDeleteSuccessMessage('');
+      navigate({ to: '/' });
+    }, 2000);
   };
 
   if (isLoading) {
@@ -231,12 +233,17 @@ export function SettingsPage() {
 
           <div className="settings-row" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 8 }}>
             <div>
-              <div className="settings-label text-danger">{t('settings.data.reset')}</div>
-              <div className="settings-description">{t('settings.data.resetDesc')}</div>
+              <div className="settings-label text-danger">{t('settings.data.deleteAll')}</div>
+              <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
             </div>
-            <button className="btn btn-danger" onClick={handleResetData}>
-              {t('settings.data.resetBtn')}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {deleteSuccessMessage && (
+                <span className="text-sm text-success">{deleteSuccessMessage}</span>
+              )}
+              <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
+                {t('settings.data.deleteAllBtn')}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -251,6 +258,14 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete All Data Modal */}
+      {showDeleteModal && (
+        <DeleteAllDataModal
+          onClose={() => setShowDeleteModal(false)}
+          onSuccess={handleDeleteSuccess}
+        />
+      )}
     </>
   );
 }

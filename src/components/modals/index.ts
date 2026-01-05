@@ -1,0 +1,1 @@
+export { DeleteAllDataModal } from './DeleteAllDataModal';
