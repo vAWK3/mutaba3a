@@ -10,6 +10,7 @@ import { ClientsPage } from './pages/clients/ClientsPage';
 import { ClientDetailPage } from './pages/clients/ClientDetailPage';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { DownloadPage } from './pages/download/DownloadPage';
 import { ThemeDemo } from './components/examples/ThemeDemo';
 
 // Root route with AppShell layout
@@ -75,6 +76,13 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+// Download route (standalone landing page)
+const downloadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/download',
+  component: DownloadPage,
+});
+
 // Theme demo route (for visual testing)
 const themeDemoRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -92,6 +100,7 @@ const routeTree = rootRoute.addChildren([
   clientDetailRoute,
   reportsRoute,
   settingsRoute,
+  downloadRoute,
   themeDemoRoute,
 ]);
 

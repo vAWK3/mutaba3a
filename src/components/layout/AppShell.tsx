@@ -3,6 +3,7 @@ import { SidebarNav } from './SidebarNav';
 import { TransactionDrawer } from '../drawers/TransactionDrawer';
 import { ClientDrawer } from '../drawers/ClientDrawer';
 import { ProjectDrawer } from '../drawers/ProjectDrawer';
+import { MacDownloadBanner } from '../ui/MacDownloadBanner';
 import { useDrawerStore } from '../../lib/stores';
 
 interface AppShellProps {
@@ -20,6 +21,8 @@ export function AppShell({ children }: AppShellProps) {
       {transactionDrawer.isOpen && <TransactionDrawer />}
       {clientDrawer.isOpen && <ClientDrawer />}
       {projectDrawer.isOpen && <ProjectDrawer />}
+
+      <MacDownloadBanner />
     </div>
   );
 }

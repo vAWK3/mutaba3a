@@ -22,7 +22,8 @@
     "clients": "العملاء",
     "transactions": "المعاملات",
     "reports": "التقارير",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "download": "تحميل"
   },
   "addMenu": {
     "income": "إيراد",
@@ -240,7 +241,18 @@
       "title": "حول التطبيق",
       "name": "متابعة - نظام إدارة مصغّر",
       "description": "أداة تتبع مالي تعمل محلياً للمستقلين والشركات الصغيرة. بياناتك محفوظة محلياً في متصفحك باستخدام IndexedDB."
+    },
+    "desktopApp": {
+      "title": "تطبيق سطح المكتب",
+      "download": "تحميل لنظام macOS",
+      "downloadDesc": "احصل على التطبيق الأصلي لأداء أفضل",
+      "downloadBtn": "تحميل"
     }
+  },
+  "downloadBanner": {
+    "message": "احصل على تطبيق Mac الأصلي لتجربة أفضل",
+    "cta": "تحميل",
+    "dismiss": "إغلاق"
   },
   "drawer": {
     "transaction": {

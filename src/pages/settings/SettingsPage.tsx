@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { useSettings, useUpdateSettings } from '../../hooks/useQueries';
 import { db } from '../../db';
@@ -255,6 +255,21 @@ export function SettingsPage() {
             <p className="text-sm" style={{ marginTop: 8 }}>
               {t('settings.about.description')}
             </p>
+          </div>
+        </div>
+
+        {/* Desktop App */}
+        <div className="settings-section">
+          <h3 className="settings-section-title">{t('settings.desktopApp.title')}</h3>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">{t('settings.desktopApp.download')}</div>
+              <div className="settings-description">{t('settings.desktopApp.downloadDesc')}</div>
+            </div>
+            <Link to="/download" className="btn btn-secondary">
+              {t('settings.desktopApp.downloadBtn')}
+            </Link>
           </div>
         </div>
       </div>

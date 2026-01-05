@@ -1,18 +1,25 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # File paths
 PACKAGE_JSON="package.json"
 TAURI_CONF="src-tauri/tauri.conf.json"
 CARGO_TOML="src-tauri/Cargo.toml"
+RELEASE_DIR="release"
+
+# GitHub repository info (auto-detected from git remote)
+GITHUB_OWNER=""
+GITHUB_REPO=""
 
 # Get current version from package.json
 get_version() {
@@ -59,6 +66,293 @@ update_version() {
     echo -e "${GREEN}Version updated in all config files${NC}"
 }
 
+# Detect GitHub owner and repo from git remote
+detect_github_repo() {
+    local remote_url
+    remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+    if [[ -z "$remote_url" ]]; then
+        echo -e "${RED}Error: No git remote 'origin' found${NC}"
+        return 1
+    fi
+
+    # Parse GitHub URL (supports both HTTPS and SSH formats)
+    # HTTPS: https://github.com/owner/repo.git
+    # SSH: git@github.com:owner/repo.git
+    if [[ "$remote_url" =~ github\.com[:/]([^/]+)/([^/.]+)(\.git)?$ ]]; then
+        GITHUB_OWNER="${BASH_REMATCH[1]}"
+        GITHUB_REPO="${BASH_REMATCH[2]}"
+        echo -e "${CYAN}Detected repository: ${BOLD}$GITHUB_OWNER/$GITHUB_REPO${NC}"
+        return 0
+    else
+        echo -e "${RED}Error: Could not parse GitHub URL from remote: $remote_url${NC}"
+        return 1
+    fi
+}
+
+# Check prerequisites for GitHub release
+check_release_prerequisites() {
+    echo -e "${BLUE}Checking release prerequisites...${NC}"
+    echo ""
+
+    # Check if gh CLI is installed
+    if ! command -v gh &> /dev/null; then
+        echo -e "${RED}Error: GitHub CLI (gh) is not installed${NC}"
+        echo ""
+        echo -e "${YELLOW}Install it with:${NC}"
+        echo -e "  ${CYAN}brew install gh${NC}"
+        echo ""
+        echo -e "Then authenticate with:"
+        echo -e "  ${CYAN}gh auth login${NC}"
+        exit 1
+    fi
+    echo -e "  ${GREEN}✓${NC} GitHub CLI (gh) installed"
+
+    # Check if gh is authenticated
+    if ! gh auth status &> /dev/null; then
+        echo -e "${RED}Error: GitHub CLI is not authenticated${NC}"
+        echo ""
+        echo -e "${YELLOW}Authenticate with:${NC}"
+        echo -e "  ${CYAN}gh auth login${NC}"
+        exit 1
+    fi
+    echo -e "  ${GREEN}✓${NC} GitHub CLI authenticated"
+
+    # Detect GitHub repository
+    if ! detect_github_repo; then
+        exit 1
+    fi
+    echo -e "  ${GREEN}✓${NC} Repository detected"
+
+    # Check git working tree status (warn but don't fail)
+    if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+        echo -e "  ${YELLOW}⚠${NC} Working tree has uncommitted changes (will be committed)"
+    else
+        echo -e "  ${GREEN}✓${NC} Working tree clean"
+    fi
+
+    echo ""
+    echo -e "${GREEN}All prerequisites satisfied${NC}"
+    echo ""
+}
+
+# Tag and push to GitHub
+tag_and_push() {
+    local version=$1
+    local tag="v$version"
+
+    echo -e "${BLUE}Preparing git tag and push...${NC}"
+
+    # Check if tag already exists remotely
+    if git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
+        echo -e "${RED}Error: Tag '$tag' already exists on remote${NC}"
+        echo ""
+        echo -e "${YELLOW}To release this version, you must either:${NC}"
+        echo -e "  1. Delete the existing release and tag on GitHub"
+        echo -e "  2. Use a different version number"
+        echo ""
+        echo -e "To delete the remote tag:"
+        echo -e "  ${CYAN}git push origin --delete $tag${NC}"
+        echo -e "  ${CYAN}gh release delete $tag --yes${NC}"
+        exit 1
+    fi
+
+    # Add all changes
+    git add .
+
+    # Commit if there are changes (don't fail if nothing to commit)
+    if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+        git commit -m "Release $tag" || true
+        echo -e "  ${GREEN}✓${NC} Changes committed"
+    else
+        echo -e "  ${CYAN}→${NC} No changes to commit"
+    fi
+
+    # Push to main
+    echo -e "  ${CYAN}→${NC} Pushing to origin main..."
+    git push origin main
+    echo -e "  ${GREEN}✓${NC} Pushed to main"
+
+    # Create annotated tag
+    git tag -a "$tag" -m "Release $tag"
+    echo -e "  ${GREEN}✓${NC} Created tag $tag"
+
+    # Push tag
+    git push origin "$tag"
+    echo -e "  ${GREEN}✓${NC} Pushed tag to origin"
+
+    echo ""
+}
+
+# Find the DMG artifact after build
+find_dmg_artifact() {
+    local dmg_path=""
+
+    echo -e "${BLUE}Locating DMG artifact...${NC}"
+
+    # Search for DMG files in Tauri build output
+    # Tauri v2 places DMGs in: src-tauri/target/release/bundle/dmg/
+    # For universal builds: src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+    local search_paths=(
+        "src-tauri/target/universal-apple-darwin/release/bundle/dmg"
+        "src-tauri/target/release/bundle/dmg"
+    )
+
+    for search_path in "${search_paths[@]}"; do
+        if [[ -d "$search_path" ]]; then
+            # Find the most recent DMG file
+            dmg_path=$(find "$search_path" -name "*.dmg" -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
+            if [[ -n "$dmg_path" && -f "$dmg_path" ]]; then
+                break
+            fi
+        fi
+    done
+
+    # If not found in specific paths, do a broader search
+    if [[ -z "$dmg_path" || ! -f "$dmg_path" ]]; then
+        dmg_path=$(find src-tauri/target -name "*.dmg" -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
+    fi
+
+    if [[ -z "$dmg_path" || ! -f "$dmg_path" ]]; then
+        echo -e "${RED}Error: No DMG file found in build output${NC}"
+        echo -e "${YELLOW}Expected location: src-tauri/target/**/bundle/dmg/*.dmg${NC}"
+        exit 1
+    fi
+
+    # Validate file is non-empty
+    if [[ ! -s "$dmg_path" ]]; then
+        echo -e "${RED}Error: DMG file is empty: $dmg_path${NC}"
+        exit 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Found: $dmg_path"
+    echo "$dmg_path"
+}
+
+# Prepare release artifacts
+prepare_release_artifacts() {
+    local version=$1
+    local source_dmg=$2
+
+    echo -e "${BLUE}Preparing release artifacts...${NC}"
+
+    # Create release directory
+    mkdir -p "$RELEASE_DIR"
+
+    # Clean filename for release
+    local release_dmg="mutaba3a-v${version}-macos-universal.dmg"
+    local release_dmg_path="$RELEASE_DIR/$release_dmg"
+    local checksum_file="$RELEASE_DIR/mutaba3a-v${version}-macos-universal.sha256"
+
+    # Copy DMG to release folder
+    cp "$source_dmg" "$release_dmg_path"
+    echo -e "  ${GREEN}✓${NC} Copied DMG to $release_dmg_path"
+
+    # Generate SHA256 checksum
+    local checksum
+    checksum=$(shasum -a 256 "$release_dmg_path" | awk '{print $1}')
+    echo "$checksum" > "$checksum_file"
+
+    echo -e "  ${GREEN}✓${NC} Generated SHA256 checksum"
+    echo ""
+    echo -e "${CYAN}SHA256:${NC} $checksum"
+    echo ""
+
+    # Return paths via global variables (bash doesn't support multiple returns well)
+    RELEASE_DMG_PATH="$release_dmg_path"
+    RELEASE_DMG_NAME="$release_dmg"
+    RELEASE_CHECKSUM_PATH="$checksum_file"
+    RELEASE_CHECKSUM="$checksum"
+}
+
+# Create GitHub release
+create_github_release() {
+    local version=$1
+    local tag="v$version"
+
+    echo -e "${BLUE}Creating GitHub release...${NC}"
+
+    # Check if release already exists
+    if gh release view "$tag" &> /dev/null; then
+        echo -e "${RED}Error: Release '$tag' already exists on GitHub${NC}"
+        echo ""
+        echo -e "${YELLOW}To overwrite, first delete the existing release:${NC}"
+        echo -e "  ${CYAN}gh release delete $tag --yes${NC}"
+        exit 1
+    fi
+
+    # Create release with auto-generated notes
+    gh release create "$tag" \
+        --title "$tag" \
+        --generate-notes \
+        "$RELEASE_DMG_PATH" \
+        "$RELEASE_CHECKSUM_PATH"
+
+    echo -e "  ${GREEN}✓${NC} Release created successfully"
+    echo ""
+}
+
+# Print release URLs
+print_release_urls() {
+    local version=$1
+    local tag="v$version"
+
+    local release_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$tag"
+    local download_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$RELEASE_DMG_NAME"
+    local checksum_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-v${version}-macos-universal.sha256"
+
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}  GitHub Release Published! $tag${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo -e "${BOLD}Release Page:${NC}"
+    echo -e "  ${CYAN}$release_url${NC}"
+    echo ""
+    echo -e "${BOLD}Direct Download (DMG):${NC}"
+    echo -e "  ${CYAN}$download_url${NC}"
+    echo ""
+    echo -e "${BOLD}Checksum File:${NC}"
+    echo -e "  ${CYAN}$checksum_url${NC}"
+    echo ""
+    echo -e "${BOLD}SHA256 Checksum:${NC}"
+    echo -e "  ${CYAN}$RELEASE_CHECKSUM${NC}"
+    echo ""
+    echo -e "${GREEN}----------------------------------------${NC}"
+    echo -e "${BOLD}Copy this URL into your website button:${NC}"
+    echo ""
+    echo -e "  ${CYAN}$download_url${NC}"
+    echo ""
+    echo -e "${GREEN}----------------------------------------${NC}"
+}
+
+# Build macOS and publish to GitHub
+build_and_release_mac() {
+    local version=$1
+
+    # Check prerequisites first
+    check_release_prerequisites
+
+    # Build macOS app
+    build_mac
+
+    # Find the built DMG
+    local dmg_path
+    dmg_path=$(find_dmg_artifact | tail -1)
+
+    # Prepare release artifacts
+    prepare_release_artifacts "$version" "$dmg_path"
+
+    # Tag and push
+    tag_and_push "$version"
+
+    # Create GitHub release
+    create_github_release "$version"
+
+    # Print URLs
+    print_release_urls "$version"
+}
+
 # Deploy web to main branch
 deploy_web() {
     echo -e "${BLUE}Deploying web version to main...${NC}"
@@ -68,7 +362,7 @@ deploy_web() {
 
     # Git operations
     git add .
-    git commit -m "Release v$1 (web)"
+    git commit -m "Release v$1 (web)" || true
     git push origin main
 
     echo -e "${GREEN}Web version v$1 deployed to main${NC}"
@@ -166,9 +460,10 @@ main() {
     echo "  3) Build Tauri for Windows"
     echo "  4) Build Tauri for macOS + Windows"
     echo "  5) All (deploy web + build all platforms)"
-    echo "  6) Cancel"
+    echo -e "  6) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
+    echo "  7) Cancel"
     echo ""
-    read -p "Select deploy option [1-6]: " deploy_choice
+    read -p "Select deploy option [1-7]: " deploy_choice
 
     case $deploy_choice in
         1)
@@ -190,6 +485,9 @@ main() {
             build_windows
             ;;
         6)
+            build_and_release_mac "$current_version"
+            ;;
+        7)
             echo -e "${YELLOW}Cancelled${NC}"
             exit 0
             ;;
