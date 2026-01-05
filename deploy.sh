@@ -21,6 +21,42 @@ RELEASE_DIR="release"
 GITHUB_OWNER=""
 GITHUB_REPO=""
 
+# --- Release secrets (mac notarization) ---
+RELEASE_ENV_FILE="./release.env"
+
+load_release_env() {
+    # Load env vars from local file (not committed)
+    if [[ -f "$RELEASE_ENV_FILE" ]]; then
+        # shellcheck disable=SC1090
+        source "$RELEASE_ENV_FILE"
+        echo -e "  ${GREEN}✓${NC} Loaded release env from ${CYAN}$RELEASE_ENV_FILE${NC}"
+    else
+        echo -e "  ${YELLOW}⚠${NC} No ${CYAN}$RELEASE_ENV_FILE${NC} found. mac notarization may fail."
+        echo -e "    Create it with APPLE_SIGNING_IDENTITY / APPLE_ID / APPLE_TEAM_ID / APPLE_PASSWORD."
+    fi
+}
+
+require_release_env() {
+    local missing=()
+
+    [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]] && missing+=("APPLE_SIGNING_IDENTITY")
+    [[ -z "${APPLE_ID:-}" ]] && missing+=("APPLE_ID")
+    [[ -z "${APPLE_TEAM_ID:-}" ]] && missing+=("APPLE_TEAM_ID")
+    [[ -z "${APPLE_PASSWORD:-}" ]] && missing+=("APPLE_PASSWORD")
+
+    if (( ${#missing[@]} > 0 )); then
+        echo -e "${RED}Error: Missing required mac notarization env vars:${NC} ${missing[*]}"
+        echo ""
+        echo -e "${YELLOW}Fix:${NC} create ${CYAN}$RELEASE_ENV_FILE${NC} with:"
+        echo -e "  export APPLE_SIGNING_IDENTITY='Developer ID Application: Your Company (TEAMID)'"
+        echo -e "  export APPLE_ID='you@example.com'"
+        echo -e "  export APPLE_TEAM_ID='TEAMID'"
+        echo -e "  export APPLE_PASSWORD='app-specific-password'"
+        echo ""
+        exit 1
+    fi
+}
+
 # Get current version from package.json
 get_version() {
     grep '"version"' "$PACKAGE_JSON" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/'
@@ -330,6 +366,10 @@ print_release_urls() {
 build_and_release_mac() {
     local version=$1
 
+     # Load & validate Apple notarization env vars
+    load_release_env
+    require_release_env
+
     # Check prerequisites first
     check_release_prerequisites
 
@@ -458,12 +498,10 @@ main() {
     echo "  1) Deploy to main (web)"
     echo "  2) Build Tauri for macOS"
     echo "  3) Build Tauri for Windows"
-    echo "  4) Build Tauri for macOS + Windows"
-    echo "  5) All (deploy web + build all platforms)"
-    echo -e "  6) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
-    echo "  7) Cancel"
+    echo -e "  4) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
+    echo "  5) Cancel"
     echo ""
-    read -p "Select deploy option [1-7]: " deploy_choice
+    read -p "Select deploy option [1-5]: " deploy_choice
 
     case $deploy_choice in
         1)
@@ -476,18 +514,9 @@ main() {
             build_windows
             ;;
         4)
-            build_mac
-            build_windows
-            ;;
-        5)
-            deploy_web "$current_version"
-            build_mac
-            build_windows
-            ;;
-        6)
             build_and_release_mac "$current_version"
             ;;
-        7)
+        5)
             echo -e "${YELLOW}Cancelled${NC}"
             exit 0
             ;;
