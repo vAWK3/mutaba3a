@@ -192,20 +192,6 @@ tag_and_push() {
 
     echo -e "${BLUE}Preparing git tag and push...${NC}"
 
-    # Check if tag already exists remotely
-    if git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
-        echo -e "${RED}Error: Tag '$tag' already exists on remote${NC}"
-        echo ""
-        echo -e "${YELLOW}To release this version, you must either:${NC}"
-        echo -e "  1. Delete the existing release and tag on GitHub"
-        echo -e "  2. Use a different version number"
-        echo ""
-        echo -e "To delete the remote tag:"
-        echo -e "  ${CYAN}git push origin --delete $tag${NC}"
-        echo -e "  ${CYAN}gh release delete $tag --yes${NC}"
-        exit 1
-    fi
-
     # Add all changes
     git add .
 
@@ -222,13 +208,18 @@ tag_and_push() {
     git push origin main
     echo -e "  ${GREEN}✓${NC} Pushed to main"
 
-    # Create annotated tag
-    git tag -a "$tag" -m "Release $tag"
-    echo -e "  ${GREEN}✓${NC} Created tag $tag"
+    # Check if tag already exists remotely - skip if so (allows parallel deploys)
+    if git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
+        echo -e "  ${YELLOW}→${NC} Tag '$tag' already exists on remote - skipping tag creation"
+    else
+        # Create annotated tag
+        git tag -a "$tag" -m "Release $tag"
+        echo -e "  ${GREEN}✓${NC} Created tag $tag"
 
-    # Push tag
-    git push origin "$tag"
-    echo -e "  ${GREEN}✓${NC} Pushed tag to origin"
+        # Push tag
+        git push origin "$tag"
+        echo -e "  ${GREEN}✓${NC} Pushed tag to origin"
+    fi
 
     echo ""
 }
@@ -495,21 +486,12 @@ EOF
     echo -e "  ${GREEN}✓${NC} Updated $config_file"
 }
 
-# Create GitHub release
+# Create GitHub release or upload to existing
 create_github_release() {
     local version=$1
     local tag="v$version"
 
     echo -e "${BLUE}Creating GitHub release...${NC}"
-
-    # Check if release already exists
-    if gh release view "$tag" &> /dev/null; then
-        echo -e "${RED}Error: Release '$tag' already exists on GitHub${NC}"
-        echo ""
-        echo -e "${YELLOW}To overwrite, first delete the existing release:${NC}"
-        echo -e "  ${CYAN}gh release delete $tag --yes${NC}"
-        exit 1
-    fi
 
     # Build list of artifacts to upload
     local artifacts=("$RELEASE_DMG_PATH" "$RELEASE_CHECKSUM_PATH")
@@ -522,13 +504,20 @@ create_github_release() {
         artifacts+=("$UPDATE_ARCHIVE_PATH")
     fi
 
-    # Create release with auto-generated notes
-    gh release create "$tag" \
-        --title "$tag" \
-        --generate-notes \
-        "${artifacts[@]}"
+    # Check if release already exists - upload to it if so (allows parallel deploys)
+    if gh release view "$tag" &> /dev/null; then
+        echo -e "  ${YELLOW}→${NC} Release '$tag' already exists - uploading Mac artifacts..."
+        gh release upload "$tag" "${artifacts[@]}" --clobber
+        echo -e "  ${GREEN}✓${NC} Mac artifacts uploaded to existing release"
+    else
+        # Create release with auto-generated notes
+        gh release create "$tag" \
+            --title "$tag" \
+            --generate-notes \
+            "${artifacts[@]}"
+        echo -e "  ${GREEN}✓${NC} Release created with Mac artifacts"
+    fi
 
-    echo -e "  ${GREEN}✓${NC} Release created successfully"
     echo ""
 }
 

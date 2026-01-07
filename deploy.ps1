@@ -491,21 +491,6 @@ function Invoke-TagAndPush {
     $tag = "v$Version"
     Write-Info "Preparing git tag and push..."
 
-    # Check if tag already exists remotely
-    $existingTags = git ls-remote --tags origin 2>$null | Select-String "refs/tags/$tag$"
-    if ($existingTags) {
-        Write-Error "Tag '$tag' already exists on remote"
-        Write-Host ""
-        Write-Warning "To release this version, you must either:"
-        Write-Host "  1. Delete the existing release and tag on GitHub"
-        Write-Host "  2. Use a different version number"
-        Write-Host ""
-        Write-Host "To delete the remote tag:"
-        Write-Host "  git push origin --delete $tag"
-        Write-Host "  gh release delete $tag --yes"
-        exit 1
-    }
-
     # Add all changes
     git add .
 
@@ -524,32 +509,29 @@ function Invoke-TagAndPush {
     git push origin main
     Write-Success "Pushed to main"
 
-    # Create annotated tag
-    git tag -a $tag -m "Release $tag"
-    Write-Success "Created tag $tag"
+    # Check if tag already exists remotely - skip if so (allows parallel deploys)
+    $existingTags = git ls-remote --tags origin 2>$null | Select-String "refs/tags/$tag$"
+    if ($existingTags) {
+        Write-Warning "Tag '$tag' already exists on remote - skipping tag creation"
+    }
+    else {
+        # Create annotated tag
+        git tag -a $tag -m "Release $tag"
+        Write-Success "Created tag $tag"
 
-    # Push tag
-    git push origin $tag
-    Write-Success "Pushed tag to origin"
+        # Push tag
+        git push origin $tag
+        Write-Success "Pushed tag to origin"
+    }
     Write-Host ""
 }
 
-# Create GitHub release
+# Create GitHub release or upload to existing
 function New-GitHubRelease {
     param([string]$Version)
 
     $tag = "v$Version"
     Write-Info "Creating GitHub release..."
-
-    # Check if release already exists
-    $null = gh release view $tag 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Error "Release '$tag' already exists on GitHub"
-        Write-Host ""
-        Write-Warning "To overwrite, first delete the existing release:"
-        Write-Host "  gh release delete $tag --yes"
-        exit 1
-    }
 
     # Build list of assets to upload
     $assets = @($script:RELEASE_MSI_PATH)
@@ -570,15 +552,26 @@ function New-GitHubRelease {
         $assets += $script:UPDATE_ARCHIVE_PATH
     }
 
-    # Create release with auto-generated notes
-    gh release create $tag --title $tag --generate-notes @assets
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to create GitHub release"
-        exit 1
+    # Check if release already exists - upload to it if so (allows parallel deploys)
+    $null = gh release view $tag 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Warning "Release '$tag' already exists - uploading Windows artifacts..."
+        gh release upload $tag @assets --clobber
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to upload Windows artifacts"
+            exit 1
+        }
+        Write-Success "Windows artifacts uploaded to existing release"
     }
-
-    Write-Success "Release created successfully"
+    else {
+        # Create release with auto-generated notes
+        gh release create $tag --title $tag --generate-notes @assets
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to create GitHub release"
+            exit 1
+        }
+        Write-Success "Release created with Windows artifacts"
+    }
     Write-Host ""
 }
 
