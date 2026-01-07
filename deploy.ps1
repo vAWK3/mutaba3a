@@ -218,6 +218,145 @@ function Find-ExeArtifact {
     return $null
 }
 
+# Check if updater signing is configured
+function Test-UpdaterSigning {
+    if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+        Write-Warning "TAURI_SIGNING_PRIVATE_KEY not set - auto-update signing disabled"
+        Write-Host "    To enable: set TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD environment variables"
+        return $false
+    }
+    Write-Success "Updater signing key configured"
+    return $true
+}
+
+# Create zip archive for Tauri updater (required format for Windows)
+function New-UpdateArchive {
+    param(
+        [string]$Version,
+        [string]$SourceNsis
+    )
+
+    Write-Info "Creating update archive for Tauri updater..."
+
+    $archiveName = "mutaba3a-v$Version-windows-x64-setup.nsis.zip"
+    $archivePath = Join-Path $RELEASE_DIR $archiveName
+
+    # Create zip from the NSIS installer
+    Compress-Archive -Path $SourceNsis -DestinationPath $archivePath -Force
+
+    if (-not (Test-Path $archivePath)) {
+        Write-Error "Failed to create update archive"
+        return $false
+    }
+
+    Write-Success "Created $archivePath"
+
+    $script:UPDATE_ARCHIVE_PATH = $archivePath
+    $script:UPDATE_ARCHIVE_NAME = $archiveName
+    return $true
+}
+
+# Sign artifact for Tauri updater
+function Invoke-SignUpdateArtifact {
+    param([string]$ArtifactPath)
+
+    if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+        Write-Warning "Skipping signing - no private key configured"
+        $script:UPDATE_SIGNATURE = ""
+        return $true
+    }
+
+    Write-Info "Signing update artifact..."
+
+    try {
+        $password = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+        if ($password) {
+            $signature = npx @tauri-apps/cli signer sign $ArtifactPath --private-key $env:TAURI_SIGNING_PRIVATE_KEY --password $password 2>$null
+        } else {
+            $signature = npx @tauri-apps/cli signer sign $ArtifactPath --private-key $env:TAURI_SIGNING_PRIVATE_KEY 2>$null
+        }
+
+        if (-not $signature) {
+            Write-Error "Failed to sign artifact"
+            return $false
+        }
+
+        Write-Success "Artifact signed"
+        $script:UPDATE_SIGNATURE = $signature
+        return $true
+    }
+    catch {
+        Write-Error "Failed to sign artifact: $_"
+        return $false
+    }
+}
+
+# Generate or update latest.json manifest for Tauri updater
+function New-UpdateManifest {
+    param([string]$Version)
+
+    $tag = "v$Version"
+    Write-Info "Generating update manifest (latest.json)..."
+
+    $manifestPath = Join-Path $RELEASE_DIR "latest.json"
+    $pubDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    $archiveUrl = "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/$($script:UPDATE_ARCHIVE_NAME)"
+
+    # Check if manifest already exists (from macOS build)
+    $existingManifest = $null
+    if (Test-Path $manifestPath) {
+        try {
+            $existingManifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+        }
+        catch {
+            # Ignore parse errors, will create new
+        }
+    }
+
+    # Build platforms object
+    $platforms = @{}
+
+    # Preserve existing macOS platforms if present
+    if ($existingManifest -and $existingManifest.platforms) {
+        if ($existingManifest.platforms.'darwin-universal') {
+            $platforms['darwin-universal'] = $existingManifest.platforms.'darwin-universal'
+        }
+        if ($existingManifest.platforms.'darwin-x86_64') {
+            $platforms['darwin-x86_64'] = $existingManifest.platforms.'darwin-x86_64'
+        }
+        if ($existingManifest.platforms.'darwin-aarch64') {
+            $platforms['darwin-aarch64'] = $existingManifest.platforms.'darwin-aarch64'
+        }
+    }
+
+    # Add Windows platform
+    $platforms['windows-x86_64'] = @{
+        signature = $script:UPDATE_SIGNATURE
+        url = $archiveUrl
+    }
+
+    # Create manifest object
+    $manifest = @{
+        version = $Version
+        notes = "Release $tag"
+        pub_date = $pubDate
+        platforms = $platforms
+    }
+
+    # Write manifest
+    $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path $manifestPath -NoNewline
+
+    if (-not (Test-Path $manifestPath)) {
+        Write-Error "Failed to create update manifest"
+        return $false
+    }
+
+    Write-Success "Created $manifestPath"
+    $script:UPDATE_MANIFEST_PATH = $manifestPath
+    return $true
+}
+
 # Prepare release artifacts
 function Prepare-ReleaseArtifacts {
     param(
@@ -425,6 +564,14 @@ function New-GitHubRelease {
         $assets += $exeChecksumFile
     }
 
+    # Add update manifest and archive if they exist
+    if ($script:UPDATE_MANIFEST_PATH -and (Test-Path $script:UPDATE_MANIFEST_PATH)) {
+        $assets += $script:UPDATE_MANIFEST_PATH
+    }
+    if ($script:UPDATE_ARCHIVE_PATH -and (Test-Path $script:UPDATE_ARCHIVE_PATH)) {
+        $assets += $script:UPDATE_ARCHIVE_PATH
+    }
+
     # Create release with auto-generated notes
     gh release create $tag --title $tag --generate-notes @assets
 
@@ -475,6 +622,20 @@ function Write-ReleaseUrls {
     Write-Host ""
     Write-ColorOutput "  $msiDownloadUrl" "Cyan"
     Write-Host ""
+
+    # Show auto-update info if manifest was created
+    if ($script:UPDATE_MANIFEST_PATH) {
+        Write-ColorOutput "----------------------------------------" "Green"
+        Write-Host "Auto-Update Manifest:"
+        $manifestUrl = "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/latest.json"
+        Write-ColorOutput "  $manifestUrl" "Cyan"
+        Write-Host ""
+        Write-Host "Update Archive:"
+        $archiveUrl = "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/$($script:UPDATE_ARCHIVE_NAME)"
+        Write-ColorOutput "  $archiveUrl" "Cyan"
+        Write-Host ""
+    }
+
     Write-ColorOutput "----------------------------------------" "Green"
 }
 
@@ -485,6 +646,9 @@ function Invoke-BuildAndRelease {
     # Check prerequisites first
     Test-ReleasePrerequisites
 
+    # Check if updater signing is available
+    $script:HAS_UPDATER_SIGNING = Test-UpdaterSigning
+
     # Build Windows app
     Build-Windows
 
@@ -494,6 +658,21 @@ function Invoke-BuildAndRelease {
 
     # Prepare release artifacts
     Prepare-ReleaseArtifacts -Version $Version -SourceMsi $msiPath -SourceExe $exePath
+
+    # Create update archive and manifest for auto-updates (if signing configured and EXE exists)
+    if ($script:HAS_UPDATER_SIGNING -and $exePath) {
+        if (New-UpdateArchive -Version $Version -SourceNsis $script:RELEASE_EXE_PATH) {
+            if (Invoke-SignUpdateArtifact -ArtifactPath $script:UPDATE_ARCHIVE_PATH) {
+                New-UpdateManifest -Version $Version | Out-Null
+            }
+        }
+    }
+    elseif (-not $exePath) {
+        Write-Warning "Skipping auto-update artifacts (no NSIS EXE found)"
+    }
+    else {
+        Write-Warning "Skipping auto-update artifacts (no signing key)"
+    }
 
     # Update website download config
     Update-DownloadConfig -Version $Version
