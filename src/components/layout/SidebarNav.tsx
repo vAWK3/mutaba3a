@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { cn } from "../../lib/utils";
 import { useT } from "../../lib/i18n";
+import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 
 const navItems = [
   { path: "/", labelKey: "nav.overview", icon: HomeIcon },
@@ -13,6 +14,7 @@ const navItems = [
 export function SidebarNav() {
   const location = useLocation();
   const t = useT();
+  const { hasUpdate } = useCheckForUpdates();
 
   return (
     <aside className="sidebar">
@@ -75,6 +77,7 @@ export function SidebarNav() {
         >
           <SettingsIcon className="nav-icon" />
           {t("nav.settings")}
+          {hasUpdate && <span className="update-indicator" />}
         </Link>
       </div>
     </aside>

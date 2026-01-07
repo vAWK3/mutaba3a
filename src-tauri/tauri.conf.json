@@ -1,8 +1,19 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "متابعة",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "identifier": "com.elmokhtbr.mutaba3a",
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_YOUR_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/vAWK3/mutaba3a/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -33,6 +44,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "wix": {
+        "language": "ar-SA"
+      }
+    },
     "macOS": {
       "signingIdentity": "Developer ID Application: Creative Restaurant Services for Restaurant Services (4LCWA596X7)"
     }

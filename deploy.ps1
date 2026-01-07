@@ -23,6 +23,13 @@ $script:RELEASE_EXE_NAME = ""
 $script:RELEASE_MSI_CHECKSUM = ""
 $script:RELEASE_EXE_CHECKSUM = ""
 
+# Auto-update artifacts
+$script:UPDATE_ARCHIVE_PATH = ""
+$script:UPDATE_ARCHIVE_NAME = ""
+$script:UPDATE_SIGNATURE = ""
+$script:UPDATE_MANIFEST_PATH = ""
+$script:HAS_UPDATER_SIGNING = $false
+
 # Colors for output
 function Write-ColorOutput {
     param(

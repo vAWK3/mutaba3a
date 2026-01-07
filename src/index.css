@@ -1176,6 +1176,48 @@ td {
   display: inline-block;
 }
 
+/* Update indicator (sidebar) */
+.update-indicator {
+  width: 8px;
+  height: 8px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+
+/* Update available banner (settings) */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.update-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.update-banner-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.update-banner-versions {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.update-banner-version {
+  font-family: var(--font-mono);
+}
+
 /* Reports Layout */
 .reports-layout {
   display: grid;

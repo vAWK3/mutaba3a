@@ -6,6 +6,7 @@ import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
 import { useT, useLanguage } from '../../lib/i18n';
 import { DeleteAllDataModal } from '../../components/modals';
+import { useCheckForUpdates, DOWNLOAD_CONFIG } from '../../hooks/useCheckForUpdates';
 import type { Currency } from '../../types';
 import type { Language } from '../../lib/i18n/types';
 
@@ -19,6 +20,7 @@ export function SettingsPage() {
   const [importStatus, setImportStatus] = useState<string>('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
+  const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
 
   const handleCurrencyToggle = (currency: Currency) => {
     if (!settings) return;
@@ -256,6 +258,40 @@ export function SettingsPage() {
               {t('settings.about.description')}
             </p>
           </div>
+        </div>
+
+        {/* Updates */}
+        <div className="settings-section">
+          <h3 className="settings-section-title">{t('settings.updates.title')}</h3>
+
+          {isCheckingUpdate ? (
+            <div className="text-muted">{t('settings.updates.checking')}</div>
+          ) : updateError ? (
+            <div className="text-muted">{t('settings.updates.checkFailed')}</div>
+          ) : hasUpdate ? (
+            <div className="update-banner">
+              <div className="update-banner-content">
+                <div className="update-banner-title">{t('settings.updates.updateAvailable')}</div>
+                <div className="update-banner-versions">
+                  {t('settings.updates.currentVersion')}: <span className="update-banner-version">{DOWNLOAD_CONFIG.version}</span>
+                  {' → '}
+                  {t('settings.updates.latestVersion')}: <span className="update-banner-version">{latestVersion}</span>
+                </div>
+              </div>
+              <Link to="/download" className="btn btn-primary">
+                {t('settings.updates.updateNow')}
+              </Link>
+            </div>
+          ) : (
+            <div className="settings-row">
+              <div>
+                <div className="settings-label">{t('settings.updates.upToDate')}</div>
+                <div className="settings-description">
+                  {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{DOWNLOAD_CONFIG.version}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Desktop App */}

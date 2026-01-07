@@ -274,6 +274,16 @@
       "name": "Mutaba3a - Mini CRM",
       "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB."
     },
+    "updates": {
+      "title": "Updates",
+      "checking": "Checking for updates...",
+      "upToDate": "You're up to date",
+      "currentVersion": "Current version",
+      "latestVersion": "Latest version",
+      "updateAvailable": "A new version is available",
+      "updateNow": "Update Now",
+      "checkFailed": "Unable to check for updates"
+    },
     "desktopApp": {
       "title": "Desktop App",
       "download": "Download for macOS",
@@ -285,6 +295,15 @@
     "message": "Get the native Mac app for a better experience",
     "cta": "Download",
     "dismiss": "Dismiss"
+  },
+  "updateBanner": {
+    "available": "Version {{version}} is available",
+    "downloading": "Downloading update... {{progress}}%",
+    "ready": "Update ready",
+    "restart": "Restart to Update",
+    "download": "Download",
+    "dismiss": "Later",
+    "error": "Update failed"
   },
   "drawer": {
     "transaction": {

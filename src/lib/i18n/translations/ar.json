@@ -274,6 +274,16 @@
       "name": "متابعة - نظام إدارة مصغّر",
       "description": "أداة تتبع مالي تعمل محلياً للمستقلين والشركات الصغيرة. بياناتك محفوظة محلياً في متصفحك باستخدام IndexedDB."
     },
+    "updates": {
+      "title": "التحديثات",
+      "checking": "جارٍ البحث عن تحديثات...",
+      "upToDate": "لديك أحدث إصدار",
+      "currentVersion": "الإصدار الحالي",
+      "latestVersion": "أحدث إصدار",
+      "updateAvailable": "يتوفر إصدار جديد",
+      "updateNow": "حدّث الآن",
+      "checkFailed": "تعذر البحث عن تحديثات"
+    },
     "desktopApp": {
       "title": "تطبيق سطح المكتب",
       "download": "تحميل لنظام macOS",
@@ -285,6 +295,15 @@
     "message": "احصل على تطبيق Mac الأصلي لتجربة أفضل",
     "cta": "تحميل",
     "dismiss": "إغلاق"
+  },
+  "updateBanner": {
+    "available": "الإصدار {{version}} متاح",
+    "downloading": "جاري التحميل... {{progress}}%",
+    "ready": "التحديث جاهز",
+    "restart": "إعادة التشغيل للتحديث",
+    "download": "تحميل",
+    "dismiss": "لاحقاً",
+    "error": "فشل التحديث"
   },
   "drawer": {
     "transaction": {

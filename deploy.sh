@@ -21,8 +21,9 @@ RELEASE_DIR="release"
 GITHUB_OWNER=""
 GITHUB_REPO=""
 
-# --- Release secrets (mac notarization) ---
+# --- Release secrets (mac notarization + updater signing) ---
 RELEASE_ENV_FILE="./release.env"
+UPDATER_PRIVATE_KEY_FILE="${TAURI_SIGNING_PRIVATE_KEY_PATH:-$HOME/.tauri/mutaba3a.key}"
 
 load_release_env() {
     # Load env vars from local file (not committed)
@@ -33,6 +34,7 @@ load_release_env() {
     else
         echo -e "  ${YELLOW}⚠${NC} No ${CYAN}$RELEASE_ENV_FILE${NC} found. mac notarization may fail."
         echo -e "    Create it with APPLE_SIGNING_IDENTITY / APPLE_ID / APPLE_TEAM_ID / APPLE_PASSWORD."
+        echo -e "    Also add TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD for updates."
     fi
 }
 
@@ -55,6 +57,17 @@ require_release_env() {
         echo ""
         exit 1
     fi
+}
+
+# Check if updater signing is configured
+check_updater_signing() {
+    if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} TAURI_SIGNING_PRIVATE_KEY not set - auto-update signing disabled"
+        echo -e "    To enable: add TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD to release.env"
+        return 1
+    fi
+    echo -e "  ${GREEN}✓${NC} Updater signing key configured"
+    return 0
 }
 
 # Get current version from package.json
@@ -301,6 +314,103 @@ prepare_release_artifacts() {
     RELEASE_CHECKSUM="$checksum"
 }
 
+# Create tar.gz archive for Tauri updater (required format)
+create_update_archive() {
+    local version=$1
+    local source_dmg=$2
+
+    echo -e "${BLUE}Creating update archive for Tauri updater...${NC}"
+
+    local archive_name="mutaba3a-v${version}-macos-universal.tar.gz"
+    local archive_path="$RELEASE_DIR/$archive_name"
+
+    # Create tar.gz from the DMG
+    tar -czf "$archive_path" -C "$(dirname "$source_dmg")" "$(basename "$source_dmg")"
+
+    if [[ ! -f "$archive_path" ]]; then
+        echo -e "${RED}Error: Failed to create update archive${NC}"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Created $archive_path"
+
+    # Return path via global variable
+    UPDATE_ARCHIVE_PATH="$archive_path"
+    UPDATE_ARCHIVE_NAME="$archive_name"
+}
+
+# Sign artifact for Tauri updater
+sign_update_artifact() {
+    local artifact_path=$1
+
+    if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+        echo -e "  ${YELLOW}⚠${NC} Skipping signing - no private key configured"
+        UPDATE_SIGNATURE=""
+        return 0
+    fi
+
+    echo -e "${BLUE}Signing update artifact...${NC}"
+
+    # Use Tauri CLI to sign the artifact
+    local signature
+    signature=$(npx @tauri-apps/cli signer sign "$artifact_path" --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" 2>/dev/null)
+
+    if [[ -z "$signature" ]]; then
+        echo -e "${RED}Error: Failed to sign artifact${NC}"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Artifact signed"
+
+    UPDATE_SIGNATURE="$signature"
+}
+
+# Generate latest.json manifest for Tauri updater
+generate_update_manifest() {
+    local version=$1
+    local tag="v$version"
+
+    echo -e "${BLUE}Generating update manifest (latest.json)...${NC}"
+
+    local manifest_path="$RELEASE_DIR/latest.json"
+    local pub_date
+    pub_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    local archive_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$UPDATE_ARCHIVE_NAME"
+
+    # Create the manifest
+    cat > "$manifest_path" << EOF
+{
+  "version": "$version",
+  "notes": "Release $tag",
+  "pub_date": "$pub_date",
+  "platforms": {
+    "darwin-universal": {
+      "signature": "$UPDATE_SIGNATURE",
+      "url": "$archive_url"
+    },
+    "darwin-x86_64": {
+      "signature": "$UPDATE_SIGNATURE",
+      "url": "$archive_url"
+    },
+    "darwin-aarch64": {
+      "signature": "$UPDATE_SIGNATURE",
+      "url": "$archive_url"
+    }
+  }
+}
+EOF
+
+    if [[ ! -f "$manifest_path" ]]; then
+        echo -e "${RED}Error: Failed to create update manifest${NC}"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Created $manifest_path"
+
+    UPDATE_MANIFEST_PATH="$manifest_path"
+}
+
 # Update website download config file
 update_download_config() {
     local version=$1
@@ -398,12 +508,22 @@ create_github_release() {
         exit 1
     fi
 
+    # Build list of artifacts to upload
+    local artifacts=("$RELEASE_DMG_PATH" "$RELEASE_CHECKSUM_PATH")
+
+    # Add update manifest and archive if they exist
+    if [[ -n "${UPDATE_MANIFEST_PATH:-}" && -f "$UPDATE_MANIFEST_PATH" ]]; then
+        artifacts+=("$UPDATE_MANIFEST_PATH")
+    fi
+    if [[ -n "${UPDATE_ARCHIVE_PATH:-}" && -f "$UPDATE_ARCHIVE_PATH" ]]; then
+        artifacts+=("$UPDATE_ARCHIVE_PATH")
+    fi
+
     # Create release with auto-generated notes
     gh release create "$tag" \
         --title "$tag" \
         --generate-notes \
-        "$RELEASE_DMG_PATH" \
-        "$RELEASE_CHECKSUM_PATH"
+        "${artifacts[@]}"
 
     echo -e "  ${GREEN}✓${NC} Release created successfully"
     echo ""
@@ -440,6 +560,20 @@ print_release_urls() {
     echo ""
     echo -e "  ${CYAN}$download_url${NC}"
     echo ""
+
+    # Show auto-update info if manifest was created
+    if [[ -n "${UPDATE_MANIFEST_PATH:-}" ]]; then
+        echo -e "${GREEN}----------------------------------------${NC}"
+        echo -e "${BOLD}Auto-Update Manifest:${NC}"
+        local manifest_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/latest.json"
+        echo -e "  ${CYAN}$manifest_url${NC}"
+        echo ""
+        echo -e "${BOLD}Update Archive:${NC}"
+        local archive_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$UPDATE_ARCHIVE_NAME"
+        echo -e "  ${CYAN}$archive_url${NC}"
+        echo ""
+    fi
+
     echo -e "${GREEN}----------------------------------------${NC}"
 }
 
@@ -454,6 +588,12 @@ build_and_release_mac() {
     # Check prerequisites first
     check_release_prerequisites
 
+    # Check if updater signing is available
+    local has_updater_signing=false
+    if check_updater_signing; then
+        has_updater_signing=true
+    fi
+
     # Build macOS app
     build_mac
 
@@ -463,6 +603,15 @@ build_and_release_mac() {
 
     # Prepare release artifacts
     prepare_release_artifacts "$version" "$dmg_path"
+
+    # Create update archive and manifest for auto-updates (if signing configured)
+    if [[ "$has_updater_signing" == "true" ]]; then
+        create_update_archive "$version" "$RELEASE_DMG_PATH"
+        sign_update_artifact "$UPDATE_ARCHIVE_PATH"
+        generate_update_manifest "$version"
+    else
+        echo -e "  ${YELLOW}⚠${NC} Skipping auto-update artifacts (no signing key)"
+    fi
 
     # Update website download config (auto-generates src/content/download-config.ts)
     update_download_config "$version"
