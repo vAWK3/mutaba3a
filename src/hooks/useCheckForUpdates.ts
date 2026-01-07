@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { DOWNLOAD_CONFIG } from '../content/download-config';
+import { fetchLatestRelease } from './useLatestRelease';
 
-const GITHUB_API_URL = 'https://api.github.com/repos/vAWK3/mutaba3a/releases/latest';
 const CACHE_KEY = 'update-check-result';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
@@ -60,6 +59,27 @@ function setCachedResult(latestVersion: string, hasUpdate: boolean): void {
   sessionStorage.setItem(CACHE_KEY, JSON.stringify(result));
 }
 
+/**
+ * Get current app version from Tauri or fallback to a default
+ */
+function getCurrentVersion(): string {
+  // In Tauri, we can get the version from the app
+  // For now, use a fallback that will be compared against GitHub
+  try {
+    // @ts-expect-error - Tauri global may not exist in web context
+    if (window.__TAURI__) {
+      // This would need to be fetched async, but for simplicity we use package.json version
+      return __APP_VERSION__ || '0.0.0';
+    }
+  } catch {
+    // Not in Tauri context
+  }
+  return __APP_VERSION__ || '0.0.0';
+}
+
+// Define the app version constant (set by Vite)
+declare const __APP_VERSION__: string | undefined;
+
 export function useCheckForUpdates(): UpdateCheckResult {
   const [state, setState] = useState<UpdateCheckResult>({
     latestVersion: null,
@@ -83,22 +103,9 @@ export function useCheckForUpdates(): UpdateCheckResult {
       }
 
       try {
-        const response = await fetch(GITHUB_API_URL, {
-          headers: {
-            Accept: 'application/vnd.github.v3+json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`GitHub API returned ${response.status}`);
-        }
-
-        const data = await response.json();
-        const tagName = data.tag_name as string;
-
-        // Strip 'v' prefix if present
-        const latestVersion = tagName.startsWith('v') ? tagName.slice(1) : tagName;
-        const currentVersion = DOWNLOAD_CONFIG.version;
+        const release = await fetchLatestRelease();
+        const latestVersion = release.version;
+        const currentVersion = getCurrentVersion();
 
         const hasUpdate = compareVersions(currentVersion, latestVersion) > 0;
 
@@ -126,5 +133,3 @@ export function useCheckForUpdates(): UpdateCheckResult {
 
   return state;
 }
-
-export { DOWNLOAD_CONFIG };

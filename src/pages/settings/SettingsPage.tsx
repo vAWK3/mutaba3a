@@ -6,7 +6,11 @@ import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
 import { useT, useLanguage } from '../../lib/i18n';
 import { DeleteAllDataModal } from '../../components/modals';
-import { useCheckForUpdates, DOWNLOAD_CONFIG } from '../../hooks/useCheckForUpdates';
+import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
+
+// App version injected by Vite at build time
+declare const __APP_VERSION__: string | undefined;
+const APP_VERSION = __APP_VERSION__ || '0.0.0';
 import type { Currency } from '../../types';
 import type { Language } from '../../lib/i18n/types';
 
@@ -273,7 +277,7 @@ export function SettingsPage() {
               <div className="update-banner-content">
                 <div className="update-banner-title">{t('settings.updates.updateAvailable')}</div>
                 <div className="update-banner-versions">
-                  {t('settings.updates.currentVersion')}: <span className="update-banner-version">{DOWNLOAD_CONFIG.version}</span>
+                  {t('settings.updates.currentVersion')}: <span className="update-banner-version">{APP_VERSION}</span>
                   {' → '}
                   {t('settings.updates.latestVersion')}: <span className="update-banner-version">{latestVersion}</span>
                 </div>
@@ -287,7 +291,7 @@ export function SettingsPage() {
               <div>
                 <div className="settings-label">{t('settings.updates.upToDate')}</div>
                 <div className="settings-description">
-                  {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{DOWNLOAD_CONFIG.version}</span>
+                  {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{APP_VERSION}</span>
                 </div>
               </div>
             </div>

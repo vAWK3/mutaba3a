@@ -138,6 +138,13 @@
   cursor: not-allowed;
 }
 
+.download-cta--loading {
+  background-color: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  cursor: wait;
+}
+
 .download-cta:focus-visible {
   box-shadow: var(--focus-ring);
 }
