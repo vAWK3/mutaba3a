@@ -18,8 +18,8 @@ export interface UnifiedAmountProps {
   ilsAmountMinor: number;
   /** Target currency for unified display (default: ILS) */
   unifiedCurrency?: Currency;
-  /** Visual variant */
-  variant?: 'default' | 'compact' | 'kpi';
+  /** Visual variant: 'table' shows just the total with hover tooltip for breakdown */
+  variant?: 'default' | 'compact' | 'kpi' | 'table';
   /** Semantic type for color styling */
   type?: 'income' | 'expense' | 'net' | 'neutral';
   /** Show rate source indicator */
@@ -84,6 +84,30 @@ export function UnifiedAmount({
             {formatAmount(usdAmountMinor, 'USD', locale)} + {formatAmount(ilsAmountMinor, 'ILS', locale)}
           </span>
         )}
+      </span>
+    );
+  }
+
+  // Table variant: shows unified total with hover tooltip showing breakdown
+  if (variant === 'table') {
+    const tooltipText = `USD: ${formatAmount(usdAmountMinor, 'USD', locale)} + ILS: ${formatAmount(ilsAmountMinor, 'ILS', locale)}`;
+
+    if (unifiedTotal !== null) {
+      return (
+        <span
+          className={cn(colorClass, className)}
+          title={tooltipText}
+          style={{ cursor: 'help' }}
+        >
+          {formatAmount(unifiedTotal, unifiedCurrency, locale)}
+        </span>
+      );
+    }
+
+    // Fallback when no FX rate available
+    return (
+      <span className={cn(colorClass, className)} title={tooltipText}>
+        {formatAmount(usdAmountMinor, 'USD', locale)} + {formatAmount(ilsAmountMinor, 'ILS', locale)}
       </span>
     );
   }

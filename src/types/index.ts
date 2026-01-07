@@ -8,7 +8,7 @@ export type CurrencyMode = 'USD' | 'ILS' | 'BOTH';
 export type PeriodPreset = 'month' | 'quarter' | 'year' | 'custom';
 
 // Report types
-export type ReportType = 'summary' | 'by-project' | 'by-client' | 'expenses-by-category' | 'unpaid-aging';
+export type ReportType = 'summary' | 'by-project' | 'by-client' | 'expenses-by-project' | 'unpaid-aging';
 
 // Transaction types
 export type TxKind = 'income' | 'expense';

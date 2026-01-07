@@ -11,7 +11,6 @@ import {
   useDeleteTransaction,
   useClients,
   useProjects,
-  useCategories,
 } from '../../hooks/useQueries';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
@@ -27,7 +26,6 @@ const schema = z.object({
   occurredAt: z.string().min(1, 'Date is required'),
   clientId: z.string().optional(),
   projectId: z.string().optional(),
-  categoryId: z.string().optional(),
   dueDate: z.string().optional(),
   title: z.string().optional(),
   notes: z.string().optional(),
@@ -45,8 +43,6 @@ export function TransactionDrawer() {
   const { data: sourceTx } = useTransaction(duplicateFromId || '');
   const { data: clients = [] } = useClients();
   const { data: projects = [] } = useProjects();
-  const { data: incomeCategories = [] } = useCategories('income');
-  const { data: expenseCategories = [] } = useCategories('expense');
 
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
@@ -71,7 +67,6 @@ export function TransactionDrawer() {
       occurredAt: todayISO(),
       clientId: defaultClientId || '',
       projectId: defaultProjectId || '',
-      categoryId: '',
       dueDate: '',
       title: '',
       notes: '',
@@ -99,7 +94,6 @@ export function TransactionDrawer() {
         occurredAt: existingTx.occurredAt.split('T')[0],
         clientId: existingTx.clientId || '',
         projectId: existingTx.projectId || '',
-        categoryId: existingTx.categoryId || '',
         dueDate: existingTx.dueDate || '',
         title: existingTx.title || '',
         notes: existingTx.notes || '',
@@ -121,7 +115,6 @@ export function TransactionDrawer() {
         occurredAt: todayISO(), // Always today, not original date
         clientId: sourceTx.clientId || '',
         projectId: sourceTx.projectId || '',
-        categoryId: sourceTx.categoryId || '',
         dueDate: '', // Clear - user sets new due date
         title: sourceTx.title || '',
         notes: sourceTx.notes || '',
@@ -134,9 +127,6 @@ export function TransactionDrawer() {
     ? projects.filter((p) => p.clientId === selectedClientId)
     : projects;
 
-  // Get categories based on type
-  const categories = selectedType === 'expense' ? expenseCategories : incomeCategories;
-
   const onSubmit = async (data: FormData) => {
     const kind: TxKind = data.type === 'expense' ? 'expense' : 'income';
     const status: TxStatus = data.type === 'receivable' ? 'unpaid' : 'paid';
@@ -147,7 +137,6 @@ export function TransactionDrawer() {
       title: data.title || undefined,
       clientId: data.clientId || undefined,
       projectId: data.projectId || undefined,
-      categoryId: data.categoryId || undefined,
       amountMinor: parseAmountToMinor(data.amount),
       currency: data.currency as Currency,
       occurredAt: new Date(data.occurredAt).toISOString(),
@@ -347,25 +336,6 @@ export function TransactionDrawer() {
                 {filteredProjects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
-        </div>
-
-        {/* Category */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.category')}</label>
-          <Controller
-            name="categoryId"
-            control={form.control}
-            render={({ field }) => (
-              <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">{t('drawer.transaction.categoryPlaceholder')}</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
                   </option>
                 ))}
               </select>

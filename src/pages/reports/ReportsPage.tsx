@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { CurrencyModeTabs } from '../../components/filters/CurrencyModeTabs';
 import { SearchInput } from '../../components/filters';
+import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
 import { useTransactions, useProjectSummaries, useClientSummaries } from '../../hooks/useQueries';
 import { formatAmount, getDateRangePreset, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
@@ -25,7 +26,7 @@ export function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('summary');
   const [period, setPeriod] = useState<PeriodPreset>('month');
   const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
+  const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('BOTH');
 
   // Table sorting and search state
@@ -91,9 +92,9 @@ export function ReportsPage() {
     return summaryByCurrency[currencyMode];
   }, [currencyMode, summaryByCurrency]);
 
-  // Expenses by category - separated by currency for BOTH mode
-  const expensesByCurrencyAndCategory = useMemo(() => {
-    const result: Record<Currency, Array<{ category: string; amount: number }>> = {
+  // Expenses by project - separated by currency for BOTH mode
+  const expensesByCurrencyAndProject = useMemo(() => {
+    const result: Record<Currency, Array<{ project: string; amount: number }>> = {
       USD: [],
       ILS: [],
     };
@@ -103,20 +104,20 @@ export function ReportsPage() {
 
     for (const tx of transactions) {
       if (tx.kind === 'expense') {
-        const cat = tx.categoryName || t('common.uncategorized');
+        const proj = tx.projectName || t('common.noProject');
         if (tx.currency === 'USD') {
-          usdMap.set(cat, (usdMap.get(cat) || 0) + tx.amountMinor);
+          usdMap.set(proj, (usdMap.get(proj) || 0) + tx.amountMinor);
         } else {
-          ilsMap.set(cat, (ilsMap.get(cat) || 0) + tx.amountMinor);
+          ilsMap.set(proj, (ilsMap.get(proj) || 0) + tx.amountMinor);
         }
       }
     }
 
     result.USD = Array.from(usdMap.entries())
-      .map(([category, amount]) => ({ category, amount }))
+      .map(([project, amount]) => ({ project, amount }))
       .sort((a, b) => b.amount - a.amount);
     result.ILS = Array.from(ilsMap.entries())
-      .map(([category, amount]) => ({ category, amount }))
+      .map(([project, amount]) => ({ project, amount }))
       .sort((a, b) => b.amount - a.amount);
 
     return result;
@@ -373,9 +374,9 @@ export function ReportsPage() {
       return [header, ...rows].join('\n');
     };
 
-    const generateExpensesCategoryCSV = (expenses: Array<{ category: string; amount: number }>, currency: Currency) => {
-      const header = 'Category,Amount,Currency';
-      const rows = expenses.map(e => `"${e.category}",${(e.amount / 100).toFixed(2)},${currency}`);
+    const generateExpensesProjectCSV = (expenses: Array<{ project: string; amount: number }>, currency: Currency) => {
+      const header = 'Project,Amount,Currency';
+      const rows = expenses.map(e => `"${e.project}",${(e.amount / 100).toFixed(2)},${currency}`);
       return [header, ...rows].join('\n');
     };
 
@@ -410,15 +411,15 @@ export function ReportsPage() {
         lines.push(generateClientsCSV());
         break;
       }
-      case 'expenses-by-category': {
+      case 'expenses-by-project': {
         if (currencyMode === 'BOTH') {
           lines.push('## USD');
-          lines.push(generateExpensesCategoryCSV(expensesByCurrencyAndCategory.USD, 'USD'));
+          lines.push(generateExpensesProjectCSV(expensesByCurrencyAndProject.USD, 'USD'));
           lines.push('');
           lines.push('## ILS');
-          lines.push(generateExpensesCategoryCSV(expensesByCurrencyAndCategory.ILS, 'ILS'));
+          lines.push(generateExpensesProjectCSV(expensesByCurrencyAndProject.ILS, 'ILS'));
         } else {
-          lines.push(generateExpensesCategoryCSV(expensesByCurrencyAndCategory[currencyMode], currencyMode));
+          lines.push(generateExpensesProjectCSV(expensesByCurrencyAndProject[currencyMode], currencyMode));
         }
         break;
       }
@@ -450,7 +451,7 @@ export function ReportsPage() {
     { type: 'summary', labelKey: 'reports.presets.summary' },
     { type: 'by-project', labelKey: 'reports.presets.byProject' },
     { type: 'by-client', labelKey: 'reports.presets.byClient' },
-    { type: 'expenses-by-category', labelKey: 'reports.presets.expensesByCategory' },
+    { type: 'expenses-by-project', labelKey: 'reports.presets.expensesByProject' },
     { type: 'unpaid-aging', labelKey: 'reports.presets.unpaidAging' },
   ];
 
@@ -590,7 +591,7 @@ export function ReportsPage() {
                 </div>
               )}
 
-              {reportType === 'expenses-by-category' && (
+              {reportType === 'expenses-by-project' && (
                 <div className="period-control">
                   <div className="segment-control">
                     <button
@@ -651,7 +652,7 @@ export function ReportsPage() {
             </div>
 
             {/* Date range display */}
-            {(reportType === 'summary' || reportType === 'expenses-by-category') && (
+            {(reportType === 'summary' || reportType === 'expenses-by-project') && (
               <div className="date-range-display" style={{ marginBottom: 16, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
                 {dateRange.dateFrom} → {dateRange.dateTo}
               </div>
@@ -719,27 +720,54 @@ export function ReportsPage() {
                             <td style={{ fontWeight: 500 }}>{p.name}</td>
                             <td className="text-secondary">{p.clientName || '-'}</td>
                             <td className="amount-cell amount-positive">
-                              {currencyMode === 'BOTH' ? '-' : formatAmount(p.paidIncomeMinor, currencyMode, locale)}
+                              {currencyMode === 'BOTH' ? (
+                                <UnifiedAmount
+                                  usdAmountMinor={p.paidIncomeMinorUSD || 0}
+                                  ilsAmountMinor={p.paidIncomeMinorILS || 0}
+                                  variant="table"
+                                  type="income"
+                                  showSource={false}
+                                />
+                              ) : formatAmount(p.paidIncomeMinor, currencyMode, locale)}
                             </td>
                             <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>
-                              {currencyMode === 'BOTH' ? '-' : formatAmount(p.unpaidIncomeMinor, currencyMode, locale)}
+                              {currencyMode === 'BOTH' ? (
+                                <UnifiedAmount
+                                  usdAmountMinor={p.unpaidIncomeMinorUSD || 0}
+                                  ilsAmountMinor={p.unpaidIncomeMinorILS || 0}
+                                  variant="table"
+                                  type="neutral"
+                                  showSource={false}
+                                />
+                              ) : formatAmount(p.unpaidIncomeMinor, currencyMode, locale)}
                             </td>
                             <td className="amount-cell">
-                              {currencyMode === 'BOTH' ? '-' : formatAmount(p.expensesMinor, currencyMode, locale)}
+                              {currencyMode === 'BOTH' ? (
+                                <UnifiedAmount
+                                  usdAmountMinor={p.expensesMinorUSD || 0}
+                                  ilsAmountMinor={p.expensesMinorILS || 0}
+                                  variant="table"
+                                  type="neutral"
+                                  showSource={false}
+                                />
+                              ) : formatAmount(p.expensesMinor, currencyMode, locale)}
                             </td>
                             <td className={cn('amount-cell', p.netMinor >= 0 ? 'amount-positive' : 'amount-negative')}>
-                              {currencyMode === 'BOTH' ? '-' : formatAmount(p.netMinor, currencyMode, locale)}
+                              {currencyMode === 'BOTH' ? (
+                                <UnifiedAmount
+                                  usdAmountMinor={(p.paidIncomeMinorUSD || 0) - (p.expensesMinorUSD || 0)}
+                                  ilsAmountMinor={(p.paidIncomeMinorILS || 0) - (p.expensesMinorILS || 0)}
+                                  variant="table"
+                                  type="net"
+                                  showSource={false}
+                                />
+                              ) : formatAmount(p.netMinor, currencyMode, locale)}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                )}
-                {currencyMode === 'BOTH' && (
-                  <p className="text-muted" style={{ marginTop: 12, fontSize: 'var(--font-size-sm)' }}>
-                    {t('reports.selectCurrencyForAmounts')}
-                  </p>
                 )}
               </div>
             )}
@@ -780,10 +808,26 @@ export function ReportsPage() {
                             <td style={{ fontWeight: 500 }}>{c.name}</td>
                             <td className="text-secondary">{c.activeProjectCount}</td>
                             <td className="amount-cell amount-positive">
-                              {currencyMode === 'BOTH' ? '-' : formatAmount(c.paidIncomeMinor, currencyMode, locale)}
+                              {currencyMode === 'BOTH' ? (
+                                <UnifiedAmount
+                                  usdAmountMinor={c.paidIncomeMinorUSD || 0}
+                                  ilsAmountMinor={c.paidIncomeMinorILS || 0}
+                                  variant="table"
+                                  type="income"
+                                  showSource={false}
+                                />
+                              ) : formatAmount(c.paidIncomeMinor, currencyMode, locale)}
                             </td>
                             <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>
-                              {currencyMode === 'BOTH' ? '-' : formatAmount(c.unpaidIncomeMinor, currencyMode, locale)}
+                              {currencyMode === 'BOTH' ? (
+                                <UnifiedAmount
+                                  usdAmountMinor={c.unpaidIncomeMinorUSD || 0}
+                                  ilsAmountMinor={c.unpaidIncomeMinorILS || 0}
+                                  variant="table"
+                                  type="neutral"
+                                  showSource={false}
+                                />
+                              ) : formatAmount(c.unpaidIncomeMinor, currencyMode, locale)}
                             </td>
                           </tr>
                         ))}
@@ -791,22 +835,17 @@ export function ReportsPage() {
                     </table>
                   </div>
                 )}
-                {currencyMode === 'BOTH' && (
-                  <p className="text-muted" style={{ marginTop: 12, fontSize: 'var(--font-size-sm)' }}>
-                    {t('reports.selectCurrencyForAmounts')}
-                  </p>
-                )}
               </div>
             )}
 
-            {reportType === 'expenses-by-category' && (
+            {reportType === 'expenses-by-project' && (
               <div>
-                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.expensesByCategory')}</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('reports.sections.expensesByProject')}</h3>
                 {currencyMode === 'BOTH' ? (
                   <>
                     <div className="currency-section" style={{ marginBottom: 24 }}>
                       <h4 style={{ marginBottom: 12, fontSize: 'var(--font-size-md)', fontWeight: 500 }}>USD</h4>
-                      {expensesByCurrencyAndCategory.USD.length === 0 ? (
+                      {expensesByCurrencyAndProject.USD.length === 0 ? (
                         <div className="empty-state">
                           <p className="text-muted">{t('reports.noExpenses')}</p>
                         </div>
@@ -815,14 +854,14 @@ export function ReportsPage() {
                           <table>
                             <thead>
                               <tr>
-                                <th>{t('transactions.columns.category')}</th>
+                                <th>{t('projects.columns.project')}</th>
                                 <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {expensesByCurrencyAndCategory.USD.map((e) => (
-                                <tr key={e.category}>
-                                  <td style={{ fontWeight: 500 }}>{e.category}</td>
+                              {expensesByCurrencyAndProject.USD.map((e) => (
+                                <tr key={e.project}>
+                                  <td style={{ fontWeight: 500 }}>{e.project}</td>
                                   <td className="amount-cell">{formatAmount(e.amount, 'USD', locale)}</td>
                                 </tr>
                               ))}
@@ -833,7 +872,7 @@ export function ReportsPage() {
                     </div>
                     <div className="currency-section">
                       <h4 style={{ marginBottom: 12, fontSize: 'var(--font-size-md)', fontWeight: 500 }}>ILS</h4>
-                      {expensesByCurrencyAndCategory.ILS.length === 0 ? (
+                      {expensesByCurrencyAndProject.ILS.length === 0 ? (
                         <div className="empty-state">
                           <p className="text-muted">{t('reports.noExpenses')}</p>
                         </div>
@@ -842,14 +881,14 @@ export function ReportsPage() {
                           <table>
                             <thead>
                               <tr>
-                                <th>{t('transactions.columns.category')}</th>
+                                <th>{t('projects.columns.project')}</th>
                                 <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {expensesByCurrencyAndCategory.ILS.map((e) => (
-                                <tr key={e.category}>
-                                  <td style={{ fontWeight: 500 }}>{e.category}</td>
+                              {expensesByCurrencyAndProject.ILS.map((e) => (
+                                <tr key={e.project}>
+                                  <td style={{ fontWeight: 500 }}>{e.project}</td>
                                   <td className="amount-cell">{formatAmount(e.amount, 'ILS', locale)}</td>
                                 </tr>
                               ))}
@@ -860,7 +899,7 @@ export function ReportsPage() {
                     </div>
                   </>
                 ) : (
-                  expensesByCurrencyAndCategory[currencyMode].length === 0 ? (
+                  expensesByCurrencyAndProject[currencyMode].length === 0 ? (
                     <div className="empty-state">
                       <p className="text-muted">{t('reports.noExpenses')}</p>
                     </div>
@@ -869,14 +908,14 @@ export function ReportsPage() {
                       <table>
                         <thead>
                           <tr>
-                            <th>{t('transactions.columns.category')}</th>
+                            <th>{t('projects.columns.project')}</th>
                             <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {expensesByCurrencyAndCategory[currencyMode].map((e) => (
-                            <tr key={e.category}>
-                              <td style={{ fontWeight: 500 }}>{e.category}</td>
+                          {expensesByCurrencyAndProject[currencyMode].map((e) => (
+                            <tr key={e.project}>
+                              <td style={{ fontWeight: 500 }}>{e.project}</td>
                               <td className="amount-cell">{formatAmount(e.amount, currencyMode, locale)}</td>
                             </tr>
                           ))}

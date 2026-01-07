@@ -21,7 +21,7 @@ export function OverviewPage() {
   const { language } = useLanguage();
   const locale = getLocale(language);
 
-  const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
+  const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
   const [currency, setCurrency] = useState<Currency | undefined>(undefined);
 
   // Use single-currency query when a specific currency is selected

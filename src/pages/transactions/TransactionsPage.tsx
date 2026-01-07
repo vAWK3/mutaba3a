@@ -50,7 +50,7 @@ export function TransactionsPage() {
     if (searchParams.dateFrom && searchParams.dateTo) {
       return { dateFrom: searchParams.dateFrom, dateTo: searchParams.dateTo };
     }
-    return getDateRangePreset("this-month");
+    return getDateRangePreset("all");
   });
   const [currency, setCurrency] = useState<Currency | undefined>(searchParams.currency);
 

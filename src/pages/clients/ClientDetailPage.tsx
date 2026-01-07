@@ -25,7 +25,7 @@ export function ClientDetailPage() {
   const locale = getLocale(language);
 
   const [activeTab, setActiveTab] = useState<'summary' | 'projects' | 'receivables' | 'transactions'>('summary');
-  const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-year'));
+  const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
   const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<TxStatus | 'overdue' | undefined>(undefined);
   const [search, setSearch] = useState('');

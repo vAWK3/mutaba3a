@@ -39,7 +39,7 @@ interface TransactionFiltersState {
  */
 export function useTransactionFilters(options: UseTransactionFiltersOptions = {}): TransactionFiltersState {
   const {
-    defaultPreset = 'this-month',
+    defaultPreset = 'all',
     withTypeFilter = false,
     withStatusFilter = false,
     projectId,

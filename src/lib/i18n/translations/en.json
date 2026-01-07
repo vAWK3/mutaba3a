@@ -174,7 +174,7 @@
       "thisYear": "This Year",
       "byProject": "By Project",
       "byClient": "By Client",
-      "expensesByCategory": "Expenses by Category",
+      "expensesByProject": "Expenses by Project",
       "unpaidAging": "Unpaid Aging"
     },
     "period": {
@@ -202,7 +202,7 @@
       "financialSummary": "Financial Summary",
       "incomeByProject": "Income by Project",
       "incomeByClient": "Income by Client",
-      "expensesByCategory": "Expenses by Category",
+      "expensesByProject": "Expenses by Project",
       "unpaidAging": "Unpaid Receivables Aging"
     },
     "aging": {

@@ -173,14 +173,14 @@ export interface Translations {
       thisYear: string;
       byProject: string;
       byClient: string;
-      expensesByCategory: string;
+      expensesByProject: string;
       unpaidAging: string;
     };
     sections: {
       financialSummary: string;
       incomeByProject: string;
       incomeByClient: string;
-      expensesByCategory: string;
+      expensesByProject: string;
       unpaidAging: string;
     };
     aging: {

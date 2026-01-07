@@ -174,7 +174,7 @@
       "thisYear": "هذا العام",
       "byProject": "حسب المشروع",
       "byClient": "حسب العميل",
-      "expensesByCategory": "المصروفات حسب الفئة",
+      "expensesByProject": "المصروفات حسب المشروع",
       "unpaidAging": "تقادم المستحقات"
     },
     "period": {
@@ -202,7 +202,7 @@
       "financialSummary": "الملخص المالي",
       "incomeByProject": "الإيرادات حسب المشروع",
       "incomeByClient": "الإيرادات حسب العميل",
-      "expensesByCategory": "المصروفات حسب الفئة",
+      "expensesByProject": "المصروفات حسب المشروع",
       "unpaidAging": "تقادم المستحقات غير المحصّلة"
     },
     "aging": {
