@@ -203,14 +203,18 @@ tag_and_push() {
         echo -e "  ${CYAN}→${NC} No changes to commit"
     fi
 
+    # Pull latest changes first (in case other platform deployed)
+    echo -e "  ${CYAN}→${NC} Pulling latest from origin main..."
+    git pull --rebase origin main 2>/dev/null || true
+
     # Push to main
     echo -e "  ${CYAN}→${NC} Pushing to origin main..."
     git push origin main
     echo -e "  ${GREEN}✓${NC} Pushed to main"
 
-    # Check if tag already exists remotely - skip if so (allows parallel deploys)
-    if git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
-        echo -e "  ${YELLOW}→${NC} Tag '$tag' already exists on remote - skipping tag creation"
+    # Check if tag already exists locally or remotely - skip if so (allows parallel deploys)
+    if git tag -l | grep -q "^$tag$" || git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
+        echo -e "  ${YELLOW}→${NC} Tag '$tag' already exists - skipping tag creation"
     else
         # Create annotated tag
         git tag -a "$tag" -m "Release $tag"
@@ -434,10 +438,10 @@ update_download_config() {
     local win_exe_sha256=""
 
     if [[ -f "$config_file" ]]; then
-        # Extract existing Windows values
-        win_file_size=$(grep -oP "fileSize: '\K[^']*" "$config_file" | tail -1 2>/dev/null || echo "")
-        win_sha256=$(grep -oP "windows:[\s\S]*?sha256: '\K[^']*" "$config_file" 2>/dev/null || echo "")
-        win_exe_sha256=$(grep -oP "exeSha256: '\K[^']*" "$config_file" 2>/dev/null || echo "")
+        # Extract existing Windows values using sed (BSD grep doesn't support -P Perl regex)
+        win_file_size=$(sed -n "/windows:/,/}/s/.*fileSize: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
+        win_sha256=$(sed -n "/windows:/,/}/s/.*sha256: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
+        win_exe_sha256=$(sed -n "/windows:/,/}/s/.*exeSha256: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
     fi
 
     # Write config file with URL template structure

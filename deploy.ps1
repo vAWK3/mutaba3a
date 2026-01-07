@@ -504,15 +504,20 @@ function Invoke-TagAndPush {
         Write-Info "No changes to commit"
     }
 
+    # Pull latest changes first (in case other platform deployed)
+    Write-Info "Pulling latest from origin main..."
+    git pull --rebase origin main 2>$null
+
     # Push to main
     Write-Info "Pushing to origin main..."
     git push origin main
     Write-Success "Pushed to main"
 
-    # Check if tag already exists remotely - skip if so (allows parallel deploys)
-    $existingTags = git ls-remote --tags origin 2>$null | Select-String "refs/tags/$tag$"
-    if ($existingTags) {
-        Write-Warning "Tag '$tag' already exists on remote - skipping tag creation"
+    # Check if tag already exists locally or remotely - skip if so (allows parallel deploys)
+    $localTag = git tag -l $tag 2>$null
+    $remoteTags = git ls-remote --tags origin 2>$null | Select-String "refs/tags/$tag$"
+    if ($localTag -or $remoteTags) {
+        Write-Warning "Tag '$tag' already exists - skipping tag creation"
     }
     else {
         # Create annotated tag
