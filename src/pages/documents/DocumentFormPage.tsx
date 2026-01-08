@@ -150,7 +150,8 @@ export function DocumentFormPage() {
   };
 
   const form = useForm<FormData>({
-    resolver: zodResolver(schema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       type: 'invoice',
       number: '',
@@ -909,7 +910,7 @@ export function DocumentFormPage() {
                                 min="0"
                                 className="input"
                                 placeholder="Amount"
-                                value={f.value / 100}
+                                value={(f.value ?? 0) / 100}
                                 onChange={(e) => f.onChange(Math.round(parseFloat(e.target.value) * 100) || 0)}
                                 disabled={isReadOnly}
                               />

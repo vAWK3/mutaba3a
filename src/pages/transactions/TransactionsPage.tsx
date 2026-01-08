@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearch, Link } from "@tanstack/react-router";
+import { useSearch } from "@tanstack/react-router";
 import { TopBar } from "../../components/layout";
 import {
   SearchInput,

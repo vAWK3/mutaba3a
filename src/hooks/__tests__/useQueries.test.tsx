@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -261,6 +261,7 @@ describe('Document Hooks', () => {
     taxMinor: 1700,
     totalMinor: 11700,
     taxRate: 0.17,
+    vatEnabled: true,
     currency: 'USD',
     language: 'en',
     issueDate: new Date().toISOString().split('T')[0],

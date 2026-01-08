@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -147,7 +147,8 @@ export function DocumentDrawer() {
   };
 
   const form = useForm<FormData>({
-    resolver: zodResolver(schema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       type: defaultType || 'invoice',
       number: '', // Auto-generated for new, editable for drafts
@@ -879,7 +880,7 @@ export function DocumentDrawer() {
                         min="0"
                         className="input"
                         placeholder="Amount"
-                        value={f.value / 100}
+                        value={(f.value ?? 0) / 100}
                         onChange={(e) => f.onChange(Math.round(parseFloat(e.target.value) * 100) || 0)}
                         disabled={isReadOnly}
                       />

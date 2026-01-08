@@ -1,7 +1,6 @@
-import React, { type ReactElement, type ReactNode } from 'react';
+import { type ReactElement, type ReactNode } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createMemoryRouter, createRootRoute, createRoute } from '@tanstack/react-router';
 import { LanguageProvider } from '../lib/i18n';
 import type { BusinessProfile, Document, Client, DocumentItem } from '../types';
 
@@ -134,6 +133,7 @@ export function createMockDocument(overrides: Partial<Document> = {}): Document 
     taxMinor,
     totalMinor,
     taxRate: 0.17,
+    vatEnabled: true,
     currency: 'USD',
     language: 'en',
     issueDate: now,

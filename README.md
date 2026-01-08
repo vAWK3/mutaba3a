@@ -259,7 +259,7 @@ This repository includes a license file that reflects the terms above. See `LICE
 If privacy-first tools matter to you and Mutaba3a helps your work, support keeps it alive:
 <!-- • GitHub Sponsors: <LINK> -->
 <!-- • Open Collective: <LINK> -->
-• Buy Me a Coffee: [<LINK>](https://buymeacoffee.com/elmokhtbr)
+• Buy Me a Coffee: https://buymeacoffee.com/elmokhtbr [<LINK>](https://buymeacoffee.com/elmokhtbr)
 <!-- • Ko-fi:  -->
 <!-- • Stripe monthly/yearly support: <LINK> -->
 

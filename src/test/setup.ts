@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import 'fake-indexeddb/auto';
-import { beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -18,15 +18,16 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }));
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
-global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-global.URL.revokeObjectURL = vi.fn();
+URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+URL.revokeObjectURL = vi.fn();
 
 // Clean up after each test
 afterEach(() => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams, useNavigate } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 import { PDFViewer, PDFDownloadLink } from '@react-pdf/renderer';
 import { TopBar } from '../../components/layout';
 import { CheckIcon, DownloadIcon } from '../../components/icons';
@@ -40,7 +40,6 @@ const STATUS_CONFIG: Record<DocumentStatus, { label: string; className: string }
 export function DocumentDetailPage() {
   const params = useParams({ strict: false }) as { documentId: string };
   const documentId = params.documentId;
-  const navigate = useNavigate();
   const markPaidMutation = useMarkDocumentPaid();
   const voidMutation = useVoidDocument();
   const issueDocumentMutation = useIssueDocument();

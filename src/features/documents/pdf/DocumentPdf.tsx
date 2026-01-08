@@ -1,10 +1,8 @@
-import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type {
   Document as DocumentEntity,
   BusinessProfile,
   Client,
-  DocumentLanguage,
 } from '../../../types';
 import { getTexts, getDocumentTypeLabel } from './texts';
 import { getTemplateStyles, getFontFamily, getTextAlign, type TemplateId } from './styles';
@@ -174,9 +172,9 @@ export function DocumentPdf({
           <View
             style={[
               styles.clientSection,
-              templateId === 'template2' && {
+              ...(templateId === 'template2' ? [{
                 borderLeftColor: businessProfile.primaryColor || '#3b82f6',
-              },
+              }] : []),
             ]}
           >
             <Text style={[dynamicStyles.text, { fontSize: 10, color: '#666666', marginBottom: 4 }]}>

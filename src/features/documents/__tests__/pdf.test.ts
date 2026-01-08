@@ -9,7 +9,7 @@ import {
   template2Styles,
   template3Styles,
 } from '../pdf/styles';
-import type { DocumentType, DocumentLanguage } from '../../../types';
+import type { DocumentType } from '../../../types';
 
 describe('PDF Text Utilities', () => {
   describe('getTexts', () => {

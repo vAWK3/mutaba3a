@@ -426,10 +426,11 @@ async function doApplyFieldUpdate(op: Operation): Promise<void> {
   const entity = await table.get(op.entityId);
 
   if (entity) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await table.update(op.entityId, {
       [op.field]: op.value,
       updatedAt: new Date().toISOString(),
-    });
+    } as any);
   }
 }
 

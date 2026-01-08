@@ -63,6 +63,7 @@ describe('documentRepo', () => {
     taxMinor: 1700,
     totalMinor: 11700,
     taxRate: 0.17,
+    vatEnabled: true,
     currency: 'USD',
     language: 'en',
     issueDate: new Date().toISOString().split('T')[0],
