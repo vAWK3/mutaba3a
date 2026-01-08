@@ -1,0 +1,15 @@
+.title {
+    color: light-dark(var(--mantine-color-metal-9), var(--mantine-color-metal-3));
+}
+
+.description {
+    color: light-dark(var(--mantine-color-metal-5), var(--mantine-color-metal-7));
+}
+
+.odd {
+    background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+}
+
+.even {
+    background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-dark-9));
+}

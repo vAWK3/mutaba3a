@@ -213,6 +213,36 @@
     },
     "noExpenses": "No expenses in this period"
   },
+  "download": {
+    "title": "Download",
+    "recommendedForYou": "Recommended for you",
+    "loading": "Loading...",
+    "comingSoon": "Coming Soon",
+    "version": "Version",
+    "size": "Size",
+    "requires": "Requires",
+    "sha256": "SHA-256",
+    "copy": "Copy",
+    "checksumCopied": "Checksum copied",
+    "howToInstall": "How to install",
+    "releaseNotes": "Release notes",
+    "allVersions": "All versions",
+    "mac": {
+      "title": "macOS",
+      "downloadDmg": "Download DMG",
+      "step1": "Download the DMG",
+      "step2": "Drag \"متابعة\" to Applications",
+      "step3": "Open and approve if prompted"
+    },
+    "windows": {
+      "title": "Windows",
+      "downloadMsi": "Download MSI",
+      "step1": "Download the MSI installer",
+      "step2": "Run the installer",
+      "step3": "Follow the installation wizard",
+      "altExe": "Alternative: Download EXE installer"
+    }
+  },
   "settings": {
     "title": "Settings",
     "language": {
@@ -286,9 +316,11 @@
     },
     "desktopApp": {
       "title": "Desktop App",
-      "download": "Download for macOS",
+      "download": "Download Desktop App",
       "downloadDesc": "Get the native app for better performance",
-      "downloadBtn": "Download"
+      "downloadBtn": "Download",
+      "downloadMac": "Download for macOS",
+      "downloadWindows": "Download for Windows"
     }
   },
   "downloadBanner": {

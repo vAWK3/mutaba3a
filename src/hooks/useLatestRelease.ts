@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { DOWNLOAD_CONFIG } from '../content/download-config';
+import { FALLBACK_DOWNLOAD_CONFIG } from '../content/download-config';
 
-const GITHUB_API_URL = `https://api.github.com/repos/${DOWNLOAD_CONFIG.githubOwner}/${DOWNLOAD_CONFIG.githubRepo}/releases/latest`;
+const GITHUB_API_URL = `https://api.github.com/repos/${FALLBACK_DOWNLOAD_CONFIG.githubOwner}/${FALLBACK_DOWNLOAD_CONFIG.githubRepo}/releases/latest`;
 const CACHE_KEY = 'latest-release-info';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 

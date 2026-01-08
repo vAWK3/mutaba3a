@@ -67,7 +67,7 @@ function getCurrentVersion(): string {
   // For now, use a fallback that will be compared against GitHub
   try {
     // @ts-expect-error - Tauri global may not exist in web context
-    if (window.__TAURI__) {
+    if (window.__TAURI_INTERNALS__) {
       // This would need to be fetched async, but for simplicity we use package.json version
       return __APP_VERSION__ || '0.0.0';
     }

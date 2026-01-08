@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 👇 Make sure the styles are applied IN THE CORRECT order */
+@layer mantine, mantine-datatable;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 54, 69, 4;
+  }
+}
+
+/* body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-end-rgb));
+} */
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* :root[data-mantine-color-scheme="light"] {
+  --mantine-color-body: var(--mantine-color-blue-2) !important;
+} */
+
+body {
+  /* Your custom styles here */
+  background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-dark-8)) !important;
+  /* Example */
+}
+
+header {
+  background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-dark-8)) !important;
+}
+
+footer {
+  background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-dark-8)) !important;
+  /* Example */
+}
+
+input,
+.mantine-MultiSelect-input,
+.mantine-DatePickerInput-input,
+select,
+.mantine-FileInput-input,
+.mantine-Textarea-input {
+
+  --input-bd: light-dark(var(--mantine-color-metal-3), var(--mantine-color-dark-4));
+}
+
+.mantine-Badge-root {
+  --badge-radius: 6px;
+
+}
+
+
+.mantine-Input-wrapper :disabled {
+
+  background-color: light-dark(var(--mantine-color-metal-2), var(--mantine-color-dark-4));
+}
+
+.mantine-Menu-dropdown :hover {
+
+  background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-dark-4)) !important;
+
+}

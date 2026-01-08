@@ -193,24 +193,24 @@ tag_and_push() {
     echo -e "${BLUE}Preparing git tag and push...${NC}"
 
     # Add all changes
-    git add .
+    # git add .
 
     # Commit if there are changes (don't fail if nothing to commit)
-    if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
-        git commit -m "Release $tag" || true
-        echo -e "  ${GREEN}✓${NC} Changes committed"
-    else
-        echo -e "  ${CYAN}→${NC} No changes to commit"
-    fi
+    # if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+    #     git commit -m "Release $tag" || true
+    #     echo -e "  ${GREEN}✓${NC} Changes committed"
+    # else
+    #     echo -e "  ${CYAN}→${NC} No changes to commit"
+    # fi
 
-    # Pull latest changes first (in case other platform deployed)
-    echo -e "  ${CYAN}→${NC} Pulling latest from origin main..."
-    git pull --rebase origin main 2>/dev/null || true
+    # # Pull latest changes first (in case other platform deployed)
+    # echo -e "  ${CYAN}→${NC} Pulling latest from origin main..."
+    # git pull --rebase origin main 2>/dev/null || true
 
-    # Push to main
-    echo -e "  ${CYAN}→${NC} Pushing to origin main..."
-    git push origin main
-    echo -e "  ${GREEN}✓${NC} Pushed to main"
+    # # Push to main
+    # echo -e "  ${CYAN}→${NC} Pushing to origin main..."
+    # git push origin main
+    # echo -e "  ${GREEN}✓${NC} Pushed to main"
 
     # Check if tag already exists locally or remotely - skip if so (allows parallel deploys)
     if git tag -l | grep -q "^$tag$" || git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
@@ -490,6 +490,78 @@ EOF
     echo -e "  ${GREEN}✓${NC} Updated $config_file"
 }
 
+# Generate download config JSON for remote hosting (jsonkeeper, etc.)
+generate_download_json() {
+    local version=$1
+    local tag="v$version"
+
+    echo -e "${BLUE}Generating download config JSON...${NC}"
+
+    # Calculate file size in MB
+    local file_size_bytes
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        file_size_bytes=$(stat -f%z "$RELEASE_DMG_PATH")
+    else
+        file_size_bytes=$(stat -c%s "$RELEASE_DMG_PATH")
+    fi
+    local file_size_mb
+    file_size_mb=$(echo "scale=2; $file_size_bytes / 1048576" | bc)
+    local file_size="~${file_size_mb} MB"
+
+    local min_macos="${MIN_MACOS:-macOS 12+}"
+
+    # Read existing Windows values from config file if present
+    local config_file="src/content/download-config.ts"
+    local win_file_size=""
+    local win_sha256=""
+    local win_exe_sha256=""
+
+    if [[ -f "$config_file" ]]; then
+        win_file_size=$(sed -n "/windows:/,/}/s/.*fileSize: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
+        win_sha256=$(sed -n "/windows:/,/}/s/.*sha256: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
+        win_exe_sha256=$(sed -n "/windows:/,/}/s/.*exeSha256: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
+    fi
+
+    # Generate JSON
+    local json_output
+    json_output=$(cat << EOF
+{
+  "githubOwner": "$GITHUB_OWNER",
+  "githubRepo": "$GITHUB_REPO",
+  "allReleasesUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases",
+  "fallbackVersion": "$version",
+  "releaseNotesUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$tag",
+  "mac": {
+    "fileSize": "$file_size",
+    "minVersion": "$min_macos",
+    "sha256": "$RELEASE_CHECKSUM",
+    "downloadUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-$tag-macos-universal.dmg"
+  },
+  "windows": {
+    "fileSize": "$win_file_size",
+    "minVersion": "Windows 10+",
+    "sha256": "$win_sha256",
+    "exeSha256": "$win_exe_sha256",
+    "msiUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-$tag-windows-x64.msi",
+    "exeUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-$tag-windows-x64-setup.exe"
+  }
+}
+EOF
+)
+
+    echo ""
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN}  Download Config JSON (copy this)${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo ""
+    echo "$json_output"
+    echo ""
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${YELLOW}Update this at your remote config URL${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo ""
+}
+
 # Create GitHub release or upload to existing
 create_github_release() {
     local version=$1
@@ -571,6 +643,12 @@ print_release_urls() {
     fi
 
     echo -e "${GREEN}----------------------------------------${NC}"
+    echo -e "${BOLD}Windows Build:${NC}"
+    echo -e "  ${YELLOW}MSI + EXE installers will be built by GitHub Actions.${NC}"
+    echo -e "  They should appear on the release in ~5-10 minutes."
+    echo -e "  Monitor: ${CYAN}gh run list --workflow=build-windows.yml${NC}"
+    echo ""
+    echo -e "${GREEN}----------------------------------------${NC}"
 }
 
 # Build macOS and publish to GitHub
@@ -611,6 +689,9 @@ build_and_release_mac() {
 
     # Update website download config (auto-generates src/content/download-config.ts)
     update_download_config "$version"
+
+    # Generate and print JSON config for remote hosting
+    generate_download_json "$version"
 
     # Tag and push (includes updated download config)
     tag_and_push "$version"
@@ -655,27 +736,25 @@ build_mac() {
     echo -e "Build output: ${BLUE}src-tauri/target/release/bundle/${NC}"
 }
 
-# Build Tauri for Windows
+# Build Tauri for Windows (now handled by CI)
 build_windows() {
-    echo -e "${BLUE}Building Tauri for Windows...${NC}"
-
-    # Check if cross-compilation tools are available
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo -e "${YELLOW}Cross-compiling for Windows from macOS...${NC}"
-        echo -e "${YELLOW}Note: You may need to install the Windows target:${NC}"
-        echo -e "${YELLOW}  rustup target add x86_64-pc-windows-msvc${NC}"
-    fi
-
-    npm run tauri build -- --target x86_64-pc-windows-msvc 2>/dev/null || {
-        echo -e "${RED}Windows build failed. If cross-compiling, ensure you have:${NC}"
-        echo -e "${RED}  1. rustup target add x86_64-pc-windows-msvc${NC}"
-        echo -e "${RED}  2. Required Windows SDK and linker${NC}"
-        echo -e "${YELLOW}Consider building on Windows or using GitHub Actions for Windows builds${NC}"
-        exit 1
-    }
-
-    echo -e "${GREEN}Windows build complete!${NC}"
-    echo -e "Build output: ${BLUE}src-tauri/target/x86_64-pc-windows-msvc/release/bundle/${NC}"
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  Windows Build - CI Automation${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo -e "${GREEN}Windows builds are now automated via GitHub Actions!${NC}"
+    echo ""
+    echo -e "When you publish a macOS release (option 4), GitHub Actions"
+    echo -e "automatically builds Windows MSI and EXE installers and"
+    echo -e "uploads them to the same release."
+    echo ""
+    echo -e "${YELLOW}Windows artifacts typically appear 5-10 minutes after release.${NC}"
+    echo ""
+    echo -e "Monitor progress: ${CYAN}gh run list --workflow=build-windows.yml${NC}"
+    echo ""
+    echo -e "For local Windows builds, use ${CYAN}deploy.ps1${NC} on a Windows machine."
+    echo ""
 }
 
 # Main menu
@@ -729,7 +808,7 @@ main() {
     echo -e "${BLUE}Deploy options:${NC}"
     echo "  1) Deploy to main (web)"
     echo "  2) Build Tauri for macOS"
-    echo "  3) Build Tauri for Windows"
+    echo "  3) Build Tauri for Windows (CI info)"
     echo -e "  4) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
     echo "  5) Cancel"
     echo ""

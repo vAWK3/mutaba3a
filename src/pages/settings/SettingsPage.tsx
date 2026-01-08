@@ -7,6 +7,8 @@ import { clearDatabase } from '../../db/seed';
 import { useT, useLanguage } from '../../lib/i18n';
 import { DeleteAllDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
+import { SyncSection } from '../../components/sync';
+import { FALLBACK_DOWNLOAD_CONFIG } from '../../content/download-config';
 
 // App version injected by Vite at build time
 declare const __APP_VERSION__: string | undefined;
@@ -166,6 +168,11 @@ export function SettingsPage() {
           </div>
         </div>
 
+        {/* Sync Settings */}
+        <div className="settings-section">
+          <SyncSection />
+        </div>
+
         {/* Currency Settings */}
         <div className="settings-section">
           <h3 className="settings-section-title">{t('settings.currency.title')}</h3>
@@ -261,6 +268,9 @@ export function SettingsPage() {
             <p className="text-sm" style={{ marginTop: 8 }}>
               {t('settings.about.description')}
             </p>
+            <p className="text-sm" style={{ marginTop: 12 }}>
+              {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{APP_VERSION}</span>
+            </p>
           </div>
         </div>
 
@@ -307,7 +317,31 @@ export function SettingsPage() {
               <div className="settings-label">{t('settings.desktopApp.download')}</div>
               <div className="settings-description">{t('settings.desktopApp.downloadDesc')}</div>
             </div>
-            <Link to="/download" className="btn btn-secondary">
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <a
+                href={FALLBACK_DOWNLOAD_CONFIG.mac.downloadUrl}
+                className="btn btn-secondary"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t('settings.desktopApp.downloadMac')}
+              </a>
+              <a
+                href={FALLBACK_DOWNLOAD_CONFIG.windows.msiUrl}
+                className="btn btn-secondary"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t('settings.desktopApp.downloadWindows')}
+              </a>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-label" style={{ color: 'var(--color-text-muted)' }}>{t('download.allVersions')}</div>
+            </div>
+            <Link to="/download" className="btn btn-ghost">
               {t('settings.desktopApp.downloadBtn')}
             </Link>
           </div>

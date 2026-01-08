@@ -151,7 +151,7 @@ export function useTauriUpdater(): TauriUpdaterResult {
   // Auto-check on mount if interval has passed
   useEffect(() => {
     // Only run in Tauri environment
-    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
       return;
     }
 
@@ -168,7 +168,7 @@ export function useTauriUpdater(): TauriUpdaterResult {
   };
 }
 
-// Helper to check if running in Tauri
+// Helper to check if running in Tauri (Tauri 2.x uses __TAURI_INTERNALS__)
 export function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }

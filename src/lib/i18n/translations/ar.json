@@ -213,6 +213,36 @@
     },
     "noExpenses": "لا توجد مصروفات في هذه الفترة"
   },
+  "download": {
+    "title": "تحميل",
+    "recommendedForYou": "موصى به لك",
+    "loading": "جارٍ التحميل...",
+    "comingSoon": "قريباً",
+    "version": "الإصدار",
+    "size": "الحجم",
+    "requires": "يتطلب",
+    "sha256": "SHA-256",
+    "copy": "نسخ",
+    "checksumCopied": "تم نسخ رمز التحقق",
+    "howToInstall": "طريقة التثبيت",
+    "releaseNotes": "ملاحظات الإصدار",
+    "allVersions": "جميع الإصدارات",
+    "mac": {
+      "title": "macOS",
+      "downloadDmg": "تحميل DMG",
+      "step1": "حمّل ملف DMG",
+      "step2": "اسحب \"متابعة\" إلى التطبيقات",
+      "step3": "افتح التطبيق ووافق إذا طُلب منك"
+    },
+    "windows": {
+      "title": "Windows",
+      "downloadMsi": "تحميل MSI",
+      "step1": "حمّل ملف MSI",
+      "step2": "شغّل برنامج التثبيت",
+      "step3": "اتبع معالج التثبيت",
+      "altExe": "بديل: تحميل ملف EXE"
+    }
+  },
   "settings": {
     "title": "الإعدادات",
     "language": {
@@ -286,9 +316,11 @@
     },
     "desktopApp": {
       "title": "تطبيق سطح المكتب",
-      "download": "تحميل لنظام macOS",
+      "download": "تحميل تطبيق سطح المكتب",
       "downloadDesc": "احصل على التطبيق الأصلي لأداء أفضل",
-      "downloadBtn": "تحميل"
+      "downloadBtn": "تحميل",
+      "downloadMac": "تحميل لنظام macOS",
+      "downloadWindows": "تحميل لنظام Windows"
     }
   },
   "downloadBanner": {

@@ -1,0 +1,7 @@
+.item {
+    background-color: transparent;
+}
+
+.item:hover {
+    background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-dark-9));
+}

@@ -484,6 +484,68 @@ export const DOWNLOAD_CONFIG = {
     Write-Success "Updated $CONFIG_FILE"
 }
 
+# Generate download config JSON for remote hosting (jsonkeeper, etc.)
+function Write-DownloadJson {
+    param([string]$Version)
+
+    $tag = "v$Version"
+    Write-Info "Generating download config JSON..."
+
+    # Calculate file size in MB
+    $fileSizeBytes = (Get-Item $script:RELEASE_MSI_PATH).Length
+    $fileSizeMb = [math]::Round($fileSizeBytes / 1MB, 2)
+    $fileSize = "~$fileSizeMb MB"
+
+    # Read existing Mac values from config file if present
+    $macFileSize = ""
+    $macMinVersion = "macOS 12+"
+    $macSha256 = ""
+
+    if (Test-Path $CONFIG_FILE) {
+        $existingContent = Get-Content $CONFIG_FILE -Raw
+        if ($existingContent -match "mac:[\s\S]*?fileSize: '([^']*)'") { $macFileSize = $Matches[1] }
+        if ($existingContent -match "mac:[\s\S]*?minVersion: '([^']*)'") { $macMinVersion = $Matches[1] }
+        if ($existingContent -match "mac:[\s\S]*?sha256: '([^']*)'") { $macSha256 = $Matches[1] }
+    }
+
+    # Generate JSON
+    $jsonOutput = @"
+{
+  "githubOwner": "$($script:GITHUB_OWNER)",
+  "githubRepo": "$($script:GITHUB_REPO)",
+  "allReleasesUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases",
+  "fallbackVersion": "$Version",
+  "releaseNotesUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/tag/$tag",
+  "mac": {
+    "fileSize": "$macFileSize",
+    "minVersion": "$macMinVersion",
+    "sha256": "$macSha256",
+    "downloadUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/mutaba3a-$tag-macos-universal.dmg"
+  },
+  "windows": {
+    "fileSize": "$fileSize",
+    "minVersion": "Windows 10+",
+    "sha256": "$($script:RELEASE_MSI_CHECKSUM)",
+    "exeSha256": "$($script:RELEASE_EXE_CHECKSUM)",
+    "msiUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/mutaba3a-$tag-windows-x64.msi",
+    "exeUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/mutaba3a-$tag-windows-x64-setup.exe"
+  }
+}
+"@
+
+    Write-Host ""
+    Write-ColorOutput "========================================" "Cyan"
+    Write-ColorOutput "  Download Config JSON (copy this)" "Cyan"
+    Write-ColorOutput "========================================" "Cyan"
+    Write-Host ""
+    Write-Host $jsonOutput
+    Write-Host ""
+    Write-ColorOutput "========================================" "Cyan"
+    Write-ColorOutput "Update this at your remote config URL" "Yellow"
+    Write-ColorOutput "========================================" "Cyan"
+    Write-Host ""
+}
+
 # Tag and push to GitHub
 function Invoke-TagAndPush {
     param([string]$Version)
@@ -672,6 +734,9 @@ function Invoke-BuildAndRelease {
 
     # Update website download config
     Update-DownloadConfig -Version $Version
+
+    # Generate and print JSON config for remote hosting
+    Write-DownloadJson -Version $Version
 
     # Tag and push (includes updated download config)
     Invoke-TagAndPush -Version $Version

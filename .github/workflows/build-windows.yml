@@ -1,0 +1,193 @@
+name: Build Windows Installers
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: windows-build-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Tauri Windows app
+        run: npm run tauri build
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          $version = $tag -replace '^v', ''
+          Write-Host "Version: $version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Find and rename artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $releaseDir = "release-artifacts"
+          New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+
+          # Find MSI
+          $msiSource = Get-ChildItem -Path "src-tauri/target/release/bundle/msi" -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $msiSource) {
+            Write-Error "MSI artifact not found!"
+            exit 1
+          }
+
+          $msiName = "mutaba3a-v$version-windows-x64.msi"
+          $msiPath = Join-Path $releaseDir $msiName
+          Copy-Item $msiSource.FullName $msiPath
+          Write-Host "MSI: $msiPath (from $($msiSource.FullName))"
+          echo "msi_path=$msiPath" >> $env:GITHUB_OUTPUT
+          echo "msi_name=$msiName" >> $env:GITHUB_OUTPUT
+
+          # Find NSIS EXE
+          $exeSource = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($exeSource) {
+            $exeName = "mutaba3a-v$version-windows-x64-setup.exe"
+            $exePath = Join-Path $releaseDir $exeName
+            Copy-Item $exeSource.FullName $exePath
+            Write-Host "EXE: $exePath (from $($exeSource.FullName))"
+            echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+            echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+            echo "has_exe=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "NSIS EXE not found (optional, continuing without it)"
+            echo "has_exe=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Generate SHA256 checksums
+        id: checksums
+        shell: pwsh
+        run: |
+          # MSI checksum
+          $msiPath = "${{ steps.artifacts.outputs.msi_path }}"
+          $msiHash = (Get-FileHash $msiPath -Algorithm SHA256).Hash.ToLower()
+          $msiChecksumFile = "$msiPath.sha256"
+          Set-Content -Path $msiChecksumFile -Value $msiHash -NoNewline
+          Write-Host "MSI SHA256: $msiHash"
+          echo "msi_checksum_path=$msiChecksumFile" >> $env:GITHUB_OUTPUT
+          echo "msi_hash=$msiHash" >> $env:GITHUB_OUTPUT
+
+          # EXE checksum (if exists)
+          if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
+            $exePath = "${{ steps.artifacts.outputs.exe_path }}"
+            $exeHash = (Get-FileHash $exePath -Algorithm SHA256).Hash.ToLower()
+            $exeChecksumFile = "$exePath.sha256"
+            Set-Content -Path $exeChecksumFile -Value $exeHash -NoNewline
+            Write-Host "EXE SHA256: $exeHash"
+            echo "exe_checksum_path=$exeChecksumFile" >> $env:GITHUB_OUTPUT
+            echo "exe_hash=$exeHash" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Upload artifacts to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          $maxRetries = 12
+          $retryDelay = 15
+
+          # Build list of files to upload
+          $files = @(
+            "${{ steps.artifacts.outputs.msi_path }}",
+            "${{ steps.checksums.outputs.msi_checksum_path }}"
+          )
+
+          if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
+            $files += "${{ steps.artifacts.outputs.exe_path }}"
+            $files += "${{ steps.checksums.outputs.exe_checksum_path }}"
+          }
+
+          Write-Host "Files to upload:"
+          $files | ForEach-Object { Write-Host "  - $_" }
+
+          # Retry logic for race conditions
+          for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+            Write-Host ""
+            Write-Host "Upload attempt $attempt of $maxRetries..."
+
+            # Check if release exists
+            $releaseCheck = gh release view $tag 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Release '$tag' not ready yet, waiting $retryDelay seconds..."
+              Start-Sleep -Seconds $retryDelay
+              continue
+            }
+
+            # Upload files with --clobber to overwrite if exists
+            gh release upload $tag @files --clobber
+
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host ""
+              Write-Host "Successfully uploaded Windows artifacts to release $tag"
+              exit 0
+            }
+
+            Write-Host "Upload failed, retrying in $retryDelay seconds..."
+            Start-Sleep -Seconds $retryDelay
+          }
+
+          Write-Error "Failed to upload artifacts after $maxRetries attempts"
+          exit 1
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "${{ github.event.release.tag_name }}"
+
+          Write-Host ""
+          Write-Host "========================================" -ForegroundColor Green
+          Write-Host "  Windows Build Complete!" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Version: $version"
+          Write-Host "Tag: $tag"
+          Write-Host ""
+          Write-Host "Uploaded artifacts:"
+          Write-Host "  - ${{ steps.artifacts.outputs.msi_name }}"
+          Write-Host "  - ${{ steps.artifacts.outputs.msi_name }}.sha256"
+          if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
+            Write-Host "  - ${{ steps.artifacts.outputs.exe_name }}"
+            Write-Host "  - ${{ steps.artifacts.outputs.exe_name }}.sha256"
+          }
+          Write-Host ""
+          Write-Host "MSI SHA256: ${{ steps.checksums.outputs.msi_hash }}"
+          if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
+            Write-Host "EXE SHA256: ${{ steps.checksums.outputs.exe_hash }}"
+          }
+          Write-Host ""
+          Write-Host "Release URL: https://github.com/${{ github.repository }}/releases/tag/$tag"

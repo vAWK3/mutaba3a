@@ -1,0 +1,32 @@
+.positive {
+    background-color: light-dark(var(--mantine-color-green-1), var(--mantine-color-darkGreen-0));
+    color: light-dark(var(--mantine-color-green-7), var(--mantine-color-darkGreen-9));
+}
+
+.negative {
+    background-color: light-dark(var(--mantine-color-red-1), var(--mantine-color-darkRed-0));
+    color: light-dark(var(--mantine-color-red-7), var(--mantine-color-darkRed-9));
+}
+
+.neutral {
+    background-color: light-dark(var(--mantine-color-metal-0), var(--mantine-color-metal-8));
+    color: light-dark(var(--mantine-color-metal-8), var(--mantine-color-metal-1));
+}
+
+.paid {
+    background-color: light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9));
+    border-color: light-dark(var(--mantine-color-blue-1), var(--mantine-color-blue-8));
+    color: light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-2));
+}
+
+.pending {
+    background-color: light-dark(var(--mantine-color-purple-1), var(--mantine-color-purple-9));
+    border-color: light-dark(var(--mantine-color-purple-2), var(--mantine-color-purple-8));
+    color: light-dark(var(--mantine-color-purple-8), var(--mantine-color-purple-2));
+}
+
+.overdue {
+    background-color: light-dark(var(--mantine-color-red-5), var(--mantine-color-red-7));
+    border-color: light-dark(var(--mantine-color-red-5), var(--mantine-color-red-6));
+    color: light-dark(var(--mantine-color-white), var(--mantine-color-red-1));
+}

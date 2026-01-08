@@ -3,8 +3,9 @@ import { TopBar } from '../../components/layout';
 import { Card } from '../../components/ui/Card';
 import { Toast } from '../../components/ui/Toast';
 import { copyToClipboard } from '../../lib/utils';
-import { DOWNLOAD_CONFIG } from '../../content/download-config';
-import { useLatestRelease } from '../../hooks/useLatestRelease';
+import { useDownloadConfig } from '../../hooks/useDownloadConfig';
+import type { DownloadConfig } from '../../content/download-config';
+import { useT } from '../../lib/i18n';
 import './DownloadPage.css';
 
 type OS = 'mac' | 'windows' | 'unknown';
@@ -31,35 +32,35 @@ interface PlatformCardProps {
   platform: 'mac' | 'windows';
   isRecommended: boolean;
   onCopyChecksum: (checksum: string) => void;
-  version: string | null;
+  config: DownloadConfig;
   hasBuild: boolean;
   isLoading: boolean;
+  t: (key: string) => string;
 }
 
-function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBuild, isLoading }: PlatformCardProps) {
+function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuild, isLoading, t }: PlatformCardProps) {
   const isMac = platform === 'mac';
-  const macConfig = DOWNLOAD_CONFIG.mac;
-  const winConfig = DOWNLOAD_CONFIG.windows;
+  const macConfig = config.mac;
+  const winConfig = config.windows;
 
-  const config = isMac ? macConfig : winConfig;
+  const platformConfig = isMac ? macConfig : winConfig;
+  const version = config.fallbackVersion;
   const isAvailable = hasBuild && !!version;
 
-  const title = isMac ? 'macOS' : 'Windows';
-  const downloadUrl = version
-    ? (isMac ? macConfig.getDownloadUrl(version) : winConfig.getMsiUrl(version))
-    : '';
-  const buttonText = isMac ? 'Download DMG' : 'Download MSI';
+  const title = t(isMac ? 'download.mac.title' : 'download.windows.title');
+  const downloadUrl = isMac ? macConfig.downloadUrl : winConfig.msiUrl;
+  const buttonText = t(isMac ? 'download.mac.downloadDmg' : 'download.windows.downloadMsi');
 
   const installSteps = isMac
     ? [
-        'Download the DMG',
-        'Drag "متابعة" to Applications',
-        'Open and approve if prompted',
+        t('download.mac.step1'),
+        t('download.mac.step2'),
+        t('download.mac.step3'),
       ]
     : [
-        'Download the MSI installer',
-        'Run the installer',
-        'Follow the installation wizard',
+        t('download.windows.step1'),
+        t('download.windows.step2'),
+        t('download.windows.step3'),
       ];
 
   return (
@@ -69,7 +70,7 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBui
       className={`download-platform-card ${isRecommended ? 'download-platform-card--recommended' : ''}`}
     >
       {isRecommended && (
-        <div className="download-recommended-badge">Recommended for you</div>
+        <div className="download-recommended-badge">{t('download.recommendedForYou')}</div>
       )}
 
       <div className="download-platform-header">
@@ -79,7 +80,7 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBui
       <div className="download-cta-wrapper">
         {isLoading ? (
           <span className="download-cta download-cta--loading">
-            Loading...
+            {t('download.loading')}
           </span>
         ) : isAvailable ? (
           <a
@@ -93,42 +94,42 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBui
           </a>
         ) : (
           <span className="download-cta download-cta--disabled">
-            Coming Soon
+            {t('download.comingSoon')}
           </span>
         )}
       </div>
 
       <div className="download-meta">
         <div className="download-meta-item">
-          <span className="download-meta-label">Version</span>
+          <span className="download-meta-label">{t('download.version')}</span>
           <span className="download-meta-value">{isLoading ? '...' : version ? `v${version}` : '—'}</span>
         </div>
-        {isAvailable && config.fileSize && (
+        {isAvailable && platformConfig.fileSize && (
           <div className="download-meta-item">
-            <span className="download-meta-label">Size</span>
-            <span className="download-meta-value">{config.fileSize}</span>
+            <span className="download-meta-label">{t('download.size')}</span>
+            <span className="download-meta-value">{platformConfig.fileSize}</span>
           </div>
         )}
         <div className="download-meta-item">
-          <span className="download-meta-label">Requires</span>
-          <span className="download-meta-value">{config.minVersion}</span>
+          <span className="download-meta-label">{t('download.requires')}</span>
+          <span className="download-meta-value">{platformConfig.minVersion}</span>
         </div>
       </div>
 
-      {isAvailable && config.sha256 && (
+      {isAvailable && platformConfig.sha256 && (
         <div className="download-checksum">
-          <span className="download-checksum-label">SHA-256</span>
+          <span className="download-checksum-label">{t('download.sha256')}</span>
           <div className="download-checksum-row">
             <code className="download-checksum-value">
-              {truncateChecksum(config.sha256)}
+              {truncateChecksum(platformConfig.sha256)}
             </code>
             <button
               type="button"
               className="download-checksum-copy"
-              onClick={() => onCopyChecksum(config.sha256)}
-              aria-label="Copy full checksum"
+              onClick={() => onCopyChecksum(platformConfig.sha256)}
+              aria-label={t('download.copy')}
             >
-              Copy
+              {t('download.copy')}
             </button>
           </div>
         </div>
@@ -136,7 +137,7 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBui
 
       {isAvailable && (
         <div className="download-install">
-          <h3 className="download-install-title">How to install</h3>
+          <h3 className="download-install-title">{t('download.howToInstall')}</h3>
           <ol className="download-install-steps">
             {installSteps.map((step, i) => (
               <li key={i}>{step}</li>
@@ -145,14 +146,14 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBui
         </div>
       )}
 
-      {!isMac && isAvailable && version && (
+      {!isMac && isAvailable && (
         <div className="download-alt">
           <a
-            href={winConfig.getExeUrl(version)}
+            href={winConfig.exeUrl}
             className="download-alt-link"
             rel="noopener"
           >
-            Alternative: Download EXE installer
+            {t('download.windows.altExe')}
           </a>
         </div>
       )}
@@ -163,7 +164,8 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, version, hasBui
 export function DownloadPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const detectedOS = useMemo(() => detectOS(), []);
-  const { release, isLoading, error } = useLatestRelease();
+  const { config, isLoading } = useDownloadConfig();
+  const t = useT();
 
   const handleCopyChecksum = useCallback(async (checksum: string) => {
     const success = await copyToClipboard(checksum);
@@ -179,14 +181,13 @@ export function DownloadPage() {
   const platformOrder: Array<'mac' | 'windows'> =
     detectedOS === 'windows' ? ['windows', 'mac'] : ['mac', 'windows'];
 
-  // If API failed, use fallback version and check static config for build availability
-  const version = release?.version ?? (error ? DOWNLOAD_CONFIG.fallbackVersion : null);
-  const hasMacBuild = release?.hasMacBuild ?? (error ? !!DOWNLOAD_CONFIG.mac.sha256 : false);
-  const hasWindowsBuild = release?.hasWindowsBuild ?? (error ? !!DOWNLOAD_CONFIG.windows.sha256 : false);
+  // Check build availability based on sha256 presence
+  const hasMacBuild = !!config.mac.sha256;
+  const hasWindowsBuild = !!config.windows.sha256;
 
   return (
     <>
-      <TopBar title="Download" />
+      <TopBar title={t('download.title')} />
       <div className="page-content download-page">
         <div className="download-container">
           <div className="download-cards">
@@ -196,36 +197,37 @@ export function DownloadPage() {
                 platform={platform}
                 isRecommended={detectedOS === platform}
                 onCopyChecksum={handleCopyChecksum}
-                version={version}
+                config={config}
                 hasBuild={platform === 'mac' ? hasMacBuild : hasWindowsBuild}
                 isLoading={isLoading}
+                t={t}
               />
             ))}
           </div>
 
           <div className="download-footer">
             <a
-              href={version ? DOWNLOAD_CONFIG.getReleaseNotesUrl(version) : DOWNLOAD_CONFIG.allReleasesUrl}
+              href={config.releaseNotesUrl || config.allReleasesUrl}
               className="download-link"
               rel="noopener noreferrer"
               target="_blank"
             >
-              Release notes
+              {t('download.releaseNotes')}
             </a>
             <a
-              href={DOWNLOAD_CONFIG.allReleasesUrl}
+              href={config.allReleasesUrl}
               className="download-link"
               rel="noopener noreferrer"
               target="_blank"
             >
-              All versions
+              {t('download.allVersions')}
             </a>
           </div>
         </div>
       </div>
 
       <Toast
-        message="Checksum copied"
+        message={t('download.checksumCopied')}
         isVisible={toastVisible}
         onClose={handleToastClose}
       />
