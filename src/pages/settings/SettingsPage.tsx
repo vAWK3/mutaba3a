@@ -1,7 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { useSettings, useUpdateSettings } from '../../hooks/useQueries';
+import {
+  useSettings,
+  useUpdateSettings,
+  useBusinessProfiles,
+  useDefaultBusinessProfile,
+  useSetDefaultBusinessProfile,
+  useArchiveBusinessProfile,
+  useDocumentSequences,
+  useUpdateDocumentSequence,
+} from '../../hooks/useQueries';
 import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
 import { useT, useLanguage } from '../../lib/i18n';
@@ -9,12 +18,45 @@ import { DeleteAllDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
 import { FALLBACK_DOWNLOAD_CONFIG } from '../../content/download-config';
+import { useDrawerStore } from '../../lib/stores';
 
 // App version injected by Vite at build time
 declare const __APP_VERSION__: string | undefined;
 const APP_VERSION = __APP_VERSION__ || '0.0.0';
-import type { Currency } from '../../types';
+import type { Currency, DocumentType, DocumentSequence } from '../../types';
 import type { Language } from '../../lib/i18n/types';
+
+// Document type display labels
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  invoice: 'Invoice',
+  receipt: 'Receipt',
+  invoice_receipt: 'Invoice Receipt',
+  credit_note: 'Credit Note',
+  price_offer: 'Price Offer',
+  proforma_invoice: 'Proforma Invoice',
+  donation_receipt: 'Donation Receipt',
+};
+
+// Default prefixes for document types
+const DEFAULT_PREFIXES: Record<DocumentType, string> = {
+  invoice: 'INV',
+  receipt: 'REC',
+  invoice_receipt: 'IR',
+  credit_note: 'CN',
+  price_offer: 'PO',
+  proforma_invoice: 'PI',
+  donation_receipt: 'DR',
+};
+
+const ALL_DOCUMENT_TYPES: DocumentType[] = [
+  'invoice',
+  'receipt',
+  'invoice_receipt',
+  'credit_note',
+  'price_offer',
+  'proforma_invoice',
+  'donation_receipt',
+];
 
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
@@ -27,6 +69,48 @@ export function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
   const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
+
+  // Business profiles
+  const { data: businessProfiles = [] } = useBusinessProfiles();
+  const { data: defaultProfile } = useDefaultBusinessProfile();
+  const setDefaultMutation = useSetDefaultBusinessProfile();
+  const archiveMutation = useArchiveBusinessProfile();
+  const { openBusinessProfileDrawer } = useDrawerStore();
+
+  // Document sequences (for the default business profile)
+  const { data: sequences = [] } = useDocumentSequences(defaultProfile?.id || '');
+  const updateSequenceMutation = useUpdateDocumentSequence();
+
+  // Build a map of sequences by document type for easy access
+  const sequenceMap = sequences.reduce((acc, seq) => {
+    acc[seq.documentType] = seq;
+    return acc;
+  }, {} as Record<DocumentType, DocumentSequence>);
+
+  // Handler for updating sequence settings
+  const handleSequenceUpdate = (
+    documentType: DocumentType,
+    field: 'prefix' | 'prefixEnabled' | 'lastNumber',
+    value: string | boolean | number
+  ) => {
+    if (!defaultProfile) return;
+
+    const updates: Partial<DocumentSequence> = {};
+    if (field === 'prefix') {
+      updates.prefix = value as string;
+    } else if (field === 'prefixEnabled') {
+      updates.prefixEnabled = value as boolean;
+    } else if (field === 'lastNumber') {
+      // When user sets "next number", we store lastNumber = nextNumber - 1
+      updates.lastNumber = Math.max(0, (value as number) - 1);
+    }
+
+    updateSequenceMutation.mutate({
+      businessProfileId: defaultProfile.id,
+      documentType,
+      updates,
+    });
+  };
 
   const handleCurrencyToggle = (currency: Currency) => {
     if (!settings) return;
@@ -172,6 +256,156 @@ export function SettingsPage() {
         <div className="settings-section">
           <SyncSection />
         </div>
+
+        {/* Business Profiles */}
+        <div className="settings-section">
+          <div className="settings-section-header">
+            <h3 className="settings-section-title">Business Profiles</h3>
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => openBusinessProfileDrawer({ mode: 'create' })}
+            >
+              + Add Profile
+            </button>
+          </div>
+
+          {businessProfiles.length === 0 ? (
+            <div className="text-muted text-sm">
+              No business profiles yet. Create one to start issuing invoices.
+            </div>
+          ) : (
+            <div className="business-profiles-list">
+              {businessProfiles.map((profile) => (
+                <div key={profile.id} className="business-profile-item">
+                  <div className="business-profile-info">
+                    {profile.logoDataUrl && (
+                      <img
+                        src={profile.logoDataUrl}
+                        alt=""
+                        className="business-profile-logo"
+                      />
+                    )}
+                    <div className="business-profile-details">
+                      <div className="business-profile-name">
+                        {profile.name}
+                        {profile.nameEn && <span className="text-muted"> ({profile.nameEn})</span>}
+                      </div>
+                      <div className="business-profile-meta text-muted text-sm">
+                        {profile.email}
+                        {profile.isDefault && (
+                          <span className="badge badge-primary" style={{ marginInlineStart: 8 }}>
+                            Default
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="business-profile-actions">
+                    {!profile.isDefault && (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setDefaultMutation.mutate(profile.id)}
+                        disabled={setDefaultMutation.isPending}
+                      >
+                        Set Default
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
+                    >
+                      Edit
+                    </button>
+                    {!profile.isDefault && (
+                      <button
+                        className="btn btn-ghost btn-sm text-danger"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to archive this business profile?')) {
+                            archiveMutation.mutate(profile.id);
+                          }
+                        }}
+                        disabled={archiveMutation.isPending}
+                      >
+                        Archive
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Document Numbering */}
+        {defaultProfile && (
+          <div className="settings-section">
+            <h3 className="settings-section-title">Document Numbering</h3>
+            <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+              Configure how document numbers are generated for each type. Settings apply to the default business profile.
+            </p>
+
+            <table className="settings-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'start', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Type</th>
+                  <th style={{ textAlign: 'start', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Prefix</th>
+                  <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Use Prefix</th>
+                  <th style={{ textAlign: 'end', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Next #</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ALL_DOCUMENT_TYPES.map((type) => {
+                  const seq = sequenceMap[type];
+                  const prefix = seq?.prefix || DEFAULT_PREFIXES[type];
+                  const prefixEnabled = seq?.prefixEnabled ?? true;
+                  const nextNumber = (seq?.lastNumber || 0) + 1;
+
+                  return (
+                    <tr key={type}>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>
+                        {DOCUMENT_TYPE_LABELS[type]}
+                      </td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>
+                        <input
+                          type="text"
+                          className="input input-sm"
+                          style={{ width: 80 }}
+                          value={prefix}
+                          onChange={(e) => handleSequenceUpdate(type, 'prefix', e.target.value)}
+                          placeholder={DEFAULT_PREFIXES[type]}
+                          disabled={!prefixEnabled}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={prefixEnabled}
+                          onChange={(e) => handleSequenceUpdate(type, 'prefixEnabled', e.target.checked)}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)', textAlign: 'end' }}>
+                        <input
+                          type="number"
+                          className="input input-sm"
+                          style={{ width: 80, textAlign: 'end' }}
+                          min={1}
+                          value={nextNumber}
+                          onChange={(e) => handleSequenceUpdate(type, 'lastNumber', parseInt(e.target.value) || 1)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <p className="text-muted text-sm" style={{ marginTop: 12 }}>
+              Example: {sequenceMap['invoice']?.prefixEnabled !== false
+                ? `${sequenceMap['invoice']?.prefix || 'INV'}-${String((sequenceMap['invoice']?.lastNumber || 0) + 1).padStart(4, '0')}`
+                : String((sequenceMap['invoice']?.lastNumber || 0) + 1).padStart(4, '0')}
+            </p>
+          </div>
+        )}
 
         {/* Currency Settings */}
         <div className="settings-section">

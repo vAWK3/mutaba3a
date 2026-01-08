@@ -10,7 +10,7 @@ import type {
   HLC,
   Operation,
 } from './ops-types';
-import type { Client, Project, Transaction, Category, FxRate } from '../../types';
+import type { Client, Project, Transaction, Category, FxRate, Document, BusinessProfile } from '../../types';
 
 // ============================================================================
 // Device Identity
@@ -410,6 +410,12 @@ async function applyCreate(op: Operation): Promise<void> {
     case 'fxRate':
       await db.fxRates.put(data as unknown as FxRate);
       break;
+    case 'document':
+      await db.documents.put(data as unknown as Document);
+      break;
+    case 'businessProfile':
+      await db.businessProfiles.put(data as unknown as BusinessProfile);
+      break;
   }
 }
 
@@ -430,8 +436,8 @@ async function doApplyFieldUpdate(op: Operation): Promise<void> {
 async function applyDelete(op: Operation): Promise<void> {
   const table = getTableForEntityType(op.entityType);
 
-  if (op.entityType === 'transaction') {
-    // Soft delete for transactions
+  if (op.entityType === 'transaction' || op.entityType === 'document') {
+    // Soft delete for transactions and documents
     await table.update(op.entityId, {
       deletedAt: new Date().toISOString(),
     });
@@ -458,11 +464,19 @@ async function applyUnarchive(op: Operation): Promise<void> {
 }
 
 async function applyMarkPaid(op: Operation): Promise<void> {
-  await db.transactions.update(op.entityId, {
-    status: 'paid',
-    paidAt: op.value as string,
-    updatedAt: new Date().toISOString(),
-  });
+  if (op.entityType === 'transaction') {
+    await db.transactions.update(op.entityId, {
+      status: 'paid',
+      paidAt: op.value as string,
+      updatedAt: new Date().toISOString(),
+    });
+  } else if (op.entityType === 'document') {
+    await db.documents.update(op.entityId, {
+      status: 'paid',
+      paidAt: op.value as string,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 }
 
 async function applyConflictResolution(op: Operation): Promise<void> {
@@ -511,6 +525,10 @@ function getTableForEntityType(entityType: EntityType) {
       return db.categories;
     case 'fxRate':
       return db.fxRates;
+    case 'document':
+      return db.documents;
+    case 'businessProfile':
+      return db.businessProfiles;
     default:
       throw new Error(`Unknown entity type: ${entityType}`);
   }

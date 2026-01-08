@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Currency, TxKind } from '../types';
+import type { Currency, TxKind, DocumentType } from '../types';
 
 // Drawer state
 interface DrawerState {
@@ -41,6 +41,35 @@ interface DrawerState {
   };
   openProjectDrawer: (options?: { mode?: 'create' | 'edit'; projectId?: string; defaultClientId?: string }) => void;
   closeProjectDrawer: () => void;
+
+  // Document drawer
+  documentDrawer: {
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    documentId?: string;
+    defaultType?: DocumentType;
+    defaultClientId?: string;
+    defaultBusinessProfileId?: string;
+    refDocumentId?: string; // For credit notes
+  };
+  openDocumentDrawer: (options?: {
+    mode?: 'create' | 'edit';
+    documentId?: string;
+    defaultType?: DocumentType;
+    defaultClientId?: string;
+    defaultBusinessProfileId?: string;
+    refDocumentId?: string;
+  }) => void;
+  closeDocumentDrawer: () => void;
+
+  // Business Profile drawer
+  businessProfileDrawer: {
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    profileId?: string;
+  };
+  openBusinessProfileDrawer: (options?: { mode?: 'create' | 'edit'; profileId?: string }) => void;
+  closeBusinessProfileDrawer: () => void;
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
@@ -104,6 +133,50 @@ export const useDrawerStore = create<DrawerState>((set) => ({
   closeProjectDrawer: () =>
     set({
       projectDrawer: {
+        isOpen: false,
+        mode: 'create',
+      },
+    }),
+
+  documentDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openDocumentDrawer: (options) =>
+    set({
+      documentDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        documentId: options?.documentId,
+        defaultType: options?.defaultType,
+        defaultClientId: options?.defaultClientId,
+        defaultBusinessProfileId: options?.defaultBusinessProfileId,
+        refDocumentId: options?.refDocumentId,
+      },
+    }),
+  closeDocumentDrawer: () =>
+    set({
+      documentDrawer: {
+        isOpen: false,
+        mode: 'create',
+      },
+    }),
+
+  businessProfileDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openBusinessProfileDrawer: (options) =>
+    set({
+      businessProfileDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        profileId: options?.profileId,
+      },
+    }),
+  closeBusinessProfileDrawer: () =>
+    set({
+      businessProfileDrawer: {
         isOpen: false,
         mode: 'create',
       },

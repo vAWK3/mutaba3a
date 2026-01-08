@@ -1,4 +1,12 @@
-import type { Client, Project, Transaction, Category, FxRate } from '../../types';
+import type {
+  Client,
+  Project,
+  Transaction,
+  Category,
+  FxRate,
+  Document,
+  BusinessProfile,
+} from '../../types';
 
 // ============================================================================
 // Hybrid Logical Clock
@@ -73,7 +81,7 @@ export interface DiscoveredPeer {
 // Operation Types
 // ============================================================================
 
-export type EntityType = 'client' | 'project' | 'transaction' | 'category' | 'fxRate';
+export type EntityType = 'client' | 'project' | 'transaction' | 'category' | 'fxRate' | 'document' | 'businessProfile';
 
 export type OpType =
   // CRUD operations
@@ -340,6 +348,8 @@ export type EntityDataMap = {
   transaction: Transaction;
   category: Category;
   fxRate: FxRate;
+  document: Document;
+  businessProfile: BusinessProfile;
 };
 
 // ============================================================================

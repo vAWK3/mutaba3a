@@ -3,6 +3,9 @@ import { SidebarNav } from './SidebarNav';
 import { TransactionDrawer } from '../drawers/TransactionDrawer';
 import { ClientDrawer } from '../drawers/ClientDrawer';
 import { ProjectDrawer } from '../drawers/ProjectDrawer';
+import { BusinessProfileDrawer } from '../drawers/BusinessProfileDrawer';
+import { DocumentDrawer } from '../drawers/DocumentDrawer';
+import { WelcomeModal } from '../modals';
 import { MacDownloadBanner } from '../ui/MacDownloadBanner';
 import { FxRateBanner } from '../ui/FxRateBanner';
 import { UpdateBanner } from '../ui/UpdateBanner';
@@ -15,7 +18,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { transactionDrawer, clientDrawer, projectDrawer } = useDrawerStore();
+  const { transactionDrawer, clientDrawer, projectDrawer, businessProfileDrawer, documentDrawer } = useDrawerStore();
 
   // Initialize sync system on app load
   useEffect(() => {
@@ -35,6 +38,8 @@ export function AppShell({ children }: AppShellProps) {
       {transactionDrawer.isOpen && <TransactionDrawer />}
       {clientDrawer.isOpen && <ClientDrawer />}
       {projectDrawer.isOpen && <ProjectDrawer />}
+      {businessProfileDrawer.isOpen && <BusinessProfileDrawer />}
+      {documentDrawer.isOpen && <DocumentDrawer />}
 
       <FxRateBanner />
       <MacDownloadBanner />
@@ -42,6 +47,7 @@ export function AppShell({ children }: AppShellProps) {
       <ExportBundleModal />
       <ImportBundleModal />
       <PairingModal />
+      <WelcomeModal />
     </div>
   );
 }

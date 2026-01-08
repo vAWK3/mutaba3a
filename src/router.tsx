@@ -98,6 +98,31 @@ const reportsRoute = createRoute({
   component: lazyPage(() => import('./pages/reports/ReportsPage'), 'ReportsPage'),
 });
 
+// Documents routes
+const documentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/documents',
+  component: lazyPage(() => import('./pages/documents'), 'DocumentsPage'),
+});
+
+const documentNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/documents/new',
+  component: lazyPage(() => import('./pages/documents'), 'DocumentFormPage'),
+});
+
+const documentDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/documents/$documentId',
+  component: lazyPage(() => import('./pages/documents'), 'DocumentDetailPage'),
+});
+
+const documentEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/documents/$documentId/edit',
+  component: lazyPage(() => import('./pages/documents'), 'DocumentFormPage'),
+});
+
 // Settings route
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -127,6 +152,10 @@ const routeTree = rootRoute.addChildren([
   projectDetailRoute,
   clientsRoute,
   clientDetailRoute,
+  documentsRoute,
+  documentNewRoute,
+  documentDetailRoute,
+  documentEditRoute,
   reportsRoute,
   settingsRoute,
   downloadRoute,

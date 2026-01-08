@@ -31,6 +31,7 @@
     "projects": "Projects",
     "clients": "Clients",
     "transactions": "Transactions",
+    "documents": "Documents",
     "reports": "Reports",
     "settings": "Settings",
     "download": "Download"
@@ -39,7 +40,8 @@
     "income": "Income",
     "expense": "Expense",
     "project": "Project",
-    "client": "Client"
+    "client": "Client",
+    "document": "Document"
   },
   "transactions": {
     "title": "Transactions",
@@ -433,5 +435,30 @@
     "refresh": "Refresh rate",
     "minimize": "Minimize",
     "drag": "Drag to move"
+  },
+  "welcome": {
+    "title": "Welcome to Mutaba3a",
+    "subtitle": "Let's set up your business profile",
+    "infoTitle": "What is a Business Profile?",
+    "bullet1": "Your company name, logo, and branding",
+    "bullet2": "Contact information for invoices",
+    "bullet3": "Tax ID and registration details",
+    "multipleProfiles": "You can create multiple profiles if you manage different businesses.",
+    "setUpNow": "Set Up Now",
+    "skipForNow": "Skip for now",
+    "skipNote": "Skip creates a default profile you can customize later in Settings."
+  },
+  "profileSwitcher": {
+    "noProfile": "No Profile",
+    "setUpBusiness": "Set up business",
+    "addProfile": "Add Business Profile",
+    "manageProfiles": "Manage Profiles",
+    "switchTo": "Switch to {name}",
+    "current": "Current"
+  },
+  "documentGuard": {
+    "title": "Business Profile Required",
+    "description": "To create invoices and documents, you need to set up a business profile first.",
+    "createProfile": "Create Business Profile"
   }
 }

@@ -1,31 +1,51 @@
-// Download config with URL templates - version fetched dynamically from GitHub
-// Static fields (fileSize, sha256, fallbackVersion) are updated by deploy.sh / deploy.ps1
-export const DOWNLOAD_CONFIG = {
+// Download config - fetched from remote JSON, this is the fallback
+// Updated by deploy.sh / deploy.ps1 during releases
+
+export interface DownloadConfigMac {
+  fileSize: string;
+  minVersion: string;
+  sha256: string;
+  downloadUrl: string;
+}
+
+export interface DownloadConfigWindows {
+  fileSize: string;
+  minVersion: string;
+  sha256: string;
+  exeSha256: string;
+  msiUrl: string;
+  exeUrl: string;
+}
+
+export interface DownloadConfig {
+  githubOwner: string;
+  githubRepo: string;
+  allReleasesUrl: string;
+  fallbackVersion: string;
+  releaseNotesUrl: string;
+  mac: DownloadConfigMac;
+  windows: DownloadConfigWindows;
+}
+
+// Fallback config used when remote fetch fails
+export const FALLBACK_DOWNLOAD_CONFIG: DownloadConfig = {
   githubOwner: 'vAWK3',
   githubRepo: 'mutaba3a',
   allReleasesUrl: 'https://github.com/vAWK3/mutaba3a/releases',
-  // Fallback version used when GitHub API fails (rate-limited, offline, etc.)
   fallbackVersion: '0.0.10',
-
-  getReleaseNotesUrl: (version: string) =>
-    `https://github.com/vAWK3/mutaba3a/releases/tag/v${version}`,
-
+  releaseNotesUrl: 'https://github.com/vAWK3/mutaba3a/releases/tag/v0.0.10',
   mac: {
-    fileSize: '~8.64 MB',
+    fileSize: '~7.15 MB',
     minVersion: 'macOS 12+',
-    sha256: '508c2dc72fddb84c88142ccda03340ab23139bf04ab5aeeea72a7a691902257f',
-    getDownloadUrl: (version: string) =>
-      `https://github.com/vAWK3/mutaba3a/releases/download/v${version}/mutaba3a-v${version}-macos-universal.dmg`,
+    sha256: '52b13df20cc8a91aa4430073551190c5dc3088f7bdca990ee6132520a827166c',
+    downloadUrl: 'https://github.com/vAWK3/mutaba3a/releases/download/v0.0.10/mutaba3a-v0.0.10-macos-universal.dmg',
   },
-
   windows: {
     fileSize: '',
     minVersion: 'Windows 10+',
     sha256: '',
     exeSha256: '',
-    getMsiUrl: (version: string) =>
-      `https://github.com/vAWK3/mutaba3a/releases/download/v${version}/mutaba3a-v${version}-windows-x64.msi`,
-    getExeUrl: (version: string) =>
-      `https://github.com/vAWK3/mutaba3a/releases/download/v${version}/mutaba3a-v${version}-windows-x64-setup.exe`,
+    msiUrl: 'https://github.com/vAWK3/mutaba3a/releases/download/v0.0.10/mutaba3a-v0.0.10-windows-x64.msi',
+    exeUrl: 'https://github.com/vAWK3/mutaba3a/releases/download/v0.0.10/mutaba3a-v0.0.10-windows-x64-setup.exe',
   },
 };

@@ -57,7 +57,7 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot }: TopBarProp
 function AddMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { openTransactionDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
+  const { openTransactionDrawer, openClientDrawer, openProjectDrawer, openDocumentDrawer } = useDrawerStore();
   const t = useT();
 
   useEffect(() => {
@@ -140,6 +140,17 @@ function AddMenu() {
             <UserPlusIcon className="nav-icon" />
             {t('addMenu.client')}
           </button>
+          <div className="add-menu-divider" />
+          <button
+            className="add-menu-item"
+            onClick={() => {
+              openDocumentDrawer({ mode: 'create' });
+              setIsOpen(false);
+            }}
+          >
+            <DocumentPlusIcon className="nav-icon" />
+            {t('addMenu.document')}
+          </button>
         </div>
       )}
     </div>
@@ -182,6 +193,14 @@ function UserPlusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+    </svg>
+  );
+}
+
+function DocumentPlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
     </svg>
   );
 }

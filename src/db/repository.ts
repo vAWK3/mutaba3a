@@ -12,6 +12,12 @@ import type {
   ClientSummary,
   TransactionDisplay,
   Currency,
+  BusinessProfile,
+  Document,
+  DocumentSequence,
+  DocumentFilters,
+  DocumentDisplay,
+  DocumentType,
 } from '../types';
 import {
   aggregateTransactionTotals,
@@ -501,5 +507,354 @@ export const settingsRepo = {
   async update(data: Partial<Settings>): Promise<void> {
     const current = await this.get();
     await db.settings.put({ ...current, ...data, id: 'default' });
+  },
+};
+
+// ============================================================================
+// Business Profile Repository
+// ============================================================================
+
+export const businessProfileRepo = {
+  async list(includeArchived = false): Promise<BusinessProfile[]> {
+    let query = db.businessProfiles.toCollection();
+    if (!includeArchived) {
+      query = db.businessProfiles.filter((p) => !p.archivedAt);
+    }
+    return query.sortBy('name');
+  },
+
+  async get(id: string): Promise<BusinessProfile | undefined> {
+    return db.businessProfiles.get(id);
+  },
+
+  async getDefault(): Promise<BusinessProfile | undefined> {
+    const profiles = await db.businessProfiles.filter((p) => p.isDefault && !p.archivedAt).toArray();
+    return profiles[0];
+  },
+
+  async create(data: Omit<BusinessProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<BusinessProfile> {
+    const now = nowISO();
+
+    // If this is the first profile or marked as default, ensure only one default
+    if (data.isDefault) {
+      await db.businessProfiles.toCollection().modify({ isDefault: false });
+    }
+
+    const profile: BusinessProfile = {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.businessProfiles.add(profile);
+    return profile;
+  },
+
+  async update(id: string, data: Partial<BusinessProfile>): Promise<void> {
+    // If setting as default, unset all others first
+    if (data.isDefault) {
+      await db.businessProfiles.toCollection().modify({ isDefault: false });
+    }
+    await db.businessProfiles.update(id, { ...data, updatedAt: nowISO() });
+  },
+
+  async setDefault(id: string): Promise<void> {
+    await db.businessProfiles.toCollection().modify({ isDefault: false });
+    await db.businessProfiles.update(id, { isDefault: true, updatedAt: nowISO() });
+  },
+
+  async archive(id: string): Promise<void> {
+    const profile = await this.get(id);
+    if (profile?.isDefault) {
+      // If archiving default, try to set another as default
+      const others = await db.businessProfiles.filter((p) => p.id !== id && !p.archivedAt).toArray();
+      if (others.length > 0) {
+        await db.businessProfiles.update(others[0].id, { isDefault: true });
+      }
+    }
+    await db.businessProfiles.update(id, { archivedAt: nowISO(), updatedAt: nowISO(), isDefault: false });
+  },
+
+  async delete(id: string): Promise<void> {
+    await db.businessProfiles.delete(id);
+  },
+};
+
+// ============================================================================
+// Document Sequence Repository (for auto-numbering)
+// ============================================================================
+
+// Document type to prefix mapping
+const DOCUMENT_PREFIXES: Record<DocumentType, string> = {
+  invoice: 'INV',
+  receipt: 'REC',
+  invoice_receipt: 'IR',
+  credit_note: 'CN',
+  price_offer: 'PO',
+  proforma_invoice: 'PI',
+  donation_receipt: 'DR',
+};
+
+export const documentSequenceRepo = {
+  async getNextNumber(businessProfileId: string, documentType: DocumentType): Promise<string> {
+    const sequenceId = `${businessProfileId}:${documentType}`;
+    let sequence = await db.documentSequences.get(sequenceId);
+
+    if (!sequence) {
+      // Create new sequence with defaults
+      sequence = {
+        id: sequenceId,
+        businessProfileId,
+        documentType,
+        lastNumber: 0,
+        prefix: DOCUMENT_PREFIXES[documentType],
+        prefixEnabled: true,
+        updatedAt: nowISO(),
+      };
+    }
+
+    // Find highest existing number for this document type (handles gaps/manual edits)
+    const existingDocs = await db.documents
+      .where('type')
+      .equals(documentType)
+      .filter((doc) => !doc.deletedAt)
+      .toArray();
+
+    let highestNumber = sequence.lastNumber;
+    for (const doc of existingDocs) {
+      // Extract number from end of document number (handles both PREFIX-NNNN and NNNN formats)
+      const match = doc.number.match(/(\d+)$/);
+      if (match) {
+        highestNumber = Math.max(highestNumber, parseInt(match[1], 10));
+      }
+    }
+
+    const nextNumber = highestNumber + 1;
+
+    // Update sequence
+    sequence.lastNumber = nextNumber;
+    sequence.updatedAt = nowISO();
+    await db.documentSequences.put(sequence);
+
+    // Format based on prefixEnabled
+    const paddedNumber = String(nextNumber).padStart(4, '0');
+    return sequence.prefixEnabled
+      ? `${sequence.prefix}-${paddedNumber}`
+      : paddedNumber;
+  },
+
+  async get(businessProfileId: string, documentType: DocumentType): Promise<DocumentSequence | undefined> {
+    return db.documentSequences.get(`${businessProfileId}:${documentType}`);
+  },
+
+  async listByBusinessProfile(businessProfileId: string): Promise<DocumentSequence[]> {
+    return db.documentSequences
+      .where('businessProfileId')
+      .equals(businessProfileId)
+      .toArray();
+  },
+
+  async update(businessProfileId: string, documentType: DocumentType, data: Partial<DocumentSequence>): Promise<void> {
+    const sequenceId = `${businessProfileId}:${documentType}`;
+    let existing = await db.documentSequences.get(sequenceId);
+
+    if (!existing) {
+      // Create with defaults if doesn't exist
+      existing = {
+        id: sequenceId,
+        businessProfileId,
+        documentType,
+        lastNumber: 0,
+        prefix: DOCUMENT_PREFIXES[documentType],
+        prefixEnabled: true,
+        updatedAt: nowISO(),
+      };
+    }
+
+    await db.documentSequences.put({
+      ...existing,
+      ...data,
+      updatedAt: nowISO(),
+    });
+  },
+
+  async getOrCreate(businessProfileId: string, documentType: DocumentType): Promise<DocumentSequence> {
+    const sequenceId = `${businessProfileId}:${documentType}`;
+    let sequence = await db.documentSequences.get(sequenceId);
+
+    if (!sequence) {
+      sequence = {
+        id: sequenceId,
+        businessProfileId,
+        documentType,
+        lastNumber: 0,
+        prefix: DOCUMENT_PREFIXES[documentType],
+        prefixEnabled: true,
+        updatedAt: nowISO(),
+      };
+      await db.documentSequences.put(sequence);
+    }
+
+    return sequence;
+  },
+};
+
+// ============================================================================
+// Document Repository
+// ============================================================================
+
+export const documentRepo = {
+  async list(filters: DocumentFilters = {}): Promise<DocumentDisplay[]> {
+    const documents = await db.documents.toArray();
+    const clients = await db.clients.toArray();
+    const profiles = await db.businessProfiles.toArray();
+
+    const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+    const profileMap = new Map(profiles.map((p) => [p.id, p.name]));
+
+    let filtered = documents.filter((doc) => {
+      if (doc.deletedAt) return false;
+      if (filters.dateFrom && doc.issueDate < filters.dateFrom) return false;
+      if (filters.dateTo && doc.issueDate > filters.dateTo + 'T23:59:59') return false;
+      if (filters.currency && doc.currency !== filters.currency) return false;
+      if (filters.type && doc.type !== filters.type) return false;
+      if (filters.status && doc.status !== filters.status) return false;
+      if (filters.businessProfileId && doc.businessProfileId !== filters.businessProfileId) return false;
+      if (filters.clientId && doc.clientId !== filters.clientId) return false;
+
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const clientName = doc.clientId ? clientMap.get(doc.clientId) : '';
+        const matchesSearch =
+          doc.number?.toLowerCase().includes(searchLower) ||
+          doc.subject?.toLowerCase().includes(searchLower) ||
+          doc.notes?.toLowerCase().includes(searchLower) ||
+          clientName?.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
+
+      return true;
+    });
+
+    // Sort
+    const sortBy = filters.sort?.by || 'issueDate';
+    const sortDir = filters.sort?.dir || 'desc';
+    filtered.sort((a, b) => {
+      const aVal = (a as unknown as Record<string, unknown>)[sortBy];
+      const bVal = (b as unknown as Record<string, unknown>)[sortBy];
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      return 0;
+    });
+
+    // Pagination
+    if (filters.offset) {
+      filtered = filtered.slice(filters.offset);
+    }
+    if (filters.limit) {
+      filtered = filtered.slice(0, filters.limit);
+    }
+
+    return filtered.map((doc) => ({
+      ...doc,
+      clientName: doc.clientId ? clientMap.get(doc.clientId) : undefined,
+      businessProfileName: profileMap.get(doc.businessProfileId),
+    }));
+  },
+
+  async get(id: string): Promise<Document | undefined> {
+    return db.documents.get(id);
+  },
+
+  async getByNumber(number: string): Promise<Document | undefined> {
+    const docs = await db.documents.where('number').equals(number).toArray();
+    return docs[0];
+  },
+
+  async isNumberTaken(number: string, excludeId?: string): Promise<boolean> {
+    const existing = await db.documents
+      .where('number')
+      .equals(number)
+      .filter((doc) => !doc.deletedAt && doc.id !== excludeId)
+      .first();
+    return !!existing;
+  },
+
+  async create(data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt'>): Promise<Document> {
+    const now = nowISO();
+    const number = await documentSequenceRepo.getNextNumber(data.businessProfileId, data.type);
+
+    const document: Document = {
+      ...data,
+      id: generateId(),
+      number,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.documents.add(document);
+    return document;
+  },
+
+  async update(id: string, data: Partial<Document>): Promise<void> {
+    await db.documents.update(id, { ...data, updatedAt: nowISO() });
+  },
+
+  async markPaid(id: string): Promise<void> {
+    const now = nowISO();
+    await db.documents.update(id, {
+      status: 'paid',
+      paidAt: now,
+      updatedAt: now,
+    });
+  },
+
+  async markVoided(id: string): Promise<void> {
+    await db.documents.update(id, {
+      status: 'voided',
+      updatedAt: nowISO(),
+    });
+  },
+
+  async markIssued(id: string): Promise<void> {
+    await db.documents.update(id, {
+      status: 'issued',
+      updatedAt: nowISO(),
+    });
+  },
+
+  async softDelete(id: string): Promise<void> {
+    await db.documents.update(id, { deletedAt: nowISO(), updatedAt: nowISO() });
+  },
+
+  async linkTransactions(documentId: string, transactionIds: string[]): Promise<void> {
+    const doc = await this.get(documentId);
+    if (!doc) return;
+
+    const existingIds = new Set(doc.linkedTransactionIds || []);
+    transactionIds.forEach((id) => existingIds.add(id));
+
+    await this.update(documentId, {
+      linkedTransactionIds: Array.from(existingIds),
+    });
+
+    // Also update transactions to link back to document
+    for (const txId of transactionIds) {
+      await transactionRepo.update(txId, { linkedDocumentId: documentId });
+    }
+  },
+
+  async unlinkTransaction(documentId: string, transactionId: string): Promise<void> {
+    const doc = await this.get(documentId);
+    if (!doc) return;
+
+    await this.update(documentId, {
+      linkedTransactionIds: (doc.linkedTransactionIds || []).filter((id) => id !== transactionId),
+    });
+
+    await transactionRepo.update(transactionId, { linkedDocumentId: undefined });
   },
 };

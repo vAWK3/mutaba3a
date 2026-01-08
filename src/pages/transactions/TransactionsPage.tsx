@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useSearch, Link } from "@tanstack/react-router";
 import { TopBar } from "../../components/layout";
 import {
   SearchInput,
@@ -36,7 +36,7 @@ interface TransactionsSearchParams {
 }
 
 export function TransactionsPage() {
-  const { openTransactionDrawer } = useDrawerStore();
+  const { openTransactionDrawer, openDocumentDrawer } = useDrawerStore();
   const markPaidMutation = useMarkTransactionPaid();
   const t = useT();
   const { language } = useLanguage();
@@ -211,6 +211,31 @@ export function TransactionsPage() {
                             onClick: () =>
                               openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
                           },
+                          // Generate Invoice (only for income transactions without linked document)
+                          ...(tx.kind === 'income' && !tx.linkedDocumentId
+                            ? [
+                                {
+                                  label: 'Generate Invoice',
+                                  onClick: () =>
+                                    openDocumentDrawer({
+                                      mode: 'create',
+                                      defaultType: tx.status === 'paid' ? 'receipt' : 'invoice',
+                                      defaultClientId: tx.clientId,
+                                    }),
+                                },
+                              ]
+                            : []),
+                          // View Invoice (if linked document exists)
+                          ...(tx.linkedDocumentId
+                            ? [
+                                {
+                                  label: 'View Invoice',
+                                  onClick: () => {
+                                    window.location.href = `/documents/${tx.linkedDocumentId}`;
+                                  },
+                                },
+                              ]
+                            : []),
                         ]}
                       />
                       {tx.notes && (

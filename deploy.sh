@@ -187,45 +187,63 @@ check_release_prerequisites() {
 
 # Tag and push to GitHub
 tag_and_push() {
-    local version=$1
-    local tag="v$version"
+  local version=$1
+  local tag="v$version"
 
-    echo -e "${BLUE}Preparing git tag and push...${NC}"
+  echo -e "${BLUE}Preparing git commit, tag and push...${NC}"
 
-    # Add all changes
-    # git add .
+  # 1) Commit the version/config changes (so the tag points to the right commit)
+  git add "$PACKAGE_JSON" "$TAURI_CONF" "$CARGO_TOML" src/content/download-config.ts || true
 
-    # Commit if there are changes (don't fail if nothing to commit)
-    # if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
-    #     git commit -m "Release $tag" || true
-    #     echo -e "  ${GREEN}✓${NC} Changes committed"
-    # else
-    #     echo -e "  ${CYAN}→${NC} No changes to commit"
-    # fi
+  if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+    git commit -m "Release $tag" || true
+    echo -e "  ${GREEN}✓${NC} Committed release changes"
+  else
+    echo -e "  ${YELLOW}→${NC} No changes to commit"
+  fi
 
-    # # Pull latest changes first (in case other platform deployed)
-    # echo -e "  ${CYAN}→${NC} Pulling latest from origin main..."
-    # git pull --rebase origin main 2>/dev/null || true
+  # Push main so origin has the commit your tag should reference
+  git push origin main
+  echo -e "  ${GREEN}✓${NC} Pushed main"
 
-    # # Push to main
-    # echo -e "  ${CYAN}→${NC} Pushing to origin main..."
-    # git push origin main
-    # echo -e "  ${GREEN}✓${NC} Pushed to main"
+  # Always refresh tags from origin (covers "remote exists, local missing")
+  git fetch --tags origin >/dev/null 2>&1 || true
 
-    # Check if tag already exists locally or remotely - skip if so (allows parallel deploys)
-    if git tag -l | grep -q "^$tag$" || git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
-        echo -e "  ${YELLOW}→${NC} Tag '$tag' already exists - skipping tag creation"
-    else
-        # Create annotated tag
-        git tag -a "$tag" -m "Release $tag"
-        echo -e "  ${GREEN}✓${NC} Created tag $tag"
+  local local_exists=false
+  local remote_exists=false
 
-        # Push tag
-        git push origin "$tag"
-        echo -e "  ${GREEN}✓${NC} Pushed tag to origin"
-    fi
+  if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    local_exists=true
+  fi
 
+  if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+    remote_exists=true
+  fi
+
+  if [[ "$remote_exists" == "true" && "$local_exists" == "false" ]]; then
+    echo -e "  ${YELLOW}→${NC} Tag '$tag' exists on origin but not locally - fetching..."
+    git fetch origin "refs/tags/$tag:refs/tags/$tag"
+    echo -e "  ${GREEN}✓${NC} Fetched tag $tag"
     echo ""
+    return 0
+  fi
+
+  if [[ "$local_exists" == "false" && "$remote_exists" == "false" ]]; then
+    echo -e "  ${CYAN}→${NC} Creating tag $tag..."
+    git tag -a "$tag" -m "Release $tag"
+    local_exists=true
+    echo -e "  ${GREEN}✓${NC} Created tag $tag"
+  fi
+
+  if [[ "$local_exists" == "true" && "$remote_exists" == "false" ]]; then
+    echo -e "  ${CYAN}→${NC} Pushing tag $tag to origin..."
+    git push origin "refs/tags/$tag"
+    echo -e "  ${GREEN}✓${NC} Pushed tag to origin"
+  else
+    echo -e "  ${YELLOW}→${NC} Tag '$tag' already exists on origin - not changing it"
+  fi
+
+  echo ""
 }
 
 # Find the DMG artifact after build
@@ -564,37 +582,35 @@ EOF
 
 # Create GitHub release or upload to existing
 create_github_release() {
-    local version=$1
-    local tag="v$version"
+  local version=$1
+  local tag="v$version"
 
-    echo -e "${BLUE}Creating GitHub release...${NC}"
+  echo -e "${BLUE}Creating GitHub release...${NC}"
 
-    # Build list of artifacts to upload
-    local artifacts=("$RELEASE_DMG_PATH" "$RELEASE_CHECKSUM_PATH")
+  local artifacts=("$RELEASE_DMG_PATH" "$RELEASE_CHECKSUM_PATH")
+  [[ -n "${UPDATE_MANIFEST_PATH:-}" && -f "$UPDATE_MANIFEST_PATH" ]] && artifacts+=("$UPDATE_MANIFEST_PATH")
+  [[ -n "${UPDATE_ARCHIVE_PATH:-}" && -f "$UPDATE_ARCHIVE_PATH" ]] && artifacts+=("$UPDATE_ARCHIVE_PATH")
 
-    # Add update manifest and archive if they exist
-    if [[ -n "${UPDATE_MANIFEST_PATH:-}" && -f "$UPDATE_MANIFEST_PATH" ]]; then
-        artifacts+=("$UPDATE_MANIFEST_PATH")
-    fi
-    if [[ -n "${UPDATE_ARCHIVE_PATH:-}" && -f "$UPDATE_ARCHIVE_PATH" ]]; then
-        artifacts+=("$UPDATE_ARCHIVE_PATH")
-    fi
-
-    # Check if release already exists - upload to it if so (allows parallel deploys)
-    if gh release view "$tag" &> /dev/null; then
-        echo -e "  ${YELLOW}→${NC} Release '$tag' already exists - uploading Mac artifacts..."
-        gh release upload "$tag" "${artifacts[@]}" --clobber
-        echo -e "  ${GREEN}✓${NC} Mac artifacts uploaded to existing release"
-    else
-        # Create release with auto-generated notes
-        gh release create "$tag" \
-            --title "$tag" \
-            --generate-notes \
-            "${artifacts[@]}"
-        echo -e "  ${GREEN}✓${NC} Release created with Mac artifacts"
-    fi
-
+  # If release exists, just upload & overwrite
+  if gh release view "$tag" &> /dev/null; then
+    echo -e "  ${YELLOW}→${NC} Release '$tag' already exists - uploading artifacts (--clobber)..."
+    gh release upload "$tag" "${artifacts[@]}" --clobber
+    echo -e "  ${GREEN}✓${NC} Artifacts uploaded"
     echo ""
+    return 0
+  fi
+
+  # Otherwise create release (if create fails because it was created concurrently, upload anyway)
+  echo -e "  ${CYAN}→${NC} Release '$tag' does not exist - creating..."
+  if gh release create "$tag" --title "$tag" --generate-notes "${artifacts[@]}"; then
+    echo -e "  ${GREEN}✓${NC} Release created with artifacts"
+  else
+    echo -e "  ${YELLOW}⚠${NC} Release create failed (maybe created elsewhere). Trying upload..."
+    gh release upload "$tag" "${artifacts[@]}" --clobber
+    echo -e "  ${GREEN}✓${NC} Artifacts uploaded after fallback"
+  fi
+
+  echo ""
 }
 
 # Print release URLs

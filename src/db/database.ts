@@ -1,5 +1,15 @@
 import Dexie, { type Table } from 'dexie';
-import type { Client, Project, Category, Transaction, FxRate, Settings } from '../types';
+import type {
+  Client,
+  Project,
+  Category,
+  Transaction,
+  FxRate,
+  Settings,
+  BusinessProfile,
+  Document,
+  DocumentSequence,
+} from '../types';
 import type {
   LocalDevice,
   TrustedPeer,
@@ -19,6 +29,11 @@ export class MiniCrmDatabase extends Dexie {
   transactions!: Table<Transaction, string>;
   fxRates!: Table<FxRate, string>;
   settings!: Table<Settings, string>;
+
+  // Document/Invoice tables
+  businessProfiles!: Table<BusinessProfile, string>;
+  documents!: Table<Document, string>;
+  documentSequences!: Table<DocumentSequence, string>;
 
   // Sync tables
   localDevice!: Table<LocalDevice, string>;
@@ -80,6 +95,37 @@ export class MiniCrmDatabase extends Dexie {
 
       // Sync history for audit
       syncHistory: 'id, peerId, method, status, completedAt',
+    });
+
+    // Version 3: Add document/invoice tables
+    this.version(3).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // New document/invoice tables
+      // Business profiles (multi-identity support)
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+
+      // Documents (invoices, receipts, credit notes, etc.)
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt',
+
+      // Document sequences for auto-numbering
+      documentSequences: 'id, [businessProfileId+documentType]',
     });
   }
 }

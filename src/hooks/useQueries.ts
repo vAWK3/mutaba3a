@@ -7,8 +7,22 @@ import {
   projectSummaryRepo,
   clientSummaryRepo,
   settingsRepo,
+  documentRepo,
+  documentSequenceRepo,
+  businessProfileRepo,
 } from '../db';
-import type { QueryFilters, Transaction, Client, Project, Currency } from '../types';
+import type {
+  QueryFilters,
+  Transaction,
+  Client,
+  Project,
+  Currency,
+  Document,
+  DocumentFilters,
+  DocumentType,
+  DocumentSequence,
+  BusinessProfile,
+} from '../types';
 
 /**
  * Invalidates all transaction-related queries.
@@ -50,6 +64,14 @@ export const queryKeys = {
   categories: (kind?: 'income' | 'expense') => ['categories', { kind }] as const,
   settings: () => ['settings'] as const,
   fxRate: (base: Currency, quote: Currency) => ['fxRate', base, quote] as const,
+  // Document/Invoice keys
+  documents: (filters: DocumentFilters) => ['documents', filters] as const,
+  document: (id: string) => ['document', id] as const,
+  documentSequences: (businessProfileId: string) => ['documentSequences', businessProfileId] as const,
+  // Business Profile keys
+  businessProfiles: () => ['businessProfiles'] as const,
+  businessProfile: (id: string) => ['businessProfile', id] as const,
+  defaultBusinessProfile: () => ['defaultBusinessProfile'] as const,
 };
 
 // Transaction hooks
@@ -295,5 +317,227 @@ export function useUpdateSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
+  });
+}
+
+// ============================================================================
+// Document/Invoice hooks
+// ============================================================================
+
+/**
+ * Invalidates all document-related queries.
+ */
+function invalidateDocumentQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['documents'] });
+  queryClient.invalidateQueries({ queryKey: ['document'] });
+}
+
+export function useDocuments(filters: DocumentFilters) {
+  return useQuery({
+    queryKey: queryKeys.documents(filters),
+    queryFn: () => documentRepo.list(filters),
+  });
+}
+
+export function useDocument(id: string) {
+  return useQuery({
+    queryKey: queryKeys.document(id),
+    queryFn: () => documentRepo.get(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt'>) =>
+      documentRepo.create(data),
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      // Also invalidate transactions if documents create transactions
+      invalidateTransactionQueries(queryClient);
+    },
+  });
+}
+
+export function useUpdateDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Document> }) =>
+      documentRepo.update(id, data),
+    onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useMarkDocumentPaid() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentRepo.markPaid(id),
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      invalidateTransactionQueries(queryClient);
+    },
+  });
+}
+
+export function useVoidDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentRepo.markVoided(id),
+    onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useIssueDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentRepo.markIssued(id),
+    onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useDeleteDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentRepo.softDelete(id),
+    onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useLinkDocumentTransactions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ documentId, transactionIds }: { documentId: string; transactionIds: string[] }) =>
+      documentRepo.linkTransactions(documentId, transactionIds),
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      invalidateTransactionQueries(queryClient);
+    },
+  });
+}
+
+// ============================================================================
+// Business Profile hooks
+// ============================================================================
+
+/**
+ * Invalidates all business profile-related queries.
+ */
+function invalidateBusinessProfileQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['businessProfiles'] });
+  queryClient.invalidateQueries({ queryKey: ['businessProfile'] });
+  queryClient.invalidateQueries({ queryKey: ['defaultBusinessProfile'] });
+}
+
+export function useBusinessProfiles() {
+  return useQuery({
+    queryKey: queryKeys.businessProfiles(),
+    queryFn: () => businessProfileRepo.list(),
+  });
+}
+
+export function useBusinessProfile(id: string) {
+  return useQuery({
+    queryKey: queryKeys.businessProfile(id),
+    queryFn: () => businessProfileRepo.get(id),
+    enabled: !!id,
+  });
+}
+
+export function useDefaultBusinessProfile() {
+  return useQuery({
+    queryKey: queryKeys.defaultBusinessProfile(),
+    queryFn: () => businessProfileRepo.getDefault(),
+  });
+}
+
+export function useCreateBusinessProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Omit<BusinessProfile, 'id' | 'createdAt' | 'updatedAt'>) =>
+      businessProfileRepo.create(data),
+    onSuccess: () => invalidateBusinessProfileQueries(queryClient),
+  });
+}
+
+export function useUpdateBusinessProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<BusinessProfile> }) =>
+      businessProfileRepo.update(id, data),
+    onSuccess: () => invalidateBusinessProfileQueries(queryClient),
+  });
+}
+
+export function useSetDefaultBusinessProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => businessProfileRepo.setDefault(id),
+    onSuccess: () => invalidateBusinessProfileQueries(queryClient),
+  });
+}
+
+export function useArchiveBusinessProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => businessProfileRepo.archive(id),
+    onSuccess: () => invalidateBusinessProfileQueries(queryClient),
+  });
+}
+
+// ============================================================================
+// Document Sequence hooks
+// ============================================================================
+
+export function useDocumentSequences(businessProfileId: string) {
+  return useQuery({
+    queryKey: queryKeys.documentSequences(businessProfileId),
+    queryFn: () => documentSequenceRepo.listByBusinessProfile(businessProfileId),
+    enabled: !!businessProfileId,
+  });
+}
+
+export function useDocumentSequence(businessProfileId: string, documentType: DocumentType) {
+  return useQuery({
+    queryKey: [...queryKeys.documentSequences(businessProfileId), documentType],
+    queryFn: () => documentSequenceRepo.getOrCreate(businessProfileId, documentType),
+    enabled: !!businessProfileId && !!documentType,
+  });
+}
+
+export function useUpdateDocumentSequence() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      businessProfileId,
+      documentType,
+      updates,
+    }: {
+      businessProfileId: string;
+      documentType: DocumentType;
+      updates: Partial<DocumentSequence>;
+    }) => documentSequenceRepo.update(businessProfileId, documentType, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documentSequences'] });
+    },
+  });
+}
+
+export function useIsDocumentNumberTaken() {
+  return useMutation({
+    mutationFn: ({ number, excludeId }: { number: string; excludeId?: string }) =>
+      documentRepo.isNumberTaken(number, excludeId),
   });
 }
