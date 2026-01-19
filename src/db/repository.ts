@@ -375,6 +375,21 @@ export const projectSummaryRepo = {
     const projectTxs = filterTransactionsByEntityAndDate(transactions, 'project', projectId, filters || {});
     const totals = aggregateTransactionTotalsWithActivity(projectTxs);
 
+    // When no currency filter, also compute per-currency breakdowns
+    let perCurrencyData = {};
+    if (!filters?.currency) {
+      const allProjectTxs = filterTransactionsByEntityAndDate(transactions, 'project', projectId, { dateFrom: filters?.dateFrom, dateTo: filters?.dateTo });
+      const byCurrency = aggregateTransactionTotalsByCurrency(allProjectTxs);
+      perCurrencyData = {
+        paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
+        paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+        unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
+        unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+        expensesMinorUSD: byCurrency.USD.expensesMinor,
+        expensesMinorILS: byCurrency.ILS.expensesMinor,
+      };
+    }
+
     return {
       id: project.id,
       name: project.name,
@@ -383,6 +398,7 @@ export const projectSummaryRepo = {
       field: project.field,
       ...totals,
       netMinor: totals.paidIncomeMinor - totals.expensesMinor,
+      ...perCurrencyData,
     };
   },
 };

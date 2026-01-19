@@ -2,6 +2,8 @@
 // Requires @react-pdf/renderer package
 
 export { DocumentPdf } from './DocumentPdf';
+export { PdfHeader } from './PdfHeader';
+export { PdfFooter } from './PdfFooter';
 export { getTexts, getDocumentTypeLabel, type DocumentTexts } from './texts';
 export {
   getTemplateStyles,

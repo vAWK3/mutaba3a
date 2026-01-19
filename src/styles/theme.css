@@ -354,6 +354,252 @@
 }
 
 /* ============================================
+   Manual Theme Override Selectors
+   Used when user explicitly selects light/dark mode
+   instead of following system preference
+   ============================================ */
+
+/* Manual override - Light Mode */
+:root[data-theme="light"] {
+  /* Background */
+  --bg: #F6F8FA;
+  --bg-subtle: #EEF1F5;
+  --surface: #FFFFFF;
+  --surface-hover: #F8FAFB;
+  --surface-2: #F3F5F8;
+  --surface-3: #EBEEF2;
+
+  /* Text */
+  --text: #0B1220;
+  --text-secondary: #3D4B5C;
+  --muted: #516077;
+  --muted-2: #7A8899;
+  --placeholder: #9CA3AF;
+
+  /* Borders & Dividers */
+  --border: rgba(11, 18, 32, 0.12);
+  --border-strong: rgba(11, 18, 32, 0.18);
+  --border-subtle: rgba(11, 18, 32, 0.06);
+  --divider: rgba(11, 18, 32, 0.08);
+
+  /* Shadows */
+  --shadow-1: 0 1px 2px rgba(11, 18, 32, 0.04), 0 1px 3px rgba(11, 18, 32, 0.06);
+  --shadow-2: 0 2px 4px rgba(11, 18, 32, 0.04), 0 4px 8px rgba(11, 18, 32, 0.08);
+  --shadow-3: 0 4px 8px rgba(11, 18, 32, 0.06), 0 8px 16px rgba(11, 18, 32, 0.1);
+  --shadow-inset: inset 0 1px 2px rgba(11, 18, 32, 0.06);
+
+  /* Primary Accent */
+  --accent: #1D8A84;
+  --accent-hover: #167A75;
+  --accent-active: #126B66;
+  --accent-subtle: rgba(29, 138, 132, 0.1);
+  --accent-muted: rgba(29, 138, 132, 0.15);
+
+  /* Solid Button Accent Tokens */
+  --accent-solid: #1D8A84;
+  --accent-solid-hover: #167A75;
+  --accent-solid-active: #126B66;
+  --on-accent: #FFFFFF;
+
+  /* Button shadow tokens */
+  --btn-primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --btn-primary-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --btn-primary-border: transparent;
+  --btn-primary-border-hover: transparent;
+
+  /* Secondary Accent */
+  --accent-2: #1976D2;
+  --accent-2-hover: #1565C0;
+  --accent-2-subtle: rgba(25, 118, 210, 0.1);
+
+  /* Semantic Colors */
+  --success: #16A34A;
+  --success-hover: #15803D;
+  --success-subtle: rgba(22, 163, 74, 0.1);
+  --success-muted: rgba(22, 163, 74, 0.15);
+
+  --warning: #D97706;
+  --warning-hover: #B45309;
+  --warning-subtle: rgba(217, 119, 6, 0.1);
+  --warning-muted: rgba(217, 119, 6, 0.15);
+
+  --error: #DC2626;
+  --error-hover: #B91C1C;
+  --error-subtle: rgba(220, 38, 38, 0.1);
+  --error-muted: rgba(220, 38, 38, 0.15);
+
+  --info: #2563EB;
+  --info-hover: #1D4ED8;
+  --info-subtle: rgba(37, 99, 235, 0.1);
+  --info-muted: rgba(37, 99, 235, 0.15);
+
+  /* Interactive States */
+  --focus: rgba(29, 138, 132, 0.4);
+  --focus-ring: 0 0 0 3px var(--focus);
+  --selection-bg: rgba(29, 138, 132, 0.15);
+  --selection-text: inherit;
+
+  /* Links */
+  --link: #1976D2;
+  --link-hover: #1565C0;
+  --link-visited: #7B1FA2;
+
+  /* Table Specific */
+  --table-header-bg: #F3F5F8;
+  --table-row-hover: rgba(29, 138, 132, 0.04);
+  --table-row-selected: rgba(29, 138, 132, 0.08);
+  --table-border: rgba(11, 18, 32, 0.08);
+
+  /* Badges */
+  --badge-paid-bg: rgba(22, 163, 74, 0.12);
+  --badge-paid-text: #15803D;
+  --badge-unpaid-bg: rgba(217, 119, 6, 0.12);
+  --badge-unpaid-text: #B45309;
+  --badge-overdue-bg: rgba(220, 38, 38, 0.12);
+  --badge-overdue-text: #B91C1C;
+  --badge-neutral-bg: rgba(81, 96, 119, 0.12);
+  --badge-neutral-text: #3D4B5C;
+
+  /* Sidebar */
+  --sidebar-bg: #FFFFFF;
+  --sidebar-border: var(--border);
+  --nav-item-hover: rgba(29, 138, 132, 0.06);
+  --nav-item-active: rgba(29, 138, 132, 0.1);
+  --nav-item-active-text: var(--accent);
+
+  /* Inputs */
+  --input-bg: #FFFFFF;
+  --input-border: var(--border);
+  --input-border-hover: var(--border-strong);
+  --input-border-focus: var(--accent);
+  --input-placeholder: var(--placeholder);
+
+  /* Overlay */
+  --overlay: rgba(11, 18, 32, 0.4);
+  --drawer-shadow: -4px 0 24px rgba(11, 18, 32, 0.12);
+}
+
+/* Manual override - Dark Mode */
+:root[data-theme="dark"] {
+  /* Background */
+  --bg: #070C16;
+  --bg-subtle: #0D1422;
+  --surface: #111827;
+  --surface-hover: #151D2E;
+  --surface-2: #1A2235;
+  --surface-3: #212B42;
+
+  /* Text */
+  --text: #E7EEF9;
+  --text-secondary: #C5D0E0;
+  --muted: #A6B4CC;
+  --muted-2: #8494B0;
+  --placeholder: #6B7A94;
+
+  /* Borders & Dividers */
+  --border: rgba(231, 238, 249, 0.1);
+  --border-strong: rgba(231, 238, 249, 0.15);
+  --border-subtle: rgba(231, 238, 249, 0.06);
+  --divider: rgba(231, 238, 249, 0.06);
+
+  /* Shadows */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.3);
+  --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.2), 0 8px 16px rgba(0, 0, 0, 0.35);
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  /* Primary Accent */
+  --accent: #2CB6A6;
+  --accent-hover: #36C9B8;
+  --accent-active: #40DBCA;
+  --accent-subtle: rgba(44, 182, 166, 0.12);
+  --accent-muted: rgba(44, 182, 166, 0.18);
+
+  /* Solid Button Accent Tokens */
+  --accent-solid: #117A72;
+  --accent-solid-hover: #117A72;
+  --accent-solid-active: #0D6660;
+  --on-accent: #FFFFFF;
+
+  /* Button shadow tokens */
+  --btn-primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --btn-primary-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
+  --btn-primary-border: rgba(255, 255, 255, 0.1);
+  --btn-primary-border-hover: rgba(255, 255, 255, 0.15);
+
+  /* Secondary Accent */
+  --accent-2: #60A5FA;
+  --accent-2-hover: #7BB5FB;
+  --accent-2-subtle: rgba(96, 165, 250, 0.12);
+
+  /* Semantic Colors */
+  --success: #22C55E;
+  --success-hover: #34D16D;
+  --success-subtle: rgba(34, 197, 94, 0.12);
+  --success-muted: rgba(34, 197, 94, 0.18);
+
+  --warning: #F59E0B;
+  --warning-hover: #FBBF24;
+  --warning-subtle: rgba(245, 158, 11, 0.12);
+  --warning-muted: rgba(245, 158, 11, 0.18);
+
+  --error: #F87171;
+  --error-hover: #FCA5A5;
+  --error-subtle: rgba(248, 113, 113, 0.12);
+  --error-muted: rgba(248, 113, 113, 0.18);
+
+  --info: #60A5FA;
+  --info-hover: #7BB5FB;
+  --info-subtle: rgba(96, 165, 250, 0.12);
+  --info-muted: rgba(96, 165, 250, 0.18);
+
+  /* Interactive States */
+  --focus: rgba(44, 182, 166, 0.45);
+  --focus-ring: 0 0 0 3px var(--focus);
+  --selection-bg: rgba(44, 182, 166, 0.25);
+  --selection-text: inherit;
+
+  /* Links */
+  --link: #60A5FA;
+  --link-hover: #7BB5FB;
+  --link-visited: #C084FC;
+
+  /* Table Specific */
+  --table-header-bg: #151D2E;
+  --table-row-hover: rgba(44, 182, 166, 0.06);
+  --table-row-selected: rgba(44, 182, 166, 0.1);
+  --table-border: rgba(231, 238, 249, 0.06);
+
+  /* Badges */
+  --badge-paid-bg: rgba(34, 197, 94, 0.15);
+  --badge-paid-text: #4ADE80;
+  --badge-unpaid-bg: rgba(245, 158, 11, 0.15);
+  --badge-unpaid-text: #FBBF24;
+  --badge-overdue-bg: rgba(248, 113, 113, 0.15);
+  --badge-overdue-text: #FCA5A5;
+  --badge-neutral-bg: rgba(166, 180, 204, 0.15);
+  --badge-neutral-text: #C5D0E0;
+
+  /* Sidebar */
+  --sidebar-bg: #0D1422;
+  --sidebar-border: var(--border);
+  --nav-item-hover: rgba(44, 182, 166, 0.08);
+  --nav-item-active: rgba(44, 182, 166, 0.12);
+  --nav-item-active-text: var(--accent);
+
+  /* Inputs */
+  --input-bg: #151D2E;
+  --input-border: var(--border);
+  --input-border-hover: var(--border-strong);
+  --input-border-focus: var(--accent);
+  --input-placeholder: var(--placeholder);
+
+  /* Overlay */
+  --overlay: rgba(0, 0, 0, 0.6);
+  --drawer-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================
    Base Styles & Reset
    ============================================ */
 *, *::before, *::after {

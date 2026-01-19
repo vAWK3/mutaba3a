@@ -9,6 +9,12 @@ import type {
   BusinessProfile,
   Document,
   DocumentSequence,
+  Expense,
+  RecurringRule,
+  Receipt,
+  ExpenseCategory,
+  Vendor,
+  MonthCloseStatus,
 } from '../types';
 import type {
   LocalDevice,
@@ -34,6 +40,14 @@ export class MiniCrmDatabase extends Dexie {
   businessProfiles!: Table<BusinessProfile, string>;
   documents!: Table<Document, string>;
   documentSequences!: Table<DocumentSequence, string>;
+
+  // Expense tables (profile-scoped)
+  expenses!: Table<Expense, string>;
+  recurringRules!: Table<RecurringRule, string>;
+  receipts!: Table<Receipt, string>;
+  expenseCategories!: Table<ExpenseCategory, string>;
+  vendors!: Table<Vendor, string>;
+  monthCloseStatuses!: Table<MonthCloseStatus, string>;
 
   // Sync tables
   localDevice!: Table<LocalDevice, string>;
@@ -126,6 +140,74 @@ export class MiniCrmDatabase extends Dexie {
 
       // Document sequences for auto-numbering
       documentSequences: 'id, [businessProfileId+documentType]',
+    });
+
+    // Version 4: Add expense tables (profile-scoped)
+    this.version(4).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // New expense tables (profile-scoped)
+      expenses: 'id, profileId, categoryId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+    });
+
+    // Version 5: Add vendors and monthly close tables
+    this.version(5).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables with vendorId index
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+
+      // New tables for vendor normalization and monthly close
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
     });
   }
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { PDFViewer } from '@react-pdf/renderer';
 import { TopBar } from '../../components/layout';
 import {
@@ -18,6 +18,8 @@ import {
 import { cn, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import { DocumentPdf } from '../../features/documents/pdf';
+import { LineItemsTable, SplitWorkspace, type LineItem } from '../../features/documents/components';
+import { useIssueAndDownload } from '../../features/documents/hooks';
 import type {
   DocumentType,
   DocumentStatus,
@@ -121,16 +123,21 @@ function formatMinorAmount(minor: number, currency: Currency): string {
 
 export function DocumentFormPage() {
   const params = useParams({ strict: false }) as { documentId?: string };
+  const searchParams = useSearch({ strict: false }) as { duplicateFrom?: string };
   const documentId = params.documentId;
+  const duplicateFromId = searchParams?.duplicateFrom;
   const isEditMode = !!documentId;
+  const isDuplicateMode = !isEditMode && !!duplicateFromId;
   const navigate = useNavigate();
   const t = useT();
 
   const [showPreview, setShowPreview] = useState(false);
   const [isOriginal, setIsOriginal] = useState(true);
+  const [proEditorMode, setProEditorMode] = useState(false);
 
   // Query hooks
   const { data: existingDoc, isLoading: docLoading } = useDocument(documentId || '');
+  const { data: sourceDoc, isLoading: sourceLoading } = useDocument(duplicateFromId || '');
   const { data: clients = [] } = useClients();
   const { data: businessProfiles = [] } = useBusinessProfiles();
   const { data: defaultProfile } = useDefaultBusinessProfile();
@@ -140,6 +147,7 @@ export function DocumentFormPage() {
   const createMutation = useCreateDocument();
   const updateMutation = useUpdateDocument();
   const deleteMutation = useDeleteDocument();
+  const { issueAndDownload, isProcessing: isIssueProcessing } = useIssueAndDownload();
 
   // Get initial business profile ID
   const getInitialBusinessProfileId = () => {
@@ -185,16 +193,7 @@ export function DocumentFormPage() {
   const watchedLanguage = watch('language');
   const watchedTemplateId = watch('templateId');
 
-  // Field arrays
-  const {
-    fields: itemFields,
-    append: appendItem,
-    remove: removeItem,
-  } = useFieldArray({
-    control,
-    name: 'items',
-  });
-
+  // Field arrays for payments
   const {
     fields: paymentFields,
     append: appendPayment,
@@ -267,6 +266,37 @@ export function DocumentFormPage() {
       });
     }
   }, [existingDoc, reset]);
+
+  // Pre-fill form when duplicating a document (Create Similar)
+  useEffect(() => {
+    if (isDuplicateMode && sourceDoc) {
+      reset({
+        type: sourceDoc.type,
+        number: '', // Will be auto-generated on save
+        businessProfileId: sourceDoc.businessProfileId,
+        clientId: sourceDoc.clientId || '',
+        subject: sourceDoc.subject || '',
+        brief: sourceDoc.brief || '',
+        notes: sourceDoc.notes || '',
+        currency: sourceDoc.currency,
+        language: sourceDoc.language,
+        templateId: sourceDoc.templateId,
+        issueDate: todayISO(), // Reset to today for new document
+        dueDate: '', // Clear due date for fresh start
+        taxRate: sourceDoc.taxRate,
+        vatEnabled: sourceDoc.vatEnabled ?? true,
+        items: sourceDoc.items.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          rateMinor: item.rateMinor,
+          discountMinor: item.discountMinor,
+          taxExempt: item.taxExempt,
+        })),
+        payments: [], // Don't copy payments - new document starts fresh
+        refDocumentId: '', // Don't copy reference
+      });
+    }
+  }, [isDuplicateMode, sourceDoc, reset]);
 
   // Update defaults when business profile changes
   useEffect(() => {
@@ -358,10 +388,6 @@ export function DocumentFormPage() {
     }
   };
 
-  const addItem = () => {
-    appendItem({ name: '', quantity: 1, rateMinor: 0, discountMinor: 0, taxExempt: false });
-  };
-
   const addPayment = () => {
     appendPayment({
       id: nanoid(),
@@ -371,6 +397,75 @@ export function DocumentFormPage() {
       notes: '',
       paidAt: todayISO(),
     });
+  };
+
+  // Issue and download handler for Pro Editor mode
+  const handleIssueFromProEditor = async () => {
+    if (!selectedBusinessProfile) return;
+
+    // First save/create the document
+    const formData = form.getValues();
+    const isValid = await form.trigger();
+    if (!isValid) return;
+
+    try {
+      let docId = documentId;
+
+      // Build document data
+      const itemsWithVat: DocumentItem[] = formData.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        rateMinor: item.rateMinor,
+        rateVatMinor: item.taxExempt ? item.rateMinor : Math.round(item.rateMinor * (1 + formData.taxRate)),
+        discountMinor: item.discountMinor,
+        taxExempt: item.taxExempt,
+      }));
+
+      const docData = {
+        type: formData.type,
+        status: 'draft' as DocumentStatus,
+        businessProfileId: formData.businessProfileId,
+        clientId: formData.clientId || undefined,
+        subject: formData.subject || undefined,
+        brief: formData.brief || undefined,
+        notes: formData.notes || undefined,
+        items: itemsWithVat,
+        payments: [],
+        subtotalMinor: totals.subtotal,
+        discountMinor: 0,
+        taxMinor: totals.tax,
+        totalMinor: totals.total,
+        taxRate: formData.taxRate,
+        vatEnabled: formData.vatEnabled,
+        currency: formData.currency as Currency,
+        language: formData.language as DocumentLanguage,
+        issueDate: new Date(formData.issueDate).toISOString(),
+        dueDate: formData.dueDate ? formData.dueDate : undefined,
+        linkedTransactionIds: existingDoc?.linkedTransactionIds || [],
+        templateId: formData.templateId,
+      };
+
+      if (isEditMode && documentId) {
+        await updateMutation.mutateAsync({ id: documentId, data: docData });
+      } else {
+        const result = await createMutation.mutateAsync(docData);
+        docId = result.id;
+      }
+
+      // Now issue and download
+      if (docId) {
+        await issueAndDownload({
+          document: { ...previewDocument, id: docId } as any,
+          businessProfile: selectedBusinessProfile,
+          client: selectedClient,
+          templateId: watchedTemplateId as TemplateId,
+          isOriginal: true,
+        });
+        navigate({ to: '/documents/$documentId', params: { documentId: docId } });
+      }
+    } catch (error) {
+      console.error('Failed to issue document:', error);
+    }
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -435,7 +530,7 @@ export function DocumentFormPage() {
     watchedTemplateId,
   ]);
 
-  if (isEditMode && docLoading) {
+  if ((isEditMode && docLoading) || (isDuplicateMode && sourceLoading)) {
     return (
       <>
         <TopBar title={t('common.loading')} />
@@ -477,7 +572,13 @@ export function DocumentFormPage() {
   return (
     <>
       <TopBar
-        title={isEditMode ? `Edit ${existingDoc?.number || 'Document'}` : 'New Document'}
+        title={
+          isEditMode
+            ? `Edit ${existingDoc?.number || 'Document'}`
+            : isDuplicateMode && sourceDoc
+              ? `New Document (from ${sourceDoc.number})`
+              : 'New Document'
+        }
         breadcrumbs={[
           { label: 'Documents', href: '/documents' },
           { label: isEditMode ? 'Edit' : 'New' },
@@ -491,12 +592,24 @@ export function DocumentFormPage() {
               <Link to="/documents" className="btn btn-ghost">
                 ← Back
               </Link>
+              {!proEditorMode && (
+                <button
+                  type="button"
+                  className={cn('btn', showPreview ? 'btn-secondary' : 'btn-ghost')}
+                  onClick={() => setShowPreview(!showPreview)}
+                >
+                  {showPreview ? 'Hide Preview' : 'Show Preview'}
+                </button>
+              )}
               <button
                 type="button"
-                className={cn('btn', showPreview ? 'btn-secondary' : 'btn-ghost')}
-                onClick={() => setShowPreview(!showPreview)}
+                className={cn('btn', proEditorMode ? 'btn-secondary' : 'btn-ghost')}
+                onClick={() => {
+                  setProEditorMode(!proEditorMode);
+                  if (!proEditorMode) setShowPreview(false); // Hide simple preview when entering Pro mode
+                }}
               >
-                {showPreview ? 'Hide Preview' : 'Show Preview'}
+                {proEditorMode ? 'Exit Pro Editor' : 'Pro Editor'}
               </button>
             </div>
             <div className="document-form-header-right">
@@ -527,7 +640,390 @@ export function DocumentFormPage() {
             </div>
           )}
 
-          <div className={cn('document-form-layout', showPreview && 'with-preview')}>
+          {/* Pro Editor Mode - Split Workspace */}
+          {proEditorMode && selectedBusinessProfile ? (
+            <SplitWorkspace
+              document={previewDocument as any}
+              businessProfile={selectedBusinessProfile}
+              client={selectedClient}
+              templateId={watchedTemplateId as TemplateId}
+              isOriginal={isOriginal}
+              onSave={() => form.handleSubmit(onSubmit)()}
+              onIssue={handleIssueFromProEditor}
+              isSaving={isSubmitting}
+              isIssuing={isIssueProcessing}
+              canIssue={!isReadOnly && watchedItems.length > 0 && watchedItems[0].name !== ''}
+              isDraft={!isEditMode || existingDoc?.status === 'draft'}
+            >
+              <form id="document-form" onSubmit={form.handleSubmit(onSubmit)}>
+                {/* Document Type Selector */}
+                <div className="form-card">
+                  <h3 className="form-card-title">Document Type</h3>
+                  <div className="document-type-grid">
+                    {DOCUMENT_TYPES.map((type) => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        className={cn('document-type-btn', selectedType === type.value && 'active')}
+                        onClick={() => !isReadOnly && setValue('type', type.value)}
+                        disabled={isReadOnly}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Document Number (only in edit mode) */}
+                {isEditMode && existingDoc && (
+                  <div className="form-card">
+                    <h3 className="form-card-title">Document Number</h3>
+                    <input
+                      type="text"
+                      className="input"
+                      {...form.register('number')}
+                      disabled={isReadOnly}
+                      placeholder="e.g., INV-0001"
+                    />
+                    <p className="form-hint">
+                      {isReadOnly
+                        ? 'Document numbers can only be changed for draft documents.'
+                        : 'You can manually change the document number. Must be unique.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Business & Client */}
+                <div className="form-card">
+                  <h3 className="form-card-title">Business & Client</h3>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Business Profile *</label>
+                      <Controller
+                        name="businessProfileId"
+                        control={control}
+                        render={({ field }) => (
+                          <select className="select" {...field} disabled={isReadOnly}>
+                            <option value="">Select profile...</option>
+                            {businessProfiles.map((profile) => (
+                              <option key={profile.id} value={profile.id}>
+                                {profile.name} {profile.nameEn ? `(${profile.nameEn})` : ''}
+                                {profile.isDefault ? ' - Default' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      />
+                      {form.formState.errors.businessProfileId && (
+                        <p className="form-error">{form.formState.errors.businessProfileId.message}</p>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Client</label>
+                      <Controller
+                        name="clientId"
+                        control={control}
+                        render={({ field }) => (
+                          <select className="select" {...field} disabled={isReadOnly}>
+                            <option value="">No client</option>
+                            {clients.map((client) => (
+                              <option key={client.id} value={client.id}>
+                                {client.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reference Document (for credit notes) */}
+                  {showRefDocument && (
+                    <div className="form-group">
+                      <label className="form-label">Reference Document *</label>
+                      <Controller
+                        name="refDocumentId"
+                        control={control}
+                        render={({ field }) => (
+                          <select className="select" {...field} disabled={isReadOnly}>
+                            <option value="">Select original document...</option>
+                            {referenceableDocuments.map((doc) => (
+                              <option key={doc.id} value={doc.id}>
+                                {doc.number} - {formatMinorAmount(doc.totalMinor, doc.currency)}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Subject & Description */}
+                <div className="form-card">
+                  <h3 className="form-card-title">Subject & Description</h3>
+                  <div className="form-group">
+                    <label className="form-label">Subject</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="Document subject..."
+                      {...form.register('subject')}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Brief Description</label>
+                    <textarea
+                      className="textarea"
+                      placeholder="Brief description..."
+                      rows={2}
+                      {...form.register('brief')}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                </div>
+
+                {/* Settings */}
+                <div className="form-card">
+                  <h3 className="form-card-title">Settings</h3>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Currency *</label>
+                      <Controller
+                        name="currency"
+                        control={control}
+                        render={({ field }) => (
+                          <select className="select" {...field} disabled={isReadOnly}>
+                            <option value="USD">USD ($)</option>
+                            <option value="ILS">ILS (₪)</option>
+                          </select>
+                        )}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Language *</label>
+                      <Controller
+                        name="language"
+                        control={control}
+                        render={({ field }) => (
+                          <select className="select" {...field} disabled={isReadOnly}>
+                            <option value="en">English</option>
+                            <option value="ar">Arabic</option>
+                          </select>
+                        )}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Template</label>
+                      <Controller
+                        name="templateId"
+                        control={control}
+                        render={({ field }) => (
+                          <select className="select" {...field} disabled={isReadOnly}>
+                            {TEMPLATES.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dates & VAT Row */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Issue Date *</label>
+                      <input
+                        type="date"
+                        className={cn('input', form.formState.errors.issueDate && 'input-error')}
+                        {...form.register('issueDate')}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    {showDueDate && (
+                      <div className="form-group">
+                        <label className="form-label">Due Date</label>
+                        <input type="date" className="input" {...form.register('dueDate')} disabled={isReadOnly} />
+                      </div>
+                    )}
+                    <div className="form-group">
+                      <label className="form-label">VAT</label>
+                      <div className="vat-toggle-row">
+                        <Controller
+                          name="vatEnabled"
+                          control={control}
+                          render={({ field }) => (
+                            <label className="toggle-label">
+                              <input
+                                type="checkbox"
+                                checked={field.value}
+                                onChange={(e) => {
+                                  field.onChange(e.target.checked);
+                                  if (e.target.checked && taxRate === 0) {
+                                    setValue('taxRate', 0.18);
+                                  }
+                                }}
+                                disabled={isReadOnly}
+                              />
+                              <span>Enable VAT</span>
+                            </label>
+                          )}
+                        />
+                        {vatEnabled && (
+                          <Controller
+                            name="taxRate"
+                            control={control}
+                            render={({ field }) => (
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                className="input input-sm"
+                                style={{ width: 80 }}
+                                value={field.value * 100}
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) / 100 || 0)}
+                                disabled={isReadOnly}
+                              />
+                            )}
+                          />
+                        )}
+                        {vatEnabled && <span className="text-muted">%</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line Items Section */}
+                <div className="form-card">
+                  <h3 className="form-card-title">Line Items</h3>
+                  <LineItemsTable
+                    items={watchedItems}
+                    currency={selectedCurrency}
+                    onChange={(items) => setValue('items', items as LineItem[])}
+                    disabled={isReadOnly}
+                  />
+                  {form.formState.errors.items && (
+                    <p className="form-error">At least one item is required</p>
+                  )}
+                </div>
+
+                {/* Totals Section */}
+                <div className="form-card totals-card">
+                  <div className="totals-section">
+                    <div className="totals-row">
+                      <span>Subtotal</span>
+                      <span>{formatMinorAmount(totals.subtotal, selectedCurrency)}</span>
+                    </div>
+                    {vatEnabled && (
+                      <div className="totals-row">
+                        <span>VAT ({(taxRate * 100).toFixed(0)}%)</span>
+                        <span>{formatMinorAmount(totals.tax, selectedCurrency)}</span>
+                      </div>
+                    )}
+                    <div className="totals-row totals-total">
+                      <span>Total</span>
+                      <span>{formatMinorAmount(totals.total, selectedCurrency)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payments Section (for receipts) */}
+                {showPayments && (
+                  <div className="form-card">
+                    <div className="form-card-header">
+                      <h3 className="form-card-title">Payment Details</h3>
+                      {!isReadOnly && (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={addPayment}>
+                          + Add Payment
+                        </button>
+                      )}
+                    </div>
+
+                    {paymentFields.map((field, index) => (
+                      <div key={field.id} className="payment-row">
+                        <div className="payment-method">
+                          <Controller
+                            name={`payments.${index}.method`}
+                            control={control}
+                            render={({ field: f }) => (
+                              <select className="select" {...f} disabled={isReadOnly}>
+                                {PAYMENT_METHODS.map((m) => (
+                                  <option key={m.value} value={m.value}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          />
+                        </div>
+                        <div className="payment-amount">
+                          <Controller
+                            name={`payments.${index}.amountMinor`}
+                            control={control}
+                            render={({ field: f }) => (
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="input"
+                                placeholder="Amount"
+                                value={(f.value ?? 0) / 100}
+                                onChange={(e) => f.onChange(Math.round(parseFloat(e.target.value) * 100) || 0)}
+                                disabled={isReadOnly}
+                              />
+                            )}
+                          />
+                        </div>
+                        <div className="payment-date">
+                          <input
+                            type="date"
+                            className="input"
+                            {...form.register(`payments.${index}.paidAt`)}
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => removePayment(index)}
+                            title="Remove payment"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+
+                    {paymentFields.length > 0 && (
+                      <div className="totals-row" style={{ marginTop: 8 }}>
+                        <span>Total Paid</span>
+                        <span>{formatMinorAmount(totalPaidMinor, selectedCurrency)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Notes */}
+                <div className="form-card">
+                  <h3 className="form-card-title">Notes</h3>
+                  <textarea
+                    className="textarea"
+                    placeholder="Additional notes (will appear on document)..."
+                    rows={3}
+                    {...form.register('notes')}
+                    disabled={isReadOnly}
+                  />
+                </div>
+              </form>
+            </SplitWorkspace>
+          ) : (
+            /* Regular Form Layout */
+            <div className={cn('document-form-layout', showPreview && 'with-preview')}>
             {/* Form section */}
             <div className="document-form-main">
               <form id="document-form" onSubmit={form.handleSubmit(onSubmit)}>
@@ -774,77 +1270,13 @@ export function DocumentFormPage() {
 
                 {/* Line Items Section */}
                 <div className="form-card">
-                  <div className="form-card-header">
-                    <h3 className="form-card-title">Line Items</h3>
-                    {!isReadOnly && (
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
-                        + Add Item
-                      </button>
-                    )}
-                  </div>
-
-                  {itemFields.map((field, index) => (
-                    <div key={field.id} className="line-item-row">
-                      <div className="line-item-main">
-                        <input
-                          type="text"
-                          className="input"
-                          placeholder="Item name"
-                          {...form.register(`items.${index}.name`)}
-                          disabled={isReadOnly}
-                        />
-                      </div>
-                      <div className="line-item-qty">
-                        <Controller
-                          name={`items.${index}.quantity`}
-                          control={control}
-                          render={({ field: f }) => (
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              className="input"
-                              placeholder="Qty"
-                              value={f.value}
-                              onChange={(e) => f.onChange(parseFloat(e.target.value) || 0)}
-                              disabled={isReadOnly}
-                            />
-                          )}
-                        />
-                      </div>
-                      <div className="line-item-rate">
-                        <Controller
-                          name={`items.${index}.rateMinor`}
-                          control={control}
-                          render={({ field: f }) => (
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              className="input"
-                              placeholder="Rate"
-                              value={f.value / 100}
-                              onChange={(e) => f.onChange(Math.round(parseFloat(e.target.value) * 100) || 0)}
-                              disabled={isReadOnly}
-                            />
-                          )}
-                        />
-                      </div>
-                      <div className="line-item-total">
-                        {formatMinorAmount(calculateItemTotal(watchedItems[index] || { quantity: 0, rateMinor: 0, discountMinor: 0 }), selectedCurrency)}
-                      </div>
-                      {!isReadOnly && itemFields.length > 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-icon"
-                          onClick={() => removeItem(index)}
-                          title="Remove item"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  <h3 className="form-card-title">Line Items</h3>
+                  <LineItemsTable
+                    items={watchedItems}
+                    currency={selectedCurrency}
+                    onChange={(items) => setValue('items', items as LineItem[])}
+                    disabled={isReadOnly}
+                  />
                   {form.formState.errors.items && (
                     <p className="form-error">At least one item is required</p>
                   )}
@@ -989,6 +1421,7 @@ export function DocumentFormPage() {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </>

@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
 import { businessProfileRepo, documentRepo, clientRepo } from '../../db/repository';
+import { getOrCreateLocalDevice } from '../../sync/core/ops-engine';
+import { initializeClock } from '../../sync/core/hlc';
 import {
   useDocuments,
   useDocument,
@@ -50,6 +52,12 @@ function createWrapper() {
 }
 
 describe('Business Profile Hooks', () => {
+  beforeAll(async () => {
+    // Initialize local device and clock for sync operations
+    const device = await getOrCreateLocalDevice();
+    initializeClock(device.id);
+  });
+
   beforeEach(async () => {
     await db.businessProfiles.clear();
   });

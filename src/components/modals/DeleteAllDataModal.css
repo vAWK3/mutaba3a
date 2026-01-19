@@ -13,9 +13,9 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--color-surface);
+  background: var(--color-surface, var(--surface, #111827));
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-3, 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15));
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
@@ -206,5 +206,254 @@
 }
 
 [dir='rtl'] .status-success {
+  flex-direction: row-reverse;
+}
+
+/* Profile Select List */
+.profile-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.profile-select-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: start;
+  transition: var(--transition-fast);
+}
+
+.profile-select-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.profile-select-item--selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.profile-select-item__radio {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-select-item--selected .profile-select-item__radio {
+  border-color: var(--color-accent);
+}
+
+.profile-select-item__radio-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.profile-select-item__radio-dot--selected {
+  background: var(--color-accent);
+}
+
+.profile-select-item__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-select-item__logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.profile-select-item__details {
+  min-width: 0;
+}
+
+.profile-select-item__name {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-select-item__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Export Success */
+.export-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.export-success h3 {
+  margin: var(--space-3) 0 var(--space-2) 0;
+  color: var(--color-text);
+}
+
+.export-success p {
+  margin: 0 0 var(--space-4) 0;
+  color: var(--color-muted);
+}
+
+/* Modal footer with multiple buttons */
+.modal-footer {
+  gap: var(--space-2);
+}
+
+/* Import Modal Styles */
+.import-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.import-dropzone:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.import-dropzone p {
+  margin: 0;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.import-file-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.import-file-name {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.import-file-meta {
+  margin-top: var(--space-1);
+}
+
+.import-mode-select {
+  margin-top: var(--space-4);
+}
+
+.import-mode-select h4 {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.import-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.import-mode-option:hover {
+  background: var(--color-surface-hover);
+}
+
+.import-mode-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--color-accent);
+}
+
+.import-mode-label {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.import-mode-desc {
+  margin-top: var(--space-1);
+}
+
+.import-profile-select {
+  margin-top: var(--space-3);
+  padding-inline-start: var(--space-6);
+}
+
+.import-profile-select .select {
+  width: 100%;
+}
+
+.import-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+}
+
+.import-progress p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.import-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.import-error h3 {
+  margin: var(--space-3) 0 var(--space-2) 0;
+  color: var(--color-text);
+}
+
+.import-error p {
+  margin: 0 0 var(--space-4) 0;
+}
+
+/* RTL support for import modal */
+[dir='rtl'] .import-file-info {
+  flex-direction: row-reverse;
+}
+
+[dir='rtl'] .import-mode-option {
   flex-direction: row-reverse;
 }

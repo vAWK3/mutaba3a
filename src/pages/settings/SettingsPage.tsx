@@ -1,20 +1,16 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import {
   useSettings,
   useUpdateSettings,
   useBusinessProfiles,
-  useDefaultBusinessProfile,
   useSetDefaultBusinessProfile,
   useArchiveBusinessProfile,
-  useDocumentSequences,
-  useUpdateDocumentSequence,
 } from '../../hooks/useQueries';
-import { db } from '../../db';
-import { clearDatabase } from '../../db/seed';
 import { useT, useLanguage } from '../../lib/i18n';
-import { DeleteAllDataModal } from '../../components/modals';
+import { useTheme, type ThemeMode } from '../../lib/theme';
+import { DeleteAllDataModal, ExportDataModal, ImportDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
 import { FALLBACK_DOWNLOAD_CONFIG } from '../../content/download-config';
@@ -23,40 +19,117 @@ import { useDrawerStore } from '../../lib/stores';
 // App version injected by Vite at build time
 declare const __APP_VERSION__: string | undefined;
 const APP_VERSION = __APP_VERSION__ || '0.0.0';
-import type { Currency, DocumentType, DocumentSequence } from '../../types';
+import type { Currency, BusinessProfile } from '../../types';
 import type { Language } from '../../lib/i18n/types';
 
-// Document type display labels
-const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  invoice: 'Invoice',
-  receipt: 'Receipt',
-  invoice_receipt: 'Invoice Receipt',
-  credit_note: 'Credit Note',
-  price_offer: 'Price Offer',
-  proforma_invoice: 'Proforma Invoice',
-  donation_receipt: 'Donation Receipt',
-};
+// Profile Actions Menu Component
+interface ProfileActionsMenuProps {
+  profile: BusinessProfile;
+  onEdit: () => void;
+  onSetDefault: () => void;
+  onArchive: () => void;
+  isSetDefaultPending: boolean;
+  isArchivePending: boolean;
+}
 
-// Default prefixes for document types
-const DEFAULT_PREFIXES: Record<DocumentType, string> = {
-  invoice: 'INV',
-  receipt: 'REC',
-  invoice_receipt: 'IR',
-  credit_note: 'CN',
-  price_offer: 'PO',
-  proforma_invoice: 'PI',
-  donation_receipt: 'DR',
-};
+function ProfileActionsMenu({
+  profile,
+  onEdit,
+  onSetDefault,
+  onArchive,
+  isSetDefaultPending,
+  isArchivePending,
+}: ProfileActionsMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-const ALL_DOCUMENT_TYPES: DocumentType[] = [
-  'invoice',
-  'receipt',
-  'invoice_receipt',
-  'credit_note',
-  'price_offer',
-  'proforma_invoice',
-  'donation_receipt',
-];
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="add-menu-container" ref={containerRef}>
+      <button className="btn btn-ghost btn-sm" onClick={() => setIsOpen(!isOpen)}>
+        <MoreIcon />
+      </button>
+      {isOpen && (
+        <div className="add-menu">
+          <button
+            className="add-menu-item"
+            onClick={() => {
+              onEdit();
+              setIsOpen(false);
+            }}
+          >
+            Edit
+          </button>
+          {!profile.isDefault && (
+            <button
+              className="add-menu-item"
+              onClick={() => {
+                onSetDefault();
+                setIsOpen(false);
+              }}
+              disabled={isSetDefaultPending}
+            >
+              Set as Default
+            </button>
+          )}
+          {!profile.isDefault && (
+            <button
+              className="add-menu-item text-danger"
+              onClick={() => {
+                if (confirm('Are you sure you want to archive this business profile?')) {
+                  onArchive();
+                  setIsOpen(false);
+                }
+              }}
+              disabled={isArchivePending}
+            >
+              Archive
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
+    </svg>
+  );
+}
 
 export function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
@@ -64,53 +137,18 @@ export function SettingsPage() {
   const t = useT();
   const navigate = useNavigate();
   const { language, setLanguage } = useLanguage();
-  const [exportStatus, setExportStatus] = useState<string>('');
-  const [importStatus, setImportStatus] = useState<string>('');
+  const { theme, setTheme } = useTheme();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
   const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
 
   // Business profiles
   const { data: businessProfiles = [] } = useBusinessProfiles();
-  const { data: defaultProfile } = useDefaultBusinessProfile();
   const setDefaultMutation = useSetDefaultBusinessProfile();
   const archiveMutation = useArchiveBusinessProfile();
   const { openBusinessProfileDrawer } = useDrawerStore();
-
-  // Document sequences (for the default business profile)
-  const { data: sequences = [] } = useDocumentSequences(defaultProfile?.id || '');
-  const updateSequenceMutation = useUpdateDocumentSequence();
-
-  // Build a map of sequences by document type for easy access
-  const sequenceMap = sequences.reduce((acc, seq) => {
-    acc[seq.documentType] = seq;
-    return acc;
-  }, {} as Record<DocumentType, DocumentSequence>);
-
-  // Handler for updating sequence settings
-  const handleSequenceUpdate = (
-    documentType: DocumentType,
-    field: 'prefix' | 'prefixEnabled' | 'lastNumber',
-    value: string | boolean | number
-  ) => {
-    if (!defaultProfile) return;
-
-    const updates: Partial<DocumentSequence> = {};
-    if (field === 'prefix') {
-      updates.prefix = value as string;
-    } else if (field === 'prefixEnabled') {
-      updates.prefixEnabled = value as boolean;
-    } else if (field === 'lastNumber') {
-      // When user sets "next number", we store lastNumber = nextNumber - 1
-      updates.lastNumber = Math.max(0, (value as number) - 1);
-    }
-
-    updateSequenceMutation.mutate({
-      businessProfileId: defaultProfile.id,
-      documentType,
-      updates,
-    });
-  };
 
   const handleCurrencyToggle = (currency: Currency) => {
     if (!settings) return;
@@ -132,78 +170,6 @@ export function SettingsPage() {
     updateMutation.mutate({ defaultCurrency: currency });
   };
 
-  const handleExportData = async () => {
-    try {
-      setExportStatus(t('settings.data.exporting'));
-
-      const data = {
-        clients: await db.clients.toArray(),
-        projects: await db.projects.toArray(),
-        categories: await db.categories.toArray(),
-        transactions: await db.transactions.toArray(),
-        fxRates: await db.fxRates.toArray(),
-        settings: await db.settings.toArray(),
-        exportedAt: new Date().toISOString(),
-      };
-
-      const json = JSON.stringify(data, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mutaba3a-backup-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setExportStatus(t('settings.data.exported'));
-      setTimeout(() => setExportStatus(''), 3000);
-    } catch (error) {
-      setExportStatus(t('settings.data.exportFailed'));
-      console.error('Export error:', error);
-    }
-  };
-
-  const handleImportData = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      try {
-        setImportStatus(t('settings.data.importing'));
-
-        const text = await file.text();
-        const data = JSON.parse(text);
-
-        // Validate structure
-        if (!data.clients || !data.projects || !data.transactions) {
-          throw new Error(t('settings.data.invalidFile'));
-        }
-
-        // Clear and import
-        await clearDatabase();
-
-        if (data.clients.length) await db.clients.bulkAdd(data.clients);
-        if (data.projects.length) await db.projects.bulkAdd(data.projects);
-        if (data.categories.length) await db.categories.bulkAdd(data.categories);
-        if (data.transactions.length) await db.transactions.bulkAdd(data.transactions);
-        if (data.fxRates?.length) await db.fxRates.bulkAdd(data.fxRates);
-        if (data.settings?.length) await db.settings.bulkAdd(data.settings);
-
-        setImportStatus(t('settings.data.imported'));
-        setTimeout(() => window.location.reload(), 1500);
-      } catch (error) {
-        setImportStatus(t('settings.data.importFailed', { error: error instanceof Error ? error.message : 'Unknown error' }));
-        console.error('Import error:', error);
-      }
-    };
-
-    input.click();
-  };
-
   const handleDeleteSuccess = () => {
     setShowDeleteModal(false);
     setDeleteSuccessMessage(t('settings.data.deleteModal.success'));
@@ -216,7 +182,7 @@ export function SettingsPage() {
   if (isLoading) {
     return (
       <>
-        <TopBar title={t('settings.title')} />
+        <TopBar title={t('settings.title')} hideAddMenu />
         <div className="page-content">
           <div className="loading">
             <div className="spinner" />
@@ -228,7 +194,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <TopBar title={t('settings.title')} />
+      <TopBar title={t('settings.title')} hideAddMenu />
       <div className="page-content" style={{ maxWidth: 600 }}>
         {/* Language Settings */}
         <div className="settings-section">
@@ -246,6 +212,28 @@ export function SettingsPage() {
                   onClick={() => setLanguage(lang)}
                 >
                   {lang === 'en' ? 'English' : 'العربية'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Theme Settings */}
+        <div className="settings-section">
+          <h3 className="settings-section-title">{t('settings.theme.title')}</h3>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">{t('settings.theme.description')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  className={`btn btn-sm ${theme === mode ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setTheme(mode)}
+                >
+                  {t(`settings.theme.${mode}`)}
                 </button>
               ))}
             </div>
@@ -286,10 +274,15 @@ export function SettingsPage() {
                       />
                     )}
                     <div className="business-profile-details">
-                      <div className="business-profile-name">
+                      <Link
+                        to="/settings/profiles/$profileId"
+                        params={{ profileId: profile.id }}
+                        className="business-profile-name"
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
                         {profile.name}
                         {profile.nameEn && <span className="text-muted"> ({profile.nameEn})</span>}
-                      </div>
+                      </Link>
                       <div className="business-profile-meta text-muted text-sm">
                         {profile.email}
                         {profile.isDefault && (
@@ -300,112 +293,19 @@ export function SettingsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="business-profile-actions">
-                    {!profile.isDefault && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setDefaultMutation.mutate(profile.id)}
-                        disabled={setDefaultMutation.isPending}
-                      >
-                        Set Default
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
-                    >
-                      Edit
-                    </button>
-                    {!profile.isDefault && (
-                      <button
-                        className="btn btn-ghost btn-sm text-danger"
-                        onClick={() => {
-                          if (confirm('Are you sure you want to archive this business profile?')) {
-                            archiveMutation.mutate(profile.id);
-                          }
-                        }}
-                        disabled={archiveMutation.isPending}
-                      >
-                        Archive
-                      </button>
-                    )}
-                  </div>
+                  <ProfileActionsMenu
+                    profile={profile}
+                    onEdit={() => navigate({ to: '/settings/profiles/$profileId', params: { profileId: profile.id } })}
+                    onSetDefault={() => setDefaultMutation.mutate(profile.id)}
+                    onArchive={() => archiveMutation.mutate(profile.id)}
+                    isSetDefaultPending={setDefaultMutation.isPending}
+                    isArchivePending={archiveMutation.isPending}
+                  />
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Document Numbering */}
-        {defaultProfile && (
-          <div className="settings-section">
-            <h3 className="settings-section-title">Document Numbering</h3>
-            <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-              Configure how document numbers are generated for each type. Settings apply to the default business profile.
-            </p>
-
-            <table className="settings-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'start', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Type</th>
-                  <th style={{ textAlign: 'start', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Prefix</th>
-                  <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Use Prefix</th>
-                  <th style={{ textAlign: 'end', padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>Next #</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ALL_DOCUMENT_TYPES.map((type) => {
-                  const seq = sequenceMap[type];
-                  const prefix = seq?.prefix || DEFAULT_PREFIXES[type];
-                  const prefixEnabled = seq?.prefixEnabled ?? true;
-                  const nextNumber = (seq?.lastNumber || 0) + 1;
-
-                  return (
-                    <tr key={type}>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>
-                        {DOCUMENT_TYPE_LABELS[type]}
-                      </td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)' }}>
-                        <input
-                          type="text"
-                          className="input input-sm"
-                          style={{ width: 80 }}
-                          value={prefix}
-                          onChange={(e) => handleSequenceUpdate(type, 'prefix', e.target.value)}
-                          placeholder={DEFAULT_PREFIXES[type]}
-                          disabled={!prefixEnabled}
-                        />
-                      </td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={prefixEnabled}
-                          onChange={(e) => handleSequenceUpdate(type, 'prefixEnabled', e.target.checked)}
-                        />
-                      </td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)', textAlign: 'end' }}>
-                        <input
-                          type="number"
-                          className="input input-sm"
-                          style={{ width: 80, textAlign: 'end' }}
-                          min={1}
-                          value={nextNumber}
-                          onChange={(e) => handleSequenceUpdate(type, 'lastNumber', parseInt(e.target.value) || 1)}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <p className="text-muted text-sm" style={{ marginTop: 12 }}>
-              Example: {sequenceMap['invoice']?.prefixEnabled !== false
-                ? `${sequenceMap['invoice']?.prefix || 'INV'}-${String((sequenceMap['invoice']?.lastNumber || 0) + 1).padStart(4, '0')}`
-                : String((sequenceMap['invoice']?.lastNumber || 0) + 1).padStart(4, '0')}
-            </p>
-          </div>
-        )}
 
         {/* Currency Settings */}
         <div className="settings-section">
@@ -457,12 +357,9 @@ export function SettingsPage() {
               <div className="settings-label">{t('settings.data.export')}</div>
               <div className="settings-description">{t('settings.data.exportDesc')}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {exportStatus && <span className="text-sm text-muted">{exportStatus}</span>}
-              <button className="btn btn-secondary" onClick={handleExportData}>
-                {t('settings.data.exportBtn')}
-              </button>
-            </div>
+            <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
+              {t('settings.data.exportBtn')}
+            </button>
           </div>
 
           <div className="settings-row">
@@ -470,12 +367,9 @@ export function SettingsPage() {
               <div className="settings-label">{t('settings.data.import')}</div>
               <div className="settings-description">{t('settings.data.importDesc')}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {importStatus && <span className="text-sm text-muted">{importStatus}</span>}
-              <button className="btn btn-secondary" onClick={handleImportData}>
-                {t('settings.data.importBtn')}
-              </button>
-            </div>
+            <button className="btn btn-secondary" onClick={() => setShowImportModal(true)}>
+              {t('settings.data.importBtn')}
+            </button>
           </div>
 
           <div className="settings-row" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 8 }}>
@@ -581,6 +475,16 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Export Data Modal */}
+      {showExportModal && (
+        <ExportDataModal onClose={() => setShowExportModal(false)} />
+      )}
+
+      {/* Import Data Modal */}
+      {showImportModal && (
+        <ImportDataModal onClose={() => setShowImportModal(false)} />
+      )}
 
       {/* Delete All Data Modal */}
       {showDeleteModal && (

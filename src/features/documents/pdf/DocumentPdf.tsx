@@ -6,6 +6,8 @@ import type {
 } from '../../../types';
 import { getTexts, getDocumentTypeLabel } from './texts';
 import { getTemplateStyles, getFontFamily, getTextAlign, type TemplateId } from './styles';
+import { PdfHeader } from './PdfHeader';
+import { PdfFooter } from './PdfFooter';
 
 // Import fonts (side effect - registers fonts)
 import './fonts';
@@ -75,19 +77,6 @@ export function DocumentPdf({
     },
   });
 
-  // Get business name based on language
-  const businessName = language === 'ar'
-    ? businessProfile.name
-    : (businessProfile.nameEn || businessProfile.name);
-
-  const businessAddress = language === 'ar'
-    ? businessProfile.address1
-    : (businessProfile.address1En || businessProfile.address1);
-
-  const businessCity = language === 'ar'
-    ? businessProfile.city
-    : (businessProfile.cityEn || businessProfile.city);
-
   return (
     <Document>
       <Page size="A4" style={[styles.page, dynamicStyles.page]}>
@@ -101,41 +90,11 @@ export function DocumentPdf({
           />
         )}
 
-        {/* Header */}
-        <View style={[styles.headerRow, dynamicStyles.headerRow]}>
-          {/* Business Info */}
-          <View style={styles.businessInfo}>
-            <Text style={[dynamicStyles.text, { fontWeight: 700, fontSize: 16, marginBottom: 4 }]}>
-              {businessName}
-            </Text>
-            {businessAddress && (
-              <Text style={[dynamicStyles.text, { fontSize: 10, color: '#666666' }]}>
-                {businessAddress}
-              </Text>
-            )}
-            {businessCity && (
-              <Text style={[dynamicStyles.text, { fontSize: 10, color: '#666666' }]}>
-                {businessCity}
-              </Text>
-            )}
-            {businessProfile.email && (
-              <Text style={[dynamicStyles.text, { fontSize: 10, color: '#666666' }]}>
-                {businessProfile.email}
-              </Text>
-            )}
-            {businessProfile.phone && (
-              <Text style={[dynamicStyles.text, { fontSize: 10, color: '#666666' }]}>
-                {businessProfile.phone}
-              </Text>
-            )}
-            {businessProfile.taxId && (
-              <Text style={[dynamicStyles.text, { fontSize: 10, color: '#666666' }]}>
-                Tax ID: {businessProfile.taxId}
-              </Text>
-            )}
-          </View>
+        {/* Header with Logo */}
+        <PdfHeader businessProfile={businessProfile} language={language} />
 
-          {/* Document Info */}
+        {/* Document Info */}
+        <View style={[styles.headerRow, dynamicStyles.headerRow, { marginBottom: 15 }]}>
           <View style={styles.documentInfo}>
             <Text style={[dynamicStyles.text, { fontWeight: 700, fontSize: 18, marginBottom: 8 }]}>
               {getDocumentTypeLabel(document.type, language)} #{document.number}
@@ -278,10 +237,12 @@ export function DocumentPdf({
           </View>
         )}
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={{ textAlign: 'center' }}>{t.digitally_certified}</Text>
-        </View>
+        {/* Footer with bank details and page numbers */}
+        <PdfFooter
+          businessProfile={businessProfile}
+          language={language}
+          documentType={document.type}
+        />
       </Page>
     </Document>
   );

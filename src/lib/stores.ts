@@ -1,5 +1,16 @@
 import { create } from 'zustand';
-import type { Currency, TxKind, DocumentType } from '../types';
+import type { Currency, TxKind, DocumentType, Currency as CurrencyType } from '../types';
+
+// Expense drawer prefill data type
+export interface ExpensePrefillData {
+  vendor?: string;
+  vendorId?: string;
+  amountMinor?: number;
+  currency?: CurrencyType;
+  occurredAt?: string;
+  title?: string;
+  categoryId?: string;
+}
 
 // Drawer state
 interface DrawerState {
@@ -70,6 +81,28 @@ interface DrawerState {
   };
   openBusinessProfileDrawer: (options?: { mode?: 'create' | 'edit'; profileId?: string }) => void;
   closeBusinessProfileDrawer: () => void;
+
+  // Expense drawer
+  expenseDrawer: {
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    expenseId?: string;
+    recurringRuleId?: string;
+    defaultProfileId?: string;
+    isRecurring?: boolean;
+    prefillData?: ExpensePrefillData;
+    linkReceiptId?: string;
+  };
+  openExpenseDrawer: (options?: {
+    mode?: 'create' | 'edit';
+    expenseId?: string;
+    recurringRuleId?: string;
+    defaultProfileId?: string;
+    isRecurring?: boolean;
+    prefillData?: ExpensePrefillData;
+    linkReceiptId?: string;
+  }) => void;
+  closeExpenseDrawer: () => void;
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
@@ -177,6 +210,31 @@ export const useDrawerStore = create<DrawerState>((set) => ({
   closeBusinessProfileDrawer: () =>
     set({
       businessProfileDrawer: {
+        isOpen: false,
+        mode: 'create',
+      },
+    }),
+
+  expenseDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openExpenseDrawer: (options) =>
+    set({
+      expenseDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        expenseId: options?.expenseId,
+        recurringRuleId: options?.recurringRuleId,
+        defaultProfileId: options?.defaultProfileId,
+        isRecurring: options?.isRecurring,
+        prefillData: options?.prefillData,
+        linkReceiptId: options?.linkReceiptId,
+      },
+    }),
+  closeExpenseDrawer: () =>
+    set({
+      expenseDrawer: {
         isOpen: false,
         mode: 'create',
       },

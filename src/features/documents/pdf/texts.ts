@@ -34,6 +34,14 @@ export interface DocumentTexts {
   credit_card: string;
   other: string;
   digitally_certified: string;
+  // Footer / Payment details
+  page_of: string;
+  bank_details: string;
+  bank_name: string;
+  branch: string;
+  account: string;
+  iban: string;
+  payment_instructions: string;
 }
 
 export const texts: Record<DocumentLanguage, DocumentTexts> = {
@@ -69,6 +77,13 @@ export const texts: Record<DocumentLanguage, DocumentTexts> = {
     credit_card: 'بطاقة ائتمان',
     other: 'أخرى',
     digitally_certified: 'موثّق رقمياً',
+    page_of: 'صفحة {0} من {1}',
+    bank_details: 'تفاصيل الحساب البنكي',
+    bank_name: 'البنك',
+    branch: 'الفرع',
+    account: 'رقم الحساب',
+    iban: 'IBAN',
+    payment_instructions: 'تعليمات الدفع',
   },
   en: {
     item: 'Item',
@@ -102,6 +117,13 @@ export const texts: Record<DocumentLanguage, DocumentTexts> = {
     credit_card: 'Credit Card',
     other: 'Other',
     digitally_certified: 'Digitally Certified',
+    page_of: 'Page {0} of {1}',
+    bank_details: 'Bank Details',
+    bank_name: 'Bank',
+    branch: 'Branch',
+    account: 'Account',
+    iban: 'IBAN',
+    payment_instructions: 'Payment Instructions',
   },
 };
 

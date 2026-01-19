@@ -25,10 +25,11 @@ export function ProjectDetailPage() {
   const [search, setSearch] = useState('');
 
   const { data: project, isLoading: projectLoading } = useProject(projectId);
+  // Fetch summary without currency filter to get both USD and ILS totals for header stats
   const { data: summary } = useProjectSummary(projectId, {
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
-    currency,
+    // Don't pass currency - we want per-currency breakdowns
   });
 
   const queryFilters = useMemo((): QueryFilters => ({
@@ -42,8 +43,6 @@ export function ProjectDetailPage() {
   }), [projectId, dateRange, currency, statusFilter, search]);
 
   const { data: transactions = [] } = useTransactions(queryFilters);
-
-  const displayCurrency = currency || 'USD';
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
@@ -99,30 +98,60 @@ export function ProjectDetailPage() {
         }
       />
       <div className="page-content">
-        {/* Inline Stats */}
+        {/* Inline Stats - Dual Currency */}
         {summary && (
           <div className="inline-stats" style={{ marginBottom: 24 }}>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.paid')}</span>
-              <span className="inline-stat-value text-success">
-                {formatAmount(summary.paidIncomeMinor, displayCurrency, locale)}
-              </span>
+              <div className="inline-stat-value text-success">
+                {summary.paidIncomeMinorUSD !== undefined ? (
+                  <>
+                    <div>{formatAmount(summary.paidIncomeMinorUSD, 'USD', locale)}</div>
+                    <div>{formatAmount(summary.paidIncomeMinorILS ?? 0, 'ILS', locale)}</div>
+                  </>
+                ) : (
+                  formatAmount(summary.paidIncomeMinor, 'USD', locale)
+                )}
+              </div>
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.unpaid')}</span>
-              <span className="inline-stat-value text-warning">
-                {formatAmount(summary.unpaidIncomeMinor, displayCurrency, locale)}
-              </span>
+              <div className="inline-stat-value text-warning">
+                {summary.unpaidIncomeMinorUSD !== undefined ? (
+                  <>
+                    <div>{formatAmount(summary.unpaidIncomeMinorUSD, 'USD', locale)}</div>
+                    <div>{formatAmount(summary.unpaidIncomeMinorILS ?? 0, 'ILS', locale)}</div>
+                  </>
+                ) : (
+                  formatAmount(summary.unpaidIncomeMinor, 'USD', locale)
+                )}
+              </div>
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.expenses')}</span>
-              <span className="inline-stat-value">{formatAmount(summary.expensesMinor, displayCurrency, locale)}</span>
+              <div className="inline-stat-value">
+                {summary.expensesMinorUSD !== undefined ? (
+                  <>
+                    <div>{formatAmount(summary.expensesMinorUSD, 'USD', locale)}</div>
+                    <div>{formatAmount(summary.expensesMinorILS ?? 0, 'ILS', locale)}</div>
+                  </>
+                ) : (
+                  formatAmount(summary.expensesMinor, 'USD', locale)
+                )}
+              </div>
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.net')}</span>
-              <span className={cn('inline-stat-value', summary.netMinor >= 0 ? 'text-success' : 'text-danger')}>
-                {formatAmount(summary.netMinor, displayCurrency, locale)}
-              </span>
+              <div className={cn('inline-stat-value', summary.netMinor >= 0 ? 'text-success' : 'text-danger')}>
+                {summary.paidIncomeMinorUSD !== undefined ? (
+                  <>
+                    <div>{formatAmount((summary.paidIncomeMinorUSD ?? 0) - (summary.expensesMinorUSD ?? 0), 'USD', locale)}</div>
+                    <div>{formatAmount((summary.paidIncomeMinorILS ?? 0) - (summary.expensesMinorILS ?? 0), 'ILS', locale)}</div>
+                  </>
+                ) : (
+                  formatAmount(summary.netMinor, 'USD', locale)
+                )}
+              </div>
             </div>
           </div>
         )}

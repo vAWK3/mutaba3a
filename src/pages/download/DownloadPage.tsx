@@ -187,7 +187,7 @@ export function DownloadPage() {
 
   return (
     <>
-      <TopBar title={t('download.title')} />
+      <TopBar title={t('download.title')} hideAddMenu />
       <div className="page-content download-page">
         <div className="download-container">
           <div className="download-cards">

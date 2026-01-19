@@ -6,19 +6,22 @@ interface CurrencyTabsProps {
   value?: Currency;
   onChange: (value?: Currency) => void;
   enabledCurrencies?: Currency[];
+  showAll?: boolean;
 }
 
-export function CurrencyTabs({ value, onChange, enabledCurrencies = ['USD', 'ILS'] }: CurrencyTabsProps) {
+export function CurrencyTabs({ value, onChange, enabledCurrencies = ['USD', 'ILS'], showAll = true }: CurrencyTabsProps) {
   const t = useT();
 
   return (
     <div className="segment-control">
-      <button
-        className={cn('segment-button', value === undefined && 'active')}
-        onClick={() => onChange(undefined)}
-      >
-        {t('common.all')}
-      </button>
+      {showAll && (
+        <button
+          className={cn('segment-button', value === undefined && 'active')}
+          onClick={() => onChange(undefined)}
+        >
+          {t('common.all')}
+        </button>
+      )}
       {enabledCurrencies.map((currency) => (
         <button
           key={currency}

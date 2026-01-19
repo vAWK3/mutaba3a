@@ -9,18 +9,21 @@ import {
   DateRangeControl,
 } from "../../components/filters";
 import { EmptyState, RowActionsMenu } from "../../components/ui";
-import { CheckIcon, CopyIcon } from "../../components/icons";
+import { CheckIcon, CopyIcon, DocumentIcon } from "../../components/icons";
 import { TransactionTypeBadge, TransactionStatusCell } from "../../components/transactions";
 import {
   useTransactions,
   useMarkTransactionPaid,
 } from "../../hooks/useQueries";
+import { useIsCompactTable } from "../../hooks/useMediaQuery";
 import { useDrawerStore } from "../../lib/stores";
 import {
   formatAmount,
   formatDate,
+  formatDateCompact,
   getDateRangePreset,
   cn,
+  getDaysUntil,
 } from "../../lib/utils";
 import { useT, useLanguage, getLocale } from "../../lib/i18n";
 import type { Currency, TxKind, TxStatus, QueryFilters } from "../../types";
@@ -102,6 +105,18 @@ export function TransactionsPage() {
   }, [dateRange, currency, typeFilter, statusFilter, search]);
 
   const { data: transactions = [], isLoading } = useTransactions(queryFilters);
+  const isCompact = useIsCompactTable();
+
+  // Helper to get status for the compact mode dot
+  const getStatusForDot = (tx: typeof transactions[0]): 'paid' | 'unpaid' | 'overdue' | null => {
+    if (tx.kind !== 'income') return null;
+    if (tx.status === 'paid') return 'paid';
+    if (tx.dueDate) {
+      const daysUntil = getDaysUntil(tx.dueDate);
+      if (daysUntil < 0) return 'overdue';
+    }
+    return 'unpaid';
+  };
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: "edit", transactionId: id });
@@ -160,9 +175,8 @@ export function TransactionsPage() {
                   <th>{t('transactions.columns.type')}</th>
                   <th>{t('transactions.columns.client')}</th>
                   <th>{t('transactions.columns.project')}</th>
-                  <th>{t('transactions.columns.category')}</th>
                   <th style={{ textAlign: "end" }}>{t('transactions.columns.amount')}</th>
-                  <th>{t('transactions.columns.status')}</th>
+                  {!isCompact && <th>{t('transactions.columns.status')}</th>}
                   <th style={{ width: 40 }}></th>
                 </tr>
               </thead>
@@ -173,13 +187,21 @@ export function TransactionsPage() {
                     className="clickable"
                     onClick={() => handleRowClick(tx.id)}
                   >
-                    <td>{formatDate(tx.occurredAt, locale)}</td>
+                    <td className={isCompact ? 'date-cell-compact' : undefined}>
+                      {isCompact && getStatusForDot(tx) && (
+                        <span
+                          className="status-dot"
+                          data-status={getStatusForDot(tx)}
+                          aria-label={getStatusForDot(tx) || undefined}
+                        />
+                      )}
+                      {isCompact ? formatDateCompact(tx.occurredAt) : formatDate(tx.occurredAt, locale)}
+                    </td>
                     <td>
                       <TransactionTypeBadge kind={tx.kind} status={tx.status} />
                     </td>
-                    <td className="text-secondary">{tx.clientName || "-"}</td>
-                    <td className="text-secondary">{tx.projectName || "-"}</td>
-                    <td className="text-secondary">{tx.categoryName || "-"}</td>
+                    <td className={cn('text-secondary', isCompact && 'text-sm-responsive')}>{tx.clientName || "-"}</td>
+                    <td className={cn('text-secondary', isCompact && 'text-sm-responsive')}>{tx.projectName || "-"}</td>
                     <td
                       className={cn(
                         "amount-cell",
@@ -190,9 +212,11 @@ export function TransactionsPage() {
                       {tx.kind === "expense" ? "-" : ""}
                       {formatAmount(tx.amountMinor, tx.currency, locale)}
                     </td>
-                    <td>
-                      <TransactionStatusCell kind={tx.kind} status={tx.status} dueDate={tx.dueDate} />
-                    </td>
+                    {!isCompact && (
+                      <td>
+                        <TransactionStatusCell kind={tx.kind} status={tx.status} dueDate={tx.dueDate} />
+                      </td>
+                    )}
                     <td style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <RowActionsMenu
                         actions={[
@@ -238,6 +262,18 @@ export function TransactionsPage() {
                             : []),
                         ]}
                       />
+                      {tx.linkedDocumentId && (
+                        <span
+                          className="doc-indicator"
+                          title={t('transactions.hasDocument')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.href = `/documents/${tx.linkedDocumentId}`;
+                          }}
+                        >
+                          <DocumentIcon size={14} />
+                        </span>
+                      )}
                       {tx.notes && (
                         <span
                           className="note-indicator"

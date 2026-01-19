@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFxRate } from '../../hooks/useFxRate';
 import { useT } from '../../lib/i18n';
+import { useTheme, type ThemeMode } from '../../lib/theme';
 import { formatRelativeDate, cn } from '../../lib/utils';
 import './FxRateBanner.css';
 
@@ -42,9 +43,17 @@ function saveState(state: BannerState): void {
   }
 }
 
+// Helper to cycle through theme modes
+function getNextTheme(current: ThemeMode): ThemeMode {
+  const cycle: ThemeMode[] = ['light', 'dark', 'system'];
+  const currentIndex = cycle.indexOf(current);
+  return cycle[(currentIndex + 1) % cycle.length];
+}
+
 export function FxRateBanner() {
   const t = useT();
   const { rate, source, isLoading, lastUpdated, refetch } = useFxRate('USD', 'ILS');
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   const [state, setState] = useState<BannerState>(loadState);
   const [isDragging, setIsDragging] = useState(false);
@@ -56,9 +65,15 @@ export function FxRateBanner() {
     saveState(state);
   }, [state]);
 
-  // Handle drag start
+  // Handle drag start - allow dragging from anywhere except buttons/actions
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!(e.target as HTMLElement).classList.contains('fx-banner-drag-handle')) {
+    const target = e.target as HTMLElement;
+    // Don't drag if clicking on buttons or action area
+    if (
+      target.closest('.fx-banner-actions') ||
+      target.closest('button') ||
+      target.tagName === 'BUTTON'
+    ) {
       return;
     }
     e.preventDefault();
@@ -122,6 +137,13 @@ export function FxRateBanner() {
     refetch();
   }, [refetch]);
 
+  const handleToggleTheme = useCallback(() => {
+    setTheme(getNextTheme(theme));
+  }, [theme, setTheme]);
+
+  // Get theme label for tooltip
+  const themeLabel = t(`settings.theme.${theme}`);
+
   // Format rate for display
   const formattedRate = rate !== null ? rate.toFixed(4) : '—';
 
@@ -142,17 +164,50 @@ export function FxRateBanner() {
   // Minimized view
   if (state.isMinimized) {
     return (
-      <button
-        className="fx-banner-minimized"
-        onClick={toggleMinimize}
-        title={t('fx.showBanner')}
+      <div
+        ref={bannerRef}
+        className={cn('fx-banner-minimized', isDragging && 'dragging')}
         style={positionStyle}
+        onMouseDown={handleMouseDown}
       >
-        <span className="fx-banner-mini-icon">$↔₪</span>
-        {source !== 'none' && rate !== null && (
-          <span className="fx-banner-mini-rate">{rate.toFixed(2)}</span>
-        )}
-      </button>
+        <div className="fx-banner-drag-handle fx-banner-drag-handle-mini" title={t('fx.drag')}>
+          <svg width="6" height="10" viewBox="0 0 8 14" fill="currentColor">
+            <circle cx="2" cy="2" r="1.5" />
+            <circle cx="6" cy="2" r="1.5" />
+            <circle cx="2" cy="7" r="1.5" />
+            <circle cx="6" cy="7" r="1.5" />
+            <circle cx="2" cy="12" r="1.5" />
+            <circle cx="6" cy="12" r="1.5" />
+          </svg>
+        </div>
+        <button
+          className="fx-banner-mini-content"
+          onClick={toggleMinimize}
+          title={t('fx.showBanner')}
+        >
+          <span className="fx-banner-mini-icon">$↔₪</span>
+          {source !== 'none' && rate !== null && (
+            <span className="fx-banner-mini-rate">{rate.toFixed(2)}</span>
+          )}
+        </button>
+        <button
+          className="fx-banner-mini-theme"
+          onClick={handleToggleTheme}
+          title={themeLabel}
+          aria-label={themeLabel}
+        >
+          {resolvedTheme === 'dark' ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="5" />
+              <path strokeLinecap="round" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            </svg>
+          )}
+        </button>
+      </div>
     );
   }
 
@@ -197,6 +252,46 @@ export function FxRateBanner() {
       </div>
 
       <div className="fx-banner-actions">
+        <button
+          className="fx-banner-btn"
+          onClick={handleToggleTheme}
+          title={themeLabel}
+          aria-label={themeLabel}
+        >
+          {resolvedTheme === 'dark' ? (
+            // Moon icon for dark mode
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+              />
+            </svg>
+          ) : (
+            // Sun icon for light mode
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <circle cx="12" cy="12" r="5" />
+              <path
+                strokeLinecap="round"
+                d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+              />
+            </svg>
+          )}
+        </button>
         <button
           className="fx-banner-btn"
           onClick={handleRefresh}

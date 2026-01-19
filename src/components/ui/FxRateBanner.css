@@ -11,13 +11,19 @@
   gap: 12px;
   padding: 8px 12px;
 
-  background-color: var(--color-surface);
+  background: var(--surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 
   user-select: none;
+  cursor: grab;
   transition: box-shadow 0.15s ease;
+}
+
+/* Ensure user-select: none is inherited by all children */
+.fx-rate-banner * {
+  user-select: none;
 }
 
 .fx-rate-banner.dragging {
@@ -119,6 +125,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  cursor: default;
 }
 
 .fx-banner-btn {
@@ -133,7 +140,7 @@
   border: none;
   border-radius: 4px;
   color: var(--color-text-secondary);
-  cursor: pointer;
+  cursor: pointer !important;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -169,29 +176,68 @@
 
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 6px 10px;
 
-  background-color: var(--color-surface);
+  background: var(--surface);
   border: 1px solid var(--color-border);
   border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
+  user-select: none;
+  cursor: grab;
+  transition: box-shadow 0.15s ease;
+}
+
+/* Ensure user-select: none is inherited by all children */
+.fx-banner-minimized * {
+  user-select: none;
+}
+
+.fx-banner-minimized.dragging {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  cursor: grabbing;
 }
 
 .fx-banner-minimized:hover {
-  color: var(--color-text-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 [dir="rtl"] .fx-banner-minimized {
   right: auto;
   left: 24px;
+}
+
+/* Mini drag handle */
+.fx-banner-drag-handle-mini {
+  padding: 2px;
+}
+
+.fx-banner-drag-handle-mini svg {
+  width: 6px;
+  height: 10px;
+}
+
+/* Mini content button */
+.fx-banner-mini-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer !important;
+  transition: color 0.15s ease;
+}
+
+.fx-banner-mini-content:hover {
+  color: var(--color-text-primary);
 }
 
 .fx-banner-mini-icon {
@@ -202,4 +248,27 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* Mini theme toggle button */
+.fx-banner-mini-theme {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-inline-start: 4px;
+
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  cursor: pointer !important;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.fx-banner-mini-theme:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-hover);
 }

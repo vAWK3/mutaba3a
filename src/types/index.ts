@@ -186,6 +186,9 @@ export type DocumentLanguage = 'ar' | 'en';
 // Payment method
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'cheque' | 'credit_card' | 'other';
 
+// Template ID type
+export type TemplateId = 'template1' | 'template2' | 'template3';
+
 // Business Profile entity (multi-identity support)
 export interface BusinessProfile {
   id: string;
@@ -207,6 +210,20 @@ export interface BusinessProfile {
   defaultCurrency: Currency;
   defaultLanguage: DocumentLanguage;
   isDefault: boolean;              // Only one can be default
+
+  // Document defaults
+  website?: string;
+  defaultTemplateId?: TemplateId;
+  defaultTaxRate?: number;         // e.g., 0.17 for 17%
+  allowedCurrencies?: Currency[];  // Restrict available currencies
+
+  // Payment/Bank details (for PDF footer)
+  bankName?: string;
+  bankBranch?: string;
+  bankAccountNumber?: string;
+  bankIban?: string;
+  paymentNotes?: string;           // Additional payment instructions
+
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -313,4 +330,232 @@ export interface DocumentFilters {
 export interface DocumentDisplay extends Document {
   clientName?: string;
   businessProfileName?: string;
+}
+
+// ============================================================================
+// Expense Types (Profile-scoped expenses with recurring support)
+// ============================================================================
+
+// Expense frequency for recurring rules
+export type ExpenseFrequency = 'monthly' | 'yearly';
+
+// Recurring rule end mode
+export type RecurringEndMode = 'endOfYear' | 'untilDate' | 'noEnd';
+
+// Expense entity (separate from Transaction, profile-scoped)
+export interface Expense {
+  id: string;
+  profileId: string;
+  title?: string;
+  vendor?: string;
+  vendorId?: string; // Reference to normalized vendor
+  categoryId?: string;
+  amountMinor: number;
+  currency: Currency;
+  occurredAt: string;
+  notes?: string;
+  recurringRuleId?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+// Recurring Rule entity (for monthly/yearly expenses)
+export interface RecurringRule {
+  id: string;
+  profileId: string;
+  title: string;
+  vendor?: string;
+  categoryId?: string;
+  amountMinor: number;
+  currency: Currency;
+  frequency: ExpenseFrequency;
+  startDate: string;
+  endMode: RecurringEndMode;
+  endDate?: string;
+  isPaused: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Receipt entity (stores file as base64, can be linked to expense)
+export interface Receipt {
+  id: string;
+  profileId: string;
+  expenseId?: string;
+  monthKey: string; // YYYY-MM format
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  data: string; // base64 encoded file
+  notes?: string;
+  // Metadata for matching
+  vendorRaw?: string; // Original vendor text
+  vendorId?: string; // Reference to normalized vendor
+  amountMinor?: number; // User-entered amount
+  currency?: Currency;
+  occurredAt?: string; // Manual or file-detected date
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Expense Category (profile-scoped)
+export interface ExpenseCategory {
+  id: string;
+  profileId: string;
+  name: string;
+  color?: string;
+}
+
+// Query filters for expenses
+export interface ExpenseFilters {
+  profileId?: string;
+  year?: number;
+  month?: number;
+  categoryId?: string;
+  currency?: Currency;
+  search?: string;
+  includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+  sort?: { by: string; dir: 'asc' | 'desc' };
+}
+
+// Query filters for receipts
+export interface ReceiptFilters {
+  profileId?: string;
+  expenseId?: string;
+  monthKey?: string;
+  unlinkedOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+// Expense with resolved names for display
+export interface ExpenseDisplay extends Expense {
+  categoryName?: string;
+  categoryColor?: string;
+  receiptCount: number;
+  isFromRecurring: boolean;
+}
+
+// Monthly expense total
+export interface MonthlyExpenseTotal {
+  month: number; // 1-12
+  totalMinorUSD: number;
+  totalMinorILS: number;
+}
+
+// Profile expense summary
+export interface ProfileExpenseSummary {
+  profileId: string;
+  profileName: string;
+  year: number;
+  totalMinorUSD: number;
+  totalMinorILS: number;
+  monthlyBreakdown: MonthlyExpenseTotal[];
+}
+
+// Forecast month data
+export interface ForecastMonth {
+  month: number;
+  year: number;
+  projectedMinor: number;
+  actualMinor?: number;
+  isPast: boolean;
+}
+
+// Expense forecast result
+export interface ExpenseForecast {
+  profileId: string;
+  profileName: string;
+  year: number;
+  monthsRemaining: number;
+  projectedTotalMinor: number;
+  currency: Currency;
+  breakdown: ForecastMonth[];
+}
+
+// ============================================================================
+// Vendor Types (for vendor normalization)
+// ============================================================================
+
+// Vendor entity (normalized vendor names)
+export interface Vendor {
+  id: string;
+  profileId: string;
+  canonicalName: string; // The normalized/display name
+  aliases: string[]; // Alternative names/spellings
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// Receipt Matching Types
+// ============================================================================
+
+// Receipt match suggestion with scoring
+export interface ReceiptMatchSuggestion {
+  receiptId: string;
+  expenseId: string;
+  score: number; // 0-100
+  confidence: 'high' | 'medium' | 'low';
+  breakdown: {
+    amountScore: number; // 0-50
+    dateScore: number; // 0-25
+    vendorScore: number; // 0-25
+  };
+  expense: ExpenseDisplay;
+}
+
+// ============================================================================
+// Bulk Upload Types
+// ============================================================================
+
+// Bulk upload file status
+export type BulkUploadStatus = 'pending' | 'uploading' | 'success' | 'error' | 'duplicate';
+
+// Bulk upload file entry
+export interface BulkUploadFile {
+  file: File;
+  detectedMonthKey: string; // YYYY-MM format
+  overrideMonthKey?: string; // User override
+  status: BulkUploadStatus;
+  error?: string;
+  receiptId?: string; // Set after successful upload
+}
+
+// ============================================================================
+// Monthly Close Types
+// ============================================================================
+
+// Monthly close checklist items
+export interface MonthCloseChecklist {
+  receiptsLinked: boolean;
+  recurringConfirmed: boolean;
+  categorized: boolean;
+  zipExported: boolean;
+}
+
+// Month close status entity
+export interface MonthCloseStatus {
+  id: string; // "{profileId}:{monthKey}"
+  profileId: string;
+  monthKey: string; // YYYY-MM format
+  isClosed: boolean;
+  closedAt?: string;
+  checklist: MonthCloseChecklist;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Computed status based on actual data
+export interface MonthCloseComputedStatus {
+  monthKey: string;
+  profileId: string;
+  unlinkedReceiptsCount: number;
+  uncategorizedExpensesCount: number;
+  isFullyLinked: boolean;
+  isFullyCategorized: boolean;
 }

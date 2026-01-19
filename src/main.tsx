@@ -20,6 +20,7 @@ import './index.css';
 import { router } from './router';
 import { initDatabase } from './db';
 import { LanguageProvider } from './lib/i18n';
+import { ThemeProvider } from './lib/theme';
 import { ToastContainer } from './components/ui/ToastContainer';
 
 // Create a client
@@ -37,11 +38,13 @@ initDatabase().catch(console.error);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LanguageProvider>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-        <ToastContainer />
-      </QueryClientProvider>
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+          <ToastContainer />
+        </QueryClientProvider>
+      </LanguageProvider>
+    </ThemeProvider>
   </StrictMode>
 );

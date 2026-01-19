@@ -58,7 +58,6 @@ export function ClientsPage() {
                 <tr>
                   <th>{t('clients.columns.client')}</th>
                   <th>{t('clients.columns.activeProjects')}</th>
-                  <th style={{ textAlign: 'end' }}>{t('clients.columns.paidIncome')}</th>
                   <th style={{ textAlign: 'end' }}>{t('clients.columns.unpaid')}</th>
                   <th>{t('clients.columns.lastPayment')}</th>
                   <th>{t('clients.columns.lastActivity')}</th>
@@ -77,20 +76,6 @@ export function ClientsPage() {
                       </Link>
                     </td>
                     <td className="text-secondary">{client.activeProjectCount}</td>
-                    <td className="amount-cell">
-                      {hasPerCurrencyData && client.paidIncomeMinorUSD !== undefined ? (
-                        <UnifiedAmount
-                          usdAmountMinor={client.paidIncomeMinorUSD}
-                          ilsAmountMinor={client.paidIncomeMinorILS ?? 0}
-                          variant="compact"
-                          type="income"
-                        />
-                      ) : (
-                        <span className="amount-positive">
-                          {formatAmount(client.paidIncomeMinor, currency!, locale)}
-                        </span>
-                      )}
-                    </td>
                     <td className="amount-cell">
                       {hasPerCurrencyData && client.unpaidIncomeMinorUSD !== undefined ? (
                         <UnifiedAmount

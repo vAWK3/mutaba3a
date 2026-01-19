@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useDrawerStore } from '../../lib/stores';
 import { useT, useDirection } from '../../lib/i18n';
 
@@ -13,9 +13,10 @@ interface TopBarProps {
   breadcrumbs?: Breadcrumb[];
   filterSlot?: ReactNode;
   rightSlot?: ReactNode;
+  hideAddMenu?: boolean;
 }
 
-export function TopBar({ title, breadcrumbs, filterSlot, rightSlot }: TopBarProps) {
+export function TopBar({ title, breadcrumbs, filterSlot, rightSlot, hideAddMenu }: TopBarProps) {
   const direction = useDirection();
   // Use appropriate separator based on direction
   const separator = direction === 'rtl' ? ' \\ ' : ' / ';
@@ -48,7 +49,7 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot }: TopBarProp
       </div>
       <div className="topbar-right">
         {rightSlot}
-        <AddMenu />
+        {!hideAddMenu && <AddMenu />}
       </div>
     </header>
   );
@@ -57,7 +58,8 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot }: TopBarProp
 function AddMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { openTransactionDrawer, openClientDrawer, openProjectDrawer, openDocumentDrawer } = useDrawerStore();
+  const { openTransactionDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
+  const navigate = useNavigate();
   const t = useT();
 
   useEffect(() => {
@@ -144,7 +146,7 @@ function AddMenu() {
           <button
             className="add-menu-item"
             onClick={() => {
-              openDocumentDrawer({ mode: 'create' });
+              navigate({ to: '/documents/new' });
               setIsOpen(false);
             }}
           >

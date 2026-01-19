@@ -187,6 +187,13 @@ export function DocumentsPage() {
                               window.location.href = `/documents/${doc.id}`;
                             },
                           },
+                          // Create Similar (duplicate as draft)
+                          {
+                            label: 'Create Similar',
+                            onClick: () => {
+                              navigate({ to: '/documents/new', search: { duplicateFrom: doc.id } });
+                            },
+                          },
                           // Issue document (only for drafts)
                           ...(doc.status === 'draft'
                             ? [

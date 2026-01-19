@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { PDFViewer, PDFDownloadLink } from '@react-pdf/renderer';
+import { PDFViewer } from '@react-pdf/renderer';
 import { TopBar } from '../../components/layout';
 import { CheckIcon, DownloadIcon } from '../../components/icons';
 import {
@@ -9,12 +9,12 @@ import {
   useClient,
   useMarkDocumentPaid,
   useVoidDocument,
-  useIssueDocument,
   useUpdateDocument,
 } from '../../hooks/useQueries';
 import { formatAmount, formatDate } from '../../lib/utils';
 import { useLanguage, getLocale } from '../../lib/i18n';
 import { DocumentPdf } from '../../features/documents/pdf';
+import { useIssueAndDownload } from '../../features/documents/hooks';
 import type { DocumentType, DocumentStatus } from '../../types';
 import type { TemplateId } from '../../features/documents/pdf/styles';
 
@@ -42,8 +42,8 @@ export function DocumentDetailPage() {
   const documentId = params.documentId;
   const markPaidMutation = useMarkDocumentPaid();
   const voidMutation = useVoidDocument();
-  const issueDocumentMutation = useIssueDocument();
   const updateDocumentMutation = useUpdateDocument();
+  const { issueAndDownload, downloadOnly, isProcessing, isIssuing } = useIssueAndDownload();
   const { language } = useLanguage();
   const locale = getLocale(language);
 
@@ -104,11 +104,44 @@ export function DocumentDetailPage() {
         voidMutation.mutate(document.id);
       }
     } else if (newStatus === 'issued') {
-      issueDocumentMutation.mutate(document.id);
+      // Use the issue and download flow for proper sequencing
+      if (businessProfile) {
+        issueAndDownload({
+          document,
+          businessProfile,
+          client: client || undefined,
+          templateId: document.templateId as TemplateId,
+          isOriginal,
+        });
+      }
     } else {
       // For draft (reverting status), use generic update
       updateDocumentMutation.mutate({ id: document.id, data: { status: newStatus } });
     }
+  };
+
+  // Handler for issue and download
+  const handleIssueAndDownload = () => {
+    if (!businessProfile) return;
+    issueAndDownload({
+      document,
+      businessProfile,
+      client: client || undefined,
+      templateId: document.templateId as TemplateId,
+      isOriginal,
+    });
+  };
+
+  // Handler for download only
+  const handleDownload = () => {
+    if (!businessProfile) return;
+    downloadOnly({
+      document,
+      businessProfile,
+      client: client || undefined,
+      templateId: document.templateId as TemplateId,
+      isOriginal,
+    });
   };
 
   return (
@@ -194,50 +227,37 @@ export function DocumentDetailPage() {
             )}
             {/* Issue & Download for draft documents */}
             {canIssue && businessProfile && (
-              <PDFDownloadLink
-                document={
-                  <DocumentPdf
-                    document={document}
-                    businessProfile={businessProfile}
-                    client={client || undefined}
-                    templateId={document.templateId as TemplateId}
-                    isOriginal={isOriginal}
-                  />
-                }
-                fileName={`${document.number}.pdf`}
+              <button
                 className="btn btn-primary"
-                onClick={() => issueDocumentMutation.mutate(document.id)}
+                onClick={handleIssueAndDownload}
+                disabled={isProcessing || isIssuing}
               >
-                {({ loading }) => (loading || issueDocumentMutation.isPending ? 'Preparing...' : (
+                {isProcessing || isIssuing ? (
+                  'Preparing...'
+                ) : (
                   <>
                     <DownloadIcon size={16} />
                     Issue & Download PDF
                   </>
-                ))}
-              </PDFDownloadLink>
+                )}
+              </button>
             )}
             {/* Download only for non-draft documents */}
             {!canIssue && businessProfile && (
-              <PDFDownloadLink
-                document={
-                  <DocumentPdf
-                    document={document}
-                    businessProfile={businessProfile}
-                    client={client || undefined}
-                    templateId={document.templateId as TemplateId}
-                    isOriginal={isOriginal}
-                  />
-                }
-                fileName={`${document.number}.pdf`}
+              <button
                 className="btn btn-primary"
+                onClick={handleDownload}
+                disabled={isProcessing}
               >
-                {({ loading }) => (loading ? 'Preparing...' : (
+                {isProcessing ? (
+                  'Preparing...'
+                ) : (
                   <>
                     <DownloadIcon size={16} />
                     Download PDF
                   </>
-                ))}
-              </PDFDownloadLink>
+                )}
+              </button>
             )}
           </div>
         </div>
@@ -312,7 +332,8 @@ export function DocumentDetailPage() {
                     disabled={
                       markPaidMutation.isPending ||
                       voidMutation.isPending ||
-                      issueDocumentMutation.isPending ||
+                      isIssuing ||
+                      isProcessing ||
                       updateDocumentMutation.isPending
                     }
                   >
@@ -338,8 +359,6 @@ export function DocumentDetailPage() {
                 )}
                 <dt>Language</dt>
                 <dd>{document.language === 'ar' ? 'Arabic' : 'English'}</dd>
-                <dt>Template</dt>
-                <dd style={{ textTransform: 'capitalize' }}>{document.templateId.replace('template', 'Template ')}</dd>
               </dl>
             </div>
 

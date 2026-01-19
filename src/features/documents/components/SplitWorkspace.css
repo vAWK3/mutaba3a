@@ -1,0 +1,218 @@
+/* SplitWorkspace Component Styles - Pro Editor Mode */
+
+.split-workspace {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--topbar-height) - 48px);
+  overflow: hidden;
+}
+
+/* Action Bar */
+.split-workspace-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.split-workspace-actions-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.split-workspace-actions-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.split-workspace-mode-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Keyboard Shortcuts Badge */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  margin-inline-start: var(--space-2);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.btn-primary .kbd {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Split Panels Container */
+.split-workspace-panels {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left Panel - Form */
+.split-workspace-left {
+  flex: 1;
+  min-width: 400px;
+  max-width: 55%;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.split-workspace-form {
+  padding: var(--space-4);
+}
+
+/* Remove nested form cards margin */
+.split-workspace-form .form-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.split-workspace-form .form-card:last-child {
+  margin-bottom: 0;
+}
+
+.split-workspace-form .form-card-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+  margin-bottom: var(--space-3);
+}
+
+/* Divider */
+.split-workspace-divider {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* Right Panel - Preview */
+.split-workspace-right {
+  flex: 1;
+  min-width: 400px;
+  max-width: 50%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.split-workspace-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.split-workspace-preview-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.split-workspace-preview {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  padding: var(--space-4);
+}
+
+.split-workspace-preview > div {
+  flex: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+/* PDF Viewer frame styling */
+.split-workspace-preview iframe {
+  border: none !important;
+  background: white;
+}
+
+/* Toggle Label */
+.split-workspace-preview-header .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.split-workspace-preview-header .toggle-label input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Responsive - hide preview on smaller screens */
+@media (max-width: 1024px) {
+  .split-workspace-right {
+    display: none;
+  }
+
+  .split-workspace-divider {
+    display: none;
+  }
+
+  .split-workspace-left {
+    max-width: 100%;
+  }
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .split-workspace-preview {
+    background: var(--surface);
+  }
+
+  .split-workspace-preview > div {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* RTL Support */
+[dir="rtl"] .split-workspace-actions-right {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .kbd {
+  margin-inline-start: 0;
+  margin-inline-end: var(--space-2);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .split-workspace-left,
+  .split-workspace-right {
+    scroll-behavior: auto;
+  }
+}

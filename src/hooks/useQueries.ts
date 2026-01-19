@@ -11,6 +11,7 @@ import {
   documentSequenceRepo,
   businessProfileRepo,
 } from '../db';
+import { syncedBusinessProfileRepo } from '../sync/core/synced-repository';
 import type {
   QueryFilters,
   Transaction,
@@ -491,7 +492,7 @@ export function useArchiveBusinessProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => businessProfileRepo.archive(id),
+    mutationFn: (id: string) => syncedBusinessProfileRepo.archive(id),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
   });
 }

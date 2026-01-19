@@ -130,6 +130,13 @@ const settingsRoute = createRoute({
   component: lazyPage(() => import('./pages/settings/SettingsPage'), 'SettingsPage'),
 });
 
+// Profile detail route (under settings)
+const profileDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/profiles/$profileId',
+  component: lazyPage(() => import('./pages/settings/ProfileDetailPage'), 'ProfileDetailPage'),
+});
+
 // Download route (standalone landing page)
 const downloadRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -144,6 +151,93 @@ const themeDemoRoute = createRoute({
   component: lazyPage(() => import('./components/examples/ThemeDemo'), 'ThemeDemo'),
 });
 
+// ============================================================================
+// Expense Routes
+// ============================================================================
+
+// Expenses search params
+interface ExpensesSearch {
+  year?: number;
+  month?: number;
+  currency?: 'USD' | 'ILS';
+  categoryId?: string;
+}
+
+const expensesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses',
+  component: lazyPage(() => import('./pages/expenses/ExpensesPage'), 'ExpensesPage'),
+  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
+    return {
+      year: typeof search.year === 'number' ? search.year : undefined,
+    };
+  },
+});
+
+const profileExpensesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/profile/$profileId',
+  component: lazyPage(() => import('./pages/expenses/ProfileExpensesPage'), 'ProfileExpensesPage'),
+  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
+    return {
+      year: typeof search.year === 'number' ? search.year : undefined,
+      month: typeof search.month === 'number' ? search.month : undefined,
+      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
+      categoryId: typeof search.categoryId === 'string' ? search.categoryId : undefined,
+    };
+  },
+});
+
+const profileReceiptsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/profile/$profileId/receipts',
+  component: lazyPage(() => import('./pages/expenses/ReceiptsPage'), 'ReceiptsPage'),
+  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
+    return {
+      year: typeof search.year === 'number' ? search.year : undefined,
+      month: typeof search.month === 'number' ? search.month : undefined,
+    };
+  },
+});
+
+const expensesOverviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/overview',
+  component: lazyPage(() => import('./pages/expenses/ExpensesOverviewPage'), 'ExpensesOverviewPage'),
+  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
+    return {
+      year: typeof search.year === 'number' ? search.year : undefined,
+    };
+  },
+});
+
+const expensesForecastRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/forecast',
+  component: lazyPage(() => import('./pages/expenses/ExpensesForecastPage'), 'ExpensesForecastPage'),
+  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
+    return {
+      year: typeof search.year === 'number' ? search.year : undefined,
+    };
+  },
+});
+
+// Monthly close search params
+interface MonthCloseSearch {
+  month?: string;
+}
+
+const monthCloseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/close/profile/$profileId',
+  component: lazyPage(() => import('./pages/expenses/MonthCloseChecklistPage'), 'MonthCloseChecklistPage'),
+  validateSearch: (search: Record<string, unknown>): MonthCloseSearch => {
+    return {
+      month: typeof search.month === 'string' ? search.month : undefined,
+    };
+  },
+});
+
 // Create route tree
 const routeTree = rootRoute.addChildren([
   overviewRoute,
@@ -156,8 +250,16 @@ const routeTree = rootRoute.addChildren([
   documentNewRoute,
   documentDetailRoute,
   documentEditRoute,
+  // Expense routes
+  expensesRoute,
+  profileExpensesRoute,
+  profileReceiptsRoute,
+  expensesOverviewRoute,
+  expensesForecastRoute,
+  monthCloseRoute,
   reportsRoute,
   settingsRoute,
+  profileDetailRoute,
   downloadRoute,
   themeDemoRoute,
 ]);

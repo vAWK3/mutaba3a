@@ -1,0 +1,131 @@
+/* BusinessProfileCard Component Styles */
+
+.business-profile-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  overflow: hidden;
+}
+
+.business-profile-card-content {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3);
+}
+
+/* Left Column */
+.business-profile-card-left {
+  display: flex;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.business-profile-card-avatar {
+  flex-shrink: 0;
+}
+
+.business-profile-card-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.business-profile-card-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.business-profile-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.business-profile-card-name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.business-profile-card-detail {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right Column */
+.business-profile-card-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  align-items: flex-end;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.business-profile-card-tax-id {
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+/* Footer */
+.business-profile-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+.business-profile-card-edit-btn {
+  font-size: var(--text-sm);
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.business-profile-card-edit-btn:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .business-profile-card-content {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .business-profile-card-right {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .business-profile-card-edit-btn {
+    transition: none;
+  }
+}
