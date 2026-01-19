@@ -426,86 +426,136 @@ EOF
 
 # Update website download config file
 update_download_config() {
-    local version=$1
-    local tag="v$version"
+  local version=$1
 
-    echo -e "${BLUE}Updating website download config...${NC}"
+  echo -e "${BLUE}Updating website download config...${NC}"
 
-    local config_file="src/content/download-config.ts"
-    local config_dir="src/content"
+  local config_file="src/content/download-config.ts"
+  local config_dir="src/content"
+  mkdir -p "$config_dir"
 
-    # Ensure directory exists
-    mkdir -p "$config_dir"
+  # Calculate mac file size in MB
+  local file_size_bytes
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    file_size_bytes=$(stat -f%z "$RELEASE_DMG_PATH")
+  else
+    file_size_bytes=$(stat -c%s "$RELEASE_DMG_PATH")
+  fi
 
-    # Calculate file size in MB
-    local file_size_bytes
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        file_size_bytes=$(stat -f%z "$RELEASE_DMG_PATH")
-    else
-        file_size_bytes=$(stat -c%s "$RELEASE_DMG_PATH")
+  local file_size_mb
+  file_size_mb=$(echo "scale=2; $file_size_bytes / 1048576" | bc)
+  local mac_file_size="~${file_size_mb} MB"
+  local min_macos="${MIN_MACOS:-macOS 12+}"
+
+  # Preserve windows values from existing file (supports both ' and ")
+  local win_file_size=""
+  local win_sha256=""
+  local win_exe_sha256=""
+
+  if [[ -f "$config_file" ]]; then
+    # Extract strings like: fileSize: "" or fileSize: ''
+    win_file_size=$(sed -n "/windows:/,/^  },/s/.*fileSize: [\"']\([^\"']*\)[\"'].*/\1/p" "$config_file" | head -1 || true)
+    win_sha256=$(sed -n "/windows:/,/^  },/s/.*sha256: [\"']\([^\"']*\)[\"'].*/\1/p" "$config_file" | head -1 || true)
+    win_exe_sha256=$(sed -n "/windows:/,/^  },/s/.*exeSha256: [\"']\([^\"']*\)[\"'].*/\1/p" "$config_file" | head -1 || true)
+
+    # Safety: if file exists but we couldn't parse, don't wipe it
+    if [[ -z "$win_file_size" && -z "$win_sha256" && -z "$win_exe_sha256" ]]; then
+      echo -e "  ${YELLOW}⚠${NC} Could not parse existing windows fields. Keeping them empty, but not overwriting file."
+      echo -e "    Fix: ensure windows block contains fileSize/sha256/exeSha256 string literals."
+      return 0
     fi
-    local file_size_mb
-    file_size_mb=$(echo "scale=2; $file_size_bytes / 1048576" | bc)
-    local file_size="~${file_size_mb} MB"
+  fi
 
-    local min_macos="${MIN_MACOS:-macOS 12+}"
-
-    # Read existing Windows config if present
-    local win_file_size=""
-    local win_sha256=""
-    local win_exe_sha256=""
-
-    if [[ -f "$config_file" ]]; then
-        # Extract existing Windows values using sed (BSD grep doesn't support -P Perl regex)
-        win_file_size=$(sed -n "/windows:/,/}/s/.*fileSize: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
-        win_sha256=$(sed -n "/windows:/,/}/s/.*sha256: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
-        win_exe_sha256=$(sed -n "/windows:/,/}/s/.*exeSha256: '\([^']*\)'.*/\1/p" "$config_file" 2>/dev/null | head -1 || echo "")
-    fi
-
-    # Write config file with URL template structure
-    cat > "$config_file" << 'EOFSTART'
+  # Write the exact structure you provided
+  cat > "$config_file" << EOF
 // Download config with URL templates - version fetched dynamically from GitHub
 // Static fields (fileSize, sha256, fallbackVersion) are updated by deploy.sh / deploy.ps1
-export const DOWNLOAD_CONFIG = {
-EOFSTART
+export interface DownloadConfig {
+  githubOwner: string;
+  githubRepo: string;
+  allReleasesUrl: string;
+  fallbackVersion: string;
+  releaseNotesUrl?: string;
+  getReleaseNotesUrl?: (version: string) => string;
+  mac: {
+    fileSize: string;
+    minVersion: string;
+    sha256: string;
+    downloadUrl: string;
+    getDownloadUrl?: (version: string) => string;
+  };
+  windows: {
+    fileSize: string;
+    minVersion: string;
+    sha256: string;
+    exeSha256?: string;
+    msiUrl: string;
+    exeUrl: string;
+    getMsiUrl?: (version: string) => string;
+    getExeUrl?: (version: string) => string;
+  };
+}
 
-    cat >> "$config_file" << EOF
-  githubOwner: '$GITHUB_OWNER',
-  githubRepo: '$GITHUB_REPO',
-  allReleasesUrl: 'https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases',
+export const DOWNLOAD_CONFIG = {
+  githubOwner: "$GITHUB_OWNER",
+  githubRepo: "$GITHUB_REPO",
+  allReleasesUrl: "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases",
   // Fallback version used when GitHub API fails (rate-limited, offline, etc.)
-  fallbackVersion: '$version',
+  fallbackVersion: "$version",
 
   getReleaseNotesUrl: (version: string) =>
     \`https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/v\${version}\`,
 
   mac: {
-    fileSize: '$file_size',
-    minVersion: '$min_macos',
-    sha256: '$RELEASE_CHECKSUM',
+    fileSize: "$mac_file_size",
+    minVersion: "$min_macos",
+    sha256: "$RELEASE_CHECKSUM",
     getDownloadUrl: (version: string) =>
       \`https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v\${version}/mutaba3a-v\${version}-macos-universal.dmg\`,
   },
 
   windows: {
-    fileSize: '$win_file_size',
-    minVersion: 'Windows 10+',
-    sha256: '$win_sha256',
-    exeSha256: '$win_exe_sha256',
+    fileSize: "$win_file_size",
+    minVersion: "Windows 10+",
+    sha256: "$win_sha256",
+    exeSha256: "$win_exe_sha256",
     getMsiUrl: (version: string) =>
       \`https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v\${version}/mutaba3a-v\${version}-windows-x64.msi\`,
     getExeUrl: (version: string) =>
       \`https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v\${version}/mutaba3a-v\${version}-windows-x64-setup.exe\`,
   },
 };
+
+const FALLBACK_VERSION = DOWNLOAD_CONFIG.fallbackVersion;
+export const FALLBACK_DOWNLOAD_CONFIG: DownloadConfig = {
+  githubOwner: DOWNLOAD_CONFIG.githubOwner,
+  githubRepo: DOWNLOAD_CONFIG.githubRepo,
+  allReleasesUrl: DOWNLOAD_CONFIG.allReleasesUrl,
+  fallbackVersion: FALLBACK_VERSION,
+  releaseNotesUrl: DOWNLOAD_CONFIG.getReleaseNotesUrl(FALLBACK_VERSION),
+  mac: {
+    fileSize: DOWNLOAD_CONFIG.mac.fileSize,
+    minVersion: DOWNLOAD_CONFIG.mac.minVersion,
+    sha256: DOWNLOAD_CONFIG.mac.sha256,
+    downloadUrl: DOWNLOAD_CONFIG.mac.getDownloadUrl(FALLBACK_VERSION),
+  },
+  windows: {
+    fileSize: DOWNLOAD_CONFIG.windows.fileSize,
+    minVersion: DOWNLOAD_CONFIG.windows.minVersion,
+    sha256: DOWNLOAD_CONFIG.windows.sha256,
+    exeSha256: DOWNLOAD_CONFIG.windows.exeSha256,
+    msiUrl: DOWNLOAD_CONFIG.windows.getMsiUrl(FALLBACK_VERSION),
+    exeUrl: DOWNLOAD_CONFIG.windows.getExeUrl(FALLBACK_VERSION),
+  },
+};
 EOF
 
-    if [[ ! -f "$config_file" ]]; then
-        echo -e "${RED}Error: Failed to write download config${NC}"
-        exit 1
-    fi
+  if [[ ! -f "$config_file" ]]; then
+    echo -e "${RED}Error: Failed to write download config${NC}"
+    exit 1
+  fi
 
-    echo -e "  ${GREEN}✓${NC} Updated $config_file"
+  echo -e "  ${GREEN}✓${NC} Updated $config_file"
 }
 
 # Generate download config JSON for remote hosting (jsonkeeper, etc.)
@@ -790,68 +840,70 @@ main() {
     echo ""
 
     # Ask about version bump
-    echo -e "${BLUE}Version options:${NC}"
-    echo "  1) Auto-increment patch ($current_version -> $new_version)"
-    echo "  2) Enter custom version (for major/minor updates)"
-    echo "  3) Keep current version"
-    echo ""
-    read -p "Select version option [1-3]: " version_choice
+    # echo -e "${BLUE}Version options:${NC}"
+    # echo "  1) Auto-increment patch ($current_version -> $new_version)"
+    # echo "  2) Enter custom version (for major/minor updates)"
+    # echo "  3) Keep current version"
+    # echo ""
+    # read -p "Select version option [1-3]: " version_choice
 
-    case $version_choice in
-        1)
-            update_version "$new_version"
-            current_version="$new_version"
-            ;;
-        2)
-            read -p "Enter new version (e.g., 1.0.0): " custom_version
-            if [[ ! "$custom_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                echo -e "${RED}Invalid version format. Use X.Y.Z${NC}"
-                exit 1
-            fi
-            update_version "$custom_version"
-            current_version="$custom_version"
-            ;;
-        3)
-            echo -e "${YELLOW}Keeping current version: $current_version${NC}"
-            ;;
-        *)
-            echo -e "${RED}Invalid option${NC}"
-            exit 1
-            ;;
-    esac
+    update_version "$new_version"
+    current_version="$new_version"
+    # case $version_choice in
+        # 1)
+        #     ;;
+        # 2)
+        #     read -p "Enter new version (e.g., 1.0.0): " custom_version
+        #     if [[ ! "$custom_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        #         echo -e "${RED}Invalid version format. Use X.Y.Z${NC}"
+        #         exit 1
+        #     fi
+        #     update_version "$custom_version"
+        #     current_version="$custom_version"
+        #     ;;
+        # 3)
+        #     echo -e "${YELLOW}Keeping current version: $current_version${NC}"
+        #     ;;
+        # *)
+        #     echo -e "${RED}Invalid option${NC}"
+        #     exit 1
+        #     ;;
+    # esac
 
-    echo ""
-    echo -e "${BLUE}Deploy options:${NC}"
-    echo "  1) Deploy to main (web)"
-    echo "  2) Build Tauri for macOS"
-    echo "  3) Build Tauri for Windows (CI info)"
-    echo -e "  4) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
-    echo "  5) Cancel"
-    echo ""
-    read -p "Select deploy option [1-5]: " deploy_choice
+    # echo ""
+    # echo -e "${BLUE}Deploy options:${NC}"
+    # echo "  1) Deploy to main (web)"
+    # echo "  2) Build Tauri for macOS"
+    # echo "  3) Build Tauri for Windows (CI info)"
+    # echo -e "  4) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
+    # echo "  5) Cancel"
+    # echo ""
+    # read -p "Select deploy option [1-5]: " deploy_choice
 
-    case $deploy_choice in
-        1)
-            deploy_web "$current_version"
-            ;;
-        2)
-            build_mac
-            ;;
-        3)
-            build_windows
-            ;;
-        4)
-            build_and_release_mac "$current_version"
-            ;;
-        5)
-            echo -e "${YELLOW}Cancelled${NC}"
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}Invalid option${NC}"
-            exit 1
-            ;;
-    esac
+    # case $deploy_choice in
+    #     1)
+    #         deploy_web "$current_version"
+    #         ;;
+    #     2)
+    #         build_mac
+    #         ;;
+    #     3)
+    #         build_windows
+    #         ;;
+    #     4)
+    #         build_and_release_mac "$current_version"
+    #         ;;
+    #     5)
+    #         echo -e "${YELLOW}Cancelled${NC}"
+    #         exit 0
+    #         ;;
+    #     *)
+    #         echo -e "${RED}Invalid option${NC}"
+    #         exit 1
+    #         ;;
+    # esac
+
+    build_and_release_mac "$current_version"
 
     echo ""
     echo -e "${GREEN}========================================${NC}"
