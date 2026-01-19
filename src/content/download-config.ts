@@ -5,7 +5,7 @@ export const DOWNLOAD_CONFIG = {
   githubRepo: 'mutaba3a',
   allReleasesUrl: 'https://github.com/vAWK3/mutaba3a/releases',
   // Fallback version used when GitHub API fails (rate-limited, offline, etc.)
-  fallbackVersion: '0.0.13',
+  fallbackVersion: '0.0.15',
 
   getReleaseNotesUrl: (version: string) =>
     `https://github.com/vAWK3/mutaba3a/releases/tag/v${version}`,
@@ -13,7 +13,7 @@ export const DOWNLOAD_CONFIG = {
   mac: {
     fileSize: '~9.79 MB',
     minVersion: 'macOS 12+',
-    sha256: '327f59f44a4e6a2ba6baee2644001cdc2188ad73b5b9e188d9cf4f6c84b3d443',
+    sha256: '77f9ab76e1e20de422d561c61661b4293288fb7977026cc9c2a84b21f380c7df',
     getDownloadUrl: (version: string) =>
       `https://github.com/vAWK3/mutaba3a/releases/download/v${version}/mutaba3a-v${version}-macos-universal.dmg`,
   },
