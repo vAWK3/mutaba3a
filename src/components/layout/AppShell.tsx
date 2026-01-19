@@ -1,30 +1,42 @@
-import { type ReactNode, useEffect } from 'react';
-import { SidebarNav } from './SidebarNav';
-import { TransactionDrawer } from '../drawers/TransactionDrawer';
-import { ClientDrawer } from '../drawers/ClientDrawer';
-import { ProjectDrawer } from '../drawers/ProjectDrawer';
-import { BusinessProfileDrawer } from '../drawers/BusinessProfileDrawer';
-import { DocumentDrawer } from '../drawers/DocumentDrawer';
-import { ExpenseDrawer } from '../drawers/ExpenseDrawer';
-import { WelcomeModal } from '../modals';
-import { MacDownloadBanner } from '../ui/MacDownloadBanner';
-import { FxRateBanner } from '../ui/FxRateBanner';
+import { type ReactNode, useEffect } from "react";
+import { SidebarNav } from "./SidebarNav";
+import { TransactionDrawer } from "../drawers/TransactionDrawer";
+import { ClientDrawer } from "../drawers/ClientDrawer";
+import { ProjectDrawer } from "../drawers/ProjectDrawer";
+import { BusinessProfileDrawer } from "../drawers/BusinessProfileDrawer";
+import { DocumentDrawer } from "../drawers/DocumentDrawer";
+import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
+import { WelcomeModal } from "../modals";
+import { MacDownloadBanner } from "../ui/MacDownloadBanner";
+import { FxRateBanner } from "../ui/FxRateBanner";
 // import { UpdateBanner } from '../ui/UpdateBanner';
-import { ConflictBanner, ExportBundleModal, ImportBundleModal, PairingModal } from '../sync';
-import { useDrawerStore } from '../../lib/stores';
-import { initializeSync } from '../../sync';
+import {
+  ConflictBanner,
+  ExportBundleModal,
+  ImportBundleModal,
+  PairingModal,
+} from "../sync";
+import { useDrawerStore } from "../../lib/stores";
+import { initializeSync } from "../../sync";
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { transactionDrawer, clientDrawer, projectDrawer, businessProfileDrawer, documentDrawer, expenseDrawer } = useDrawerStore();
+  const {
+    transactionDrawer,
+    clientDrawer,
+    projectDrawer,
+    businessProfileDrawer,
+    documentDrawer,
+    expenseDrawer,
+  } = useDrawerStore();
 
   // Initialize sync system on app load
   useEffect(() => {
     initializeSync().catch((err) => {
-      console.error('Failed to initialize sync:', err);
+      console.error("Failed to initialize sync:", err);
     });
   }, []);
 
@@ -45,7 +57,7 @@ export function AppShell({ children }: AppShellProps) {
 
       <FxRateBanner />
       <MacDownloadBanner />
-      //TODO: reinsert
+
       {/* <UpdateBanner /> */}
       <ExportBundleModal />
       <ImportBundleModal />
