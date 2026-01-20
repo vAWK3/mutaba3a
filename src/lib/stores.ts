@@ -103,6 +103,53 @@ interface DrawerState {
     linkReceiptId?: string;
   }) => void;
   closeExpenseDrawer: () => void;
+
+  // Retainer drawer
+  retainerDrawer: {
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    retainerId?: string;
+    defaultProfileId?: string;
+    defaultClientId?: string;
+    defaultProjectId?: string;
+  };
+  openRetainerDrawer: (options?: {
+    mode?: 'create' | 'edit';
+    retainerId?: string;
+    defaultProfileId?: string;
+    defaultClientId?: string;
+    defaultProjectId?: string;
+  }) => void;
+  closeRetainerDrawer: () => void;
+
+  // Retainer matching drawer
+  retainerMatchingDrawer: {
+    isOpen: boolean;
+    step: 'select-transaction' | 'select-projected';
+    transactionId?: string;
+    projectedIncomeId?: string;
+  };
+  openRetainerMatchingDrawer: (options?: {
+    step?: 'select-transaction' | 'select-projected';
+    transactionId?: string;
+    projectedIncomeId?: string;
+  }) => void;
+  closeRetainerMatchingDrawer: () => void;
+  setRetainerMatchingStep: (step: 'select-transaction' | 'select-projected') => void;
+  setRetainerMatchingTransaction: (transactionId: string) => void;
+  setRetainerMatchingProjectedIncome: (projectedIncomeId: string) => void;
+
+  // Selected retainer for inspector panel
+  selectedRetainerId?: string;
+  selectRetainer: (id?: string) => void;
+
+  // Day detail drawer (Money Answers page)
+  dayDetailDrawer: {
+    isOpen: boolean;
+    date?: string;
+  };
+  openDayDetailDrawer: (options: { date: string }) => void;
+  closeDayDetailDrawer: () => void;
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
@@ -237,6 +284,99 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       expenseDrawer: {
         isOpen: false,
         mode: 'create',
+      },
+    }),
+
+  // Retainer drawer
+  retainerDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openRetainerDrawer: (options) =>
+    set({
+      retainerDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        retainerId: options?.retainerId,
+        defaultProfileId: options?.defaultProfileId,
+        defaultClientId: options?.defaultClientId,
+        defaultProjectId: options?.defaultProjectId,
+      },
+    }),
+  closeRetainerDrawer: () =>
+    set({
+      retainerDrawer: {
+        isOpen: false,
+        mode: 'create',
+      },
+    }),
+
+  // Retainer matching drawer
+  retainerMatchingDrawer: {
+    isOpen: false,
+    step: 'select-transaction',
+  },
+  openRetainerMatchingDrawer: (options) =>
+    set({
+      retainerMatchingDrawer: {
+        isOpen: true,
+        step: options?.step || 'select-transaction',
+        transactionId: options?.transactionId,
+        projectedIncomeId: options?.projectedIncomeId,
+      },
+    }),
+  closeRetainerMatchingDrawer: () =>
+    set({
+      retainerMatchingDrawer: {
+        isOpen: false,
+        step: 'select-transaction',
+        transactionId: undefined,
+        projectedIncomeId: undefined,
+      },
+    }),
+  setRetainerMatchingStep: (step) =>
+    set((state) => ({
+      retainerMatchingDrawer: {
+        ...state.retainerMatchingDrawer,
+        step,
+      },
+    })),
+  setRetainerMatchingTransaction: (transactionId) =>
+    set((state) => ({
+      retainerMatchingDrawer: {
+        ...state.retainerMatchingDrawer,
+        transactionId,
+        step: 'select-projected',
+      },
+    })),
+  setRetainerMatchingProjectedIncome: (projectedIncomeId) =>
+    set((state) => ({
+      retainerMatchingDrawer: {
+        ...state.retainerMatchingDrawer,
+        projectedIncomeId,
+      },
+    })),
+
+  // Selected retainer for inspector panel
+  selectedRetainerId: undefined,
+  selectRetainer: (id) => set({ selectedRetainerId: id }),
+
+  // Day detail drawer (Money Answers page)
+  dayDetailDrawer: {
+    isOpen: false,
+  },
+  openDayDetailDrawer: (options) =>
+    set({
+      dayDetailDrawer: {
+        isOpen: true,
+        date: options.date,
+      },
+    }),
+  closeDayDetailDrawer: () =>
+    set({
+      dayDetailDrawer: {
+        isOpen: false,
+        date: undefined,
       },
     }),
 }));

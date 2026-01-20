@@ -1,13 +1,15 @@
 /// <reference types="vite/client" />
 
-// Vite environment variables
-interface ImportMetaEnv {
-  readonly VITE_DOWNLOAD_CONFIG_URL: string;
-}
+// Vite environment variables (empty - no custom env vars needed)
+interface ImportMetaEnv {}
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Build-time constants
+declare const __APP_VERSION__: string;
+declare const __BUILD_MODE__: 'web' | 'desktop';
 
 // Fontsource variable fonts
 declare module '@fontsource-variable/inter';

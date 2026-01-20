@@ -1,0 +1,30 @@
+# Stable download URLs - redirect to GitHub Releases latest artifacts
+[[redirects]]
+  from = "/download/mac"
+  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-universal.dmg"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/download/windows"
+  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64.msi"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/download/windows-exe"
+  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64-setup.exe"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/download/release-notes"
+  to = "https://github.com/vAWK3/mutaba3a/releases/latest"
+  status = 302
+  force = true
+
+# SPA fallback - serve index.html for all routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

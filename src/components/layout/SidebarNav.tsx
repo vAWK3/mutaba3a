@@ -1,26 +1,221 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "../../lib/utils";
 import { useT } from "../../lib/i18n";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { ProfileSwitcher } from "./ProfileSwitcher";
+import { useDrawerStore } from "../../lib/stores";
 
-const navItems = [
-  { path: "/", labelKey: "nav.overview", icon: HomeIcon },
-  { path: "/projects", labelKey: "nav.projects", icon: FolderIcon },
-  { path: "/clients", labelKey: "nav.clients", icon: UsersIcon },
-  { path: "/transactions", labelKey: "nav.transactions", icon: ListIcon },
-  { path: "/documents", labelKey: "nav.documents", icon: DocumentIcon },
-  { path: "/expenses", labelKey: "nav.expenses", icon: ExpensesIcon },
-  { path: "/reports", labelKey: "nav.reports", icon: ChartIcon },
-] as const;
+// Storage key for collapsed state
+const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
+
+function useCollapsedState() {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggle = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // Ignore localStorage errors
+      }
+      return next;
+    });
+  }, []);
+
+  return [collapsed, toggle] as const;
+}
+
+// Navigation item type
+interface NavItem {
+  path: string;
+  labelKey: string;
+  icon: React.ComponentType<{ className?: string }>;
+  exact?: boolean;
+  badge?: "hasUpdate";
+}
+
+// Navigation section type
+interface NavSection {
+  key: string;
+  labelKey: string;
+  items: NavItem[];
+}
+
+// Define navigation sections
+const navSections: NavSection[] = [
+  {
+    key: "work",
+    labelKey: "nav.sections.work",
+    items: [
+      { path: "/", labelKey: "nav.overview", icon: HomeIcon, exact: true },
+      { path: "/projects", labelKey: "nav.projects", icon: FolderIcon },
+      { path: "/clients", labelKey: "nav.clients", icon: UsersIcon },
+    ],
+  },
+  {
+    key: "money",
+    labelKey: "nav.sections.money",
+    items: [
+      { path: "/transactions", labelKey: "nav.transactions", icon: ListIcon },
+      { path: "/documents", labelKey: "nav.documents", icon: DocumentIcon },
+      { path: "/retainers", labelKey: "nav.retainers", icon: RetainerIcon },
+      { path: "/money-answers", labelKey: "nav.moneyAnswers", icon: AnswersIcon },
+      { path: "/expenses", labelKey: "nav.expenses", icon: ExpensesIcon },
+      { path: "/reports", labelKey: "nav.reports", icon: ChartIcon },
+    ],
+  },
+];
+
+// System section items (rendered in footer)
+const systemItems: NavItem[] = [
+  { path: "/download", labelKey: "nav.download", icon: DownloadIcon },
+  { path: "/settings", labelKey: "nav.settings", icon: SettingsIcon, badge: "hasUpdate" },
+];
+
+// New action menu items
+type NewMenuAction = "document" | "transaction" | "client" | "expense";
+
+const newMenuItems: { key: NewMenuAction; labelKey: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "document", labelKey: "nav.newMenu.document", icon: DocumentIcon },
+  { key: "transaction", labelKey: "nav.newMenu.transaction", icon: ListIcon },
+  { key: "client", labelKey: "nav.newMenu.client", icon: UsersIcon },
+  { key: "expense", labelKey: "nav.newMenu.expense", icon: ExpensesIcon },
+];
 
 export function SidebarNav() {
   const location = useLocation();
+  const navigate = useNavigate();
   const t = useT();
   const { hasUpdate } = useCheckForUpdates();
+  const [collapsed, toggleCollapsed] = useCollapsedState();
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement>(null);
+  const newButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Global drawer state from stores
+  const openDocumentDrawer = useDrawerStore((s) => s.openDocumentDrawer);
+  const openTransactionDrawer = useDrawerStore((s) => s.openTransactionDrawer);
+  const openClientDrawer = useDrawerStore((s) => s.openClientDrawer);
+  const openExpenseDrawer = useDrawerStore((s) => s.openExpenseDrawer);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!newMenuOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        newMenuRef.current &&
+        !newMenuRef.current.contains(e.target as Node) &&
+        newButtonRef.current &&
+        !newButtonRef.current.contains(e.target as Node)
+      ) {
+        setNewMenuOpen(false);
+      }
+    }
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setNewMenuOpen(false);
+        newButtonRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [newMenuOpen]);
+
+  // Check if a nav item is active
+  const isItemActive = (item: NavItem): boolean => {
+    if (item.exact) {
+      return location.pathname === item.path;
+    }
+    return (
+      location.pathname === item.path ||
+      location.pathname.startsWith(item.path + "/")
+    );
+  };
+
+  // Handle new menu action
+  const handleNewAction = (action: NewMenuAction) => {
+    setNewMenuOpen(false);
+    switch (action) {
+      case "document":
+        openDocumentDrawer({ mode: "create" });
+        navigate({ to: "/documents" });
+        break;
+      case "transaction":
+        openTransactionDrawer({ mode: "create", defaultKind: "income" });
+        break;
+      case "client":
+        openClientDrawer({ mode: "create" });
+        break;
+      case "expense":
+        openExpenseDrawer({ mode: "create" });
+        navigate({ to: "/expenses" });
+        break;
+    }
+  };
+
+  // Render a single nav item
+  const renderNavItem = (item: NavItem, showBadge: boolean = false) => {
+    const Icon = item.icon;
+    const isActive = isItemActive(item);
+    const showUpdateBadge = showBadge && item.badge === "hasUpdate" && hasUpdate;
+
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        className={cn("nav-item", isActive && "active")}
+        aria-current={isActive ? "page" : undefined}
+        title={collapsed ? t(item.labelKey) : undefined}
+      >
+        {isActive && <span className="nav-item-rail" aria-hidden="true" />}
+        <span className="nav-item-icon-wrapper">
+          <Icon className="nav-icon" />
+          {collapsed && showUpdateBadge && (
+            <span className="nav-item-dot" aria-label={t("settings.updates.updateAvailable")} />
+          )}
+        </span>
+        {!collapsed && (
+          <>
+            <span className="nav-item-label">{t(item.labelKey)}</span>
+            {showUpdateBadge && <span className="update-indicator" />}
+          </>
+        )}
+      </Link>
+    );
+  };
+
+  // Render a section
+  const renderSection = (section: NavSection) => {
+    return (
+      <div key={section.key} className="nav-section">
+        {!collapsed && (
+          <div className="nav-section-header">{t(section.labelKey)}</div>
+        )}
+        <div className="nav-section-items">
+          {section.items.map((item) => renderNavItem(item))}
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <aside className="sidebar">
+    <aside className={cn("sidebar", collapsed && "collapsed")}>
+      {/* Header with brand and collapse toggle */}
       <div className="sidebar-header">
         <Link to="/" className="brand" aria-label="متابعة">
           <img
@@ -33,62 +228,98 @@ export function SidebarNav() {
             loading="eager"
             decoding="async"
           />
-          <span className="brand-name" lang="ar" dir="rtl">
-            متابعة
-          </span>
+          {!collapsed && (
+            <span className="brand-name" lang="ar" dir="rtl">
+              متابعة
+            </span>
+          )}
         </Link>
+        <button
+          type="button"
+          className="sidebar-collapse-toggle"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? t("nav.expand") : t("nav.collapse")}
+          title={collapsed ? t("nav.expand") : t("nav.collapse")}
+        >
+          <ChevronIcon className={cn("nav-icon", collapsed && "rotated")} />
+        </button>
       </div>
 
-      <nav className="sidebar-nav">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.path === "/"
-              ? location.pathname === "/"
-              : location.pathname.startsWith(item.path);
+      {/* Profile Switcher */}
+      <div className="sidebar-profile">
+        <ProfileSwitcher collapsed={collapsed} />
+      </div>
 
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn("nav-item", isActive && "active")}
-            >
-              <Icon className="nav-icon" />
-              {t(item.labelKey)}
-            </Link>
-          );
-        })}
+      {/* New Action Button */}
+      <div className="new-action-section">
+        <button
+          ref={newButtonRef}
+          type="button"
+          className={cn("new-action-btn", newMenuOpen && "active")}
+          onClick={() => setNewMenuOpen(!newMenuOpen)}
+          title={collapsed ? t("nav.new") : undefined}
+          aria-expanded={newMenuOpen}
+          aria-haspopup="menu"
+        >
+          <PlusIcon className="nav-icon" />
+          {!collapsed && <span className="new-action-label">{t("nav.new")}</span>}
+        </button>
+
+        {newMenuOpen && (
+          <div
+            ref={newMenuRef}
+            className={cn("new-action-menu", collapsed && "collapsed-menu")}
+            role="menu"
+          >
+            {newMenuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="new-action-menu-item"
+                  role="menuitem"
+                  onClick={() => handleNewAction(item.key)}
+                >
+                  <Icon className="nav-icon" />
+                  <span>{t(item.labelKey)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Main Navigation */}
+      <nav className="sidebar-nav">
+        {navSections.map(renderSection)}
       </nav>
 
+      {/* Footer with system items */}
       <div className="sidebar-footer">
-        <div className="sidebar-profile-switcher">
-          <ProfileSwitcher />
-        </div>
-        <Link
-          to="/download"
-          className={cn(
-            "nav-item",
-            location.pathname === "/download" && "active"
-          )}
-        >
-          <DownloadIcon className="nav-icon" />
-          {t("nav.download")}
-        </Link>
-        <Link
-          to="/settings"
-          className={cn(
-            "nav-item",
-            location.pathname === "/settings" && "active"
-          )}
-        >
-          <SettingsIcon className="nav-icon" />
-          {t("nav.settings")}
-          {hasUpdate && <span className="update-indicator" />}
-        </Link>
+        {!collapsed && (
+          <div className="nav-section-header">{t("nav.sections.system")}</div>
+        )}
+        {systemItems.map((item) => renderNavItem(item, true))}
       </div>
+
+      {/* Expand toggle (visible only when collapsed) */}
+      {collapsed && (
+        <button
+          type="button"
+          className="sidebar-expand-toggle"
+          onClick={toggleCollapsed}
+          aria-label={t("nav.expand")}
+          title={t("nav.expand")}
+        >
+          <ExpandIcon className="nav-icon" />
+        </button>
+      )}
     </aside>
   );
 }
+
+// Icons
 
 function HomeIcon({ className }: { className?: string }) {
   return (
@@ -234,6 +465,24 @@ function DownloadIcon({ className }: { className?: string }) {
   );
 }
 
+function RetainerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+      />
+    </svg>
+  );
+}
+
 function SettingsIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -252,6 +501,78 @@ function SettingsIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+      />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 19.5 8.25 12l7.5-7.5"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 4.5v15m7.5-7.5h-15"
+      />
+    </svg>
+  );
+}
+
+function AnswersIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
+      />
+    </svg>
+  );
+}
+
+function ExpandIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
       />
     </svg>
   );

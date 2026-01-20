@@ -193,7 +193,7 @@ tag_and_push() {
   echo -e "${BLUE}Preparing git commit, tag and push...${NC}"
 
   # 1) Commit the version/config changes (so the tag points to the right commit)
-  git add "$PACKAGE_JSON" "$TAURI_CONF" "$CARGO_TOML" src/content/download-config.ts || true
+  git add "$PACKAGE_JSON" "$TAURI_CONF" "$CARGO_TOML" || true
 
   if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
     git commit -m "Release $tag" || true
@@ -301,30 +301,43 @@ prepare_release_artifacts() {
     # Create release directory
     mkdir -p "$RELEASE_DIR"
 
-    # Clean filename for release
-    local release_dmg="mutaba3a-v${version}-macos-universal.dmg"
-    local release_dmg_path="$RELEASE_DIR/$release_dmg"
-    local checksum_file="$RELEASE_DIR/mutaba3a-v${version}-macos-universal.sha256"
+    # Versioned filenames (for archival)
+    local versioned_dmg="mutaba3a-v${version}-macos-universal.dmg"
+    local versioned_dmg_path="$RELEASE_DIR/$versioned_dmg"
+    local versioned_checksum_file="$RELEASE_DIR/mutaba3a-v${version}-macos-universal.sha256"
 
-    # Copy DMG to release folder
-    cp "$source_dmg" "$release_dmg_path"
-    echo -e "  ${GREEN}✓${NC} Copied DMG to $release_dmg_path"
+    # Stable filenames (for Netlify redirects)
+    local stable_dmg="mutaba3a-macos-universal.dmg"
+    local stable_dmg_path="$RELEASE_DIR/$stable_dmg"
+    local stable_checksum_file="$RELEASE_DIR/mutaba3a-macos-universal.dmg.sha256"
+
+    # Copy DMG to versioned path
+    cp "$source_dmg" "$versioned_dmg_path"
+    echo -e "  ${GREEN}✓${NC} Copied DMG to $versioned_dmg_path"
+
+    # Copy DMG to stable path
+    cp "$source_dmg" "$stable_dmg_path"
+    echo -e "  ${GREEN}✓${NC} Copied DMG to $stable_dmg_path (stable)"
 
     # Generate SHA256 checksum
     local checksum
-    checksum=$(shasum -a 256 "$release_dmg_path" | awk '{print $1}')
-    echo "$checksum" > "$checksum_file"
+    checksum=$(shasum -a 256 "$versioned_dmg_path" | awk '{print $1}')
+    echo "$checksum" > "$versioned_checksum_file"
+    echo "$checksum" > "$stable_checksum_file"
 
-    echo -e "  ${GREEN}✓${NC} Generated SHA256 checksum"
+    echo -e "  ${GREEN}✓${NC} Generated SHA256 checksums"
     echo ""
     echo -e "${CYAN}SHA256:${NC} $checksum"
     echo ""
 
     # Return paths via global variables (bash doesn't support multiple returns well)
-    RELEASE_DMG_PATH="$release_dmg_path"
-    RELEASE_DMG_NAME="$release_dmg"
-    RELEASE_CHECKSUM_PATH="$checksum_file"
+    RELEASE_DMG_PATH="$versioned_dmg_path"
+    RELEASE_DMG_NAME="$versioned_dmg"
+    RELEASE_CHECKSUM_PATH="$versioned_checksum_file"
     RELEASE_CHECKSUM="$checksum"
+    # Stable paths for upload
+    STABLE_DMG_PATH="$stable_dmg_path"
+    STABLE_CHECKSUM_PATH="$stable_checksum_file"
 }
 
 # Create tar.gz archive for Tauri updater (required format)
@@ -637,7 +650,14 @@ create_github_release() {
 
   echo -e "${BLUE}Creating GitHub release...${NC}"
 
+  # Build artifact list - versioned first, then stable
   local artifacts=("$RELEASE_DMG_PATH" "$RELEASE_CHECKSUM_PATH")
+
+  # Add stable artifacts
+  [[ -n "${STABLE_DMG_PATH:-}" && -f "$STABLE_DMG_PATH" ]] && artifacts+=("$STABLE_DMG_PATH")
+  [[ -n "${STABLE_CHECKSUM_PATH:-}" && -f "$STABLE_CHECKSUM_PATH" ]] && artifacts+=("$STABLE_CHECKSUM_PATH")
+
+  # Add update artifacts
   [[ -n "${UPDATE_MANIFEST_PATH:-}" && -f "$UPDATE_MANIFEST_PATH" ]] && artifacts+=("$UPDATE_MANIFEST_PATH")
   [[ -n "${UPDATE_ARCHIVE_PATH:-}" && -f "$UPDATE_ARCHIVE_PATH" ]] && artifacts+=("$UPDATE_ARCHIVE_PATH")
 
@@ -669,8 +689,8 @@ print_release_urls() {
     local tag="v$version"
 
     local release_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$tag"
-    local download_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$RELEASE_DMG_NAME"
-    local checksum_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-v${version}-macos-universal.sha256"
+    local versioned_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$RELEASE_DMG_NAME"
+    local stable_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/mutaba3a-macos-universal.dmg"
 
     echo ""
     echo -e "${GREEN}========================================${NC}"
@@ -680,19 +700,15 @@ print_release_urls() {
     echo -e "${BOLD}Release Page:${NC}"
     echo -e "  ${CYAN}$release_url${NC}"
     echo ""
-    echo -e "${BOLD}Direct Download (DMG):${NC}"
-    echo -e "  ${CYAN}$download_url${NC}"
-    echo ""
-    echo -e "${BOLD}Checksum File:${NC}"
-    echo -e "  ${CYAN}$checksum_url${NC}"
-    echo ""
     echo -e "${BOLD}SHA256 Checksum:${NC}"
     echo -e "  ${CYAN}$RELEASE_CHECKSUM${NC}"
     echo ""
     echo -e "${GREEN}----------------------------------------${NC}"
-    echo -e "${BOLD}Copy this URL into your website button:${NC}"
+    echo -e "${BOLD}Stable Download URL (always latest):${NC}"
+    echo -e "  ${CYAN}$stable_url${NC}"
     echo ""
-    echo -e "  ${CYAN}$download_url${NC}"
+    echo -e "${BOLD}Versioned Download URL (archival):${NC}"
+    echo -e "  ${CYAN}$versioned_url${NC}"
     echo ""
 
     # Show auto-update info if manifest was created
@@ -741,7 +757,7 @@ build_and_release_mac() {
     local dmg_path
     dmg_path=$(find_dmg_artifact | tail -1)
 
-    # Prepare release artifacts
+    # Prepare release artifacts (both versioned and stable)
     prepare_release_artifacts "$version" "$dmg_path"
 
     # Create update archive and manifest for auto-updates (if signing configured)
@@ -753,31 +769,24 @@ build_and_release_mac() {
         echo -e "  ${YELLOW}⚠${NC} Skipping auto-update artifacts (no signing key)"
     fi
 
-    # Update website download config (auto-generates src/content/download-config.ts)
-    update_download_config "$version"
-
-    # Generate and print JSON config for remote hosting
-    generate_download_json "$version"
-
-    # Tag and push (includes updated download config)
+    # Tag and push
     tag_and_push "$version"
 
-    # Create GitHub release
+    # Create GitHub release (uploads both versioned and stable artifacts)
     create_github_release "$version"
 
     # Print URLs
     print_release_urls "$version"
 
-    # Confirm website update
-    echo -e "${GREEN}✓ Website download page updated with v$version metadata${NC}"
+    echo -e "${GREEN}✓ Release v$version published with stable download URLs${NC}"
 }
 
 # Deploy web to main branch
 deploy_web() {
     echo -e "${BLUE}Deploying web version to main...${NC}"
 
-    # Build the web version
-    npm run build
+    # Build the web version explicitly
+    npm run build:web
 
     # Git operations
     git add .

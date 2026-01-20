@@ -2,13 +2,21 @@ import { useState, useCallback, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { Card } from '../../components/ui/Card';
 import { Toast } from '../../components/ui/Toast';
-import { copyToClipboard } from '../../lib/utils';
-import { useDownloadConfig } from '../../hooks/useDownloadConfig';
-import type { DownloadConfig } from '../../content/download-config';
+import { useLatestRelease } from '../../hooks/useLatestRelease';
+import { PLATFORM_CONFIG } from '../../content/download-config';
 import { useT } from '../../lib/i18n';
 import './DownloadPage.css';
 
 type OS = 'mac' | 'windows' | 'unknown';
+
+// Stable download URLs (redirected by Netlify to GitHub Releases latest)
+const DOWNLOAD_URLS = {
+  mac: '/download/mac',
+  windowsMsi: '/download/windows',
+  windowsExe: '/download/windows-exe',
+  releaseNotes: '/download/release-notes',
+  allReleases: 'https://github.com/vAWK3/mutaba3a/releases',
+} as const;
 
 function detectOS(): OS {
   const ua = navigator.userAgent.toLowerCase();
@@ -23,32 +31,21 @@ function detectOS(): OS {
   return 'unknown';
 }
 
-function truncateChecksum(checksum: string): string {
-  if (!checksum || checksum.length <= 20) return checksum || '—';
-  return `${checksum.slice(0, 8)}...${checksum.slice(-8)}`;
-}
-
 interface PlatformCardProps {
   platform: 'mac' | 'windows';
   isRecommended: boolean;
-  onCopyChecksum: (checksum: string) => void;
-  config: DownloadConfig;
+  version: string | null;
   hasBuild: boolean;
   isLoading: boolean;
   t: (key: string) => string;
 }
 
-function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuild, isLoading, t }: PlatformCardProps) {
+function PlatformCard({ platform, isRecommended, version, hasBuild, isLoading, t }: PlatformCardProps) {
   const isMac = platform === 'mac';
-  const macConfig = config.mac;
-  const winConfig = config.windows;
-
-  const platformConfig = isMac ? macConfig : winConfig;
-  const version = config.fallbackVersion;
-  const isAvailable = hasBuild && !!version;
+  const platformConfig = PLATFORM_CONFIG[platform];
 
   const title = t(isMac ? 'download.mac.title' : 'download.windows.title');
-  const downloadUrl = isMac ? macConfig.downloadUrl : winConfig.msiUrl;
+  const downloadUrl = isMac ? DOWNLOAD_URLS.mac : DOWNLOAD_URLS.windowsMsi;
   const buttonText = t(isMac ? 'download.mac.downloadDmg' : 'download.windows.downloadMsi');
 
   const installSteps = isMac
@@ -62,6 +59,9 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuil
         t('download.windows.step2'),
         t('download.windows.step3'),
       ];
+
+  // Show as available if we have build info from GitHub, or fallback if loading failed
+  const isAvailable = hasBuild || (!isLoading && version === null);
 
   return (
     <Card
@@ -88,7 +88,7 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuil
             className={`download-cta ${isRecommended ? 'download-cta--primary' : 'download-cta--secondary'}`}
             rel="noopener"
             data-cta={`download-${platform}`}
-            data-version={version}
+            data-version={version || 'latest'}
           >
             {buttonText}
           </a>
@@ -102,38 +102,15 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuil
       <div className="download-meta">
         <div className="download-meta-item">
           <span className="download-meta-label">{t('download.version')}</span>
-          <span className="download-meta-value">{isLoading ? '...' : version ? `v${version}` : '—'}</span>
+          <span className="download-meta-value">
+            {isLoading ? '...' : version ? `v${version}` : '\u2014'}
+          </span>
         </div>
-        {isAvailable && platformConfig.fileSize && (
-          <div className="download-meta-item">
-            <span className="download-meta-label">{t('download.size')}</span>
-            <span className="download-meta-value">{platformConfig.fileSize}</span>
-          </div>
-        )}
         <div className="download-meta-item">
           <span className="download-meta-label">{t('download.requires')}</span>
           <span className="download-meta-value">{platformConfig.minVersion}</span>
         </div>
       </div>
-
-      {isAvailable && platformConfig.sha256 && (
-        <div className="download-checksum">
-          <span className="download-checksum-label">{t('download.sha256')}</span>
-          <div className="download-checksum-row">
-            <code className="download-checksum-value">
-              {truncateChecksum(platformConfig.sha256)}
-            </code>
-            <button
-              type="button"
-              className="download-checksum-copy"
-              onClick={() => onCopyChecksum(platformConfig.sha256)}
-              aria-label={t('download.copy')}
-            >
-              {t('download.copy')}
-            </button>
-          </div>
-        </div>
-      )}
 
       {isAvailable && (
         <div className="download-install">
@@ -149,7 +126,7 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuil
       {!isMac && isAvailable && (
         <div className="download-alt">
           <a
-            href={winConfig.exeUrl}
+            href={DOWNLOAD_URLS.windowsExe}
             className="download-alt-link"
             rel="noopener"
           >
@@ -164,15 +141,8 @@ function PlatformCard({ platform, isRecommended, onCopyChecksum, config, hasBuil
 export function DownloadPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const detectedOS = useMemo(() => detectOS(), []);
-  const { config, isLoading } = useDownloadConfig();
+  const { release, isLoading } = useLatestRelease();
   const t = useT();
-
-  const handleCopyChecksum = useCallback(async (checksum: string) => {
-    const success = await copyToClipboard(checksum);
-    if (success) {
-      setToastVisible(true);
-    }
-  }, []);
 
   const handleToastClose = useCallback(() => {
     setToastVisible(false);
@@ -181,9 +151,12 @@ export function DownloadPage() {
   const platformOrder: Array<'mac' | 'windows'> =
     detectedOS === 'windows' ? ['windows', 'mac'] : ['mac', 'windows'];
 
-  // Check build availability based on sha256 presence
-  const hasMacBuild = !!config.mac.sha256;
-  const hasWindowsBuild = !!config.windows.sha256;
+  // Determine build availability from GitHub API response
+  const hasMacBuild = release?.hasMacBuild ?? false;
+  const hasWindowsBuild = release?.hasWindowsBuild ?? false;
+
+  // Use release notes URL from GitHub API, or fallback to Netlify redirect
+  const releaseNotesUrl = release?.releaseNotesUrl || DOWNLOAD_URLS.releaseNotes;
 
   return (
     <>
@@ -196,8 +169,7 @@ export function DownloadPage() {
                 key={platform}
                 platform={platform}
                 isRecommended={detectedOS === platform}
-                onCopyChecksum={handleCopyChecksum}
-                config={config}
+                version={release?.version || null}
                 hasBuild={platform === 'mac' ? hasMacBuild : hasWindowsBuild}
                 isLoading={isLoading}
                 t={t}
@@ -207,7 +179,7 @@ export function DownloadPage() {
 
           <div className="download-footer">
             <a
-              href={config.releaseNotesUrl || config.allReleasesUrl}
+              href={releaseNotesUrl}
               className="download-link"
               rel="noopener noreferrer"
               target="_blank"
@@ -215,7 +187,7 @@ export function DownloadPage() {
               {t('download.releaseNotes')}
             </a>
             <a
-              href={config.allReleasesUrl}
+              href={DOWNLOAD_URLS.allReleases}
               className="download-link"
               rel="noopener noreferrer"
               target="_blank"

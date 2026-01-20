@@ -1,13 +1,17 @@
 {
   "name": "mutaba3a",
   "private": true,
-  "version": "0.0.16",
+  "version": "0.0.17",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:desktop": "TAURI_PLATFORM=1 vite",
     "build": "tsc -b && vite build",
+    "build:web": "tsc -b && vite build",
+    "build:desktop": "tsc -b && TAURI_PLATFORM=1 vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "preview:web": "vite preview --outDir dist-web",
     "tauri": "tauri",
     "deploy": "./deploy.sh",
     "test": "vitest",

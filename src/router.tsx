@@ -222,6 +222,62 @@ const expensesForecastRoute = createRoute({
   },
 });
 
+// ============================================================================
+// Retainer Routes
+// ============================================================================
+
+// Retainers search params
+interface RetainersSearch {
+  status?: 'draft' | 'active' | 'paused' | 'ended';
+  currency?: 'USD' | 'ILS';
+  clientId?: string;
+}
+
+const retainersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/retainers',
+  component: lazyPage(() => import('./pages/retainers/RetainersPage'), 'RetainersPage'),
+  validateSearch: (search: Record<string, unknown>): RetainersSearch => {
+    return {
+      status: search.status === 'draft' || search.status === 'active' || search.status === 'paused' || search.status === 'ended'
+        ? search.status
+        : undefined,
+      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
+      clientId: typeof search.clientId === 'string' ? search.clientId : undefined,
+    };
+  },
+});
+
+// ============================================================================
+// Money Answers Route
+// ============================================================================
+
+// Money Answers search params
+interface MoneyAnswersSearch {
+  mode?: 'month' | 'year';
+  month?: string;
+  year?: number;
+  currency?: 'USD' | 'ILS';
+  includeReceivables?: boolean;
+  includeProjections?: boolean;
+}
+
+const moneyAnswersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/money-answers',
+  component: lazyPage(() => import('./pages/money-answers'), 'MoneyAnswersPage'),
+  validateSearch: (search: Record<string, unknown>): MoneyAnswersSearch => {
+    return {
+      mode: search.mode === 'month' || search.mode === 'year' ? search.mode : undefined,
+      month: typeof search.month === 'string' ? search.month : undefined,
+      year: typeof search.year === 'number' ? search.year : undefined,
+      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
+      includeReceivables: typeof search.includeReceivables === 'boolean' ? search.includeReceivables : undefined,
+      includeProjections: typeof search.includeProjections === 'boolean' ? search.includeProjections : undefined,
+    };
+  },
+});
+
 // Monthly close search params
 interface MonthCloseSearch {
   month?: string;
@@ -257,6 +313,10 @@ const routeTree = rootRoute.addChildren([
   expensesOverviewRoute,
   expensesForecastRoute,
   monthCloseRoute,
+  // Retainer routes
+  retainersRoute,
+  // Money Answers route
+  moneyAnswersRoute,
   reportsRoute,
   settingsRoute,
   profileDetailRoute,
@@ -264,8 +324,11 @@ const routeTree = rootRoute.addChildren([
   themeDemoRoute,
 ]);
 
-// Create router
-export const router = createRouter({ routeTree });
+// Create router with conditional basepath for web build
+export const router = createRouter({
+  routeTree,
+  basepath: __BUILD_MODE__ === 'web' ? '/app' : undefined,
+});
 
 // Type declaration for router
 declare module '@tanstack/react-router' {

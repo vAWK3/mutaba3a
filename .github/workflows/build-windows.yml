@@ -71,22 +71,41 @@ jobs:
             exit 1
           }
 
-          $msiName = "mutaba3a-v$version-windows-x64.msi"
-          $msiPath = Join-Path $releaseDir $msiName
-          Copy-Item $msiSource.FullName $msiPath
-          Write-Host "MSI: $msiPath (from $($msiSource.FullName))"
-          echo "msi_path=$msiPath" >> $env:GITHUB_OUTPUT
-          echo "msi_name=$msiName" >> $env:GITHUB_OUTPUT
+          # Versioned MSI (for archival)
+          $msiVersionedName = "mutaba3a-v$version-windows-x64.msi"
+          $msiVersionedPath = Join-Path $releaseDir $msiVersionedName
+          Copy-Item $msiSource.FullName $msiVersionedPath
+          Write-Host "MSI (versioned): $msiVersionedPath"
+          echo "msi_versioned_path=$msiVersionedPath" >> $env:GITHUB_OUTPUT
+          echo "msi_versioned_name=$msiVersionedName" >> $env:GITHUB_OUTPUT
+
+          # Stable MSI (for Netlify redirects)
+          $msiStableName = "mutaba3a-windows-x64.msi"
+          $msiStablePath = Join-Path $releaseDir $msiStableName
+          Copy-Item $msiSource.FullName $msiStablePath
+          Write-Host "MSI (stable): $msiStablePath"
+          echo "msi_stable_path=$msiStablePath" >> $env:GITHUB_OUTPUT
+          echo "msi_stable_name=$msiStableName" >> $env:GITHUB_OUTPUT
 
           # Find NSIS EXE
           $exeSource = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($exeSource) {
-            $exeName = "mutaba3a-v$version-windows-x64-setup.exe"
-            $exePath = Join-Path $releaseDir $exeName
-            Copy-Item $exeSource.FullName $exePath
-            Write-Host "EXE: $exePath (from $($exeSource.FullName))"
-            echo "exe_path=$exePath" >> $env:GITHUB_OUTPUT
-            echo "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+            # Versioned EXE (for archival)
+            $exeVersionedName = "mutaba3a-v$version-windows-x64-setup.exe"
+            $exeVersionedPath = Join-Path $releaseDir $exeVersionedName
+            Copy-Item $exeSource.FullName $exeVersionedPath
+            Write-Host "EXE (versioned): $exeVersionedPath"
+            echo "exe_versioned_path=$exeVersionedPath" >> $env:GITHUB_OUTPUT
+            echo "exe_versioned_name=$exeVersionedName" >> $env:GITHUB_OUTPUT
+
+            # Stable EXE (for Netlify redirects)
+            $exeStableName = "mutaba3a-windows-x64-setup.exe"
+            $exeStablePath = Join-Path $releaseDir $exeStableName
+            Copy-Item $exeSource.FullName $exeStablePath
+            Write-Host "EXE (stable): $exeStablePath"
+            echo "exe_stable_path=$exeStablePath" >> $env:GITHUB_OUTPUT
+            echo "exe_stable_name=$exeStableName" >> $env:GITHUB_OUTPUT
+
             echo "has_exe=true" >> $env:GITHUB_OUTPUT
           } else {
             Write-Host "NSIS EXE not found (optional, continuing without it)"
@@ -97,24 +116,36 @@ jobs:
         id: checksums
         shell: pwsh
         run: |
-          # MSI checksum
-          $msiPath = "${{ steps.artifacts.outputs.msi_path }}"
-          $msiHash = (Get-FileHash $msiPath -Algorithm SHA256).Hash.ToLower()
-          $msiChecksumFile = "$msiPath.sha256"
-          Set-Content -Path $msiChecksumFile -Value $msiHash -NoNewline
+          # MSI checksums (versioned and stable)
+          $msiVersionedPath = "${{ steps.artifacts.outputs.msi_versioned_path }}"
+          $msiHash = (Get-FileHash $msiVersionedPath -Algorithm SHA256).Hash.ToLower()
+
+          $msiVersionedChecksumFile = "$msiVersionedPath.sha256"
+          Set-Content -Path $msiVersionedChecksumFile -Value $msiHash -NoNewline
           Write-Host "MSI SHA256: $msiHash"
-          echo "msi_checksum_path=$msiChecksumFile" >> $env:GITHUB_OUTPUT
+          echo "msi_versioned_checksum_path=$msiVersionedChecksumFile" >> $env:GITHUB_OUTPUT
           echo "msi_hash=$msiHash" >> $env:GITHUB_OUTPUT
 
-          # EXE checksum (if exists)
+          $msiStablePath = "${{ steps.artifacts.outputs.msi_stable_path }}"
+          $msiStableChecksumFile = "$msiStablePath.sha256"
+          Set-Content -Path $msiStableChecksumFile -Value $msiHash -NoNewline
+          echo "msi_stable_checksum_path=$msiStableChecksumFile" >> $env:GITHUB_OUTPUT
+
+          # EXE checksums (if exists)
           if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
-            $exePath = "${{ steps.artifacts.outputs.exe_path }}"
-            $exeHash = (Get-FileHash $exePath -Algorithm SHA256).Hash.ToLower()
-            $exeChecksumFile = "$exePath.sha256"
-            Set-Content -Path $exeChecksumFile -Value $exeHash -NoNewline
+            $exeVersionedPath = "${{ steps.artifacts.outputs.exe_versioned_path }}"
+            $exeHash = (Get-FileHash $exeVersionedPath -Algorithm SHA256).Hash.ToLower()
+
+            $exeVersionedChecksumFile = "$exeVersionedPath.sha256"
+            Set-Content -Path $exeVersionedChecksumFile -Value $exeHash -NoNewline
             Write-Host "EXE SHA256: $exeHash"
-            echo "exe_checksum_path=$exeChecksumFile" >> $env:GITHUB_OUTPUT
+            echo "exe_versioned_checksum_path=$exeVersionedChecksumFile" >> $env:GITHUB_OUTPUT
             echo "exe_hash=$exeHash" >> $env:GITHUB_OUTPUT
+
+            $exeStablePath = "${{ steps.artifacts.outputs.exe_stable_path }}"
+            $exeStableChecksumFile = "$exeStablePath.sha256"
+            Set-Content -Path $exeStableChecksumFile -Value $exeHash -NoNewline
+            echo "exe_stable_checksum_path=$exeStableChecksumFile" >> $env:GITHUB_OUTPUT
           }
 
       - name: Upload artifacts to release
@@ -126,15 +157,23 @@ jobs:
           $maxRetries = 12
           $retryDelay = 15
 
-          # Build list of files to upload
+          # Build list of files to upload (versioned + stable)
           $files = @(
-            "${{ steps.artifacts.outputs.msi_path }}",
-            "${{ steps.checksums.outputs.msi_checksum_path }}"
+            # Versioned MSI
+            "${{ steps.artifacts.outputs.msi_versioned_path }}",
+            "${{ steps.checksums.outputs.msi_versioned_checksum_path }}",
+            # Stable MSI
+            "${{ steps.artifacts.outputs.msi_stable_path }}",
+            "${{ steps.checksums.outputs.msi_stable_checksum_path }}"
           )
 
           if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
-            $files += "${{ steps.artifacts.outputs.exe_path }}"
-            $files += "${{ steps.checksums.outputs.exe_checksum_path }}"
+            # Versioned EXE
+            $files += "${{ steps.artifacts.outputs.exe_versioned_path }}"
+            $files += "${{ steps.checksums.outputs.exe_versioned_checksum_path }}"
+            # Stable EXE
+            $files += "${{ steps.artifacts.outputs.exe_stable_path }}"
+            $files += "${{ steps.checksums.outputs.exe_stable_checksum_path }}"
           }
 
           Write-Host "Files to upload:"
@@ -183,12 +222,20 @@ jobs:
           Write-Host "Version: $version"
           Write-Host "Tag: $tag"
           Write-Host ""
-          Write-Host "Uploaded artifacts:"
-          Write-Host "  - ${{ steps.artifacts.outputs.msi_name }}"
-          Write-Host "  - ${{ steps.artifacts.outputs.msi_name }}.sha256"
+          Write-Host "Uploaded artifacts (versioned):"
+          Write-Host "  - ${{ steps.artifacts.outputs.msi_versioned_name }}"
+          Write-Host "  - ${{ steps.artifacts.outputs.msi_versioned_name }}.sha256"
           if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
-            Write-Host "  - ${{ steps.artifacts.outputs.exe_name }}"
-            Write-Host "  - ${{ steps.artifacts.outputs.exe_name }}.sha256"
+            Write-Host "  - ${{ steps.artifacts.outputs.exe_versioned_name }}"
+            Write-Host "  - ${{ steps.artifacts.outputs.exe_versioned_name }}.sha256"
+          }
+          Write-Host ""
+          Write-Host "Uploaded artifacts (stable):"
+          Write-Host "  - ${{ steps.artifacts.outputs.msi_stable_name }}"
+          Write-Host "  - ${{ steps.artifacts.outputs.msi_stable_name }}.sha256"
+          if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
+            Write-Host "  - ${{ steps.artifacts.outputs.exe_stable_name }}"
+            Write-Host "  - ${{ steps.artifacts.outputs.exe_stable_name }}.sha256"
           }
           Write-Host ""
           Write-Host "MSI SHA256: ${{ steps.checksums.outputs.msi_hash }}"

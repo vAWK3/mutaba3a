@@ -15,6 +15,8 @@ import type {
   ExpenseCategory,
   Vendor,
   MonthCloseStatus,
+  RetainerAgreement,
+  ProjectedIncome,
 } from '../types';
 import type {
   LocalDevice,
@@ -48,6 +50,10 @@ export class MiniCrmDatabase extends Dexie {
   expenseCategories!: Table<ExpenseCategory, string>;
   vendors!: Table<Vendor, string>;
   monthCloseStatuses!: Table<MonthCloseStatus, string>;
+
+  // Retainer tables
+  retainerAgreements!: Table<RetainerAgreement, string>;
+  projectedIncome!: Table<ProjectedIncome, string>;
 
   // Sync tables
   localDevice!: Table<LocalDevice, string>;
@@ -208,6 +214,83 @@ export class MiniCrmDatabase extends Dexie {
       // New tables for vendor normalization and monthly close
       vendors: 'id, profileId, canonicalName, createdAt',
       monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+    });
+
+    // Version 6: Add retainer tables
+    this.version(6).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      // Add linkedProjectedIncomeId index to transactions
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // New retainer tables
+      retainerAgreements: 'id, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+    });
+
+    // Version 7: Add profileId to retainer tables
+    this.version(7).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables with profileId index
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
     });
   }
 }

@@ -22,6 +22,7 @@ export const GENERAL_CATEGORIES: CategoryTemplate[] = [
   { name: 'Bank Fees', nameAr: 'رسوم بنكية', color: '#64748b' },
   { name: 'Taxes & Licenses', nameAr: 'الضرائب والتراخيص', color: '#a855f7' },
   { name: 'Office Supplies', nameAr: 'مستلزمات المكتب', color: '#22c55e' },
+  { name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
   { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
@@ -40,6 +41,7 @@ export const STARTUP_CATEGORIES: CategoryTemplate[] = [
   { name: 'Equipment', nameAr: 'المعدات', color: '#ef4444' },
   { name: 'Team Perks', nameAr: 'امتيازات الفريق', color: '#22c55e' },
   { name: 'Contractor Payments', nameAr: 'مدفوعات المتعاقدين', color: '#f97316' },
+  { name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
   { name: 'Bank & Payment Fees', nameAr: 'رسوم بنكية ومدفوعات', color: '#64748b' },
   { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
@@ -60,6 +62,7 @@ export const LAW_FIRM_CATEGORIES: CategoryTemplate[] = [
   { name: 'Travel Expenses', nameAr: 'مصاريف السفر', color: '#0ea5e9' },
   { name: 'Office Supplies', nameAr: 'مستلزمات المكتب', color: '#22c55e' },
   { name: 'Communication', nameAr: 'الاتصالات', color: '#64748b' },
+  { name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
   { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 

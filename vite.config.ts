@@ -4,15 +4,18 @@ import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json'
 
 const isTauri = !!process.env.TAURI_PLATFORM || !!process.env.TAURI_FAMILY
+const buildMode = isTauri ? 'desktop' : 'web'
 
 export default defineConfig({
   base: isTauri ? './' : '/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_MODE__: JSON.stringify(buildMode),
   },
   plugins: [
     react(),
     VitePWA({
+      disable: isTauri, // Disable PWA for desktop builds
       registerType: 'autoUpdate',
       includeAssets: [
         'favicon.svg',
@@ -27,8 +30,8 @@ export default defineConfig({
         theme_color: '#070C16',
         background_color: '#070C16',
         display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        scope: isTauri ? '/' : '/app/',
+        start_url: isTauri ? '/' : '/app',
         icons: [
           {
             src: '/icons/icon-192.png',
@@ -50,7 +53,7 @@ export default defineConfig({
       },
       // Optional: lets you test PWA behavior during `npm run dev`
       devOptions: {
-        enabled: true,
+        enabled: !isTauri,
       },
     }),
   ],
@@ -62,6 +65,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    outDir: isTauri ? 'dist-desktop' : 'dist-web',
     rollupOptions: {
       output: {
         manualChunks: {

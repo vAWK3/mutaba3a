@@ -6,6 +6,8 @@ import { ProjectDrawer } from "../drawers/ProjectDrawer";
 import { BusinessProfileDrawer } from "../drawers/BusinessProfileDrawer";
 import { DocumentDrawer } from "../drawers/DocumentDrawer";
 import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
+import { RetainerDrawer } from "../drawers/RetainerDrawer";
+import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
 import { WelcomeModal } from "../modals";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
@@ -31,6 +33,8 @@ export function AppShell({ children }: AppShellProps) {
     businessProfileDrawer,
     documentDrawer,
     expenseDrawer,
+    retainerDrawer,
+    retainerMatchingDrawer,
   } = useDrawerStore();
 
   // Initialize sync system on app load
@@ -54,6 +58,8 @@ export function AppShell({ children }: AppShellProps) {
       {businessProfileDrawer.isOpen && <BusinessProfileDrawer />}
       {documentDrawer.isOpen && <DocumentDrawer />}
       {expenseDrawer.isOpen && <ExpenseDrawer />}
+      {retainerDrawer.isOpen && <RetainerDrawer />}
+      {retainerMatchingDrawer.isOpen && <RetainerMatchingDrawer />}
 
       <FxRateBanner />
       <MacDownloadBanner />

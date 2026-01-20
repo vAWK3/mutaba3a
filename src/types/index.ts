@@ -64,6 +64,7 @@ export interface Transaction {
   updatedAt: string;
   deletedAt?: string;
   linkedDocumentId?: string; // Optional link to invoice/receipt document
+  linkedProjectedIncomeId?: string; // Optional link to projected income (from retainer)
 }
 
 // FX Rate entity
@@ -558,4 +559,209 @@ export interface MonthCloseComputedStatus {
   uncategorizedExpensesCount: number;
   isFullyLinked: boolean;
   isFullyCategorized: boolean;
+}
+
+// ============================================================================
+// Retainer Types (for recurring income agreements)
+// ============================================================================
+
+// Retainer cadence
+export type RetainerCadence = 'monthly' | 'quarterly';
+
+// Retainer status
+export type RetainerStatus = 'draft' | 'active' | 'paused' | 'ended';
+
+// Projected income state
+export type ProjectedIncomeState = 'upcoming' | 'due' | 'received' | 'partial' | 'missed' | 'canceled';
+
+// Retainer Agreement entity
+export interface RetainerAgreement {
+  id: string;
+  profileId: string; // FK to BusinessProfile
+  clientId: string;
+  projectId?: string;
+  title: string;
+  currency: Currency;
+  amountMinor: number;
+  cadence: RetainerCadence;
+  paymentDay: number; // 1-28
+  startDate: string; // ISO date
+  endDate?: string; // ISO date (optional)
+  status: RetainerStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+// Projected Income entity (generated from retainers)
+export interface ProjectedIncome {
+  id: string;
+  profileId: string; // FK to BusinessProfile
+  sourceType: 'retainer';
+  sourceId: string; // Reference to RetainerAgreement.id
+  clientId: string;
+  projectId?: string;
+  currency: Currency;
+  expectedAmountMinor: number;
+  expectedDate: string; // ISO date
+  periodStart: string; // ISO date
+  periodEnd: string; // ISO date
+  state: ProjectedIncomeState;
+  receivedAmountMinor: number;
+  receivedAt?: string; // ISO timestamp
+  matchedTransactionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Retainer with resolved names for display
+export interface RetainerAgreementDisplay extends RetainerAgreement {
+  profileName?: string;
+  clientName?: string;
+  projectName?: string;
+  nextExpectedDate?: string;
+  dueNowAmountMinor: number;
+  lastReceivedDate?: string;
+  lastReceivedAmountMinor?: number;
+}
+
+// Projected income with resolved names for display
+export interface ProjectedIncomeDisplay extends ProjectedIncome {
+  clientName?: string;
+  projectName?: string;
+  retainerTitle?: string;
+  daysOverdue?: number;
+}
+
+// Query filters for retainers
+export interface RetainerFilters {
+  profileId?: string;
+  status?: RetainerStatus;
+  currency?: Currency;
+  clientId?: string;
+  projectId?: string;
+  dueOnly?: boolean;
+  search?: string;
+}
+
+// Query filters for projected income
+export interface ProjectedIncomeFilters {
+  profileId?: string;
+  sourceId?: string;
+  clientId?: string;
+  state?: ProjectedIncomeState | ProjectedIncomeState[];
+  dateFrom?: string;
+  dateTo?: string;
+  currency?: Currency;
+}
+
+// Retainer match suggestion (for matching transactions to projected income)
+export interface RetainerMatchSuggestion {
+  projectedIncomeId: string;
+  score: number; // 0-100
+  confidence: 'high' | 'medium' | 'low';
+  projectedIncome: ProjectedIncomeDisplay;
+}
+
+// ============================================================================
+// Money Answers Types (Unified Financial Cockpit)
+// ============================================================================
+
+// Money Event Direction
+export type MoneyDirection = 'inflow' | 'outflow';
+
+// Money Event Source
+export type MoneyEventSource =
+  | 'actual_income'      // Transaction kind=income, status=paid
+  | 'actual_cost'        // Transaction kind=expense
+  | 'receivable'         // Transaction kind=income, status=unpaid
+  | 'profile_expense'    // Expense table
+  | 'projected_expense'  // From RecurringRule forecast
+  | 'retainer';          // From ProjectedIncome
+
+// Money Event State
+export type MoneyEventState =
+  | 'paid' | 'unpaid' | 'overdue' | 'upcoming' | 'missed' | 'cancelled';
+
+// Confidence Level
+export type MoneyConfidence = 'high' | 'medium' | 'low';
+
+// Core MoneyEvent
+export interface MoneyEvent {
+  id: string;
+  profileId?: string;
+  direction: MoneyDirection;
+  source: MoneyEventSource;
+  state: MoneyEventState;
+  amountMinor: number;
+  currency: Currency;
+  eventDate: string;        // Primary: paidAt || dueDate || expectedDate || occurredAt
+  dueDate?: string;
+  paidDate?: string;
+  expectedDate?: string;
+  counterparty?: { id: string; name: string; type: 'client' | 'vendor' };
+  title: string;
+  confidence: MoneyConfidence;
+  sourceEntityId: string;
+  sourceEntityType: 'transaction' | 'expense' | 'projectedIncome';
+}
+
+// Daily Aggregate
+export interface DailyAggregate {
+  date: string;
+  inflowMinor: number;
+  outflowMinor: number;
+  netMinor: number;
+  runningBalanceMinor: number;
+  events: MoneyEvent[];
+  confidenceLevel: MoneyConfidence;
+}
+
+// Month Summary
+export interface MonthSummary {
+  month: string;
+  totalInflowMinor: number;
+  totalOutflowMinor: number;
+  netMinor: number;
+  awaitingMinor: number;
+  projectedOutflowMinor: number;
+}
+
+// Year Summary
+export interface YearSummary {
+  year: number;
+  totalInflowMinor: number;
+  totalOutflowMinor: number;
+  netMinor: number;
+  avgAwaitingMinor: number;
+  retainerStabilityPercent: number;
+  months: MonthSummary[];
+  bestMonth?: string;
+  worstMonth?: string;
+}
+
+// Guidance Item
+export type GuidanceSeverity = 'critical' | 'warning' | 'info';
+export type GuidanceCategory = 'collect' | 'reduce' | 'delay' | 'hygiene';
+
+export interface GuidanceItem {
+  id: string;
+  severity: GuidanceSeverity;
+  category: GuidanceCategory;
+  title: string;
+  description: string;
+  impactMinor: number;
+  impactCurrency: Currency;
+  relatedEventIds: string[];
+  primaryAction?: { label: string; type: string; payload?: Record<string, unknown> };
+}
+
+// Money Answers Filters
+export interface MoneyAnswersFilters {
+  month?: string; // YYYY-MM
+  year?: number;
+  currency: Currency;
+  includeReceivables?: boolean;
+  includeProjections?: boolean;
 }

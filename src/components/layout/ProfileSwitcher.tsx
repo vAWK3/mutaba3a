@@ -6,7 +6,11 @@ import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import './ProfileSwitcher.css';
 
-export function ProfileSwitcher() {
+interface ProfileSwitcherProps {
+  collapsed?: boolean;
+}
+
+export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
   const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -74,13 +78,14 @@ export function ProfileSwitcher() {
   if (profiles.length === 0) {
     return (
       <button
-        className="profile-switcher profile-switcher-empty"
+        className={`profile-switcher profile-switcher-empty ${collapsed ? 'collapsed' : ''}`}
         onClick={handleAddProfile}
+        title={collapsed ? t('profileSwitcher.setUpBusiness') : undefined}
       >
         <div className="profile-switcher-avatar profile-switcher-avatar-empty">
           <PlusIcon />
         </div>
-        <span className="profile-switcher-name">{t('profileSwitcher.setUpBusiness')}</span>
+        {!collapsed && <span className="profile-switcher-name">{t('profileSwitcher.setUpBusiness')}</span>}
       </button>
     );
   }
@@ -88,22 +93,27 @@ export function ProfileSwitcher() {
   const currentProfile = defaultProfile || profiles[0];
 
   return (
-    <div className="profile-switcher-container" ref={containerRef}>
+    <div className={`profile-switcher-container ${collapsed ? 'collapsed' : ''}`} ref={containerRef}>
       <button
-        className="profile-switcher"
+        className={`profile-switcher ${collapsed ? 'collapsed' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        title={collapsed ? currentProfile.name : undefined}
       >
         <ProfileAvatar profile={currentProfile} />
-        <span className="profile-switcher-name">
-          {currentProfile.name}
-        </span>
-        <ChevronIcon className={isOpen ? 'rotated' : ''} />
+        {!collapsed && (
+          <>
+            <span className="profile-switcher-name">
+              {currentProfile.name}
+            </span>
+            <ChevronIcon className={isOpen ? 'rotated' : ''} />
+          </>
+        )}
       </button>
 
       {isOpen && (
-        <div className="profile-switcher-dropdown" role="listbox">
+        <div className={`profile-switcher-dropdown ${collapsed ? 'collapsed-dropdown' : ''}`} role="listbox">
           <div className="profile-switcher-list">
             {profiles.map((profile) => (
               <button

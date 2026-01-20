@@ -13,8 +13,13 @@ import { useTheme, type ThemeMode } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal, ImportDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
-import { FALLBACK_DOWNLOAD_CONFIG } from '../../content/download-config';
 import { useDrawerStore } from '../../lib/stores';
+
+// Stable download URLs (redirected by Netlify to GitHub Releases latest)
+const DOWNLOAD_URLS = {
+  mac: '/download/mac',
+  windows: '/download/windows',
+} as const;
 
 // App version injected by Vite at build time
 declare const __APP_VERSION__: string | undefined;
@@ -447,18 +452,16 @@ export function SettingsPage() {
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <a
-                href={FALLBACK_DOWNLOAD_CONFIG.mac.downloadUrl}
+                href={DOWNLOAD_URLS.mac}
                 className="btn btn-secondary"
-                target="_blank"
-                rel="noopener noreferrer"
+                rel="noopener"
               >
                 {t('settings.desktopApp.downloadMac')}
               </a>
               <a
-                href={FALLBACK_DOWNLOAD_CONFIG.windows.msiUrl}
+                href={DOWNLOAD_URLS.windows}
                 className="btn btn-secondary"
-                target="_blank"
-                rel="noopener noreferrer"
+                rel="noopener"
               >
                 {t('settings.desktopApp.downloadWindows')}
               </a>

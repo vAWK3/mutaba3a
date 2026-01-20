@@ -229,3 +229,32 @@
 [dir='rtl'] .profile-switcher-check {
   margin-inline-start: auto;
 }
+
+/* Collapsed State */
+.profile-switcher-container.collapsed {
+  display: flex;
+  justify-content: center;
+}
+
+.profile-switcher.collapsed {
+  width: auto;
+  padding: var(--space-2);
+  justify-content: center;
+}
+
+.profile-switcher-empty.collapsed {
+  width: auto;
+  padding: var(--space-2);
+  justify-content: center;
+}
+
+.profile-switcher-dropdown.collapsed-dropdown {
+  position: absolute;
+  bottom: auto;
+  top: 0;
+  inset-inline-start: 100%;
+  inset-inline-end: auto;
+  margin-bottom: 0;
+  margin-inline-start: var(--space-2);
+  min-width: 200px;
+}

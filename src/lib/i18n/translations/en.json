@@ -32,10 +32,26 @@
     "clients": "Clients",
     "transactions": "Transactions",
     "documents": "Documents",
+    "retainers": "Retainers",
+    "moneyAnswers": "Answers",
     "expenses": "Expenses",
     "reports": "Reports",
     "settings": "Settings",
-    "download": "Download"
+    "download": "Download",
+    "new": "New",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "sections": {
+      "work": "Work",
+      "money": "Money",
+      "system": "System"
+    },
+    "newMenu": {
+      "document": "New Document",
+      "transaction": "New Transaction",
+      "client": "New Client",
+      "expense": "New Expense"
+    }
   },
   "addMenu": {
     "income": "Income",
@@ -572,6 +588,29 @@
       "receipts": "Receipts",
       "addReceipt": "Add Receipt",
       "linkReceipt": "Link from Inbox"
+    },
+    "retainer": {
+      "new": "New Retainer",
+      "edit": "Edit Retainer",
+      "client": "Client",
+      "clientPlaceholder": "Select client...",
+      "title": "Title",
+      "titlePlaceholder": "e.g. Monthly retainer",
+      "amount": "Amount",
+      "amountPlaceholder": "0.00",
+      "currency": "Currency",
+      "cadence": "Cadence",
+      "paymentDay": "Payment Day",
+      "startDate": "Start Date",
+      "endDate": "End Date (optional)",
+      "project": "Project (optional)",
+      "projectPlaceholder": "Select project...",
+      "status": "Status",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional notes...",
+      "schedulePreview": "Schedule Preview",
+      "enterDetailsForPreview": "Enter amount and start date to see schedule",
+      "andMore": "and more..."
     }
   },
   "filters": {
@@ -713,6 +752,300 @@
       "title": "Closed Month",
       "text": "{month} has been closed. Editing expenses in closed months is not recommended.",
       "reopenButton": "Reopen to Edit"
+    }
+  },
+  "retainers": {
+    "title": "Retainers",
+    "new": "New Retainer",
+    "addRetainer": "Add Retainer",
+    "matchPayment": "Match Payment",
+    "empty": "No retainers found",
+    "emptySearch": "Try adjusting your search or filters",
+    "emptyHint": "Create your first retainer to track recurring income",
+    "searchPlaceholder": "Search retainers...",
+    "selectToInspect": "Select a retainer to view details",
+    "confirmArchive": "Are you sure you want to archive this retainer?",
+    "confirmPause": "Are you sure you want to pause this retainer? Future payments will be canceled.",
+    "confirmEnd": "Are you sure you want to end this retainer? This cannot be undone.",
+    "activate": "Activate",
+    "pause": "Pause",
+    "resume": "Resume",
+    "end": "End",
+    "summary": "Summary",
+    "activeCount": "Active Retainers",
+    "monthlyExpected": "Monthly Expected",
+    "totalDue": "Total Due",
+    "totalOverdue": "Total Overdue",
+    "filters": {
+      "view": "View",
+      "all": "All",
+      "due": "Due Now",
+      "active": "Active",
+      "ending": "Ending Soon",
+      "status": "Status",
+      "currency": "Currency",
+      "client": "Client"
+    },
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "ended": "Ended"
+    },
+    "cadence": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly"
+    },
+    "state": {
+      "upcoming": "Upcoming",
+      "due": "Due",
+      "received": "Received",
+      "partial": "Partial",
+      "missed": "Missed",
+      "canceled": "Canceled"
+    },
+    "columns": {
+      "status": "Status",
+      "title": "Title",
+      "client": "Client",
+      "amount": "Amount",
+      "cadence": "Cadence",
+      "nextDue": "Next Due",
+      "dueNow": "Due Now"
+    },
+    "inspector": {
+      "overview": "Overview",
+      "schedule": "Schedule",
+      "transactions": "Transactions",
+      "notes": "Notes",
+      "client": "Client",
+      "project": "Project",
+      "amount": "Amount",
+      "cadence": "Cadence",
+      "paymentDay": "Payment Day",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "status": "Status"
+    }
+  },
+  "retainerMatching": {
+    "selectTransaction": "Select Transaction",
+    "selectProjectedIncome": "Select Payment Period",
+    "selectTransactionDesc": "Choose an income transaction to match with a retainer payment",
+    "selectProjectedDesc": "Choose the payment period to link this transaction to",
+    "searchTransactions": "Search transactions...",
+    "searchProjected": "Search periods...",
+    "createNewTransaction": "Create New Transaction",
+    "noMatchingTransactions": "No matching transactions found",
+    "noUnlinkedTransactions": "No unlinked income transactions",
+    "noMatchingProjected": "No matching periods found",
+    "noDueItems": "No due payment periods",
+    "untitled": "Untitled transaction",
+    "untitledRetainer": "Untitled retainer",
+    "suggestions": "Suggestions",
+    "otherDueItems": "Other Due Periods",
+    "confidence": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    }
+  },
+  "landing": {
+    "hero": {
+      "headline": "Your finances belong on your device, not in the cloud",
+      "subheadline": "Track income, expenses, and receivables locally. No account. No subscription. Free for personal use.",
+      "trust": "Free for personal use. No account required.",
+      "ctaPrimary": "Open Web App",
+      "ctaSecondary": "Download Desktop App"
+    },
+    "problem": {
+      "headline": "Freelancers deserve better than spreadsheets",
+      "pain1": "You track income in one spreadsheet, expenses in another",
+      "pain2": "You forget who owes you money until it's too late",
+      "pain3": "You can't work when the WiFi goes out",
+      "pain4": "Your financial data lives on servers you don't control"
+    },
+    "howItWorks": {
+      "headline": "Three steps to financial clarity",
+      "step1Title": "Track Everything in One Place",
+      "step1Desc": "Income, expenses, and receivables. Clients, projects, and categories. All linked, all local.",
+      "step2Title": "Work Offline, Sync Never",
+      "step2Desc": "Your data stays on your device. No cloud sync by default. Export anytime.",
+      "step3Title": "Know What You're Owed",
+      "step3Desc": "See overdue payments at a glance. Generate invoices. Track until paid.",
+      "cta": "Try it now"
+    },
+    "features": {
+      "headline": "Everything you need, nothing you don't",
+      "ledger": {
+        "title": "Transaction Ledger",
+        "desc": "Track income, expenses, and receivables in a unified ledger"
+      },
+      "clients": {
+        "title": "Client & Project Management",
+        "desc": "Organize work by client and project, see totals and history"
+      },
+      "documents": {
+        "title": "Document Generation",
+        "desc": "Create invoices, receipts, and credit notes (bilingual AR/EN)"
+      },
+      "retainers": {
+        "title": "Retainer Management",
+        "desc": "Track recurring income contracts and payment schedules"
+      },
+      "expenses": {
+        "title": "Expense Tracking",
+        "desc": "Profile-scoped expenses with receipt management and recurring rules"
+      },
+      "answers": {
+        "title": "Money Answers Dashboard",
+        "desc": "Unified financial cockpit with cash flow timeline"
+      },
+      "reports": {
+        "title": "Reports & Export",
+        "desc": "Built-in report presets with CSV export"
+      },
+      "currency": {
+        "title": "Multi-Currency",
+        "desc": "Native USD and ILS support with optional FX conversion"
+      }
+    },
+    "privacy": {
+      "headline": "Your data. Your device. Your rules.",
+      "point1": "No account required to use",
+      "point2": "No tracking or analytics",
+      "point3": "No cloud sync by default",
+      "point4": "Data stored locally (IndexedDB/SQLite)",
+      "point5": "Export everything as JSON anytime",
+      "point6": "Source-available on GitHub"
+    },
+    "platforms": {
+      "headline": "Native apps for Mac and Windows",
+      "pwa": "Or use in your browser at any time",
+      "downloadMac": "Download for macOS",
+      "downloadWindows": "Download for Windows"
+    },
+    "pricing": {
+      "headline": "Free for personal use",
+      "personal": "Free for personal and educational use",
+      "commercial": "Commercial license required for business use",
+      "support": "Support development",
+      "supportCta": "Support on Buy Me a Coffee"
+    },
+    "faq": {
+      "headline": "Frequently Asked Questions",
+      "q1": "Is Mutaba3a really free?",
+      "a1": "Free for personal and educational use. A commercial license is required for business use.",
+      "q2": "Where is my data stored?",
+      "a2": "Locally on your device. The web version uses IndexedDB. The desktop app uses SQLite.",
+      "q3": "What if I need multiple devices?",
+      "a3": "Export JSON and import on another device. Cloud sync with end-to-end encryption is on the roadmap.",
+      "q4": "Does it work offline?",
+      "a4": "Yes. After the initial load, the web app works offline. The desktop app always works offline.",
+      "q5": "What currencies are supported?",
+      "a5": "USD and ILS are built-in. Track them separately or unified with FX conversion.",
+      "q6": "Can I create invoices?",
+      "a6": "Yes. Invoices, receipts, and credit notes—all bilingual (Arabic and English).",
+      "q7": "Is there a mobile app?",
+      "a7": "The PWA works on mobile browsers. Native mobile apps are on the roadmap.",
+      "q8": "How do I back up my data?",
+      "a8": "Export to JSON from Settings. Import on any device instantly.",
+      "q9": "What's the difference between web and desktop?",
+      "a9": "Same features. Desktop has native performance and automatic updates.",
+      "q10": "How can I support the project?",
+      "a10": "Buy Me a Coffee or purchase a commercial license when available."
+    },
+    "finalCta": {
+      "headline": "Start tracking your finances today",
+      "trust": "No account. No tracking. Free for personal use."
+    },
+    "footer": {
+      "copyright": "Mutaba3a",
+      "github": "GitHub",
+      "privacy": "Privacy"
+    },
+    "langToggle": {
+      "en": "EN",
+      "ar": "AR"
+    }
+  },
+  "moneyAnswers": {
+    "title": "Answers",
+    "includeReceivables": "Include receivables",
+    "includeProjections": "Include projections",
+    "cashFlowTimeline": "Cash Flow Timeline",
+    "guidanceTitle": "Action Items",
+    "noData": "No data for this period",
+    "mode": {
+      "month": "Month",
+      "year": "Year"
+    },
+    "yearMode": {
+      "totalInflow": "Total Inflow",
+      "totalOutflow": "Total Outflow",
+      "netIncome": "Net Income",
+      "avgAwaiting": "Avg. Awaiting",
+      "retainerStability": "Retainer Stability",
+      "monthlyTrend": "Monthly Trend",
+      "insights": "Year Insights",
+      "bestMonth": "Best Month",
+      "worstMonth": "Worst Month",
+      "retainerHealth": "Retainer Health",
+      "paymentsReceived": "{{received}} of {{total}} payments received",
+      "noDataForYear": "No data for this year",
+      "yearTrend": "Year Trend",
+      "trendUp": "Improving",
+      "trendDown": "Declining",
+      "vsFirstHalf": "vs. first half",
+      "onTimePayments": "on-time payments"
+    },
+    "kpi": {
+      "willMakeIt": "End of Month Forecast",
+      "endOfMonthForecast": "Cash + expected income - expected costs",
+      "cashOnHand": "Cash on Hand",
+      "currentBalance": "Actual balance to date",
+      "comingVsLeaking": "Coming vs Leaking",
+      "netForecast": "Net forecast"
+    },
+    "legend": {
+      "inflow": "Inflow",
+      "outflow": "Outflow",
+      "runningBalance": "Running balance"
+    },
+    "unifiedNote": "All amounts shown in ILS (unified)",
+    "dayDetail": {
+      "inflow": "Inflow",
+      "outflow": "Outflow",
+      "net": "Net",
+      "noEvents": "No events on this day",
+      "inflows": "Inflows",
+      "outflows": "Outflows"
+    },
+    "source": {
+      "actualIncome": "Paid income",
+      "actualCost": "Expense",
+      "receivable": "Receivable",
+      "profileExpense": "Expense",
+      "projectedExpense": "Projected expense",
+      "retainer": "Retainer"
+    },
+    "state": {
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "overdue": "Overdue",
+      "upcoming": "Upcoming",
+      "missed": "Missed",
+      "cancelled": "Cancelled"
+    },
+    "guidance": {
+      "allGood": "Looking good! No action items right now.",
+      "impact": "Impact",
+      "category": {
+        "collect": "Collect",
+        "reduce": "Reduce",
+        "delay": "Delay",
+        "hygiene": "Hygiene"
+      }
     }
   }
 }

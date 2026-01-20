@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { FALLBACK_DOWNLOAD_CONFIG } from '../content/download-config';
 
-const GITHUB_API_URL = `https://api.github.com/repos/${FALLBACK_DOWNLOAD_CONFIG.githubOwner}/${FALLBACK_DOWNLOAD_CONFIG.githubRepo}/releases/latest`;
+const GITHUB_API_URL = 'https://api.github.com/repos/vAWK3/mutaba3a/releases/latest';
 const CACHE_KEY = 'latest-release-info';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
 interface CachedRelease {
   version: string;
+  releaseNotesUrl: string;
   hasMacBuild: boolean;
   hasWindowsBuild: boolean;
   timestamp: number;
@@ -14,6 +14,7 @@ interface CachedRelease {
 
 export interface ReleaseInfo {
   version: string;
+  releaseNotesUrl: string;
   hasMacBuild: boolean;
   hasWindowsBuild: boolean;
 }
@@ -64,6 +65,7 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo> {
 
   const data = await response.json();
   const tagName = data.tag_name as string;
+  const htmlUrl = data.html_url as string;
   const assets = (data.assets || []) as Array<{ name: string }>;
 
   // Strip 'v' prefix if present
@@ -77,7 +79,7 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo> {
     (a) => a.name.includes('windows') || a.name.endsWith('.msi') || a.name.endsWith('.exe')
   );
 
-  return { version, hasMacBuild, hasWindowsBuild };
+  return { version, releaseNotesUrl: htmlUrl, hasMacBuild, hasWindowsBuild };
 }
 
 export function useLatestRelease(): UseLatestReleaseResult {
@@ -95,6 +97,7 @@ export function useLatestRelease(): UseLatestReleaseResult {
         setState({
           release: {
             version: cached.version,
+            releaseNotesUrl: cached.releaseNotesUrl,
             hasMacBuild: cached.hasMacBuild,
             hasWindowsBuild: cached.hasWindowsBuild,
           },
