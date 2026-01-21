@@ -82,8 +82,8 @@ export const engagementRepo = {
     const sortBy = filters.sort?.by || 'createdAt';
     const sortDir = filters.sort?.dir || 'desc';
     filtered.sort((a, b) => {
-      const aValue = (a as Record<string, unknown>)[sortBy] as string;
-      const bValue = (b as Record<string, unknown>)[sortBy] as string;
+      const aValue = (a as unknown as Record<string, unknown>)[sortBy] as string;
+      const bValue = (b as unknown as Record<string, unknown>)[sortBy] as string;
       const comparison = aValue.localeCompare(bValue);
       return sortDir === 'desc' ? -comparison : comparison;
     });

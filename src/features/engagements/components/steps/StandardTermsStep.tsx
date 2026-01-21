@@ -53,7 +53,7 @@ const DISPUTE_PATHS: { value: DisputePath; label: string; description: string }[
 ];
 
 export function StandardTermsStep({ className }: StandardTermsStepProps) {
-  const { register, control, watch } = useFormContext<EngagementSnapshot>();
+  const { register, control } = useFormContext<EngagementSnapshot>();
 
   return (
     <div className={cn('wizard-step-content', className)}>

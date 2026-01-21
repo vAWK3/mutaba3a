@@ -29,7 +29,7 @@ const OWNERSHIP_RULES = [
 ];
 
 export function RelationshipStep({ className }: RelationshipStepProps) {
-  const { register, control, watch } = useFormContext<EngagementSnapshot>();
+  const { control, watch } = useFormContext<EngagementSnapshot>();
   const { engagementType } = useWizardStore();
 
   const termType = watch('termType') || 'fixed';

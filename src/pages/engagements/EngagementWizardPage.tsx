@@ -6,13 +6,9 @@ import { z } from 'zod';
 import { TopBar } from '../../components/layout';
 import { useClients, useBusinessProfiles } from '../../hooks/useQueries';
 import { useToast } from '../../lib/toastStore';
-import { cn } from '../../lib/utils';
 
 // Feature imports
-import {
-  useWizardStore,
-  STEP_LABELS,
-} from '../../features/engagements/hooks/useWizardStore';
+import { useWizardStore } from '../../features/engagements/hooks/useWizardStore';
 import {
   useEngagement,
   useLatestVersion,
@@ -117,7 +113,6 @@ export function EngagementWizardPage() {
   // Store state
   const {
     currentStep,
-    mode,
     engagementType,
     engagementCategory,
     primaryLanguage,
@@ -128,7 +123,6 @@ export function EngagementWizardPage() {
     setIsSaving,
     setPrefill,
     initializeForEdit,
-    reset: resetStore,
     setEngagementId,
   } = useWizardStore();
 

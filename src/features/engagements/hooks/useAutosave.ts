@@ -19,7 +19,7 @@ export function useAutosave(
   isDirty: boolean,
   onSaved?: (timestamp: string) => void
 ) {
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
 
