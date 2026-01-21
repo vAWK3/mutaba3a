@@ -1,0 +1,101 @@
+/* Money Answers Section */
+.landing-money-answers {
+  background: var(--surface, #111827);
+}
+
+.money-answer-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+.money-answer-card {
+  padding: 24px;
+  background: var(--bg, #070C16);
+  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  border-radius: var(--radius-lg, 8px);
+  transition: all 0.2s ease;
+}
+
+.money-answer-card:hover {
+  border-color: var(--accent-subtle, rgba(44, 182, 166, 0.3));
+  transform: translateY(-2px);
+}
+
+.money-answer-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg, 16px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text, #E7EEF9);
+  margin: 0 0 12px 0;
+}
+
+.money-answer-desc {
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #A6B4CC);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.money-answers-forecast {
+  max-width: 600px;
+  margin: 0 auto 48px;
+  text-align: center;
+  padding: 24px;
+  background: var(--accent-subtle, rgba(44, 182, 166, 0.08));
+  border: 1px solid var(--accent-subtle, rgba(44, 182, 166, 0.2));
+  border-radius: var(--radius-lg, 8px);
+}
+
+.forecast-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-md, 14px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--accent, #2CB6A6);
+  margin: 0 0 8px 0;
+}
+
+.forecast-desc {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #C5D0E0);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.money-answers-preview {
+  display: flex;
+  justify-content: center;
+}
+
+.money-answers-img {
+  max-width: 100%;
+  max-height: 500px;
+  height: auto;
+  border-radius: var(--radius-xl, 12px);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .money-answer-cards {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .money-answer-card {
+    padding: 20px;
+  }
+
+  .money-answers-forecast {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .money-answer-card {
+    transition: none;
+  }
+}

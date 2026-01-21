@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { CurrencyTabs } from '../../components/filters';
+import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useAllProfilesExpenseTotals } from '../../hooks/useExpenseQueries';
 import { formatAmount, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency, ProfileExpenseSummary } from '../../types';
+import type { ProfileExpenseSummary } from '../../types';
 import './ExpensesOverviewPage.css';
 
 export function ExpensesOverviewPage() {
@@ -15,14 +15,13 @@ export function ExpensesOverviewPage() {
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
 
   const { data: profileSummaries = [], isLoading } = useAllProfilesExpenseTotals(year);
 
   // Year options
   const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
-  // Calculate totals
+  // Calculate totals - always show both currencies
   const totals = useMemo(() => {
     let totalUSD = 0;
     let totalILS = 0;
@@ -41,11 +40,9 @@ export function ExpensesOverviewPage() {
     return { totalUSD, totalILS, monthlyTotalsUSD, monthlyTotalsILS };
   }, [profileSummaries]);
 
-  // Get max for chart scaling
-  const monthlyTotals = currency === 'ILS' ? totals.monthlyTotalsILS : totals.monthlyTotalsUSD;
+  // For chart scaling, use USD totals as primary display
+  const monthlyTotals = totals.monthlyTotalsUSD;
   const maxMonthly = Math.max(...monthlyTotals, 1);
-  const displayCurrency = currency || 'USD';
-  const displayTotal = currency === 'ILS' ? totals.totalILS : totals.totalUSD;
 
   // Month names
   const monthNames = useMemo(() => {
@@ -55,14 +52,14 @@ export function ExpensesOverviewPage() {
     });
   }, [year, locale]);
 
-  // Sort profiles by total
+  // Sort profiles by total (combined, using USD as proxy)
   const sortedProfiles = useMemo(() => {
     return [...profileSummaries].sort((a, b) => {
-      const aTotal = currency === 'ILS' ? a.totalMinorILS : a.totalMinorUSD;
-      const bTotal = currency === 'ILS' ? b.totalMinorILS : b.totalMinorUSD;
+      const aTotal = a.totalMinorUSD + a.totalMinorILS;
+      const bTotal = b.totalMinorUSD + b.totalMinorILS;
       return bTotal - aTotal;
     });
-  }, [profileSummaries, currency]);
+  }, [profileSummaries]);
 
   return (
     <>
@@ -85,7 +82,6 @@ export function ExpensesOverviewPage() {
                 </option>
               ))}
             </select>
-            <CurrencyTabs value={currency} onChange={setCurrency} />
           </div>
         }
       />
@@ -101,26 +97,18 @@ export function ExpensesOverviewPage() {
               <div className="overview-grand-total-label">
                 {t('expenses.overview.totalExpenses')} ({year})
               </div>
-              <div className="overview-grand-total-value amount-negative">
-                {currency ? (
-                  formatAmount(displayTotal, displayCurrency, locale)
-                ) : (
-                  <>
-                    {totals.totalUSD > 0 && (
-                      <span>{formatAmount(totals.totalUSD, 'USD', locale)}</span>
-                    )}
-                    {totals.totalILS > 0 && (
-                      <span>{formatAmount(totals.totalILS, 'ILS', locale)}</span>
-                    )}
-                    {totals.totalUSD === 0 && totals.totalILS === 0 && <span>-</span>}
-                  </>
-                )}
-              </div>
+              <CurrencySummaryPopup
+                usdAmountMinor={totals.totalUSD}
+                ilsAmountMinor={totals.totalILS}
+                eurAmountMinor={0}
+                type="expense"
+                size="large"
+              />
             </div>
 
-            {/* Monthly Chart */}
+            {/* Monthly Chart - shows USD totals */}
             <div className="overview-chart-section">
-              <h3 className="section-title">{t('expenses.overview.monthlyBreakdown')}</h3>
+              <h3 className="section-title">{t('expenses.overview.monthlyBreakdown')} (USD)</h3>
               <div className="overview-bar-chart">
                 {monthlyTotals.map((total, i) => {
                   const height = maxMonthly > 0 ? (total / maxMonthly) * 100 : 0;
@@ -135,7 +123,7 @@ export function ExpensesOverviewPage() {
                       <div className="chart-bar-label">{monthNames[i]}</div>
                       <div className="chart-bar-value">
                         {total > 0
-                          ? formatAmount(total, displayCurrency, locale)
+                          ? formatAmount(total, 'USD', locale)
                           : '-'}
                       </div>
                     </div>
@@ -144,7 +132,7 @@ export function ExpensesOverviewPage() {
               </div>
             </div>
 
-            {/* Profile Breakdown Table */}
+            {/* Profile Breakdown Table - Always shows both currencies */}
             <div className="overview-breakdown-section">
               <h3 className="section-title">{t('expenses.overview.byProfile')}</h3>
               {sortedProfiles.length === 0 ? (
@@ -157,24 +145,12 @@ export function ExpensesOverviewPage() {
                     <thead>
                       <tr>
                         <th>{t('expenses.overview.profile')}</th>
-                        {!currency && <th style={{ textAlign: 'end' }}>USD</th>}
-                        {!currency && <th style={{ textAlign: 'end' }}>ILS</th>}
-                        {currency && (
-                          <th style={{ textAlign: 'end' }}>{t('expenses.overview.total')}</th>
-                        )}
-                        <th style={{ textAlign: 'end' }}>{t('expenses.overview.percentage')}</th>
+                        <th style={{ textAlign: 'end' }}>USD</th>
+                        <th style={{ textAlign: 'end' }}>ILS</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sortedProfiles.map((summary: ProfileExpenseSummary) => {
-                        const profileTotal = currency === 'ILS'
-                          ? summary.totalMinorILS
-                          : summary.totalMinorUSD;
-                        const grandTotal = currency === 'ILS' ? totals.totalILS : totals.totalUSD;
-                        const percentage = grandTotal > 0
-                          ? ((profileTotal / grandTotal) * 100).toFixed(1)
-                          : '0';
-
                         return (
                           <tr key={summary.profileId}>
                             <td>
@@ -186,29 +162,15 @@ export function ExpensesOverviewPage() {
                                 {summary.profileName}
                               </Link>
                             </td>
-                            {!currency && (
-                              <td className="amount-cell amount-negative">
-                                {summary.totalMinorUSD > 0
-                                  ? formatAmount(summary.totalMinorUSD, 'USD', locale)
-                                  : '-'}
-                              </td>
-                            )}
-                            {!currency && (
-                              <td className="amount-cell amount-negative">
-                                {summary.totalMinorILS > 0
-                                  ? formatAmount(summary.totalMinorILS, 'ILS', locale)
-                                  : '-'}
-                              </td>
-                            )}
-                            {currency && (
-                              <td className="amount-cell amount-negative">
-                                {profileTotal > 0
-                                  ? formatAmount(profileTotal, displayCurrency, locale)
-                                  : '-'}
-                              </td>
-                            )}
-                            <td className="amount-cell text-muted">
-                              {profileTotal > 0 ? `${percentage}%` : '-'}
+                            <td className="amount-cell amount-negative">
+                              {summary.totalMinorUSD > 0
+                                ? formatAmount(summary.totalMinorUSD, 'USD', locale)
+                                : '-'}
+                            </td>
+                            <td className="amount-cell amount-negative">
+                              {summary.totalMinorILS > 0
+                                ? formatAmount(summary.totalMinorILS, 'ILS', locale)
+                                : '-'}
                             </td>
                           </tr>
                         );
@@ -217,28 +179,16 @@ export function ExpensesOverviewPage() {
                     <tfoot>
                       <tr>
                         <td style={{ fontWeight: 600 }}>{t('expenses.overview.total')}</td>
-                        {!currency && (
-                          <td className="amount-cell amount-negative" style={{ fontWeight: 600 }}>
-                            {totals.totalUSD > 0
-                              ? formatAmount(totals.totalUSD, 'USD', locale)
-                              : '-'}
-                          </td>
-                        )}
-                        {!currency && (
-                          <td className="amount-cell amount-negative" style={{ fontWeight: 600 }}>
-                            {totals.totalILS > 0
-                              ? formatAmount(totals.totalILS, 'ILS', locale)
-                              : '-'}
-                          </td>
-                        )}
-                        {currency && (
-                          <td className="amount-cell amount-negative" style={{ fontWeight: 600 }}>
-                            {displayTotal > 0
-                              ? formatAmount(displayTotal, displayCurrency, locale)
-                              : '-'}
-                          </td>
-                        )}
-                        <td className="amount-cell text-muted">100%</td>
+                        <td className="amount-cell amount-negative" style={{ fontWeight: 600 }}>
+                          {totals.totalUSD > 0
+                            ? formatAmount(totals.totalUSD, 'USD', locale)
+                            : '-'}
+                        </td>
+                        <td className="amount-cell amount-negative" style={{ fontWeight: 600 }}>
+                          {totals.totalILS > 0
+                            ? formatAmount(totals.totalILS, 'ILS', locale)
+                            : '-'}
+                        </td>
                       </tr>
                     </tfoot>
                   </table>

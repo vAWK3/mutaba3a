@@ -1,37 +1,26 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs } from '../../components/filters';
-import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
+import { SearchInput } from '../../components/filters';
+import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useClientSummaries } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate, formatRelativeDate } from '../../lib/utils';
+import { formatDate, formatRelativeDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency } from '../../types';
 
 export function ClientsPage() {
   const { openClientDrawer } = useDrawerStore();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [search, setSearch] = useState('');
 
-  const { data: clients = [], isLoading } = useClientSummaries(currency, search);
-
-  // Helper to check if client has per-currency data (when no currency filter)
-  const hasPerCurrencyData = !currency;
+  // Always fetch all currencies - no currency filter
+  const { data: clients = [], isLoading } = useClientSummaries(undefined, search);
 
   return (
     <>
-      <TopBar
-        title={t('clients.title')}
-        filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24 }}>
-            <CurrencyTabs value={currency} onChange={setCurrency} />
-          </div>
-        }
-      />
+      <TopBar title={t('clients.title')} />
       <div className="page-content">
         <div className="filters-row">
           <SearchInput value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
@@ -77,18 +66,12 @@ export function ClientsPage() {
                     </td>
                     <td className="text-secondary">{client.activeProjectCount}</td>
                     <td className="amount-cell">
-                      {hasPerCurrencyData && client.unpaidIncomeMinorUSD !== undefined ? (
-                        <UnifiedAmount
-                          usdAmountMinor={client.unpaidIncomeMinorUSD}
-                          ilsAmountMinor={client.unpaidIncomeMinorILS ?? 0}
-                          variant="compact"
-                          type="neutral"
-                        />
-                      ) : (
-                        <span style={{ color: 'var(--color-warning)' }}>
-                          {formatAmount(client.unpaidIncomeMinor, currency!, locale)}
-                        </span>
-                      )}
+                      <CurrencySummaryPopup
+                        usdAmountMinor={client.unpaidIncomeMinorUSD ?? 0}
+                        ilsAmountMinor={client.unpaidIncomeMinorILS ?? 0}
+                        eurAmountMinor={client.unpaidIncomeMinorEUR ?? 0}
+                        type="neutral"
+                      />
                     </td>
                     <td className="text-muted">
                       {client.lastPaymentAt ? formatDate(client.lastPaymentAt, locale) : '-'}

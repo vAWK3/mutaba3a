@@ -29,7 +29,7 @@ const schema = z.object({
   countryEn: z.string().optional(),
   postalCode: z.string().optional(),
   primaryColor: z.string().optional(),
-  defaultCurrency: z.enum(['USD', 'ILS']),
+  defaultCurrency: z.enum(['USD', 'ILS', 'EUR']),
   defaultLanguage: z.enum(['ar', 'en']),
   isDefault: z.boolean(),
 });

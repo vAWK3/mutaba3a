@@ -5,6 +5,7 @@ export {
   isCacheStale,
   convertAmount,
   getUnifiedTotal,
+  getUnifiedTotalWithEur,
   type FxSource,
   type FxRateResult,
   type FxCacheEntry,

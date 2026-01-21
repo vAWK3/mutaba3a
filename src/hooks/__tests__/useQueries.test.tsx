@@ -275,6 +275,7 @@ describe('Document Hooks', () => {
     issueDate: new Date().toISOString().split('T')[0],
     linkedTransactionIds: [],
     templateId: 'template1',
+    exportCount: 0,
   });
 
   describe('useDocuments', () => {

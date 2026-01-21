@@ -150,6 +150,24 @@ export function useDeleteTransaction() {
   });
 }
 
+export function useArchiveTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => transactionRepo.archive(id),
+    onSuccess: () => invalidateTransactionQueries(queryClient),
+  });
+}
+
+export function useUnarchiveTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => transactionRepo.unarchive(id),
+    onSuccess: () => invalidateTransactionQueries(queryClient),
+  });
+}
+
 // Client hooks
 export function useClients() {
   return useQuery({
@@ -408,6 +426,37 @@ export function useDeleteDocument() {
   return useMutation({
     mutationFn: (id: string) => documentRepo.softDelete(id),
     onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useArchiveDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentRepo.archive(id),
+    onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useUnarchiveDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => documentRepo.unarchive(id),
+    onSuccess: () => invalidateDocumentQueries(queryClient),
+  });
+}
+
+export function useLockDocumentAfterExport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, pdfSavedPath }: { id: string; pdfSavedPath?: string }) =>
+      documentRepo.lockAfterExport(id, pdfSavedPath),
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      invalidateTransactionQueries(queryClient);
+    },
   });
 }
 

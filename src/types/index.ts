@@ -1,5 +1,5 @@
 // Currency types
-export type Currency = 'USD' | 'ILS';
+export type Currency = 'USD' | 'ILS' | 'EUR';
 
 // Currency mode for reports (BOTH shows separate totals per currency)
 export type CurrencyMode = 'USD' | 'ILS' | 'BOTH';
@@ -65,6 +65,10 @@ export interface Transaction {
   deletedAt?: string;
   linkedDocumentId?: string; // Optional link to invoice/receipt document
   linkedProjectedIncomeId?: string; // Optional link to projected income (from retainer)
+  // Immutability (locked when linked document is exported)
+  lockedAt?: string;           // ISO timestamp - locked when linked doc exported
+  lockedByDocumentId?: string; // ID of document that caused lock
+  archivedAt?: string;         // ISO timestamp when archived
 }
 
 // FX Rate entity
@@ -112,6 +116,7 @@ export interface OverviewTotals {
 export interface OverviewTotalsByCurrency {
   USD: OverviewTotals;
   ILS: OverviewTotals;
+  EUR: OverviewTotals;
 }
 
 // FX rate source types
@@ -132,10 +137,13 @@ export interface ProjectSummary {
   // Per-currency breakdown (present when currency filter is undefined)
   paidIncomeMinorUSD?: number;
   paidIncomeMinorILS?: number;
+  paidIncomeMinorEUR?: number;
   unpaidIncomeMinorUSD?: number;
   unpaidIncomeMinorILS?: number;
+  unpaidIncomeMinorEUR?: number;
   expensesMinorUSD?: number;
   expensesMinorILS?: number;
+  expensesMinorEUR?: number;
 }
 
 // Client summary for list view
@@ -150,8 +158,10 @@ export interface ClientSummary {
   // Per-currency breakdown (present when currency filter is undefined)
   paidIncomeMinorUSD?: number;
   paidIncomeMinorILS?: number;
+  paidIncomeMinorEUR?: number;
   unpaidIncomeMinorUSD?: number;
   unpaidIncomeMinorILS?: number;
+  unpaidIncomeMinorEUR?: number;
 }
 
 // Transaction with resolved names for display
@@ -299,6 +309,18 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;              // Soft delete
+
+  // Immutability & Export tracking
+  lockedAt?: string;               // ISO timestamp - first export locks document
+  exportCount: number;             // Number of PDF exports (starts at 0)
+  lastExportedAt?: string;         // ISO timestamp of last export
+
+  // PDF Archival (Tauri desktop only)
+  pdfSavedPath?: string;           // Full path to archived PDF on disk
+  pdfSavedAt?: string;             // ISO timestamp when saved
+
+  // Archive (soft-hide from lists)
+  archivedAt?: string;             // ISO timestamp when archived
 }
 
 // Document sequence for auto-numbering
@@ -325,6 +347,7 @@ export interface DocumentFilters {
   limit?: number;
   offset?: number;
   sort?: { by: string; dir: 'asc' | 'desc' };
+  includeArchived?: boolean;       // Include archived documents (default: false)
 }
 
 // Document with resolved names for display

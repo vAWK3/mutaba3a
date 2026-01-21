@@ -1,37 +1,24 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs } from '../../components/filters';
-import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
+import { SearchInput } from '../../components/filters';
+import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useProjectSummaries } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatRelativeDate } from '../../lib/utils';
-import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency } from '../../types';
+import { formatRelativeDate } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 export function ProjectsPage() {
   const { openProjectDrawer } = useDrawerStore();
   const t = useT();
-  const { language } = useLanguage();
-  const locale = getLocale(language);
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [search, setSearch] = useState('');
 
-  const { data: projects = [], isLoading } = useProjectSummaries(currency, search);
-
-  // Helper to check if project has per-currency data (when no currency filter)
-  const hasPerCurrencyData = !currency;
+  // Always fetch all currencies - no currency filter
+  const { data: projects = [], isLoading } = useProjectSummaries(undefined, search);
 
   return (
     <>
-      <TopBar
-        title={t('projects.title')}
-        filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24 }}>
-            <CurrencyTabs value={currency} onChange={setCurrency} />
-          </div>
-        }
-      />
+      <TopBar title={t('projects.title')} />
       <div className="page-content">
         <div className="filters-row">
           <SearchInput value={search} onChange={setSearch} placeholder={t('projects.searchPlaceholder')} />
@@ -78,18 +65,12 @@ export function ProjectsPage() {
                     <td className="text-secondary">{project.clientName || '-'}</td>
                     <td className="text-secondary">{project.field || '-'}</td>
                     <td className="amount-cell">
-                      {hasPerCurrencyData && project.unpaidIncomeMinorUSD !== undefined ? (
-                        <UnifiedAmount
-                          usdAmountMinor={project.unpaidIncomeMinorUSD}
-                          ilsAmountMinor={project.unpaidIncomeMinorILS ?? 0}
-                          variant="compact"
-                          type="neutral"
-                        />
-                      ) : (
-                        <span style={{ color: 'var(--color-warning)' }}>
-                          {formatAmount(project.unpaidIncomeMinor, currency!, locale)}
-                        </span>
-                      )}
+                      <CurrencySummaryPopup
+                        usdAmountMinor={project.unpaidIncomeMinorUSD ?? 0}
+                        ilsAmountMinor={project.unpaidIncomeMinorILS ?? 0}
+                        eurAmountMinor={project.unpaidIncomeMinorEUR ?? 0}
+                        type="neutral"
+                      />
                     </td>
                     <td className="text-muted">
                       {project.lastActivityAt ? formatRelativeDate(project.lastActivityAt, t) : '-'}

@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { CurrencyTabs } from '../../components/filters';
 import {
   useExpenseForecast,
   useActiveRecurringRules,
@@ -20,7 +19,8 @@ export function ExpensesForecastPage() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
   const [year, setYear] = useState(currentYear);
-  const [currency, setCurrency] = useState<Currency>('USD');
+  // Default to ILS - forecast shows ILS-based projections
+  const currency: Currency = 'ILS';
 
   const { data: profiles = [] } = useBusinessProfiles();
   const profileIds = useMemo(() => profiles.map((p) => p.id), [profiles]);
@@ -109,7 +109,6 @@ export function ExpensesForecastPage() {
                 </option>
               ))}
             </select>
-            <CurrencyTabs value={currency} onChange={(c) => c && setCurrency(c)} showAll={false} />
           </div>
         }
       />

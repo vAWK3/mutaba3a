@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react';
 import { pdf } from '@react-pdf/renderer';
+import { useQueryClient } from '@tanstack/react-query';
 import { useIssueDocument } from '../../../hooks/useQueries';
 import { useToast } from '../../../lib/toastStore';
+import { documentRepo } from '../../../db';
+import { savePdfToDisk, isPdfArchivalAvailable } from '../../../services/pdfArchival';
 import { DocumentPdf } from '../pdf';
 import type { Document, BusinessProfile, Client } from '../../../types';
 import type { TemplateId } from '../pdf/styles';
@@ -24,6 +27,7 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
   const [isProcessing, setIsProcessing] = useState(false);
   const issueDocumentMutation = useIssueDocument();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   const downloadBlob = useCallback((blob: Blob, fileName: string) => {
     const url = URL.createObjectURL(blob);
@@ -84,11 +88,42 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
           isOriginal,
         });
 
-        // Step 3: Download the PDF
+        // Step 3: Save to disk if in Tauri (PDF archival)
+        let pdfSavedPath: string | undefined;
+        if (isPdfArchivalAvailable()) {
+          try {
+            pdfSavedPath = await savePdfToDisk(
+              blob,
+              businessProfile.name,
+              doc.issueDate,
+              doc.number
+            );
+            if (pdfSavedPath) {
+              console.log('PDF archived to:', pdfSavedPath);
+            }
+          } catch (archiveError) {
+            // Log warning but continue - archival is nice-to-have
+            console.warn('Failed to archive PDF to disk:', archiveError);
+            showToast('PDF saved but archival failed');
+          }
+        }
+
+        // Step 4: Download the PDF
         const downloadFileName = fileName || `${doc.number}.pdf`;
         downloadBlob(blob, downloadFileName);
 
-        // Step 4: Show success toast
+        // Step 5: Lock the document after successful export
+        try {
+          await documentRepo.lockAfterExport(doc.id, pdfSavedPath);
+          // Invalidate document queries to reflect locked state
+          queryClient.invalidateQueries({ queryKey: ['document', doc.id] });
+          queryClient.invalidateQueries({ queryKey: ['documents'] });
+        } catch (lockError) {
+          // Log but don't fail - the export succeeded
+          console.warn('Failed to lock document after export:', lockError);
+        }
+
+        // Step 6: Show success toast
         showToast('Document issued and downloaded');
 
         options.onSuccess?.();
@@ -100,7 +135,7 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
         setIsProcessing(false);
       }
     },
-    [issueDocumentMutation, generatePdfBlob, downloadBlob, showToast, options]
+    [issueDocumentMutation, generatePdfBlob, downloadBlob, showToast, options, queryClient]
   );
 
   const downloadOnly = useCallback(
@@ -115,7 +150,7 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
       setIsProcessing(true);
 
       try {
-        // Generate and download PDF without issuing
+        // Generate PDF blob
         const blob = await generatePdfBlob({
           document: doc,
           businessProfile,
@@ -124,8 +159,38 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
           isOriginal,
         });
 
+        // Save to disk if first export and in Tauri
+        let pdfSavedPath: string | undefined;
+        const isFirstExport = !doc.lockedAt;
+        if (isFirstExport && isPdfArchivalAvailable()) {
+          try {
+            pdfSavedPath = await savePdfToDisk(
+              blob,
+              businessProfile.name,
+              doc.issueDate,
+              doc.number
+            );
+            if (pdfSavedPath) {
+              console.log('PDF archived to:', pdfSavedPath);
+            }
+          } catch (archiveError) {
+            console.warn('Failed to archive PDF to disk:', archiveError);
+          }
+        }
+
+        // Download the PDF
         const downloadFileName = fileName || `${doc.number}.pdf`;
         downloadBlob(blob, downloadFileName);
+
+        // Lock the document after successful export (tracks export count even if already locked)
+        try {
+          await documentRepo.lockAfterExport(doc.id, pdfSavedPath);
+          // Invalidate document queries to reflect updated state
+          queryClient.invalidateQueries({ queryKey: ['document', doc.id] });
+          queryClient.invalidateQueries({ queryKey: ['documents'] });
+        } catch (lockError) {
+          console.warn('Failed to update document after export:', lockError);
+        }
 
         showToast('Document downloaded');
       } catch (error) {
@@ -135,7 +200,7 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
         setIsProcessing(false);
       }
     },
-    [generatePdfBlob, downloadBlob, showToast]
+    [generatePdfBlob, downloadBlob, showToast, queryClient]
   );
 
   return {

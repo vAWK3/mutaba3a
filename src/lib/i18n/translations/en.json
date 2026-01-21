@@ -851,12 +851,21 @@
     }
   },
   "landing": {
+    "langToggle": {
+      "en": "EN",
+      "ar": "AR"
+    },
     "hero": {
       "headline": "Your finances belong on your device, not in the cloud",
       "subheadline": "Track income, expenses, and receivables locally. No account. No subscription. Free for personal use.",
-      "trust": "Free for personal use. No account required.",
+      "trust": "No account. No tracking. No cloud by default. Free for personal use.",
       "ctaPrimary": "Open Web App",
       "ctaSecondary": "Download Desktop App"
+    },
+    "answersMini": {
+      "q1": "Will I make it this month?",
+      "q2": "Who owes me money?",
+      "q3": "What's coming next?"
     },
     "problem": {
       "headline": "Freelancers deserve better than spreadsheets",
@@ -865,53 +874,95 @@
       "pain3": "You can't work when the WiFi goes out",
       "pain4": "Your financial data lives on servers you don't control"
     },
-    "howItWorks": {
-      "headline": "Three steps to financial clarity",
-      "step1Title": "Track Everything in One Place",
-      "step1Desc": "Income, expenses, and receivables. Clients, projects, and categories. All linked, all local.",
-      "step2Title": "Work Offline, Sync Never",
-      "step2Desc": "Your data stays on your device. No cloud sync by default. Export anytime.",
-      "step3Title": "Know What You're Owed",
-      "step3Desc": "See overdue payments at a glance. Generate invoices. Track until paid.",
-      "cta": "Try it now"
-    },
-    "features": {
-      "headline": "Everything you need, nothing you don't",
-      "ledger": {
-        "title": "Transaction Ledger",
-        "desc": "Track income, expenses, and receivables in a unified ledger"
+    "useCases": {
+      "headline": "One tool for every money moment",
+      "subheadline": "From chasing payments to forecasting cash—all in one place.",
+      "tabs": {
+        "receivables": "Receivables",
+        "retainers": "Retainers",
+        "expenses": "Expenses",
+        "documents": "Documents",
+        "forecast": "Forecast"
       },
-      "clients": {
-        "title": "Client & Project Management",
-        "desc": "Organize work by client and project, see totals and history"
-      },
-      "documents": {
-        "title": "Document Generation",
-        "desc": "Create invoices, receipts, and credit notes (bilingual AR/EN)"
+      "receivables": {
+        "outcome": "Never forget who owes you money.",
+        "step1": "Log income as paid or unpaid",
+        "step2": "See overdue receivables at a glance",
+        "step3": "Mark paid when cash arrives"
       },
       "retainers": {
-        "title": "Retainer Management",
-        "desc": "Track recurring income contracts and payment schedules"
+        "outcome": "Track recurring income without spreadsheets.",
+        "step1": "Set up client retainers with payment schedule",
+        "step2": "Match incoming payments to expected periods",
+        "step3": "See missed or partial payments instantly"
       },
       "expenses": {
-        "title": "Expense Tracking",
-        "desc": "Profile-scoped expenses with receipt management and recurring rules"
+        "outcome": "Know exactly where your money goes.",
+        "step1": "Log expenses per business profile",
+        "step2": "Attach and organize receipts",
+        "step3": "Set up recurring costs for forecasting"
       },
-      "answers": {
-        "title": "Money Answers Dashboard",
-        "desc": "Unified financial cockpit with cash flow timeline"
+      "documents": {
+        "outcome": "Generate professional documents in seconds.",
+        "step1": "Create invoices, receipts, or credit notes",
+        "step2": "Auto-fill from client and project data",
+        "step3": "Export PDF (bilingual AR/EN supported)"
       },
-      "reports": {
-        "title": "Reports & Export",
-        "desc": "Built-in report presets with CSV export"
-      },
-      "currency": {
-        "title": "Multi-Currency",
-        "desc": "Native USD and ILS support with optional FX conversion"
+      "forecast": {
+        "outcome": "See your financial future before it happens.",
+        "step1": "View projected income from retainers",
+        "step2": "See recurring expenses rolling forward",
+        "step3": "Spot risk days before they arrive"
       }
+    },
+    "moneyAnswers": {
+      "headline": "Money Answers",
+      "subheadline": "Projection is not prediction. It's a flashlight.",
+      "card1Title": "Will I make it?",
+      "card1Desc": "See your end-of-month forecast: cash on hand plus expected income minus expected costs.",
+      "card2Title": "What am I waiting on?",
+      "card2Desc": "Track unpaid receivables and retainer payments due. Know who owes you and when.",
+      "card3Title": "What can I afford next?",
+      "card3Desc": "Spot surplus or shortfall before making decisions. Plan major expenses with confidence.",
+      "forecastTitle": "Why forecasting matters",
+      "forecastDesc": "Most tools show you what happened. Mutaba3a shows you what's likely to happen—so you can act before problems arrive."
+    },
+    "proof": {
+      "headline": "See it in action",
+      "tabs": {
+        "desktop": "Desktop App",
+        "web": "Web App"
+      },
+      "items": {
+        "dashboardTitle": "Dashboard",
+        "dashboardDesc": "Your financial overview at a glance",
+        "documentsTitle": "Documents",
+        "documentsDesc": "Create and manage invoices",
+        "clientsTitle": "Clients",
+        "clientsDesc": "Track client finances and history",
+        "expensesTitle": "Expenses",
+        "expensesDesc": "Organize costs by business profile"
+      }
+    },
+    "capabilities": {
+      "headline": "Everything you need, nothing you don't",
+      "block1Title": "Get paid and stay paid",
+      "block1Bullet1": "Clients and projects",
+      "block1Bullet2": "Receivables tracking",
+      "block1Bullet3": "Retainer management",
+      "block1Bullet4": "Invoice generation",
+      "block2Title": "Stay on top of costs",
+      "block2Bullet1": "Fixed and recurring expenses",
+      "block2Bullet2": "Receipt management",
+      "block2Bullet3": "Profile-scoped expense tracking",
+      "block3Title": "Know your month and year",
+      "block3Bullet1": "Cash flow timeline",
+      "block3Bullet2": "Risk day detection",
+      "block3Bullet3": "Reports and CSV export"
     },
     "privacy": {
       "headline": "Your data. Your device. Your rules.",
+      "intro": "Mutaba3a is built for people who care where their financial data lives.",
       "point1": "No account required to use",
       "point2": "No tracking or analytics",
       "point3": "No cloud sync by default",
@@ -919,16 +970,22 @@
       "point5": "Export everything as JSON anytime",
       "point6": "Source-available on GitHub"
     },
-    "platforms": {
-      "headline": "Native apps for Mac and Windows",
-      "pwa": "Or use in your browser at any time",
-      "downloadMac": "Download for macOS",
-      "downloadWindows": "Download for Windows"
+    "download": {
+      "headline": "Download the desktop app",
+      "latestLabel": "Latest version",
+      "releaseNotes": "Release notes",
+      "mac": "Download for macOS",
+      "macHint": "Universal (Intel + Apple Silicon)",
+      "windowsMsi": "Download for Windows",
+      "windowsHint": "MSI Installer",
+      "windowsExe": "Alternative: Download EXE installer",
+      "pwaNote": "Or use the web app in your browser—works offline after first load."
     },
     "pricing": {
       "headline": "Free for personal use",
       "personal": "Free for personal and educational use",
       "commercial": "Commercial license required for business use",
+      "future": "Team features and cloud sync coming later (paid).",
       "support": "Support development",
       "supportCta": "Support on Buy Me a Coffee"
     },
@@ -953,7 +1010,11 @@
       "q9": "What's the difference between web and desktop?",
       "a9": "Same features. Desktop has native performance and automatic updates.",
       "q10": "How can I support the project?",
-      "a10": "Buy Me a Coffee or purchase a commercial license when available."
+      "a10": "Buy Me a Coffee or purchase a commercial license when available.",
+      "q11": "What happens to my data if the project shuts down?",
+      "a11": "Your data stays on your device. Export anytime to JSON. You own it forever.",
+      "q12": "Can I use it for my business?",
+      "a12": "Yes, with a commercial license. Contact us for pricing or wait for the self-serve option."
     },
     "finalCta": {
       "headline": "Start tracking your finances today",
@@ -963,10 +1024,6 @@
       "copyright": "Mutaba3a",
       "github": "GitHub",
       "privacy": "Privacy"
-    },
-    "langToggle": {
-      "en": "EN",
-      "ar": "AR"
     }
   },
   "moneyAnswers": {

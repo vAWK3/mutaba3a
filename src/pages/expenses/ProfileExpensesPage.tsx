@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs } from '../../components/filters';
+import { SearchInput } from '../../components/filters';
 import { RowActionsMenu } from '../../components/ui';
 import { CopyIcon, TrashIcon } from '../../components/icons';
 import {
@@ -20,7 +20,7 @@ import { useBusinessProfile } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency, ExpenseFilters } from '../../types';
+import type { ExpenseFilters } from '../../types';
 import './ProfileExpensesPage.css';
 import '../../components/modals/DeleteAllDataModal.css';
 
@@ -33,7 +33,6 @@ export function ProfileExpensesPage() {
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [categoryId, setCategoryId] = useState<string>('');
   const [search, setSearch] = useState('');
   const [showRecurring, setShowRecurring] = useState(true);
@@ -49,14 +48,14 @@ export function ProfileExpensesPage() {
   const resumeRuleMutation = useResumeRecurringRule();
   const deleteRuleMutation = useDeleteRecurringRule();
 
+  // Always fetch all currencies (no currency filter)
   const filters = useMemo((): ExpenseFilters => ({
     profileId,
     year,
-    currency,
     categoryId: categoryId || undefined,
     search: search || undefined,
     sort: { by: 'occurredAt', dir: 'desc' },
-  }), [profileId, year, currency, categoryId, search]);
+  }), [profileId, year, categoryId, search]);
 
   const { data: expenses = [], isLoading: expensesLoading } = useExpenses(filters);
 
@@ -177,7 +176,6 @@ export function ProfileExpensesPage() {
             onChange={setSearch}
             placeholder={t('expenses.searchPlaceholder')}
           />
-          <CurrencyTabs value={currency} onChange={setCurrency} />
           {categories.length > 0 ? (
             <select
               className="select"

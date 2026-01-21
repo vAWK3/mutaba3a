@@ -1,0 +1,105 @@
+/* Proof Gallery Section */
+.landing-proof-gallery {
+  background: var(--bg-subtle, #0D1422);
+}
+
+.gallery-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+.gallery-tab {
+  padding: 12px 32px;
+  background: var(--surface, #111827);
+  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
+  border-radius: var(--radius-lg, 8px);
+  color: var(--text-secondary, #C5D0E0);
+  font-size: var(--text-md, 14px);
+  font-weight: var(--weight-medium, 500);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gallery-tab:hover {
+  background: var(--surface-hover, #151D2E);
+  border-color: var(--border-strong, rgba(231, 238, 249, 0.15));
+  color: var(--text, #E7EEF9);
+}
+
+.gallery-tab--active {
+  background: var(--accent-subtle, rgba(44, 182, 166, 0.12));
+  border-color: var(--accent, #2CB6A6);
+  color: var(--accent, #2CB6A6);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.gallery-item {
+  margin: 0;
+  background: var(--surface, #111827);
+  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  border-radius: var(--radius-xl, 12px);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.gallery-item:hover {
+  border-color: var(--border, rgba(231, 238, 249, 0.1));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.gallery-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.gallery-caption {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gallery-caption strong {
+  font-size: var(--text-md, 14px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text, #E7EEF9);
+}
+
+.gallery-caption span {
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #A6B4CC);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-tabs {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .gallery-tab {
+    width: 100%;
+    max-width: 280px;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-tab,
+  .gallery-item {
+    transition: none;
+  }
+}

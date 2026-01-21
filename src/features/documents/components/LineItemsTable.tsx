@@ -21,6 +21,7 @@ export interface LineItemsTableProps {
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: '$',
   ILS: '₪',
+  EUR: '€',
 };
 
 // Calculate item total in minor units

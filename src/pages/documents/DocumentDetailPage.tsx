@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useNavigate } from '@tanstack/react-router';
 import { PDFViewer } from '@react-pdf/renderer';
 import { TopBar } from '../../components/layout';
-import { CheckIcon, DownloadIcon } from '../../components/icons';
+import { CheckIcon, DownloadIcon, LockIcon } from '../../components/icons';
 import {
   useDocument,
   useBusinessProfile,
@@ -10,6 +10,8 @@ import {
   useMarkDocumentPaid,
   useVoidDocument,
   useUpdateDocument,
+  useArchiveDocument,
+  useUnarchiveDocument,
 } from '../../hooks/useQueries';
 import { formatAmount, formatDate } from '../../lib/utils';
 import { useLanguage, getLocale } from '../../lib/i18n';
@@ -40,9 +42,12 @@ const STATUS_CONFIG: Record<DocumentStatus, { label: string; className: string }
 export function DocumentDetailPage() {
   const params = useParams({ strict: false }) as { documentId: string };
   const documentId = params.documentId;
+  const navigate = useNavigate();
   const markPaidMutation = useMarkDocumentPaid();
   const voidMutation = useVoidDocument();
   const updateDocumentMutation = useUpdateDocument();
+  const archiveMutation = useArchiveDocument();
+  const unarchiveMutation = useUnarchiveDocument();
   const { issueAndDownload, downloadOnly, isProcessing, isIssuing } = useIssueAndDownload();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -87,10 +92,12 @@ export function DocumentDetailPage() {
     );
   }
 
-  const canEdit = document.status === 'draft';
-  const canIssue = document.status === 'draft';
+  const isLocked = !!document.lockedAt;
+  const isArchived = !!document.archivedAt;
+  const canEdit = document.status === 'draft' && !isLocked;
+  const canIssue = document.status === 'draft' && !isLocked;
   const canMarkPaid = document.status === 'issued' && document.type === 'invoice';
-  const canVoid = document.status === 'issued';
+  const canVoid = document.status === 'issued' && !isLocked;
   const canCreateCreditNote = document.status === 'paid' && document.type === 'invoice';
 
   // Handler for manual status changes
@@ -162,6 +169,14 @@ export function DocumentDetailPage() {
                 {STATUS_CONFIG[document.status].label}
               </span>
               <span className="badge badge-muted">{DOCUMENT_TYPE_LABELS[document.type]}</span>
+              {isLocked && (
+                <span className="badge badge-info" title={`Locked on ${formatDate(document.lockedAt!, locale)}`}>
+                  <LockIcon size={12} /> Locked
+                </span>
+              )}
+              {isArchived && (
+                <span className="badge badge-warning">Archived</span>
+              )}
               <span className="text-muted">
                 {formatDate(document.issueDate, locale)}
               </span>
@@ -197,6 +212,15 @@ export function DocumentDetailPage() {
                 Edit
               </Link>
             )}
+            {/* Show Duplicate button for locked documents instead of Edit */}
+            {isLocked && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => navigate({ to: '/documents/new', search: { duplicateFrom: document.id } })}
+              >
+                Duplicate
+              </button>
+            )}
             {canMarkPaid && (
               <button
                 className="btn btn-success"
@@ -225,6 +249,24 @@ export function DocumentDetailPage() {
                 Create Credit Note
               </Link>
             )}
+            {/* Archive/Unarchive button */}
+            {isArchived ? (
+              <button
+                className="btn btn-ghost"
+                onClick={() => unarchiveMutation.mutate(document.id)}
+                disabled={unarchiveMutation.isPending}
+              >
+                Unarchive
+              </button>
+            ) : (
+              <button
+                className="btn btn-ghost"
+                onClick={() => archiveMutation.mutate(document.id)}
+                disabled={archiveMutation.isPending}
+              >
+                Archive
+              </button>
+            )}
             {/* Issue & Download for draft documents */}
             {canIssue && businessProfile && (
               <button
@@ -242,8 +284,8 @@ export function DocumentDetailPage() {
                 )}
               </button>
             )}
-            {/* Download only for non-draft documents */}
-            {!canIssue && businessProfile && (
+            {/* Download only for non-draft/locked documents */}
+            {(!canIssue || isLocked) && businessProfile && document.status !== 'draft' && (
               <button
                 className="btn btn-primary"
                 onClick={handleDownload}
@@ -254,7 +296,7 @@ export function DocumentDetailPage() {
                 ) : (
                   <>
                     <DownloadIcon size={16} />
-                    Download PDF
+                    Download Copy
                   </>
                 )}
               </button>

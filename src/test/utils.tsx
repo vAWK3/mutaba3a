@@ -142,6 +142,7 @@ export function createMockDocument(overrides: Partial<Document> = {}): Document 
     refDocumentId: undefined,
     linkedTransactionIds: [],
     templateId: 'template1',
+    exportCount: 0,
     createdAt: now,
     updatedAt: now,
     deletedAt: undefined,

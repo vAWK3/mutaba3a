@@ -253,6 +253,25 @@ export const transactionRepo = {
   },
 
   async update(id: string, data: Partial<Transaction>): Promise<void> {
+    const existing = await db.transactions.get(id);
+    if (!existing) return;
+
+    // If transaction is locked, only allow archivedAt updates
+    if (existing.lockedAt) {
+      const allowedFields = ['archivedAt'];
+      const attemptedFields = Object.keys(data).filter(
+        (key) => key !== 'updatedAt' && !allowedFields.includes(key)
+      );
+
+      if (attemptedFields.length > 0) {
+        throw new TransactionLockedError(
+          `Transaction is locked by document ${existing.lockedByDocumentId}. Only archive/unarchive is allowed.`,
+          id,
+          existing.lockedByDocumentId
+        );
+      }
+    }
+
     await db.transactions.update(id, { ...data, updatedAt: nowISO() });
   },
 
@@ -267,6 +286,29 @@ export const transactionRepo = {
 
   async softDelete(id: string): Promise<void> {
     await db.transactions.update(id, { deletedAt: nowISO(), updatedAt: nowISO() });
+  },
+
+  /**
+   * Archive a transaction (soft-hide from lists).
+   */
+  async archive(id: string): Promise<void> {
+    const now = nowISO();
+    await db.transactions.update(id, { archivedAt: now, updatedAt: now });
+  },
+
+  /**
+   * Unarchive a transaction.
+   */
+  async unarchive(id: string): Promise<void> {
+    await db.transactions.update(id, { archivedAt: undefined, updatedAt: nowISO() });
+  },
+
+  /**
+   * Check if a transaction is locked.
+   */
+  async isLocked(id: string): Promise<boolean> {
+    const tx = await db.transactions.get(id);
+    return !!tx?.lockedAt;
   },
 
   async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency }): Promise<OverviewTotals> {
@@ -343,10 +385,13 @@ export const projectSummaryRepo = {
           perCurrencyData = {
             paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
             paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+            paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
             unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
             unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+            unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
             expensesMinorUSD: byCurrency.USD.expensesMinor,
             expensesMinorILS: byCurrency.ILS.expensesMinor,
+            expensesMinorEUR: byCurrency.EUR.expensesMinor,
           };
         }
 
@@ -383,10 +428,13 @@ export const projectSummaryRepo = {
       perCurrencyData = {
         paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
         paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+        paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
         unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
         unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+        unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
         expensesMinorUSD: byCurrency.USD.expensesMinor,
         expensesMinorILS: byCurrency.ILS.expensesMinor,
+        expensesMinorEUR: byCurrency.EUR.expensesMinor,
       };
     }
 
@@ -433,8 +481,10 @@ export const clientSummaryRepo = {
           perCurrencyData = {
             paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
             paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+            paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
             unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
             unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+            unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
           };
         }
 
@@ -719,6 +769,40 @@ export const documentSequenceRepo = {
 // Document Repository
 // ============================================================================
 
+// Custom error for document lock violations
+export class DocumentLockedError extends Error {
+  documentId?: string;
+  constructor(message: string, documentId?: string) {
+    super(message);
+    this.name = 'DocumentLockedError';
+    this.documentId = documentId;
+  }
+}
+
+// Custom error for duplicate document numbers
+export class DuplicateDocumentNumberError extends Error {
+  number: string;
+  suggestedNumber?: string;
+  constructor(number: string, suggestedNumber?: string) {
+    super(`Document number ${number} already exists`);
+    this.name = 'DuplicateDocumentNumberError';
+    this.number = number;
+    this.suggestedNumber = suggestedNumber;
+  }
+}
+
+// Custom error for transaction lock violations
+export class TransactionLockedError extends Error {
+  transactionId: string;
+  lockedByDocumentId?: string;
+  constructor(message: string, transactionId: string, lockedByDocumentId?: string) {
+    super(message);
+    this.name = 'TransactionLockedError';
+    this.transactionId = transactionId;
+    this.lockedByDocumentId = lockedByDocumentId;
+  }
+}
+
 export const documentRepo = {
   async list(filters: DocumentFilters = {}): Promise<DocumentDisplay[]> {
     const documents = await db.documents.toArray();
@@ -730,6 +814,8 @@ export const documentRepo = {
 
     let filtered = documents.filter((doc) => {
       if (doc.deletedAt) return false;
+      // Filter out archived documents unless includeArchived is true
+      if (!filters.includeArchived && doc.archivedAt) return false;
       if (filters.dateFrom && doc.issueDate < filters.dateFrom) return false;
       if (filters.dateTo && doc.issueDate > filters.dateTo + 'T23:59:59') return false;
       if (filters.currency && doc.currency !== filters.currency) return false;
@@ -808,15 +894,112 @@ export const documentRepo = {
       ...data,
       id: generateId(),
       number,
+      exportCount: 0, // Initialize export count
       createdAt: now,
       updatedAt: now,
     };
-    await db.documents.add(document);
+
+    // Use transaction to atomically check uniqueness before insert
+    await db.transaction('rw', db.documents, async () => {
+      // Check for existing document with same businessProfileId, type, and number
+      const existing = await db.documents
+        .where('[businessProfileId+type+number]')
+        .equals([document.businessProfileId, document.type, document.number])
+        .filter((doc) => !doc.deletedAt)
+        .first();
+
+      if (existing) {
+        // Get next available number for suggestion
+        const suggested = await documentSequenceRepo.getNextNumber(data.businessProfileId, data.type);
+        throw new DuplicateDocumentNumberError(document.number, suggested);
+      }
+
+      await db.documents.add(document);
+    });
+
     return document;
   },
 
+  /**
+   * Create a document with a specific number, checking for uniqueness atomically.
+   * Used when duplicating or when the user specifies a custom number.
+   */
+  async createWithNumber(
+    data: Omit<Document, 'id' | 'createdAt' | 'updatedAt'> & { number: string }
+  ): Promise<Document> {
+    const now = nowISO();
+
+    const document: Document = {
+      ...data,
+      id: generateId(),
+      exportCount: data.exportCount ?? 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.transaction('rw', db.documents, async () => {
+      // Check for existing document with same businessProfileId, type, and number
+      const existing = await db.documents
+        .where('[businessProfileId+type+number]')
+        .equals([document.businessProfileId, document.type, document.number])
+        .filter((doc) => !doc.deletedAt)
+        .first();
+
+      if (existing) {
+        const suggested = await documentSequenceRepo.getNextNumber(data.businessProfileId, data.type);
+        throw new DuplicateDocumentNumberError(document.number, suggested);
+      }
+
+      await db.documents.add(document);
+    });
+
+    return document;
+  },
+
+  /**
+   * Get the next available document number for a given profile and type.
+   */
+  async getNextAvailableNumber(businessProfileId: string, type: DocumentType): Promise<string> {
+    return documentSequenceRepo.getNextNumber(businessProfileId, type);
+  },
+
   async update(id: string, data: Partial<Document>): Promise<void> {
-    await db.documents.update(id, { ...data, updatedAt: nowISO() });
+    const existing = await db.documents.get(id);
+    if (!existing) return;
+
+    // If document is locked, only allow archivedAt updates
+    if (existing.lockedAt) {
+      const allowedFields = ['archivedAt'];
+      const attemptedFields = Object.keys(data).filter(
+        (key) => key !== 'updatedAt' && !allowedFields.includes(key)
+      );
+
+      if (attemptedFields.length > 0) {
+        throw new DocumentLockedError(
+          `Cannot modify locked document. Only archive/unarchive is allowed.`,
+          id
+        );
+      }
+    }
+
+    // If changing number, check uniqueness
+    if (data.number && data.number !== existing.number) {
+      await db.transaction('rw', db.documents, async () => {
+        const duplicate = await db.documents
+          .where('[businessProfileId+type+number]')
+          .equals([existing.businessProfileId, data.type || existing.type, data.number!])
+          .filter((doc) => !doc.deletedAt && doc.id !== id)
+          .first();
+
+        if (duplicate) {
+          throw new DuplicateDocumentNumberError(data.number!);
+        }
+
+        await db.documents.update(id, { ...data, updatedAt: nowISO() });
+      });
+    } else {
+      await db.documents.update(id, { ...data, updatedAt: nowISO() });
+    }
   },
 
   async markPaid(id: string): Promise<void> {
@@ -872,5 +1055,73 @@ export const documentRepo = {
     });
 
     await transactionRepo.update(transactionId, { linkedDocumentId: undefined });
+  },
+
+  /**
+   * Lock a document after first export. Increments export count and sets lock timestamp on first export.
+   * Also locks all linked transactions.
+   * @param id Document ID
+   * @param pdfSavedPath Optional path where PDF was saved (Tauri desktop only)
+   */
+  async lockAfterExport(id: string, pdfSavedPath?: string): Promise<void> {
+    const now = nowISO();
+    const doc = await this.get(id);
+    if (!doc) return;
+
+    const isFirstExport = !doc.lockedAt;
+    const updateData: Partial<Document> = {
+      exportCount: (doc.exportCount || 0) + 1,
+      lastExportedAt: now,
+    };
+
+    // Set lock timestamp on first export
+    if (isFirstExport) {
+      updateData.lockedAt = now;
+    }
+
+    // Set PDF path if provided (Tauri)
+    if (pdfSavedPath) {
+      updateData.pdfSavedPath = pdfSavedPath;
+      updateData.pdfSavedAt = now;
+    }
+
+    // Use raw update to bypass lock guard (we're allowed to update these fields)
+    await db.documents.update(id, { ...updateData, updatedAt: now });
+
+    // Lock all linked transactions on first export
+    if (isFirstExport && doc.linkedTransactionIds && doc.linkedTransactionIds.length > 0) {
+      await db.transaction('rw', db.transactions, async () => {
+        for (const txId of doc.linkedTransactionIds) {
+          await db.transactions.update(txId, {
+            lockedAt: now,
+            lockedByDocumentId: id,
+            updatedAt: now,
+          });
+        }
+      });
+    }
+  },
+
+  /**
+   * Check if a document is locked (immutable).
+   */
+  async isLocked(id: string): Promise<boolean> {
+    const doc = await this.get(id);
+    return !!doc?.lockedAt;
+  },
+
+  /**
+   * Archive a document (soft-hide from lists).
+   */
+  async archive(id: string): Promise<void> {
+    const now = nowISO();
+    await db.documents.update(id, { archivedAt: now, updatedAt: now });
+  },
+
+  /**
+   * Unarchive a document.
+   */
+  async unarchive(id: string): Promise<void> {
+    await db.documents.update(id, { archivedAt: undefined, updatedAt: nowISO() });
   },
 };

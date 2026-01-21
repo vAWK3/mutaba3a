@@ -72,6 +72,7 @@ describe('documentRepo', () => {
     refDocumentId: undefined,
     linkedTransactionIds: [],
     templateId: 'template1',
+    exportCount: 0,
     deletedAt: undefined,
     ...overrides,
   });

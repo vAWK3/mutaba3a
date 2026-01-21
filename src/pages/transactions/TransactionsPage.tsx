@@ -3,7 +3,6 @@ import { useSearch } from "@tanstack/react-router";
 import { TopBar } from "../../components/layout";
 import {
   SearchInput,
-  CurrencyTabs,
   StatusSegment,
   TypeSegment,
   DateRangeControl,
@@ -26,14 +25,13 @@ import {
   getDaysUntil,
 } from "../../lib/utils";
 import { useT, useLanguage, getLocale } from "../../lib/i18n";
-import type { Currency, TxKind, TxStatus, QueryFilters } from "../../types";
+import type { TxKind, TxStatus, QueryFilters } from "../../types";
 
 type TypeFilter = TxKind | "receivable" | undefined;
 
 interface TransactionsSearchParams {
   dateFrom?: string;
   dateTo?: string;
-  currency?: Currency;
   kind?: TxKind;
   status?: TxStatus | 'overdue';
 }
@@ -55,7 +53,6 @@ export function TransactionsPage() {
     }
     return getDateRangePreset("all");
   });
-  const [currency, setCurrency] = useState<Currency | undefined>(searchParams.currency);
 
   // Derive type filter from URL kind+status
   const initialTypeFilter = useMemo((): TypeFilter => {
@@ -75,17 +72,16 @@ export function TransactionsPage() {
   // Clear URL-based filters after initial load (optional - keeps URL clean)
   const [initialParamsApplied, setInitialParamsApplied] = useState(false);
   useEffect(() => {
-    if (!initialParamsApplied && (searchParams.dateFrom || searchParams.currency || searchParams.kind)) {
+    if (!initialParamsApplied && (searchParams.dateFrom || searchParams.kind)) {
       setInitialParamsApplied(true);
     }
   }, [initialParamsApplied, searchParams]);
 
-  // Build query filters
+  // Build query filters - always fetch all currencies (no currency filter)
   const queryFilters = useMemo((): QueryFilters => {
     const filters: QueryFilters = {
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
-      currency,
       search: search || undefined,
       sort: { by: "occurredAt", dir: "desc" },
     };
@@ -102,7 +98,7 @@ export function TransactionsPage() {
     }
 
     return filters;
-  }, [dateRange, currency, typeFilter, statusFilter, search]);
+  }, [dateRange, typeFilter, statusFilter, search]);
 
   const { data: transactions = [], isLoading } = useTransactions(queryFilters);
   const isCompact = useIsCompactTable();
@@ -138,7 +134,6 @@ export function TransactionsPage() {
                 setDateRange({ dateFrom: from, dateTo: to })
               }
             />
-            <CurrencyTabs value={currency} onChange={setCurrency} />
           </div>
         }
       />

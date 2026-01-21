@@ -1,22 +1,21 @@
 /**
  * CurrencySummaryPopup Component
- * Displays a unified amount with a clickable icon that shows a popup breakdown of USD and ILS.
+ * Displays a unified amount with a clickable icon that shows a popup breakdown of USD, ILS, and EUR.
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { useFxRate } from '../../hooks/useFxRate';
-import { getUnifiedTotal } from '../../lib/fx';
+import { getUnifiedTotalWithEur } from '../../lib/fx';
 import { formatAmount, cn } from '../../lib/utils';
 import { useLanguage, getLocale, useT } from '../../lib/i18n';
-import type { Currency } from '../../types';
 
 export interface CurrencySummaryPopupProps {
   /** Amount in USD minor units (cents) */
   usdAmountMinor: number;
   /** Amount in ILS minor units (agorot) */
   ilsAmountMinor: number;
-  /** Target currency for unified display (default: ILS) */
-  unifiedCurrency?: Currency;
+  /** Amount in EUR minor units (cents) */
+  eurAmountMinor?: number;
   /** Semantic type for color styling */
   type?: 'income' | 'expense' | 'net' | 'neutral';
   /** Label for the amount (optional) */
@@ -30,7 +29,7 @@ export interface CurrencySummaryPopupProps {
 export function CurrencySummaryPopup({
   usdAmountMinor,
   ilsAmountMinor,
-  unifiedCurrency = 'ILS',
+  eurAmountMinor = 0,
   type = 'neutral',
   label,
   size = 'default',
@@ -38,13 +37,18 @@ export function CurrencySummaryPopup({
 }: CurrencySummaryPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { rate, source } = useFxRate('USD', 'ILS');
+  const { rate: usdToIlsRate, source: usdSource } = useFxRate('USD', 'ILS');
+  const { rate: eurToIlsRate, source: eurSource } = useFxRate('EUR', 'ILS');
   const { language } = useLanguage();
   const locale = getLocale(language);
   const t = useT();
 
-  // Calculate unified total
-  const unifiedTotal = getUnifiedTotal(usdAmountMinor, ilsAmountMinor, unifiedCurrency, rate);
+  // Calculate unified total including EUR
+  const unifiedTotal = getUnifiedTotalWithEur(usdAmountMinor, ilsAmountMinor, eurAmountMinor, usdToIlsRate, eurToIlsRate);
+
+  // Overall source status could be used for unified indicator if needed
+  // const overallSource = usdSource === 'none' || eurSource === 'none' ? 'none' :
+  //                       usdSource === 'cached' || eurSource === 'cached' ? 'cached' : 'live';
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -74,6 +78,15 @@ export function CurrencySummaryPopup({
     }
   }, [isOpen]);
 
+  // Build fallback display string when rate unavailable
+  const buildFallbackDisplay = () => {
+    const parts: string[] = [];
+    if (usdAmountMinor !== 0) parts.push(formatAmount(usdAmountMinor, 'USD', locale));
+    if (ilsAmountMinor !== 0) parts.push(formatAmount(ilsAmountMinor, 'ILS', locale));
+    if (eurAmountMinor !== 0) parts.push(formatAmount(eurAmountMinor, 'EUR', locale));
+    return parts.join(' + ') || formatAmount(0, 'ILS', locale);
+  };
+
   // Determine color class based on type and value
   const getColorClass = () => {
     if (type === 'income') return 'amount-positive';
@@ -82,7 +95,7 @@ export function CurrencySummaryPopup({
       if (unifiedTotal !== null) {
         return unifiedTotal >= 0 ? 'amount-positive' : 'amount-negative';
       }
-      const rawNet = usdAmountMinor + ilsAmountMinor;
+      const rawNet = usdAmountMinor + ilsAmountMinor + eurAmountMinor;
       return rawNet >= 0 ? 'amount-positive' : 'amount-negative';
     }
     return '';
@@ -96,8 +109,8 @@ export function CurrencySummaryPopup({
       <div className="currency-summary-main">
         <span className={cn('currency-summary-amount', colorClass, size === 'large' && 'large')}>
           {unifiedTotal !== null
-            ? formatAmount(unifiedTotal, unifiedCurrency, locale)
-            : `${formatAmount(usdAmountMinor, 'USD', locale)} + ${formatAmount(ilsAmountMinor, 'ILS', locale)}`}
+            ? formatAmount(unifiedTotal, 'ILS', locale)
+            : buildFallbackDisplay()}
         </span>
         <button
           type="button"
@@ -127,16 +140,34 @@ export function CurrencySummaryPopup({
               {formatAmount(ilsAmountMinor, 'ILS', locale)}
             </span>
           </div>
-          {rate && (
-            <div className="currency-breakdown-rate">
-              <span className="currency-breakdown-rate-label">
-                {t('fx.bannerTitle')}: 1 USD = {rate.toFixed(2)} ILS
-              </span>
-              <span className={cn('currency-breakdown-source', `source-${source}`)}>
-                ({t(`fx.${source}`)})
-              </span>
-            </div>
-          )}
+          <div className="currency-breakdown-row">
+            <span className="currency-breakdown-label">EUR</span>
+            <span className={cn('currency-breakdown-value', colorClass)}>
+              {formatAmount(eurAmountMinor, 'EUR', locale)}
+            </span>
+          </div>
+          <div className="currency-breakdown-rates">
+            {usdToIlsRate && (
+              <div className="currency-breakdown-rate">
+                <span className="currency-breakdown-rate-label">
+                  $1 = {usdToIlsRate.toFixed(2)} ₪
+                </span>
+                <span className={cn('currency-breakdown-source', `source-${usdSource}`)}>
+                  ({t(`fx.${usdSource}`)})
+                </span>
+              </div>
+            )}
+            {eurToIlsRate && (
+              <div className="currency-breakdown-rate">
+                <span className="currency-breakdown-rate-label">
+                  €1 = {eurToIlsRate.toFixed(2)} ₪
+                </span>
+                <span className={cn('currency-breakdown-source', `source-${eurSource}`)}>
+                  ({t(`fx.${eurSource}`)})
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

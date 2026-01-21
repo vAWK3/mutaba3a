@@ -1,13 +1,20 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs, DateRangeControl } from '../../components/filters';
+import { SearchInput, DateRangeControl } from '../../components/filters';
 import { EmptyState, RowActionsMenu } from '../../components/ui';
-import { CheckIcon } from '../../components/icons';
-import { useDocuments, useMarkDocumentPaid, useVoidDocument, useIssueDocument } from '../../hooks/useQueries';
+import { CheckIcon, LockIcon } from '../../components/icons';
+import {
+  useDocuments,
+  useMarkDocumentPaid,
+  useVoidDocument,
+  useIssueDocument,
+  useArchiveDocument,
+  useUnarchiveDocument,
+} from '../../hooks/useQueries';
 import { formatAmount, formatDate, getDateRangePreset } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency, DocumentType, DocumentStatus, DocumentFilters } from '../../types';
+import type { DocumentType, DocumentStatus, DocumentFilters } from '../../types';
 
 // Document type display labels
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -33,29 +40,31 @@ export function DocumentsPage() {
   const markPaidMutation = useMarkDocumentPaid();
   const voidMutation = useVoidDocument();
   const issueDocumentMutation = useIssueDocument();
+  const archiveMutation = useArchiveDocument();
+  const unarchiveMutation = useUnarchiveDocument();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
 
   // Filters state
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [typeFilter, setTypeFilter] = useState<DocumentType | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | undefined>(undefined);
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
-  // Build query filters
+  // Build query filters - always fetch all currencies (no currency filter)
   const queryFilters = useMemo((): DocumentFilters => {
     return {
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
-      currency,
       type: typeFilter,
       status: statusFilter,
       search: search || undefined,
       sort: { by: 'issueDate', dir: 'desc' },
+      includeArchived: showArchived,
     };
-  }, [dateRange, currency, typeFilter, statusFilter, search]);
+  }, [dateRange, typeFilter, statusFilter, search, showArchived]);
 
   const { data: documents = [], isLoading } = useDocuments(queryFilters);
 
@@ -77,7 +86,6 @@ export function DocumentsPage() {
               dateTo={dateRange.dateTo}
               onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
             />
-            <CurrencyTabs value={currency} onChange={setCurrency} />
           </div>
         }
       />
@@ -117,6 +125,16 @@ export function DocumentsPage() {
             onChange={setSearch}
             placeholder="Search documents..."
           />
+
+          {/* Show Archived Toggle */}
+          <label className="toggle-label" style={{ marginInlineStart: 'auto' }}>
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            <span>Show Archived</span>
+          </label>
         </div>
 
         {isLoading ? (
@@ -175,6 +193,14 @@ export function DocumentsPage() {
                       <span className={STATUS_CONFIG[doc.status].className}>
                         {STATUS_CONFIG[doc.status].label}
                       </span>
+                      {doc.lockedAt && (
+                        <LockIcon size={12} className="inline-icon text-muted" />
+                      )}
+                      {doc.archivedAt && (
+                        <span className="badge badge-warning" style={{ marginInlineStart: 4 }}>
+                          Archived
+                        </span>
+                      )}
                     </td>
                     <td>
                       <RowActionsMenu
@@ -183,8 +209,7 @@ export function DocumentsPage() {
                           {
                             label: 'View',
                             onClick: () => {
-                              // Navigate to detail page instead of drawer
-                              window.location.href = `/documents/${doc.id}`;
+                              navigate({ to: '/documents/$documentId', params: { documentId: doc.id } });
                             },
                           },
                           // Create Similar (duplicate as draft)
@@ -194,8 +219,8 @@ export function DocumentsPage() {
                               navigate({ to: '/documents/new', search: { duplicateFrom: doc.id } });
                             },
                           },
-                          // Issue document (only for drafts)
-                          ...(doc.status === 'draft'
+                          // Issue document (only for drafts and not locked)
+                          ...(doc.status === 'draft' && !doc.lockedAt
                             ? [
                                 {
                                   label: 'Issue Document',
@@ -213,8 +238,8 @@ export function DocumentsPage() {
                                 },
                               ]
                             : []),
-                          // Void (only for issued documents)
-                          ...(doc.status === 'issued'
+                          // Void (only for issued documents and not locked)
+                          ...(doc.status === 'issued' && !doc.lockedAt
                             ? [
                                 {
                                   label: 'Void',
@@ -237,6 +262,20 @@ export function DocumentsPage() {
                                 },
                               ]
                             : []),
+                          // Archive/Unarchive
+                          ...(doc.archivedAt
+                            ? [
+                                {
+                                  label: 'Unarchive',
+                                  onClick: () => unarchiveMutation.mutate(doc.id),
+                                },
+                              ]
+                            : [
+                                {
+                                  label: 'Archive',
+                                  onClick: () => archiveMutation.mutate(doc.id),
+                                },
+                              ]),
                         ]}
                       />
                     </td>

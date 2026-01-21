@@ -20,7 +20,7 @@ const schema = z.object({
   clientId: z.string().min(1, 'Client is required'),
   title: z.string().min(1, 'Title is required'),
   amount: z.string().min(1, 'Amount is required'),
-  currency: z.enum(['USD', 'ILS']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   cadence: z.enum(['monthly', 'quarterly']),
   paymentDay: z.number().min(1).max(28),
   startDate: z.string().min(1, 'Start date is required'),

@@ -770,3 +770,81 @@
 :root[data-theme="light"] .landing-platform-card:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
+
+/* ============================================
+   Capabilities Section
+   ============================================ */
+.landing-capabilities {
+  background: var(--bg-subtle, #0D1422);
+}
+
+.capabilities-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.capability-block {
+  padding: 32px;
+  background: var(--surface, #111827);
+  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  border-radius: var(--radius-xl, 12px);
+}
+
+.capability-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg, 16px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--text, #E7EEF9);
+  margin: 0 0 20px 0;
+}
+
+.capability-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.capability-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary, #C5D0E0);
+}
+
+.capability-item svg {
+  flex-shrink: 0;
+  color: var(--accent, #2CB6A6);
+}
+
+/* Privacy intro */
+.landing-privacy-intro {
+  text-align: center;
+  color: var(--text-secondary, #C5D0E0);
+  font-size: var(--text-md, 14px);
+  max-width: 600px;
+  margin: -32px auto 40px;
+}
+
+/* Pricing future line */
+.landing-pricing-line--future {
+  font-size: var(--text-sm, 12px);
+  color: var(--muted-2, #8494B0);
+  margin-bottom: 32px;
+}
+
+/* Responsive for capabilities */
+@media (max-width: 1024px) {
+  .capabilities-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .capability-block {
+    padding: 24px;
+  }
+}

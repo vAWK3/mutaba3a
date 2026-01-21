@@ -22,7 +22,7 @@ type TransactionType = 'income' | 'receivable' | 'expense';
 const schema = z.object({
   type: z.enum(['income', 'receivable', 'expense']),
   amount: z.string().min(1, 'Amount is required'),
-  currency: z.enum(['USD', 'ILS']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   occurredAt: z.string().min(1, 'Date is required'),
   clientId: z.string().optional(),
   projectId: z.string().optional(),

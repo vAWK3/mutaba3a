@@ -1,14 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { TopBar } from '../../components/layout';
-import { CurrencyTabs, DateRangeControl } from '../../components/filters';
+import { DateRangeControl } from '../../components/filters';
 import { CheckIcon } from '../../components/icons';
 import { TransactionTypeBadge } from '../../components/transactions';
-import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
-import { useOverviewTotals, useOverviewTotalsByCurrency, useAttentionReceivables, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
+import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
+import { useOverviewTotalsByCurrency, useAttentionReceivables, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency } from '../../types';
 
 //TODO: remove initial sample data and remove button of "reset to sample data"
 //TODO: add button to "delete all data", but automatically export all data as separate csv files clients/projects/transactions and only after saving the file then proceed user to confirm that data is backed up then delete
@@ -22,58 +21,21 @@ export function OverviewPage() {
   const locale = getLocale(language);
 
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
 
-  // Use single-currency query when a specific currency is selected
-  const { data: singleCurrencyTotals, isLoading: singleLoading } = useOverviewTotals(
-    dateRange.dateFrom,
-    dateRange.dateTo,
-    currency
-  );
-
-  // Use per-currency query when "All" is selected
-  const { data: byCurrencyTotals, isLoading: byCurrencyLoading } = useOverviewTotalsByCurrency(
+  // Always fetch all currencies - no currency filter
+  const { data: byCurrencyTotals, isLoading: totalsLoading } = useOverviewTotalsByCurrency(
     dateRange.dateFrom,
     dateRange.dateTo
   );
 
-  const totalsLoading = currency ? singleLoading : byCurrencyLoading;
-
-  const { data: attentionItems = [] } = useAttentionReceivables(currency);
+  const { data: attentionItems = [] } = useAttentionReceivables();
 
   const { data: recentTransactions = [] } = useTransactions({
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
-    currency,
     limit: 10,
     sort: { by: 'occurredAt', dir: 'desc' },
   });
-
-  // Prepare KPI data based on whether we're showing single currency or unified
-  const kpiData = useMemo(() => {
-    if (currency) {
-      // Single currency mode - use simple formatting
-      if (!singleCurrencyTotals) return null;
-      const net = singleCurrencyTotals.paidIncomeMinor - singleCurrencyTotals.expensesMinor;
-      return {
-        mode: 'single' as const,
-        currency,
-        paidIncome: formatAmount(singleCurrencyTotals.paidIncomeMinor, currency, locale),
-        unpaid: formatAmount(singleCurrencyTotals.unpaidIncomeMinor, currency, locale),
-        expenses: formatAmount(singleCurrencyTotals.expensesMinor, currency, locale),
-        net: formatAmount(net, currency, locale),
-        netValue: net,
-      };
-    } else {
-      // Multi-currency mode - show unified with breakdown
-      if (!byCurrencyTotals) return null;
-      return {
-        mode: 'unified' as const,
-        usd: byCurrencyTotals.USD,
-        ils: byCurrencyTotals.ILS,
-      };
-    }
-  }, [singleCurrencyTotals, byCurrencyTotals, currency, locale]);
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
@@ -95,7 +57,6 @@ export function OverviewPage() {
               dateTo={dateRange.dateTo}
               onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
             />
-            <CurrencyTabs value={currency} onChange={setCurrency} />
           </div>
         }
       />
@@ -110,63 +71,46 @@ export function OverviewPage() {
               </div>
             ))}
           </div>
-        ) : kpiData?.mode === 'single' ? (
+        ) : byCurrencyTotals ? (
           <div className="kpi-row">
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.paidIncome')}</div>
-              <div className="kpi-value positive">{kpiData.paidIncome}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.unpaidReceivables')}</div>
-              <div className="kpi-value warning">{kpiData.unpaid}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.expenses')}</div>
-              <div className="kpi-value">{kpiData.expenses}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.net')}</div>
-              <div className={cn('kpi-value', kpiData.netValue >= 0 ? 'positive' : 'negative')}>
-                {kpiData.net}
-              </div>
-            </div>
-          </div>
-        ) : kpiData?.mode === 'unified' ? (
-          <div className="kpi-row">
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.paidIncome')}</div>
-              <UnifiedAmount
-                usdAmountMinor={kpiData.usd.paidIncomeMinor}
-                ilsAmountMinor={kpiData.ils.paidIncomeMinor}
-                variant="kpi"
+              <CurrencySummaryPopup
+                usdAmountMinor={byCurrencyTotals.USD.paidIncomeMinor}
+                ilsAmountMinor={byCurrencyTotals.ILS.paidIncomeMinor}
+                eurAmountMinor={byCurrencyTotals.EUR.paidIncomeMinor}
                 type="income"
+                size="large"
               />
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.unpaidReceivables')}</div>
-              <UnifiedAmount
-                usdAmountMinor={kpiData.usd.unpaidIncomeMinor}
-                ilsAmountMinor={kpiData.ils.unpaidIncomeMinor}
-                variant="kpi"
+              <CurrencySummaryPopup
+                usdAmountMinor={byCurrencyTotals.USD.unpaidIncomeMinor}
+                ilsAmountMinor={byCurrencyTotals.ILS.unpaidIncomeMinor}
+                eurAmountMinor={byCurrencyTotals.EUR.unpaidIncomeMinor}
                 type="neutral"
+                size="large"
               />
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.expenses')}</div>
-              <UnifiedAmount
-                usdAmountMinor={kpiData.usd.expensesMinor}
-                ilsAmountMinor={kpiData.ils.expensesMinor}
-                variant="kpi"
+              <CurrencySummaryPopup
+                usdAmountMinor={byCurrencyTotals.USD.expensesMinor}
+                ilsAmountMinor={byCurrencyTotals.ILS.expensesMinor}
+                eurAmountMinor={byCurrencyTotals.EUR.expensesMinor}
                 type="expense"
+                size="large"
               />
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{t('overview.kpi.net')}</div>
-              <UnifiedAmount
-                usdAmountMinor={kpiData.usd.paidIncomeMinor - kpiData.usd.expensesMinor}
-                ilsAmountMinor={kpiData.ils.paidIncomeMinor - kpiData.ils.expensesMinor}
-                variant="kpi"
+              <CurrencySummaryPopup
+                usdAmountMinor={byCurrencyTotals.USD.paidIncomeMinor - byCurrencyTotals.USD.expensesMinor}
+                ilsAmountMinor={byCurrencyTotals.ILS.paidIncomeMinor - byCurrencyTotals.ILS.expensesMinor}
+                eurAmountMinor={byCurrencyTotals.EUR.paidIncomeMinor - byCurrencyTotals.EUR.expensesMinor}
                 type="net"
+                size="large"
               />
             </div>
           </div>

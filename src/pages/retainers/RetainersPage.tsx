@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs } from '../../components/filters';
+import { SearchInput } from '../../components/filters';
 import { EmptyState } from '../../components/ui';
 import { useRetainers, useRetainerDisplay, useRetainerSummary, useUpdateDueStates } from '../../hooks/useRetainerQueries';
 import { useClients, useBusinessProfiles } from '../../hooks/useQueries';
@@ -8,7 +8,7 @@ import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, cn } from '../../lib/utils';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency, RetainerStatus, RetainerFilters } from '../../types';
+import type { RetainerStatus, RetainerFilters } from '../../types';
 import './RetainersPage.css';
 
 type ViewFilter = 'all' | 'due' | 'active' | 'ending';
@@ -38,7 +38,6 @@ export function RetainersPage() {
   const [profileFilter, setProfileFilter] = useState<string | undefined>(undefined);
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all');
   const [statusFilter, setStatusFilter] = useState<RetainerStatus | undefined>(undefined);
-  const [currencyFilter, setCurrencyFilter] = useState<Currency | undefined>(undefined);
   const [clientFilter, setClientFilter] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState('');
 
@@ -49,12 +48,11 @@ export function RetainersPage() {
     }
   }, [defaultProfile, profileFilter]);
 
-  // Build query filters
+  // Build query filters - always fetch all currencies
   const queryFilters = useMemo((): RetainerFilters => {
     const filters: RetainerFilters = {
       profileId: profileFilter,
       search: search || undefined,
-      currency: currencyFilter,
       clientId: clientFilter,
     };
 
@@ -73,10 +71,10 @@ export function RetainersPage() {
     }
 
     return filters;
-  }, [profileFilter, viewFilter, statusFilter, currencyFilter, clientFilter, search]);
+  }, [profileFilter, viewFilter, statusFilter, clientFilter, search]);
 
   const { data: retainers = [], isLoading } = useRetainers(queryFilters);
-  const { data: summary } = useRetainerSummary(profileFilter, currencyFilter);
+  const { data: summary } = useRetainerSummary(profileFilter);
   const { data: clients = [] } = useClients();
   const { data: selectedRetainer } = useRetainerDisplay(selectedRetainerId || '');
 
@@ -161,11 +159,6 @@ export function RetainersPage() {
           </div>
 
           <div className="filter-section">
-            <h4 className="filter-section-title">{t('retainers.filters.currency')}</h4>
-            <CurrencyTabs value={currencyFilter} onChange={setCurrencyFilter} />
-          </div>
-
-          <div className="filter-section">
             <h4 className="filter-section-title">{t('retainers.filters.client')}</h4>
             <select
               className="select filter-select"
@@ -201,7 +194,6 @@ export function RetainersPage() {
                 <CurrencySummaryPopup
                   usdAmountMinor={summary.totalExpectedMonthlyUsdMinor}
                   ilsAmountMinor={summary.totalExpectedMonthlyIlsMinor}
-                  unifiedCurrency="ILS"
                   type="income"
                   label={t('retainers.monthlyExpected')}
                 />
@@ -210,7 +202,6 @@ export function RetainersPage() {
                 <CurrencySummaryPopup
                   usdAmountMinor={summary.totalDueUsdMinor}
                   ilsAmountMinor={summary.totalDueIlsMinor}
-                  unifiedCurrency="ILS"
                   type={(summary.totalDueUsdMinor + summary.totalDueIlsMinor) > 0 ? 'expense' : 'neutral'}
                   label={t('retainers.totalDue')}
                 />
@@ -220,7 +211,6 @@ export function RetainersPage() {
                   <CurrencySummaryPopup
                     usdAmountMinor={summary.totalOverdueUsdMinor}
                     ilsAmountMinor={summary.totalOverdueIlsMinor}
-                    unifiedCurrency="ILS"
                     type="expense"
                     label={t('retainers.totalOverdue')}
                   />

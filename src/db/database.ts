@@ -292,6 +292,53 @@ export class MiniCrmDatabase extends Dexie {
       retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
       projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
     });
+
+    // Version 8: Document immutability, unique numbering, and archive support
+    this.version(8).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      // Add lockedAt and archivedAt indexes to transactions
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables with new indexes for uniqueness and immutability
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      // Add compound index for unique number enforcement and lockedAt/archivedAt indexes
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt, [businessProfileId+type+number], lockedAt, archivedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables unchanged
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+    }).upgrade(tx => {
+      // Migration: set exportCount = 0 for all existing documents
+      return tx.table('documents').toCollection().modify(doc => {
+        if (doc.exportCount === undefined) {
+          doc.exportCount = 0;
+        }
+      });
+    });
   }
 }
 

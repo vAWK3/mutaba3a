@@ -13,9 +13,10 @@ import { PdfFooter } from './PdfFooter';
 import './fonts';
 
 // Format amount from minor units to display string
-function formatAmount(amountMinor: number, currency: 'USD' | 'ILS'): string {
+function formatAmount(amountMinor: number, currency: 'USD' | 'ILS' | 'EUR'): string {
   const amount = amountMinor / 100;
-  const symbol = currency === 'USD' ? '$' : '₪';
+  const symbols: Record<string, string> = { USD: '$', ILS: '₪', EUR: '€' };
+  const symbol = symbols[currency] || '';
 
   const formatted = amount.toLocaleString('en-US', {
     minimumFractionDigits: 2,

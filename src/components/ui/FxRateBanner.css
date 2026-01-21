@@ -61,7 +61,13 @@
 .fx-banner-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+}
+
+.fx-banner-rates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .fx-banner-rate {

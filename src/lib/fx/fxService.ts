@@ -229,3 +229,36 @@ export function getUnifiedTotal(
     return usdMinor + convertedIls;
   }
 }
+
+/**
+ * Get unified total in ILS including EUR amounts
+ * @param usdMinor Amount in USD minor units
+ * @param ilsMinor Amount in ILS minor units
+ * @param eurMinor Amount in EUR minor units
+ * @param usdToIlsRate Exchange rate (how many ILS per 1 USD)
+ * @param eurToIlsRate Exchange rate (how many ILS per 1 EUR)
+ * @returns Unified total in ILS minor units, or null if required rates unavailable
+ */
+export function getUnifiedTotalWithEur(
+  usdMinor: number,
+  ilsMinor: number,
+  eurMinor: number,
+  usdToIlsRate: number | null,
+  eurToIlsRate: number | null
+): number | null {
+  // Need USD rate if there are USD amounts
+  if (usdMinor !== 0 && (usdToIlsRate === null || usdToIlsRate <= 0)) {
+    return null;
+  }
+
+  // Need EUR rate if there are EUR amounts
+  if (eurMinor !== 0 && (eurToIlsRate === null || eurToIlsRate <= 0)) {
+    return null;
+  }
+
+  // Convert everything to ILS
+  const convertedUsd = usdMinor !== 0 && usdToIlsRate ? convertAmount(usdMinor, 'USD', 'ILS', usdToIlsRate) : 0;
+  const convertedEur = eurMinor !== 0 && eurToIlsRate ? convertAmount(eurMinor, 'EUR', 'ILS', eurToIlsRate) : 0;
+
+  return ilsMinor + convertedUsd + convertedEur;
+}

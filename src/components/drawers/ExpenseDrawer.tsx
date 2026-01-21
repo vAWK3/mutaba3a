@@ -27,7 +27,7 @@ const schema = z.object({
   expenseType: z.enum(['onetime', 'recurring']),
   profileId: z.string().min(1, 'Profile is required'),
   amount: z.string().min(1, 'Amount is required'),
-  currency: z.enum(['USD', 'ILS']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   occurredAt: z.string().min(1, 'Date is required'),
   title: z.string().optional(),
   vendor: z.string().optional(),

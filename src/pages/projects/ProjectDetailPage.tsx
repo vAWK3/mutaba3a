@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs, StatusSegment, DateRangeControl } from '../../components/filters';
+import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
 import { RowActionsMenu } from '../../components/ui';
+import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useProject, useProjectSummary, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency, TxStatus, QueryFilters } from '../../types';
+import type { TxStatus, QueryFilters } from '../../types';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
@@ -20,7 +21,6 @@ export function ProjectDetailPage() {
 
   const [activeTab, setActiveTab] = useState<'summary' | 'transactions'>('summary');
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<TxStatus | 'overdue' | undefined>(undefined);
   const [search, setSearch] = useState('');
 
@@ -32,15 +32,15 @@ export function ProjectDetailPage() {
     // Don't pass currency - we want per-currency breakdowns
   });
 
+  // Always fetch all currencies (no currency filter)
   const queryFilters = useMemo((): QueryFilters => ({
     projectId,
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
-    currency,
     status: statusFilter,
     search: search || undefined,
     sort: { by: 'occurredAt', dir: 'desc' },
-  }), [projectId, dateRange, currency, statusFilter, search]);
+  }), [projectId, dateRange, statusFilter, search]);
 
   const { data: transactions = [] } = useTransactions(queryFilters);
 
@@ -98,60 +98,44 @@ export function ProjectDetailPage() {
         }
       />
       <div className="page-content">
-        {/* Inline Stats - Dual Currency */}
+        {/* Inline Stats - Unified with EUR support */}
         {summary && (
           <div className="inline-stats" style={{ marginBottom: 24 }}>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.paid')}</span>
-              <div className="inline-stat-value text-success">
-                {summary.paidIncomeMinorUSD !== undefined ? (
-                  <>
-                    <div>{formatAmount(summary.paidIncomeMinorUSD, 'USD', locale)}</div>
-                    <div>{formatAmount(summary.paidIncomeMinorILS ?? 0, 'ILS', locale)}</div>
-                  </>
-                ) : (
-                  formatAmount(summary.paidIncomeMinor, 'USD', locale)
-                )}
-              </div>
+              <CurrencySummaryPopup
+                usdAmountMinor={summary.paidIncomeMinorUSD ?? 0}
+                ilsAmountMinor={summary.paidIncomeMinorILS ?? 0}
+                eurAmountMinor={summary.paidIncomeMinorEUR ?? 0}
+                type="income"
+              />
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.unpaid')}</span>
-              <div className="inline-stat-value text-warning">
-                {summary.unpaidIncomeMinorUSD !== undefined ? (
-                  <>
-                    <div>{formatAmount(summary.unpaidIncomeMinorUSD, 'USD', locale)}</div>
-                    <div>{formatAmount(summary.unpaidIncomeMinorILS ?? 0, 'ILS', locale)}</div>
-                  </>
-                ) : (
-                  formatAmount(summary.unpaidIncomeMinor, 'USD', locale)
-                )}
-              </div>
+              <CurrencySummaryPopup
+                usdAmountMinor={summary.unpaidIncomeMinorUSD ?? 0}
+                ilsAmountMinor={summary.unpaidIncomeMinorILS ?? 0}
+                eurAmountMinor={summary.unpaidIncomeMinorEUR ?? 0}
+                type="neutral"
+              />
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.expenses')}</span>
-              <div className="inline-stat-value">
-                {summary.expensesMinorUSD !== undefined ? (
-                  <>
-                    <div>{formatAmount(summary.expensesMinorUSD, 'USD', locale)}</div>
-                    <div>{formatAmount(summary.expensesMinorILS ?? 0, 'ILS', locale)}</div>
-                  </>
-                ) : (
-                  formatAmount(summary.expensesMinor, 'USD', locale)
-                )}
-              </div>
+              <CurrencySummaryPopup
+                usdAmountMinor={summary.expensesMinorUSD ?? 0}
+                ilsAmountMinor={summary.expensesMinorILS ?? 0}
+                eurAmountMinor={summary.expensesMinorEUR ?? 0}
+                type="expense"
+              />
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.net')}</span>
-              <div className={cn('inline-stat-value', summary.netMinor >= 0 ? 'text-success' : 'text-danger')}>
-                {summary.paidIncomeMinorUSD !== undefined ? (
-                  <>
-                    <div>{formatAmount((summary.paidIncomeMinorUSD ?? 0) - (summary.expensesMinorUSD ?? 0), 'USD', locale)}</div>
-                    <div>{formatAmount((summary.paidIncomeMinorILS ?? 0) - (summary.expensesMinorILS ?? 0), 'ILS', locale)}</div>
-                  </>
-                ) : (
-                  formatAmount(summary.netMinor, 'USD', locale)
-                )}
-              </div>
+              <CurrencySummaryPopup
+                usdAmountMinor={(summary.paidIncomeMinorUSD ?? 0) - (summary.expensesMinorUSD ?? 0)}
+                ilsAmountMinor={(summary.paidIncomeMinorILS ?? 0) - (summary.expensesMinorILS ?? 0)}
+                eurAmountMinor={(summary.paidIncomeMinorEUR ?? 0) - (summary.expensesMinorEUR ?? 0)}
+                type="net"
+              />
             </div>
           </div>
         )}
@@ -209,7 +193,6 @@ export function ProjectDetailPage() {
                 dateTo={dateRange.dateTo}
                 onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
               />
-              <CurrencyTabs value={currency} onChange={setCurrency} />
               <StatusSegment value={statusFilter} onChange={setStatusFilter} />
               <SearchInput value={search} onChange={setSearch} />
             </div>

@@ -70,7 +70,7 @@ const itemSchema = z.object({
 const paymentSchema = z.object({
   id: z.string(),
   amountMinor: z.number().min(0),
-  currency: z.enum(['USD', 'ILS']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   method: z.enum(['cash', 'bank_transfer', 'cheque', 'credit_card', 'other']),
   notes: z.string().optional(),
   paidAt: z.string(),
@@ -93,7 +93,7 @@ const schema = z.object({
   subject: z.string().optional(),
   brief: z.string().optional(),
   notes: z.string().optional(),
-  currency: z.enum(['USD', 'ILS']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   language: z.enum(['ar', 'en']),
   templateId: z.string(),
   issueDate: z.string().min(1, 'Issue date is required'),
@@ -358,6 +358,7 @@ export function DocumentFormPage() {
       refDocumentId: data.refDocumentId || undefined,
       linkedTransactionIds: existingDoc?.linkedTransactionIds || [],
       templateId: data.templateId,
+      exportCount: existingDoc?.exportCount || 0,
     };
 
     try {
@@ -443,6 +444,7 @@ export function DocumentFormPage() {
         dueDate: formData.dueDate ? formData.dueDate : undefined,
         linkedTransactionIds: existingDoc?.linkedTransactionIds || [],
         templateId: formData.templateId,
+        exportCount: existingDoc?.exportCount || 0,
       };
 
       if (isEditMode && documentId) {
@@ -543,6 +545,48 @@ export function DocumentFormPage() {
     );
   }
 
+  // Guard: Cannot edit locked document - redirect to detail page
+  if (isEditMode && existingDoc?.lockedAt) {
+    return (
+      <>
+        <TopBar
+          title={`Document ${existingDoc.number} is Locked`}
+          breadcrumbs={[
+            { label: 'Documents', href: '/documents' },
+            { label: existingDoc.number, href: `/documents/${existingDoc.id}` },
+            { label: 'Edit' },
+          ]}
+        />
+        <div className="page-content">
+          <div className="empty-state">
+            <h3 className="empty-state-title">Document is Locked</h3>
+            <p className="empty-state-description">
+              This document has been exported and is now immutable. You cannot edit locked documents.
+              <br />
+              To create a new document based on this one, use the "Duplicate" action.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <Link
+                to="/documents/$documentId"
+                params={{ documentId: existingDoc.id }}
+                className="btn btn-secondary"
+              >
+                View Document
+              </Link>
+              <Link
+                to="/documents/new"
+                search={{ duplicateFrom: existingDoc.id }}
+                className="btn btn-primary"
+              >
+                Create Duplicate
+              </Link>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // Guard: No business profiles
   if (businessProfiles.length === 0) {
     return (
@@ -567,7 +611,7 @@ export function DocumentFormPage() {
     );
   }
 
-  const isReadOnly = isEditMode && existingDoc && existingDoc.status !== 'draft';
+  const isReadOnly = isEditMode && existingDoc && (existingDoc.status !== 'draft' || !!existingDoc.lockedAt);
 
   return (
     <>
@@ -636,7 +680,9 @@ export function DocumentFormPage() {
 
           {isReadOnly && (
             <div className="alert alert-info">
-              This document is {existingDoc?.status} and cannot be edited.
+              {existingDoc?.lockedAt
+                ? 'This document has been exported and is locked. It cannot be edited.'
+                : `This document is ${existingDoc?.status} and cannot be edited.`}
             </div>
           )}
 

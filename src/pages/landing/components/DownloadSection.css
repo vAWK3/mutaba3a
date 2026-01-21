@@ -1,0 +1,116 @@
+/* Download Section */
+.landing-download {
+  background: var(--bg, #070C16);
+}
+
+.download-version {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  font-size: var(--text-sm, 12px);
+}
+
+.version-label {
+  color: var(--muted, #A6B4CC);
+}
+
+.version-number {
+  color: var(--text, #E7EEF9);
+  font-weight: var(--weight-medium, 500);
+  font-family: var(--font-mono, monospace);
+}
+
+.version-notes-link {
+  color: var(--accent, #2CB6A6);
+  text-decoration: none;
+  margin-inline-start: 8px;
+}
+
+.version-notes-link:hover {
+  text-decoration: underline;
+}
+
+.download-cards {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.download-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 48px;
+  background: var(--surface, #111827);
+  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
+  border-radius: var(--radius-xl, 12px);
+  text-decoration: none;
+  color: var(--text, #E7EEF9);
+  transition: all 0.2s ease;
+}
+
+.download-card:hover {
+  border-color: var(--accent, #2CB6A6);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.download-card-icon {
+  color: var(--text-secondary, #C5D0E0);
+}
+
+.download-card-label {
+  font-size: var(--text-md, 14px);
+  font-weight: var(--weight-medium, 500);
+}
+
+.download-card-hint {
+  font-size: var(--text-xs, 11px);
+  color: var(--muted, #A6B4CC);
+}
+
+.download-alt {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.download-alt-link {
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #A6B4CC);
+  text-decoration: none;
+}
+
+.download-alt-link:hover {
+  color: var(--text, #E7EEF9);
+  text-decoration: underline;
+}
+
+.landing-pwa-note {
+  text-align: center;
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #A6B4CC);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .download-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .download-card {
+    width: 100%;
+    max-width: 280px;
+    padding: 24px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download-card {
+    transition: none;
+  }
+}

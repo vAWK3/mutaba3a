@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { SearchInput, CurrencyTabs, StatusSegment, DateRangeControl } from '../../components/filters';
+import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
 import { RowActionsMenu } from '../../components/ui';
+import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import {
   useClient,
@@ -14,7 +15,7 @@ import {
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency, TxStatus, QueryFilters } from '../../types';
+import type { TxStatus, QueryFilters } from '../../types';
 
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' });
@@ -26,40 +27,36 @@ export function ClientDetailPage() {
 
   const [activeTab, setActiveTab] = useState<'summary' | 'projects' | 'receivables' | 'transactions'>('summary');
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
-  const [currency, setCurrency] = useState<Currency | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<TxStatus | 'overdue' | undefined>(undefined);
   const [search, setSearch] = useState('');
 
   const { data: client, isLoading: clientLoading } = useClient(clientId);
+  // Fetch summary without currency filter to get per-currency breakdowns
   const { data: summary } = useClientSummary(clientId, {
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
-    currency,
   });
   const { data: projects = [] } = useProjects(clientId);
 
+  // Always fetch all currencies (no currency filter)
   const queryFilters = useMemo((): QueryFilters => ({
     clientId,
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
-    currency,
     status: statusFilter,
     search: search || undefined,
     sort: { by: 'occurredAt', dir: 'desc' },
-  }), [clientId, dateRange, currency, statusFilter, search]);
+  }), [clientId, dateRange, statusFilter, search]);
 
   const receivablesFilters = useMemo((): QueryFilters => ({
     clientId,
     kind: 'income',
     status: 'unpaid',
-    currency,
     sort: { by: 'dueDate', dir: 'asc' },
-  }), [clientId, currency]);
+  }), [clientId]);
 
   const { data: transactions = [] } = useTransactions(queryFilters);
   const { data: receivables = [] } = useTransactions(receivablesFilters);
-
-  const displayCurrency = currency || 'USD';
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
@@ -114,7 +111,7 @@ export function ClientDetailPage() {
         }
       />
       <div className="page-content">
-        {/* Inline Stats */}
+        {/* Inline Stats - Unified with EUR support */}
         {summary && (
           <div className="inline-stats" style={{ marginBottom: 24 }}>
             <div className="inline-stat">
@@ -123,15 +120,21 @@ export function ClientDetailPage() {
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('clients.columns.paidIncome')}</span>
-              <span className="inline-stat-value text-success">
-                {formatAmount(summary.paidIncomeMinor, displayCurrency, locale)}
-              </span>
+              <CurrencySummaryPopup
+                usdAmountMinor={summary.paidIncomeMinorUSD ?? 0}
+                ilsAmountMinor={summary.paidIncomeMinorILS ?? 0}
+                eurAmountMinor={summary.paidIncomeMinorEUR ?? 0}
+                type="income"
+              />
             </div>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('clients.columns.unpaid')}</span>
-              <span className="inline-stat-value text-warning">
-                {formatAmount(summary.unpaidIncomeMinor, displayCurrency, locale)}
-              </span>
+              <CurrencySummaryPopup
+                usdAmountMinor={summary.unpaidIncomeMinorUSD ?? 0}
+                ilsAmountMinor={summary.unpaidIncomeMinorILS ?? 0}
+                eurAmountMinor={summary.unpaidIncomeMinorEUR ?? 0}
+                type="neutral"
+              />
             </div>
           </div>
         )}
@@ -247,9 +250,6 @@ export function ClientDetailPage() {
 
         {activeTab === 'receivables' && (
           <>
-            <div className="filters-row">
-              <CurrencyTabs value={currency} onChange={setCurrency} />
-            </div>
             {receivables.length === 0 ? (
               <div className="empty-state">
                 <h3 className="empty-state-title">{t('clients.detail.noReceivables')}</h3>
@@ -325,7 +325,6 @@ export function ClientDetailPage() {
                 dateTo={dateRange.dateTo}
                 onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
               />
-              <CurrencyTabs value={currency} onChange={setCurrency} />
               <StatusSegment value={statusFilter} onChange={setStatusFilter} />
               <SearchInput value={search} onChange={setSearch} />
             </div>

@@ -31,14 +31,14 @@ const schema = z.object({
   countryEn: z.string().optional(),
   postalCode: z.string().optional(),
   primaryColor: z.string().optional(),
-  defaultCurrency: z.enum(['USD', 'ILS']),
+  defaultCurrency: z.enum(['USD', 'ILS', 'EUR']),
   defaultLanguage: z.enum(['ar', 'en']),
   isDefault: z.boolean(),
   // Document defaults
   website: z.string().optional(),
   defaultTemplateId: z.enum(['template1', 'template2', 'template3']).optional(),
   defaultTaxRate: z.number().min(0).max(1).optional(),
-  allowedCurrencies: z.array(z.enum(['USD', 'ILS'])).optional(),
+  allowedCurrencies: z.array(z.enum(['USD', 'ILS', 'EUR'])).optional(),
   // Payment/Bank details
   bankName: z.string().optional(),
   bankBranch: z.string().optional(),

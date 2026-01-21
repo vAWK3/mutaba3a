@@ -1,36 +1,46 @@
-import { StrictMode, lazy, Suspense } from 'react';
-import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider } from '@tanstack/react-router';
+import { StrictMode, lazy, Suspense } from "react";
+import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RouterProvider } from "@tanstack/react-router";
 
 // Import fonts
-import '@fontsource-variable/inter';
-import '@fontsource-variable/source-serif-4';
-import '@fontsource/ibm-plex-mono/400.css';
-import '@fontsource/ibm-plex-mono/500.css';
-import '@fontsource/ibm-plex-mono/600.css';
-import '@fontsource/ibm-plex-sans-arabic/400.css';
-import '@fontsource/ibm-plex-sans-arabic/500.css';
-import '@fontsource/ibm-plex-sans-arabic/600.css';
+import "@fontsource-variable/inter";
+import "@fontsource-variable/source-serif-4";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import "@fontsource/ibm-plex-sans-arabic/400.css";
+import "@fontsource/ibm-plex-sans-arabic/500.css";
+import "@fontsource/ibm-plex-sans-arabic/600.css";
 
 // Import theme and styles
-import './styles/theme.css';
-import './index.css';
+import "./styles/theme.css";
+import "./index.css";
 
-import { router } from './router';
-import { initDatabase } from './db';
-import { LanguageProvider } from './lib/i18n';
-import { ThemeProvider } from './lib/theme';
-import { ToastContainer } from './components/ui/ToastContainer';
+import { router } from "./router";
+import { initDatabase } from "./db";
+import { LanguageProvider } from "./lib/i18n";
+import { ThemeProvider } from "./lib/theme";
+import { ToastContainer } from "./components/ui/ToastContainer";
 
 // Lazy load landing pages (only imported in web build, tree-shaken from desktop)
-const LandingPage = __BUILD_MODE__ === 'web'
-  ? lazy(() => import('./pages/landing/LandingPage').then(m => ({ default: m.LandingPage })))
-  : null;
+const LandingPage =
+  __BUILD_MODE__ === "web"
+    ? lazy(() =>
+        import("./pages/landing/LandingPage").then((m) => ({
+          default: m.LandingPage,
+        })),
+      )
+    : null;
 
-const DownloadPage = __BUILD_MODE__ === 'web'
-  ? lazy(() => import('./pages/download/DownloadPage').then(m => ({ default: m.DownloadPage })))
-  : null;
+const DownloadPage =
+  __BUILD_MODE__ === "web"
+    ? lazy(() =>
+        import("./pages/download/DownloadPage").then((m) => ({
+          default: m.DownloadPage,
+        })),
+      )
+    : null;
 
 // Create a client
 const queryClient = new QueryClient({
@@ -44,24 +54,26 @@ const queryClient = new QueryClient({
 
 // Simple loading fallback for landing pages
 const LandingLoader = () => (
-  <div style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-    background: 'var(--color-bg-base, #070C16)',
-    color: 'var(--color-text-muted, #888)'
-  }}>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100vh",
+      background: "var(--color-bg-base, #070C16)",
+      color: "var(--color-text-muted, #888)",
+    }}
+  >
     Loading...
   </div>
 );
 
 function App() {
   // Web build: handle landing routes outside router
-  if (__BUILD_MODE__ === 'web') {
+  if (__BUILD_MODE__ === "web") {
     const path = window.location.pathname;
 
-    if (path === '/' && LandingPage) {
+    if (path === "/" && LandingPage) {
       return (
         <ThemeProvider>
           <LanguageProvider>
@@ -73,7 +85,7 @@ function App() {
       );
     }
 
-    if (path === '/download' && DownloadPage) {
+    if (path === "/download" && DownloadPage) {
       return (
         <ThemeProvider>
           <LanguageProvider>
@@ -102,12 +114,8 @@ function App() {
 // Initialize database with default settings (no sample data)
 initDatabase().catch(console.error);
 
-//TODO: when creating document ensure no other document with same prefix and number exists in db
-//TODO: after generating document save pdf copy on disk, and make transaction/document locked after downloading once, user can archive but can't edit once downloaded as original. they can then only download copy of document.
-//TODO: above only applies to tax invoice, receipt, donation receipt, etc... money events, not price offer or proforma invoice or something
-
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
-  </StrictMode>
+  </StrictMode>,
 );

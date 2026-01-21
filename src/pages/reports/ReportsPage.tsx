@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
-import { CurrencyModeTabs } from '../../components/filters/CurrencyModeTabs';
 import { SearchInput } from '../../components/filters';
 import { UnifiedAmount } from '../../components/ui/UnifiedAmount';
 import { useTransactions, useProjectSummaries, useClientSummaries } from '../../hooks/useQueries';
@@ -27,7 +26,8 @@ export function ReportsPage() {
   const [period, setPeriod] = useState<PeriodPreset>('month');
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
-  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('BOTH');
+  // Always show both currencies
+  const currencyMode: CurrencyMode = 'BOTH';
 
   // Table sorting and search state
   const [projectSortKey, setProjectSortKey] = useState<'name' | 'paid' | 'unpaid' | 'expenses' | 'net'>('net');
@@ -63,6 +63,7 @@ export function ReportsPage() {
     const result: Record<Currency, SummaryData> = {
       USD: { paidIncome: 0, unpaidIncome: 0, expenses: 0, net: 0 },
       ILS: { paidIncome: 0, unpaidIncome: 0, expenses: 0, net: 0 },
+      EUR: { paidIncome: 0, unpaidIncome: 0, expenses: 0, net: 0 },
     };
 
     for (const tx of transactions) {
@@ -80,6 +81,7 @@ export function ReportsPage() {
 
     result.USD.net = result.USD.paidIncome - result.USD.expenses;
     result.ILS.net = result.ILS.paidIncome - result.ILS.expenses;
+    result.EUR.net = result.EUR.paidIncome - result.EUR.expenses;
 
     return result;
   }, [transactions]);
@@ -97,18 +99,22 @@ export function ReportsPage() {
     const result: Record<Currency, Array<{ project: string; amount: number }>> = {
       USD: [],
       ILS: [],
+      EUR: [],
     };
 
     const usdMap = new Map<string, number>();
     const ilsMap = new Map<string, number>();
+    const eurMap = new Map<string, number>();
 
     for (const tx of transactions) {
       if (tx.kind === 'expense') {
         const proj = tx.projectName || t('common.noProject');
         if (tx.currency === 'USD') {
           usdMap.set(proj, (usdMap.get(proj) || 0) + tx.amountMinor);
-        } else {
+        } else if (tx.currency === 'ILS') {
           ilsMap.set(proj, (ilsMap.get(proj) || 0) + tx.amountMinor);
+        } else {
+          eurMap.set(proj, (eurMap.get(proj) || 0) + tx.amountMinor);
         }
       }
     }
@@ -117,6 +123,9 @@ export function ReportsPage() {
       .map(([project, amount]) => ({ project, amount }))
       .sort((a, b) => b.amount - a.amount);
     result.ILS = Array.from(ilsMap.entries())
+      .map(([project, amount]) => ({ project, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    result.EUR = Array.from(eurMap.entries())
       .map(([project, amount]) => ({ project, amount }))
       .sort((a, b) => b.amount - a.amount);
 
@@ -128,6 +137,7 @@ export function ReportsPage() {
     const result: Record<Currency, { current: number; '1-30': number; '31-60': number; '60+': number }> = {
       USD: { current: 0, '1-30': 0, '31-60': 0, '60+': 0 },
       ILS: { current: 0, '1-30': 0, '31-60': 0, '60+': 0 },
+      EUR: { current: 0, '1-30': 0, '31-60': 0, '60+': 0 },
     };
 
     const now = new Date();
@@ -636,8 +646,6 @@ export function ReportsPage() {
                 </div>
               )}
 
-              <CurrencyModeTabs value={currencyMode} onChange={setCurrencyMode} />
-
               {(reportType === 'by-project' || reportType === 'by-client') && (
                 <SearchInput
                   value={tableSearch}
@@ -899,7 +907,7 @@ export function ReportsPage() {
                     </div>
                   </>
                 ) : (
-                  expensesByCurrencyAndProject[currencyMode].length === 0 ? (
+                  expensesByCurrencyAndProject[currencyMode as Currency].length === 0 ? (
                     <div className="empty-state">
                       <p className="text-muted">{t('reports.noExpenses')}</p>
                     </div>
@@ -913,10 +921,10 @@ export function ReportsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {expensesByCurrencyAndProject[currencyMode].map((e) => (
+                          {expensesByCurrencyAndProject[currencyMode as Currency].map((e) => (
                             <tr key={e.project}>
                               <td style={{ fontWeight: 500 }}>{e.project}</td>
-                              <td className="amount-cell">{formatAmount(e.amount, currencyMode, locale)}</td>
+                              <td className="amount-cell">{formatAmount(e.amount, currencyMode as Currency, locale)}</td>
                             </tr>
                           ))}
                         </tbody>

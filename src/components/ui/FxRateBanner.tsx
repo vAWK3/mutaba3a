@@ -52,8 +52,13 @@ function getNextTheme(current: ThemeMode): ThemeMode {
 
 export function FxRateBanner() {
   const t = useT();
-  const { rate, source, isLoading, lastUpdated, refetch } = useFxRate('USD', 'ILS');
+  const { rate: usdRate, source: usdSource, isLoading: usdLoading, lastUpdated: usdLastUpdated, refetch: refetchUsd } = useFxRate('USD', 'ILS');
+  const { rate: eurRate, source: eurSource, isLoading: eurLoading, refetch: refetchEur } = useFxRate('EUR', 'ILS');
   const { theme, resolvedTheme, setTheme } = useTheme();
+
+  // Combined loading state
+  const isLoading = usdLoading || eurLoading;
+  const lastUpdated = usdLastUpdated;
 
   const [state, setState] = useState<BannerState>(loadState);
   const [isDragging, setIsDragging] = useState(false);
@@ -134,8 +139,9 @@ export function FxRateBanner() {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    refetchUsd();
+    refetchEur();
+  }, [refetchUsd, refetchEur]);
 
   const handleToggleTheme = useCallback(() => {
     setTheme(getNextTheme(theme));
@@ -144,11 +150,16 @@ export function FxRateBanner() {
   // Get theme label for tooltip
   const themeLabel = t(`settings.theme.${theme}`);
 
-  // Format rate for display
-  const formattedRate = rate !== null ? rate.toFixed(4) : '—';
+  // Format rates for display
+  const formattedUsdRate = usdRate !== null ? usdRate.toFixed(4) : '—';
+  const formattedEurRate = eurRate !== null ? eurRate.toFixed(4) : '—';
 
   // Get relative time for last updated
   const lastUpdatedText = lastUpdated ? formatRelativeDate(lastUpdated, t) : '';
+
+  // Determine overall source (most conservative)
+  const overallSource = usdSource === 'none' || eurSource === 'none' ? 'none' :
+                        usdSource === 'cached' || eurSource === 'cached' ? 'cached' : 'live';
 
   // Position style
   const positionStyle: React.CSSProperties =
@@ -186,8 +197,8 @@ export function FxRateBanner() {
           title={t('fx.showBanner')}
         >
           <span className="fx-banner-mini-icon">$↔₪</span>
-          {source !== 'none' && rate !== null && (
-            <span className="fx-banner-mini-rate">{rate.toFixed(2)}</span>
+          {usdSource !== 'none' && usdRate !== null && (
+            <span className="fx-banner-mini-rate">{usdRate.toFixed(2)}</span>
           )}
         </button>
         <button
@@ -233,20 +244,35 @@ export function FxRateBanner() {
       </div>
 
       <div className="fx-banner-content">
-        <div className="fx-banner-rate">
-          <span className="fx-banner-formula">$1 = {formattedRate} ₪</span>
-          <span className={cn('fx-banner-source', `source-${source}`)}>
-            {isLoading ? (
-              <span className="fx-loading">...</span>
-            ) : (
-              <>
-                <span className="fx-source-dot" />
-                {t(`fx.${source}`)}
-              </>
-            )}
-          </span>
+        <div className="fx-banner-rates">
+          <div className="fx-banner-rate">
+            <span className="fx-banner-formula">$1 = {formattedUsdRate} ₪</span>
+            <span className={cn('fx-banner-source', `source-${usdSource}`)}>
+              {usdLoading ? (
+                <span className="fx-loading">...</span>
+              ) : (
+                <>
+                  <span className="fx-source-dot" />
+                  {t(`fx.${usdSource}`)}
+                </>
+              )}
+            </span>
+          </div>
+          <div className="fx-banner-rate">
+            <span className="fx-banner-formula">€1 = {formattedEurRate} ₪</span>
+            <span className={cn('fx-banner-source', `source-${eurSource}`)}>
+              {eurLoading ? (
+                <span className="fx-loading">...</span>
+              ) : (
+                <>
+                  <span className="fx-source-dot" />
+                  {t(`fx.${eurSource}`)}
+                </>
+              )}
+            </span>
+          </div>
         </div>
-        {lastUpdatedText && source !== 'none' && (
+        {lastUpdatedText && overallSource !== 'none' && (
           <div className="fx-banner-updated">{lastUpdatedText}</div>
         )}
       </div>
