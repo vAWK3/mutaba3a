@@ -1,3 +1,7 @@
+[build]
+  publish = "dist-web"
+  command = "npm run build:web"
+
 # Stable download URLs - redirect to GitHub Releases latest artifacts
 [[redirects]]
   from = "/download/mac"
