@@ -92,11 +92,11 @@ const clientDetailRoute = createRoute({
 });
 
 // Reports route
-const reportsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/reports',
-  component: lazyPage(() => import('./pages/reports/ReportsPage'), 'ReportsPage'),
-});
+// const reportsRoute = createRoute({
+//   getParentRoute: () => rootRoute,
+//   path: '/reports',
+//   component: lazyPage(() => import('./pages/reports/ReportsPage'), 'ReportsPage'),
+// });
 
 // Documents routes
 const documentsRoute = createRoute({
@@ -371,7 +371,7 @@ const routeTree = rootRoute.addChildren([
   engagementEditRoute,
   // Money Answers route
   moneyAnswersRoute,
-  reportsRoute,
+  // reportsRoute,
   settingsRoute,
   profileDetailRoute,
   downloadRoute,
