@@ -7,7 +7,9 @@
     "archive": "Archive",
     "add": "Add",
     "edit": "Edit",
+    "view": "View",
     "loading": "Loading...",
+    "downloading": "Downloading...",
     "search": "Search...",
     "close": "Close",
     "confirm": "Confirm",
@@ -32,6 +34,7 @@
     "clients": "Clients",
     "transactions": "Transactions",
     "documents": "Documents",
+    "engagements": "Engagements",
     "retainers": "Retainers",
     "moneyAnswers": "Answers",
     "expenses": "Expenses",
@@ -48,6 +51,7 @@
     },
     "newMenu": {
       "document": "New Document",
+      "engagement": "New Engagement",
       "transaction": "New Transaction",
       "client": "New Client",
       "expense": "New Expense"
@@ -848,6 +852,113 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low"
+    }
+  },
+  "engagements": {
+    "title": "Engagements",
+    "new": "New Engagement",
+    "addEngagement": "Add Engagement",
+    "empty": "No engagements found",
+    "emptySearch": "Try adjusting your search or filters",
+    "emptyHint": "Create your first engagement to get started",
+    "searchPlaceholder": "Search engagements...",
+    "selectToInspect": "Select an engagement to view details",
+    "untitled": "Untitled Engagement",
+    "confirmArchive": "Are you sure you want to archive this engagement?",
+    "duplicate": "Duplicate",
+    "downloadPdf": "Download PDF",
+    "archive": "Archive",
+    "restore": "Restore",
+    "summary": "Summary",
+    "draftCount": "Drafts",
+    "finalCount": "Finalized",
+    "archivedCount": "Archived",
+    "filters": {
+      "view": "View",
+      "all": "All",
+      "draft": "Drafts",
+      "final": "Finalized",
+      "archived": "Archived",
+      "type": "Type",
+      "category": "Category",
+      "profile": "Profile",
+      "client": "Client"
+    },
+    "status": {
+      "draft": "Draft",
+      "final": "Final",
+      "archived": "Archived"
+    },
+    "type": {
+      "task": "Task-Based",
+      "retainer": "Retainer"
+    },
+    "category": {
+      "design": "Design",
+      "development": "Development",
+      "consulting": "Consulting",
+      "marketing": "Marketing",
+      "legal": "Legal",
+      "other": "Other"
+    },
+    "columns": {
+      "status": "Status",
+      "title": "Title",
+      "client": "Client",
+      "type": "Type",
+      "category": "Category",
+      "language": "Lang",
+      "versions": "Versions",
+      "updated": "Updated"
+    },
+    "inspector": {
+      "overview": "Overview",
+      "client": "Client",
+      "project": "Project",
+      "type": "Type",
+      "category": "Category",
+      "language": "Language",
+      "status": "Status",
+      "versions": "Versions",
+      "created": "Created",
+      "lastUpdated": "Last Updated",
+      "summary": "Summary",
+      "scope": "Scope",
+      "deliverables": "Deliverables",
+      "exclusions": "Exclusions",
+      "milestones": "Milestones"
+    },
+    "wizard": {
+      "newTitle": "New Engagement",
+      "editTitle": "Edit Engagement",
+      "saveDraft": "Save Draft",
+      "finalize": "Finalize",
+      "saving": "Saving...",
+      "lastSaved": "Last saved",
+      "unsavedChanges": "Unsaved changes",
+      "steps": {
+        "client": "Client & Type",
+        "summary": "Summary",
+        "scope": "Scope",
+        "timeline": "Timeline",
+        "reviews": "Reviews",
+        "payment": "Payment",
+        "relationship": "Relationship",
+        "terms": "Terms",
+        "review": "Review & Export"
+      }
+    },
+    "clarityCheck": {
+      "title": "Clarity Check",
+      "allClear": "All clear! No issues found.",
+      "highCount": "{count} high",
+      "mediumCount": "{count} medium",
+      "lowCount": "{count} low",
+      "severity": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      }
     }
   },
   "landing": {

@@ -249,6 +249,56 @@ const retainersRoute = createRoute({
 });
 
 // ============================================================================
+// Engagement Routes
+// ============================================================================
+
+// Engagement search params for new wizard
+interface EngagementNewSearch {
+  clientId?: string;
+  type?: 'task' | 'retainer';
+}
+
+// Engagement list search params
+interface EngagementsSearch {
+  status?: 'draft' | 'final' | 'archived';
+  type?: 'task' | 'retainer';
+  clientId?: string;
+}
+
+const engagementsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/engagements',
+  component: lazyPage(() => import('./pages/engagements'), 'EngagementsPage'),
+  validateSearch: (search: Record<string, unknown>): EngagementsSearch => {
+    return {
+      status: search.status === 'draft' || search.status === 'final' || search.status === 'archived'
+        ? search.status
+        : undefined,
+      type: search.type === 'task' || search.type === 'retainer' ? search.type : undefined,
+      clientId: typeof search.clientId === 'string' ? search.clientId : undefined,
+    };
+  },
+});
+
+const engagementNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/engagements/new',
+  component: lazyPage(() => import('./pages/engagements'), 'EngagementWizardPage'),
+  validateSearch: (search: Record<string, unknown>): EngagementNewSearch => {
+    return {
+      clientId: typeof search.clientId === 'string' ? search.clientId : undefined,
+      type: search.type === 'task' || search.type === 'retainer' ? search.type : undefined,
+    };
+  },
+});
+
+const engagementEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/engagements/$engagementId/edit',
+  component: lazyPage(() => import('./pages/engagements'), 'EngagementWizardPage'),
+});
+
+// ============================================================================
 // Money Answers Route
 // ============================================================================
 
@@ -315,6 +365,10 @@ const routeTree = rootRoute.addChildren([
   monthCloseRoute,
   // Retainer routes
   retainersRoute,
+  // Engagement routes
+  engagementsRoute,
+  engagementNewRoute,
+  engagementEditRoute,
   // Money Answers route
   moneyAnswersRoute,
   reportsRoute,
