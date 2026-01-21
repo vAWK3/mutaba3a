@@ -1,0 +1,9 @@
+# Stable download URLs - redirect to GitHub Releases latest artifacts
+# The ! forces the redirect even if a matching file exists
+/download/mac https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-universal.dmg 302!
+/download/windows https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64.msi 302!
+/download/windows-exe https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64-setup.exe 302!
+/download/release-notes https://github.com/vAWK3/mutaba3a/releases/latest 302!
+
+# SPA fallback - serve index.html for all routes (must be last)
+/* /index.html 200
