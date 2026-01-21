@@ -879,38 +879,38 @@ main() {
         #     ;;
     # esac
 
-    # echo ""
-    # echo -e "${BLUE}Deploy options:${NC}"
-    # echo "  1) Deploy to main (web)"
-    # echo "  2) Build Tauri for macOS"
-    # echo "  3) Build Tauri for Windows (CI info)"
-    # echo -e "  4) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
-    # echo "  5) Cancel"
-    # echo ""
-    # read -p "Select deploy option [1-5]: " deploy_choice
+    echo ""
+    echo -e "${BLUE}Deploy options:${NC}"
+    echo "  1) Deploy to main (web)"
+    echo -e "  2) ${GREEN}Build macOS + Publish GitHub Release (DMG)${NC}"
+    echo "  3) Cancel"
+    # echo "  3) Build Tauri for macOS"
+    # echo "  4) Build Tauri for Windows (CI info)"
+    echo ""
+    read -p "Select deploy option [1-3]: " deploy_choice
 
-    # case $deploy_choice in
-    #     1)
-    #         deploy_web "$current_version"
-    #         ;;
+    case $deploy_choice in
+        1)
+            deploy_web "$current_version"
+            ;;
     #     2)
     #         build_mac
     #         ;;
     #     3)
     #         build_windows
     #         ;;
-    #     4)
-    #         build_and_release_mac "$current_version"
-    #         ;;
-    #     5)
-    #         echo -e "${YELLOW}Cancelled${NC}"
-    #         exit 0
-    #         ;;
-    #     *)
-    #         echo -e "${RED}Invalid option${NC}"
-    #         exit 1
-    #         ;;
-    # esac
+        2)
+            build_and_release_mac "$current_version"
+            ;;
+        3)
+            echo -e "${YELLOW}Cancelled${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid option${NC}"
+            exit 1
+            ;;
+    esac
 
     build_and_release_mac "$current_version"
 
