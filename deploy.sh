@@ -912,7 +912,7 @@ main() {
             ;;
     esac
 
-    build_and_release_mac "$current_version"
+    # build_and_release_mac "$current_version"
 
     echo ""
     echo -e "${GREEN}========================================${NC}"
