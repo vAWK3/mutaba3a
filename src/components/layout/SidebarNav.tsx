@@ -179,14 +179,11 @@ export function SidebarNav() {
     const isActive = isItemActive(item);
     const showUpdateBadge = showBadge && item.badge === "hasUpdate" && hasUpdate;
 
-    return (
-      <Link
-        key={item.path}
-        to={item.path}
-        className={cn("nav-item", isActive && "active")}
-        aria-current={isActive ? "page" : undefined}
-        title={collapsed ? t(item.labelKey) : undefined}
-      >
+    // Use <a> for download link (outside router scope, avoids basepath)
+    const isExternalPath = item.path === "/download";
+
+    const content = (
+      <>
         {isActive && <span className="nav-item-rail" aria-hidden="true" />}
         <span className="nav-item-icon-wrapper">
           <Icon className="nav-icon" />
@@ -200,6 +197,32 @@ export function SidebarNav() {
             {showUpdateBadge && <span className="update-indicator" />}
           </>
         )}
+      </>
+    );
+
+    if (isExternalPath) {
+      return (
+        <a
+          key={item.path}
+          href={item.path}
+          className={cn("nav-item", isActive && "active")}
+          aria-current={isActive ? "page" : undefined}
+          title={collapsed ? t(item.labelKey) : undefined}
+        >
+          {content}
+        </a>
+      );
+    }
+
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        className={cn("nav-item", isActive && "active")}
+        aria-current={isActive ? "page" : undefined}
+        title={collapsed ? t(item.labelKey) : undefined}
+      >
+        {content}
       </Link>
     );
   };

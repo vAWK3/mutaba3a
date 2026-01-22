@@ -425,9 +425,9 @@ export function SettingsPage() {
                   {t('settings.updates.latestVersion')}: <span className="update-banner-version">{latestVersion}</span>
                 </div>
               </div>
-              <Link to="/download" className="btn btn-primary">
+              <a href="/download" className="btn btn-primary">
                 {t('settings.updates.updateNow')}
-              </Link>
+              </a>
             </div>
           ) : (
             <div className="settings-row">
@@ -472,9 +472,9 @@ export function SettingsPage() {
             <div>
               <div className="settings-label" style={{ color: 'var(--color-text-muted)' }}>{t('download.allVersions')}</div>
             </div>
-            <Link to="/download" className="btn btn-ghost">
+            <a href="/download" className="btn btn-ghost">
               {t('settings.desktopApp.downloadBtn')}
-            </Link>
+            </a>
           </div>
         </div>
       </div>

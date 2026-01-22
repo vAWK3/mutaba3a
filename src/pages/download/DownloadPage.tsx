@@ -178,6 +178,9 @@ export function DownloadPage() {
           </div>
 
           <div className="download-footer">
+            <a href="/app" className="download-link download-link--back">
+              {t('download.backToApp')}
+            </a>
             <a
               href={releaseNotesUrl}
               className="download-link"

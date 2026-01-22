@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n';
 import './MacDownloadBanner.css';
 
@@ -44,13 +43,13 @@ export function MacDownloadBanner() {
         {t('downloadBanner.message')}
       </span>
       <div className="mac-download-banner-actions">
-        <Link
-          to="/download"
+        <a
+          href="/download"
           className="mac-download-banner-cta"
           data-cta="download-banner-mac"
         >
           {t('downloadBanner.cta')}
-        </Link>
+        </a>
         <button
           type="button"
           className="mac-download-banner-dismiss"

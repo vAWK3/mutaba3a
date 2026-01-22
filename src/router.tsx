@@ -137,13 +137,6 @@ const profileDetailRoute = createRoute({
   component: lazyPage(() => import('./pages/settings/ProfileDetailPage'), 'ProfileDetailPage'),
 });
 
-// Download route (standalone landing page)
-const downloadRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/download',
-  component: lazyPage(() => import('./pages/download/DownloadPage'), 'DownloadPage'),
-});
-
 // Theme demo route (for visual testing)
 const themeDemoRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -374,7 +367,6 @@ const routeTree = rootRoute.addChildren([
   // reportsRoute,
   settingsRoute,
   profileDetailRoute,
-  downloadRoute,
   themeDemoRoute,
 ]);
 

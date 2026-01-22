@@ -251,6 +251,7 @@
     "howToInstall": "How to install",
     "releaseNotes": "Release notes",
     "allVersions": "All versions",
+    "backToApp": "Back to App",
     "mac": {
       "title": "macOS",
       "downloadDmg": "Download DMG",

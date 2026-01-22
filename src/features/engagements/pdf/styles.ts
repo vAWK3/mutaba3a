@@ -205,7 +205,13 @@ export const engagementStyles = StyleSheet.create({
   },
 });
 
+// Serif fonts for professional letter style
 export function getFontFamily(language: EngagementLanguage): string {
+  return language === 'ar' ? 'Amiri' : 'SourceSerif4';
+}
+
+// Sans-serif fonts for mono/UI elements
+export function getSansFontFamily(language: EngagementLanguage): string {
   return language === 'ar' ? 'IBMPlexSansArabic' : 'IBMPlexSans';
 }
 
