@@ -146,7 +146,7 @@ export function CoverLetterPage({
   return (
     <Page
       size="A4"
-      style={[styles.page, !profile && styles.pageNoHeader]}
+      style={[styles.page, !profile ? styles.pageNoHeader : {}]}
     >
       {/* Header */}
       {profile && (

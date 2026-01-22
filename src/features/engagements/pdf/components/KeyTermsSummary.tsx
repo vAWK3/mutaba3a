@@ -145,14 +145,14 @@ export function KeyTermsSummary({
             key={row.label}
             style={[
               styles.tableRow,
-              index === 0 && styles.tableRowFirst,
-              isRtl && styles.tableRowRtl,
+              index === 0 ? styles.tableRowFirst : {},
+              isRtl ? styles.tableRowRtl : {},
             ]}
           >
             <View
               style={[
                 styles.labelCell,
-                isRtl && styles.labelCellRtl,
+                isRtl ? styles.labelCellRtl : {},
               ]}
             >
               <Text style={[styles.labelText, { fontFamily: sansFontFamily, textAlign }]}>
@@ -163,7 +163,7 @@ export function KeyTermsSummary({
               <Text
                 style={[
                   styles.valueText,
-                  row.emphasize && styles.valueTextEmphasize,
+                  row.emphasize ? styles.valueTextEmphasize : {},
                   { fontFamily, textAlign },
                 ]}
               >

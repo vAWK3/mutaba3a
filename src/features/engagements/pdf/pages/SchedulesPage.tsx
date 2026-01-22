@@ -238,7 +238,7 @@ export function SchedulesPage({
   return (
     <Page
       size="A4"
-      style={[styles.page, !profile && styles.pageNoHeader]}
+      style={[styles.page, !profile ? styles.pageNoHeader : {}]}
     >
       {/* Header */}
       {profile && (
@@ -364,15 +364,15 @@ export function SchedulesPage({
                   key={milestone.id || index}
                   style={[
                     styles.tableRow,
-                    index === 0 && styles.tableRowFirst,
-                    isRtl && styles.tableRowRtl,
+                    index === 0 ? styles.tableRowFirst : {},
+                    isRtl ? styles.tableRowRtl : {},
                   ]}
                 >
                   <Text
                     style={[
                       styles.tableCell,
                       styles.tableCellLabel,
-                      isRtl && styles.tableCellLabelRtl,
+                      isRtl ? styles.tableCellLabelRtl : {},
                       { fontFamily, textAlign },
                     ]}
                   >
@@ -436,15 +436,15 @@ export function SchedulesPage({
                       key={item.id || index}
                       style={[
                         styles.tableRow,
-                        index === 0 && styles.tableRowFirst,
-                        isRtl && styles.tableRowRtl,
+                        index === 0 ? styles.tableRowFirst : {},
+                        isRtl ? styles.tableRowRtl : {},
                       ]}
                     >
                       <Text
                         style={[
                           styles.tableCell,
                           styles.tableCellLabel,
-                          isRtl && styles.tableCellLabelRtl,
+                          isRtl ? styles.tableCellLabelRtl : {},
                           { fontFamily, textAlign },
                         ]}
                       >
