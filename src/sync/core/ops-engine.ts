@@ -101,9 +101,19 @@ interface CaptureParams {
 /**
  * Capture a mutation as an operation in the ops log.
  * Called by synced repositories after performing a mutation.
+ *
+ * If sync is not initialized yet, this will skip capturing the operation
+ * (the local mutation still happens, just won't be synced).
  */
-export async function captureOp(params: CaptureParams): Promise<Operation> {
-  const device = getLocalDevice();
+export async function captureOp(params: CaptureParams): Promise<Operation | null> {
+  // Check if sync is initialized - if not, skip capturing
+  // This can happen if user performs an action before sync init completes
+  if (!cachedDevice) {
+    console.warn('[OpsEngine] Sync not initialized, skipping op capture for:', params.entityType, params.opType);
+    return null;
+  }
+
+  const device = cachedDevice;
   const hlc = tick();
 
   const op: Operation = {
@@ -148,7 +158,7 @@ export async function captureOp(params: CaptureParams): Promise<Operation> {
 export async function captureCreate<T extends Record<string, unknown>>(
   entityType: EntityType,
   entity: T & { id: string }
-): Promise<Operation> {
+): Promise<Operation | null> {
   return captureOp({
     entityType,
     entityId: entity.id,
@@ -181,7 +191,9 @@ export async function captureUpdate<T extends Record<string, unknown>>(
       value,
       previousValue: previousValues[field],
     });
-    ops.push(op);
+    if (op) {
+      ops.push(op);
+    }
   }
 
   return ops;
@@ -190,7 +202,7 @@ export async function captureUpdate<T extends Record<string, unknown>>(
 /**
  * Capture a delete operation.
  */
-export async function captureDelete(entityType: EntityType, entityId: string): Promise<Operation> {
+export async function captureDelete(entityType: EntityType, entityId: string): Promise<Operation | null> {
   return captureOp({
     entityType,
     entityId,
@@ -201,7 +213,7 @@ export async function captureDelete(entityType: EntityType, entityId: string): P
 /**
  * Capture an archive operation.
  */
-export async function captureArchive(entityType: EntityType, entityId: string): Promise<Operation> {
+export async function captureArchive(entityType: EntityType, entityId: string): Promise<Operation | null> {
   return captureOp({
     entityType,
     entityId,
@@ -213,7 +225,7 @@ export async function captureArchive(entityType: EntityType, entityId: string): 
 /**
  * Capture a mark_paid operation for transactions.
  */
-export async function captureMarkPaid(transactionId: string, paidAt: string): Promise<Operation> {
+export async function captureMarkPaid(transactionId: string, paidAt: string): Promise<Operation | null> {
   return captureOp({
     entityType: 'transaction',
     entityId: transactionId,

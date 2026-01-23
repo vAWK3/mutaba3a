@@ -16,6 +16,20 @@ export function LandingFooter() {
             >
               {t('landing.footer.github')}
             </a>
+            <a
+              href="https://buymeacoffee.com/elmokhtbr"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('landing.footer.buyMeACoffee')}
+            </a>
+            <a
+              href="https://ko-fi.com/elmokhtbr"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('landing.footer.kofi')}
+            </a>
           </div>
         </div>
       </div>

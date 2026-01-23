@@ -334,7 +334,9 @@
     "about": {
       "title": "About",
       "name": "Mutaba3a - Mini CRM",
-      "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB."
+      "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB.",
+      "support": "Support this project",
+      "supportDesc": "If you find this tool useful, consider supporting its development"
     },
     "updates": {
       "title": "Updates",
@@ -1113,7 +1115,8 @@
       "commercial": "Commercial license required for business use",
       "future": "Team features and cloud sync coming later (paid).",
       "support": "Support development",
-      "supportCta": "Support on Buy Me a Coffee"
+      "supportBmac": "Buy Me a Coffee",
+      "supportKofi": "Ko-fi"
     },
     "faq": {
       "headline": "Frequently Asked Questions",
@@ -1149,7 +1152,9 @@
     "footer": {
       "copyright": "Mutaba3a",
       "github": "GitHub",
-      "privacy": "Privacy"
+      "privacy": "Privacy",
+      "buyMeACoffee": "Buy Me a Coffee",
+      "kofi": "Ko-fi"
     }
   },
   "moneyAnswers": {
@@ -1229,6 +1234,50 @@
         "delay": "Delay",
         "hygiene": "Hygiene"
       }
+    }
+  },
+  "demo": {
+    "modal": {
+      "title": "Activate Demo Mode",
+      "infoTitle": "Demo Mode",
+      "infoDesc": "This will populate the app with realistic sample data for demonstration purposes. Your existing data will not be affected.",
+      "willCreate": "Demo data will include:",
+      "item": {
+        "profile": "1 business profile",
+        "clients": "10 clients with contact info",
+        "projects": "15 projects across various fields",
+        "transactions": "60+ transactions (6 months history)",
+        "documents": "12 invoices with mixed statuses",
+        "retainers": "3 active retainer agreements",
+        "expenses": "25+ expenses with categories"
+      },
+      "confirmLabel": "Type \"{word}\" to confirm:",
+      "seeding": "Creating demo data...",
+      "successTitle": "Demo Mode Activated",
+      "successDesc": "Sample data has been created. The page will reload to show your demo data.",
+      "errorTitle": "Failed to Create Demo Data",
+      "errorDesc": "An error occurred while creating demo data. Please try again.",
+      "seedButton": "Seed Demo Data",
+      "doneButton": "Get Started",
+      "tryAgain": "Try Again"
+    },
+    "banner": {
+      "label": "Demo Mode",
+      "frozenTo": "Time: {date}",
+      "freeze": "Freeze Time",
+      "unfreeze": "Real Time",
+      "freezeTime": "Freeze time for consistent screenshots",
+      "unfreezeTime": "Return to real-time",
+      "reset": "Reset",
+      "resetting": "Resetting...",
+      "resetDemo": "Remove demo data and exit demo mode",
+      "resetConfirm": "Are you sure you want to reset demo mode? All demo data will be removed."
+    },
+    "stats": {
+      "clients": "Clients",
+      "projects": "Projects",
+      "transactions": "Transactions",
+      "documents": "Documents"
     }
   }
 }

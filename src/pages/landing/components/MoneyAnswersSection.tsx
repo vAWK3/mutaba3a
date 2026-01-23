@@ -46,7 +46,7 @@ export function MoneyAnswersSection() {
 
         <div className="money-answers-preview">
           <img
-            src="/assets/landing/screenshot-answers.svg"
+            src="/assets/landing/screenshot-answers.png"
             alt="Money Answers Dashboard"
             className="money-answers-img"
           />

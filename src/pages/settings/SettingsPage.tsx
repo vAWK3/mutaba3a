@@ -405,6 +405,31 @@ export function SettingsPage() {
               {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{APP_VERSION}</span>
             </p>
           </div>
+
+          <div className="settings-row" style={{ marginTop: 16 }}>
+            <div>
+              <div className="settings-label">{t('settings.about.support')}</div>
+              <div className="settings-description">{t('settings.about.supportDesc')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <a
+                href="https://buymeacoffee.com/elmokhtbr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary"
+              >
+                Buy Me a Coffee
+              </a>
+              <a
+                href="https://ko-fi.com/elmokhtbr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary"
+              >
+                Ko-fi
+              </a>
+            </div>
+          </div>
         </div>
 
         {/* Updates */}

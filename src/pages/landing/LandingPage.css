@@ -488,6 +488,24 @@
   color: var(--muted-2, #8494B0);
 }
 
+.landing-pricing-support-links {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.landing-btn--kofi {
+  background: #13C3FF;
+  color: #000;
+  font-weight: var(--weight-semibold, 600);
+}
+
+.landing-btn--kofi:hover {
+  background: #3DD0FF;
+  transform: translateY(-1px);
+}
+
 /* ============================================
    Section 8: FAQ
    ============================================ */

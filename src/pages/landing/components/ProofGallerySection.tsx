@@ -37,7 +37,7 @@ export function ProofGallerySection() {
           {SCREENSHOTS.map((item) => (
             <figure key={item} className="gallery-item">
               <img
-                src={`/assets/landing/proof-${tab}-${item}.svg`}
+                src={`/assets/landing/proof-${tab}-${item}.png`}
                 alt={t(`landing.proof.items.${item}Title`)}
                 className="gallery-img"
               />

@@ -17,14 +17,24 @@ export function PricingSection() {
           </p>
           <div className="landing-pricing-support">
             <span>{t('landing.pricing.support')}</span>
-            <a
-              href="https://www.buymeacoffee.com/ahmad3"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="landing-btn landing-btn--coffee"
-            >
-              {t('landing.pricing.supportCta')}
-            </a>
+            <div className="landing-pricing-support-links">
+              <a
+                href="https://buymeacoffee.com/elmokhtbr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="landing-btn landing-btn--coffee"
+              >
+                {t('landing.pricing.supportBmac')}
+              </a>
+              <a
+                href="https://ko-fi.com/elmokhtbr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="landing-btn landing-btn--kofi"
+              >
+                {t('landing.pricing.supportKofi')}
+              </a>
+            </div>
           </div>
         </div>
       </div>

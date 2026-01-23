@@ -40,7 +40,7 @@ export function UseCasesSection() {
           </div>
           <div className="use-case-preview">
             <img
-              src={`/assets/landing/usecase-${active}.svg`}
+              src={`/assets/landing/usecase-${active}.png`}
               alt={t(`landing.useCases.tabs.${active}`)}
               className="use-case-img"
             />

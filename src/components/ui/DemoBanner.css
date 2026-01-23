@@ -1,0 +1,130 @@
+/* Demo Banner Styles */
+
+.demo-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: linear-gradient(90deg, #7c3aed 0%, #2563eb 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  z-index: 1000;
+  font-size: var(--font-size-sm);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.demo-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.demo-banner-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: rgba(255, 255, 255, 0.2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: var(--font-size-xs);
+}
+
+.demo-banner-frozen {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  opacity: 0.9;
+  font-size: var(--font-size-xs);
+}
+
+.demo-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.demo-banner-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.demo-banner-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.demo-banner-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.demo-banner-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Adjust app shell when banner is present */
+.app-shell:has(.demo-banner) {
+  padding-top: 36px;
+}
+
+/* Alternative: if :has() not supported, use body class approach */
+body.demo-mode-active .app-shell {
+  padding-top: 36px;
+}
+
+/* RTL support */
+[dir='rtl'] .demo-banner {
+  flex-direction: row-reverse;
+}
+
+[dir='rtl'] .demo-banner-content {
+  flex-direction: row-reverse;
+}
+
+[dir='rtl'] .demo-banner-badge {
+  flex-direction: row-reverse;
+}
+
+[dir='rtl'] .demo-banner-frozen {
+  flex-direction: row-reverse;
+}
+
+[dir='rtl'] .demo-banner-actions {
+  flex-direction: row-reverse;
+}
+
+[dir='rtl'] .demo-banner-btn {
+  flex-direction: row-reverse;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .demo-banner {
+    padding: 0 var(--space-2);
+  }
+
+  .demo-banner-frozen span,
+  .demo-banner-btn span {
+    display: none;
+  }
+
+  .demo-banner-badge span {
+    display: none;
+  }
+}

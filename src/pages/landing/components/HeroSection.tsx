@@ -55,7 +55,7 @@ export function HeroSection() {
 
           <div className="hero-preview">
             <img
-              src="/assets/landing/hero-dashboard.svg"
+              src="/assets/landing/hero-dashboard.png"
               alt="Dashboard preview"
               className="hero-preview-img"
             />

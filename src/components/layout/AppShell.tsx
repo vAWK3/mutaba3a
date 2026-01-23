@@ -8,9 +8,10 @@ import { DocumentDrawer } from "../drawers/DocumentDrawer";
 import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
 import { RetainerDrawer } from "../drawers/RetainerDrawer";
 import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
-import { WelcomeModal } from "../modals";
+import { WelcomeModal, DemoSeedModal } from "../modals";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
+import { DemoBanner } from "../ui/DemoBanner";
 // import { UpdateBanner } from '../ui/UpdateBanner';
 import {
   ConflictBanner,
@@ -20,6 +21,7 @@ import {
 } from "../sync";
 import { useDrawerStore } from "../../lib/stores";
 import { initializeSync } from "../../sync";
+import { useDemoStore, DEMO_QUERY_PARAM } from "../../demo";
 
 interface AppShellProps {
   children: ReactNode;
@@ -37,6 +39,8 @@ export function AppShell({ children }: AppShellProps) {
     retainerMatchingDrawer,
   } = useDrawerStore();
 
+  const { showConfirmModal, setShowConfirmModal, isActive } = useDemoStore();
+
   // Initialize sync system on app load
   useEffect(() => {
     initializeSync().catch((err) => {
@@ -44,8 +48,36 @@ export function AppShell({ children }: AppShellProps) {
     });
   }, []);
 
+  // Detect ?demo=1 query parameter to trigger demo mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(DEMO_QUERY_PARAM) === "1") {
+      setShowConfirmModal(true);
+      // Clean URL by removing the demo parameter
+      params.delete(DEMO_QUERY_PARAM);
+      const newUrl =
+        params.toString().length > 0
+          ? `${window.location.pathname}?${params.toString()}`
+          : window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [setShowConfirmModal]);
+
+  // Add body class when demo mode is active (for CSS :has() fallback)
+  useEffect(() => {
+    if (isActive) {
+      document.body.classList.add("demo-mode-active");
+    } else {
+      document.body.classList.remove("demo-mode-active");
+    }
+    return () => {
+      document.body.classList.remove("demo-mode-active");
+    };
+  }, [isActive]);
+
   return (
     <div className="app-shell">
+      <DemoBanner />
       <SidebarNav />
       <main className="main-content">
         <ConflictBanner />
@@ -69,6 +101,10 @@ export function AppShell({ children }: AppShellProps) {
       <ImportBundleModal />
       <PairingModal />
       <WelcomeModal />
+
+      {showConfirmModal && (
+        <DemoSeedModal onClose={() => setShowConfirmModal(false)} />
+      )}
     </div>
   );
 }
