@@ -318,6 +318,12 @@ export interface Document {
   // PDF Archival (Tauri desktop only)
   pdfSavedPath?: string;           // Full path to archived PDF on disk
   pdfSavedAt?: string;             // ISO timestamp when saved
+  pdfVersion?: number;             // PDF version (0 = never exported, 1+ = exported versions)
+  pdfVersionHistory?: Array<{      // History of all PDF versions
+    version: number;
+    path: string;
+    savedAt: string;
+  }>;
 
   // Archive (soft-hide from lists)
   archivedAt?: string;             // ISO timestamp when archived

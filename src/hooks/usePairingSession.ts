@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSyncStore } from '../sync/stores/syncStore';
+import { isTauri } from '../lib/platform';
 
 // ============================================================================
 // Types
@@ -34,7 +35,8 @@ export interface PairingStatusResponse {
 // ============================================================================
 
 const POLL_INTERVAL_MS = 2000;
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+// Cache the isTauri check at module load time
+const IS_TAURI = isTauri();
 
 // ============================================================================
 // Hook
@@ -51,7 +53,7 @@ export function usePairingSession() {
 
   // Start a new pairing session
   const startSession = useCallback(async () => {
-    if (!isTauri) {
+    if (!IS_TAURI) {
       setError('Pairing is only available in the desktop app');
       return;
     }
@@ -78,7 +80,7 @@ export function usePairingSession() {
   const cancelSession = useCallback(async () => {
     stopPolling();
 
-    if (session && isTauri) {
+    if (session && IS_TAURI) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('cancel_pairing_session', { pairingId: session.pairingId });
@@ -103,7 +105,7 @@ export function usePairingSession() {
     stopPolling();
 
     const poll = async () => {
-      if (!isTauri) return;
+      if (!IS_TAURI) return;
 
       try {
         const { invoke } = await import('@tauri-apps/api/core');

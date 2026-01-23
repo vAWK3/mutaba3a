@@ -6,12 +6,13 @@
  *
  * Directory Structure:
  * Documents/Mutaba3a/{sanitizedProfileName}/{year}/{documentNumber}.pdf
+ *
+ * Versioning:
+ * - First export: INV-0001.pdf
+ * - Subsequent exports: INV-0001_v2.pdf, INV-0001_v3.pdf, etc.
  */
 
-// Check if we're running in Tauri
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
-}
+import { isTauri } from '../lib/platform';
 
 /**
  * Sanitize a string to be safe for use in file paths.
@@ -45,13 +46,17 @@ function buildDirectoryPath(profileName: string, issueDate: string): string[] {
 }
 
 /**
- * Build the full file name for a document.
+ * Build the full file name for a document with optional version suffix.
  * @param documentNumber Document number (e.g., "INV-0001")
+ * @param version PDF version number (1 = no suffix, 2+ = _v2, _v3, etc.)
  * @returns Sanitized file name with .pdf extension
  */
-function buildFileName(documentNumber: string): string {
+function buildFileName(documentNumber: string, version: number = 1): string {
   const sanitized = sanitizeForPath(documentNumber) || 'document';
-  return `${sanitized}.pdf`;
+  if (version <= 1) {
+    return `${sanitized}.pdf`;
+  }
+  return `${sanitized}_v${version}.pdf`;
 }
 
 /**
@@ -62,13 +67,15 @@ function buildFileName(documentNumber: string): string {
  * @param profileName Business profile name (for directory structure)
  * @param issueDate ISO date string (for year-based organization)
  * @param documentNumber Document number (for file name)
+ * @param version PDF version number (1 = no suffix, 2+ = _v2, _v3, etc.)
  * @returns Full path where file was saved, or undefined if not in Tauri
  */
 export async function savePdfToDisk(
   blob: Blob,
   profileName: string,
   issueDate: string,
-  documentNumber: string
+  documentNumber: string,
+  version: number = 1
 ): Promise<string | undefined> {
   // Gracefully skip for web builds
   if (!isTauri()) {
@@ -82,7 +89,7 @@ export async function savePdfToDisk(
 
     // Build path segments
     const dirSegments = buildDirectoryPath(profileName, issueDate);
-    const fileName = buildFileName(documentNumber);
+    const fileName = buildFileName(documentNumber, version);
 
     // Create directory structure
     const dirPath = dirSegments.join('/');
@@ -119,13 +126,52 @@ export function isPdfArchivalAvailable(): boolean {
 /**
  * Get the expected path where a document would be saved.
  * Useful for display purposes.
+ *
+ * @param profileName Business profile name
+ * @param issueDate ISO date string
+ * @param documentNumber Document number
+ * @param version PDF version number (1 = no suffix, 2+ = _v2, _v3, etc.)
  */
 export function getExpectedPath(
   profileName: string,
   issueDate: string,
-  documentNumber: string
+  documentNumber: string,
+  version: number = 1
 ): string {
   const dirSegments = buildDirectoryPath(profileName, issueDate);
-  const fileName = buildFileName(documentNumber);
+  const fileName = buildFileName(documentNumber, version);
   return `Documents/${dirSegments.join('/')}/${fileName}`;
+}
+
+/**
+ * Check if a PDF file exists at the expected path.
+ * Returns false for web builds.
+ *
+ * @param profileName Business profile name
+ * @param issueDate ISO date string
+ * @param documentNumber Document number
+ * @param version PDF version number
+ */
+export async function checkPdfExists(
+  profileName: string,
+  issueDate: string,
+  documentNumber: string,
+  version: number = 1
+): Promise<boolean> {
+  if (!isTauri()) {
+    return false;
+  }
+
+  try {
+    const moduleName = '@tauri-apps/' + 'plugin-fs';
+    const { exists, BaseDirectory } = await import(/* @vite-ignore */ moduleName);
+
+    const dirSegments = buildDirectoryPath(profileName, issueDate);
+    const fileName = buildFileName(documentNumber, version);
+    const fullPath = `${dirSegments.join('/')}/${fileName}`;
+
+    return await exists(fullPath, { baseDir: BaseDirectory.Document });
+  } catch {
+    return false;
+  }
 }

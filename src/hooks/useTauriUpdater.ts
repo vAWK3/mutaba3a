@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { isTauri } from '../lib/platform';
 
 const LAST_CHECK_KEY = 'tauri-updater-last-check';
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -151,7 +152,7 @@ export function useTauriUpdater(): TauriUpdaterResult {
   // Auto-check on mount if interval has passed
   useEffect(() => {
     // Only run in Tauri environment
-    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+    if (!isTauri()) {
       return;
     }
 
@@ -168,7 +169,5 @@ export function useTauriUpdater(): TauriUpdaterResult {
   };
 }
 
-// Helper to check if running in Tauri (Tauri 2.x uses __TAURI_INTERNALS__)
-export function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
+// Re-export isTauri from platform.ts for backwards compatibility
+export { isTauri } from '../lib/platform';

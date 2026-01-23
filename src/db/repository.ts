@@ -895,6 +895,7 @@ export const documentRepo = {
       id: generateId(),
       number,
       exportCount: 0, // Initialize export count
+      pdfVersion: 0, // Initialize PDF version (0 = never exported)
       createdAt: now,
       updatedAt: now,
     };
@@ -933,6 +934,7 @@ export const documentRepo = {
       ...data,
       id: generateId(),
       exportCount: data.exportCount ?? 0,
+      pdfVersion: data.pdfVersion ?? 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -1058,20 +1060,24 @@ export const documentRepo = {
   },
 
   /**
-   * Lock a document after first export. Increments export count and sets lock timestamp on first export.
+   * Lock a document after first export. Increments export count, PDF version, and sets lock timestamp on first export.
    * Also locks all linked transactions.
    * @param id Document ID
    * @param pdfSavedPath Optional path where PDF was saved (Tauri desktop only)
+   * @returns The new PDF version number
    */
-  async lockAfterExport(id: string, pdfSavedPath?: string): Promise<void> {
+  async lockAfterExport(id: string, pdfSavedPath?: string): Promise<number> {
     const now = nowISO();
     const doc = await this.get(id);
-    if (!doc) return;
+    if (!doc) return 0;
 
     const isFirstExport = !doc.lockedAt;
+    const newPdfVersion = (doc.pdfVersion || 0) + 1;
+
     const updateData: Partial<Document> = {
       exportCount: (doc.exportCount || 0) + 1,
       lastExportedAt: now,
+      pdfVersion: newPdfVersion,
     };
 
     // Set lock timestamp on first export
@@ -1079,10 +1085,21 @@ export const documentRepo = {
       updateData.lockedAt = now;
     }
 
-    // Set PDF path if provided (Tauri)
+    // Set PDF path and add to version history if provided (Tauri)
     if (pdfSavedPath) {
       updateData.pdfSavedPath = pdfSavedPath;
       updateData.pdfSavedAt = now;
+
+      // Track version history
+      const versionHistory = doc.pdfVersionHistory || [];
+      updateData.pdfVersionHistory = [
+        ...versionHistory,
+        {
+          version: newPdfVersion,
+          path: pdfSavedPath,
+          savedAt: now,
+        },
+      ];
     }
 
     // Use raw update to bypass lock guard (we're allowed to update these fields)
@@ -1100,6 +1117,8 @@ export const documentRepo = {
         }
       });
     }
+
+    return newPdfVersion;
   },
 
   /**

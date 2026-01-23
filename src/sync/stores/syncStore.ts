@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { db } from '../../db/database';
 import { applyOp } from '../core/ops-engine';
+import { isTauri } from '../../lib/platform';
 import type {
   SyncConnectionStatus,
   DiscoveredPeer,
@@ -178,7 +179,7 @@ export const useSyncStore = create<SyncStore>((set, get) => ({
 
     try {
       // Check if Tauri is available
-      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      if (isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
         const peers = await invoke<DiscoveredPeer[]>('discover_lan_peers');
         set({ discoveredPeers: peers });
@@ -241,7 +242,7 @@ export const useSyncStore = create<SyncStore>((set, get) => ({
     }
 
     // Set up Tauri event listener for incoming sync operations
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    if (isTauri()) {
       const { listen } = await import('@tauri-apps/api/event');
       const { invoke } = await import('@tauri-apps/api/core');
 

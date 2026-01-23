@@ -89,6 +89,8 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
         });
 
         // Step 3: Save to disk if in Tauri (PDF archival)
+        // Calculate the next version number (current + 1, starting from 1)
+        const nextVersion = (doc.pdfVersion || 0) + 1;
         let pdfSavedPath: string | undefined;
         if (isPdfArchivalAvailable()) {
           try {
@@ -96,7 +98,8 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
               blob,
               businessProfile.name,
               doc.issueDate,
-              doc.number
+              doc.number,
+              nextVersion
             );
             if (pdfSavedPath) {
               console.log('PDF archived to:', pdfSavedPath);
@@ -159,16 +162,18 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
           isOriginal,
         });
 
-        // Save to disk if first export and in Tauri
+        // Save to disk if in Tauri (PDF archival)
+        // Calculate the next version number (current + 1, starting from 1)
+        const nextVersion = (doc.pdfVersion || 0) + 1;
         let pdfSavedPath: string | undefined;
-        const isFirstExport = !doc.lockedAt;
-        if (isFirstExport && isPdfArchivalAvailable()) {
+        if (isPdfArchivalAvailable()) {
           try {
             pdfSavedPath = await savePdfToDisk(
               blob,
               businessProfile.name,
               doc.issueDate,
-              doc.number
+              doc.number,
+              nextVersion
             );
             if (pdfSavedPath) {
               console.log('PDF archived to:', pdfSavedPath);

@@ -8,10 +8,11 @@ import { useState, useEffect } from 'react';
 import { useSyncStore, useSyncStatus, useSyncActions } from '../../sync/stores/syncStore';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { isTauri } from '../../lib/platform';
 import './SyncSection.css';
 
-// Check if running in Tauri (Tauri 2.x uses __TAURI_INTERNALS__)
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+// Cache the isTauri check at module load time
+const IS_TAURI = isTauri();
 
 export function SyncSection() {
   const { status, pendingConflicts, lastSyncAt, serverRunning } = useSyncStatus();
@@ -29,7 +30,7 @@ export function SyncSection() {
   }, []); // Run once on mount
 
   const handleStartServer = async () => {
-    if (!isTauri) return;
+    if (!IS_TAURI) return;
 
     setServerStarting(true);
     try {
@@ -51,7 +52,7 @@ export function SyncSection() {
   };
 
   const handleStopServer = async () => {
-    if (!isTauri) return;
+    if (!IS_TAURI) return;
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -106,7 +107,7 @@ export function SyncSection() {
       </Card>
 
       {/* Wi-Fi Sync (Tauri only) */}
-      {isTauri && (
+      {IS_TAURI && (
         <Card className="sync-section__card">
           <h3 className="sync-section__subtitle">Wi-Fi Sync</h3>
 

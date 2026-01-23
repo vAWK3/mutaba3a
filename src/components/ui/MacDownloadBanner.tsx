@@ -1,19 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useT } from '../../lib/i18n';
+import { isTauri, isMacOS } from '../../lib/platform';
 import './MacDownloadBanner.css';
 
 const STORAGE_KEY = 'hideDownloadBanner';
-
-function isMacOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const platform = navigator.platform?.toLowerCase() || '';
-  const userAgent = navigator.userAgent?.toLowerCase() || '';
-  return platform.includes('mac') || userAgent.includes('macintosh');
-}
-
-function isRunningInTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
 
 export function MacDownloadBanner() {
   const t = useT();
@@ -21,7 +11,7 @@ export function MacDownloadBanner() {
 
   useEffect(() => {
     // Only show on macOS in browser (not Tauri)
-    if (!isMacOS() || isRunningInTauri()) return;
+    if (!isMacOS() || isTauri()) return;
 
     // Check if user has dismissed the banner
     const hidden = localStorage.getItem(STORAGE_KEY);

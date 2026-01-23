@@ -689,6 +689,20 @@
     "description": "To create invoices and documents, you need to set up a business profile first.",
     "createProfile": "Create Business Profile"
   },
+  "documents": {
+    "pdfChoice": {
+      "title": "Document Already Exported",
+      "description": "Document {number} was previously exported as PDF (version {version}). What would you like to do?",
+      "edit": {
+        "title": "Edit Document",
+        "description": "Go back to make changes. A new PDF version will be created when you export again."
+      },
+      "download": {
+        "title": "Download Existing PDF",
+        "description": "Download the current PDF as-is without creating a new version."
+      }
+    }
+  },
   "vendor": {
     "createNew": "Create new"
   },

@@ -1,0 +1,92 @@
+/* PDF Download Choice Modal */
+.pdf-choice-modal {
+  max-width: 420px;
+}
+
+.pdf-choice-description {
+  margin: 0 0 var(--space-5) 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.pdf-choice-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pdf-choice-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: start;
+  transition: var(--transition-fast);
+}
+
+.pdf-choice-option:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-accent);
+}
+
+.pdf-choice-option--primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.pdf-choice-option--primary:hover {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+}
+
+.pdf-choice-option-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+.pdf-choice-option--primary .pdf-choice-option-icon {
+  background: var(--color-accent);
+  color: white;
+}
+
+.pdf-choice-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.pdf-choice-option-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+}
+
+.pdf-choice-option-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+/* RTL support */
+[dir='rtl'] .pdf-choice-option {
+  flex-direction: row-reverse;
+  text-align: end;
+}
+
+[dir='rtl'] .pdf-choice-option-content {
+  align-items: flex-end;
+}

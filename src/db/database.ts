@@ -443,6 +443,57 @@ export class MiniCrmDatabase extends Dexie {
         }
       });
     });
+
+    // Version 11: Add pdfVersion to documents for PDF versioning
+    this.version(11).stores({
+      // Keep all existing tables unchanged
+      clients: 'id, name, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, clientId, field, createdAt, updatedAt, archivedAt',
+      categories: 'id, kind, name',
+      transactions: 'id, kind, status, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged (no schema change, just data migration)
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt, [businessProfileId+type+number], lockedAt, archivedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables unchanged
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+
+      // Engagement tables unchanged
+      engagements: 'id, profileId, clientId, projectId, type, category, status, primaryLanguage, createdAt, updatedAt, archivedAt',
+      engagementVersions: 'id, engagementId, versionNumber, status, createdAt',
+    }).upgrade(tx => {
+      // Migration: set pdfVersion for all existing documents
+      // - If document has pdfSavedPath (already exported), set pdfVersion = 1
+      // - Otherwise, set pdfVersion = 0 (never exported)
+      return tx.table('documents').toCollection().modify((doc: { pdfVersion?: number; pdfSavedPath?: string }) => {
+        if (doc.pdfVersion === undefined) {
+          doc.pdfVersion = doc.pdfSavedPath ? 1 : 0;
+        }
+      });
+    });
   }
 }
 

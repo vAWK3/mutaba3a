@@ -1,5 +1,6 @@
 import { db } from '../../db/database';
 import { HybridLogicalClock, tick, receive } from './hlc';
+import { isTauri } from '../../lib/platform';
 import type {
   EntityType,
   OpType,
@@ -60,7 +61,7 @@ export function getLocalDevice(): LocalDevice {
 }
 
 function detectDeviceType(): 'desktop' | 'web' | 'mobile' {
-  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+  if (isTauri()) {
     return 'desktop';
   }
   return 'web';
@@ -128,7 +129,7 @@ export async function captureOp(params: CaptureParams): Promise<Operation> {
   }
 
   // Also store in Rust backend for mobile sync (pull)
-  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+  if (isTauri()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('store_local_sync_op', { op });

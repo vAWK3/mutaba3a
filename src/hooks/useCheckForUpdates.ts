@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchLatestRelease } from './useLatestRelease';
+import { isTauri } from '../lib/platform';
 
 const CACHE_KEY = 'update-check-result';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
@@ -65,14 +66,9 @@ function setCachedResult(latestVersion: string, hasUpdate: boolean): void {
 function getCurrentVersion(): string {
   // In Tauri, we can get the version from the app
   // For now, use a fallback that will be compared against GitHub
-  try {
-    // @ts-expect-error - Tauri global may not exist in web context
-    if (window.__TAURI_INTERNALS__) {
-      // This would need to be fetched async, but for simplicity we use package.json version
-      return __APP_VERSION__ || '0.0.0';
-    }
-  } catch {
-    // Not in Tauri context
+  if (isTauri()) {
+    // This would need to be fetched async, but for simplicity we use package.json version
+    return __APP_VERSION__ || '0.0.0';
   }
   return __APP_VERSION__ || '0.0.0';
 }
