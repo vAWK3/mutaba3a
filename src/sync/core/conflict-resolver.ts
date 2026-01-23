@@ -65,7 +65,7 @@ export async function resolveProfileConflict(
     status: 'resolved',
     resolution: resolution.action as ConflictResolution,
     resolvedAt: new Date().toISOString(),
-    resolutionOpId: resolutionOp.id,
+    resolutionOpId: resolutionOp?.id,
   });
 }
 
@@ -152,7 +152,7 @@ export async function resolveMoneyConflict(
     status: 'resolved',
     resolution: resolution.action as ConflictResolution,
     resolvedAt: new Date().toISOString(),
-    resolutionOpId: resolutionOp.id,
+    resolutionOpId: resolutionOp?.id,
   });
 }
 
