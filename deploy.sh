@@ -805,6 +805,10 @@ build_mac() {
         echo -e "${YELLOW}Warning: Building macOS app on non-macOS system may not work${NC}"
     fi
 
+    # Clean Rust build cache to ensure fresh version embedding
+    echo -e "${BLUE}Cleaning Rust build cache...${NC}"
+    cargo clean --manifest-path src-tauri/Cargo.toml
+
     npm run tauri build -- --target universal-apple-darwin 2>/dev/null || npm run tauri build
 
     echo -e "${GREEN}macOS build complete!${NC}"
