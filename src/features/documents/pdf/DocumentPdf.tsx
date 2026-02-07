@@ -111,6 +111,27 @@ export function DocumentPdf({
           </View>
         </View>
 
+        {/* Not Tax Document Disclaimer Banner (for payment_request) */}
+        {document.type === 'payment_request' && (
+          <View style={{
+            backgroundColor: '#fef3c7',
+            padding: 8,
+            marginBottom: 15,
+            borderRadius: 4,
+            borderWidth: 1,
+            borderColor: '#f59e0b',
+          }}>
+            <Text style={[dynamicStyles.text, {
+              textAlign: 'center',
+              fontSize: 10,
+              color: '#92400e',
+              fontWeight: 600,
+            }]}>
+              {t.not_tax_document}
+            </Text>
+          </View>
+        )}
+
         {/* Subject & Brief */}
         {(document.subject || document.brief) && (
           <View style={{ marginBottom: 15 }}>

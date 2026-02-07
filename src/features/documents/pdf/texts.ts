@@ -23,6 +23,7 @@ export interface DocumentTexts {
   price_offer: string;
   proforma_invoice: string;
   donation_receipt: string;
+  payment_request: string;
   // Additional
   to: string;
   from: string;
@@ -42,6 +43,8 @@ export interface DocumentTexts {
   account: string;
   iban: string;
   payment_instructions: string;
+  // Disclaimers
+  not_tax_document: string;
 }
 
 export const texts: Record<DocumentLanguage, DocumentTexts> = {
@@ -67,6 +70,7 @@ export const texts: Record<DocumentLanguage, DocumentTexts> = {
     price_offer: 'عرض سعر',
     proforma_invoice: 'فاتورة أولية',
     donation_receipt: 'سند تبرّع',
+    payment_request: 'طلب دفع',
     to: 'إلى',
     from: 'من',
     bill_to: 'فاتورة إلى',
@@ -84,6 +88,7 @@ export const texts: Record<DocumentLanguage, DocumentTexts> = {
     account: 'رقم الحساب',
     iban: 'IBAN',
     payment_instructions: 'تعليمات الدفع',
+    not_tax_document: 'هذا المستند ليس مستند ضريبي / This is not a tax document',
   },
   en: {
     item: 'Item',
@@ -107,6 +112,7 @@ export const texts: Record<DocumentLanguage, DocumentTexts> = {
     price_offer: 'Price Offer',
     proforma_invoice: 'Proforma Invoice',
     donation_receipt: 'Donation Receipt',
+    payment_request: 'Payment Request',
     to: 'To',
     from: 'From',
     bill_to: 'Bill To',
@@ -124,6 +130,7 @@ export const texts: Record<DocumentLanguage, DocumentTexts> = {
     account: 'Account',
     iban: 'IBAN',
     payment_instructions: 'Payment Instructions',
+    not_tax_document: 'This document is not a tax document',
   },
 };
 

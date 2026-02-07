@@ -1,11 +1,11 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "متابعة",
-  "version": "0.0.46",
+  "version": "0.0.47",
   "identifier": "com.elmokhtbr.mutaba3a",
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_YOUR_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFREY5MzFDQTFENkM3NzcKUldSM3g5YWhISlBmdmcyb0dsWVRGZ0Q0bWNmTjJGZkFOQnRYZ3FIQTRNcy9XRnk3bFlPU1QxN3kK",
       "endpoints": [
         "https://github.com/vAWK3/mutaba3a/releases/latest/download/latest.json"
       ],

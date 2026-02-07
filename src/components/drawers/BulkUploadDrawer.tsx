@@ -178,7 +178,7 @@ export function BulkUploadDrawer({
             receiptId: receipts[0]?.id,
           };
         }
-      } catch (err) {
+      } catch {
         updatedFiles[i] = {
           ...file,
           status: 'error',

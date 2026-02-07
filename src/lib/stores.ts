@@ -128,6 +128,10 @@ interface DrawerState {
     step: 'select-transaction' | 'select-projected';
     transactionId?: string;
     projectedIncomeId?: string;
+    // Confirmation flow state
+    pendingProjectedId?: string; // Selected but not yet confirmed
+    matchSuccess?: boolean; // Show success state
+    lastMatchedIds?: { transactionId: string; projectedId: string }; // For undo
   };
   openRetainerMatchingDrawer: (options?: {
     step?: 'select-transaction' | 'select-projected';
@@ -138,6 +142,8 @@ interface DrawerState {
   setRetainerMatchingStep: (step: 'select-transaction' | 'select-projected') => void;
   setRetainerMatchingTransaction: (transactionId: string) => void;
   setRetainerMatchingProjectedIncome: (projectedIncomeId: string) => void;
+  setRetainerMatchingPendingProjected: (projectedId: string | undefined) => void;
+  setRetainerMatchingSuccess: (success: boolean, ids?: { transactionId: string; projectedId: string }) => void;
 
   // Selected retainer for inspector panel
   selectedRetainerId?: string;
@@ -323,6 +329,9 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         step: options?.step || 'select-transaction',
         transactionId: options?.transactionId,
         projectedIncomeId: options?.projectedIncomeId,
+        pendingProjectedId: undefined,
+        matchSuccess: false,
+        lastMatchedIds: undefined,
       },
     }),
   closeRetainerMatchingDrawer: () =>
@@ -332,6 +341,9 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         step: 'select-transaction',
         transactionId: undefined,
         projectedIncomeId: undefined,
+        pendingProjectedId: undefined,
+        matchSuccess: false,
+        lastMatchedIds: undefined,
       },
     }),
   setRetainerMatchingStep: (step) =>
@@ -339,6 +351,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       retainerMatchingDrawer: {
         ...state.retainerMatchingDrawer,
         step,
+        pendingProjectedId: undefined, // Clear pending when going back
       },
     })),
   setRetainerMatchingTransaction: (transactionId) =>
@@ -347,6 +360,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         ...state.retainerMatchingDrawer,
         transactionId,
         step: 'select-projected',
+        pendingProjectedId: undefined,
       },
     })),
   setRetainerMatchingProjectedIncome: (projectedIncomeId) =>
@@ -354,6 +368,22 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       retainerMatchingDrawer: {
         ...state.retainerMatchingDrawer,
         projectedIncomeId,
+      },
+    })),
+  setRetainerMatchingPendingProjected: (projectedId) =>
+    set((state) => ({
+      retainerMatchingDrawer: {
+        ...state.retainerMatchingDrawer,
+        pendingProjectedId: projectedId,
+      },
+    })),
+  setRetainerMatchingSuccess: (success, ids) =>
+    set((state) => ({
+      retainerMatchingDrawer: {
+        ...state.retainerMatchingDrawer,
+        matchSuccess: success,
+        lastMatchedIds: ids,
+        pendingProjectedId: undefined,
       },
     })),
 

@@ -71,6 +71,7 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   price_offer: 'Price Offer',
   proforma_invoice: 'Proforma Invoice',
   donation_receipt: 'Donation Receipt',
+  payment_request: 'Payment Request',
 };
 
 const DEFAULT_PREFIXES: Record<DocumentType, string> = {
@@ -81,6 +82,7 @@ const DEFAULT_PREFIXES: Record<DocumentType, string> = {
   price_offer: 'PO',
   proforma_invoice: 'PI',
   donation_receipt: 'DR',
+  payment_request: 'PR',
 };
 
 const ALL_DOCUMENT_TYPES: DocumentType[] = [
@@ -91,6 +93,7 @@ const ALL_DOCUMENT_TYPES: DocumentType[] = [
   'price_offer',
   'proforma_invoice',
   'donation_receipt',
+  'payment_request',
 ];
 
 export function ProfileDetailPage() {

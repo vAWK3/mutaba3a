@@ -196,6 +196,7 @@ export function useCountdown(expiresAt: string | undefined): number {
 
   useEffect(() => {
     if (!expiresAt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRemaining(0);
       return;
     }

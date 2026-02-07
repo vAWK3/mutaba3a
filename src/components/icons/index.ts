@@ -1,4 +1,7 @@
 export { CheckIcon } from './CheckIcon';
+export { CheckCircleIcon } from './CheckCircleIcon';
+export { ChevronDownIcon } from './ChevronDownIcon';
+export { ArrowRightIcon } from './ArrowRightIcon';
 export { CopyIcon } from './CopyIcon';
 export { DocumentIcon } from './DocumentIcon';
 export { LockIcon } from './LockIcon';

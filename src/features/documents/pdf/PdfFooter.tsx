@@ -74,6 +74,7 @@ const SHOW_BANK_DETAILS_TYPES: DocumentType[] = [
   'invoice',
   'proforma_invoice',
   'invoice_receipt',
+  'payment_request',
 ];
 
 interface PdfFooterProps {

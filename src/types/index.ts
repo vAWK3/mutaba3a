@@ -169,6 +169,7 @@ export interface TransactionDisplay extends Transaction {
   clientName?: string;
   projectName?: string;
   categoryName?: string;
+  daysOverdue?: number;
 }
 
 // ============================================================================
@@ -183,7 +184,8 @@ export type DocumentType =
   | 'credit_note'
   | 'price_offer'
   | 'proforma_invoice'
-  | 'donation_receipt';
+  | 'donation_receipt'
+  | 'payment_request';
 
 // Document status
 export type DocumentStatus = 'draft' | 'issued' | 'paid' | 'voided';
@@ -685,12 +687,22 @@ export interface ProjectedIncomeFilters {
   currency?: Currency;
 }
 
+// Match score breakdown (for transparent scoring)
+export interface MatchScoreBreakdown {
+  total: number;
+  currency: number; // 0 or 30
+  client: number;   // 0 or 30
+  amount: number;   // 0-25
+  date: number;     // 0-15
+}
+
 // Retainer match suggestion (for matching transactions to projected income)
 export interface RetainerMatchSuggestion {
   projectedIncomeId: string;
   score: number; // 0-100
   confidence: 'high' | 'medium' | 'low';
   projectedIncome: ProjectedIncomeDisplay;
+  scoreBreakdown?: MatchScoreBreakdown; // Detailed breakdown for transparency
 }
 
 // ============================================================================

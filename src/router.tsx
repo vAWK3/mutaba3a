@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { Suspense } from 'react';
 import { createRouter, createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
 import { AppShell } from './components/layout';

@@ -91,6 +91,14 @@ export function useTransaction(id: string) {
   });
 }
 
+export function useTransactionDisplay(id: string | undefined) {
+  return useQuery({
+    queryKey: ['transactionDisplay', id],
+    queryFn: () => transactionRepo.getDisplay(id!),
+    enabled: !!id,
+  });
+}
+
 export function useOverviewTotals(dateFrom: string, dateTo: string, currency?: Currency) {
   return useQuery({
     queryKey: queryKeys.overviewTotals(dateFrom, dateTo, currency),
@@ -589,5 +597,54 @@ export function useIsDocumentNumberTaken() {
   return useMutation({
     mutationFn: ({ number, excludeId }: { number: string; excludeId?: string }) =>
       documentRepo.isNumberTaken(number, excludeId),
+  });
+}
+
+// ============================================================================
+// Payment Request hooks
+// ============================================================================
+
+export function useCreatePaymentRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt' | 'linkedTransactionIds'>) => {
+      const { createPaymentRequestWithReceivable } = await import('../services/paymentRequestService');
+      return createPaymentRequestWithReceivable({ documentData: data });
+    },
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      invalidateTransactionQueries(queryClient);
+    },
+  });
+}
+
+export function useRecordPaymentForRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ documentId, paidAt }: { documentId: string; paidAt: string }) => {
+      const { recordPaymentForRequest } = await import('../services/paymentRequestService');
+      return recordPaymentForRequest(documentId, paidAt);
+    },
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      invalidateTransactionQueries(queryClient);
+    },
+  });
+}
+
+export function useVoidPaymentRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (documentId: string) => {
+      const { voidPaymentRequest } = await import('../services/paymentRequestService');
+      return voidPaymentRequest(documentId);
+    },
+    onSuccess: () => {
+      invalidateDocumentQueries(queryClient);
+      invalidateTransactionQueries(queryClient);
+    },
   });
 }

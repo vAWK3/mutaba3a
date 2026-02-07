@@ -12,6 +12,8 @@ import {
   useUpdateDocument,
   useArchiveDocument,
   useUnarchiveDocument,
+  useRecordPaymentForRequest,
+  useVoidPaymentRequest,
 } from '../../hooks/useQueries';
 import { formatAmount, formatDate } from '../../lib/utils';
 import { useLanguage, getLocale } from '../../lib/i18n';
@@ -29,6 +31,7 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   price_offer: 'Price Offer',
   proforma_invoice: 'Proforma Invoice',
   donation_receipt: 'Donation Receipt',
+  payment_request: 'Payment Request',
 };
 
 // Status display config
@@ -48,6 +51,8 @@ export function DocumentDetailPage() {
   const updateDocumentMutation = useUpdateDocument();
   const archiveMutation = useArchiveDocument();
   const unarchiveMutation = useUnarchiveDocument();
+  const recordPaymentMutation = useRecordPaymentForRequest();
+  const voidPaymentRequestMutation = useVoidPaymentRequest();
   const { issueAndDownload, downloadOnly, isProcessing, isIssuing } = useIssueAndDownload();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -94,9 +99,11 @@ export function DocumentDetailPage() {
 
   const isLocked = !!document.lockedAt;
   const isArchived = !!document.archivedAt;
+  const isPaymentRequest = document.type === 'payment_request';
   const canEdit = document.status === 'draft' && !isLocked;
   const canIssue = document.status === 'draft' && !isLocked;
   const canMarkPaid = document.status === 'issued' && document.type === 'invoice';
+  const canRecordPayment = isPaymentRequest && document.status === 'issued';
   const canVoid = document.status === 'issued' && !isLocked;
   const canCreateCreditNote = document.status === 'paid' && document.type === 'invoice';
 
@@ -231,15 +238,36 @@ export function DocumentDetailPage() {
                 Mark as Paid
               </button>
             )}
+            {canRecordPayment && (
+              <button
+                className="btn btn-success"
+                onClick={() => {
+                  if (confirm('Record payment for this request? This will mark the linked receivable as paid.')) {
+                    recordPaymentMutation.mutate({
+                      documentId: document.id,
+                      paidAt: new Date().toISOString(),
+                    });
+                  }
+                }}
+                disabled={recordPaymentMutation.isPending}
+              >
+                <CheckIcon size={16} />
+                Record Payment
+              </button>
+            )}
             {canVoid && (
               <button
                 className="btn btn-warning"
                 onClick={() => {
-                  if (confirm('Are you sure you want to void this document?')) {
-                    voidMutation.mutate(document.id);
+                  if (confirm('Are you sure you want to void this document?' + (isPaymentRequest ? ' This will also delete the linked receivable.' : ''))) {
+                    if (isPaymentRequest) {
+                      voidPaymentRequestMutation.mutate(document.id);
+                    } else {
+                      voidMutation.mutate(document.id);
+                    }
                   }
                 }}
-                disabled={voidMutation.isPending}
+                disabled={voidMutation.isPending || voidPaymentRequestMutation.isPending}
               >
                 Void
               </button>

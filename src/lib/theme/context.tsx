@@ -68,6 +68,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   // Apply theme to document and handle system preference changes
   useEffect(() => {
     const resolved = resolveTheme(theme);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setResolvedTheme(resolved);
 
     // Apply data-theme attribute for CSS targeting

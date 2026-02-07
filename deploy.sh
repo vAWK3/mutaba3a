@@ -840,24 +840,7 @@ main() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
-    # Get and display current version
-    local current_version=$(get_version)
-    local new_version=$(increment_patch "$current_version")
-
-    echo -e "Current version: ${YELLOW}$current_version${NC}"
-    echo -e "Next version:    ${GREEN}$new_version${NC}"
-    echo ""
-
-    # Ask about version bump
-    # echo -e "${BLUE}Version options:${NC}"
-    # echo "  1) Auto-increment patch ($current_version -> $new_version)"
-    # echo "  2) Enter custom version (for major/minor updates)"
-    # echo "  3) Keep current version"
-    # echo ""
-    # read -p "Select version option [1-3]: " version_choice
-
-    update_version "$new_version"
-    current_version="$new_version"
+  
     # case $version_choice in
         # 1)
         #     ;;
@@ -878,6 +861,9 @@ main() {
         #     exit 1
         #     ;;
     # esac
+
+    # Get and display current version
+    local current_version=$(get_version)
 
     echo ""
     echo -e "${BLUE}Deploy options:${NC}"
@@ -900,6 +886,15 @@ main() {
     #         build_windows
     #         ;;
         2)
+              
+            local new_version=$(increment_patch "$current_version")
+
+            echo -e "Current version: ${YELLOW}$current_version${NC}"
+            echo -e "Next version:    ${GREEN}$new_version${NC}"
+            echo ""
+
+            update_version "$new_version"
+            current_version="$new_version"
             build_and_release_mac "$current_version"
             ;;
         3)

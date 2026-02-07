@@ -1,48 +1,313 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Drawer } from './Drawer';
 import { SearchInput } from '../filters';
 import { useDrawerStore } from '../../lib/stores';
-import { useTransactions } from '../../hooks/useQueries';
+import { useTransactions, useTransactionDisplay } from '../../hooks/useQueries';
 import {
   useRetainerMatchSuggestions,
   useDueItems,
   useMatchTransaction,
+  useUnmatchTransaction,
 } from '../../hooks/useRetainerQueries';
 import { formatAmount, formatDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { ProjectedIncomeDisplay } from '../../types';
+import { useToast } from '../../lib/toastStore';
+import type { ProjectedIncomeDisplay, RetainerMatchSuggestion, MatchScoreBreakdown } from '../../types';
+import { CheckCircleIcon, ChevronDownIcon, ArrowRightIcon } from '../icons';
+
+// Step Progress Indicator
+function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
+  return (
+    <div className="matching-steps">
+      <div className={cn('matching-step-dot', currentStep >= 1 && 'active', currentStep > 1 && 'completed')} />
+      <div className={cn('matching-step-line', currentStep >= 2 && 'active')} />
+      <div className={cn('matching-step-dot', currentStep >= 2 && 'active')} />
+    </div>
+  );
+}
+
+// Selected Transaction Context Card
+interface SelectedTransactionCardProps {
+  transactionId: string;
+  onBack: () => void;
+}
+
+function SelectedTransactionCard({ transactionId, onBack }: SelectedTransactionCardProps) {
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = getLocale(language);
+  const { data: transaction } = useTransactionDisplay(transactionId);
+
+  if (!transaction) return null;
+
+  return (
+    <div className="matching-context-card">
+      <div className="matching-context-info">
+        <span className="matching-context-title">
+          {transaction.title || transaction.clientName || t('retainerMatching.untitled')}
+        </span>
+        <span className="matching-context-meta">
+          {formatDate(transaction.occurredAt, locale)}
+          {transaction.clientName && ` \u2022 ${transaction.clientName}`}
+        </span>
+      </div>
+      <span className="matching-context-amount">
+        {formatAmount(transaction.amountMinor, transaction.currency, locale)}
+      </span>
+      <button className="matching-context-change" onClick={onBack}>
+        {t('retainerMatching.change')}
+      </button>
+    </div>
+  );
+}
+
+// Score Breakdown Badge (expandable)
+interface ScoreBadgeProps {
+  score: number;
+  confidence: 'high' | 'medium' | 'low';
+  breakdown?: MatchScoreBreakdown;
+}
+
+function ScoreBadge({ score, confidence, breakdown }: ScoreBadgeProps) {
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!expanded) return;
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [expanded]);
+
+  return (
+    <div className="score-breakdown-wrapper" ref={wrapperRef}>
+      <button
+        className={cn('score-badge', `confidence-${confidence}`)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setExpanded(!expanded);
+        }}
+        type="button"
+      >
+        <span className="score-badge-value">{score}</span>
+        <ChevronDownIcon size={12} className={cn('score-badge-chevron', expanded && 'expanded')} />
+      </button>
+
+      {expanded && breakdown && (
+        <div className="score-breakdown">
+          <div className="score-breakdown-title">{t('retainerMatching.scoreBreakdown.title')}</div>
+          <div className="score-breakdown-row">
+            <span className="score-breakdown-label">{t('retainerMatching.scoreBreakdown.currency')}</span>
+            <span className={cn('score-breakdown-value', breakdown.currency > 0 ? 'positive' : 'zero')}>
+              +{breakdown.currency}
+            </span>
+          </div>
+          <div className="score-breakdown-row">
+            <span className="score-breakdown-label">{t('retainerMatching.scoreBreakdown.client')}</span>
+            <span className={cn('score-breakdown-value', breakdown.client > 0 ? 'positive' : 'zero')}>
+              +{breakdown.client}
+            </span>
+          </div>
+          <div className="score-breakdown-row">
+            <span className="score-breakdown-label">{t('retainerMatching.scoreBreakdown.amount')}</span>
+            <span className={cn('score-breakdown-value', breakdown.amount > 0 ? 'positive' : 'zero')}>
+              +{breakdown.amount}
+            </span>
+          </div>
+          <div className="score-breakdown-row">
+            <span className="score-breakdown-label">{t('retainerMatching.scoreBreakdown.date')}</span>
+            <span className={cn('score-breakdown-value', breakdown.date > 0 ? 'positive' : 'zero')}>
+              +{breakdown.date}
+            </span>
+          </div>
+          <div className="score-breakdown-row score-breakdown-total">
+            <span className="score-breakdown-label">{t('retainerMatching.scoreBreakdown.total')}</span>
+            <span className="score-breakdown-value positive">{breakdown.total}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Match Confirmation Preview
+interface MatchConfirmationProps {
+  transactionId: string;
+  projectedIncome: ProjectedIncomeDisplay;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}
+
+function MatchConfirmation({ transactionId, projectedIncome, onConfirm, onCancel, isLoading }: MatchConfirmationProps) {
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = getLocale(language);
+  const { data: transaction } = useTransactionDisplay(transactionId);
+
+  if (!transaction) return null;
+
+  return (
+    <div className="matching-confirmation">
+      <h4 className="matching-confirmation-header">{t('retainerMatching.confirmation.title')}</h4>
+      <div className="matching-confirmation-preview">
+        <div className="matching-confirmation-card">
+          <div className="matching-confirmation-card-title">{t('retainerMatching.confirmation.transaction')}</div>
+          <div className="matching-confirmation-card-main">
+            {transaction.title || transaction.clientName || t('retainerMatching.untitled')}
+          </div>
+          <div className="matching-confirmation-card-meta">{formatDate(transaction.occurredAt, locale)}</div>
+          <div className="matching-confirmation-card-amount">
+            {formatAmount(transaction.amountMinor, transaction.currency, locale)}
+          </div>
+        </div>
+
+        <ArrowRightIcon size={24} className="matching-confirmation-arrow" />
+
+        <div className="matching-confirmation-card">
+          <div className="matching-confirmation-card-title">{t('retainerMatching.confirmation.period')}</div>
+          <div className="matching-confirmation-card-main">
+            {projectedIncome.retainerTitle || t('retainerMatching.untitledRetainer')}
+          </div>
+          <div className="matching-confirmation-card-meta">
+            {new Date(projectedIncome.expectedDate).toLocaleDateString(locale, {
+              month: 'short',
+              year: 'numeric',
+            })}
+          </div>
+          <div className="matching-confirmation-card-amount">
+            {formatAmount(
+              projectedIncome.expectedAmountMinor - projectedIncome.receivedAmountMinor,
+              projectedIncome.currency,
+              locale
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="matching-confirmation-actions">
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={isLoading}>
+          {t('retainerMatching.confirmation.cancel')}
+        </button>
+        <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isLoading}>
+          {isLoading ? t('common.loading') : t('retainerMatching.confirmation.confirm')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Match Success State
+function MatchSuccess() {
+  const t = useT();
+  return (
+    <div className="matching-success">
+      <CheckCircleIcon size={64} className="matching-success-icon" />
+      <h3 className="matching-success-title">{t('retainerMatching.success.title')}</h3>
+      <p className="matching-success-message">{t('retainerMatching.success.message')}</p>
+    </div>
+  );
+}
 
 export function RetainerMatchingDrawer() {
   const {
     retainerMatchingDrawer,
     closeRetainerMatchingDrawer,
     setRetainerMatchingTransaction,
+    setRetainerMatchingStep,
+    setRetainerMatchingPendingProjected,
+    setRetainerMatchingSuccess,
     openTransactionDrawer,
   } = useDrawerStore();
-  const { step, transactionId } = retainerMatchingDrawer;
+  const { step, transactionId, pendingProjectedId, matchSuccess, lastMatchedIds } = retainerMatchingDrawer;
   const t = useT();
+  const { showToast } = useToast();
 
   const matchMutation = useMatchTransaction();
+  const unmatchMutation = useUnmatchTransaction();
+
+  // Get due items to find the pending projected income details
+  const { data: dueItems = [] } = useDueItems();
+  const { data: suggestions = [] } = useRetainerMatchSuggestions(transactionId ?? '');
+
+  const pendingProjectedIncome = useMemo(() => {
+    if (!pendingProjectedId) return null;
+    // First check suggestions
+    const suggestion = suggestions.find((s) => s.projectedIncomeId === pendingProjectedId);
+    if (suggestion) return suggestion.projectedIncome;
+    // Then check due items
+    return dueItems.find((item) => item.id === pendingProjectedId) || null;
+  }, [pendingProjectedId, suggestions, dueItems]);
 
   const getTitle = () => {
+    if (matchSuccess) return t('retainerMatching.success.title');
+    if (pendingProjectedId) return t('retainerMatching.confirmation.title');
     if (step === 'select-transaction') {
       return t('retainerMatching.selectTransaction');
     }
     return t('retainerMatching.selectProjectedIncome');
   };
 
-  const handleMatch = async (projectedId: string) => {
-    if (!transactionId) return;
+  const handleSelectProjectedIncome = (projectedId: string) => {
+    // Show confirmation instead of immediate match
+    setRetainerMatchingPendingProjected(projectedId);
+  };
+
+  const handleConfirmMatch = async () => {
+    if (!transactionId || !pendingProjectedId) return;
 
     try {
       await matchMutation.mutateAsync({
-        projectedIncomeId: projectedId,
+        projectedIncomeId: pendingProjectedId,
         transactionId,
       });
-      closeRetainerMatchingDrawer();
+
+      // Show success state
+      setRetainerMatchingSuccess(true, { transactionId, projectedId: pendingProjectedId });
+
+      // Show toast with undo option
+      showToast(t('retainerMatching.toast.matched'), {
+        action: {
+          label: t('retainerMatching.toast.undo'),
+          onClick: handleUndo,
+        },
+        duration: 5000,
+      });
+
+      // Close drawer after delay
+      setTimeout(() => {
+        closeRetainerMatchingDrawer();
+      }, 1500);
     } catch (error) {
       console.error('Failed to match transaction:', error);
     }
+  };
+
+  const handleUndo = async () => {
+    if (!lastMatchedIds) return;
+    try {
+      await unmatchMutation.mutateAsync({
+        projectedIncomeId: lastMatchedIds.projectedId,
+        transactionId: lastMatchedIds.transactionId,
+      });
+      showToast(t('retainerMatching.toast.undone'));
+    } catch (error) {
+      console.error('Failed to undo match:', error);
+    }
+  };
+
+  const handleCancelConfirmation = () => {
+    setRetainerMatchingPendingProjected(undefined);
+  };
+
+  const handleBack = () => {
+    setRetainerMatchingStep('select-transaction');
   };
 
   return (
@@ -50,14 +315,29 @@ export function RetainerMatchingDrawer() {
       title={getTitle()}
       onClose={closeRetainerMatchingDrawer}
       footer={
-        <div className="drawer-footer-right">
-          <button type="button" className="btn btn-secondary" onClick={closeRetainerMatchingDrawer}>
-            {t('common.cancel')}
-          </button>
-        </div>
+        !matchSuccess && !pendingProjectedId ? (
+          <div className="drawer-footer-right">
+            <button type="button" className="btn btn-secondary" onClick={closeRetainerMatchingDrawer}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        ) : null
       }
     >
-      {step === 'select-transaction' ? (
+      {/* Step indicator */}
+      {!matchSuccess && !pendingProjectedId && <StepIndicator currentStep={step === 'select-transaction' ? 1 : 2} />}
+
+      {matchSuccess ? (
+        <MatchSuccess />
+      ) : pendingProjectedId && pendingProjectedIncome && transactionId ? (
+        <MatchConfirmation
+          transactionId={transactionId}
+          projectedIncome={pendingProjectedIncome}
+          onConfirm={handleConfirmMatch}
+          onCancel={handleCancelConfirmation}
+          isLoading={matchMutation.isPending}
+        />
+      ) : step === 'select-transaction' ? (
         <TransactionSelector
           onSelect={(txId) => setRetainerMatchingTransaction(txId)}
           onCreateNew={() => {
@@ -66,11 +346,11 @@ export function RetainerMatchingDrawer() {
           }}
         />
       ) : (
-        <ProjectedIncomeSelector
-          transactionId={transactionId!}
-          onSelect={handleMatch}
-          isMatching={matchMutation.isPending}
-        />
+        <>
+          {/* Show selected transaction context */}
+          {transactionId && <SelectedTransactionCard transactionId={transactionId} onBack={handleBack} />}
+          <ProjectedIncomeSelector transactionId={transactionId!} onSelect={handleSelectProjectedIncome} />
+        </>
       )}
     </Drawer>
   );
@@ -105,10 +385,11 @@ function TransactionSelector({ onSelect, onCreateNew }: TransactionSelectorProps
   const filteredTransactions = useMemo(() => {
     if (!search) return unlinkedTransactions;
     const searchLower = search.toLowerCase();
-    return unlinkedTransactions.filter((tx) =>
-      tx.title?.toLowerCase().includes(searchLower) ||
-      tx.clientName?.toLowerCase().includes(searchLower) ||
-      tx.projectName?.toLowerCase().includes(searchLower)
+    return unlinkedTransactions.filter(
+      (tx) =>
+        tx.title?.toLowerCase().includes(searchLower) ||
+        tx.clientName?.toLowerCase().includes(searchLower) ||
+        tx.projectName?.toLowerCase().includes(searchLower)
     );
   }, [unlinkedTransactions, search]);
 
@@ -117,11 +398,7 @@ function TransactionSelector({ onSelect, onCreateNew }: TransactionSelectorProps
       <p className="matching-description">{t('retainerMatching.selectTransactionDesc')}</p>
 
       <div className="matching-filters">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t('retainerMatching.searchTransactions')}
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder={t('retainerMatching.searchTransactions')} />
       </div>
 
       <div className="matching-actions">
@@ -141,18 +418,14 @@ function TransactionSelector({ onSelect, onCreateNew }: TransactionSelectorProps
       ) : (
         <div className="matching-list">
           {filteredTransactions.map((tx) => (
-            <button
-              key={tx.id}
-              className="matching-item"
-              onClick={() => onSelect(tx.id)}
-            >
+            <button key={tx.id} className="matching-item" onClick={() => onSelect(tx.id)}>
               <div className="matching-item-main">
                 <span className="matching-item-title">
                   {tx.title || tx.clientName || t('retainerMatching.untitled')}
                 </span>
                 <span className="matching-item-meta">
                   {formatDate(tx.occurredAt, locale)}
-                  {tx.clientName && ` • ${tx.clientName}`}
+                  {tx.clientName && ` \u2022 ${tx.clientName}`}
                 </span>
               </div>
               <span className="matching-item-amount amount-positive">
@@ -170,10 +443,9 @@ function TransactionSelector({ onSelect, onCreateNew }: TransactionSelectorProps
 interface ProjectedIncomeSelectorProps {
   transactionId: string;
   onSelect: (projectedIncomeId: string) => void;
-  isMatching: boolean;
 }
 
-function ProjectedIncomeSelector({ transactionId, onSelect, isMatching }: ProjectedIncomeSelectorProps) {
+function ProjectedIncomeSelector({ transactionId, onSelect }: ProjectedIncomeSelectorProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -191,9 +463,7 @@ function ProjectedIncomeSelector({ transactionId, onSelect, isMatching }: Projec
     const suggestedIds = new Set(suggestions.map((s) => s.projectedIncomeId));
 
     // Filter due items that are not in suggestions
-    const otherItems = dueItems.filter(
-      (item) => !suggestedIds.has(item.id)
-    );
+    const otherItems = dueItems.filter((item) => !suggestedIds.has(item.id));
 
     // Apply search filter
     if (search) {
@@ -218,11 +488,7 @@ function ProjectedIncomeSelector({ transactionId, onSelect, isMatching }: Projec
       <p className="matching-description">{t('retainerMatching.selectProjectedDesc')}</p>
 
       <div className="matching-filters">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t('retainerMatching.searchProjected')}
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder={t('retainerMatching.searchProjected')} />
       </div>
 
       {isLoading ? (
@@ -237,35 +503,13 @@ function ProjectedIncomeSelector({ transactionId, onSelect, isMatching }: Projec
               <h4 className="matching-section-title">{t('retainerMatching.suggestions')}</h4>
               <div className="matching-list">
                 {displayItems.suggestions.map((suggestion) => (
-                  <button
+                  <ProjectedIncomeItem
                     key={suggestion.projectedIncomeId}
-                    className="matching-item matching-item-suggested"
-                    onClick={() => onSelect(suggestion.projectedIncomeId)}
-                    disabled={isMatching}
-                  >
-                    <div className="matching-item-main">
-                      <span className="matching-item-title">
-                        {suggestion.projectedIncome.retainerTitle || t('retainerMatching.untitledRetainer')}
-                      </span>
-                      <span className="matching-item-meta">
-                        {new Date(suggestion.projectedIncome.expectedDate).toLocaleDateString(locale, {
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                        {suggestion.projectedIncome.clientName && ` • ${suggestion.projectedIncome.clientName}`}
-                      </span>
-                    </div>
-                    <div className="matching-item-right">
-                      <span className="matching-item-amount">
-                        {formatAmount(
-                          suggestion.projectedIncome.expectedAmountMinor - suggestion.projectedIncome.receivedAmountMinor,
-                          suggestion.projectedIncome.currency,
-                          locale
-                        )}
-                      </span>
-                      <ConfidenceBadge confidence={suggestion.confidence} />
-                    </div>
-                  </button>
+                    item={suggestion.projectedIncome}
+                    suggestion={suggestion}
+                    onSelect={() => onSelect(suggestion.projectedIncomeId)}
+                    locale={locale}
+                  />
                 ))}
               </div>
             </div>
@@ -277,32 +521,7 @@ function ProjectedIncomeSelector({ transactionId, onSelect, isMatching }: Projec
               <h4 className="matching-section-title">{t('retainerMatching.otherDueItems')}</h4>
               <div className="matching-list">
                 {displayItems.others.map((item) => (
-                  <button
-                    key={item.id}
-                    className="matching-item"
-                    onClick={() => onSelect(item.id)}
-                    disabled={isMatching}
-                  >
-                    <div className="matching-item-main">
-                      <span className="matching-item-title">
-                        {item.retainerTitle || t('retainerMatching.untitledRetainer')}
-                      </span>
-                      <span className="matching-item-meta">
-                        {new Date(item.expectedDate).toLocaleDateString(locale, {
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                        {item.clientName && ` • ${item.clientName}`}
-                      </span>
-                    </div>
-                    <span className="matching-item-amount">
-                      {formatAmount(
-                        item.expectedAmountMinor - item.receivedAmountMinor,
-                        item.currency,
-                        locale
-                      )}
-                    </span>
-                  </button>
+                  <ProjectedIncomeItem key={item.id} item={item} onSelect={() => onSelect(item.id)} locale={locale} />
                 ))}
               </div>
             </div>
@@ -319,12 +538,41 @@ function ProjectedIncomeSelector({ transactionId, onSelect, isMatching }: Projec
   );
 }
 
-// Confidence Badge
-function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low' }) {
+// Projected Income Item (with optional suggestion score)
+interface ProjectedIncomeItemProps {
+  item: ProjectedIncomeDisplay;
+  suggestion?: RetainerMatchSuggestion;
+  onSelect: () => void;
+  locale: string;
+}
+
+function ProjectedIncomeItem({ item, suggestion, onSelect, locale }: ProjectedIncomeItemProps) {
   const t = useT();
+
   return (
-    <span className={cn('confidence-badge', `confidence-${confidence}`)}>
-      {t(`retainerMatching.confidence.${confidence}`)}
-    </span>
+    <button className={cn('matching-item', suggestion && 'matching-item-suggested')} onClick={onSelect}>
+      <div className="matching-item-main">
+        <span className="matching-item-title">{item.retainerTitle || t('retainerMatching.untitledRetainer')}</span>
+        <span className="matching-item-meta">
+          {new Date(item.expectedDate).toLocaleDateString(locale, {
+            month: 'short',
+            year: 'numeric',
+          })}
+          {item.clientName && ` \u2022 ${item.clientName}`}
+        </span>
+      </div>
+      <div className="matching-item-right">
+        <span className="matching-item-amount">
+          {formatAmount(item.expectedAmountMinor - item.receivedAmountMinor, item.currency, locale)}
+        </span>
+        {suggestion && (
+          <ScoreBadge
+            score={suggestion.score}
+            confidence={suggestion.confidence}
+            breakdown={suggestion.scoreBreakdown}
+          />
+        )}
+      </div>
+    </button>
   );
 }

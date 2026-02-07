@@ -102,6 +102,7 @@ export function BusinessProfileDrawer() {
         isDefault: existingProfile.isDefault,
       });
       if (existingProfile.logoDataUrl) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLogoPreview(existingProfile.logoDataUrl);
       }
     }

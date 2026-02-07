@@ -14,6 +14,7 @@ import {
   useBusinessProfiles,
   useDefaultBusinessProfile,
   useDocuments,
+  useCreatePaymentRequest,
 } from '../../hooks/useQueries';
 import { cn, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
@@ -39,8 +40,9 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string; labelAr: string }[] 
   { value: 'invoice_receipt', label: 'Invoice Receipt', labelAr: 'فاتورة وإيصال' },
   { value: 'credit_note', label: 'Credit Note', labelAr: 'إشعار دائن' },
   { value: 'price_offer', label: 'Price Offer', labelAr: 'عرض سعر' },
-  { value: 'proforma_invoice', label: 'Proforma Invoice', labelAr: 'فاتورة مبدئية' },
+  { value: 'proforma_invoice', label: 'Proforma Invoice', labelAr: 'فاתורة מבדצית' },
   { value: 'donation_receipt', label: 'Donation Receipt', labelAr: 'إيصال تبرع' },
+  { value: 'payment_request', label: 'Payment Request', labelAr: 'חשבון עסקה' },
 ];
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -86,6 +88,7 @@ const schema = z.object({
     'price_offer',
     'proforma_invoice',
     'donation_receipt',
+    'payment_request',
   ]),
   number: z.string().optional(),
   businessProfileId: z.string().min(1, 'Business profile is required'),
@@ -145,6 +148,7 @@ export function DocumentFormPage() {
 
   // Mutations
   const createMutation = useCreateDocument();
+  const createPaymentRequestMutation = useCreatePaymentRequest();
   const updateMutation = useUpdateDocument();
   const deleteMutation = useDeleteDocument();
   const { issueAndDownload, isProcessing: isIssueProcessing } = useIssueAndDownload();
@@ -330,7 +334,7 @@ export function DocumentFormPage() {
     let status: DocumentStatus = 'draft';
     if (selectedType === 'receipt' || selectedType === 'invoice_receipt' || selectedType === 'donation_receipt') {
       status = 'paid';
-    } else if (selectedType === 'price_offer' || selectedType === 'proforma_invoice') {
+    } else if (selectedType === 'price_offer' || selectedType === 'proforma_invoice' || selectedType === 'payment_request') {
       status = 'issued';
     }
 
@@ -368,6 +372,10 @@ export function DocumentFormPage() {
           : docData;
         await updateMutation.mutateAsync({ id: documentId, data: updateData });
         navigate({ to: '/documents/$documentId', params: { documentId } });
+      } else if (selectedType === 'payment_request') {
+        // Payment Request creates a receivable transaction automatically
+        const result = await createPaymentRequestMutation.mutateAsync(docData);
+        navigate({ to: '/documents/$documentId', params: { documentId: result.document.id } });
       } else {
         const result = await createMutation.mutateAsync(docData);
         navigate({ to: '/documents/$documentId', params: { documentId: result.id } });
@@ -457,6 +465,7 @@ export function DocumentFormPage() {
       // Now issue and download
       if (docId) {
         await issueAndDownload({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           document: { ...previewDocument, id: docId } as any,
           businessProfile: selectedBusinessProfile,
           client: selectedClient,
@@ -470,10 +479,10 @@ export function DocumentFormPage() {
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || createPaymentRequestMutation.isPending || updateMutation.isPending;
   const showPayments =
     selectedType === 'receipt' || selectedType === 'invoice_receipt' || selectedType === 'donation_receipt';
-  const showDueDate = selectedType === 'invoice' || selectedType === 'proforma_invoice';
+  const showDueDate = selectedType === 'invoice' || selectedType === 'proforma_invoice' || selectedType === 'payment_request';
   const showRefDocument = selectedType === 'credit_note';
 
   const referenceableDocuments = allDocuments.filter(
@@ -689,6 +698,7 @@ export function DocumentFormPage() {
           {/* Pro Editor Mode - Split Workspace */}
           {proEditorMode && selectedBusinessProfile ? (
             <SplitWorkspace
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               document={previewDocument as any}
               businessProfile={selectedBusinessProfile}
               client={selectedClient}
@@ -1456,6 +1466,7 @@ export function DocumentFormPage() {
                 <div className="preview-container">
                   <PDFViewer width="100%" height="100%" showToolbar={false}>
                     <DocumentPdf
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       document={previewDocument as any}
                       businessProfile={selectedBusinessProfile}
                       client={selectedClient || undefined}

@@ -283,10 +283,10 @@ export function useUpdateDueStates() {
 /**
  * Get match suggestions for a specific transaction
  */
-export function useRetainerMatchSuggestions(transactionId: string) {
+export function useRetainerMatchSuggestions(transactionId: string | undefined) {
   return useQuery({
-    queryKey: retainerQueryKeys.matchSuggestions(transactionId),
-    queryFn: () => retainerMatching.getSuggestionsForTransaction(transactionId),
+    queryKey: retainerQueryKeys.matchSuggestions(transactionId || ''),
+    queryFn: () => retainerMatching.getSuggestionsForTransaction(transactionId!),
     enabled: !!transactionId,
   });
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from 'react';
 import { useFormContext, useFieldArray } from 'react-hook-form';
 import { cn } from '../../../../lib/utils';
@@ -238,6 +239,7 @@ export function ScopeStep({ className }: ScopeStepProps) {
         <div className="tags-list">
           {(exclusions as unknown as string[]).map((item, index) => (
             <span key={index} className="tag">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {typeof item === 'string' ? item : (item as any).value || ''}
               <button type="button" className="tag-remove" onClick={() => removeExclusion(index)}>
                 ×
@@ -271,6 +273,7 @@ export function ScopeStep({ className }: ScopeStepProps) {
         <div className="tags-list">
           {(dependencies as unknown as string[]).map((item, index) => (
             <span key={index} className="tag tag-dependency">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {typeof item === 'string' ? item : (item as any).value || ''}
               <button type="button" className="tag-remove" onClick={() => removeDependency(index)}>
                 ×

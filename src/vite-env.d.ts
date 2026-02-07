@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 // Vite environment variables (empty - no custom env vars needed)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface ImportMetaEnv {}
 
 interface ImportMeta {

@@ -66,7 +66,7 @@ function normalizeTransaction(
   let direction: MoneyDirection;
   let source: MoneyEventSource;
   let state: MoneyEventState;
-  let confidence: MoneyConfidence = 'high';
+  const confidence: MoneyConfidence = 'high';
 
   if (tx.kind === 'income') {
     direction = 'inflow';

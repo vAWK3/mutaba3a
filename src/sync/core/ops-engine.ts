@@ -439,10 +439,10 @@ async function doApplyFieldUpdate(op: Operation): Promise<void> {
   const entity = await table.get(op.entityId);
 
   if (entity) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await table.update(op.entityId, {
       [op.field]: op.value,
       updatedAt: new Date().toISOString(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   }
 }
@@ -603,6 +603,7 @@ async function createFieldConflict(op: Operation, localMeta: EntityFieldMeta): P
 async function createMoneyEventConflict(
   op: Operation,
   transaction: Transaction,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _versions: MoneyEventVersion[]
 ): Promise<Conflict> {
   const device = getLocalDevice();

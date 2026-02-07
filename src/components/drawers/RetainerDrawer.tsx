@@ -99,7 +99,7 @@ export function RetainerDrawer() {
     horizonDate.setMonth(horizonDate.getMonth() + 12);
     const horizon = endDate && endDate < horizonDate ? endDate : horizonDate;
 
-    let currentDate = new Date(startDate);
+    const currentDate = new Date(startDate);
     const monthsIncrement = selectedCadence === 'quarterly' ? 3 : 1;
 
     while (currentDate <= horizon && preview.length < 6) {

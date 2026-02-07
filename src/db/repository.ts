@@ -240,6 +240,27 @@ export const transactionRepo = {
     return db.transactions.get(id);
   },
 
+  async getDisplay(id: string): Promise<TransactionDisplay | undefined> {
+    const tx = await db.transactions.get(id);
+    if (!tx || tx.deletedAt) return undefined;
+
+    const client = tx.clientId ? await db.clients.get(tx.clientId) : undefined;
+    const project = tx.projectId ? await db.projects.get(tx.projectId) : undefined;
+    const category = tx.categoryId ? await db.categories.get(tx.categoryId) : undefined;
+    const today = todayISO();
+
+    return {
+      ...tx,
+      clientName: client?.name,
+      projectName: project?.name,
+      categoryName: category?.name,
+      daysOverdue:
+        tx.kind === 'income' && tx.status === 'unpaid' && tx.dueDate && tx.dueDate < today
+          ? Math.floor((new Date(today).getTime() - new Date(tx.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+          : undefined,
+    };
+  },
+
   async create(data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Promise<Transaction> {
     const now = nowISO();
     const transaction: Transaction = {
@@ -659,6 +680,7 @@ const DOCUMENT_PREFIXES: Record<DocumentType, string> = {
   price_offer: 'PO',
   proforma_invoice: 'PI',
   donation_receipt: 'DR',
+  payment_request: 'PR',
 };
 
 export const documentSequenceRepo = {

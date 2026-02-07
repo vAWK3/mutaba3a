@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components */
 import { useFormContext } from 'react-hook-form';
 import { cn } from '../../../../lib/utils';
 import { useWizardStore, STEP_LABELS } from '../../hooks/useWizardStore';

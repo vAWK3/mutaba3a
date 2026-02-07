@@ -612,6 +612,36 @@
       "high": "تطابق عالي",
       "medium": "تطابق متوسط",
       "low": "تطابق منخفض"
+    },
+    "steps": {
+      "transaction": "المعاملة",
+      "period": "الفترة"
+    },
+    "selectedTransaction": "المعاملة المختارة",
+    "change": "تغيير",
+    "scoreBreakdown": {
+      "title": "درجة التطابق",
+      "currency": "العملة",
+      "client": "العميل",
+      "amount": "المبلغ",
+      "date": "التاريخ",
+      "total": "الإجمالي"
+    },
+    "confirmation": {
+      "title": "تأكيد المطابقة",
+      "transaction": "المعاملة",
+      "period": "الفترة",
+      "confirm": "تأكيد المطابقة",
+      "cancel": "إلغاء"
+    },
+    "success": {
+      "title": "تمت المطابقة!",
+      "message": "تم ربط المعاملة بفترة العقد بنجاح"
+    },
+    "toast": {
+      "matched": "تمت مطابقة الدفعة بنجاح",
+      "undo": "تراجع",
+      "undone": "تم التراجع عن المطابقة"
     }
   },
   "drawer": {

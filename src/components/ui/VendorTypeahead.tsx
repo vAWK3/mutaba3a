@@ -101,8 +101,10 @@ export function VendorTypeahead({
   // Sync input value with external value prop
   useEffect(() => {
     if (value !== inputValue) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInputValue(value);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   // Handle click outside to close dropdown

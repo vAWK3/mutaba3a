@@ -35,8 +35,9 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string; labelAr: string }[] 
   { value: 'invoice_receipt', label: 'Invoice Receipt', labelAr: 'فاتورة وإيصال' },
   { value: 'credit_note', label: 'Credit Note', labelAr: 'إشعار دائن' },
   { value: 'price_offer', label: 'Price Offer', labelAr: 'عرض سعر' },
-  { value: 'proforma_invoice', label: 'Proforma Invoice', labelAr: 'فاتورة مبدئية' },
+  { value: 'proforma_invoice', label: 'Proforma Invoice', labelAr: 'فاתורה מבדצית' },
   { value: 'donation_receipt', label: 'Donation Receipt', labelAr: 'إيصال تبرع' },
+  { value: 'payment_request', label: 'Payment Request', labelAr: 'חשבון עסקה' },
 ];
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -82,6 +83,7 @@ const schema = z.object({
     'price_offer',
     'proforma_invoice',
     'donation_receipt',
+    'payment_request',
   ]),
   number: z.string().optional(), // Only used in edit mode for manual changes
   businessProfileId: z.string().min(1, 'Business profile is required'),

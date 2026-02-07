@@ -7,6 +7,7 @@ import type {
   RetainerFilters,
   ProjectedIncomeFilters,
   RetainerMatchSuggestion,
+  MatchScoreBreakdown,
   Currency,
   Transaction,
   TransactionDisplay,
@@ -378,7 +379,7 @@ export const projectedIncomeRepo = {
 
     const today = todayISO();
 
-    let filtered = items.filter((pi) => {
+    const filtered = items.filter((pi) => {
       if (filters.profileId && pi.profileId !== filters.profileId) return false;
       if (filters.sourceId && pi.sourceId !== filters.sourceId) return false;
       if (filters.clientId && pi.clientId !== filters.clientId) return false;
@@ -493,7 +494,7 @@ export const scheduleGenerator = {
 
     // Generate periods based on cadence
     const newItems: ProjectedIncome[] = [];
-    let currentDate = new Date(retainer.startDate);
+    const currentDate = new Date(retainer.startDate);
 
     while (currentDate.toISOString().split('T')[0] <= horizon) {
       const year = currentDate.getFullYear();
@@ -645,7 +646,8 @@ export const retainerMatching = {
     const suggestions: RetainerMatchSuggestion[] = [];
 
     for (const item of unmatchedItems) {
-      const score = this.calculateMatchScore(transaction, item);
+      const scoreBreakdown = this.calculateMatchScore(transaction, item);
+      const score = scoreBreakdown.total;
 
       if (score >= 40) {
         let confidence: 'high' | 'medium' | 'low';
@@ -662,6 +664,7 @@ export const retainerMatching = {
           score,
           confidence,
           projectedIncome: item,
+          scoreBreakdown,
         });
       }
     }
@@ -681,18 +684,24 @@ export const retainerMatching = {
   calculateMatchScore(
     transaction: Transaction,
     projectedIncome: ProjectedIncomeDisplay
-  ): number {
-    let score = 0;
+  ): MatchScoreBreakdown {
+    const breakdown: MatchScoreBreakdown = {
+      total: 0,
+      currency: 0,
+      client: 0,
+      amount: 0,
+      date: 0,
+    };
 
     // Currency match (required)
     if (transaction.currency !== projectedIncome.currency) {
-      return 0;
+      return breakdown;
     }
-    score += 30;
+    breakdown.currency = 30;
 
     // Client match
     if (transaction.clientId && transaction.clientId === projectedIncome.clientId) {
-      score += 30;
+      breakdown.client = 30;
     }
 
     // Amount proximity
@@ -702,13 +711,13 @@ export const retainerMatching = {
     const percentDiff = remainingAmount > 0 ? diff / remainingAmount : 1;
 
     if (percentDiff <= 0.01) {
-      score += 25; // Exact or within 1%
+      breakdown.amount = 25; // Exact or within 1%
     } else if (percentDiff <= 0.05) {
-      score += 20; // Within 5%
+      breakdown.amount = 20; // Within 5%
     } else if (percentDiff <= 0.1) {
-      score += 15; // Within 10%
+      breakdown.amount = 15; // Within 10%
     } else if (percentDiff <= 0.2) {
-      score += 10; // Within 20%
+      breakdown.amount = 10; // Within 20%
     }
 
     // Date proximity
@@ -716,16 +725,17 @@ export const retainerMatching = {
     const daysDiff = Math.abs(daysBetween(transactionDate, projectedIncome.expectedDate));
 
     if (daysDiff <= 3) {
-      score += 15;
+      breakdown.date = 15;
     } else if (daysDiff <= 7) {
-      score += 12;
+      breakdown.date = 12;
     } else if (daysDiff <= 14) {
-      score += 8;
+      breakdown.date = 8;
     } else if (daysDiff <= 30) {
-      score += 4;
+      breakdown.date = 4;
     }
 
-    return score;
+    breakdown.total = breakdown.currency + breakdown.client + breakdown.amount + breakdown.date;
+    return breakdown;
   },
 
   /**

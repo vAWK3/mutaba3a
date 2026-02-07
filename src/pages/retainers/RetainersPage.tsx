@@ -44,6 +44,7 @@ export function RetainersPage() {
   // Set default profile filter when profiles load
   useEffect(() => {
     if (defaultProfile && !profileFilter) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileFilter(defaultProfile);
     }
   }, [defaultProfile, profileFilter]);

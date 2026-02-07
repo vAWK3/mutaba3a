@@ -114,7 +114,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
     setError('');
 
     try {
-      let stats = { profiles: 0, documents: 0, transactions: 0 };
+      const stats = { profiles: 0, documents: 0, transactions: 0 };
 
       if (importMode === 'legacy') {
         // Legacy import - clear and import all data
@@ -219,7 +219,8 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
         // Merge into existing profile
         // Update profile fields
         if (fileData.profile) {
-          const { id, createdAt, ...profileUpdates } = fileData.profile;
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id: _id, createdAt: _createdAt, ...profileUpdates } = fileData.profile;
           await db.businessProfiles.update(selectedProfileId, {
             ...profileUpdates,
             updatedAt: new Date().toISOString(),

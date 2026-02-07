@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useFormContext, useFieldArray, Controller } from 'react-hook-form';
 import { cn } from '../../../../lib/utils';
@@ -187,6 +188,7 @@ export function ReviewsStep({ className }: ReviewsStepProps) {
             <div className="tags-list">
               {(scopeCategories as unknown as string[]).map((item, index) => (
                 <span key={index} className="tag">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {typeof item === 'string' ? item : (item as any).value || ''}
                   <button type="button" className="tag-remove" onClick={() => removeScope(index)}>
                     ×

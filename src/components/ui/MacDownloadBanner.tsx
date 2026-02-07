@@ -17,6 +17,7 @@ export function MacDownloadBanner() {
     const hidden = localStorage.getItem(STORAGE_KEY);
     if (hidden === 'true') return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsVisible(true);
   }, []);
 

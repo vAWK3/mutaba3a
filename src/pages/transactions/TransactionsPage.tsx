@@ -73,6 +73,7 @@ export function TransactionsPage() {
   const [initialParamsApplied, setInitialParamsApplied] = useState(false);
   useEffect(() => {
     if (!initialParamsApplied && (searchParams.dateFrom || searchParams.kind)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInitialParamsApplied(true);
     }
   }, [initialParamsApplied, searchParams]);

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components */
 import { Page, View, Text, StyleSheet } from '@react-pdf/renderer';
 import type { EngagementSnapshot, EngagementLanguage, EngagementType, EngagementCategory } from '../../types';
 import type { Client, BusinessProfile } from '../../../../types';

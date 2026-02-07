@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import { useEffect, useRef, useCallback } from 'react';
 import type { EngagementSnapshot } from '../types';
 

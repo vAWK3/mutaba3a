@@ -25,6 +25,7 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   price_offer: 'Price Offer',
   proforma_invoice: 'Proforma',
   donation_receipt: 'Donation',
+  payment_request: 'Payment Req',
 };
 
 // Status display config
@@ -105,6 +106,7 @@ export function DocumentsPage() {
             <option value="price_offer">Price Offer</option>
             <option value="proforma_invoice">Proforma Invoice</option>
             <option value="donation_receipt">Donation Receipt</option>
+            <option value="payment_request">Payment Request</option>
           </select>
 
           {/* Status Filter */}

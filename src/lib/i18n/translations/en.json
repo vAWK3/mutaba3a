@@ -869,6 +869,36 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low"
+    },
+    "steps": {
+      "transaction": "Transaction",
+      "period": "Period"
+    },
+    "selectedTransaction": "Selected Transaction",
+    "change": "Change",
+    "scoreBreakdown": {
+      "title": "Match Score",
+      "currency": "Currency",
+      "client": "Client",
+      "amount": "Amount",
+      "date": "Date",
+      "total": "Total"
+    },
+    "confirmation": {
+      "title": "Confirm Match",
+      "transaction": "Transaction",
+      "period": "Period",
+      "confirm": "Confirm Match",
+      "cancel": "Cancel"
+    },
+    "success": {
+      "title": "Payment Matched!",
+      "message": "Transaction linked to retainer period successfully"
+    },
+    "toast": {
+      "matched": "Payment matched successfully",
+      "undo": "Undo",
+      "undone": "Match undone"
     }
   },
   "engagements": {
