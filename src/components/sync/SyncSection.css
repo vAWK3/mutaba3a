@@ -18,7 +18,7 @@
 
 .sync-section__description {
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0 0 var(--space-3);
 }
 
@@ -27,8 +27,8 @@
 }
 
 .sync-section__card--warning {
-  border-color: var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 5%, var(--color-bg-primary));
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 5%, var(--bg-primary));
 }
 
 /* Status Block */
@@ -52,20 +52,20 @@
 }
 
 .sync-status-indicator--idle {
-  background: var(--color-success);
+  background: var(--success);
 }
 
 .sync-status-indicator--syncing {
-  background: var(--color-primary);
+  background: var(--accent);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .sync-status-indicator--error {
-  background: var(--color-danger);
+  background: var(--error);
 }
 
 .sync-status-indicator--offline {
-  background: var(--color-text-secondary);
+  background: var(--text-secondary);
 }
 
 .sync-status-block__title {
@@ -85,11 +85,11 @@
 }
 
 .sync-meta-item__label {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .sync-meta-item__value {
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 /* Server Toggle */
@@ -113,13 +113,13 @@
 
 .sync-server-toggle__helper {
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 /* Discovery */
 .sync-discovery {
   padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border);
 }
 
 .sync-discovery__actions {
@@ -141,7 +141,7 @@
   display: flex;
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-bg-secondary);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
 }
 
@@ -151,7 +151,7 @@
 
 .sync-discovered-item__address {
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
 }
 

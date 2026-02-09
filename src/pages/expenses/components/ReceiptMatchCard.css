@@ -88,7 +88,7 @@
 }
 
 .receipt-match-suggestion.is-best {
-  background: var(--color-success-subtle);
+  background: var(--success-subtle);
 }
 
 .suggestion-info {
@@ -131,13 +131,13 @@
 }
 
 .suggestion-score.text-success {
-  background: var(--color-success-subtle);
-  color: var(--color-success);
+  background: var(--success-subtle);
+  color: var(--success);
 }
 
 .suggestion-score.text-warning {
-  background: var(--color-warning-subtle);
-  color: var(--color-warning);
+  background: var(--warning-subtle);
+  color: var(--warning);
 }
 
 .receipt-match-no-suggestions {

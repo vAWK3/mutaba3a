@@ -18,7 +18,7 @@
 }
 
 .bulk-upload-dropzone:hover {
-  border-color: var(--color-primary);
+  border-color: var(--accent);
   background: var(--bg-hover);
 }
 
@@ -96,7 +96,7 @@
 
 .bulk-upload-progress-bar {
   height: 100%;
-  background: var(--color-primary);
+  background: var(--accent);
   transition: width 0.3s ease;
 }
 
@@ -119,18 +119,18 @@
 }
 
 .bulk-upload-file.status-success {
-  border-color: var(--color-success);
-  background: var(--color-success-subtle);
+  border-color: var(--success);
+  background: var(--success-subtle);
 }
 
 .bulk-upload-file.status-error {
-  border-color: var(--color-danger);
-  background: var(--color-danger-subtle);
+  border-color: var(--error);
+  background: var(--error-subtle);
 }
 
 .bulk-upload-file.status-duplicate {
-  border-color: var(--color-warning);
-  background: var(--color-warning-subtle);
+  border-color: var(--warning);
+  background: var(--warning-subtle);
 }
 
 .bulk-upload-file-info {
@@ -191,21 +191,21 @@
   width: 16px;
   height: 16px;
   border: 2px solid var(--border);
-  border-top-color: var(--color-primary);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 .status-badge.status-success {
-  color: var(--color-success);
+  color: var(--success);
 }
 
 .status-badge.status-duplicate {
-  color: var(--color-warning);
+  color: var(--warning);
 }
 
 .status-badge.status-error {
-  color: var(--color-danger);
+  color: var(--error);
 }
 
 .bulk-upload-file-remove {
@@ -225,7 +225,7 @@
 }
 
 .bulk-upload-file-remove:hover {
-  color: var(--color-danger);
+  color: var(--error);
   background: var(--bg-hover);
 }
 

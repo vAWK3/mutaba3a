@@ -10,10 +10,10 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--color-text);
+  color: var(--text);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -21,20 +21,20 @@
 }
 
 .expense-quick-link:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-border-hover);
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
 }
 
 .expense-quick-link svg {
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 /* Grand Totals */
 .expense-grand-totals {
   margin-bottom: 24px;
   padding: 16px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -47,7 +47,7 @@
 .expense-grand-total-label {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .expense-grand-total-amounts {
@@ -71,8 +71,8 @@
   display: flex;
   flex-direction: column;
   padding: 16px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   text-decoration: none;
   color: inherit;
@@ -80,8 +80,8 @@
 }
 
 .expense-profile-card:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-border-hover);
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
@@ -96,11 +96,11 @@
   font-size: 16px;
   font-weight: 600;
   margin: 0;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .expense-profile-card-header svg {
-  color: var(--color-text-muted);
+  color: var(--muted);
   flex-shrink: 0;
 }
 
@@ -119,7 +119,7 @@
 .expense-profile-card-stat-label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -130,13 +130,13 @@
 }
 
 .expense-profile-card-stat-value.amount-negative {
-  color: var(--color-danger);
+  color: var(--error);
 }
 
 .expense-profile-card-receipts {
   margin-top: auto;
   padding-top: 12px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border);
 }
 
 .expense-profile-card-receipts-link {
@@ -144,13 +144,13 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: var(--color-text-muted);
+  color: var(--muted);
   text-decoration: none;
   transition: color 0.15s;
 }
 
 .expense-profile-card-receipts-link:hover {
-  color: var(--color-primary);
+  color: var(--accent);
 }
 
 /* RTL adjustments */

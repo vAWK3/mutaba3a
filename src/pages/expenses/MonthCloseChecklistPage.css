@@ -20,8 +20,8 @@
 }
 
 .month-close-banner.ready {
-  background: var(--color-success-subtle);
-  border-color: var(--color-success);
+  background: var(--success-subtle);
+  border-color: var(--success);
 }
 
 .month-close-banner.closed {
@@ -41,7 +41,7 @@
 }
 
 .month-close-banner.ready .month-close-banner-icon {
-  color: var(--color-success);
+  color: var(--success);
 }
 
 .month-close-banner.pending .month-close-banner-icon {

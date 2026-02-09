@@ -7,7 +7,9 @@
     "archive": "أرشفة",
     "add": "إضافة",
     "edit": "تعديل",
+    "view": "عرض",
     "loading": "جارٍ التحميل...",
+    "downloading": "جارٍ التحميل...",
     "search": "بحث...",
     "close": "إغلاق",
     "confirm": "تأكيد",
@@ -32,6 +34,7 @@
     "clients": "العملاء",
     "transactions": "المعاملات",
     "documents": "المستندات",
+    "engagements": "العقود",
     "retainers": "العقود المتكررة",
     "moneyAnswers": "إجابات",
     "expenses": "المصروفات",
@@ -48,6 +51,7 @@
     },
     "newMenu": {
       "document": "مستند جديد",
+      "engagement": "عقد جديد",
       "transaction": "معاملة جديدة",
       "client": "عميل جديد",
       "expense": "مصروف جديد"
@@ -513,12 +517,26 @@
   },
   "retainers": {
     "title": "العقود المتكررة",
+    "new": "عقد متكرر جديد",
     "addRetainer": "إضافة عقد",
     "matchPayment": "مطابقة الدفعات",
     "empty": "لا توجد عقود متكررة",
+    "emptySearch": "حاول تعديل البحث أو الفلاتر",
     "emptyHint": "أنشئ أول عقد لتتبع الإيرادات المتوقعة",
     "searchPlaceholder": "بحث في العقود...",
+    "selectToInspect": "اختر عقداً لعرض التفاصيل",
     "confirmArchive": "هل أنت متأكد من أرشفة هذا العقد؟",
+    "confirmPause": "هل أنت متأكد من إيقاف هذا العقد؟ سيتم إلغاء الدفعات المستقبلية.",
+    "confirmEnd": "هل أنت متأكد من إنهاء هذا العقد؟ لا يمكن التراجع عن هذا الإجراء.",
+    "activate": "تفعيل",
+    "pause": "إيقاف",
+    "resume": "استئناف",
+    "end": "إنهاء",
+    "summary": "ملخص",
+    "activeCount": "العقود النشطة",
+    "monthlyExpected": "المتوقع شهرياً",
+    "totalDue": "إجمالي المستحق",
+    "totalOverdue": "إجمالي المتأخر",
     "view": {
       "all": "الكل",
       "dueNow": "مستحق الآن",
@@ -549,6 +567,7 @@
       "placeholder": "اختر عقداً للاطلاع على التفاصيل",
       "overview": "نظرة عامة",
       "schedule": "الجدول الزمني",
+      "transactions": "المعاملات",
       "linkedTransactions": "المعاملات المرتبطة",
       "noLinkedTransactions": "لا توجد معاملات مرتبطة بعد",
       "client": "العميل",
@@ -560,6 +579,7 @@
       "endDate": "تاريخ الانتهاء",
       "noEndDate": "مفتوح",
       "notes": "ملاحظات",
+      "status": "الحالة",
       "dueAmount": "المبلغ المستحق",
       "actions": "الإجراءات",
       "edit": "تعديل",
@@ -583,7 +603,20 @@
       "missed": "فائت",
       "canceled": "ملغى"
     },
+    "state": {
+      "upcoming": "قادم",
+      "due": "مستحق",
+      "received": "مستلم",
+      "partial": "جزئي",
+      "missed": "فائت",
+      "canceled": "ملغى"
+    },
     "filters": {
+      "view": "عرض",
+      "all": "الكل",
+      "due": "مستحق الآن",
+      "active": "نشط",
+      "ending": "ينتهي قريباً",
       "status": "الحالة",
       "currency": "العملة",
       "client": "العميل",
@@ -642,6 +675,113 @@
       "matched": "تمت مطابقة الدفعة بنجاح",
       "undo": "تراجع",
       "undone": "تم التراجع عن المطابقة"
+    }
+  },
+  "engagements": {
+    "title": "العقود",
+    "new": "عقد جديد",
+    "addEngagement": "إضافة عقد",
+    "empty": "لا توجد عقود",
+    "emptySearch": "حاول تعديل البحث أو الفلاتر",
+    "emptyHint": "أنشئ أول عقد للبدء",
+    "searchPlaceholder": "بحث في العقود...",
+    "selectToInspect": "اختر عقداً لعرض التفاصيل",
+    "untitled": "عقد بدون عنوان",
+    "confirmArchive": "هل أنت متأكد من أرشفة هذا العقد؟",
+    "duplicate": "نسخ",
+    "downloadPdf": "تحميل PDF",
+    "archive": "أرشفة",
+    "restore": "استعادة",
+    "summary": "ملخص",
+    "draftCount": "مسودات",
+    "finalCount": "نهائية",
+    "archivedCount": "مؤرشفة",
+    "filters": {
+      "view": "عرض",
+      "all": "الكل",
+      "draft": "مسودات",
+      "final": "نهائية",
+      "archived": "مؤرشفة",
+      "type": "النوع",
+      "category": "الفئة",
+      "profile": "الملف",
+      "client": "العميل"
+    },
+    "status": {
+      "draft": "مسودة",
+      "final": "نهائي",
+      "archived": "مؤرشف"
+    },
+    "type": {
+      "task": "مبني على المهام",
+      "retainer": "عقد متكرر"
+    },
+    "category": {
+      "design": "تصميم",
+      "development": "تطوير",
+      "consulting": "استشارات",
+      "marketing": "تسويق",
+      "legal": "قانوني",
+      "other": "أخرى"
+    },
+    "columns": {
+      "status": "الحالة",
+      "title": "العنوان",
+      "client": "العميل",
+      "type": "النوع",
+      "category": "الفئة",
+      "language": "اللغة",
+      "versions": "الإصدارات",
+      "updated": "آخر تحديث"
+    },
+    "inspector": {
+      "overview": "نظرة عامة",
+      "client": "العميل",
+      "project": "المشروع",
+      "type": "النوع",
+      "category": "الفئة",
+      "language": "اللغة",
+      "status": "الحالة",
+      "versions": "الإصدارات",
+      "created": "تاريخ الإنشاء",
+      "lastUpdated": "آخر تحديث",
+      "summary": "ملخص",
+      "scope": "النطاق",
+      "deliverables": "المخرجات",
+      "exclusions": "الاستثناءات",
+      "milestones": "المراحل"
+    },
+    "wizard": {
+      "newTitle": "عقد جديد",
+      "editTitle": "تعديل العقد",
+      "saveDraft": "حفظ كمسودة",
+      "finalize": "إنهاء",
+      "saving": "جارٍ الحفظ...",
+      "lastSaved": "آخر حفظ",
+      "unsavedChanges": "تغييرات غير محفوظة",
+      "steps": {
+        "client": "العميل والنوع",
+        "summary": "الملخص",
+        "scope": "النطاق",
+        "timeline": "الجدول الزمني",
+        "reviews": "المراجعات",
+        "payment": "الدفع",
+        "relationship": "العلاقة",
+        "terms": "الشروط",
+        "review": "مراجعة وتصدير"
+      }
+    },
+    "clarityCheck": {
+      "title": "فحص الوضوح",
+      "allClear": "كل شيء واضح! لا توجد مشاكل.",
+      "highCount": "{count} عالية",
+      "mediumCount": "{count} متوسطة",
+      "lowCount": "{count} منخفضة",
+      "severity": {
+        "high": "عالية",
+        "medium": "متوسطة",
+        "low": "منخفضة"
+      }
     }
   },
   "drawer": {

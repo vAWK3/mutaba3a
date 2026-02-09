@@ -12,7 +12,7 @@
   padding: 8px 12px;
 
   background: var(--surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 
@@ -42,15 +42,15 @@
   align-items: center;
   justify-content: center;
   padding: 4px;
-  color: var(--color-text-muted);
+  color: var(--muted);
   cursor: grab;
   border-radius: 4px;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .fx-banner-drag-handle:hover {
-  color: var(--color-text-secondary);
-  background-color: var(--color-surface-hover);
+  color: var(--text-secondary);
+  background-color: var(--surface-hover);
 }
 
 .fx-rate-banner.dragging .fx-banner-drag-handle {
@@ -80,7 +80,7 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
@@ -102,28 +102,28 @@
 }
 
 .fx-banner-source.source-live {
-  color: var(--color-success);
-  background-color: var(--color-success-subtle, rgba(34, 197, 94, 0.1));
+  color: var(--success);
+  background-color: var(--success-subtle, rgba(34, 197, 94, 0.1));
 }
 
 .fx-banner-source.source-cached {
-  color: var(--color-warning);
-  background-color: var(--color-warning-subtle, rgba(245, 158, 11, 0.1));
+  color: var(--warning);
+  background-color: var(--warning-subtle, rgba(245, 158, 11, 0.1));
 }
 
 .fx-banner-source.source-none {
-  color: var(--color-danger);
-  background-color: var(--color-danger-subtle, rgba(239, 68, 68, 0.1));
+  color: var(--error);
+  background-color: var(--error-subtle, rgba(239, 68, 68, 0.1));
 }
 
 .fx-loading {
   font-style: italic;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 .fx-banner-updated {
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 /* Action buttons */
@@ -145,14 +145,14 @@
   background: transparent;
   border: none;
   border-radius: 4px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer !important;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .fx-banner-btn:hover {
-  color: var(--color-text-primary);
-  background-color: var(--color-surface-hover);
+  color: var(--text-primary);
+  background-color: var(--surface-hover);
 }
 
 .fx-banner-btn:disabled {
@@ -186,7 +186,7 @@
   padding: 6px 10px;
 
   background: var(--surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 
@@ -237,13 +237,13 @@
 
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer !important;
   transition: color 0.15s ease;
 }
 
 .fx-banner-mini-content:hover {
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .fx-banner-mini-icon {
@@ -253,7 +253,7 @@
 .fx-banner-mini-rate {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 /* Mini theme toggle button */
@@ -269,12 +269,12 @@
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: var(--color-text-muted);
+  color: var(--muted);
   cursor: pointer !important;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .fx-banner-mini-theme:hover {
-  color: var(--color-text-primary);
-  background-color: var(--color-surface-hover);
+  color: var(--text-primary);
+  background-color: var(--surface-hover);
 }

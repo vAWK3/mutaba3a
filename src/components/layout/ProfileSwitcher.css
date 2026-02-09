@@ -11,8 +11,8 @@
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-bg-hover);
-  border: 1px solid var(--color-border);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: var(--transition-fast);
@@ -20,13 +20,13 @@
 }
 
 .profile-switcher:hover {
-  background: var(--color-bg-active);
-  border-color: var(--color-border-strong);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
 .profile-switcher:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* Avatar */
@@ -47,8 +47,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: white;
 }
 
@@ -56,16 +56,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-hover);
-  color: var(--color-text-muted);
+  background: var(--surface-hover);
+  color: var(--muted);
 }
 
 /* Name */
 .profile-switcher-name {
   flex: 1;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -74,7 +74,7 @@
 /* Chevron */
 .profile-switcher-chevron {
   flex-shrink: 0;
-  color: var(--color-text-muted);
+  color: var(--muted);
   transition: transform var(--transition-fast);
 }
 
@@ -85,11 +85,11 @@
 /* Empty State */
 .profile-switcher-empty {
   border-style: dashed;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 .profile-switcher-empty .profile-switcher-name {
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 /* Loading State */
@@ -100,7 +100,7 @@
 .profile-switcher-skeleton {
   width: 100%;
   height: 24px;
-  background: var(--color-bg-hover);
+  background: var(--surface-hover);
   border-radius: var(--radius-sm);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
@@ -121,10 +121,10 @@
   left: 0;
   right: 0;
   margin-bottom: var(--space-2);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-3);
   z-index: 50;
   animation: dropdown-in 150ms ease;
   overflow: hidden;
@@ -164,17 +164,17 @@
 }
 
 .profile-switcher-option:hover {
-  background: var(--color-bg-hover);
+  background: var(--surface-hover);
 }
 
 .profile-switcher-option.active {
-  background: var(--color-primary-light);
+  background: var(--accent-subtle);
 }
 
 .profile-switcher-option-name {
   flex: 1;
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -182,20 +182,20 @@
 
 .profile-switcher-option-name-en {
   display: block;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  color: var(--muted);
   margin-top: 1px;
 }
 
 .profile-switcher-check {
   flex-shrink: 0;
-  color: var(--color-primary);
+  color: var(--accent);
 }
 
 /* Divider */
 .profile-switcher-divider {
   height: 1px;
-  background: var(--color-border);
+  background: var(--border);
   margin: var(--space-1) 0;
 }
 
@@ -208,16 +208,16 @@
   padding: var(--space-2) var(--space-3);
   background: transparent;
   border: none;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  color: var(--muted);
   cursor: pointer;
   transition: var(--transition-fast);
   text-decoration: none;
 }
 
 .profile-switcher-action:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 /* RTL Support */

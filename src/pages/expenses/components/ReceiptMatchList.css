@@ -51,11 +51,11 @@
 }
 
 .receipt-match-group-badge.confidence-high {
-  background: var(--color-success);
+  background: var(--success);
 }
 
 .receipt-match-group-badge.confidence-medium {
-  background: var(--color-warning);
+  background: var(--warning);
 }
 
 .receipt-match-group-badge.confidence-low {

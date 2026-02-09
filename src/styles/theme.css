@@ -12,6 +12,7 @@
   --font-en: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
   --font-ar: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
   --font-heading: "Source Serif 4 Variable", "Source Serif 4", "Georgia", serif;
+  --font-heading-ar: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Monaco", "Consolas", monospace;
 
   /* Font Sizes */
@@ -658,6 +659,15 @@ h3, .h3 { font-size: var(--text-2xl); }
 h4, .h4 { font-size: var(--text-xl); }
 h5, .h5 { font-size: var(--text-lg); }
 h6, .h6 { font-size: var(--text-md); }
+
+/* Arabic headings use IBM Plex Sans Arabic */
+:lang(ar) h1, :lang(ar) h2, :lang(ar) h3,
+:lang(ar) h4, :lang(ar) h5, :lang(ar) h6,
+:lang(ar) .h1, :lang(ar) .h2, :lang(ar) .h3,
+:lang(ar) .h4, :lang(ar) .h5, :lang(ar) .h6 {
+  font-family: var(--font-heading-ar);
+  letter-spacing: 0; /* Arabic doesn't use tight tracking */
+}
 
 /* Numeric utility class */
 .num,

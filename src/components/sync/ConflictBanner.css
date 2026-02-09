@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-4);
-  background: color-mix(in srgb, var(--color-warning) 15%, var(--color-bg-primary));
-  border-bottom: 1px solid var(--color-warning);
+  background: color-mix(in srgb, var(--warning) 15%, var(--bg-primary));
+  border-bottom: 1px solid var(--warning);
 }
 
 .conflict-banner__content {
@@ -14,12 +14,12 @@
 }
 
 .conflict-banner__icon {
-  color: var(--color-warning);
+  color: var(--warning);
 }
 
 .conflict-banner__text {
   font-size: 13px;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .conflict-banner__actions {
@@ -38,22 +38,22 @@
 }
 
 .conflict-banner__btn--review {
-  background: var(--color-warning);
+  background: var(--warning);
   color: white;
   font-weight: 500;
 }
 
 .conflict-banner__btn--review:hover {
-  background: color-mix(in srgb, var(--color-warning) 90%, black);
+  background: color-mix(in srgb, var(--warning) 90%, black);
 }
 
 .conflict-banner__btn--dismiss {
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   padding: var(--space-1);
 }
 
 .conflict-banner__btn--dismiss:hover {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }

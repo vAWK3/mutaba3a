@@ -13,7 +13,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--color-surface, var(--surface, #111827));
+  background: var(--surface, var(--surface, #111827));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-3, 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15));
   width: 90%;
@@ -51,13 +51,13 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
   margin: 0;
 }
 
@@ -69,15 +69,15 @@
   height: 32px;
   border: none;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--muted);
   cursor: pointer;
   border-radius: var(--radius-md);
   transition: var(--transition-fast);
 }
 
 .modal-close:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 /* Modal body */
@@ -92,28 +92,28 @@
   display: flex;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error-border);
+  background: var(--error-subtle);
+  border: 1px solid var(--error-muted);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-5);
 }
 
 .modal-warning svg {
   flex-shrink: 0;
-  color: var(--color-error);
+  color: var(--error);
 }
 
 .modal-warning p {
   margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-error);
+  font-size: var(--text-sm);
+  color: var(--error);
   line-height: 1.5;
 }
 
 /* Steps */
 .modal-step {
   padding: var(--space-4);
-  background: var(--color-surface-alt);
+  background: var(--surface-2);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-4);
 }
@@ -128,15 +128,15 @@
 }
 
 .modal-step-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
   margin: 0 0 var(--space-2) 0;
 }
 
 .modal-step-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin: 0 0 var(--space-3) 0;
 }
 
@@ -152,8 +152,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  color: var(--text);
   cursor: pointer;
   margin-bottom: var(--space-3);
 }
@@ -162,7 +162,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: var(--color-accent);
+  accent-color: var(--accent);
 }
 
 .modal-checkbox input[type='checkbox']:disabled {
@@ -174,13 +174,13 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: var(--font-size-sm);
-  color: var(--color-success);
+  font-size: var(--text-sm);
+  color: var(--success);
 }
 
 .status-error {
-  font-size: var(--font-size-sm);
-  color: var(--color-error);
+  font-size: var(--text-sm);
+  color: var(--error);
 }
 
 /* Modal footer */
@@ -188,8 +188,8 @@
   display: flex;
   justify-content: flex-end;
   padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface-alt);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 /* RTL support */
@@ -222,8 +222,8 @@
   gap: var(--space-3);
   width: 100%;
   padding: var(--space-3);
-  background: var(--color-surface-alt);
-  border: 1px solid var(--color-border);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
   text-align: start;
@@ -231,18 +231,18 @@
 }
 
 .profile-select-item:hover {
-  background: var(--color-surface-hover);
+  background: var(--surface-hover);
 }
 
 .profile-select-item--selected {
-  border-color: var(--color-accent);
-  background: var(--color-accent-subtle);
+  border-color: var(--accent);
+  background: var(--accent-subtle);
 }
 
 .profile-select-item__radio {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--border);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -251,7 +251,7 @@
 }
 
 .profile-select-item--selected .profile-select-item__radio {
-  border-color: var(--color-accent);
+  border-color: var(--accent);
 }
 
 .profile-select-item__radio-dot {
@@ -262,7 +262,7 @@
 }
 
 .profile-select-item__radio-dot--selected {
-  background: var(--color-accent);
+  background: var(--accent);
 }
 
 .profile-select-item__info {
@@ -286,8 +286,8 @@
 }
 
 .profile-select-item__name {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -310,12 +310,12 @@
 
 .export-success h3 {
   margin: var(--space-3) 0 var(--space-2) 0;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .export-success p {
   margin: 0 0 var(--space-4) 0;
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 /* Modal footer with multiple buttons */
@@ -331,21 +331,21 @@
   justify-content: center;
   gap: var(--space-3);
   padding: var(--space-8) var(--space-4);
-  border: 2px dashed var(--color-border);
+  border: 2px dashed var(--border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-alt);
+  background: var(--surface-2);
   cursor: pointer;
   transition: var(--transition-fast);
 }
 
 .import-dropzone:hover {
-  border-color: var(--color-accent);
-  background: var(--color-accent-subtle);
+  border-color: var(--accent);
+  background: var(--accent-subtle);
 }
 
 .import-dropzone p {
   margin: 0;
-  color: var(--color-muted);
+  color: var(--muted);
   text-align: center;
 }
 
@@ -354,14 +354,14 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  background: var(--color-surface-alt);
+  background: var(--surface-2);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-4);
 }
 
 .import-file-name {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  color: var(--text);
 }
 
 .import-file-meta {
@@ -374,9 +374,9 @@
 
 .import-mode-select h4 {
   margin: 0 0 var(--space-3) 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
 }
 
 .import-mode-option {
@@ -384,7 +384,7 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   cursor: pointer;
@@ -392,17 +392,17 @@
 }
 
 .import-mode-option:hover {
-  background: var(--color-surface-hover);
+  background: var(--surface-hover);
 }
 
 .import-mode-option input[type="radio"] {
   margin-top: 2px;
-  accent-color: var(--color-accent);
+  accent-color: var(--accent);
 }
 
 .import-mode-label {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  color: var(--text);
 }
 
 .import-mode-desc {
@@ -429,7 +429,7 @@
 
 .import-progress p {
   margin: 0;
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 .import-error {
@@ -442,7 +442,7 @@
 
 .import-error h3 {
   margin: var(--space-3) 0 var(--space-2) 0;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .import-error p {

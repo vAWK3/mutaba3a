@@ -250,19 +250,19 @@
 }
 
 .state-icon.received {
-  color: var(--color-positive);
+  color: var(--success);
 }
 
 .state-icon.partial {
-  color: var(--color-warning);
+  color: var(--warning);
 }
 
 .state-icon.due {
-  color: var(--color-warning);
+  color: var(--warning);
 }
 
 .state-icon.missed {
-  color: var(--color-negative);
+  color: var(--error);
 }
 
 .state-icon.canceled {
@@ -291,13 +291,13 @@
 }
 
 .status-badge.status-active {
-  background: var(--color-positive-subtle);
-  color: var(--color-positive);
+  background: var(--success-subtle);
+  color: var(--success);
 }
 
 .status-badge.status-paused {
-  background: var(--color-warning-subtle);
-  color: var(--color-warning);
+  background: var(--warning-subtle);
+  color: var(--warning);
 }
 
 .status-badge.status-ended {
@@ -326,7 +326,7 @@
 
 /* Amount Colors */
 .amount-warning {
-  color: var(--color-warning);
+  color: var(--warning);
 }
 
 /* Responsive */

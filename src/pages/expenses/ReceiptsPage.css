@@ -4,8 +4,8 @@
   gap: 24px;
   margin-bottom: 24px;
   padding: 16px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -23,7 +23,7 @@
 .receipts-stat-label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -46,8 +46,8 @@
 .receipt-card {
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
@@ -55,23 +55,23 @@
 }
 
 .receipt-card:hover {
-  border-color: var(--color-border-hover);
+  border-color: var(--border-hover);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .receipt-card.selected {
-  border-color: var(--color-primary);
+  border-color: var(--accent);
 }
 
 .receipt-card.unlinked {
-  border-color: var(--color-warning);
+  border-color: var(--warning);
 }
 
 .receipt-thumbnail {
   position: relative;
   width: 100%;
   height: 140px;
-  background: var(--color-surface-hover);
+  background: var(--surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,7 +85,7 @@
 }
 
 .receipt-pdf-icon {
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 .receipt-info {
@@ -117,20 +117,20 @@
 }
 
 .receipt-status.linked {
-  background: var(--color-success-bg);
-  color: var(--color-success);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .receipt-status.unlinked {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .receipt-actions {
   display: flex;
   gap: 4px;
   padding: 8px 12px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border);
 }
 
 /* Link Expense Modal */
@@ -147,8 +147,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   text-align: start;
@@ -159,7 +159,7 @@
 }
 
 .link-expense-item:hover {
-  background: var(--color-surface-hover);
+  background: var(--surface-hover);
 }
 
 .link-expense-info {
@@ -174,7 +174,7 @@
 
 .link-expense-date {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 
 .link-expense-amount {
@@ -189,7 +189,7 @@
   min-height: 400px;
   max-height: 70vh;
   overflow: auto;
-  background: var(--color-surface-hover);
+  background: var(--surface-hover);
   border-radius: 4px;
 }
 

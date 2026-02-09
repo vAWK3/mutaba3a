@@ -38,16 +38,27 @@
 - Created `.claude/CHANGELOG.md` - this file
 - Created `.claude/TECH_DEBT.md` - technical debt tracking
 - Created `.claude/CI_CD.md` - CI/CD pipeline documentation
+- Added h5, h6 heading styles to index.css for completeness
 
 ### Changed
 - Updated `DECISIONS.md` ADR-018 with canonical token naming clarification
 - Updated `PATTERNS.md` with Design Token Patterns section (token quick reference, button styling, focus styles, dark mode support)
-- Updated `TECH_DEBT.md` with TD-011 for design system inconsistencies
+- Updated `TECH_DEBT.md` with TD-011 for design system inconsistencies (now resolved)
+
+### Fixed
+- **Design System Unification (TD-011 - Resolved)**:
+  - Phase 1: Added deprecation notices to legacy CSS variables in index.css
+  - Phase 2: Removed dead `.landing-btn--*` classes from LandingPage.css, removed inline fallback values from 12 landing page CSS files
+  - Phase 3: Migrated 39+ CSS files from legacy tokens to canonical tokens (`--font-size-*` → `--text-*`, `--font-weight-*` → `--weight-*`, `--shadow-sm/md/lg` → `--shadow-1/2/3`)
+  - Phase 4: Standardized focus styles to use `box-shadow: var(--focus-ring)` instead of `outline` across 7 files; updated line-height to use `--leading-tight` (kept compact heading sizes for app UI)
 
 ### Technical
 - Formalized project knowledge management system
-- Documented design system review findings: dual button implementations, legacy token mappings, focus style inconsistencies
-- Created 4-phase remediation plan for design system unification (see TD-011)
+- Design system now has single source of truth: `theme.css` for canonical tokens
+- All focus-visible styles use `box-shadow: var(--focus-ring)` for consistency
+- App headings use compact sizes (h1: 20px, h2: 18px, h3: 16px, h4: 14px) for data-dense cockpit UI
+- Landing page headings use larger theme.css scale for marketing emphasis
+- Fixed missed token migration in SplitWorkspace.css (`--shadow-lg` → `--shadow-3`)
 
 ---
 

@@ -3,17 +3,17 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: 9999px;
-  background: var(--color-bg-secondary);
+  background: var(--bg-secondary);
   cursor: pointer;
   font-size: 13px;
   transition: background-color 0.15s, border-color 0.15s;
 }
 
 .sync-status-chip:hover {
-  background: var(--color-bg-tertiary);
-  border-color: var(--color-border-hover);
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
 }
 
 .sync-status-chip__icon {
@@ -23,44 +23,44 @@
 
 .sync-status-chip__label {
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .sync-status-chip__sublabel {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 /* Variants */
 .sync-status-chip--success .sync-status-chip__icon {
-  color: var(--color-success);
+  color: var(--success);
 }
 
 .sync-status-chip--warning {
-  border-color: var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary));
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-secondary));
 }
 
 .sync-status-chip--warning .sync-status-chip__icon {
-  color: var(--color-warning);
+  color: var(--warning);
 }
 
 .sync-status-chip--error {
-  border-color: var(--color-danger);
-  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-secondary));
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, var(--bg-secondary));
 }
 
 .sync-status-chip--error .sync-status-chip__icon {
-  color: var(--color-danger);
+  color: var(--error);
 }
 
 .sync-status-chip--syncing .sync-status-chip__icon {
-  color: var(--color-primary);
+  color: var(--accent);
   animation: spin 1s linear infinite;
 }
 
 .sync-status-chip--muted .sync-status-chip__icon {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 @keyframes spin {

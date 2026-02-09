@@ -12,7 +12,7 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-3);
   max-height: 200px;
   overflow-y: auto;
   margin-top: 4px;

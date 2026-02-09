@@ -236,80 +236,6 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-011: Design System Inconsistencies Between Landing and App
-**Status**: Open
-**Priority**: High
-**Introduced**: 2024-03 (identified 2026-02)
-**Impact**: Visual inconsistency, maintenance burden, dark mode issues in some components
-
-**Description**:
-The design system has accumulated inconsistencies between the landing page and the main app. Two parallel styling systems exist with different variable naming conventions, duplicate button implementations, and mixed focus styles.
-
-**Current State**:
-
-1. **Duplicate Token Definitions**:
-   - `theme.css` (canonical): `--text-sm`, `--weight-medium`, `--space-4` (rem)
-   - `index.css` (legacy): `--font-size-sm`, `--font-weight-medium`, `--space-4` (px)
-   - Both files define the same concepts with different names
-
-2. **Dual Button Systems**:
-   - `Button.css`: App button with `.btn-*` classes, proper size variants
-   - `LandingPage.css`: Landing button with `.landing-btn--*` classes, no size variants
-   - Duplicated hover/active/focus logic
-
-3. **Focus Style Mismatch**:
-   - `theme.css`: `box-shadow: var(--focus-ring)` (teal glow)
-   - `index.css`: `outline: 2px solid var(--color-primary)` (outline)
-
-4. **Legacy Color Mapping**:
-   - `index.css` maps `--color-*` to theme variables
-   - Some components still use `--color-*` directly
-   - Extra indirection complicates maintenance
-
-5. **Landing Page Defensive Fallbacks**:
-   - CSS uses `var(--bg, #070C16)` with inline fallbacks
-   - Suggests uncertainty about theme.css import order
-
-6. **Heading Typography**:
-   - `theme.css`: Defines `--font-heading` (Source Serif 4)
-   - `index.css`: Headings don't use `--font-heading`
-   - Landing page correctly uses serif headings
-
-**Remediation**:
-
-Phase 1 - Documentation & Standards (Small):
-1. Document canonical token names in PATTERNS.md
-2. Add deprecation notices to legacy variables in index.css
-3. Create quick reference for new development
-
-Phase 2 - Button Unification (Medium):
-1. Export app Button component/styles for use on landing
-2. Remove `.landing-btn--*` classes from LandingPage.css
-3. Or create shared button CSS imported by both
-
-Phase 3 - Token Migration (Medium):
-1. Audit all 26 component CSS files for legacy variable usage
-2. Replace `--font-size-*` → `--text-*`
-3. Replace `--font-weight-*` → `--weight-*`
-4. Replace `--color-*` → direct theme tokens
-5. Remove redundant definitions from index.css
-
-Phase 4 - Focus & Typography Standardization (Small):
-1. Standardize focus styles to `box-shadow: var(--focus-ring)`
-2. Ensure app headings use `--font-heading`
-3. Remove landing page CSS fallback values
-
-**Effort**: Medium (spread across 4 phases)
-
-**Files Affected**:
-- `src/styles/theme.css` - Canonical (no changes needed)
-- `src/index.css` - Legacy mapping to deprecate
-- `src/pages/landing/LandingPage.css` - Remove custom buttons, fallbacks
-- `src/components/ui/Button.css` - May need exports
-- `src/components/**/*.css` - Audit for legacy usage (26 files)
-
----
-
 ## In Progress
 
 *No items currently in progress.*
@@ -317,6 +243,35 @@ Phase 4 - Focus & Typography Standardization (Small):
 ---
 
 ## Resolved Debt
+
+### TD-011: Design System Inconsistencies Between Landing and App
+**Status**: Resolved
+**Resolved**: 2026-02-09
+**Original Priority**: High
+
+**Description**:
+The design system had accumulated inconsistencies between the landing page and the main app: duplicate token definitions (`--font-size-*` vs `--text-*`), dual button systems (`.landing-btn--*` vs `.btn-*`), focus style mismatch (`outline` vs `box-shadow`), landing page defensive fallbacks, and heading typography not using `--font-heading`.
+
+**Resolution**:
+- **Phase 1**: Added deprecation notices to all legacy CSS variables in `index.css`
+- **Phase 2**: Removed dead `.landing-btn--*` classes from `LandingPage.css`, removed inline fallback values from 12 landing page CSS files
+- **Phase 3**: Migrated 39 CSS files from legacy tokens to canonical tokens:
+  - `--font-size-*` → `--text-*`
+  - `--font-weight-*` → `--weight-*`
+  - `--color-*` → direct theme tokens
+  - `--shadow-sm/md/lg` → `--shadow-1/2/3`
+- **Phase 4**: Standardized all `:focus-visible` styles to use `box-shadow: var(--focus-ring)` instead of `outline`; updated heading line-height to use `--leading-tight` (kept compact heading sizes for app's data-dense UI)
+
+**Files Modified**:
+- `src/index.css` (deprecation notices + token migration + focus styles + heading line-height)
+- `src/pages/landing/LandingPage.css` (button removal + fallback removal + focus styles)
+- `src/components/layout/ProfileSwitcher.css` (focus styles)
+- `src/components/ui/Toast.css` (focus styles)
+- `src/components/ui/RowActionsMenu.css` (focus styles)
+- `src/features/documents/components/SplitWorkspace.css` (shadow token)
+- 39+ component CSS files (token migration)
+
+---
 
 ### TD-R001: Missing Document Immutability
 **Status**: Resolved

@@ -13,7 +13,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--color-surface, #111827);
+  background: var(--surface, #111827);
   border-radius: var(--radius-lg, 12px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15);
   width: 90%;
@@ -29,27 +29,27 @@
   display: flex;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: var(--color-accent-subtle, rgba(59, 130, 246, 0.1));
-  border: 1px solid var(--color-accent, #3b82f6);
+  background: var(--accent-subtle, rgba(59, 130, 246, 0.1));
+  border: 1px solid var(--accent, #3b82f6);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-5);
 }
 
 .demo-info svg {
   flex-shrink: 0;
-  color: var(--color-accent, #3b82f6);
+  color: var(--accent, #3b82f6);
 }
 
 .demo-info-title {
   margin: 0 0 var(--space-1) 0;
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
 }
 
 .demo-info-desc {
   margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
+  font-size: var(--text-sm);
+  color: var(--muted);
   line-height: 1.5;
 }
 
@@ -59,38 +59,38 @@
 }
 
 .demo-preview h3 {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
   margin: 0 0 var(--space-2) 0;
 }
 
 .demo-preview ul {
   margin: 0;
   padding-inline-start: var(--space-5);
-  color: var(--color-muted);
-  font-size: var(--font-size-sm);
+  color: var(--muted);
+  font-size: var(--text-sm);
   line-height: 1.8;
 }
 
 /* Confirmation input */
 .demo-confirm {
   padding: var(--space-4);
-  background: var(--color-surface-alt);
+  background: var(--surface-2);
   border-radius: var(--radius-md);
 }
 
 .demo-confirm label {
   display: block;
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  color: var(--text);
   margin-bottom: var(--space-2);
 }
 
 .demo-confirm .input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -108,14 +108,14 @@
 
 .demo-seeding p {
   margin: 0;
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 .demo-spinner {
   width: 48px;
   height: 48px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-accent);
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -136,19 +136,19 @@
 }
 
 .demo-success svg {
-  color: var(--color-success);
+  color: var(--success);
   margin-bottom: var(--space-3);
 }
 
 .demo-success h3 {
   margin: 0 0 var(--space-2) 0;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .demo-success p {
   margin: 0 0 var(--space-4) 0;
-  color: var(--color-muted);
-  font-size: var(--font-size-sm);
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 /* Stats grid */
@@ -165,19 +165,19 @@
   flex-direction: column;
   align-items: center;
   padding: var(--space-3);
-  background: var(--color-surface-alt);
+  background: var(--surface-2);
   border-radius: var(--radius-md);
 }
 
 .demo-stat-value {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-accent);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--accent);
 }
 
 .demo-stat-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
+  font-size: var(--text-xs);
+  color: var(--muted);
   margin-top: var(--space-1);
 }
 
@@ -191,19 +191,19 @@
 }
 
 .demo-error svg {
-  color: var(--color-error);
+  color: var(--error);
   margin-bottom: var(--space-3);
 }
 
 .demo-error h3 {
   margin: 0 0 var(--space-2) 0;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .demo-error p {
   margin: 0;
-  color: var(--color-muted);
-  font-size: var(--font-size-sm);
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 /* RTL support */

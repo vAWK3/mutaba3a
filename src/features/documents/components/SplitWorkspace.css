@@ -148,7 +148,7 @@
   flex: 1;
   border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-3);
 }
 
 /* PDF Viewer frame styling */
