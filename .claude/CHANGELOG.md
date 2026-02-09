@@ -71,6 +71,12 @@
   - `ChevronLeftIcon` and `ChevronRightIcon` icons
   - Pagination CSS styles with RTL support
 
+- **SQLite Migration Preparation (TD-013)**:
+  - Created `src/db/interfaces.ts` with TypeScript interfaces for all repositories
+  - 19 repository interfaces defined for complete data layer abstraction
+  - `IRepositoryProvider` factory interface for platform-based implementation selection
+  - Exported interfaces from `src/db/index.ts`
+
 ### Fixed
 - Fixed missing required fields in test data (BusinessProfile, Receipt)
 - Fixed unused variable warning in retainerRepo.test.ts
@@ -79,6 +85,12 @@
 - Test count increased from 246 to 337 (91 new tests)
 - All 337 tests passing (5 skipped)
 - TD-002, TD-008, TD-012 resolved
+- **Sync Feature Audit (TD-003 Updated)**:
+  - Verified bundle export/import sync is fully working
+  - All sync modals wired in AppShell (Export, Import, Pairing)
+  - `initializeSync()` called on app load
+  - SyncSection component displayed in Settings
+  - Updated TD-003 status: bundle sync working, live LAN sync needs Tauri verification
 
 ---
 

@@ -50,29 +50,87 @@ Test coverage has been improved but still needs work.
 
 ---
 
-### TD-003: Sync Not Yet Activated
-**Status**: Open
-**Priority**: High
+### TD-013: SQLite Migration for Tauri
+**Status**: In Progress
+**Priority**: Medium
 **Introduced**: 2024-06
-**Impact**: Users cannot sync between devices
+**Updated**: 2026-02-09
+**Impact**: Desktop app uses IndexedDB instead of native SQLite
 
 **Description**:
-Sync infrastructure is in place (HLC, OpLog, types, conflict resolution) but not yet wired to UI and transport.
+Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds for better performance and native file system integration. Currently, both web and desktop use IndexedDB via Dexie.
 
-**Current State**:
-- `src/sync/core/` - Complete types and logic
-- `src/sync/transport/` - Bundle encoder exists
-- `src/sync/stores/` - State management ready
-- UI: Settings has placeholder for sync
+**Current State (2026-02-09)**:
+- ✅ Repository interfaces created (`src/db/interfaces.ts`)
+- ✅ All repository operations documented with TypeScript interfaces
+- ✅ Current Dexie implementation satisfies the interfaces
+- Schema version at 12 with all tables defined
 
-**Remediation**:
-1. Implement LAN discovery (mDNS or manual IP entry)
-2. Implement device pairing UI
-3. Wire bundle export/import to UI
-4. Test conflict resolution flows
-5. Add sync status indicators
+**Repository Interfaces Created**:
+- `IClientRepository`, `IProjectRepository`, `ICategoryRepository`
+- `ITransactionRepository`, `IProjectSummaryRepository`, `IClientSummaryRepository`
+- `IFxRateRepository`, `ISettingsRepository`, `IBusinessProfileRepository`
+- `IDocumentRepository`, `IDocumentSequenceRepository`
+- `IExpenseRepository`, `IExpenseCategoryRepository`, `IReceiptRepository`
+- `IVendorRepository`, `IMonthCloseStatusRepository`, `IRecurringRuleRepository`
+- `IRetainerAgreementRepository`, `IProjectedIncomeRepository`
+- `IRepositoryProvider` (factory interface)
+
+**Remaining**:
+1. Create SQLite schema matching Dexie tables
+2. Implement SQLite repositories using `@tauri-apps/plugin-sql`
+3. Create repository factory that selects implementation based on platform
+4. Add migration logic for existing IndexedDB data → SQLite
+5. Test sync operations with SQLite backend
+6. Benchmark performance improvements
+
+**Migration Path**:
+1. **Phase 1** (Complete): Define interfaces for all repositories
+2. **Phase 2**: Implement SQLite versions of repositories
+3. **Phase 3**: Add platform detection and factory pattern
+4. **Phase 4**: Data migration from IndexedDB to SQLite
+5. **Phase 5**: Remove IndexedDB code from Tauri builds
 
 **Effort**: Large
+
+---
+
+### TD-003: Live Sync Not Yet Activated
+**Status**: In Progress
+**Priority**: High
+**Introduced**: 2024-06
+**Updated**: 2026-02-09
+**Impact**: Users can sync via bundle export/import but not via live LAN/network sync
+
+**Description**:
+Sync infrastructure is in place (HLC, OpLog, types, conflict resolution). Bundle-based offline sync is fully working. Live network sync is partially implemented.
+
+**Current State (2026-02-09)**:
+- `src/sync/core/` - Complete types and logic ✅
+- `src/sync/transport/` - Bundle encoder + crypto ✅
+- `src/sync/stores/syncStore.ts` - Complete state management ✅
+- **Bundle Sync (Offline)**: ✅ FULLY WORKING
+  - `ExportBundleModal` and `ImportBundleModal` wired in AppShell
+  - `SyncSection` in Settings page with export/import buttons
+  - Encrypted bundle generation and import working
+- **Wi-Fi Sync (LAN)**: PARTIALLY IMPLEMENTED
+  - UI exists in `SyncSection.tsx` (Tauri-only conditional)
+  - Requires Tauri backend commands (`start_sync_server`, `stop_sync_server`)
+  - Device discovery and pairing UI exists
+  - Status: Needs Tauri backend verification
+- **Conflict Resolution UI**:
+  - `ConflictBanner` component exists and renders in AppShell
+  - Conflict review flow needs testing
+
+**Remaining**:
+1. ~~Wire bundle export/import to UI~~ ✅ Done
+2. ~~Add sync status indicators~~ ✅ Done (SyncStatusChip, status in SyncSection)
+3. Verify Tauri backend sync commands work end-to-end
+4. Test Wi-Fi sync between desktop devices
+5. Test conflict resolution flows
+6. Consider WebRTC or relay server for web-to-web sync (future)
+
+**Effort**: Medium (reduced from Large - much already done)
 
 ---
 
