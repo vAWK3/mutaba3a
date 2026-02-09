@@ -121,10 +121,7 @@ describe('fxRateRepo', () => {
   });
 
   describe('getLatest', () => {
-    // NOTE: These tests are skipped because fxRateRepo.getLatest() uses a compound index
-    // [baseCurrency+quoteCurrency] that is not defined in the database schema.
-    // This is tracked in TECH_DEBT.md as a bug to fix.
-    it.skip('should return the latest rate for a currency pair', async () => {
+    it('should return the latest rate for a currency pair', async () => {
       await fxRateRepo.create({
         baseCurrency: 'USD',
         quoteCurrency: 'ILS',
@@ -146,7 +143,7 @@ describe('fxRateRepo', () => {
       expect(rate?.effectiveDate).toBe('2024-01-15');
     });
 
-    it.skip('should return undefined for non-existent currency pair', async () => {
+    it('should return undefined for non-existent currency pair', async () => {
       const rate = await fxRateRepo.getLatest('USD', 'EUR');
       expect(rate).toBeUndefined();
     });

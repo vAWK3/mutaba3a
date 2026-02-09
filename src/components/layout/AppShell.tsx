@@ -12,6 +12,7 @@ import { WelcomeModal, DemoSeedModal } from "../modals";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
 import { DemoBanner } from "../ui/DemoBanner";
+import { InlineErrorBoundary } from "../ui/ErrorBoundary";
 // import { UpdateBanner } from '../ui/UpdateBanner';
 import {
   ConflictBanner,
@@ -84,14 +85,46 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
-      {transactionDrawer.isOpen && <TransactionDrawer />}
-      {clientDrawer.isOpen && <ClientDrawer />}
-      {projectDrawer.isOpen && <ProjectDrawer />}
-      {businessProfileDrawer.isOpen && <BusinessProfileDrawer />}
-      {documentDrawer.isOpen && <DocumentDrawer />}
-      {expenseDrawer.isOpen && <ExpenseDrawer />}
-      {retainerDrawer.isOpen && <RetainerDrawer />}
-      {retainerMatchingDrawer.isOpen && <RetainerMatchingDrawer />}
+      {transactionDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <TransactionDrawer />
+        </InlineErrorBoundary>
+      )}
+      {clientDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <ClientDrawer />
+        </InlineErrorBoundary>
+      )}
+      {projectDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <ProjectDrawer />
+        </InlineErrorBoundary>
+      )}
+      {businessProfileDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <BusinessProfileDrawer />
+        </InlineErrorBoundary>
+      )}
+      {documentDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <DocumentDrawer />
+        </InlineErrorBoundary>
+      )}
+      {expenseDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <ExpenseDrawer />
+        </InlineErrorBoundary>
+      )}
+      {retainerDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <RetainerDrawer />
+        </InlineErrorBoundary>
+      )}
+      {retainerMatchingDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <RetainerMatchingDrawer />
+        </InlineErrorBoundary>
+      )}
 
       <FxRateBanner />
       <MacDownloadBanner />

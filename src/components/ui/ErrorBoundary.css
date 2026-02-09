@@ -1,0 +1,76 @@
+.error-boundary-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-6);
+  background: var(--color-bg-base);
+  color: var(--color-text-base);
+}
+
+.error-boundary-content {
+  max-width: 28rem;
+  text-align: center;
+}
+
+.error-boundary-content h2 {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-base);
+}
+
+.error-boundary-content p {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.error-boundary-content details {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  text-align: left;
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+}
+
+.error-boundary-content summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.error-boundary-content pre {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-bg-base);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: 10rem;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+/* Inline error for smaller sections */
+.inline-error-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.inline-error-fallback p {
+  margin: 0;
+  font-size: var(--text-sm);
+}

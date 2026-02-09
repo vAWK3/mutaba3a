@@ -24,6 +24,8 @@ import { initDatabase } from "./db";
 import { LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { ToastContainer } from "./components/ui/ToastContainer";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import "./components/ui/ErrorBoundary.css";
 
 // Lazy load landing pages (only imported in web build, tree-shaken from desktop)
 const LandingPage =
@@ -118,6 +120,8 @@ initDatabase().catch(console.error);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

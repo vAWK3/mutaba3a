@@ -164,45 +164,37 @@ Demo mode uses the same database instance with special flags. This is intentiona
 ---
 
 ### TD-007: Bundle Size Growth
-**Status**: Open
+**Status**: Open (Audited 2026-02-09)
 **Priority**: Low
 **Introduced**: 2025-01
 **Impact**: Initial load time may increase
 
 **Description**:
-As features are added, bundle size grows. Currently ~250KB gzipped total.
+Bundle size has grown significantly. Total precache is 11.5MB (though most is lazy-loaded).
 
-**Current State**:
-- Manual chunks for vendors (react, router, query, forms, db)
-- Lazy loading for some routes
-- PDF library is heavy (~50KB)
+**Current State** (Audit 2026-02-09):
+- **fonts-*.js**: 1,586 KB (527 KB gzipped) - 9 font families/weights bundled together
+- **index-B5kMr9UK.js**: 590 KB (163 KB gzipped) - PDF library (@react-pdf/renderer)
+- **index-ZWWaRq82.js**: 205 KB (48 KB gzipped) - Unknown, needs investigation
+- **monthDetection-*.js**: 101 KB (32 KB gzipped) - Date utilities
+- Vendor chunks well-organized (react, router, query, forms, db)
+- Page routes are lazy-loaded correctly
 
-**Remediation**:
-1. Audit bundle with `vite-bundle-visualizer`
-2. Split PDF generation to separate chunk
-3. Tree-shake unused i18n strings
-4. Consider CDN for static assets
-
-**Effort**: Small
-
----
-
-### TD-008: Error Boundaries Missing
-**Status**: Open
-**Priority**: Medium
-**Introduced**: 2024-05
-**Impact**: Errors may crash entire app
-
-**Description**:
-No React error boundaries in place. A rendering error in one component can crash the entire app.
+**Optimization Opportunities**:
+1. **Fonts** (HIGH IMPACT): 527KB gzipped for fonts is excessive
+   - Move fonts to external CDN (Google Fonts, Bunny Fonts)
+   - Or use font subsetting to reduce file size
+   - Consider loading Arabic fonts only when Arabic is selected
+2. **PDF library** (MEDIUM): Could be further lazy-loaded to only load on document export
+3. **Date utilities**: Consider using native Intl APIs where possible
 
 **Remediation**:
-1. Add ErrorBoundary at router level
-2. Add ErrorBoundary around drawers
-3. Add fallback UI for error states
-4. Add error reporting (optional, privacy-respecting)
+1. ~~Audit bundle~~ ✅ Done
+2. Move fonts to CDN or use subsetting
+3. Lazy-load PDF library on first document action
+4. Tree-shake unused i18n strings
 
-**Effort**: Small
+**Effort**: Medium
 
 ---
 
@@ -244,30 +236,6 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-012: fxRateRepo.getLatest() Missing Compound Index
-**Status**: Open
-**Priority**: Low
-**Introduced**: Unknown (discovered 2026-02-09)
-**Impact**: FX rate lookup by currency pair throws SchemaError
-
-**Description**:
-The `fxRateRepo.getLatest()` function uses a compound index `[baseCurrency+quoteCurrency]` that is not defined in the database schema. This causes a `SchemaError: KeyPath [baseCurrency+quoteCurrency] on object store fxRates is not indexed` when called.
-
-**Current State**:
-- `src/db/repository.ts:556-561` uses `.where('[baseCurrency+quoteCurrency]')`
-- `src/db/database.ts` schema defines `fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt'` (no compound index)
-- Tests for this function are skipped in `src/db/__tests__/settingsRepo.test.ts`
-
-**Remediation**:
-1. Add compound index to schema: `fxRates: 'id, [baseCurrency+quoteCurrency], effectiveDate, createdAt'`
-2. Increment database version and add migration
-3. Unskip tests in settingsRepo.test.ts
-4. Alternative: Rewrite getLatest() to filter manually (less efficient)
-
-**Effort**: Small
-
----
-
 ## In Progress
 
 *No items currently in progress.*
@@ -275,6 +243,38 @@ The `fxRateRepo.getLatest()` function uses a compound index `[baseCurrency+quote
 ---
 
 ## Resolved Debt
+
+### TD-008: Error Boundaries Missing
+**Status**: Resolved
+**Resolved**: 2026-02-09
+**Original Priority**: Medium
+
+**Description**:
+No React error boundaries in place. A rendering error in one component could crash the entire app.
+
+**Resolution**:
+- Created `ErrorBoundary` component for app-level error catching with retry/reload UI
+- Created `InlineErrorBoundary` for drawer-level errors with minimal fallback
+- Wrapped main App component in `ErrorBoundary` in main.tsx
+- Wrapped all 8 drawers in `InlineErrorBoundary` in AppShell.tsx
+- Added CSS styling for error fallback states
+
+---
+
+### TD-012: fxRateRepo.getLatest() Missing Compound Index
+**Status**: Resolved
+**Resolved**: 2026-02-09
+**Original Priority**: Low
+
+**Description**:
+The `fxRateRepo.getLatest()` function used a compound index `[baseCurrency+quoteCurrency]` that was not defined in the database schema, causing SchemaError when called.
+
+**Resolution**:
+- Added database version 12 with compound index `[baseCurrency+quoteCurrency]` on fxRates table
+- Unskipped tests in `src/db/__tests__/settingsRepo.test.ts`
+- All 16 settingsRepo tests now pass
+
+---
 
 ### TD-011: Design System Inconsistencies Between Landing and App
 **Status**: Resolved
