@@ -15,6 +15,9 @@ describe('expenseRepo', () => {
       name: 'Test Profile',
       email: 'test@example.com',
       isDefault: true,
+      businessType: 'company',
+      defaultCurrency: 'USD',
+      defaultLanguage: 'en',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -305,6 +308,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 12345,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
       });
 
       expect(receipt.id).toBeDefined();
@@ -321,6 +325,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 100,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
       });
       await receiptRepo.create({
         profileId,
@@ -328,6 +333,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 200,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
       });
       await receiptRepo.create({
         profileId,
@@ -335,6 +341,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-04',
         sizeBytes: 300,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
       });
     });
 
@@ -364,6 +371,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 100,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
       });
 
       await receiptRepo.linkToExpense(receipt.id, expense.id);
@@ -388,6 +396,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 100,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
         expenseId: expense.id,
       });
 
@@ -413,6 +422,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 100,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
         expenseId: expense.id,
       });
 
@@ -422,6 +432,7 @@ describe('receiptRepo', () => {
         monthKey: '2024-03',
         sizeBytes: 200,
         mimeType: 'application/pdf',
+        data: 'base64-test-data',
       });
 
       const unlinked = await receiptRepo.getUnlinkedByProfile(profileId);

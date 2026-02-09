@@ -18,6 +18,9 @@ describe('retainerRepo', () => {
       name: 'Test Profile',
       email: 'test@example.com',
       isDefault: true,
+      businessType: 'company',
+      defaultCurrency: 'USD',
+      defaultLanguage: 'en',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -330,6 +333,9 @@ describe('projectedIncomeRepo', () => {
       name: 'Test Profile',
       email: 'test@example.com',
       isDefault: true,
+      businessType: 'company',
+      defaultCurrency: 'USD',
+      defaultLanguage: 'en',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -433,6 +439,9 @@ describe('scheduleGenerator', () => {
       name: 'Test Profile',
       email: 'test@example.com',
       isDefault: true,
+      businessType: 'company',
+      defaultCurrency: 'USD',
+      defaultLanguage: 'en',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -454,7 +463,7 @@ describe('scheduleGenerator', () => {
 
   describe('generateSchedule', () => {
     it('should generate monthly schedule items', async () => {
-      const retainer = await db.retainerAgreements.add({
+      await db.retainerAgreements.add({
         id: 'test-retainer',
         profileId,
         clientId,
@@ -548,6 +557,9 @@ describe('retainerMatching', () => {
       name: 'Test Profile',
       email: 'test@example.com',
       isDefault: true,
+      businessType: 'company',
+      defaultCurrency: 'USD',
+      defaultLanguage: 'en',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -731,6 +743,9 @@ describe('getRetainerSummary', () => {
       name: 'Test Profile',
       email: 'test@example.com',
       isDefault: true,
+      businessType: 'company',
+      defaultCurrency: 'USD',
+      defaultLanguage: 'en',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

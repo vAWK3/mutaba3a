@@ -6,3 +6,4 @@ export { Numeric, Amount, type NumericProps, type AmountProps } from './Numeric'
 export { EmptyState } from './EmptyState';
 export { InlineStats } from './InlineStats';
 export { RowActionsMenu, type RowAction } from './RowActionsMenu';
+export { Pagination } from './Pagination';

@@ -35,9 +35,9 @@ Test coverage has been improved but still needs work.
 - `src/features/documents/__tests__/` - totals.test.ts, pdf.test.ts
 
 **Remaining Gaps**:
-- Drawer component tests (TransactionDrawer, ClientDrawer, ProjectDrawer)
+- ~~Drawer component tests (TransactionDrawer, ClientDrawer, ProjectDrawer)~~ ✅ Done 2026-02-09
 - Page component tests
-- Expense and Retainer repository tests
+- ~~Expense and Retainer repository tests~~ ✅ Done 2026-02-09
 - useTransactionFilters and other utility hooks
 
 **Remediation**:
@@ -47,30 +47,6 @@ Test coverage has been improved but still needs work.
 4. Target: 80% coverage for critical paths
 
 **Effort**: Medium (reduced from Large)
-
----
-
-### TD-002: Reports Feature Incomplete
-**Status**: Open
-**Priority**: Medium
-**Introduced**: 2024-06
-**Impact**: Reports page exists but lacks functionality
-
-**Description**:
-The `/reports` route exists but the Reports page is not fully implemented. Currently redirects or shows placeholder.
-
-**Current State**:
-- Route defined in router
-- Page component exists but features commented out
-- Query hooks for reports data exist
-
-**Remediation**:
-1. Implement report presets (by project, by client, by category)
-2. Add CSV export functionality
-3. Add date range and currency filters
-4. Consider PDF export
-
-**Effort**: Medium
 
 ---
 
@@ -101,47 +77,60 @@ Sync infrastructure is in place (HLC, OpLog, types, conflict resolution) but not
 ---
 
 ### TD-004: No E2E Tests
-**Status**: Open
+**Status**: In Progress
 **Priority**: Medium
 **Introduced**: 2024-05
+**Updated**: 2026-02-09
 **Impact**: Critical flows not validated automatically
 
 **Description**:
 No end-to-end tests exist. Critical user journeys are only tested manually.
 
-**Remediation**:
-1. Set up Playwright or Cypress
-2. Add E2E tests for critical flows:
-   - Create transaction
+**Current State (2026-02-09)**:
+- Playwright installed and configured
+- `playwright.config.ts` created with Chromium setup
+- E2E tests added:
+  - `e2e/navigation.spec.ts` - Main page navigation tests
+  - `e2e/transaction.spec.ts` - Transaction CRUD tests
+  - `e2e/settings.spec.ts` - Settings page tests
+- npm scripts added: `test:e2e`, `test:e2e:ui`
+
+**Remaining**:
+1. Add more E2E tests for:
    - Generate invoice
    - Export data
    - Demo mode toggle
-3. Add to CI pipeline
+2. Add to CI pipeline (GitHub Actions)
+3. Expand browser coverage (Firefox, Safari)
 
-**Effort**: Medium
+**Effort**: Medium (reduced from initial)
 
 ---
 
 ### TD-005: Large IndexedDB Tables
-**Status**: Open
+**Status**: In Progress
 **Priority**: Low
 **Introduced**: 2024-08
+**Updated**: 2026-02-09
 **Impact**: Performance may degrade with large datasets
 
 **Description**:
 No pagination or virtualization for large tables. Users with 10K+ transactions may experience slowness.
 
-**Current State**:
-- All data loaded into memory
-- Tables render all rows
+**Current State (2026-02-09)**:
+- Repository already supports offset/limit in QueryFilters
+- Created reusable `Pagination` component
+- Added ChevronLeft/Right icons for pagination controls
+- CSS styles for pagination added to index.css
 
-**Remediation**:
-1. Implement cursor-based pagination in repositories
-2. Add virtualization to DataTable (react-window or similar)
-3. Add loading states for large datasets
-4. Consider IndexedDB query optimization
+**Remaining**:
+1. ~~Implement cursor-based pagination in repositories~~ ✅ Already exists
+2. ~~Add reusable pagination component~~ ✅ Done
+3. Integrate pagination into TransactionsPage (requires useTransactions hook update)
+4. Add virtualization for very large datasets (react-window)
+5. Consider IndexedDB query optimization
 
-**Effort**: Medium
+**Effort**: Medium (reduced)
 
 ---
 
@@ -199,17 +188,25 @@ Bundle size has grown significantly. Total precache is 11.5MB (though most is la
 ---
 
 ### TD-009: Accessibility Audit Needed
-**Status**: Open
+**Status**: In Progress
 **Priority**: Medium
 **Introduced**: 2024-05
+**Updated**: 2026-02-09
 **Impact**: App may not be fully accessible
 
 **Description**:
 No formal accessibility audit has been performed. Some ARIA attributes exist but coverage is inconsistent.
 
-**Remediation**:
-1. Run axe-core or similar accessibility checker
-2. Fix critical issues (keyboard navigation, focus management)
+**Current State (2026-02-09)**:
+- axe-core/playwright installed for automated accessibility testing
+- Created `e2e/accessibility.spec.ts` with tests for:
+  - Overview, Transactions, Projects, Clients, Reports, Settings pages
+  - Transaction drawer accessibility
+- Automated checks will catch common issues (WCAG violations)
+
+**Remaining**:
+1. ~~Run axe-core or similar accessibility checker~~ ✅ Done
+2. Fix critical issues identified by axe-core
 3. Add ARIA labels to interactive elements
 4. Test with screen reader
 5. Document accessibility features
@@ -243,6 +240,24 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ## Resolved Debt
+
+### TD-002: Reports Feature Incomplete
+**Status**: Resolved
+**Resolved**: 2026-02-09
+**Original Priority**: Medium
+
+**Description**:
+The `/reports` route existed but the Reports page was not fully implemented.
+
+**Resolution**:
+- Created full Reports page at `src/pages/reports/ReportsPage.tsx`
+- Implemented 5 report presets: Summary, By Project, By Client, Expenses by Project, Unpaid Aging
+- Added date range filter with presets (This Month, Last Month, This Year, All Time, Custom)
+- Added currency mode selector (USD, ILS, Both)
+- Implemented CSV export for all report types
+- Uncommented and activated route in router.tsx
+
+---
 
 ### TD-008: Error Boundaries Missing
 **Status**: Resolved

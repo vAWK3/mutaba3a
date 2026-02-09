@@ -1,6 +1,8 @@
 export { CheckIcon } from './CheckIcon';
 export { CheckCircleIcon } from './CheckCircleIcon';
 export { ChevronDownIcon } from './ChevronDownIcon';
+export { ChevronLeftIcon } from './ChevronLeftIcon';
+export { ChevronRightIcon } from './ChevronRightIcon';
 export { ArrowRightIcon } from './ArrowRightIcon';
 export { CopyIcon } from './CopyIcon';
 export { DocumentIcon } from './DocumentIcon';

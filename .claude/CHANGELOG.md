@@ -28,6 +28,60 @@
 
 ---
 
+## [0.0.50] - 2026-02-09
+
+### Added
+- **Reports Feature (TD-002 Resolved)**:
+  - Full Reports page at `src/pages/reports/ReportsPage.tsx`
+  - 5 report presets: Summary, By Project, By Client, Expenses by Project, Unpaid Aging
+  - Date range filter (This Month, Last Month, This Year, All Time, Custom)
+  - Currency mode selector (USD, ILS, Both)
+  - CSV export for all report types
+  - Route activated in `router.tsx`
+
+- **Error Boundaries (TD-008 Resolved)**:
+  - `ErrorBoundary` component for app-level error catching
+  - `InlineErrorBoundary` for drawer-level errors
+  - CSS styling for error fallback states
+
+- **Database Schema v12**:
+  - Added compound index `[baseCurrency+quoteCurrency]` on fxRates table (TD-012 resolved)
+
+- **Test Coverage Expansion**:
+  - `src/db/__tests__/expenseRepo.test.ts` (37 tests) - Expense, category, receipt, vendor, monthClose repos
+  - `src/db/__tests__/retainerRepo.test.ts` (26 tests) - Retainer, projected income, schedule generator, matching
+  - `src/components/__tests__/TransactionDrawer.test.tsx` (12 tests)
+  - `src/components/__tests__/ClientDrawer.test.tsx` (10 tests)
+  - `src/components/__tests__/ProjectDrawer.test.tsx` (10 tests)
+
+- **E2E Testing Infrastructure (TD-004)**:
+  - Playwright test framework configured (`playwright.config.ts`)
+  - E2E test files created:
+    - `e2e/navigation.spec.ts` - Page navigation tests
+    - `e2e/transaction.spec.ts` - Transaction CRUD tests
+    - `e2e/settings.spec.ts` - Settings page tests
+  - npm scripts: `test:e2e`, `test:e2e:ui`
+
+- **Accessibility Testing Infrastructure (TD-009)**:
+  - axe-core/playwright installed for automated a11y testing
+  - `e2e/accessibility.spec.ts` - Tests for WCAG compliance on all main pages
+
+- **Pagination Infrastructure (TD-005)**:
+  - `Pagination` component at `src/components/ui/Pagination.tsx`
+  - `ChevronLeftIcon` and `ChevronRightIcon` icons
+  - Pagination CSS styles with RTL support
+
+### Fixed
+- Fixed missing required fields in test data (BusinessProfile, Receipt)
+- Fixed unused variable warning in retainerRepo.test.ts
+
+### Technical
+- Test count increased from 246 to 337 (91 new tests)
+- All 337 tests passing (5 skipped)
+- TD-002, TD-008, TD-012 resolved
+
+---
+
 ## [0.0.49] - 2026-02-09
 
 ### Added
