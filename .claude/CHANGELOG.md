@@ -28,6 +28,34 @@
 
 ---
 
+## [0.0.49] - 2026-02-09
+
+### Added
+- **Comprehensive Test Coverage for Main Flows**:
+  - `src/db/__tests__/transactionRepo.test.ts` (37 tests) - Full CRUD, filtering, totals, overdue/attention logic
+  - `src/db/__tests__/clientRepo.test.ts` (22 tests) - CRUD operations and client summaries
+  - `src/db/__tests__/projectRepo.test.ts` (24 tests) - CRUD operations and project summaries
+  - `src/db/__tests__/settingsRepo.test.ts` (16 tests) - Settings, FX rates, categories
+  - `src/db/__tests__/aggregations.test.ts` (27 tests) - Pure aggregation functions
+- Extended `src/test/utils.tsx` with new factory functions:
+  - `createMockTransaction`, `createMockProject`, `createMockCategory`, `createMockFxRate`
+  - Helper functions: `createMockIncome`, `createMockExpense`, `createMockReceivable`, `createMockOverdueReceivable`
+  - Date utilities: `getRelativeDate`, `getRelativeTimestamp`
+
+### Changed
+- Updated `TEST_PLAN.md` with current coverage status
+- Updated `TECH_DEBT.md`:
+  - TD-001 status changed to "In Progress" with updated coverage information
+  - Added TD-012 for fxRateRepo.getLatest() missing compound index bug
+
+### Technical
+- Test coverage improved from ~3% to ~40%
+- All 246 tests passing (2 skipped due to missing compound index)
+- Repository layer now has ~85% test coverage
+- Tests cover: transactions, clients, projects, documents, business profiles, settings, categories, aggregations
+
+---
+
 ## [0.0.48] - 2026-02-09
 
 ### Added

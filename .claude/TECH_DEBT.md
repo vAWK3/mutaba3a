@@ -19,26 +19,34 @@
 ## Open Debt
 
 ### TD-001: Limited Test Coverage
-**Status**: Open
+**Status**: In Progress
 **Priority**: High
 **Introduced**: 2024-05
+**Updated**: 2026-02-09
 **Impact**: Bugs may slip through, refactoring risky
 
 **Description**:
-Current test coverage is low (~3%). Only 6 test files exist.
+Test coverage has been improved but still needs work.
 
-**Current State**:
-- `src/db/__tests__/` - Basic repository tests
-- `src/hooks/__tests__/` - Some hook tests
-- `src/components/__tests__/` - Minimal component tests
+**Current State (Updated 2026-02-09)**:
+- `src/db/__tests__/` - Repository tests (businessProfileRepo, documentRepo, transactionRepo, clientRepo, projectRepo, settingsRepo, aggregations) - **✅ Good coverage**
+- `src/hooks/__tests__/` - Hook tests for business profile and document hooks
+- `src/components/__tests__/` - BusinessProfileDrawer component test
+- `src/features/documents/__tests__/` - totals.test.ts, pdf.test.ts
+
+**Remaining Gaps**:
+- Drawer component tests (TransactionDrawer, ClientDrawer, ProjectDrawer)
+- Page component tests
+- Expense and Retainer repository tests
+- useTransactionFilters and other utility hooks
 
 **Remediation**:
-1. Add unit tests for all repository methods
+1. ~~Add unit tests for all repository methods~~ ✅ Done for core repos
 2. Add component tests for critical UI (drawers, tables)
 3. Add integration tests for key flows (create transaction, mark paid)
 4. Target: 80% coverage for critical paths
 
-**Effort**: Large
+**Effort**: Medium (reduced from Large)
 
 ---
 
@@ -233,6 +241,30 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 3. Allow header/footer customization
 
 **Effort**: Large (if template builder), Small (if just modular)
+
+---
+
+### TD-012: fxRateRepo.getLatest() Missing Compound Index
+**Status**: Open
+**Priority**: Low
+**Introduced**: Unknown (discovered 2026-02-09)
+**Impact**: FX rate lookup by currency pair throws SchemaError
+
+**Description**:
+The `fxRateRepo.getLatest()` function uses a compound index `[baseCurrency+quoteCurrency]` that is not defined in the database schema. This causes a `SchemaError: KeyPath [baseCurrency+quoteCurrency] on object store fxRates is not indexed` when called.
+
+**Current State**:
+- `src/db/repository.ts:556-561` uses `.where('[baseCurrency+quoteCurrency]')`
+- `src/db/database.ts` schema defines `fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt'` (no compound index)
+- Tests for this function are skipped in `src/db/__tests__/settingsRepo.test.ts`
+
+**Remediation**:
+1. Add compound index to schema: `fxRates: 'id, [baseCurrency+quoteCurrency], effectiveDate, createdAt'`
+2. Increment database version and add migration
+3. Unskip tests in settingsRepo.test.ts
+4. Alternative: Rewrite getLatest() to filter manually (less efficient)
+
+**Effort**: Small
 
 ---
 
