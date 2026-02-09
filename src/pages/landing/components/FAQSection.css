@@ -5,7 +5,7 @@
 }
 
 .landing-faq-item {
-  border-bottom: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .landing-faq-item:last-child {
@@ -20,9 +20,9 @@
   padding: 20px 0;
   background: none;
   border: none;
-  color: var(--text, #E7EEF9);
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-medium, 500);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
   text-align: left;
   cursor: pointer;
   transition: color 0.15s ease;
@@ -33,12 +33,12 @@
 }
 
 .landing-faq-question:hover {
-  color: var(--accent, #2CB6A6);
+  color: var(--accent);
 }
 
 .landing-faq-question svg {
   flex-shrink: 0;
-  color: var(--muted, #A6B4CC);
+  color: var(--muted);
   transition: transform 0.2s ease;
 }
 
@@ -59,14 +59,14 @@
 
 .landing-faq-answer p {
   margin: 0;
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   line-height: 1.6;
 }
 
 @media (max-width: 768px) {
   .landing-faq-question {
-    font-size: var(--text-sm, 12px);
+    font-size: var(--text-sm);
     padding: 16px 0;
   }
 }

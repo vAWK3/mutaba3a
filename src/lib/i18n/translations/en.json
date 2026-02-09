@@ -1014,23 +1014,64 @@
       "ar": "AR"
     },
     "hero": {
-      "headline": "Your finances belong on your device, not in the cloud",
-      "subheadline": "Track income, expenses, and receivables locally. No account. No subscription. Free for personal use.",
-      "trust": "No account. No tracking. No cloud by default. Free for personal use.",
-      "ctaPrimary": "Open Web App",
-      "ctaSecondary": "Download Desktop App"
+      "badge": "Privacy-first finance tracking",
+      "headline": "Your finances. Your device. Your rules.",
+      "subheadline": "A powerful desktop app for tracking income, expenses, and receivables. No cloud required. No account needed. Your data stays on your device.",
+      "value1": "Offline-first",
+      "value2": "Zero tracking",
+      "value3": "Export anytime",
+      "downloadMac": "Download for Mac",
+      "downloadWindows": "Download for Windows",
+      "orTry": "Or try the",
+      "webApp": "free web app"
     },
-    "answersMini": {
-      "q1": "Will I make it this month?",
-      "q2": "Who owes me money?",
-      "q3": "What's coming next?"
+    "trustBadges": {
+      "noCloud": "No cloud required",
+      "noCloudDesc": "Data stored locally on your device",
+      "noTracking": "Zero tracking",
+      "noTrackingDesc": "No analytics, no telemetry, no spying",
+      "offline": "Works offline",
+      "offlineDesc": "Full functionality without internet",
+      "export": "Export anytime",
+      "exportDesc": "Your data in JSON, CSV, or PDF"
+    },
+    "valueProps": {
+      "headline": "Financial control without compromise",
+      "subheadline": "Built for freelancers and small businesses who value privacy and ownership.",
+      "privacy": {
+        "title": "Privacy by design",
+        "desc": "Your financial data never leaves your device unless you explicitly export it.",
+        "bullet1": "No account or sign-up required",
+        "bullet2": "No cloud sync by default",
+        "bullet3": "Source-available on GitHub"
+      },
+      "power": {
+        "title": "Professional-grade tools",
+        "desc": "Everything you need to manage clients, projects, and cash flow in one place.",
+        "bullet1": "Multi-currency support (USD, ILS, EUR)",
+        "bullet2": "Invoice and receipt generation",
+        "bullet3": "Retainer and receivables tracking"
+      },
+      "control": {
+        "title": "Total data ownership",
+        "desc": "No vendor lock-in. Export everything, import anywhere, shut down anytime.",
+        "bullet1": "Full JSON export/import",
+        "bullet2": "Works indefinitely without internet",
+        "bullet3": "Self-hosted option for teams"
+      }
     },
     "problem": {
-      "headline": "Freelancers deserve better than spreadsheets",
-      "pain1": "You track income in one spreadsheet, expenses in another",
-      "pain2": "You forget who owes you money until it's too late",
-      "pain3": "You can't work when the WiFi goes out",
-      "pain4": "Your financial data lives on servers you don't control"
+      "headline": "Why existing tools fail privacy-conscious users",
+      "intro": "Most finance tools treat your data as their product. We built something different.",
+      "item1Title": "Cloud dependency",
+      "item1Desc": "Your financial data lives on servers you don't control, subject to breaches and policy changes.",
+      "item2Title": "Tracking everywhere",
+      "item2Desc": "Analytics, telemetry, and behavior tracking built into every interaction.",
+      "item3Title": "Subscription fatigue",
+      "item3Desc": "Monthly fees for basic features you should own outright.",
+      "item4Title": "Vendor lock-in",
+      "item4Desc": "Exporting your own data is either impossible or intentionally painful.",
+      "solution": "Mutaba3a is different: a one-time download that works forever, stores data locally, and puts you in complete control."
     },
     "useCases": {
       "headline": "One tool for every money moment",
@@ -1087,6 +1128,7 @@
     },
     "proof": {
       "headline": "See it in action",
+      "subheadline": "A native desktop experience built for speed and reliability.",
       "tabs": {
         "desktop": "Desktop App",
         "web": "Web App"
@@ -1103,20 +1145,21 @@
       }
     },
     "capabilities": {
-      "headline": "Everything you need, nothing you don't",
-      "block1Title": "Get paid and stay paid",
-      "block1Bullet1": "Clients and projects",
-      "block1Bullet2": "Receivables tracking",
-      "block1Bullet3": "Retainer management",
-      "block1Bullet4": "Invoice generation",
-      "block2Title": "Stay on top of costs",
+      "headline": "Everything you need to manage your finances",
+      "subheadline": "Professional features without the cloud dependency.",
+      "block1Title": "Income & receivables",
+      "block1Bullet1": "Track clients and projects",
+      "block1Bullet2": "Monitor outstanding receivables",
+      "block1Bullet3": "Manage retainer agreements",
+      "block1Bullet4": "Generate invoices and receipts",
+      "block2Title": "Expenses & costs",
       "block2Bullet1": "Fixed and recurring expenses",
-      "block2Bullet2": "Receipt management",
-      "block2Bullet3": "Profile-scoped expense tracking",
-      "block3Title": "Know your month and year",
-      "block3Bullet1": "Cash flow timeline",
-      "block3Bullet2": "Risk day detection",
-      "block3Bullet3": "Reports and CSV export"
+      "block2Bullet2": "Receipt attachment and organization",
+      "block2Bullet3": "Category and profile-based tracking",
+      "block3Title": "Insights & planning",
+      "block3Bullet1": "Cash flow timeline visualization",
+      "block3Bullet2": "Forecast and risk detection",
+      "block3Bullet3": "Export to CSV, JSON, or PDF"
     },
     "privacy": {
       "headline": "Your data. Your device. Your rules.",
@@ -1140,18 +1183,50 @@
       "pwaNote": "Or use the web app in your browser—works offline after first load."
     },
     "pricing": {
-      "headline": "Free for personal use",
-      "personal": "Free for personal and educational use",
-      "commercial": "Commercial license required for business use",
-      "future": "Team features and cloud sync coming later (paid).",
-      "support": "Support development",
-      "supportBmac": "Buy Me a Coffee",
-      "supportKofi": "Ko-fi"
+      "headline": "Simple, transparent pricing",
+      "subheadline": "Pay once, own forever. No subscriptions. No hidden fees.",
+      "web": {
+        "title": "Web App",
+        "price": "$0",
+        "priceNote": "free forever",
+        "description": "Full-featured PWA that works in your browser.",
+        "feature1": "All core features included",
+        "feature2": "Works offline after first load",
+        "feature3": "Data stored in browser",
+        "feature4": "Export to JSON anytime",
+        "cta": "Open Web App"
+      },
+      "desktop": {
+        "title": "Desktop App",
+        "price": "$49",
+        "priceNote": "one-time payment",
+        "description": "Native macOS and Windows app for serious users.",
+        "feature1": "Everything in Web, plus:",
+        "feature2": "Native performance",
+        "feature3": "Automatic updates",
+        "feature4": "File system access",
+        "feature5": "Priority support",
+        "cta": "Buy Desktop App"
+      },
+      "support": {
+        "title": "Support & Consulting",
+        "price": "Custom",
+        "priceNote": "contact us",
+        "description": "Setup assistance and custom integrations.",
+        "feature1": "Onboarding assistance",
+        "feature2": "Data migration help",
+        "feature3": "Custom integrations",
+        "cta": "Contact Us"
+      },
+      "disclaimer": {
+        "title": "Important: Your data is stored locally",
+        "text": "Uninstalling the app or clearing browser data will permanently delete all your data. Always export a backup before making changes to your system. You are responsible for your own backups."
+      }
     },
     "faq": {
       "headline": "Frequently Asked Questions",
-      "q1": "Is Mutaba3a really free?",
-      "a1": "Free for personal and educational use. A commercial license is required for business use.",
+      "q1": "What's the pricing model?",
+      "a1": "The web app is free forever. The desktop app is a one-time $49 purchase. No subscriptions.",
       "q2": "Where is my data stored?",
       "a2": "Locally on your device. The web version uses IndexedDB. The desktop app uses SQLite.",
       "q3": "What if I need multiple devices?",
@@ -1176,8 +1251,15 @@
       "a12": "Yes, with a commercial license. Contact us for pricing or wait for the self-serve option."
     },
     "finalCta": {
-      "headline": "Start tracking your finances today",
-      "trust": "No account. No tracking. Free for personal use."
+      "headline": "Take control of your finances",
+      "subheadline": "Pay once, own forever. No subscriptions. No cloud required.",
+      "trust1": "$0 web app",
+      "trust2": "$49 desktop",
+      "trust3": "One-time payment",
+      "downloadMac": "Buy for Mac — $49",
+      "downloadWindows": "Buy for Windows — $49",
+      "orTry": "Or start with the",
+      "webApp": "free web app"
     },
     "footer": {
       "copyright": "Mutaba3a",

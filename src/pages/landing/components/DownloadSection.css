@@ -1,6 +1,6 @@
 /* Download Section */
 .landing-download {
-  background: var(--bg, #070C16);
+  background: var(--bg);
 }
 
 .download-version {
@@ -9,21 +9,21 @@
   justify-content: center;
   gap: 8px;
   margin-bottom: 32px;
-  font-size: var(--text-sm, 12px);
+  font-size: var(--text-sm);
 }
 
 .version-label {
-  color: var(--muted, #A6B4CC);
+  color: var(--muted);
 }
 
 .version-number {
-  color: var(--text, #E7EEF9);
-  font-weight: var(--weight-medium, 500);
-  font-family: var(--font-mono, monospace);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  font-family: var(--font-mono);
 }
 
 .version-notes-link {
-  color: var(--accent, #2CB6A6);
+  color: var(--accent);
   text-decoration: none;
   margin-inline-start: 8px;
 }
@@ -45,32 +45,32 @@
   align-items: center;
   gap: 12px;
   padding: 32px 48px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-  border-radius: var(--radius-xl, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
   text-decoration: none;
-  color: var(--text, #E7EEF9);
+  color: var(--text);
   transition: all 0.2s ease;
 }
 
 .download-card:hover {
-  border-color: var(--accent, #2CB6A6);
+  border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .download-card-icon {
-  color: var(--text-secondary, #C5D0E0);
+  color: var(--text-secondary);
 }
 
 .download-card-label {
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-medium, 500);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
 }
 
 .download-card-hint {
-  font-size: var(--text-xs, 11px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
 .download-alt {
@@ -79,20 +79,20 @@
 }
 
 .download-alt-link {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   text-decoration: none;
 }
 
 .download-alt-link:hover {
-  color: var(--text, #E7EEF9);
+  color: var(--text);
   text-decoration: underline;
 }
 
 .landing-pwa-note {
   text-align: center;
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 /* Responsive */

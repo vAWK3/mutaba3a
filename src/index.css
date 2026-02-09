@@ -1,102 +1,235 @@
-/* Design System - Mini CRM */
-/*
- * LEGACY COLOR MAPPING
- * Maps old --color-* variables to theme.css variables for dark mode support.
- * theme.css defines --bg, --surface, --text, etc. with proper dark mode overrides.
- */
+/* ============================================
+   Design System - Mini CRM
+   ============================================
+
+   IMPORTANT: This file contains LEGACY variables for backwards compatibility.
+
+   For NEW development, use canonical tokens from src/styles/theme.css
+   See .claude/PATTERNS.md for the full token reference guide.
+
+   Tech Debt: TD-011 tracks migration of legacy tokens.
+   ============================================ */
+
+/* ============================================
+   DEPRECATED: Legacy Color Variables
+   ============================================
+
+   These --color-* variables are DEPRECATED and exist only for
+   backwards compatibility with existing components.
+
+   DO NOT USE in new code. Use canonical tokens instead:
+
+   | Deprecated              | Use Instead          |
+   |-------------------------|----------------------|
+   | --color-bg              | --bg                 |
+   | --color-surface         | --surface            |
+   | --color-bg-elevated     | --surface            |
+   | --color-text            | --text               |
+   | --color-text-secondary  | --text-secondary     |
+   | --color-text-muted      | --muted              |
+   | --color-primary         | --accent             |
+   | --color-primary-light   | --accent-subtle      |
+   | --color-success         | --success            |
+   | --color-warning         | --warning            |
+   | --color-danger          | --error              |
+   | --color-error           | --error              |
+   | --color-border          | --border             |
+
+   ============================================ */
 :root {
-  /* Colors - mapped to theme.css variables */
+  /* @deprecated Use --bg instead */
   --color-bg: var(--bg);
+  /* @deprecated Use --surface instead */
   --color-surface: var(--surface);
+  /* @deprecated Use --surface-hover instead */
   --color-surface-hover: var(--surface-hover);
+  /* @deprecated Use --surface-2 instead */
   --color-surface-alt: var(--surface-2);
+  /* @deprecated Use --surface instead */
   --color-bg-elevated: var(--surface);
+  /* @deprecated Use --surface-hover instead */
   --color-bg-hover: var(--surface-hover);
+  /* @deprecated Use --surface-2 instead */
   --color-bg-active: var(--surface-2);
 
+  /* @deprecated Use --border instead */
   --color-border: var(--border);
+  /* @deprecated Use --border-strong instead */
   --color-border-strong: var(--border-strong);
 
+  /* @deprecated Use --text instead */
   --color-text: var(--text);
+  /* @deprecated Use --text-secondary instead */
   --color-text-secondary: var(--text-secondary);
+  /* @deprecated Use --muted instead */
   --color-text-muted: var(--muted);
 
+  /* @deprecated Use --accent instead */
   --color-primary: var(--accent);
+  /* @deprecated Use --accent-hover instead */
   --color-primary-hover: var(--accent-hover);
+  /* @deprecated Use --accent-subtle instead */
   --color-primary-light: var(--accent-subtle);
 
+  /* @deprecated Use --success instead */
   --color-success: var(--success);
+  /* @deprecated Use --success-subtle instead */
   --color-success-light: var(--success-subtle);
 
+  /* @deprecated Use --warning instead */
   --color-warning: var(--warning);
+  /* @deprecated Use --warning-subtle instead */
   --color-warning-light: var(--warning-subtle);
 
+  /* @deprecated Use --error instead */
   --color-danger: var(--error);
+  /* @deprecated Use --error-subtle instead */
   --color-danger-light: var(--error-subtle);
 
+  /* @deprecated Use --error instead */
   --color-error: var(--error);
+  /* @deprecated Use --error-subtle instead */
   --color-error-bg: var(--error-subtle);
+  /* @deprecated Use --error-muted instead */
   --color-error-border: var(--error-muted);
 
+  /* @deprecated Use --accent instead */
   --color-accent: var(--accent);
+  /* @deprecated Use --accent-subtle instead */
   --color-accent-subtle: var(--accent-subtle);
 
+  /* Semantic transaction colors - these map to standard semantic tokens */
+  /* @deprecated Use --success instead */
   --color-income: var(--success);
+  /* @deprecated Use --text-secondary instead */
   --color-expense: var(--text-secondary);
+  /* @deprecated Use --warning instead */
   --color-unpaid: var(--warning);
+  /* @deprecated Use --error instead */
   --color-overdue: var(--error);
 
-  /* Spacing (8px base) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
+  /* ============================================
+     DEPRECATED: Legacy Spacing (px values)
+     ============================================
 
-  /* Layout */
+     theme.css defines spacing in rem for better accessibility.
+     These px-based values exist for backwards compatibility.
+
+     Canonical tokens use the same names but with rem values.
+     The rem values from theme.css will take precedence when
+     theme.css is imported after this file.
+     ============================================ */
+
+  /* Note: theme.css spacing tokens override these with rem values */
+  /* Keep for components that haven't migrated yet */
+
+  /* ============================================
+     Layout Constants (NOT deprecated)
+     ============================================
+     These are shared with theme.css and are canonical.
+     ============================================ */
   --sidebar-width: 240px;
   --topbar-height: 56px;
   --drawer-width: 480px;
   --table-row-height: 44px;
 
-  /* Typography */
+  /* ============================================
+     DEPRECATED: Legacy Typography Variables
+     ============================================
+
+     DO NOT USE in new code. Use canonical tokens instead:
+
+     | Deprecated            | Use Instead       |
+     |-----------------------|-------------------|
+     | --font-size-xs        | --text-xs         |
+     | --font-size-sm        | --text-sm         |
+     | --font-size-base      | --text-base       |
+     | --font-size-md        | --text-md         |
+     | --font-size-lg        | --text-lg         |
+     | --font-size-xl        | --text-xl         |
+     | --font-size-2xl       | --text-2xl        |
+     | --font-weight-normal  | --weight-normal   |
+     | --font-weight-medium  | --weight-medium   |
+     | --font-weight-semibold| --weight-semibold |
+     | --font-family         | --font-en         |
+     | --font-mono           | --font-mono       |
+
+     ============================================ */
+
+  /* @deprecated Use --font-en from theme.css instead */
   --font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
     sans-serif;
+  /* @deprecated theme.css has --font-mono with better stack */
   --font-mono: "SF Mono", Monaco, Consolas, "Liberation Mono", monospace;
 
+  /* @deprecated Use --text-xs instead */
   --font-size-xs: 11px;
+  /* @deprecated Use --text-sm instead */
   --font-size-sm: 12px;
+  /* @deprecated Use --text-base instead */
   --font-size-base: 13px;
+  /* @deprecated Use --text-md instead */
   --font-size-md: 14px;
+  /* @deprecated Use --text-lg instead */
   --font-size-lg: 16px;
+  /* @deprecated Use --text-xl instead */
   --font-size-xl: 18px;
+  /* @deprecated Use --text-2xl instead */
   --font-size-2xl: 20px;
 
+  /* @deprecated Use --weight-normal instead */
   --font-weight-normal: 400;
+  /* @deprecated Use --weight-medium instead */
   --font-weight-medium: 500;
+  /* @deprecated Use --weight-semibold instead */
   --font-weight-semibold: 600;
 
+  /* @deprecated Use --leading-tight instead */
   --line-height-tight: 1.25;
+  /* @deprecated Use --leading-normal instead */
   --line-height-normal: 1.5;
 
-  /* Borders */
+  /* ============================================
+     Border Radius (NOT deprecated)
+     ============================================
+     These match theme.css and are canonical.
+     ============================================ */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  /* Shadows */
+  /* ============================================
+     DEPRECATED: Legacy Shadow Variables
+     ============================================
+
+     DO NOT USE in new code. Use canonical tokens instead:
+
+     | Deprecated     | Use Instead  |
+     |----------------|--------------|
+     | --shadow-sm    | --shadow-1   |
+     | --shadow-md    | --shadow-2   |
+     | --shadow-lg    | --shadow-3   |
+
+     Note: theme.css shadows have proper dark mode support.
+     ============================================ */
+
+  /* @deprecated Use --shadow-1 instead */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  /* @deprecated Use --shadow-2 instead */
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  /* @deprecated Use --shadow-3 instead */
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  /* @deprecated Use --drawer-shadow instead */
   --shadow-drawer: -4px 0 15px rgba(0, 0, 0, 0.1);
 
-  /* Transitions */
+  /* ============================================
+     Transitions (NOT deprecated)
+     ============================================
+     These are fine to use, though consider using
+     CSS transition shorthand directly.
+     ============================================ */
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
 }

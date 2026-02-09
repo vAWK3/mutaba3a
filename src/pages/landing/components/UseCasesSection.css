@@ -1,12 +1,12 @@
 /* Use Cases Section */
 .landing-use-cases {
-  background: var(--bg, #070C16);
+  background: var(--bg);
 }
 
 .landing-section-subheadline {
   text-align: center;
-  color: var(--muted, #A6B4CC);
-  font-size: var(--text-md, 14px);
+  color: var(--muted);
+  font-size: var(--text-md);
   margin-top: -32px;
   margin-bottom: 40px;
 }
@@ -21,31 +21,31 @@
 
 .use-case-tab {
   padding: 12px 24px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-  border-radius: var(--radius-lg, 8px);
-  color: var(--text-secondary, #C5D0E0);
-  font-size: var(--text-sm, 12px);
-  font-weight: var(--weight-medium, 500);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .use-case-tab:hover {
-  background: var(--surface-hover, #151D2E);
-  border-color: var(--border-strong, rgba(231, 238, 249, 0.15));
-  color: var(--text, #E7EEF9);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .use-case-tab--active {
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.12));
-  border-color: var(--accent, #2CB6A6);
-  color: var(--accent, #2CB6A6);
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .use-case-tab--active:hover {
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.15));
-  color: var(--accent, #2CB6A6);
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 .use-case-content {
@@ -57,23 +57,23 @@
 
 .use-case-journey {
   padding: 32px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
-  border-radius: var(--radius-xl, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
 }
 
 .use-case-outcome {
-  font-size: var(--text-lg, 16px);
-  font-weight: var(--weight-medium, 500);
-  color: var(--text, #E7EEF9);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  color: var(--text);
   margin-bottom: 24px;
 }
 
 .use-case-steps {
   margin: 0;
   padding-inline-start: 20px;
-  color: var(--text-secondary, #C5D0E0);
-  font-size: var(--text-md, 14px);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
   line-height: 1.8;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .use-case-steps li::marker {
-  color: var(--accent, #2CB6A6);
+  color: var(--accent);
 }
 
 .use-case-preview {
@@ -94,7 +94,7 @@
 .use-case-img {
   max-width: 100%;
   height: auto;
-  border-radius: var(--radius-lg, 8px);
+  border-radius: var(--radius-lg);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
 }
 

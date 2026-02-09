@@ -13,6 +13,7 @@ export function ProofGallerySection() {
     <section className="landing-section landing-proof-gallery">
       <div className="landing-container">
         <h2 className="landing-section-headline">{t('landing.proof.headline')}</h2>
+        <p className="landing-section-subheadline">{t('landing.proof.subheadline')}</p>
 
         <div className="gallery-tabs" role="tablist">
           <button

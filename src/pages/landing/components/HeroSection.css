@@ -1,104 +1,286 @@
-/* Hero Section - Enhanced Layout */
+/* Hero Section - Privacy-first, download-focused */
+.landing-hero {
+  padding-top: 120px;
+  padding-bottom: 80px;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%);
+  overflow: hidden;
+}
+
 .hero-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 48px;
+  gap: 64px;
   align-items: center;
-  text-align: left;
-}
-
-:lang(ar) .hero-layout {
-  text-align: right;
 }
 
 .hero-content {
-  display: flex;
-  flex-direction: column;
+  max-width: 560px;
 }
 
-.hero-answers-mini {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 24px 0;
-}
-
-.hero-answer-card {
+/* Privacy Badge */
+.hero-badge {
   display: inline-flex;
   align-items: center;
-  padding: 10px 16px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-  border-radius: var(--radius-lg, 8px);
-  font-size: var(--text-sm, 12px);
-  color: var(--text-secondary, #C5D0E0);
-  transition: all 0.15s ease;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent);
+  border-radius: 100px;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  margin-bottom: 24px;
 }
 
-.hero-answer-card:hover {
-  border-color: var(--accent-subtle, rgba(44, 182, 166, 0.3));
-  color: var(--text, #E7EEF9);
+.hero-badge svg {
+  flex-shrink: 0;
 }
 
-.hero-answer-q {
-  font-style: italic;
+/* Headlines */
+.landing-headline-large {
+  font-family: var(--font-heading);
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: var(--weight-bold);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin: 0 0 20px 0;
+  color: var(--text);
 }
 
-.hero-preview {
+.landing-subheadline-large {
+  font-size: clamp(16px, 2vw, 20px);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 28px 0;
+  max-width: 480px;
+}
+
+/* Value Strip */
+.hero-value-strip {
   display: flex;
-  justify-content: center;
   align-items: center;
+  gap: 16px;
+  margin-bottom: 36px;
+  flex-wrap: wrap;
+}
+
+.hero-value-item {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hero-value-divider {
+  width: 4px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 50%;
+}
+
+/* Download CTAs */
+.hero-download-ctas {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.hero-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  min-width: 180px;
+}
+
+.hero-download-btn--mac {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.hero-download-btn--mac:hover {
+  background: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(231, 238, 249, 0.2);
+}
+
+.hero-download-btn--windows {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.hero-download-btn--windows:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+.hero-download-btn svg {
+  flex-shrink: 0;
+}
+
+.hero-download-btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.hero-download-btn-label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.hero-download-btn-hint {
+  font-size: var(--text-xs);
+  opacity: 0.7;
+}
+
+/* Alt Link */
+.hero-alt-link {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin: 0;
+}
+
+.hero-web-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: var(--weight-medium);
+}
+
+.hero-web-link:hover {
+  text-decoration: underline;
+}
+
+/* Preview */
+.hero-preview {
+  position: relative;
+}
+
+.hero-preview-frame {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px var(--border-subtle),
+    0 24px 80px rgba(0, 0, 0, 0.4),
+    0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .hero-preview-img {
-  max-width: 100%;
+  display: block;
+  width: 100%;
   height: auto;
-  border-radius: var(--radius-xl, 12px);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-lg);
 }
 
 /* Responsive */
 @media (max-width: 1024px) {
   .hero-layout {
     grid-template-columns: 1fr;
-    text-align: center;
-  }
-
-  :lang(ar) .hero-layout {
+    gap: 48px;
     text-align: center;
   }
 
   .hero-content {
-    align-items: center;
-  }
-
-  .hero-answers-mini {
-    justify-content: center;
-  }
-
-  .hero-preview {
-    order: -1;
-    margin-bottom: 24px;
-  }
-
-  .hero-preview-img {
-    max-width: 80%;
-  }
-}
-
-@media (max-width: 768px) {
-  .hero-answers-mini {
+    max-width: 100%;
+    display: flex;
     flex-direction: column;
     align-items: center;
   }
 
-  .hero-answer-card {
-    width: 100%;
-    max-width: 280px;
+  .landing-subheadline-large {
+    max-width: 540px;
+  }
+
+  .hero-value-strip {
     justify-content: center;
   }
 
-  .hero-preview-img {
-    max-width: 100%;
+  .hero-download-ctas {
+    justify-content: center;
+  }
+
+  .hero-preview {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-hero {
+    padding-top: 100px;
+    padding-bottom: 60px;
+  }
+
+  .hero-download-ctas {
+    flex-direction: column;
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .hero-download-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .hero-value-strip {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hero-value-divider {
+    display: none;
+  }
+}
+
+/* RTL Support */
+:lang(ar) .hero-layout {
+  text-align: right;
+}
+
+:lang(ar) .hero-content {
+  align-items: flex-end;
+}
+
+:lang(ar) .hero-download-btn-text {
+  align-items: flex-end;
+}
+
+@media (max-width: 1024px) {
+  :lang(ar) .hero-layout {
+    text-align: center;
+  }
+
+  :lang(ar) .hero-content {
+    align-items: center;
+  }
+
+  :lang(ar) .hero-download-btn-text {
+    align-items: flex-start;
+  }
+}
+
+/* Light mode */
+:root[data-theme="light"] .hero-download-btn--mac {
+  background: var(--bg);
+  color: var(--text);
+}
+
+:root[data-theme="light"] .hero-download-btn--mac:hover {
+  background: #1a1a1a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hero-download-btn {
+    transition: none;
   }
 }

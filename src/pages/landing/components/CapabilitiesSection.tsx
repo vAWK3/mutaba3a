@@ -71,6 +71,7 @@ export function CapabilitiesSection() {
     <section className="landing-section landing-capabilities">
       <div className="landing-container">
         <h2 className="landing-section-headline">{t('landing.capabilities.headline')}</h2>
+        <p className="landing-section-subheadline">{t('landing.capabilities.subheadline')}</p>
         <div className="capabilities-grid">
           {blocks.map((block, idx) => (
             <CapabilityBlock key={idx} title={block.title} bullets={block.bullets} />

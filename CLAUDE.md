@@ -1,1533 +1,532 @@
+Here’s a revised CLAUDE.md that keeps your “Project Intelligence & Engineering Standards” template, but injects the original mini-rm product/UX/architecture spec as the authoritative project layer (routes, AppShell, drawers-first UX rule, offline-first repo, schema, build order, perf guardrails, etc.) pulled from the attached file.  ￼
 
-## **1) Route map + app shell layout**
+# CLAUDE.md — Project Intelligence & Engineering Standards
 
-  
-
-### **Routes**
-
-- / → **Overview**
-    
-- /projects → **Projects index**
-    
-- /projects/:projectId → **Project detail**
-    
-- /clients → **Clients index**
-    
-- /clients/:clientId → **Client detail**
-    
-- /transactions → **Transactions ledger**
-    
-- /reports → **Reports**
-    
-- /settings → **Settings**
-    
-
-  
-
-### **AppShell (shared layout)**
-
-- **Left Sidebar** (fixed)
-    
-    - Overview
-        
-    - Projects
-        
-    - Clients
-        
-    - Transactions
-        
-    - Reports
-        
-    - (Settings pinned at bottom)
-        
-    
-- **TopBar** (sticky inside content)
-    
-    - Page title (and breadcrumb only for detail pages)
-        
-    - Global filters (optional per page)
-        
-    - **Primary CTA**: + Add (menu)
-        
-    
-- **Main Content** (scroll)
-    
-- **Global Drawers**
-    
-    - TransactionDrawer (Add/Edit)
-        
-    - ProjectDrawer (Add/Edit basic)
-        
-    - ClientDrawer (Add/Edit basic)
-        
-    
-
-  
-
-**Key UX rule:** no “create pages.” Everything is **drawer-first** so the app feels like a tool, not a website.
+> **This file is the single source of truth for all AI-assisted development in this project.**
+> Claude MUST read this file at the start of every session and follow all instructions precisely.
 
 ---
 
-## **2) Shared UI components (implementation-ready spec)**
+## 🧭 PROJECT-SPEC FIRST (MINI-RM) — AUTHORITATIVE IMPLEMENTATION TARGET
 
-  
+This repository implements a **desktop-first mini resource manager** (mini-rm) that feels like a tool, not a website.
 
-### **Navigation + framing**
+### Non-negotiable UX rule
+- **No “create pages.” Everything is drawer-first** so the app feels like a cockpit, not CRUD.  [oai_citation:1‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-- SidebarNav
-    
-    - Active state, keyboard friendly
-        
-    - Collapsible sections (later, not MVP)
-        
-    
-- TopBar
-    
-    - Breadcrumbs (only on /projects/:id and /clients/:id)
-        
-    - AddMenuButton (always visible)
-        
-    
+### Rendering + state boundaries (MVP)
+- **SPA/PWA** (server irrelevant for MVP)
+- **Local-first data** in IndexedDB now (Dexie), with a **Repo abstraction**
+- **UI state** (filters, drawers) stored in **URL + lightweight store**
+- **Derived totals** computed in Repo (preferred) or memoized selectors  [oai_citation:2‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-  
-
-### **Filters (reused across pages)**
-
-- DateRangePicker (presets: This month, Last month, This year, Custom)
-    
-- CurrencyTabs (USD, ILS, All (Converted) optional)
-    
-- StatusSegment (All, Paid, Unpaid, Overdue) — only when relevant
-    
-- SearchInput (searches client/project/note)
-    
-
-  
-
-### **Tables**
-
-- DataTable
-    
-    - sortable columns
-        
-    - column visibility (later)
-        
-    - row click opens detail OR drawer depending on page
-        
-    
-- RowActions
-    
-    - Edit
-        
-    - Duplicate (nice-to-have)
-        
-    - Delete (soft-delete preferred)
-        
-    
-
-  
-
-### **Drawers**
-
-- TransactionDrawer
-    
-    - mode: create/edit
-        
-    - type switch: Income (Paid), Receivable (Unpaid), Expense
-        
-    - smart defaults: last currency, last project for client, today’s date
-        
-    
-- ClientDrawer, ProjectDrawer
-    
-    - minimal fields only
-        
-    
-
----
-
-## **3) Screen-by-screen: layout + columns + filters**
-
-  
-
-### **A) Overview** 
-
-### **/**
-
-  
-
-**Top controls**
-
-- Date range preset (default: **This month**)
-    
-- Currency tabs: USD | ILS | All (Converted) (the last one can be disabled until FX settings exist)
-    
-
-  
-
-**KPI cards (for selected currency)**
-
-- Paid Income
-    
-- Unpaid Receivables
-    
-- Expenses
-    
-- Net (Paid - Expenses)
-    
-    _(Optional microtext: “Net incl. receivables”)_
-    
-
-  
-
-**Needs attention list**
-
-- Overdue receivables (sorted by most overdue)
-    
-- Receivables due in next 7 days
-    
-
-  
-
-**Recent activity table (last 10)**
-
-Columns:
-
-- Date
-    
-- Type (Income / Receivable / Expense)
-    
-- Client
-    
-- Project
-    
-- Amount
-    
-- Status (Paid/Unpaid + due date if unpaid)
-    
-
-  
-
-Row click → opens TransactionDrawer (edit)
-
----
-
-### **B) Projects index** 
-
-### **/projects**
-
-  
-
-**Filters**
-
-- Search (name + client)
-    
-- Field filter (simple dropdown)
-    
-- Currency tabs
-    
-
-  
-
-**Columns**
-
-- Project
-    
-- Client
-    
-- Field
-    
-- Paid Income
-    
-- Unpaid
-    
-- Expenses
-    
-- Net
-    
-- Last activity
-    
-
-  
-
-Row click → /projects/:projectId
-
----
-
-### **C) Project detail** 
-
-### **/projects/:projectId**
-
-  
-
-Header:
-
-- Project name
-    
-- Quick stats inline (Paid / Unpaid / Expenses)
-    
-- + Add prefilled with project
-    
-
-  
-
-Tabs:
-
-1. **Summary**
-    
-    - KPI row for project
-        
-    - Month breakdown list (not a full chart)
-        
-    
-2. **Transactions**
-    
-    - same table as ledger but scoped to project
-        
-    
-3. **Notes** (optional MVP but low effort, high value)
-    
-
-  
-
-Transactions tab filters:
-
-- Date range
-    
-- Currency
-    
-- Status (All/Paid/Unpaid/Overdue)
-    
-- Search
-    
-
-  
-
-Transactions columns:
-
-- Date
-    
-- Type
-    
-- Client
-    
-- Category
-    
-- Amount
-    
-- Status / Due
-    
-- Note indicator
-    
-
----
-
-### **D) Clients index** 
-
-### **/clients**
-
-  
-
-**Filters**
-
-- Search
-    
-- Currency tabs
-    
-
-  
-
-**Columns**
-
-- Client
-    
-- Active projects
-    
-- Paid Income
-    
-- Unpaid
-    
-- Last payment date
-    
-- Last activity
-    
-
-  
-
-Row click → /clients/:clientId
-
----
-
-### **E) Client detail** 
-
-### **/clients/:clientId**
-
-  
-
-Header:
-
-- Client name
-    
-- Quick stats
-    
-- + Add prefilled with client
-    
-
-  
-
-Sections/Tabs (either is fine; I’d do tabs for consistency):
-
-1. Summary
-    
-2. Projects (list of linked projects)
-    
-3. Receivables (focused table)
-    
-4. Transactions (full scoped ledger)
-    
-
-  
-
-Receivables table columns:
-
-- Due date
-    
-- Project
-    
-- Amount
-    
-- Days overdue
-    
-- Status
-    
-- Actions: Mark paid
-    
-
----
-
-### **F) Transactions ledger** 
-
-### **/transactions**
-
-  
-
-This is the “truth table” screen.
-
-  
-
-**Filters (top row)**
-
-- Date range (default This month)
-    
-- Currency tabs
-    
-- Type: All | Income | Receivable | Expense
-    
-- Status (contextual): All | Paid | Unpaid | Overdue
-    
-- Search
-    
-
-  
-
-**Columns**
-
-- Date
-    
-- Type
-    
-- Client
-    
-- Project
-    
-- Category
-    
-- Amount (with currency)
-    
-- Status (Paid/Unpaid + due)
-    
-- Note / Attachments indicator
-    
-
-  
-
-Row click → TransactionDrawer (edit)
-
----
-
-### **G) Reports** 
-
-### **/reports**
-
-  
-
-Left panel: report presets
-
-Right panel: report view + export
-
-  
-
-Presets:
-
-- This month
-    
-- This year
-    
-- By project
-    
-- By client
-    
-- Expenses by category
-    
-- Unpaid aging (0–7 / 8–30 / 31–60 / 60+)
-    
-
-  
-
-Common controls:
-
-- Date range (where relevant)
-    
-- Currency tabs
-    
-- Export CSV (MVP)
-    
-- Toggle All (Converted) (only if FX configured)
-    
-
----
-
-### **H) Settings** 
-
-### **/settings**
-
-  
-
-MVP-only settings:
-
-- Enabled currencies (USD/ILS)
-    
-- Default currency tab
-    
-- FX settings (only needed for “All converted”)
-    
-- Data export/import
-    
-- (Later) Sync login + status
-    
-
----
-
-## **4) Data model (offline-first, multi-currency, receivables clean)**
-
-  
-
-### **Core entities**
-
-- **Client**
-    
-- **Project**
-    
-- **Transaction**
-    
-
-  
-
-### **The big choice: how to represent “unpaid income”**
-
-  
-
-Do **not** invent a second object. Make it a transaction with kind=income and status=unpaid.
-
-That way:
-
-- receivables are first-class
-    
-- “mark paid” is just flipping status + setting paid_at
-    
-
-  
-
-### **Transaction types**
-
-- kind: income | expense
-    
-- status: paid | unpaid _(only meaningful for income; expenses are always paid unless you want “payables” later)_
-    
-- due_date: required if income+unpaid, else null
-    
-
-  
-
-### **Currency handling rules (non-negotiable)**
-
-1. **Always store the original amount & currency.**
-    
-2. Reports are **per-currency by default**.
-    
-3. “All (Converted)” is optional and must:
-    
-    - clearly show the base currency
-        
-    - clearly state the FX source (manual rate, date)
-        
-    
-
-  
-
-### **Minimal schema (SQLite-friendly, works later for sync)**
-
-```
--- clients
-CREATE TABLE clients (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT,
-  phone TEXT,
-  notes TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  archived_at TEXT
-);
-
--- projects
-CREATE TABLE projects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  client_id TEXT,
-  field TEXT,              -- e.g. "Design", "Development", "Legal"
-  notes TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  archived_at TEXT,
-  FOREIGN KEY (client_id) REFERENCES clients(id)
-);
-
--- categories (simple, optional table; or keep category as TEXT on transaction)
-CREATE TABLE categories (
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,      -- 'income' or 'expense'
-  name TEXT NOT NULL
-);
-
--- transactions
-CREATE TABLE transactions (
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,              -- 'income' | 'expense'
-  status TEXT NOT NULL,            -- 'paid' | 'unpaid' (income only; expenses use 'paid')
-  title TEXT,                      -- optional short label
-  client_id TEXT,
-  project_id TEXT,
-  category_id TEXT,
-  amount_minor INTEGER NOT NULL,   -- store cents/agorot
-  currency TEXT NOT NULL,          -- 'USD' | 'ILS'
-  occurred_at TEXT NOT NULL,       -- when it happened (invoice date / expense date)
-  due_date TEXT,                   -- required if income+unpaid
-  paid_at TEXT,                    -- set when marking paid
-  notes TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  deleted_at TEXT,
-  FOREIGN KEY (client_id) REFERENCES clients(id),
-  FOREIGN KEY (project_id) REFERENCES projects(id),
-  FOREIGN KEY (category_id) REFERENCES categories(id)
-);
-
--- fx rates (only needed for unified converted reports)
-CREATE TABLE fx_rates (
-  id TEXT PRIMARY KEY,
-  base_currency TEXT NOT NULL,     -- e.g. 'ILS'
-  quote_currency TEXT NOT NULL,    -- e.g. 'USD'
-  rate REAL NOT NULL,              -- 1 quote_currency = rate base_currency? pick and stick to one convention
-  effective_date TEXT NOT NULL,    -- YYYY-MM-DD
-  source TEXT NOT NULL,            -- 'manual'
-  created_at TEXT NOT NULL
-);
-```
-
-### **Receivable logic (exact behavior)**
-
-- A transaction is a **receivable** if:
-    
-    - kind = 'income' AND status = 'unpaid'
-        
-    
-- It is **overdue** if:
-    
-    - receivable AND due_date < today
-        
-    
-- “Mark as paid” does:
-    
-    - set status='paid'
-        
-    - set paid_at = now()
-        
-    - optionally set occurred_at unchanged (keep original “earned” date)
-        
-    
-
-  
-
-This preserves a useful distinction:
-
-- **occurred_at** = when you earned/issued it
-    
-- **paid_at** = when cash actually arrived
-    
-
----
-
-## **5) Repository API (so storage can swap later: IndexedDB now, SQLite in Tauri)**
-
-  
-
-Define a storage-agnostic interface. Your UI never touches SQL directly.
-
-```
-type Currency = 'USD' | 'ILS';
-type TxKind = 'income' | 'expense';
-type TxStatus = 'paid' | 'unpaid';
-
-export interface Transaction {
-  id: string;
-  kind: TxKind;
-  status: TxStatus;
-  clientId?: string;
-  projectId?: string;
-  categoryId?: string;
-  amountMinor: number;
-  currency: Currency;
-  occurredAt: string; // ISO
-  dueDate?: string;   // ISO date
-  paidAt?: string;    // ISO
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string;
-}
-
-export interface QueryFilters {
-  dateFrom?: string;
-  dateTo?: string;
-  currency?: Currency;         // if undefined => all (but show grouped totals)
-  kind?: TxKind;
-  status?: TxStatus | 'overdue';
-  clientId?: string;
-  projectId?: string;
-  search?: string;
-  limit?: number;
-  offset?: number;
-  sort?: { by: string; dir: 'asc' | 'desc' };
-}
-
-export interface Repo {
-  listTransactions(filters: QueryFilters): Promise<Transaction[]>;
-  getTransaction(id: string): Promise<Transaction | null>;
-  upsertTransaction(tx: Transaction): Promise<void>;
-  markIncomePaid(id: string, paidAtIso: string): Promise<void>;
-  softDeleteTransaction(id: string): Promise<void>;
-
-  listProjects(...): Promise<...>;
-  listClients(...): Promise<...>;
-
-  getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency }): Promise<{
-    paidIncomeMinor: number;
-    unpaidIncomeMinor: number;
-    expensesMinor: number;
-  }>;
-}
-```
-
-**Why this matters:** you can start with **Dexie/IndexedDB** for web speed, then implement the same Repo using **SQLite in Tauri** without rewriting screens.
-
----
-
-## **6) “All (Converted)” unified view (FX behavior that won’t lie)**
-
-- Only enabled when:
-    
-    - user selects a base currency (e.g. ILS)
-        
-    - at least one relevant FX rate exists for date range
-        
-    
-- Conversion convention (pick one and never mix):
-    
-    - Example: store **USD→ILS** as base=ILS, quote=USD, rate=3.65 meaning:
-        
-        - amountILS = amountUSD * 3.65
-            
-        
-    
-- For a converted report, each row should optionally show:
-    
-    - original amount + currency
-        
-    - converted amount + base currency
-        
-    - FX rate used (effective date)
-        
-    
-
-  
-
-MVP shortcut (honest one): for “This month” converted totals, use the **latest rate** in that month unless a per-day rate exists.
-
----
-
-## **7) What to build first (fastest path)**
-
-1. Implement **Repo + schema + seed data**
-    
-2. Build **Transactions ledger + TransactionDrawer**
-    
-3. Add **Projects index/detail** (just filtered ledger + summary)
-    
-4. Add **Clients index/detail**
-    
-5. Add **Overview** (computed totals + attention list)
-    
-6. Add **Reports presets** (reuse query + group)
-    
-
-  
-
-That order gives you a usable tool early, and every new screen is mostly just “different query + grouping.”
-
----
-
-Below is a buildable **component tree per route** (React desktop-first) plus a **minimal design system spec** so it feels like a sharp financial cockpit, not an admin CRUD swamp.
-
----
-
-## **0) App architecture decisions (so the code stays sane)**
-
-  
-
-### **Rendering + state boundaries**
-
-- **Server is irrelevant for MVP** → build as SPA/PWA.
-    
-- **Data lives locally** (IndexedDB now), with a **Repo** abstraction.
-    
-- **UI state** (filters, drawers) is URL + lightweight store.
-    
-- **Derived totals** are computed in the Repo (preferred) or memoized selectors.
-    
-
-  
-
-### **Suggested stack (fast + predictable)**
-
+### Suggested stack
 - React + Vite
-    
-- TanStack Router _or_ React Router
-    
-- TanStack Query for caching async queries (even offline repos benefit)
-    
-- Dexie (IndexedDB) for web storage
-    
-- Later: swap Repo to SQLite in Tauri
-    
+- TanStack Router (or React Router)
+- TanStack Query
+- Dexie (IndexedDB)
+- Later: swap Repo to SQLite in Tauri  [oai_citation:3‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-## **1) Global component system (App Shell)**
+## 🗺️ ROUTES (MVP)
 
-  
+- / → Overview
+- /projects → Projects index
+- /projects/:projectId → Project detail
+- /clients → Clients index
+- /clients/:clientId → Client detail
+- /transactions → Transactions ledger
+- /reports → Reports
+- /settings → Settings  [oai_citation:4‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-### **<AppRoot />**
+---
 
-- Provides:
-    
-    - <RepoProvider repo={repo} />
-        
-    - <QueryClientProvider />
-        
-    - <AppUIProvider /> (drawer state, toasts)
-        
-    - Router
-        
-    
+## 🧱 APP SHELL (ALWAYS MOUNTED)
 
-  
+### AppRoot providers
+- RepoProvider(repo)
+- QueryClientProvider
+- AppUIProvider (drawer state, toasts)
+- Router  [oai_citation:5‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-### **<AppShell />**
+### AppShell composition
 
-###  **(always mounted)**
-
-```
 AppShell
- ├─ SidebarNav
- ├─ TopBar
- ├─ MainViewport
- └─ GlobalOverlays
-     ├─ TransactionDrawerController
-     ├─ ProjectDrawerController
-     └─ ClientDrawerController
-```
+├─ SidebarNav
+├─ TopBar
+├─ MainViewport
+└─ GlobalOverlays
+├─ TransactionDrawerController
+├─ ProjectDrawerController
+└─ ClientDrawerController
 
-#### **SidebarNav**
+### SidebarNav
+- Fixed left navigation; Settings pinned at bottom
+- Active state + keyboard friendly
+- Collapsible sections later, not MVP  [oai_citation:7‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-Props:
+### TopBar
+- Sticky in content
+- Page title + breadcrumb only on detail pages
+- Primary CTA: **+ Add (menu)**  [oai_citation:8‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-- items: NavItem[]
-    
-- activePath: string
-    
-
-  
-
-Memo boundary:
-
-- React.memo(SidebarNav) (re-renders only on route change)
-    
-
-  
-
-#### **TopBar**
-
-Props:
-
-- title: ReactNode
-    
-- breadcrumbs?: Breadcrumb[]
-    
-- rightSlot?: ReactNode (Add menu, page actions)
-    
-- filterSlot?: ReactNode (page-level filters)
-    
-
-  
-
-Memo boundary:
-
-- split:
-    
-    - TopBarTitle
-        
-    - TopBarActions
-        
-    - TopBarFilters
-        
-    
-
-  
-
-#### **GlobalOverlays**
-
-State:
-
-- drawerState in a small store (Zustand or Context + reducer)
-    
-- But: **open drawer state should mirror URL** when possible (deep linkable):
-    
-    - ?tx=123 for edit drawer
-        
-    - ?newTx=income for create
-        
-    
+### GlobalOverlays URL mirroring (deep linkable)
+- Edit drawer: `?tx=<id>`
+- Create drawer: `?newTx=income|expense|receivable&clientId=&projectId=`  [oai_citation:9‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-## **2) Shared primitives (the “cockpit kit”)**
+## 🧩 SHARED UI COMPONENTS (COCKPIT KIT)
 
-  
+### Filters (reusable)
+- DateRangeControl (presets: This month, Last month, This year, Custom)
+- CurrencyTabs (USD, ILS, optional All Converted)
+- TypeSegment (All | Income | Receivable | Expense)
+- StatusSegment (All | Paid | Unpaid | Overdue)
+- SearchInput (client/project/note; debounce ~200ms)  [oai_citation:10‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-### **Filters**
+Perf rule:
+- Filters update a **single FiltersModel** object and push to URL (replaceState), not multiple setStates.  [oai_citation:11‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-- <DateRangeControl value onChange presets />
-    
-- <CurrencyTabs value onChange enabledCurrencies />
-    
-- <TypeSegment value onChange /> (All / Income / Receivable / Expense)
-    
-- <StatusSegment value onChange /> (All / Paid / Unpaid / Overdue)
-    
-- <SearchInput value onChange debounceMs=200 />
-    
+### Tables
+- DataTable(columns, rows, rowKey, onRowClick)
+- CellAmount(amountMinor, currency)
+- CellStatus(status, dueDate, paidAt)
+- RowActionsMenu  [oai_citation:12‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-  
+Perf rule:
+- Tables receive **already-shaped rows**, not raw transactions computed per cell.  [oai_citation:13‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-Perf rule: Filters update a **single FiltersModel** object and push to URL (replaceState), not multiple setStates.
-
-  
-
-### **Tables**
-
-- <DataTable columns rows rowKey onRowClick />
-    
-- <CellAmount amountMinor currency />
-    
-- <CellStatus status dueDate paidAt />
-    
-- <RowActionsMenu />
-    
-
-  
-
-Perf rule: Tables should take **already-shaped rows**. Don’t pass raw transactions and compute per cell.
-
-  
-
-### **Summary blocks**
-
-- <KpiRow items />
-    
-- <InlineStat label value />
-    
-- <AttentionList items onAction />
-    
+### Summary blocks
+- KpiRow
+- InlineStat
+- AttentionList  [oai_citation:14‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-## **3) Data fetching pattern (per screen)**
+## 📄 SCREEN SPECS (MVP BEHAVIOR)
 
-  
+### Overview (/)
+- Top controls: DateRange (default This month), Currency tabs
+- KPI cards: Paid Income, Unpaid Receivables, Expenses, Net
+- Needs attention: overdue + due next 7 days
+- Recent activity (last 10)
+- Row click opens TransactionDrawer edit  [oai_citation:15‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-Use TanStack Query with **stable query keys** derived from filters.
+### Transactions ledger (/transactions) “truth table”
+- Filters: date, currency, type, status, search
+- Row click opens TransactionDrawer edit (`?tx=`)  [oai_citation:16‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-  
+### Projects (/projects) + detail (/projects/:id)
+- Index columns: project, client, field, paid, unpaid, expenses, net, last activity
+- Detail: tabs (Summary, Transactions, Notes optional), +Add prefilled with project  [oai_citation:17‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-Example:
+### Clients (/clients) + detail (/clients/:id)
+- Index columns: client, active projects, paid, unpaid, last payment, last activity
+- Detail: tabs (Summary, Projects, Receivables, Transactions)
+- Receivables focus: due, days overdue, mark paid  [oai_citation:18‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-- ['transactions', normalizedFilters]
-    
-- ['overviewTotals', dateRange, currency]
-    
-- ['project', projectId]
-    
-- ['projectTotals', projectId, dateRange, currency]
-    
+### Reports (/reports)
+- Presets: month/year/by project/by client/expenses by category/unpaid aging
+- Export CSV (MVP)
+- Converted toggle only if FX configured  [oai_citation:19‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
-  
-
-Normalization:
-
-- ensure dateFrom/dateTo are ISO strings
-    
-- ensure undefined fields are stripped (so query keys don’t churn)
-    
-
-  
-
-Memo boundaries:
-
-- useMemo(() => normalizeFilters(filters), [filters])
-    
-- don’t recreate column defs every render: useMemo(columns, [])
-    
+### Settings (/settings)
+- Enabled currencies, default currency tab
+- FX settings (manual rates) for converted reports
+- Data export/import  [oai_citation:20‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-# **4) Route-by-route component trees**
+## 🗃️ DATA MODEL (OFFLINE-FIRST, MULTI-CURRENCY)
 
-  
-
-## **/**
-
-##  **Overview**
-
-```
-OverviewPage
- ├─ OverviewHeader
- │   ├─ DateRangeControl
- │   └─ CurrencyTabs
- ├─ OverviewKpis (query: overview totals)
- ├─ AttentionPanel (query: overdue + due soon)
- └─ RecentActivityTable (query: last 10 tx)
-```
-
-### **OverviewPage state**
-
-- filters: { dateFrom, dateTo, currencyTab } synced to URL
-    
-
-  
-
-### **Queries**
-
-- useOverviewTotals({dateFrom,dateTo,currency})
-    
-- useAttentionReceivables({dateFrom,dateTo,currency}) (overdue + next 7 days)
-    
-- useTransactions({dateFrom,dateTo,currency, limit:10, sort:'occurredAt:desc'})
-    
-
-  
-
-Memo boundaries
-
-- OverviewKpis memoizes formatted numbers, only rerenders when totals change.
-    
-- RecentActivityTable gets pre-shaped rows.
-    
-
-  
-
-Actions
-
-- “Mark paid” calls repo.markIncomePaid(txId) then invalidates:
-    
-    - overviewTotals
-        
-    - attentionReceivables
-        
-    - transactions
-        
-    
-
----
-
-## **/transactions**
-
-##  **Ledger**
-
-```
-TransactionsPage
- ├─ LedgerHeader
- │   ├─ DateRangeControl
- │   ├─ CurrencyTabs
- │   ├─ TypeSegment
- │   ├─ StatusSegment
- │   └─ SearchInput
- ├─ LedgerTable (query: transactions list)
- └─ LedgerFooter
-     ├─ Pagination (optional MVP)
-     └─ TotalsStrip (query: totals by currency/kind)
-```
-
-### **Ledger filters model**
-
-```
-{
-  dateFrom, dateTo,
-  currency?,            // undefined = all currencies
-  kind?,                // undefined = all
-  status?,              // includes 'overdue'
-  search?,
-  limit, offset,
-  sort
-}
-```
-
-### **Table columns (exact)**
-
-1. Date (occurredAt)
-    
-2. Type (Income / Receivable / Expense)
-    
-3. Client
-    
-4. Project
-    
-5. Category
-    
-6. Amount (right aligned)
-    
-7. Status (Paid/Unpaid + due)
-    
-8. Note/Attachment indicator
-    
-
-  
-
-Row click → opens TransactionDrawer with ?tx=<id>
-
-  
-
-Memo boundaries
-
-- LedgerTable only re-renders when rows or columns change
-    
-- columns defined once with useMemo([])
-    
-
----
-
-## **/projects**
-
-##  **Projects index**
-
-```
-ProjectsPage
- ├─ ProjectsHeader
- │   ├─ SearchInput
- │   ├─ FieldSelect
- │   └─ CurrencyTabs
- ├─ ProjectsTable (query: projects summary list)
- └─ EmptyState / CreateProjectCTA
-```
-
-### **Query shape**
-
-  
-
-Prefer one query that returns “summary rows”:
-
-repo.listProjectSummaries({currency, search, field})
-
-  
-
-Columns
-
-- Project
-    
+### Core entities
 - Client
-    
-- Field
-    
-- Paid Income
-    
-- Unpaid
-    
-- Expenses
-    
-- Net
-    
-- Last activity
-    
-
-  
-
-Row click → /projects/:id
-
----
-
-## **/projects/:projectId**
-
-##  **Project detail**
-
-```
-ProjectDetailPage
- ├─ ProjectTopBar
- │   ├─ Breadcrumbs (Projects / ProjectName)
- │   ├─ InlineStats (paid/unpaid/expenses)
- │   └─ AddMenuButton (prefill projectId)
- ├─ ProjectTabs
- │   ├─ SummaryTab
- │   │   ├─ KpiRow (query: project totals)
- │   │   └─ MonthBreakdownList (query: grouped by month)
- │   ├─ TransactionsTab
- │   │   ├─ FiltersRow (date/currency/status/search)
- │   │   └─ TransactionsTable (scoped query)
- │   └─ NotesTab (optional)
-```
-
-### **Queries**
-
-- useProject(projectId) (name, clientId, field)
-    
-- useProjectTotals(projectId, dateRange, currency)
-    
-- useProjectMonthly(projectId, year, currency) (simple list)
-    
-- useTransactions({projectId,...filters})
-    
-
-  
-
-Perf rule
-
-- Tabs should mount lazily (only render active tab) to avoid running all queries.
-    
-
----
-
-## **/clients**
-
-##  **Clients index**
-
-```
-ClientsPage
- ├─ ClientsHeader
- │   ├─ SearchInput
- │   └─ CurrencyTabs
- ├─ ClientsTable (query: client summary list)
- └─ EmptyState / CreateClientCTA
-```
-
-Columns
-
-- Client
-    
-- Active projects
-    
-- Paid income
-    
-- Unpaid
-    
-- Last payment date
-    
-- Last activity
-    
-
----
-
-## **/clients/:clientId**
-
-##  **Client detail**
-
-```
-ClientDetailPage
- ├─ ClientTopBar
- │   ├─ Breadcrumbs (Clients / ClientName)
- │   ├─ InlineStats
- │   └─ AddMenuButton (prefill clientId)
- ├─ ClientTabs
- │   ├─ SummaryTab (totals + tiny breakdown)
- │   ├─ ProjectsTab (query: projects for client)
- │   ├─ ReceivablesTab
- │   │   ├─ StatusSegment (Unpaid/Overdue/All)
- │   │   └─ ReceivablesTable (scoped query)
- │   └─ TransactionsTab (scoped ledger)
-```
-
-Receivables columns
-
-- Due date
-    
 - Project
-    
-- Amount
-    
-- Days overdue
-    
-- Status
-    
-- Action: Mark paid
-    
+- Transaction  [oai_citation:21‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+
+### Represent “unpaid income”
+- Do **not** invent a second object.
+- Receivable = Transaction with `kind=income` and `status=unpaid`.  [oai_citation:22‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+
+### Currency rules (non-negotiable)
+1. Always store original amount + currency
+2. Reports are per-currency by default
+3. “All Converted” is optional and must clearly show base currency + FX source/date  [oai_citation:23‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+
+### Minimal schema (SQLite-friendly; also maps to IndexedDB tables)
+(Keep the semantics exactly; storage engine can vary.)  [oai_citation:24‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+
+### Receivable logic
+- receivable: `kind='income' && status='unpaid'`
+- overdue: receivable && due_date < today
+- mark paid:
+  - set status='paid'
+  - set paid_at = now
+  - keep occurred_at as earned/issued date  [oai_citation:25‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-## **/reports**
+## 🧱 REPOSITORY API (STORAGE-AGNOSTIC CONTRACT)
 
-##  **Reports**
-
-```
-ReportsPage
- ├─ ReportsLayout
- │   ├─ ReportsSidebar (preset list)
- │   └─ ReportPanel
- │       ├─ ReportHeader (title + controls)
- │       │   ├─ DateRangeControl (contextual)
- │       │   ├─ CurrencyTabs
- │       │   ├─ ConvertedToggle (disabled until FX set)
- │       │   └─ ExportButton (CSV)
- │       └─ ReportBody (varies by preset)
-```
-
-### **Preset components**
-
-- ReportThisMonth
-    
-- ReportThisYear
-    
-- ReportByProject
-    
-- ReportByClient
-    
-- ReportExpensesByCategory
-    
-- ReportUnpaidAging
-    
-
-  
-
-Each preset should use **one query** returning grouped rows.
-
-  
-
-Example:
-
-repo.getReport({type:'expensesByCategory', dateFrom, dateTo, currency})
-
-  
-
-Export:
-
-- Use same dataset as UI (no recomputation), generate CSV client-side.
-    
+UI never touches SQL directly; UI uses Repo interface so we can swap Dexie → SQLite later.  [oai_citation:26‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-## **/settings**
+## 🧾 FX “ALL (CONVERTED)” RULES (HONEST CONVERSIONS)
 
-##  **Settings**
-
-```
-SettingsPage
- ├─ CurrencySettings (enabled currencies, default tab)
- ├─ FxSettings (manual rates list + add rate)
- └─ DataTools (export/import backup)
-```
-
-DataTools MVP actions
-
-- Export JSON backup (all tables)
-    
-- Import JSON backup (with validation)
-    
-- Later: “Open backup folder” via Tauri
-    
+- Enable only when base currency selected and rates exist
+- Pick one conversion convention and never mix
+- Rows may show original amount + converted amount + FX rate effective date
+- MVP shortcut: for “This month”, use latest rate that month unless per-day exists  [oai_citation:27‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-# **5) Drawers (exact structure + state)**
+## 🧱 BUILD ORDER (FASTEST PATH)
 
-  
-
-## **TransactionDrawer (Create/Edit)**
-
-```
-TransactionDrawer
- ├─ Header (mode + close)
- ├─ TypeSelector (Income / Receivable / Expense)
- ├─ FormBody
- │   ├─ AmountInput (amount + currency)
- │   ├─ DateInput (occurredAt)
- │   ├─ ClientCombobox (optional)
- │   ├─ ProjectCombobox (optional, filtered by client)
- │   ├─ CategorySelect
- │   ├─ (Receivable only) DueDate + Status
- │   ├─ Notes
- │   └─ (Later) Attachments
- └─ Footer
-     ├─ Delete (edit only)
-     ├─ Save
-     └─ Save + Add Another (nice)
-```
-
-### **Drawer state rules**
-
-- Open edit: ?tx=<id>
-    
-- Open create: ?newTx=income|expense|receivable&clientId=&projectId=
-    
-- On save:
-    
-    - upsert, invalidate relevant queries
-        
-    - close drawer by removing query param (router replace)
-        
-    
-
-  
-
-Perf + correctness:
-
-- Use form library (React Hook Form) + schema validation.
-    
-- amountMinor computed safely from decimal input.
-    
+1. Repo + schema + seed
+2. Transactions ledger + TransactionDrawer
+3. Projects index/detail
+4. Clients index/detail
+5. Overview (totals + attention)
+6. Reports presets (reuse query + group)  [oai_citation:28‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-# **6) Minimal Design System Spec (desktop-first)**
+## 🚀 PERFORMANCE GUARDRAILS
 
-  
-
-## **Layout + spacing**
-
-- Base unit: **8px**
-    
-- Page padding: **24px**
-    
-- Card padding: **16px**
-    
-- Table row height: **40px** (dense, readable)
-    
-- Header height: **56px**
-    
-- Sidebar width: **240px**
-    
-
-  
-
-## **Typography (simple hierarchy)**
-
-- Page title: 18–20px / semibold
-    
-- Section title: 14–16px / semibold
-    
-- Body: 13–14px / regular
-    
-- Muted/meta: 12px
-    
-
-  
-
-## **Table density + alignment rules**
-
-- Amounts always **right-aligned**
-    
-- Dates and statuses are compact
-    
-- “Type” uses small pill/badge, not huge labels
-    
-- Zebra striping optional; prefer subtle row hover
-    
-
-  
-
-## **Color semantics (don’t over-design)**
-
-- Paid income: positive tone
-    
-- Expenses: neutral/negative tone
-    
-- Unpaid: warning tone
-    
-- Overdue: stronger warning tone
-    
-
-  
-
-But keep it minimal: most rows should look identical; semantics are hints, not a rainbow.
-
-  
-
-## **Interaction rules**
-
-- Primary action always in top-right: + Add
-    
-- Row click opens drawer (fast edit)
-    
-- Esc closes drawer
-    
-- Cmd/Ctrl+K opens global search (later, but keep room)
-    
-
-  
-
-## **Empty states**
-
-  
-
-Every index page needs:
-
-- short explanation
-    
-- one CTA: “Create X”
-    
-    No illustrations needed.
-    
+- Pre-shape rows in useMemo before passing to tables
+- Column defs stable via useMemo([])
+- Filter state stored as one object + URL sync to avoid rerender storms
+- Ledger scaling later: pagination or virtualization; default hard cap = This month  [oai_citation:29‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
 
 ---
 
-# **7) Performance guardrails (so it stays snappy)**
+## 🧠 SELF-MANAGED KNOWLEDGE SYSTEM
 
-- Pre-shape rows in a useMemo before passing to tables.
-    
-- Column defs in useMemo([]) with stable callbacks.
-    
-- Avoid re-render storms: keep filter state in one object + URL sync.
-    
-- For large ledgers later:
-    
-    - add pagination or virtualization (TanStack Virtual)
-        
-    - add “This month” as default hard cap
-        
-    
+Claude is responsible for maintaining its own project memory to prevent contradictions and regressions.
+
+### Knowledge Files (Claude must maintain these)
+
+.claude/
+├── SYSTEM_OVERVIEW.md
+├── DECISIONS.md
+├── CHANGELOG.md
+├── COMPONENT_REGISTRY.md
+├── PATTERNS.md
+├── TECH_DEBT.md
+├── TEST_PLAN.md
+└── INFRA.md
+
+### Design & Roadmap Documentation (Authoritative Source)
+
+docs/
+├── README.md
+├── admin-panel/
+│ ├── 01-VISION.md
+│ ├── 02-ARCHITECTURE.md
+│ ├── 03-DATA-MODELS.md
+│ ├── 04-UI-UX-DESIGN.md
+│ ├── 05-FEATURES.md
+│ └── 06-SECURITY.md
+├── architecture/
+│ └── SYSTEM-ARCHITECTURE.md
+└── roadmap/
+└── ROADMAP.md
+
+Claude MUST consult `docs/` before implementing any feature, fix, or enhancement:
+1. Before any new feature: read `docs/admin-panel/05-FEATURES.md`
+2. Before architecture decisions: check `docs/admin-panel/02-ARCHITECTURE.md` + `docs/architecture/SYSTEM-ARCHITECTURE.md`
+3. Before UI work: follow `docs/admin-panel/04-UI-UX-DESIGN.md`
+4. Before data model changes: consult `docs/admin-panel/03-DATA-MODELS.md`
+5. Before starting any phase: reference `docs/roadmap/ROADMAP.md`
+6. Before security-related work: read `docs/admin-panel/06-SECURITY.md`
+7. After completing a roadmap milestone: update `docs/roadmap/ROADMAP.md`
+
+### Knowledge Update Protocol
+
+Before making ANY change, Claude MUST:
+1. Read ALL files in `.claude/`
+2. Read `SYSTEM_OVERVIEW.md`
+3. Check `DECISIONS.md`
+4. Check `COMPONENT_REGISTRY.md`
+5. Check `PATTERNS.md`
+
+After completing ANY change, Claude MUST:
+1. Update `CHANGELOG.md` (date, what, why, files)
+2. Update `SYSTEM_OVERVIEW.md` if features/capabilities/architecture changed
+3. Update `DECISIONS.md` if a new decision was made
+4. Update `COMPONENT_REGISTRY.md` if reusable components changed/added
+5. Update `PATTERNS.md` if a new pattern was introduced
+6. Update `TECH_DEBT.md` if debt introduced/resolved
+7. Update `TEST_PLAN.md` with coverage updates
+
+### Conflict Prevention Rules
+- NEVER contradict `DECISIONS.md` without explicit override log (why, what replaces it, date)
+- NEVER duplicate functionality (check `COMPONENT_REGISTRY.md` first)
+- NEVER introduce new patterns if existing in `PATTERNS.md` fits
+- If conflict exists between code and documented decisions, STOP and flag it
+
+---
+
+## 🏗️ FEATURE DEVELOPMENT LIFECYCLE
+
+Every new feature MUST follow this lifecycle.
+
+### Phase 1: Design
+Before writing implementation code:
+1. Write Design Brief: `.claude/designs/<feature-name>.md`
+   - problem + acceptance criteria
+   - proposed solution + component diagram
+   - API contracts + error states
+   - reuse analysis (COMPONENT_REGISTRY)
+   - impact analysis
+   - i18n/l10n considerations
+   - cost implications
+   - infra requirements
+2. Get explicit user approval before proceeding
+
+### Phase 2: Test Plan & TDD
+1. Write Test Plan: `.claude/designs/<feature-name>-tests.md`
+2. Write tests first (Red)
+3. Implement (Green)
+4. Refactor (keep Green)
+
+### Phase 3: Implementation
+- Clean, production-ready code
+- Run ALL tests locally
+- Verify zero regressions
+
+### Phase 4: Verification
+Run locally:
+```bash
+npm run lint
+npm run test
+npm run test:integration
+npm run typecheck
+npm run build
+
+No task is “done” until all pass.
+
+⸻
+
+📐 CODE STANDARDS & DESIGN PATTERNS
+
+Clean Code Principles
+	•	Single responsibility
+	•	DRY, KISS, YAGNI
+	•	Meaningful naming
+	•	Small functions (~20 lines)
+	•	No magic numbers/strings
+	•	Explicit over implicit
+
+Engineering Patterns (document in PATTERNS.md)
+	•	Repository, Factory, Strategy, Observer/Event, Adapter
+	•	Dependency Injection
+	•	CQRS where it adds value
+	•	Circuit breaker for external calls
+
+Code Organization
+
+src/
+├── components/
+├── services/
+├── repositories/
+├── models/
+├── utils/
+├── config/
+├── middleware/
+├── i18n/
+│ └── locales/
+├── infrastructure/
+│ ├── terraform/
+│ └── docker/
+└── tests/
+   ├── unit/
+   ├── integration/
+   ├── e2e/
+   └── fixtures/
+
+Component Reusability Rules
+	•	Check COMPONENT_REGISTRY + codebase before creating anything new
+	•	If 70%+ overlap: extend existing component
+	•	Register every reusable component
+	•	Components require docs + tests + usage example
+
+⸻
+
+☁️ CLOUD NATIVE & INFRASTRUCTURE AS CODE
+
+Cloud Native Principles
+	•	12-factor
+	•	Containerized
+	•	Stateless processes
+	•	Disposable
+	•	Dev/prod parity
+	•	Logs as streams
+	•	Health checks: /health and /ready
+
+IaC
+	•	ALL infra in code (Terraform/Pulumi/CDK; decision in DECISIONS.md)
+	•	IaC lives in src/infrastructure/
+	•	Review plan/preview before apply
+	•	Remote state
+	•	Parameterized environments
+
+Docker Standards
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+USER node
+EXPOSE 3000
+HEALTHCHECK CMD curl -f http://localhost:3000/health || exit 1
+CMD ["node", "dist/index.js"]
+
+
+⸻
+
+🔐 ENVIRONMENT VARIABLES & CONFIGURATION
+
+Rules
+	•	Never hardcode secrets/URLs/ports/env-specific values
+	•	.env.example committed; real .env ignored
+	•	Validate env at startup; fail fast
+
+Config pattern
+
+import { z } from 'zod';
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  PORT: z.coerce.number().default(3000),
+  DATABASE_URL: z.string().url(),
+  API_KEY: z.string().min(1),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  DEFAULT_LOCALE: z.string().default('en'),
+});
+
+export const config = envSchema.parse(process.env);
+
+Secrets management
+	•	Use cloud secrets manager
+	•	Never log secrets
+	•	Rotate regularly; design for rotation
+	•	Document vars in .env.example and README
+
+⸻
+
+🌍 INTERNATIONALIZATION (i18n) & MULTILINGUAL SUPPORT
+
+Rules
+	•	All user-facing strings via i18n keys
+	•	Locale-aware formatting (Intl)
+	•	RTL supported from day one
+	•	ICU MessageFormat
+
+⸻
+
+💰 COST OPTIMIZATION
+	•	Smallest resources that meet perf
+	•	Auto-scaling
+	•	Cache at every layer
+	•	Budgets + alerts
+	•	Pagination for list endpoints
+	•	Index DB queries; document indexes
+
+⸻
+
+🧪 TESTING STANDARDS
+	•	Test pyramid: unit 70%, integration 20%, e2e 10%
+	•	TDD mandatory
+	•	Every function: happy + edge + error
+	•	Isolation, mock boundaries only
+	•	Coverage: 80% min; 100% for critical logic
+	•	Regression suite must pass before completion
+
+⸻
+
+📝 GIT & CHANGE MANAGEMENT
+
+Commit format:
+
+<type>(<scope>): <short description>
+
+<body — what and why>
+
+<footer — breaking changes, refs>
+
+Branch strategy:
+	•	main, develop, feature/, fix/, infra/
+
+⸻
+
+🚨 CLAUDE’S MANDATORY WORKFLOW CHECKLIST
+
+Before starting ANY task:
+
+□ Read all files in .claude/
+□ Read SYSTEM_OVERVIEW.md
+□ Check COMPONENT_REGISTRY.md
+□ Check PATTERNS.md
+□ Check DECISIONS.md
+□ Check docs/roadmap/ROADMAP.md
+□ Check relevant docs/admin-panel specs
+□ Re-validate mini-rm Project-Spec First section in this CLAUDE.md
+
+Before considering ANY task complete:
+
+□ Clean code principles followed
+□ Env vars externalized
+□ i18n keys used
+□ Component registry updated
+□ Design doc created (new features)
+□ TDD followed
+□ All tests pass (unit + integration + existing)
+□ Lint passes
+□ Build succeeds
+□ Typecheck passes
+□ CHANGELOG updated
+□ SYSTEM_OVERVIEW updated (if needed)
+□ DECISIONS/PATTERNS/TECH_DEBT/TEST_PLAN updated (if needed)
+□ No regressions
+
+
+⸻
+
+🚫 DEPLOYMENT & GIT RESTRICTIONS
+
+Claude is NOT allowed to:
+	•	deploy (firebase/gcloud/terraform apply/pulumi up/etc)
+	•	push to remote (git push, force push, PR creation)
+
+Claude CAN:
+	•	create branches locally
+	•	stage + commit locally
+	•	run tests/builds/lint locally
+	•	prepare configs/scripts + document exact commands for the user
+
+⸻
+
+⚠️ ABSOLUTE RULES — NEVER BREAK THESE
+	1.	Never skip TDD
+	2.	Never hardcode env-specific values
+	3.	Never duplicate components (reuse/extend)
+	4.	Never contradict DECISIONS without override log
+	5.	Never call task done without running required checks
+	6.	Never introduce new pattern without documenting
+	7.	Never create infra manually
+	8.	Never commit secrets
+	9.	Never skip knowledge updates
+	10.	Never merge with failing tests
+	11.	Never auto-deploy
+	12.	Never auto-push

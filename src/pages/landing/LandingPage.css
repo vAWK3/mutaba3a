@@ -1,15 +1,37 @@
 /* ============================================
    Landing Page Styles
    Desktop-first, dark mode as primary
+   Strong, calm, confident, trustworthy
+   WCAG 2.1 AA compliant
    ============================================ */
+
+/* Skip Link for Accessibility */
+.landing-skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--accent-solid);
+  color: #fff;
+  padding: 8px 16px;
+  z-index: 1000;
+  font-weight: var(--weight-semibold);
+  border-radius: 0 0 var(--radius-md) 0;
+}
+
+.landing-skip-link:focus {
+  top: 0;
+}
 
 /* Page Layout */
 .landing-page {
   min-height: 100vh;
-  background: var(--bg, #070C16);
-  color: var(--text, #E7EEF9);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-en);
   line-height: 1.6;
+  /* Improved text rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 :lang(ar) .landing-page {
@@ -41,23 +63,23 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-  border-radius: var(--radius-md, 6px);
-  color: var(--muted, #A6B4CC);
-  font-size: var(--text-sm, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .landing-lang-toggle:hover {
-  background: var(--surface-hover, #151D2E);
-  border-color: var(--border-strong, rgba(231, 238, 249, 0.15));
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
 .landing-lang-toggle span.active {
-  color: var(--text, #E7EEF9);
-  font-weight: var(--weight-medium, 500);
+  color: var(--text);
+  font-weight: var(--weight-medium);
 }
 
 .landing-lang-divider {
@@ -75,8 +97,8 @@
 
 .landing-section-headline {
   font-family: var(--font-heading);
-  font-size: var(--text-3xl, 24px);
-  font-weight: var(--weight-semibold, 600);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
   text-align: center;
   margin-bottom: 48px;
   letter-spacing: -0.02em;
@@ -89,7 +111,7 @@
   text-align: center;
   padding-top: 100px;
   padding-bottom: 100px;
-  background: linear-gradient(180deg, var(--bg, #070C16) 0%, var(--bg-subtle, #0D1422) 100%);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%);
 }
 
 .landing-logo {
@@ -100,8 +122,8 @@
 
 .landing-brand {
   font-family: var(--font-heading);
-  font-size: var(--text-4xl, 30px);
-  font-weight: var(--weight-semibold, 600);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-semibold);
   margin: 0 0 8px 0;
   letter-spacing: -0.02em;
   display: flex;
@@ -112,15 +134,15 @@
 
 .landing-brand-ar {
   font-family: var(--font-ar);
-  font-size: var(--text-2xl, 20px);
-  color: var(--muted, #A6B4CC);
-  font-weight: var(--weight-normal, 400);
+  font-size: var(--text-2xl);
+  color: var(--muted);
+  font-weight: var(--weight-normal);
 }
 
 .landing-headline {
   font-family: var(--font-heading);
-  font-size: var(--text-2xl, 20px);
-  font-weight: var(--weight-medium, 500);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-medium);
   max-width: 600px;
   margin: 0 auto 16px;
   line-height: 1.4;
@@ -128,16 +150,16 @@
 }
 
 .landing-subheadline {
-  font-size: var(--text-lg, 16px);
-  color: var(--text-secondary, #C5D0E0);
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
   max-width: 540px;
   margin: 0 auto 12px;
   line-height: 1.6;
 }
 
 .landing-trust {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin-bottom: 32px;
 }
 
@@ -149,80 +171,23 @@
 }
 
 /* ============================================
-   Buttons
+   Buttons - REMOVED (unified with app Button component)
+   ============================================
+   Button styles have been consolidated.
+   - Use app Button component (src/components/ui/Button.tsx)
+   - See Button.css for .btn-* classes
+   - Section-specific styles remain in their respective CSS files:
+     - HeroSection.css: .hero-download-btn--*
+     - FinalCTASection.css: .final-cta-btn--*
+     - PricingSection.css: .pricing-card-cta--*
+     - DownloadSection.css: .download-card
    ============================================ */
-.landing-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 14px 32px;
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-medium, 500);
-  border-radius: var(--radius-lg, 8px);
-  text-decoration: none;
-  transition: all 0.15s ease;
-  cursor: pointer;
-  border: none;
-  min-width: 200px;
-}
-
-.landing-btn--primary {
-  background: var(--accent-solid, #117A72);
-  color: var(--on-accent, #fff);
-  box-shadow: var(--btn-primary-shadow);
-  border: 1px solid var(--btn-primary-border);
-}
-
-.landing-btn--primary:hover {
-  background: var(--accent-solid-hover, #117A72);
-  box-shadow: var(--btn-primary-shadow-hover);
-  border-color: var(--btn-primary-border-hover);
-  transform: translateY(-1px);
-}
-
-.landing-btn--primary:active {
-  background: var(--accent-solid-active, #0D6660);
-  transform: translateY(0);
-}
-
-.landing-btn--secondary {
-  background: transparent;
-  color: var(--text-secondary, #C5D0E0);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-}
-
-.landing-btn--secondary:hover {
-  background: var(--surface, #111827);
-  color: var(--text, #E7EEF9);
-  border-color: var(--border-strong, rgba(231, 238, 249, 0.15));
-}
-
-.landing-btn--outline {
-  background: transparent;
-  color: var(--accent, #2CB6A6);
-  border: 1px solid var(--accent, #2CB6A6);
-}
-
-.landing-btn--outline:hover {
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.12));
-}
-
-.landing-btn--coffee {
-  background: #FFDD00;
-  color: #000;
-  font-weight: var(--weight-semibold, 600);
-}
-
-.landing-btn--coffee:hover {
-  background: #FFE633;
-  transform: translateY(-1px);
-}
 
 /* ============================================
    Section 2: Problem Statement
    ============================================ */
 .landing-problem {
-  background: var(--surface, #111827);
+  background: var(--surface);
 }
 
 .landing-pain-points {
@@ -235,9 +200,9 @@
 .landing-pain-points li {
   position: relative;
   padding: 16px 0 16px 32px;
-  font-size: var(--text-md, 14px);
-  color: var(--text-secondary, #C5D0E0);
-  border-bottom: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 :lang(ar) .landing-pain-points li {
@@ -256,7 +221,7 @@
   transform: translateY(-50%);
   width: 6px;
   height: 6px;
-  background: var(--warning, #F59E0B);
+  background: var(--warning);
   border-radius: 50%;
 }
 
@@ -269,7 +234,7 @@
    Section 3: How It Works
    ============================================ */
 .landing-how {
-  background: var(--bg, #070C16);
+  background: var(--bg);
 }
 
 .landing-steps {
@@ -282,14 +247,14 @@
 .landing-step {
   text-align: center;
   padding: 32px 24px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
-  border-radius: var(--radius-xl, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
   transition: all 0.2s ease;
 }
 
 .landing-step:hover {
-  border-color: var(--border, rgba(231, 238, 249, 0.1));
+  border-color: var(--border);
   transform: translateY(-2px);
 }
 
@@ -300,21 +265,21 @@
   width: 64px;
   height: 64px;
   margin: 0 auto 20px;
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.12));
-  border-radius: var(--radius-lg, 8px);
-  color: var(--accent, #2CB6A6);
+  background: var(--accent-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--accent);
 }
 
 .landing-step-title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg, 16px);
-  font-weight: var(--weight-semibold, 600);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
   margin: 0 0 12px 0;
 }
 
 .landing-step-desc {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin: 0;
   line-height: 1.6;
 }
@@ -327,7 +292,7 @@
    Section 4: Features
    ============================================ */
 .landing-features {
-  background: var(--bg-subtle, #0D1422);
+  background: var(--bg-subtle);
 }
 
 .landing-features-grid {
@@ -338,14 +303,14 @@
 
 .landing-feature-card {
   padding: 24px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
-  border-radius: var(--radius-lg, 8px);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   transition: all 0.2s ease;
 }
 
 .landing-feature-card:hover {
-  border-color: var(--accent-subtle, rgba(44, 182, 166, 0.3));
+  border-color: var(--accent-subtle);
   transform: translateY(-2px);
 }
 
@@ -356,21 +321,21 @@
   width: 48px;
   height: 48px;
   margin-bottom: 16px;
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.12));
-  border-radius: var(--radius-md, 6px);
-  color: var(--accent, #2CB6A6);
+  background: var(--accent-subtle);
+  border-radius: var(--radius-md);
+  color: var(--accent);
 }
 
 .landing-feature-title {
   font-family: var(--font-heading);
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-semibold, 600);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
   margin: 0 0 8px 0;
 }
 
 .landing-feature-desc {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin: 0;
   line-height: 1.5;
 }
@@ -379,7 +344,7 @@
    Section 5: Privacy & Trust
    ============================================ */
 .landing-privacy {
-  background: var(--surface, #111827);
+  background: var(--surface);
 }
 
 .landing-trust-list {
@@ -396,20 +361,20 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: var(--text-md, 14px);
-  color: var(--text-secondary, #C5D0E0);
+  font-size: var(--text-md);
+  color: var(--text-secondary);
 }
 
 .landing-trust-item svg {
   flex-shrink: 0;
-  color: var(--success, #22C55E);
+  color: var(--success);
 }
 
 /* ============================================
    Section 6: Platforms
    ============================================ */
 .landing-platforms {
-  background: var(--bg, #070C16);
+  background: var(--bg);
 }
 
 .landing-platform-cards {
@@ -425,40 +390,40 @@
   align-items: center;
   gap: 16px;
   padding: 32px 48px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-  border-radius: var(--radius-xl, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
   text-decoration: none;
-  color: var(--text, #E7EEF9);
+  color: var(--text);
   transition: all 0.2s ease;
 }
 
 .landing-platform-card:hover {
-  border-color: var(--accent, #2CB6A6);
+  border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .landing-platform-icon {
-  color: var(--text-secondary, #C5D0E0);
+  color: var(--text-secondary);
 }
 
 .landing-platform-label {
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-medium, 500);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
 }
 
 .landing-pwa-note {
   text-align: center;
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 /* ============================================
    Section 7: Pricing
    ============================================ */
 .landing-pricing {
-  background: var(--bg-subtle, #0D1422);
+  background: var(--bg-subtle);
 }
 
 .landing-pricing-content {
@@ -466,13 +431,13 @@
 }
 
 .landing-pricing-line {
-  font-size: var(--text-lg, 16px);
+  font-size: var(--text-lg);
   margin: 0 0 8px 0;
 }
 
 .landing-pricing-line--muted {
-  font-size: var(--text-md, 14px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-md);
+  color: var(--muted);
   margin-bottom: 32px;
 }
 
@@ -484,8 +449,8 @@
 }
 
 .landing-pricing-support span {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted-2, #8494B0);
+  font-size: var(--text-sm);
+  color: var(--muted-2);
 }
 
 .landing-pricing-support-links {
@@ -495,22 +460,11 @@
   justify-content: center;
 }
 
-.landing-btn--kofi {
-  background: #13C3FF;
-  color: #000;
-  font-weight: var(--weight-semibold, 600);
-}
-
-.landing-btn--kofi:hover {
-  background: #3DD0FF;
-  transform: translateY(-1px);
-}
-
 /* ============================================
    Section 8: FAQ
    ============================================ */
 .landing-faq {
-  background: var(--surface, #111827);
+  background: var(--surface);
 }
 
 .landing-faq-list {
@@ -519,7 +473,7 @@
 }
 
 .landing-faq-item {
-  border-bottom: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .landing-faq-item:last-child {
@@ -534,9 +488,9 @@
   padding: 20px 0;
   background: none;
   border: none;
-  color: var(--text, #E7EEF9);
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-medium, 500);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
   text-align: left;
   cursor: pointer;
   transition: color 0.15s ease;
@@ -547,12 +501,12 @@
 }
 
 .landing-faq-question:hover {
-  color: var(--accent, #2CB6A6);
+  color: var(--accent);
 }
 
 .landing-faq-question svg {
   flex-shrink: 0;
-  color: var(--muted, #A6B4CC);
+  color: var(--muted);
   transition: transform 0.2s ease;
 }
 
@@ -573,8 +527,8 @@
 
 .landing-faq-answer p {
   margin: 0;
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   line-height: 1.6;
 }
 
@@ -582,7 +536,7 @@
    Section 9: Final CTA
    ============================================ */
 .landing-final-cta {
-  background: linear-gradient(180deg, var(--bg-subtle, #0D1422) 0%, var(--bg, #070C16) 100%);
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg) 100%);
   text-align: center;
 }
 
@@ -602,8 +556,8 @@
    ============================================ */
 .landing-footer {
   padding: 32px 0;
-  background: var(--bg, #070C16);
-  border-top: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
+  background: var(--bg);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .landing-footer-content {
@@ -613,8 +567,8 @@
 }
 
 .landing-footer-brand {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .landing-footer-links {
@@ -623,14 +577,14 @@
 }
 
 .landing-footer-links a {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 .landing-footer-links a:hover {
-  color: var(--text, #E7EEF9);
+  color: var(--text);
 }
 
 /* ============================================
@@ -652,7 +606,7 @@
   }
 
   .landing-section-headline {
-    font-size: var(--text-2xl, 20px);
+    font-size: var(--text-2xl);
     margin-bottom: 32px;
   }
 
@@ -662,15 +616,15 @@
   }
 
   .landing-brand {
-    font-size: var(--text-3xl, 24px);
+    font-size: var(--text-3xl);
   }
 
   .landing-headline {
-    font-size: var(--text-xl, 18px);
+    font-size: var(--text-xl);
   }
 
   .landing-subheadline {
-    font-size: var(--text-md, 14px);
+    font-size: var(--text-md);
   }
 
   .landing-steps {
@@ -699,7 +653,7 @@
   }
 
   .landing-faq-question {
-    font-size: var(--text-sm, 12px);
+    font-size: var(--text-sm);
     padding: 16px 0;
   }
 
@@ -707,11 +661,6 @@
     flex-direction: column;
     gap: 16px;
     text-align: center;
-  }
-
-  .landing-btn {
-    width: 100%;
-    max-width: 280px;
   }
 }
 
@@ -742,7 +691,6 @@
    Reduced Motion
    ============================================ */
 @media (prefers-reduced-motion: reduce) {
-  .landing-btn,
   .landing-step,
   .landing-feature-card,
   .landing-platform-card,
@@ -793,7 +741,7 @@
    Capabilities Section
    ============================================ */
 .landing-capabilities {
-  background: var(--bg-subtle, #0D1422);
+  background: var(--bg-subtle);
 }
 
 .capabilities-grid {
@@ -804,16 +752,16 @@
 
 .capability-block {
   padding: 32px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
-  border-radius: var(--radius-xl, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
 }
 
 .capability-title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg, 16px);
-  font-weight: var(--weight-semibold, 600);
-  color: var(--text, #E7EEF9);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
   margin: 0 0 20px 0;
 }
 
@@ -828,28 +776,28 @@
   align-items: center;
   gap: 12px;
   padding: 8px 0;
-  font-size: var(--text-sm, 12px);
-  color: var(--text-secondary, #C5D0E0);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .capability-item svg {
   flex-shrink: 0;
-  color: var(--accent, #2CB6A6);
+  color: var(--accent);
 }
 
 /* Privacy intro */
 .landing-privacy-intro {
   text-align: center;
-  color: var(--text-secondary, #C5D0E0);
-  font-size: var(--text-md, 14px);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
   max-width: 600px;
   margin: -32px auto 40px;
 }
 
 /* Pricing future line */
 .landing-pricing-line--future {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted-2, #8494B0);
+  font-size: var(--text-sm);
+  color: var(--muted-2);
   margin-bottom: 32px;
 }
 
@@ -864,5 +812,64 @@
 @media (max-width: 768px) {
   .capability-block {
     padding: 24px;
+  }
+}
+
+/* ============================================
+   Accessibility: Focus Styles
+   ============================================ */
+.landing-page a:focus-visible,
+.landing-page button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================
+   High Contrast Mode Support
+   ============================================ */
+@media (prefers-contrast: high) {
+  .landing-page {
+    --text: #FFFFFF;
+    --text-secondary: #E0E0E0;
+    --muted: #C0C0C0;
+    --border: rgba(255, 255, 255, 0.3);
+    --border-subtle: rgba(255, 255, 255, 0.2);
+  }
+
+  .landing-section-headline {
+    font-weight: var(--weight-bold);
+  }
+
+  .landing-step,
+  .landing-feature-card,
+  .capability-block {
+    border-width: 2px;
+  }
+
+  .landing-faq-item {
+    border-bottom-width: 2px;
+  }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+  .landing-header,
+  .landing-hero-actions,
+  .landing-final-cta,
+  .landing-footer {
+    display: none;
+  }
+
+  .landing-page {
+    background: #fff;
+    color: #000;
+  }
+
+  .landing-section {
+    padding: 20px 0;
+    break-inside: avoid;
   }
 }

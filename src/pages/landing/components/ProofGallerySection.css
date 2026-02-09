@@ -1,6 +1,6 @@
 /* Proof Gallery Section */
 .landing-proof-gallery {
-  background: var(--bg-subtle, #0D1422);
+  background: var(--bg-subtle);
 }
 
 .gallery-tabs {
@@ -12,26 +12,26 @@
 
 .gallery-tab {
   padding: 12px 32px;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border, rgba(231, 238, 249, 0.1));
-  border-radius: var(--radius-lg, 8px);
-  color: var(--text-secondary, #C5D0E0);
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-medium, 500);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .gallery-tab:hover {
-  background: var(--surface-hover, #151D2E);
-  border-color: var(--border-strong, rgba(231, 238, 249, 0.15));
-  color: var(--text, #E7EEF9);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .gallery-tab--active {
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.12));
-  border-color: var(--accent, #2CB6A6);
-  color: var(--accent, #2CB6A6);
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .gallery-grid {
@@ -42,15 +42,15 @@
 
 .gallery-item {
   margin: 0;
-  background: var(--surface, #111827);
-  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
-  border-radius: var(--radius-xl, 12px);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
   overflow: hidden;
   transition: all 0.2s ease;
 }
 
 .gallery-item:hover {
-  border-color: var(--border, rgba(231, 238, 249, 0.1));
+  border-color: var(--border);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
@@ -69,14 +69,14 @@
 }
 
 .gallery-caption strong {
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-semibold, 600);
-  color: var(--text, #E7EEF9);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
 }
 
 .gallery-caption span {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 /* Responsive */

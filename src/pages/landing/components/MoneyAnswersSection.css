@@ -1,6 +1,6 @@
 /* Money Answers Section */
 .landing-money-answers {
-  background: var(--surface, #111827);
+  background: var(--surface);
 }
 
 .money-answer-cards {
@@ -12,28 +12,28 @@
 
 .money-answer-card {
   padding: 24px;
-  background: var(--bg, #070C16);
-  border: 1px solid var(--border-subtle, rgba(231, 238, 249, 0.06));
-  border-radius: var(--radius-lg, 8px);
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   transition: all 0.2s ease;
 }
 
 .money-answer-card:hover {
-  border-color: var(--accent-subtle, rgba(44, 182, 166, 0.3));
+  border-color: var(--accent-subtle);
   transform: translateY(-2px);
 }
 
 .money-answer-title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg, 16px);
-  font-weight: var(--weight-semibold, 600);
-  color: var(--text, #E7EEF9);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
   margin: 0 0 12px 0;
 }
 
 .money-answer-desc {
-  font-size: var(--text-sm, 12px);
-  color: var(--muted, #A6B4CC);
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin: 0;
   line-height: 1.6;
 }
@@ -43,22 +43,22 @@
   margin: 0 auto 48px;
   text-align: center;
   padding: 24px;
-  background: var(--accent-subtle, rgba(44, 182, 166, 0.08));
-  border: 1px solid var(--accent-subtle, rgba(44, 182, 166, 0.2));
-  border-radius: var(--radius-lg, 8px);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .forecast-title {
   font-family: var(--font-heading);
-  font-size: var(--text-md, 14px);
-  font-weight: var(--weight-semibold, 600);
-  color: var(--accent, #2CB6A6);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--accent);
   margin: 0 0 8px 0;
 }
 
 .forecast-desc {
-  font-size: var(--text-sm, 12px);
-  color: var(--text-secondary, #C5D0E0);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.6;
 }
@@ -72,7 +72,7 @@
   max-width: 100%;
   max-height: 500px;
   height: auto;
-  border-radius: var(--radius-xl, 12px);
+  border-radius: var(--radius-xl);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
 }
 
