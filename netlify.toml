@@ -5,7 +5,7 @@
 # Stable download URLs - redirect to GitHub Releases latest artifacts
 [[redirects]]
   from = "/download/mac"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-universal.dmg"
+  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-arm64.dmg"
   status = 302
   force = true
 

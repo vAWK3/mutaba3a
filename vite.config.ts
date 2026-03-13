@@ -3,15 +3,17 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import pkg from "./package.json";
 
-const isTauri = !!process.env.TAURI_PLATFORM || !!process.env.TAURI_FAMILY;
-const buildMode = isTauri ? "desktop" : "web";
+export default defineConfig(({ mode }) => {
+  // Check both Tauri env vars AND the --mode flag
+  const isTauri = !!process.env.TAURI_PLATFORM || !!process.env.TAURI_FAMILY || mode === "desktop";
+  const buildMode = isTauri ? "desktop" : "web";
 
-export default defineConfig({
-  base: isTauri ? "./" : "/",
-  define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
-    __BUILD_MODE__: JSON.stringify(buildMode),
-  },
+  return {
+    base: isTauri ? "./" : "/",
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __BUILD_MODE__: JSON.stringify(buildMode),
+    },
   plugins: [
     react(),
     VitePWA({
@@ -78,7 +80,7 @@ export default defineConfig({
       '/download/mac': {
         target: 'https://github.com',
         changeOrigin: true,
-        rewrite: () => '/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-universal.dmg',
+        rewrite: () => '/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-arm64.dmg',
       },
       '/download/windows': {
         target: 'https://github.com',
@@ -112,4 +114,5 @@ export default defineConfig({
       },
     },
   },
+};
 });

@@ -464,7 +464,7 @@ export const DOWNLOAD_CONFIG = {
     minVersion: '$macMinVersion',
     sha256: '$macSha256',
     getDownloadUrl: (version: string) =>
-      ``https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/v`${version}/mutaba3a-v`${version}-macos-universal.dmg``,
+      ``https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/v`${version}/mutaba3a-v`${version}-macos-arm64.dmg``,
   },
 
   windows: {
@@ -520,7 +520,7 @@ function Write-DownloadJson {
     "fileSize": "$macFileSize",
     "minVersion": "$macMinVersion",
     "sha256": "$macSha256",
-    "downloadUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/mutaba3a-$tag-macos-universal.dmg"
+    "downloadUrl": "https://github.com/$($script:GITHUB_OWNER)/$($script:GITHUB_REPO)/releases/download/$tag/mutaba3a-$tag-macos-arm64.dmg"
   },
   "windows": {
     "fileSize": "$fileSize",
