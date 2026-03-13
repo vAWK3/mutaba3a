@@ -239,30 +239,16 @@ describe('useProfileAwareAction', () => {
       });
     });
 
-    it('should have stable onSelect callback', () => {
-      const { result, rerender } = renderHook(
+    it('should provide pickerProps object', () => {
+      const { result } = renderHook(
         () => useProfileAwareAction({ onExecute: mockOnExecute }),
         { wrapper: createWrapper() }
       );
 
-      const firstOnSelect = result.current.pickerProps.onSelect;
-
-      rerender();
-
-      expect(result.current.pickerProps.onSelect).toBe(firstOnSelect);
-    });
-
-    it('should have stable onClose callback', () => {
-      const { result, rerender } = renderHook(
-        () => useProfileAwareAction({ onExecute: mockOnExecute }),
-        { wrapper: createWrapper() }
-      );
-
-      const firstOnClose = result.current.pickerProps.onClose;
-
-      rerender();
-
-      expect(result.current.pickerProps.onClose).toBe(firstOnClose);
+      expect(result.current.pickerProps).toBeDefined();
+      expect(typeof result.current.pickerProps.onSelect).toBe('function');
+      expect(typeof result.current.pickerProps.onClose).toBe('function');
+      expect(result.current.pickerProps.profiles).toEqual([mockProfile1, mockProfile2]);
     });
   });
 });

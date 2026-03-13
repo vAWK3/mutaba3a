@@ -347,7 +347,7 @@ create_update_archive() {
 
     echo -e "${BLUE}Creating update archive for Tauri updater...${NC}"
 
-    local archive_name="mutaba3a-v${version}-macos-universal.tar.gz"
+    local archive_name="mutaba3a-v${version}-macos-arm64.tar.gz"
     local archive_path="$RELEASE_DIR/$archive_name"
 
     # Create tar.gz from the DMG
@@ -541,7 +541,7 @@ export const DOWNLOAD_CONFIG = {
     minVersion: "$min_macos",
     sha256: "$RELEASE_CHECKSUM",
     getDownloadUrl: (version: string) =>
-      \`https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v\${version}/mutaba3a-v\${version}-macos-universal.dmg\`,
+      \`https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/v\${version}/mutaba3a-v\${version}-macos-arm64.dmg\`,
   },
 
   windows: {
@@ -633,7 +633,7 @@ generate_download_json() {
     "fileSize": "$file_size",
     "minVersion": "$min_macos",
     "sha256": "$RELEASE_CHECKSUM",
-    "downloadUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-$tag-macos-universal.dmg"
+    "downloadUrl": "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/mutaba3a-$tag-macos-arm64.dmg"
   },
   "windows": {
     "fileSize": "$win_file_size",
@@ -707,7 +707,7 @@ print_release_urls() {
 
     local release_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/tag/$tag"
     local versioned_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$RELEASE_DMG_NAME"
-    local stable_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/mutaba3a-macos-universal.dmg"
+    local stable_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/mutaba3a-macos-arm64.dmg"
 
     echo ""
     echo -e "${GREEN}========================================${NC}"
@@ -822,8 +822,9 @@ build_mac() {
         echo -e "${YELLOW}Warning: Building macOS app on non-macOS system may not work${NC}"
     fi
 
-    # Clean Rust build cache to ensure fresh version embedding
-    echo -e "${BLUE}Cleaning Rust build cache...${NC}"
+    # Clean build caches to ensure fresh version embedding
+    echo -e "${BLUE}Cleaning build caches...${NC}"
+    rm -rf dist-desktop dist-web
     cargo clean --manifest-path src-tauri/Cargo.toml
 
     echo ""

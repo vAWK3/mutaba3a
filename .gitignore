@@ -167,4 +167,4 @@ dist-ssr
 release/
 dist-web/
 dist-desktop/
-dist/
+dist/src-tauri/target/
