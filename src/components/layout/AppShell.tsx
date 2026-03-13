@@ -13,7 +13,7 @@ import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
 import { DemoBanner } from "../ui/DemoBanner";
 import { InlineErrorBoundary } from "../ui/ErrorBoundary";
-// import { UpdateBanner } from '../ui/UpdateBanner';
+import { UpdateBanner } from '../ui/UpdateBanner';
 import {
   ConflictBanner,
   ExportBundleModal,
@@ -129,7 +129,7 @@ export function AppShell({ children }: AppShellProps) {
       <FxRateBanner />
       <MacDownloadBanner />
 
-      {/* <UpdateBanner /> */}
+      <UpdateBanner />
       <ExportBundleModal />
       <ImportBundleModal />
       <PairingModal />

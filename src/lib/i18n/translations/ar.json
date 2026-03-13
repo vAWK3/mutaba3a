@@ -363,8 +363,8 @@
     "dismiss": "إغلاق"
   },
   "updateBanner": {
-    "available": "الإصدار {{version}} متاح",
-    "downloading": "جاري التحميل... {{progress}}%",
+    "available": "الإصدار {version} متاح",
+    "downloading": "جاري التحميل... {progress}%",
     "ready": "التحديث جاهز",
     "restart": "إعادة التشغيل للتحديث",
     "download": "تحميل",

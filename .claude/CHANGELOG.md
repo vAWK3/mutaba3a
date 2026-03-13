@@ -28,6 +28,31 @@
 
 ---
 
+## [0.0.51] - 2026-03-13
+
+### Fixed
+- **Desktop App Update System**:
+  - Re-enabled UpdateBanner component in AppShell
+  - Fixed translation interpolation syntax (changed `{{var}}` to `{var}` to match i18n system)
+  - UpdateBanner now properly shows when updates are available in Tauri desktop app
+  - Users see update notifications with download progress and restart prompts
+
+### Added
+- **Update Banner Tests**:
+  - `src/components/__tests__/UpdateBanner.test.tsx` (11 tests) - Full coverage for update banner states
+  - `src/hooks/__tests__/useTauriUpdater.test.ts` (8 tests) - Hook behavior and API tests
+
+### Technical
+- Test count increased from 337 to 356 (19 new tests for update system)
+- All 356 tests passing (5 skipped)
+- Files changed:
+  - `src/components/ui/UpdateBanner.tsx` - Uncommented and improved implementation
+  - `src/components/layout/AppShell.tsx` - Re-enabled UpdateBanner import and usage
+  - `src/lib/i18n/translations/en.json` - Fixed interpolation syntax in updateBanner keys
+  - `src/lib/i18n/translations/ar.json` - Fixed interpolation syntax in updateBanner keys
+
+---
+
 ## [0.0.50] - 2026-02-09
 
 ### Added

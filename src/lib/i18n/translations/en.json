@@ -363,8 +363,8 @@
     "dismiss": "Dismiss"
   },
   "updateBanner": {
-    "available": "Version {{version}} is available",
-    "downloading": "Downloading update... {{progress}}%",
+    "available": "Version {version} is available",
+    "downloading": "Downloading update... {progress}%",
     "ready": "Update ready",
     "restart": "Restart to Update",
     "download": "Download",

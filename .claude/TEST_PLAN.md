@@ -1,8 +1,8 @@
 # TEST_PLAN.md — Testing Strategy & Coverage
 
 > **Purpose**: Document testing approach, coverage targets, and test organization.
-> **Current Coverage**: ~40% (significantly improved as of 2026-02-09)
-> **Last Updated**: 2026-02-09
+> **Current Coverage**: ~42% (update system tests added 2026-03-13)
+> **Last Updated**: 2026-03-13
 
 ---
 
@@ -41,8 +41,10 @@
 | `src/components/__tests__/BusinessProfileDrawer.test.tsx` | Component | 8 | Basic - form rendering |
 | `src/features/documents/__tests__/totals.test.ts` | Unit | 20 | Full - calculations |
 | `src/features/documents/__tests__/pdf.test.ts` | Unit | 24 | Full - PDF text utilities |
+| `src/components/__tests__/UpdateBanner.test.tsx` | Component | 11 | **Full** - Update banner states |
+| `src/hooks/__tests__/useTauriUpdater.test.ts` | Unit | 8 | **Full** - Tauri updater hook |
 
-**Total: 248 tests (246 passing, 2 skipped)**
+**Total: 356 tests (356 passing, 5 skipped)**
 
 ### Coverage by Module (Updated 2026-02-09)
 
