@@ -14,10 +14,11 @@
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea |
 | **Buttons** | Button, IconButton, RowActionsMenu |
 | **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
+| **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | UnifiedAmount, FxRateBanner, CurrencyBadge |
+| **Money** | UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateBanner, CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -471,6 +472,151 @@ navigate({ search: { newProject: true, clientId } }); // Create
 
 ---
 
+## Home Components
+
+### PredictiveKpiStrip
+**Location**: `src/components/home/PredictiveKpiStrip.tsx`
+**Purpose**: Display predictive KPI cards showing current vs projected values for the month.
+
+```tsx
+<PredictiveKpiStrip
+  className="my-strip"
+/>
+```
+
+**Features**:
+- Fetches guidance data for current month (USD and ILS)
+- Shows KPI cards for: Income, Expenses, Net
+- Each card displays current actual amount and projected amount
+- Projected amounts include unpaid income and projected retainers
+- Responsive: stacks on mobile (480px breakpoint)
+- Currency-aware: shows both USD and ILS totals
+
+**Sub-components**:
+- `KpiCardForecast`: Individual KPI card with actual/projected display
+
+```tsx
+<KpiCardForecast
+  title="Income"
+  actualMinor={500000}
+  projectedMinor={750000}
+  currency="USD"
+  locale="en-US"
+  type="income"
+/>
+```
+
+**Props (KpiCardForecast)**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `title` | string | Card title (i18n key result) |
+| `actualMinor` | number | Current actual amount in minor units |
+| `projectedMinor` | number | Projected amount in minor units |
+| `currency` | Currency | 'USD' \| 'ILS' |
+| `locale` | string | Locale for formatting |
+| `type` | 'income' \| 'expense' \| 'net' | Affects color styling |
+
+**Related**: `useGuidance` hook for data fetching
+
+---
+
+### AttentionFeed
+**Location**: `src/components/home/AttentionFeed.tsx`
+**Purpose**: Display severity-ordered attention items for unpaid income on the Home page.
+
+```tsx
+<AttentionFeed className="my-feed" />
+```
+
+**Features**:
+- Shows unpaid income needing attention (overdue, due soon, missing due dates)
+- Maximum 5 items shown
+- Critical items always visible
+- Warning/Info items collapse if >3 total
+- "View all" links to Income page with unpaid filter
+- Actions route through canonical IncomeDrawer
+- Accessibility: proper list semantics, ARIA labels
+
+**Severity Levels**:
+- `critical`: Red icon (AlertCircle) - overdue items
+- `warning`: Yellow icon (AlertTriangle) - due soon
+- `info`: Blue icon (InfoCircle) - no due date
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `className?` | string | Additional CSS class |
+
+**Data Source**: `useGuidance` hook with `includeUnpaidIncome: true`
+
+**Accessibility**:
+- Uses semantic `<ul>` / `<li>` elements
+- `role="list"` and `role="listitem"` for screen readers
+- `aria-label` on list container
+- `aria-hidden="true"` on decorative icons
+- `aria-expanded` on show more/less toggle
+
+---
+
+### MonthActualsRow
+**Location**: `src/components/home/MonthActualsRow.tsx`
+**Purpose**: Display actual income and expenses for the current month with currency tabs.
+
+```tsx
+<MonthActualsRow className="my-row" />
+```
+
+**Features**:
+- Shows actuals for current month (not projections)
+- Currency tabs to switch between USD and ILS
+- Grid of KPI cards: Paid Income, Unpaid, Expenses, Net
+- Responsive grid: 2 columns on mobile
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `className?` | string | Additional CSS class |
+
+**Data Source**: `useGuidance` hook for income/expenses data
+
+---
+
+### QuickSummaries
+**Location**: `src/components/home/QuickSummaries.tsx`
+**Purpose**: Display quick summary cards for recent activity and top clients.
+
+```tsx
+<QuickSummaries className="my-summaries" />
+```
+
+**Features**:
+- Recent transactions list
+- Top clients by revenue
+- Quick actions for common operations
+
+---
+
+### KpiStrip
+**Location**: `src/components/home/KpiStrip.tsx`
+**Purpose**: Legacy KPI strip component (superseded by PredictiveKpiStrip).
+
+**Note**: Consider using `PredictiveKpiStrip` for new features requiring projected values.
+
+---
+
+### InfoIcon
+**Location**: `src/components/icons/InfoIcon.tsx` (or inline in Home components)
+**Purpose**: Information tooltip trigger icon.
+
+```tsx
+<InfoIcon />
+// Renders: (i) info circle icon
+```
+
+**Usage**: Typically paired with tooltips to explain projected values or data sources.
+
+---
+
 ## Table Components
 
 ### DataTable
@@ -678,18 +824,58 @@ toast.info('Syncing...');
 ## Money Components
 
 ### UnifiedAmount
-**Location**: `src/components/money/UnifiedAmount.tsx`
-**Purpose**: Display amount with optional FX conversion.
+**Location**: `src/components/ui/UnifiedAmount.tsx`
+**Purpose**: Display multi-currency totals (USD + ILS + EUR) as unified ILS amount with breakdown.
 
 ```tsx
 <UnifiedAmount
+  usdAmountMinor={1999}
+  ilsAmountMinor={5000}
+  eurAmountMinor={1500}
+  variant="kpi"  // 'default' | 'compact' | 'kpi' | 'table'
+  type="income"  // 'income' | 'expense' | 'net' | 'neutral'
+/>
+// KPI variant: ₪95.50 with breakdown "USD: $19.99 + ILS: ₪50.00 + EUR: €15.00"
+// Table variant: ₪95.50 with hover tooltip showing breakdown
+```
+
+**Use when**: Displaying aggregated totals from multiple currencies (summaries, KPIs).
+
+---
+
+### AmountWithConversion
+**Location**: `src/components/ui/AmountWithConversion.tsx`
+**Purpose**: Display single-currency amount with hover tooltip showing ILS conversion.
+
+```tsx
+<AmountWithConversion
   amountMinor={1999}
   currency="USD"
-  showConverted={true}
-  baseCurrency="ILS"
+  type="income"
+  showExpenseSign={false}
 />
-// Renders: $19.99 (≈ ₪73.50)
+// Renders: $19.99 with hover tooltip "≈ ₪73.50 ($1 = 3.67 ₪, Live)"
 ```
+
+**Use when**: Displaying individual transaction amounts in tables/lists.
+
+---
+
+### CurrencySummaryPopup
+**Location**: `src/components/ui/CurrencySummaryPopup.tsx`
+**Purpose**: Display unified ILS amount with click-to-expand currency breakdown popup.
+
+```tsx
+<CurrencySummaryPopup
+  usdAmountMinor={1999}
+  ilsAmountMinor={5000}
+  eurAmountMinor={1500}
+  type="income"
+/>
+// Renders: ₪95.50 with info icon; click shows dropdown with per-currency amounts + FX rates
+```
+
+**Use when**: Summary statistics in page headers or table cells where space is limited.
 
 ---
 
@@ -768,6 +954,10 @@ import {
 | Document components | Documents | 2024-08 |
 | Expense components | Expenses | 2024-09 |
 | Retainer components | Retainers | 2024-10 |
+| Home components | Home | 2026-03 |
+| PredictiveKpiStrip | Home | 2026-03 |
+| AttentionFeed | Home | 2026-03 |
+| MonthActualsRow | Home | 2026-03 |
 
 ---
 

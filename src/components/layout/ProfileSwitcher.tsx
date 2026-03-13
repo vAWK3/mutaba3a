@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useBusinessProfiles, useDefaultBusinessProfile, useSetDefaultBusinessProfile } from '../../hooks/useQueries';
-import { useDrawerStore } from '../../lib/stores';
+import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import './ProfileSwitcher.css';
@@ -13,14 +12,43 @@ interface ProfileSwitcherProps {
 export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
   const t = useT();
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<'top' | 'bottom'>('top');
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const { data: profiles = [], isLoading: profilesLoading } = useBusinessProfiles();
-  const { data: defaultProfile, isLoading: defaultLoading } = useDefaultBusinessProfile();
-  const setDefaultMutation = useSetDefaultBusinessProfile();
-  const { openBusinessProfileDrawer } = useDrawerStore();
+  const {
+    isAllProfiles,
+    activeProfileId,
+    activeProfile,
+    profiles,
+    showAllProfilesOption,
+    setActiveProfile,
+    isLoading,
+  } = useActiveProfile();
 
-  const isLoading = profilesLoading || defaultLoading;
+  // Calculate dropdown position based on available space
+  const calculateDropdownPosition = () => {
+    if (!buttonRef.current) return;
+
+    const buttonRect = buttonRef.current.getBoundingClientRect();
+    const dropdownHeight = Math.min(profiles.length * 44 + 60, 260); // Estimate: 44px per item + actions
+    const spaceAbove = buttonRect.top;
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+
+    // Prefer top, but use bottom if not enough space above
+    if (spaceAbove < dropdownHeight && spaceBelow > spaceAbove) {
+      setDropdownPosition('bottom');
+    } else {
+      setDropdownPosition('top');
+    }
+  };
+
+  const handleToggleDropdown = () => {
+    if (!isOpen) {
+      calculateDropdownPosition();
+    }
+    setIsOpen(!isOpen);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -56,13 +84,8 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
     };
   }, [isOpen]);
 
-  const handleSwitchProfile = (profileId: string) => {
-    setDefaultMutation.mutate(profileId);
-    setIsOpen(false);
-  };
-
-  const handleAddProfile = () => {
-    openBusinessProfileDrawer({ mode: 'create' });
+  const handleSwitchProfile = (profileId: string | 'all') => {
+    setActiveProfile(profileId);
     setIsOpen(false);
   };
 
@@ -77,35 +100,47 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
   // Empty state - no profiles
   if (profiles.length === 0) {
     return (
-      <button
+      <Link
+        to="/settings"
         className={`profile-switcher profile-switcher-empty ${collapsed ? 'collapsed' : ''}`}
-        onClick={handleAddProfile}
         title={collapsed ? t('profileSwitcher.setUpBusiness') : undefined}
       >
         <div className="profile-switcher-avatar profile-switcher-avatar-empty">
-          <PlusIcon />
+          <SettingsIcon />
         </div>
         {!collapsed && <span className="profile-switcher-name">{t('profileSwitcher.setUpBusiness')}</span>}
-      </button>
+      </Link>
     );
   }
 
-  const currentProfile = defaultProfile || profiles[0];
+  // Display name for the current selection
+  const displayName = isAllProfiles
+    ? t('profileSwitcher.allProfiles')
+    : (activeProfile?.name ?? profiles[0]?.name ?? '');
 
   return (
     <div className={`profile-switcher-container ${collapsed ? 'collapsed' : ''}`} ref={containerRef}>
       <button
-        className={`profile-switcher ${collapsed ? 'collapsed' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        className={`profile-switcher ${collapsed ? 'collapsed' : ''} ${isAllProfiles ? 'all-profiles' : ''}`}
+        onClick={handleToggleDropdown}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        title={collapsed ? currentProfile.name : undefined}
+        title={collapsed ? displayName : undefined}
       >
-        <ProfileAvatar profile={currentProfile} />
+        {isAllProfiles ? (
+          <AllProfilesAvatar />
+        ) : activeProfile ? (
+          <ProfileAvatar profile={activeProfile} />
+        ) : (
+          <div className="profile-switcher-avatar profile-switcher-avatar-empty">
+            <SettingsIcon />
+          </div>
+        )}
         {!collapsed && (
           <>
             <span className="profile-switcher-name">
-              {currentProfile.name}
+              {displayName}
             </span>
             <ChevronIcon className={isOpen ? 'rotated' : ''} />
           </>
@@ -113,15 +148,37 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
       </button>
 
       {isOpen && (
-        <div className={`profile-switcher-dropdown ${collapsed ? 'collapsed-dropdown' : ''}`} role="listbox">
+        <div className={`profile-switcher-dropdown ${collapsed ? 'collapsed-dropdown' : ''} ${dropdownPosition === 'bottom' ? 'dropdown-bottom' : ''}`} role="listbox">
           <div className="profile-switcher-list">
+            {/* All Profiles option - only shown when 2+ profiles exist */}
+            {showAllProfilesOption && (
+              <>
+                <button
+                  className={`profile-switcher-option profile-switcher-option-all ${isAllProfiles ? 'active' : ''}`}
+                  onClick={() => handleSwitchProfile('all')}
+                  role="option"
+                  aria-selected={isAllProfiles}
+                >
+                  <AllProfilesAvatar size="small" />
+                  <span className="profile-switcher-option-name">
+                    {t('profileSwitcher.allProfiles')}
+                  </span>
+                  {isAllProfiles && (
+                    <CheckIcon className="profile-switcher-check" />
+                  )}
+                </button>
+                <div className="profile-switcher-divider profile-switcher-divider-thin" />
+              </>
+            )}
+
+            {/* Individual profiles */}
             {profiles.map((profile) => (
               <button
                 key={profile.id}
-                className={`profile-switcher-option ${profile.id === currentProfile.id ? 'active' : ''}`}
+                className={`profile-switcher-option ${profile.id === activeProfileId ? 'active' : ''}`}
                 onClick={() => handleSwitchProfile(profile.id)}
                 role="option"
-                aria-selected={profile.id === currentProfile.id}
+                aria-selected={profile.id === activeProfileId}
               >
                 <ProfileAvatar profile={profile} size="small" />
                 <span className="profile-switcher-option-name">
@@ -132,7 +189,7 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
                     </span>
                   )}
                 </span>
-                {profile.id === currentProfile.id && (
+                {profile.id === activeProfileId && (
                   <CheckIcon className="profile-switcher-check" />
                 )}
               </button>
@@ -140,14 +197,6 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
           </div>
 
           <div className="profile-switcher-divider" />
-
-          <button
-            className="profile-switcher-action"
-            onClick={handleAddProfile}
-          >
-            <PlusIcon />
-            {t('profileSwitcher.addProfile')}
-          </button>
 
           <Link
             to="/settings"
@@ -194,6 +243,29 @@ function ProfileAvatar({ profile, size = 'medium' }: { profile: BusinessProfile;
   );
 }
 
+function AllProfilesAvatar({ size = 'medium' }: { size?: 'small' | 'medium' }) {
+  const sizeClass = size === 'small' ? 'profile-switcher-avatar-sm' : '';
+
+  return (
+    <div className={`profile-switcher-avatar profile-switcher-avatar-all ${sizeClass}`}>
+      <svg
+        width="16"
+        height="16"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"
+        />
+      </svg>
+    </div>
+  );
+}
+
 function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -222,14 +294,6 @@ function CheckIcon({ className }: { className?: string }) {
       strokeWidth={2}
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
     </svg>
   );
 }

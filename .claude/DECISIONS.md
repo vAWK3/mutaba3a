@@ -29,6 +29,7 @@
 | ADR-018 | CSS Variables for Theming | Active | 2024-03 |
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
+| ADR-021 | Question-First UX Redesign | Active | 2026-03 |
 
 ---
 
@@ -549,6 +550,37 @@ formatCurrency(1999, 'USD')      // → "$19.99" or "١٩٫٩٩ $"
 - Compatible with Testing Library
 - Same config as Vite
 - Less ecosystem than Jest (but growing)
+
+---
+
+## ADR-021: Question-First UX Redesign
+
+**Status**: Active
+**Date**: 2026-03
+**Context**: The app evolved into an entity-first mini CRM (clients/projects/transactions/documents) but the core user need is simpler: fast answers about cash flow. Users need to know what they received, what's unpaid, and what they spent, not manage a pipeline or document system.
+
+**Decision**: Transform the product from entity-first software to question-first financial UX.
+
+**Key Changes**:
+1. **New Navigation**: Home, Income, Expenses, Insights | Clients, Projects | Settings
+2. **Renamed Routes**: Overview → Home, Transactions → Income, Reports/Money Answers → Insights
+3. **Deprecated from UX**: Documents, Retainers, Engagements, standalone Reports page
+4. **Mental Model**: Layer 1 = Money (income/expenses/unpaid), Layer 2 = Context (clients/projects), Layer 3 = Answers (home/insights)
+
+**Consequences**:
+- Sharper product identity: "cash flow tool" not "mini CRM"
+- Faster user comprehension (question-first vs entity-first)
+- Clients/Projects become supporting context, not primary navigation
+- Documents feature preserved in code but hidden from nav (can reintroduce later)
+- Existing drawer-first, URL-driven, offline-first architecture preserved
+
+**Implementation**:
+- Phase 1: Navigation and labeling cleanup
+- Phase 2: Home, Income, Expenses page redesign
+- Phase 3: Clients and Projects repositioning
+- Phase 4: Insights consolidation
+
+**Reference**: `docs/ux-redesign/UX-REDESIGN-SPEC.md`, `docs/ux-redesign/IMPLEMENTATION-PLAN.md`
 
 ---
 

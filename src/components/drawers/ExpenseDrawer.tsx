@@ -195,6 +195,10 @@ export function ExpenseDrawer() {
     try {
       if (data.expenseType === 'recurring') {
         // Handle recurring rule
+        // Extract day of month from start date
+        const startDateObj = new Date(data.startDate || todayISO());
+        const dayOfMonth = startDateObj.getDate();
+
         const ruleData = {
           profileId: data.profileId,
           title: data.title || '',
@@ -203,9 +207,12 @@ export function ExpenseDrawer() {
           amountMinor: parseAmountToMinor(data.amount),
           currency: data.currency as Currency,
           frequency: data.frequency as ExpenseFrequency,
+          dayOfMonth,
           startDate: data.startDate || todayISO(),
           endMode: data.endMode as RecurringEndMode,
           endDate: data.endMode === 'untilDate' ? data.endDate : undefined,
+          scope: 'general' as const,
+          reminderDaysBefore: 0,
           isPaused: false,
         };
 

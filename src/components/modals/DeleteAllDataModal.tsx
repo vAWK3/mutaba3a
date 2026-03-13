@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { db, deleteAllData } from '../../db';
 import { useT } from '../../lib/i18n';
@@ -101,7 +102,7 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
 
   const canDelete = exportStatus === 'done' && backupConfirmed && deleteStatus !== 'deleting';
 
-  return (
+  return createPortal(
     <>
       <div className="modal-overlay" onClick={onClose} />
       <div
@@ -188,7 +189,8 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

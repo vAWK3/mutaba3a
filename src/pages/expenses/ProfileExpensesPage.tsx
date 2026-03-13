@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
-import { RowActionsMenu } from '../../components/ui';
+import { RowActionsMenu, RecurringOccurrenceList } from '../../components/ui';
+import { RecurringConfirmModal, RecurringSnoozeModal } from '../../components/modals';
 import { CopyIcon, TrashIcon } from '../../components/icons';
 import {
   useExpenses,
@@ -15,12 +16,19 @@ import {
   useExpenseCategories,
   useSeedExpenseCategories,
 } from '../../hooks/useExpenseQueries';
+import {
+  useDueOccurrences,
+  useVirtualOccurrences,
+  useConfirmRecurringPayment,
+  useSkipRecurringOccurrence,
+  useSnoozeRecurringOccurrence,
+} from '../../hooks/useRecurringExpenseQueries';
 import type { CategoryPreset } from '../../db/defaultExpenseCategories';
 import { useBusinessProfile } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { ExpenseFilters } from '../../types';
+import type { ExpenseFilters, VirtualOccurrenceDisplay } from '../../types';
 import './ProfileExpensesPage.css';
 import '../../components/modals/DeleteAllDataModal.css';
 
@@ -37,16 +45,54 @@ export function ProfileExpensesPage() {
   const [search, setSearch] = useState('');
   const [showRecurring, setShowRecurring] = useState(true);
   const [showCategorySetup, setShowCategorySetup] = useState(false);
+  const [showDueOccurrences, setShowDueOccurrences] = useState(true);
+  const [showForecast, setShowForecast] = useState(true);
+  const [confirmModalOccurrence, setConfirmModalOccurrence] = useState<VirtualOccurrenceDisplay | null>(null);
+  const [snoozeModalOccurrence, setSnoozeModalOccurrence] = useState<VirtualOccurrenceDisplay | null>(null);
+
+  // Date range for forecast (rest of the year from today, or full year if viewing past year)
+  const forecastDateRange = useMemo(() => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+
+    if (year < currentYear) {
+      // Past year: show full year
+      return { from: `${year}-01-01`, to: `${year}-12-31` };
+    } else if (year > currentYear) {
+      // Future year: show full year
+      return { from: `${year}-01-01`, to: `${year}-12-31` };
+    } else {
+      // Current year: show from today to end of year
+      const todayStr = today.toISOString().split('T')[0];
+      return { from: todayStr, to: `${year}-12-31` };
+    }
+  }, [year]);
 
   const { data: profile, isLoading: profileLoading } = useBusinessProfile(profileId);
   const { data: totals } = useExpenseYearlyTotals(profileId, year);
   const { data: categories = [] } = useExpenseCategories(profileId);
   const { data: recurringRules = [] } = useRecurringRules(profileId);
+  const { data: dueOccurrences = [] } = useDueOccurrences(profileId);
+  const { data: allOccurrences = [] } = useVirtualOccurrences(
+    profileId,
+    forecastDateRange.from,
+    forecastDateRange.to
+  );
+
+  // Filter to only projected occurrences for the forecast
+  const forecastOccurrences = useMemo(() => {
+    return allOccurrences.filter(occ => occ.computedState === 'projected');
+  }, [allOccurrences]);
 
   const deleteExpenseMutation = useDeleteExpense();
   const pauseRuleMutation = usePauseRecurringRule();
   const resumeRuleMutation = useResumeRecurringRule();
   const deleteRuleMutation = useDeleteRecurringRule();
+
+  // Recurring occurrence mutations
+  const confirmPaymentMutation = useConfirmRecurringPayment();
+  const skipOccurrenceMutation = useSkipRecurringOccurrence();
+  const snoozeOccurrenceMutation = useSnoozeRecurringOccurrence();
 
   // Always fetch all currencies (no currency filter)
   const filters = useMemo((): ExpenseFilters => ({
@@ -72,6 +118,54 @@ export function ProfileExpensesPage() {
 
   const handleAddRecurring = () => {
     openExpenseDrawer({ mode: 'create', defaultProfileId: profileId, isRecurring: true });
+  };
+
+  // Recurring occurrence handlers
+  const handleMarkPaid = (occurrence: VirtualOccurrenceDisplay) => {
+    setConfirmModalOccurrence(occurrence);
+  };
+
+  const handleSkip = (occurrence: VirtualOccurrenceDisplay) => {
+    if (confirm(t('expenses.recurring.occurrence.confirmSkip'))) {
+      skipOccurrenceMutation.mutate({
+        ruleId: occurrence.ruleId,
+        profileId: occurrence.profileId,
+        expectedDate: occurrence.expectedDate,
+      });
+    }
+  };
+
+  const handleSnooze = (occurrence: VirtualOccurrenceDisplay) => {
+    setSnoozeModalOccurrence(occurrence);
+  };
+
+  const handleConfirmPayment = (params: {
+    ruleId: string;
+    profileId: string;
+    expectedDate: string;
+    amountMinor?: number;
+    actualPaidDate?: string;
+    notes?: string;
+  }) => {
+    confirmPaymentMutation.mutate(params, {
+      onSuccess: () => {
+        setConfirmModalOccurrence(null);
+      },
+    });
+  };
+
+  const handleConfirmSnooze = (params: {
+    ruleId: string;
+    profileId: string;
+    expectedDate: string;
+    snoozeUntil: string;
+    notes?: string;
+  }) => {
+    snoozeOccurrenceMutation.mutate(params, {
+      onSuccess: () => {
+        setSnoozeModalOccurrence(null);
+      },
+    });
   };
 
   if (profileLoading) {
@@ -166,6 +260,30 @@ export function ProfileExpensesPage() {
                 {recurringRules.filter((r) => !r.isPaused).length}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Due Occurrences Section */}
+        {dueOccurrences.length > 0 && (
+          <div className="due-occurrences-section" style={{ marginBottom: 24 }}>
+            <button
+              className="recurring-rules-header"
+              onClick={() => setShowDueOccurrences(!showDueOccurrences)}
+            >
+              <span className="recurring-rules-title">
+                {t('expenses.recurring.occurrence.needsAttention')} ({dueOccurrences.length})
+              </span>
+              <ChevronIcon className={cn('recurring-rules-chevron', showDueOccurrences && 'expanded')} />
+            </button>
+
+            {showDueOccurrences && (
+              <RecurringOccurrenceList
+                occurrences={dueOccurrences}
+                onMarkPaid={handleMarkPaid}
+                onSkip={handleSkip}
+                onSnooze={handleSnooze}
+              />
+            )}
           </div>
         )}
 
@@ -309,6 +427,31 @@ export function ProfileExpensesPage() {
           </button>
         </div>
 
+        {/* Forecast Section - Upcoming projected expenses */}
+        {forecastOccurrences.length > 0 && (
+          <div className="forecast-section" style={{ marginTop: 24 }}>
+            <button
+              className="recurring-rules-header"
+              onClick={() => setShowForecast(!showForecast)}
+            >
+              <span className="recurring-rules-title">
+                {t('expenses.recurring.forecast')} ({forecastOccurrences.length})
+              </span>
+              <ChevronIcon className={cn('recurring-rules-chevron', showForecast && 'expanded')} />
+            </button>
+
+            {showForecast && (
+              <RecurringOccurrenceList
+                occurrences={forecastOccurrences}
+                onMarkPaid={handleMarkPaid}
+                onSkip={handleSkip}
+                onSnooze={handleSnooze}
+                compact
+              />
+            )}
+          </div>
+        )}
+
         {/* Recurring Rules Section */}
         {recurringRules.length > 0 && (
           <div className="recurring-rules-section">
@@ -390,6 +533,22 @@ export function ProfileExpensesPage() {
         isOpen={showCategorySetup}
         onClose={() => setShowCategorySetup(false)}
         profileId={profileId}
+      />
+
+      {/* Recurring Occurrence Modals */}
+      <RecurringConfirmModal
+        occurrence={confirmModalOccurrence}
+        isOpen={!!confirmModalOccurrence}
+        onClose={() => setConfirmModalOccurrence(null)}
+        onConfirm={handleConfirmPayment}
+        isLoading={confirmPaymentMutation.isPending}
+      />
+      <RecurringSnoozeModal
+        occurrence={snoozeModalOccurrence}
+        isOpen={!!snoozeModalOccurrence}
+        onClose={() => setSnoozeModalOccurrence(null)}
+        onSnooze={handleConfirmSnooze}
+        isLoading={snoozeOccurrenceMutation.isPending}
       />
     </>
   );
@@ -492,7 +651,7 @@ function CategorySetupModal({ isOpen, onClose, profileId }: CategorySetupModalPr
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
               </svg>
-              <p>{t('common.error') || 'An error occurred. Please try again.'}</p>
+              <p>{t('common.errorMessage')}</p>
             </div>
           )}
           <div className="preset-options">

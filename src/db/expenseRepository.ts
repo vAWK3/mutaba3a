@@ -63,6 +63,16 @@ export const expenseRepo = {
         if (expenseMonth !== filters.month) return false;
       }
 
+      // Filter by date range
+      if (filters.dateFrom) {
+        const expenseDate = e.occurredAt.split('T')[0];
+        if (expenseDate < filters.dateFrom) return false;
+      }
+      if (filters.dateTo) {
+        const expenseDate = e.occurredAt.split('T')[0];
+        if (expenseDate > filters.dateTo) return false;
+      }
+
       // Search
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
@@ -225,21 +235,30 @@ export const expenseRepo = {
 // ============================================================================
 
 export const recurringRuleRepo = {
-  async list(profileId?: string): Promise<RecurringRule[]> {
-    let query = db.recurringRules.toCollection();
-    if (profileId) {
-      query = db.recurringRules.where('profileId').equals(profileId);
-    }
-    return query.toArray();
+  async list(filters?: {
+    profileId?: string;
+    isPaused?: boolean;
+    scope?: 'general' | 'project';
+  }): Promise<RecurringRule[]> {
+    const rules = await db.recurringRules.toArray();
+
+    return rules.filter((r) => {
+      if (r.deletedAt) return false;
+      if (filters?.profileId && r.profileId !== filters.profileId) return false;
+      if (filters?.isPaused !== undefined && r.isPaused !== filters.isPaused) return false;
+      if (filters?.scope && r.scope !== filters.scope) return false;
+      return true;
+    });
   },
 
-  async listActive(profileId?: string): Promise<RecurringRule[]> {
-    const rules = await this.list(profileId);
-    return rules.filter((r) => !r.isPaused);
+  async listActive(profileId: string): Promise<RecurringRule[]> {
+    return this.list({ profileId, isPaused: false });
   },
 
   async get(id: string): Promise<RecurringRule | undefined> {
-    return db.recurringRules.get(id);
+    const rule = await db.recurringRules.get(id);
+    if (rule?.deletedAt) return undefined;
+    return rule;
   },
 
   async create(data: Omit<RecurringRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<RecurringRule> {
@@ -266,8 +285,86 @@ export const recurringRuleRepo = {
     await db.recurringRules.update(id, { isPaused: false, updatedAt: nowISO() });
   },
 
+  async softDelete(id: string): Promise<void> {
+    await db.recurringRules.update(id, { deletedAt: nowISO(), updatedAt: nowISO() });
+  },
+
   async delete(id: string): Promise<void> {
     await db.recurringRules.delete(id);
+  },
+};
+
+// ============================================================================
+// Recurring Occurrence Repository
+// ============================================================================
+
+import type { RecurringOccurrence, RecurringOccurrenceStatus } from '../types';
+
+export const recurringOccurrenceRepo = {
+  async list(filters: {
+    profileId: string;
+    ruleId?: string;
+    status?: RecurringOccurrenceStatus | RecurringOccurrenceStatus[];
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<RecurringOccurrence[]> {
+    const occurrences = await db.recurringOccurrences.toArray();
+
+    return occurrences.filter((o) => {
+      if (o.profileId !== filters.profileId) return false;
+      if (filters.ruleId && o.ruleId !== filters.ruleId) return false;
+
+      // Status filtering
+      if (filters.status) {
+        const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+        if (!statuses.includes(o.status)) return false;
+      }
+
+      // Date range filtering
+      if (filters.dateFrom && o.expectedDate < filters.dateFrom) return false;
+      if (filters.dateTo && o.expectedDate > filters.dateTo) return false;
+
+      return true;
+    });
+  },
+
+  async get(id: string): Promise<RecurringOccurrence | undefined> {
+    return db.recurringOccurrences.get(id);
+  },
+
+  async getByRuleAndDate(ruleId: string, expectedDate: string): Promise<RecurringOccurrence | undefined> {
+    const occurrences = await db.recurringOccurrences
+      .where('[ruleId+expectedDate]')
+      .equals([ruleId, expectedDate])
+      .toArray();
+    return occurrences[0];
+  },
+
+  async getHistoryForRule(ruleId: string): Promise<RecurringOccurrence[]> {
+    return db.recurringOccurrences
+      .where('ruleId')
+      .equals(ruleId)
+      .sortBy('expectedDate');
+  },
+
+  async create(data: Omit<RecurringOccurrence, 'id' | 'createdAt' | 'updatedAt'>): Promise<RecurringOccurrence> {
+    const now = nowISO();
+    const occurrence: RecurringOccurrence = {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.recurringOccurrences.add(occurrence);
+    return occurrence;
+  },
+
+  async update(id: string, data: Partial<RecurringOccurrence>): Promise<void> {
+    await db.recurringOccurrences.update(id, { ...data, updatedAt: nowISO() });
+  },
+
+  async delete(id: string): Promise<void> {
+    await db.recurringOccurrences.delete(id);
   },
 };
 

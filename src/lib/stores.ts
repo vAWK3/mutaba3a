@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { Currency, TxKind, DocumentType, Currency as CurrencyType } from '../types';
 
+// Income status for the income drawer (Earned/Invoiced/Received)
+export type IncomeStatus = 'earned' | 'invoiced' | 'received';
+
 // Expense drawer prefill data type
 export interface ExpensePrefillData {
   vendor?: string;
@@ -14,33 +17,50 @@ export interface ExpensePrefillData {
 
 // Drawer state
 interface DrawerState {
-  // Transaction drawer
-  transactionDrawer: {
+  // Income drawer (formerly TransactionDrawer)
+  incomeDrawer: {
     isOpen: boolean;
     mode: 'create' | 'edit';
     transactionId?: string;
-    defaultKind?: TxKind;
+    defaultStatus?: IncomeStatus;
     defaultClientId?: string;
     defaultProjectId?: string;
+    defaultProfileId?: string;
     duplicateFromId?: string;
   };
+  openIncomeDrawer: (options?: {
+    mode?: 'create' | 'edit';
+    transactionId?: string;
+    defaultStatus?: IncomeStatus;
+    defaultClientId?: string;
+    defaultProjectId?: string;
+    defaultProfileId?: string;
+    duplicateFromId?: string;
+  }) => void;
+  closeIncomeDrawer: () => void;
+
+  // Legacy alias for TransactionDrawer (backwards compatibility)
+  transactionDrawer: DrawerState['incomeDrawer'];
   openTransactionDrawer: (options?: {
     mode?: 'create' | 'edit';
     transactionId?: string;
-    defaultKind?: TxKind;
+    defaultKind?: TxKind;  // Legacy: maps to defaultStatus
+    defaultStatus?: IncomeStatus;  // New: directly set status
     defaultClientId?: string;
     defaultProjectId?: string;
+    defaultProfileId?: string;
     duplicateFromId?: string;
   }) => void;
-  closeTransactionDrawer: () => void;
+  closeTransactionDrawer: DrawerState['closeIncomeDrawer'];
 
   // Client drawer
   clientDrawer: {
     isOpen: boolean;
     mode: 'create' | 'edit';
     clientId?: string;
+    defaultProfileId?: string;
   };
-  openClientDrawer: (options?: { mode?: 'create' | 'edit'; clientId?: string }) => void;
+  openClientDrawer: (options?: { mode?: 'create' | 'edit'; clientId?: string; defaultProfileId?: string }) => void;
   closeClientDrawer: () => void;
 
   // Project drawer
@@ -49,8 +69,9 @@ interface DrawerState {
     mode: 'create' | 'edit';
     projectId?: string;
     defaultClientId?: string;
+    defaultProfileId?: string;
   };
-  openProjectDrawer: (options?: { mode?: 'create' | 'edit'; projectId?: string; defaultClientId?: string }) => void;
+  openProjectDrawer: (options?: { mode?: 'create' | 'edit'; projectId?: string; defaultClientId?: string; defaultProfileId?: string }) => void;
   closeProjectDrawer: () => void;
 
   // Document drawer
@@ -156,28 +177,69 @@ interface DrawerState {
   };
   openDayDetailDrawer: (options: { date: string }) => void;
   closeDayDetailDrawer: () => void;
+
+  // Partial payment drawer
+  partialPaymentDrawer: {
+    isOpen: boolean;
+    transactionId?: string;
+  };
+  openPartialPaymentDrawer: (options: { transactionId: string }) => void;
+  closePartialPaymentDrawer: () => void;
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
+  // Income drawer (formerly TransactionDrawer)
+  incomeDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openIncomeDrawer: (options) =>
+    set({
+      incomeDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        transactionId: options?.transactionId,
+        defaultStatus: options?.defaultStatus,
+        defaultClientId: options?.defaultClientId,
+        defaultProjectId: options?.defaultProjectId,
+        defaultProfileId: options?.defaultProfileId,
+        duplicateFromId: options?.duplicateFromId,
+      },
+    }),
+  closeIncomeDrawer: () =>
+    set({
+      incomeDrawer: {
+        isOpen: false,
+        mode: 'create',
+      },
+    }),
+
+  // Legacy aliases (backwards compatibility during migration)
+  // These forward to income drawer - consumers should migrate to incomeDrawer
   transactionDrawer: {
     isOpen: false,
     mode: 'create',
   },
-  openTransactionDrawer: (options) =>
+  openTransactionDrawer: (options) => {
+    // Map old defaultKind to new defaultStatus, or use defaultStatus directly if provided
+    const defaultStatus = options?.defaultStatus
+      ?? (options?.defaultKind === 'income' ? 'earned' : undefined);
     set({
-      transactionDrawer: {
+      incomeDrawer: {
         isOpen: true,
         mode: options?.mode || 'create',
         transactionId: options?.transactionId,
-        defaultKind: options?.defaultKind,
+        defaultStatus: defaultStatus as IncomeStatus | undefined,
         defaultClientId: options?.defaultClientId,
         defaultProjectId: options?.defaultProjectId,
+        defaultProfileId: options?.defaultProfileId,
         duplicateFromId: options?.duplicateFromId,
       },
-    }),
+    });
+  },
   closeTransactionDrawer: () =>
     set({
-      transactionDrawer: {
+      incomeDrawer: {
         isOpen: false,
         mode: 'create',
       },
@@ -193,6 +255,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         isOpen: true,
         mode: options?.mode || 'create',
         clientId: options?.clientId,
+        defaultProfileId: options?.defaultProfileId,
       },
     }),
   closeClientDrawer: () =>
@@ -214,6 +277,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         mode: options?.mode || 'create',
         projectId: options?.projectId,
         defaultClientId: options?.defaultClientId,
+        defaultProfileId: options?.defaultProfileId,
       },
     }),
   closeProjectDrawer: () =>
@@ -407,6 +471,25 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       dayDetailDrawer: {
         isOpen: false,
         date: undefined,
+      },
+    }),
+
+  // Partial payment drawer
+  partialPaymentDrawer: {
+    isOpen: false,
+  },
+  openPartialPaymentDrawer: (options) =>
+    set({
+      partialPaymentDrawer: {
+        isOpen: true,
+        transactionId: options.transactionId,
+      },
+    }),
+  closePartialPaymentDrawer: () =>
+    set({
+      partialPaymentDrawer: {
+        isOpen: false,
+        transactionId: undefined,
       },
     }),
 }));

@@ -48,7 +48,7 @@ export function FinalCTASection() {
 
         <p className="final-cta-web-note">
           {t('landing.finalCta.orTry')}{' '}
-          <a href="/app" className="final-cta-web-link">
+          <a href="/app?demo=1" className="final-cta-web-link">
             {t('landing.finalCta.webApp')}
           </a>
         </p>

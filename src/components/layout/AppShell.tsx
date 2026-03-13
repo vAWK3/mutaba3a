@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from "react";
 import { SidebarNav } from "./SidebarNav";
-import { TransactionDrawer } from "../drawers/TransactionDrawer";
+import { IncomeDrawer } from "../drawers/IncomeDrawer";
 import { ClientDrawer } from "../drawers/ClientDrawer";
 import { ProjectDrawer } from "../drawers/ProjectDrawer";
 import { BusinessProfileDrawer } from "../drawers/BusinessProfileDrawer";
@@ -8,6 +8,7 @@ import { DocumentDrawer } from "../drawers/DocumentDrawer";
 import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
 import { RetainerDrawer } from "../drawers/RetainerDrawer";
 import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
+import { PartialPaymentDrawer } from "../drawers/PartialPaymentDrawer";
 import { WelcomeModal, DemoSeedModal } from "../modals";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
@@ -30,7 +31,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const {
-    transactionDrawer,
+    incomeDrawer,
     clientDrawer,
     projectDrawer,
     businessProfileDrawer,
@@ -38,6 +39,8 @@ export function AppShell({ children }: AppShellProps) {
     expenseDrawer,
     retainerDrawer,
     retainerMatchingDrawer,
+    partialPaymentDrawer,
+    closePartialPaymentDrawer,
   } = useDrawerStore();
 
   const { showConfirmModal, setShowConfirmModal, isActive } = useDemoStore();
@@ -85,9 +88,9 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
-      {transactionDrawer.isOpen && (
+      {incomeDrawer.isOpen && (
         <InlineErrorBoundary>
-          <TransactionDrawer />
+          <IncomeDrawer />
         </InlineErrorBoundary>
       )}
       {clientDrawer.isOpen && (
@@ -123,6 +126,14 @@ export function AppShell({ children }: AppShellProps) {
       {retainerMatchingDrawer.isOpen && (
         <InlineErrorBoundary>
           <RetainerMatchingDrawer />
+        </InlineErrorBoundary>
+      )}
+      {partialPaymentDrawer.isOpen && partialPaymentDrawer.transactionId && (
+        <InlineErrorBoundary>
+          <PartialPaymentDrawer
+            transactionId={partialPaymentDrawer.transactionId}
+            onClose={closePartialPaymentDrawer}
+          />
         </InlineErrorBoundary>
       )}
 

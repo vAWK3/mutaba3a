@@ -60,6 +60,24 @@
   color: var(--muted);
 }
 
+.profile-switcher-avatar-all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: white;
+}
+
+/* All Profiles button styling */
+.profile-switcher.all-profiles {
+  border-color: var(--accent-subtle);
+  background: var(--accent-subtle);
+}
+
+.profile-switcher.all-profiles:hover {
+  border-color: var(--accent);
+}
+
 /* Name */
 .profile-switcher-name {
   flex: 1;
@@ -130,6 +148,14 @@
   overflow: hidden;
 }
 
+/* Dropdown opens below when not enough space above */
+.profile-switcher-dropdown.dropdown-bottom {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: var(--space-2);
+}
+
 @keyframes dropdown-in {
   from {
     opacity: 0;
@@ -197,6 +223,23 @@
   height: 1px;
   background: var(--border);
   margin: var(--space-1) 0;
+}
+
+.profile-switcher-divider-thin {
+  margin: var(--space-1) var(--space-2);
+}
+
+/* All Profiles option styling */
+.profile-switcher-option-all {
+  background: var(--accent-subtle);
+}
+
+.profile-switcher-option-all:hover {
+  background: var(--accent-subtle);
+}
+
+.profile-switcher-option-all.active {
+  background: var(--accent-subtle);
 }
 
 /* Action Buttons */

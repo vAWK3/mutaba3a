@@ -1,3 +1,9 @@
+/**
+ * @deprecated This page is deprecated as of 2026-03-13.
+ * The /money-answers route now redirects to /insights.
+ * This code is kept for reference and potential future reuse.
+ * See: docs/ux-redesign/UX-REDESIGN-SPEC.md
+ */
 import { useMemo } from 'react';
 import { useSearch, useNavigate } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n';

@@ -22,14 +22,36 @@
     "previous": "Previous",
     "next": "Next",
     "uncategorized": "Uncategorized",
-    "noResults": "No results found"
+    "noResults": "No results found",
+    "errorMessage": "An error occurred. Please try again.",
+    "sort": {
+      "nameAZ": "Name (A-Z)",
+      "nameZA": "Name (Z-A)",
+      "valueHigh": "Value (High to Low)",
+      "valueLow": "Value (Low to High)",
+      "unpaidHigh": "Unpaid (High to Low)",
+      "unpaidLow": "Unpaid (Low to High)",
+      "activityRecent": "Recent Activity",
+      "activityOldest": "Oldest Activity",
+      "netHigh": "Net (High to Low)",
+      "netLow": "Net (Low to High)"
+    }
+  },
+  "currency": {
+    "USD": "USD",
+    "ILS": "ILS",
+    "EUR": "EUR",
+    "all": "All"
   },
   "toast": {
     "transactionDuplicated": "Transaction created",
     "transactionUndone": "Transaction undone"
   },
   "nav": {
+    "home": "Home",
     "overview": "Overview",
+    "income": "Income",
+    "insights": "Insights",
     "projects": "Projects",
     "clients": "Clients",
     "transactions": "Transactions",
@@ -45,16 +67,20 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "sections": {
+      "main": "Main",
+      "workspace": "Workspace",
       "work": "Work",
       "money": "Money",
       "system": "System"
     },
     "newMenu": {
+      "income": "Add Income",
+      "expense": "Add Expense",
+      "client": "Add Client",
+      "project": "Add Project",
       "document": "New Document",
       "engagement": "New Engagement",
-      "transaction": "New Transaction",
-      "client": "New Client",
-      "expense": "New Expense"
+      "transaction": "New Transaction"
     }
   },
   "addMenu": {
@@ -72,6 +98,8 @@
     "addTransaction": "Add Transaction",
     "searchPlaceholder": "Search transactions...",
     "confirmDelete": "Are you sure you want to delete this transaction?",
+    "generateInvoice": "Generate Invoice",
+    "viewInvoice": "View Invoice",
     "type": {
       "income": "Income",
       "expense": "Expense",
@@ -80,9 +108,20 @@
     "status": {
       "paid": "Paid",
       "unpaid": "Unpaid",
+      "partial": "Partial ({percent}%)",
       "overdue": "{days}d overdue",
       "dueIn": "Due in {days}d",
       "dueToday": "Due today"
+    },
+    "partialPayment": {
+      "title": "Record Payment",
+      "received": "Received so far",
+      "remaining": "Remaining",
+      "amount": "Payment amount",
+      "record": "Record Payment",
+      "markFullyPaid": "Mark Fully Paid",
+      "paymentRecorded": "Payment recorded",
+      "recordPayment": "Record Payment"
     },
     "columns": {
       "date": "Date",
@@ -91,12 +130,13 @@
       "project": "Project",
       "category": "Category",
       "amount": "Amount",
-      "status": "Status"
+      "status": "Status",
+      "description": "Description"
     },
     "hasDocument": "Has linked document"
   },
   "overview": {
-    "title": "Overview",
+    "title": "Home",
     "kpi": {
       "paidIncome": "Paid Income",
       "unpaidReceivables": "Unpaid Receivables",
@@ -106,7 +146,80 @@
     "needsAttention": "Needs Attention",
     "noAttention": "No overdue or upcoming receivables",
     "recentActivity": "Recent Activity",
-    "noRecent": "No recent transactions"
+    "noRecent": "No recent transactions",
+    "welcome": {
+      "title": "Welcome to Mutaba3a",
+      "description": "Start tracking your cash flow by adding your first client, project, or income entry.",
+      "addClient": "Add Client",
+      "addProject": "Add Project",
+      "addIncome": "Add Income"
+    }
+  },
+  "onboarding": {
+    "title": "Get Started",
+    "subtitle": "Let's set up your cash flow tracking",
+    "step1": {
+      "title": "Add Your First Client",
+      "description": "Start by adding a client you work with"
+    },
+    "step2": {
+      "title": "Create a Project",
+      "description": "Organize work under projects"
+    },
+    "step3": {
+      "title": "Record Income",
+      "description": "Track your first payment"
+    },
+    "skip": "Skip for now",
+    "complete": "Go to Dashboard",
+    "stepOf": "Step {current} of {total}"
+  },
+  "home": {
+    "forecast": {
+      "willMakeIt": "Will I Make It?",
+      "willMakeItHelp": "End-of-month forecast: your current cash plus expected income minus upcoming expenses. Assumes unpaid invoices will be collected by their due date.",
+      "endOfMonth": "End-of-month forecast",
+      "cashOnHand": "Cash on Hand",
+      "cashOnHandHelp": "Your current balance based on actual paid income and expenses to date. Does not include unpaid invoices or projections.",
+      "currentBalance": "Current balance",
+      "comingLeaving": "Coming / Leaving",
+      "comingLeavingHelp": "Coming: unpaid income due this month plus expected retainer payments. Leaving: known expenses scheduled for the rest of the month.",
+      "coming": "Coming",
+      "leaving": "Leaving",
+      "net": "Net"
+    },
+    "actuals": {
+      "title": "This Month's Actuals",
+      "received": "Received",
+      "unpaid": "Unpaid",
+      "expenses": "Expenses",
+      "net": "Net"
+    },
+    "attention": {
+      "title": "Needs Attention",
+      "viewAll": "View all",
+      "empty": "All clear! No items need attention.",
+      "markPaid": "Mark Paid",
+      "viewDetails": "View",
+      "viewUnpaid": "View Unpaid",
+      "showMore": "Show {count} more",
+      "showLess": "Show less"
+    }
+  },
+  "income": {
+    "empty": "No income yet",
+    "emptyHint": "Add your first income to start tracking",
+    "addIncome": "Add Income",
+    "summary": {
+      "received": "Received",
+      "unpaid": "Unpaid"
+    },
+    "status": {
+      "all": "All",
+      "unpaid": "Unpaid",
+      "received": "Received",
+      "overdue": "Overdue"
+    }
   },
   "projects": {
     "title": "Projects",
@@ -123,11 +236,20 @@
       "project": "Project",
       "client": "Client",
       "field": "Field",
+      "received": "Received",
       "paid": "Paid",
       "unpaid": "Unpaid",
       "expenses": "Expenses",
       "net": "Net",
       "lastActivity": "Last Activity"
+    },
+    "summary": {
+      "projectsCount": "{count} projects",
+      "projectsCountOne": "1 project",
+      "totalReceived": "Total Received",
+      "totalUnpaid": "Total Unpaid",
+      "totalExpenses": "Total Expenses",
+      "totalNet": "Total Net"
     },
     "tabs": {
       "summary": "Summary",
@@ -161,10 +283,18 @@
     "columns": {
       "client": "Client",
       "activeProjects": "Active Projects",
+      "received": "Received",
       "paidIncome": "Paid Income",
       "unpaid": "Unpaid",
+      "expenses": "Expenses",
       "lastPayment": "Last Payment",
       "lastActivity": "Last Activity"
+    },
+    "summary": {
+      "clientsCount": "{count} clients",
+      "clientsCountOne": "1 client",
+      "totalReceived": "Total Received",
+      "totalUnpaid": "Total Unpaid"
     },
     "tabs": {
       "summary": "Summary",
@@ -176,6 +306,9 @@
       "clientDetails": "Client Details",
       "email": "Email",
       "phone": "Phone",
+      "recentActivity": "Recent Activity",
+      "noRecentActivity": "No recent activity",
+      "viewAllTransactions": "View All Transactions",
       "noProjects": "No projects",
       "noProjectsHint": "Add your first project for this client.",
       "noReceivables": "No receivables",
@@ -189,9 +322,48 @@
       "action": "Action"
     }
   },
+  "insights": {
+    "title": "Insights",
+    "tabs": {
+      "summary": "Summary",
+      "clients": "Clients",
+      "projects": "Projects",
+      "expenses": "Expenses",
+      "unpaid": "Unpaid"
+    },
+    "period": {
+      "month": "Month",
+      "year": "Year"
+    },
+    "toggles": {
+      "includeUnpaid": "Include unpaid income",
+      "includeProjected": "Include projected retainers"
+    },
+    "cashFlowTimeline": {
+      "title": "Cash Flow Timeline",
+      "hint": "View daily inflows and outflows with a dedicated date picker"
+    },
+    "yearInsights": {
+      "title": "Year Insights"
+    },
+    "monthlyTrend": {
+      "title": "Monthly Trend",
+      "income": "Income",
+      "expenses": "Expenses",
+      "net": "Net",
+      "noData": "No data for this period"
+    },
+    "unpaid": {
+      "byClient": "Outstanding by Client",
+      "byProject": "Outstanding by Project",
+      "totalUnpaid": "Total Unpaid",
+      "invoices": "Invoices"
+    }
+  },
   "reports": {
     "title": "Reports",
     "exportCsv": "Export CSV",
+    "print": "Print",
     "presets": {
       "summary": "Summary",
       "thisMonth": "This Month",
@@ -270,6 +442,14 @@
   },
   "settings": {
     "title": "Settings",
+    "profile": {
+      "title": "Business Profiles",
+      "addProfile": "+ Add Profile",
+      "setDefault": "Set as Default",
+      "default": "Default",
+      "confirmArchive": "Are you sure you want to archive this business profile?",
+      "empty": "No business profiles yet. Create one to start issuing invoices."
+    },
     "language": {
       "title": "Language",
       "description": "Choose your preferred language"
@@ -336,7 +516,9 @@
       "name": "Mutaba3a - Mini CRM",
       "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB.",
       "support": "Support this project",
-      "supportDesc": "If you find this tool useful, consider supporting its development"
+      "supportDesc": "If you find this tool useful, consider supporting its development",
+      "buyMeCoffee": "Buy Me a Coffee",
+      "kofi": "Ko-fi"
     },
     "updates": {
       "title": "Updates",
@@ -378,6 +560,15 @@
     "addRecurring": "Add Recurring",
     "empty": "No expenses found",
     "emptyHint": "Add your first expense to get started",
+    "summary": {
+      "total": "Total Expenses",
+      "thisMonth": "This Month"
+    },
+    "view": {
+      "list": "List",
+      "byCategory": "By Category",
+      "byProject": "By Project"
+    },
     "emptyProfiles": "No business profiles",
     "emptyProfilesHint": "Create a business profile to track expenses",
     "emptyExpenses": "No expenses",
@@ -385,6 +576,9 @@
     "emptyExpensesHint": "Add your first expense to get started",
     "searchPlaceholder": "Search expenses...",
     "confirmDelete": "Are you sure you want to delete this expense?",
+    "confirmDeleteFromRecurring": "This expense was created from a recurring rule. Delete it anyway?",
+    "fromRecurring": "Created from a recurring expense rule",
+    "recurringBadge": "Recurring",
     "confirmDeleteRule": "Are you sure you want to delete this recurring rule?",
     "year": "Year",
     "month": "Month",
@@ -395,9 +589,15 @@
     "totalILS": "Total (ILS)",
     "viewReceipts": "View Receipts",
     "manageReceipts": "Manage Receipts",
+    "manageRecurring": "Manage Recurring",
     "allProfilesOverview": "All Profiles Overview",
+    "allProfiles": "All Profiles",
+    "currentProfile": "Current: {name}",
+    "profileMode": "Profile mode",
+    "profileSpecificTools": "Profile-Specific Tools",
+    "profileSpecificToolsHint": "Recurring schedules, due payments, and forecasts require a specific profile to be selected.",
+    "openProfile": "Open {name}",
     "recurringRules": "Recurring Rules",
-    "fromRecurring": "From recurring rule",
     "monthly": "monthly",
     "yearly": "yearly",
     "pause": "Pause",
@@ -482,7 +682,55 @@
       "pause": "Pause",
       "resume": "Resume",
       "paused": "Paused",
-      "active": "Active"
+      "active": "Active",
+      "dayOfMonth": "Day of Month",
+      "monthOfYear": "Month",
+      "reminderDays": "Reminder Days",
+      "reminderDaysHint": "Days before due to show reminder",
+      "scope": "Scope",
+      "scopeGeneral": "General",
+      "scopeProject": "Project",
+      "occurrence": {
+        "title": "Recurring Expense",
+        "confirmPayment": "Confirm Payment",
+        "skip": "Skip",
+        "skipConfirm": "Are you sure you want to skip this expense?",
+        "snooze": "Snooze",
+        "snoozeUntil": "Snooze until",
+        "markPaid": "Mark Paid",
+        "expectedOn": "Expected on",
+        "actualDate": "Actual Date",
+        "editAmount": "Edit Amount",
+        "notes": "Notes",
+        "notesPlaceholder": "Any notes about this payment...",
+        "state": {
+          "projected": "Projected",
+          "due": "Due",
+          "overdue": "Overdue",
+          "snoozed": "Snoozed",
+          "paid": "Paid",
+          "skipped": "Skipped"
+        },
+        "dueIn": "Due in {days} days",
+        "dueToday": "Due today",
+        "overdueDays": "Overdue by {days} days",
+        "snoozedUntil": "Snoozed until {date}",
+        "empty": "No upcoming recurring expenses",
+        "emptyHint": "Create a recurring rule to see upcoming payments",
+        "needsAttention": "Needs Attention",
+        "confirmSkip": "Are you sure you want to skip this expense? This action cannot be undone."
+      },
+      "rule": {
+        "new": "New Recurring Rule",
+        "edit": "Edit Recurring Rule",
+        "title": "Title",
+        "titlePlaceholder": "e.g., Office Rent, Subscriptions",
+        "amount": "Amount",
+        "history": "Payment History",
+        "noHistory": "No payment history yet",
+        "deleteConfirm": "Are you sure you want to delete this recurring rule? Past expenses will not be affected."
+      },
+      "forecast": "Upcoming Expenses"
     },
     "columns": {
       "date": "Date",
@@ -516,6 +764,17 @@
     }
   },
   "drawer": {
+    "income": {
+      "title": "New Income",
+      "editTitle": "Edit Income",
+      "statusEarned": "Earned",
+      "statusEarnedHint": "Work done, not yet billed",
+      "statusInvoiced": "Invoiced",
+      "statusInvoicedHint": "Invoice sent, awaiting payment",
+      "statusReceived": "Received",
+      "statusReceivedHint": "Payment collected",
+      "dueDate": "Due Date"
+    },
     "transaction": {
       "new": "New Transaction",
       "edit": "Edit Transaction",
@@ -530,6 +789,8 @@
       "currency": "Currency",
       "date": "Date",
       "dueDate": "Due Date",
+      "profile": "Business Profile",
+      "profilePlaceholder": "Select profile...",
       "client": "Client",
       "clientPlaceholder": "Select client...",
       "project": "Project",
@@ -644,7 +905,8 @@
     "required": "This field is required",
     "amountRequired": "Amount is required",
     "dateRequired": "Date is required",
-    "nameRequired": "Name is required"
+    "nameRequired": "Name is required",
+    "profileRequired": "Profile is required"
   },
   "time": {
     "today": "Today",
@@ -684,7 +946,17 @@
     "addProfile": "Add Business Profile",
     "manageProfiles": "Manage Profiles",
     "switchTo": "Switch to {name}",
-    "current": "Current"
+    "current": "Current",
+    "allProfiles": "All Profiles"
+  },
+  "profile": {
+    "select": "Select Profile",
+    "selectPrompt": "Which profile is this for?",
+    "choose": "Choose profile",
+    "change": "change",
+    "badge": {
+      "viewingAll": "Viewing all profiles"
+    }
   },
   "documentGuard": {
     "title": "Business Profile Required",

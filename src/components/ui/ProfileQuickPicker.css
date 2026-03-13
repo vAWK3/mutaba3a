@@ -1,0 +1,87 @@
+.profile-quick-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  max-width: 280px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.profile-quick-picker-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.profile-quick-picker-list {
+  padding: 4px;
+}
+
+.profile-quick-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: start;
+  transition: background-color 0.1s ease;
+}
+
+.profile-quick-picker-option:hover {
+  background: var(--surface-hover);
+}
+
+.profile-quick-picker-option:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.profile-quick-picker-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-quick-picker-avatar {
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.profile-quick-picker-avatar.avatar-small {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.profile-quick-picker-avatar.avatar-medium {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.profile-quick-picker-avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+}
+
+/* RTL support */
+[dir='rtl'] .profile-quick-picker-option {
+  text-align: end;
+}

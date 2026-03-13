@@ -1,0 +1,82 @@
+.onboarding-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: var(--space-8);
+}
+
+.onboarding-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.onboarding-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.onboarding-subtitle {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  margin-bottom: var(--space-6);
+}
+
+.onboarding-step-content {
+  padding: var(--space-6) 0;
+}
+
+.onboarding-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  margin-bottom: var(--space-4);
+}
+
+.onboarding-step-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.onboarding-step-description {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.onboarding-actions .btn-primary {
+  width: 100%;
+}
+
+.onboarding-actions .btn-ghost {
+  width: 100%;
+  color: var(--text-muted);
+}
+
+.onboarding-actions .btn-ghost:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}

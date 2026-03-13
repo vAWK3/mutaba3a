@@ -17,12 +17,14 @@ export function UpdateBanner() {
   });
 
   // Update dismissed state when availableVersion changes
+  /* eslint-disable react-hooks/set-state-in-effect -- Syncing state with prop changes is intentional */
   useEffect(() => {
     if (availableVersion) {
       const storedVersion = localStorage.getItem(DISMISSED_KEY);
       setDismissed(storedVersion === availableVersion);
     }
   }, [availableVersion]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleDismiss = useCallback(() => {
     if (availableVersion) {

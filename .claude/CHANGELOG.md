@@ -28,6 +28,306 @@
 
 ---
 
+## [Unreleased] - 2026-03-13
+
+### Fixed
+- **Timezone Bug in Recurring Expense Calculations**: Fixed `shouldRuleOccurInMonth` in `forecastCalculations.ts` to use consistent year/month numeric comparison instead of Date object comparison, which was causing incorrect results in UTC+ timezones
+- **untilDate End Mode**: Fixed end date logic to properly exclude months where the occurrence day would fall after the end date
+
+### Added
+- **Recurring Source Badge**: Expenses generated from recurring rules now display a "Recurring" badge next to the title
+  - Added `.recurring-badge` CSS styling in `index.css`
+  - Added translation keys `expenses.fromRecurring` and `expenses.recurringBadge`
+- **Profile Mode Indicator**: Expenses page now shows explicit "All Profiles" vs "Current Profile" toggle
+  - Added `.expenses-mode-indicator` and `.expenses-mode-button` styles
+  - Added translation keys for profile mode UI
+  - Now shows all available profiles as buttons for quick switching
+- **Profile-Specific Tools Card**: Shows explanatory message when in All Profiles mode about features that require a specific profile
+- **Delete Action**: Added delete action to expense row actions menu with confirmation dialog
+  - Special confirmation message for expenses from recurring rules
+- **Keyboard Shortcuts**: Added keyboard shortcuts to expenses page
+  - `N` - Open new expense drawer
+  - `/` - Focus search input
+  - `Esc` - Close drawer (already handled by Drawer component)
+- **Profile-Aware Routing**: Clicking a profile button now navigates to `/expenses/profile/$profileId`
+  - Deep-linkable profile URLs
+  - URL reflects current profile context
+
+### Changed
+- **Duplicate Button**: Now properly prefills expense data (amount, currency, vendor, category, title) when duplicating
+- **Multi-Currency Group Totals**: `ExpenseGroupedView` now shows separate totals per currency instead of summing all currencies
+- **SearchInput Component**: Now uses `forwardRef` and exposes `focus()` method via ref
+
+### Fixed
+- **GAP 1**: Delete action now available in row actions menu
+- **GAP 2**: Duplicate button now prefills expense data correctly
+- **GAP 3**: Page mode is now explicit with visible toggle
+- **GAP 4**: Profile selection now navigates to profile-specific URL
+- **GAP 6**: Multi-currency group totals now show separate amounts per currency
+- **GAP 10**: Recurring source badge now identifies expenses generated from rules
+
+### Technical
+- Changed `GroupedExpenses` interface from `totalMinor: number` to `totalsByCurrency: Record<string, number>`
+- Added `.expense-title-cell` wrapper for title cell content
+- Added `SearchInputRef` type export from filters
+- Added `useNavigate` hook for profile-based routing
+
+---
+
+## [Previous] - 2026-03-13
+
+### Added
+- **Income Query Hooks (`useIncomeQueries.ts`)**: New dedicated hooks for income-specific queries
+  - `useIncome(filters)`: Fetch income transactions with optional filters (pre-filters by kind='income')
+  - `useIncomeById(id)`: Fetch a single income transaction
+  - `useReceivables(filters)`: Fetch unpaid income (receivables) with optional overdue filter
+  - `useIncomeTotals()`: Fetch income totals for overview displays
+  - `useAttentionReceivables()`: Fetch receivables needing attention
+  - `useCreateIncome()`, `useUpdateIncome()`: Create/update income transactions
+  - `useMarkIncomePaid()`: Mark income as paid (replaces deprecated `useMarkTransactionPaid`)
+  - `useRecordIncomePartialPayment()`: Record partial payments
+  - `useDeleteIncome()`, `useArchiveIncome()`, `useUnarchiveIncome()`: Lifecycle mutations
+
+### Changed
+- **IncomePage**: Migrated from `useTransactions` to `useIncome` and `useMarkIncomePaid`
+- **ClientDetailPage**: Migrated receivables tab from `useTransactions` to `useReceivables`, mark paid to `useMarkIncomePaid`
+- **ProjectDetailPage**: Migrated mark paid from `useMarkTransactionPaid` to `useMarkIncomePaid`
+- **TransactionsPage**: Migrated mark paid from `useMarkTransactionPaid` to `useMarkIncomePaid` (keeps `useTransactions` for mixed view)
+- **RetainerMatchingDrawer**: Migrated from `useTransactions` to `useIncome` for paid income lookup
+
+### Technical
+- **Deprecated `useTransactions`**: Added deprecation notice; kept for legacy mixed views until next release
+- **Deprecated `useMarkTransactionPaid`**: Added deprecation notice; use `useMarkIncomePaid` instead
+- Proper query key separation for income queries vs generic transaction queries
+- Income hooks automatically invalidate both income-specific and legacy transaction caches for backwards compatibility
+
+---
+
+- **Insights Reintegration (Phase 1 & 2)**:
+  - **Phase 1: Data Contracts & Aggregation Functions**
+    - New forecast types: `ForecastKPIs`, `AmountByCurrency`, `ForecastOptions`, `MonthActuals`, `AttentionItem` in `src/types/index.ts`
+    - Pure aggregation functions in `src/lib/aggregations.ts`:
+      - Date utilities: `getTodayISO`, `getMonthRange`, `getDaysInMonth`, `daysBetween`, `isDateInRange`
+      - Amount utilities: `zeroAmounts`, `addAmount`, `subtractAmount`
+      - Transaction grouping: `getTransactionEffectiveDate`, `groupTransactionsByDay`, `groupTransactionsByMonth`
+      - Forecast calculations: `calculateForecastKPIs`, `calculateMonthActuals`, `calculateRunningBalance`
+      - Attention helpers: `findOverdueUnpaidIncome`, `findUnpaidIncomeDueSoon`, `findUnpaidIncomeMissingDueDate`
+    - 60 unit tests for aggregation functions in `src/lib/__tests__/aggregations.test.ts`
+    - Terminology update per ADR-010: "receivables" → "unpaid income", "projections" → "projected retainer"
+  - **Phase 2: Home Page Components**
+    - `PredictiveKpiStrip` component: 3 forecast KPI cards (Will I Make It?, Cash on Hand, Coming/Leaving)
+    - `AttentionFeed` component: Severity-sorted attention items with max 5 items, collapsible
+    - `MonthActualsRow` component: Collapsible summary of received/unpaid/expenses/net
+    - `InfoIcon` in icons
+    - Updated `OverviewPage` to use new components (current-month only, no date range selector)
+    - i18n translations for all new components (English and Arabic)
+    - CSS styles for all new components
+  - **Phase 3: Insights Page Enhancement**
+    - Added Cash Flow Timeline link to Insights Summary tab
+    - Links to `/money-answers` page for dedicated timeline view with its own date picker
+    - i18n translations for timeline link and hint text (English and Arabic)
+    - Removed inline period toggle and inclusion toggles to avoid conflicts with Insights date range
+  - **Phase 4: Polish, Responsiveness, Testing, Documentation**
+    - **Responsive Design**:
+      - Added mobile breakpoint (480px) for attention-feed, actuals-row, kpi-card-forecast
+      - Stack layouts and reduced padding on small screens
+      - Hidden currency tabs on mobile in actuals-row (uses localStorage default)
+    - **Accessibility Improvements**:
+      - AttentionFeed: semantic `<ul>`/`<li>` with role="list"/role="listitem"
+      - Added aria-label on attention list container
+      - Added aria-hidden="true" on decorative icons
+      - Added aria-label on action buttons for screen readers
+      - Added aria-expanded on expand/collapse toggle buttons
+    - **Component Documentation**:
+      - Updated COMPONENT_REGISTRY.md with new Home components section
+      - Documented PredictiveKpiStrip, AttentionFeed, MonthActualsRow, QuickSummaries, InfoIcon
+      - Added props tables, usage examples, and accessibility notes
+      - Updated Component Ownership table
+    - **Integration Tests**:
+      - 47 new tests for Home components in `src/components/home/__tests__/`
+      - AttentionFeed.test.tsx: rendering, accessibility, severity styling, actions, currency display
+      - PredictiveKpiStrip.test.tsx: currency tabs, help tooltips, value display, Coming/Leaving card
+      - MonthActualsRow.test.tsx: expand/collapse, localStorage persistence, currency tabs, color coding
+
+### Fixed
+- **Desktop app update mechanism**:
+  - Fixed `deploy.sh` signature extraction - was including full CLI output instead of just the base64 signature in `latest.json`, breaking Tauri's auto-updater
+  - Added version change detection (`handleVersionChange()` in `src/lib/platform.ts`) - clears update-related localStorage caches when app version changes, ensuring users who install a new DMG see the correct version (macOS preserves app data across installs)
+
+### Added
+- **Migration Safety Layer** (`src/db/migration-safety.ts`):
+  - Automatic pre-migration backups to prevent data loss during schema updates
+  - Post-migration validation to detect missing fields (profileId, receivedAmountMinor)
+  - Auto-fix capability for common migration issues
+  - Backup storage in separate IndexedDB database (`mutaba3a_backup`)
+  - Recovery functions: `restoreFromBackup()`, `importBackupFromFile()`
+  - Validation functions: `validateMigration()`, `autoFixMigrationIssues()`
+  - Export functions: `downloadBackup()`, `exportCompleteBackup()`
+  - Migration event logging for audit trail
+  - Keeps last 3 backups automatically, cleans up older ones
+  - Tests: 16 tests in `src/db/__tests__/migration-safety.test.ts`
+  - Integrated into `initDatabase()` - runs automatically on app startup
+  - `repairDatabase()` function for manual recovery
+
+- **AmountWithConversion component**: New UI component that displays single-currency amounts with hover tooltip showing ILS-converted value using live FX rates from Frankfurter API
+  - Used in transaction tables where each row has a single currency
+  - Shows original currency with hover tooltip displaying approximate ILS conversion and FX rate source (Live/Cached)
+  - Graceful degradation: shows plain amount if FX rate unavailable
+
+### Changed
+- **Multi-currency display reintegration**: Updated all transaction-related pages to use unified currency display components
+  - **TransactionsPage**: Uses `AmountWithConversion` for individual transaction amounts with hover conversion
+  - **OverviewPage**: Uses `AmountWithConversion` in recent activity and needs attention sections
+  - **ClientDetailPage**: Uses `AmountWithConversion` in transaction tables and recent activity
+  - **ProjectDetailPage**: Uses `AmountWithConversion` in transaction tables
+  - **IncomePage**: Uses `CurrencySummaryPopup` for summary totals, `AmountWithConversion` for rows
+  - **ExpensesLedgerPage**: Uses `CurrencySummaryPopup` for summary totals, `AmountWithConversion` for rows
+- ILS is now the default display currency with hover tooltips showing conversion breakdown
+
+### Changed
+- **IncomeDrawer Refactor (TransactionDrawer → IncomeDrawer)**:
+  - Renamed `TransactionDrawer` to `IncomeDrawer` for clarity
+  - Replaced type selector (Income/Receivable/Expense) with status selector (Earned/Invoiced/Received)
+  - New status model maps: Earned → unpaid, Invoiced → unpaid, Received → paid
+  - Added contextual profile handling:
+    - Single profile users: profile hidden
+    - Multi-profile users: profile shown as compact chip
+    - "All Profiles" mode: shows profile quick picker
+  - Added `ProfileContextChip` component for drawer profile display
+  - Added `ProfileQuickPicker` component for fast profile selection
+  - Added `useProfileAwareAction` hook for profile-checking before actions
+  - Updated `useDrawerStore` with `incomeDrawer` state (legacy `transactionDrawer` aliased)
+  - Updated SidebarNav to use profile-aware actions
+  - Added i18n keys for income drawer status labels (en/ar)
+  - Migrated tests from TransactionDrawer.test.tsx to IncomeDrawer.test.tsx
+
+### Added
+- **Partial Payments Support**:
+  - Added `receivedAmountMinor` field to Transaction for tracking partial payments
+  - Added `PaymentStatus` type ('unpaid' | 'partial' | 'paid')
+  - Database schema v14 with migration for existing transactions
+  - `transactionRepo.recordPartialPayment()` method to record incremental payments
+  - Updated `transactionRepo.getDisplay()` to compute `paymentStatus` and `remainingAmountMinor`
+  - `PaymentStatusBadge` component (`src/components/ui/PaymentStatusBadge.tsx`)
+  - `PartialPaymentDrawer` component with quick-fill buttons (25%, 50%, 100%)
+  - `useRecordPartialPayment` mutation hook
+  - i18n keys for partial payment UI in en.json and ar.json
+
+- **URL-Persisted Sorting**:
+  - `useSortState` hook (`src/hooks/useSortState.ts`) for URL-based sort state management
+  - ClientsPage and ProjectsPage now persist sort field/direction in URL params
+  - Sort state survives page refresh and navigation
+
+- **First-Run Onboarding**:
+  - `useOnboardingStore` (`src/lib/onboardingStore.ts`) - Zustand store with localStorage persistence
+  - `OnboardingOverlay` component with step-based guided setup
+  - `OnboardingStepIndicator` component for visual progress
+  - 3-step flow: Add Client → Create Project → Record Income
+  - Auto-advances when drawers complete entity creation
+  - Skip option persists in localStorage
+  - i18n keys for onboarding UI in en.json and ar.json
+
+- **Multi-Profile with "All Profiles" Lens**:
+  - Added `profileId` field to `Client`, `Project`, `Transaction` types for profile isolation
+  - Database schema v13 with migration to assign existing records to default profile
+  - `ProfileStore` (`src/lib/profileStore.ts`) - Zustand store for active profile state
+  - `useActiveProfile` hook (`src/hooks/useActiveProfile.ts`) - Business logic for profile context
+  - `useProfileFilter` hook - Helper for query filtering
+  - "All Profiles" option in ProfileSwitcher when 2+ profiles exist
+  - `ProfileBadge` component (`src/components/ui/ProfileBadge.tsx`) - Visual indicator for profile
+  - `ProfilePickerModal` (`src/components/modals/ProfilePickerModal.tsx`) - Profile selection for creation flows
+  - Updated drawer stores to support `defaultProfileId` parameter
+  - Updated pages (Overview, Clients, Projects, Expenses) to respect profile context
+  - i18n keys: `profileSwitcher.allProfiles`, `profile.select`, `profile.selectPrompt`, `profile.badge.viewingAll` (en/ar)
+
+- **UX Redesign Phase 4 - Insights Page** (`src/pages/insights/InsightsPage.tsx`):
+  - New consolidated Insights page at `/insights` replacing Reports redirect
+  - Preset tabs: Summary, Clients, Projects, Expenses, Unpaid
+  - Summary tab: Paid income, unpaid receivables, expenses, net calculation
+  - Clients tab: Client list with paid income and unpaid breakdown
+  - Projects tab: Project list with received, unpaid, expenses, net columns
+  - Expenses tab: Expenses by project breakdown
+  - Unpaid tab: Aging buckets (current, 1-30d, 31-60d, 60+d overdue)
+  - Date range filter (period control)
+  - Currency mode selector (USD, ILS, Both)
+  - CSV export for each preset tab
+  - Tests: 21 tests in `src/pages/insights/__tests__/InsightsPage.test.tsx`
+  - i18n: Added `insights.title` and `insights.tabs.*` keys (en/ar)
+  - CSS: Added `.insights-tabs`, `.insights-tab`, `.insights-section` styles
+
+### Fixed
+- **i18n**: Added missing `transactions.columns.description` key (en: "Description", ar: "الوصف")
+
+### Changed
+- **Router**: `/insights` route now uses dedicated InsightsPage instead of redirecting to ReportsPage
+
+### Deprecated
+- **MoneyAnswersPage** (`src/pages/money-answers/`): Marked as deprecated with JSDoc comments. Route redirects to `/insights`. Code kept for reference.
+- **ReportsPage** (`src/pages/reports/`): Marked as deprecated with JSDoc comments. Route redirects to `/insights`. Code kept for reference.
+
+### Added
+- **UX Redesign Specification**:
+  - Created `docs/ux-redesign/UX-REDESIGN-SPEC.md` - Authoritative spec for question-first UX redesign
+  - Created `docs/ux-redesign/IMPLEMENTATION-PLAN.md` - 4-phase implementation breakdown with ~100 actionable tasks
+  - Product direction shift: entity-first CRM → question-first cash flow workspace
+  - New navigation structure: Home, Income, Expenses, Insights | Clients, Projects | Settings
+  - Deprecation plan for Documents, Retainers, Engagements, standalone Reports/Money Answers
+
+### Added
+- **UX Redesign Phase 2.3 - Expenses Page** (`src/pages/expenses/ExpensesLedgerPage.tsx`):
+  - New question-first expenses ledger page at `/expenses`
+  - View toggles: List (default), By Category, By Project
+  - Expenses summary strip showing total expenses
+  - Category grouping with subtotals
+  - Project grouping with subtotals
+  - Transaction-based filtering (kind='expense')
+  - Connects to TransactionDrawer for edit with default kind='expense'
+  - Empty state with "Add Expense" action
+  - Tests: 15 tests in `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx`
+  - Profile-based expense system moved to `/expenses/profiles` route
+
+- **EmptyState Component Enhancement** (`src/components/ui/EmptyState.tsx`):
+  - Added `hint` prop as alias for `description`
+  - Added `actionLabel` and `onAction` props as convenience alternatives to `action` object
+  - Maintains backwards compatibility with existing `description` and `action` props
+
+- **UX Redesign Phase 3.1 - Clients List Redesign** (`src/pages/clients/ClientsPage.tsx`):
+  - Added "Received" column showing paid income totals per client
+  - Added summary strip with total clients count, total received, total unpaid
+  - CurrencySummaryPopup for multi-currency display (USD/ILS/EUR)
+  - Tests: 16 tests in `src/pages/clients/__tests__/ClientsPage.test.tsx`
+  - i18n: Added `clients.columns.received` and `clients.summary.*` keys
+
+- **UX Redesign Phase 3.3 - Projects List Redesign** (`src/pages/projects/ProjectsPage.tsx`):
+  - Added columns: Received, Expenses, Net
+  - Net calculation: received - expenses per project
+  - Visual indicator for negative net projects (color-coded cells)
+  - Summary strip with totals: projects count, received, unpaid, expenses, net
+  - Tests: 23 tests in `src/pages/projects/__tests__/ProjectsPage.test.tsx`
+  - i18n: Added `projects.columns.received` and `projects.summary.*` keys
+  - CSS: Added `.projects-summary-strip`, `.net-cell.positive/.negative` styles
+
+### Changed
+- **UX Redesign Phase 1 Complete** (Navigation + Routes + i18n + Add Menu + Titles):
+  - **Sidebar restructured** with question-first navigation sections (Main, Workspace, System)
+  - **New routes**: `/income`, `/expenses`, `/insights` created
+  - **Legacy redirects added**:
+    - `/transactions` → `/income`
+    - `/reports` → `/insights`
+    - `/money-answers` → `/insights`
+  - **Navigation items removed** from sidebar: Documents, Retainers, Engagements, Money Answers
+  - **Global Add Menu simplified**: Removed Document option from TopBar add menu (now only: Income, Expense, Project, Client)
+  - **Page title updated**: Overview page title changed from "Overview" to "Home" (en: "Home", ar: "الرئيسية")
+  - **i18n labels** updated in en.json and ar.json with new nav keys
+  - Files changed:
+    - `src/router.tsx` - Added redirects for legacy routes
+    - `src/components/layout/SidebarNav.tsx` - Already restructured with new nav sections
+    - `src/components/layout/TopBar.tsx` - Removed Document from add menu
+    - `src/lib/i18n/translations/en.json` - Updated overview.title to "Home"
+    - `src/lib/i18n/translations/ar.json` - Updated overview.title to "الرئيسية"
+
+---
+
 ## [0.0.51] - 2026-03-13
 
 ### Fixed

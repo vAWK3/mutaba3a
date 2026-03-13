@@ -7,17 +7,14 @@ import {
   TypeSegment,
   DateRangeControl,
 } from "../../components/filters";
-import { EmptyState, RowActionsMenu } from "../../components/ui";
+import { EmptyState, RowActionsMenu, AmountWithConversion } from "../../components/ui";
 import { CheckIcon, CopyIcon, DocumentIcon } from "../../components/icons";
 import { TransactionTypeBadge, TransactionStatusCell } from "../../components/transactions";
-import {
-  useTransactions,
-  useMarkTransactionPaid,
-} from "../../hooks/useQueries";
+import { useTransactions } from "../../hooks/useQueries";
+import { useMarkIncomePaid } from "../../hooks/useIncomeQueries";
 import { useIsCompactTable } from "../../hooks/useMediaQuery";
 import { useDrawerStore } from "../../lib/stores";
 import {
-  formatAmount,
   formatDate,
   formatDateCompact,
   getDateRangePreset,
@@ -37,8 +34,8 @@ interface TransactionsSearchParams {
 }
 
 export function TransactionsPage() {
-  const { openTransactionDrawer, openDocumentDrawer } = useDrawerStore();
-  const markPaidMutation = useMarkTransactionPaid();
+  const { openIncomeDrawer, openExpenseDrawer, openDocumentDrawer } = useDrawerStore();
+  const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -115,8 +112,12 @@ export function TransactionsPage() {
     return 'unpaid';
   };
 
-  const handleRowClick = (id: string) => {
-    openTransactionDrawer({ mode: "edit", transactionId: id });
+  const handleRowClick = (id: string, kind: TxKind) => {
+    if (kind === 'expense') {
+      openExpenseDrawer({ mode: "edit", expenseId: id });
+    } else {
+      openIncomeDrawer({ mode: "edit", transactionId: id });
+    }
   };
 
   return (
@@ -159,7 +160,7 @@ export function TransactionsPage() {
             description={search ? t('transactions.emptySearch') : t('transactions.emptyHint')}
             action={{
               label: t('transactions.addTransaction'),
-              onClick: () => openTransactionDrawer({ mode: "create" }),
+              onClick: () => openIncomeDrawer({ mode: "create", defaultStatus: "earned" }),
             }}
           />
         ) : (
@@ -181,7 +182,7 @@ export function TransactionsPage() {
                   <tr
                     key={tx.id}
                     className="clickable"
-                    onClick={() => handleRowClick(tx.id)}
+                    onClick={() => handleRowClick(tx.id, tx.kind)}
                   >
                     <td className={isCompact ? 'date-cell-compact' : undefined}>
                       {isCompact && getStatusForDot(tx) && (
@@ -198,15 +199,13 @@ export function TransactionsPage() {
                     </td>
                     <td className={cn('text-secondary', isCompact && 'text-sm-responsive')}>{tx.clientName || "-"}</td>
                     <td className={cn('text-secondary', isCompact && 'text-sm-responsive')}>{tx.projectName || "-"}</td>
-                    <td
-                      className={cn(
-                        "amount-cell",
-                        tx.kind === "income" && "amount-positive",
-                        tx.kind === "expense" && "amount-negative"
-                      )}
-                    >
-                      {tx.kind === "expense" ? "-" : ""}
-                      {formatAmount(tx.amountMinor, tx.currency, locale)}
+                    <td className="amount-cell">
+                      <AmountWithConversion
+                        amountMinor={tx.amountMinor}
+                        currency={tx.currency}
+                        type={tx.kind === "income" ? "income" : "expense"}
+                        showExpenseSign={tx.kind === "expense"}
+                      />
                     </td>
                     {!isCompact && (
                       <td>
@@ -228,14 +227,21 @@ export function TransactionsPage() {
                           {
                             label: t('common.duplicate'),
                             icon: <CopyIcon size={16} />,
-                            onClick: () =>
-                              openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                            onClick: () => {
+                              if (tx.kind === 'expense') {
+                                // For expenses, we'd need a duplicate mechanism in ExpenseDrawer
+                                // For now, just open a new expense drawer
+                                openExpenseDrawer({ mode: 'create' });
+                              } else {
+                                openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id });
+                              }
+                            },
                           },
                           // Generate Invoice (only for income transactions without linked document)
                           ...(tx.kind === 'income' && !tx.linkedDocumentId
                             ? [
                                 {
-                                  label: 'Generate Invoice',
+                                  label: t('transactions.generateInvoice'),
                                   onClick: () =>
                                     openDocumentDrawer({
                                       mode: 'create',
@@ -249,7 +255,7 @@ export function TransactionsPage() {
                           ...(tx.linkedDocumentId
                             ? [
                                 {
-                                  label: 'View Invoice',
+                                  label: t('transactions.viewInvoice'),
                                   onClick: () => {
                                     window.location.href = `/documents/${tx.linkedDocumentId}`;
                                   },

@@ -47,6 +47,44 @@ export function parseAmountToMinor(value: string): number {
   return Math.round(num * 100);
 }
 
+/**
+ * Parse a currency input string to minor units (cents).
+ * Handles various formats like "100", "100.50", "$100", etc.
+ */
+export function parseCurrencyInput(value: string): number {
+  // Remove currency symbols and non-numeric characters except . and -
+  const cleaned = value.replace(/[^0-9.-]/g, '');
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return 0;
+  return Math.round(num * 100);
+}
+
+/**
+ * Format a currency input string to a clean decimal format.
+ * Used for input fields to maintain consistent format while typing.
+ */
+export function formatCurrencyInput(value: string): string {
+  // Remove non-numeric characters except . and -
+  const cleaned = value.replace(/[^0-9.-]/g, '');
+
+  // Handle empty or invalid input
+  if (!cleaned || cleaned === '-' || cleaned === '.') return cleaned;
+
+  // Parse and validate
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    // Too many decimal points, keep only first two parts
+    return parts[0] + '.' + parts[1];
+  }
+
+  // Limit decimal places to 2
+  if (parts.length === 2 && parts[1].length > 2) {
+    return parts[0] + '.' + parts[1].slice(0, 2);
+  }
+
+  return cleaned;
+}
+
 export function formatDate(isoString: string, locale: string = 'en-US'): string {
   const date = new Date(isoString);
   return date.toLocaleDateString(locale, {
@@ -116,6 +154,17 @@ export function getDaysUntil(dateString: string): number {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Format a Date to YYYY-MM-DD string in local timezone.
+ * Unlike toISOString(), this preserves the local date.
+ */
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function getDateRangePreset(preset: 'this-month' | 'last-month' | 'this-year' | 'all'): { dateFrom: string; dateTo: string } {
   const now = new Date();
 
@@ -124,24 +173,24 @@ export function getDateRangePreset(preset: 'this-month' | 'last-month' | 'this-y
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       return {
-        dateFrom: firstDay.toISOString().split('T')[0],
-        dateTo: lastDay.toISOString().split('T')[0],
+        dateFrom: formatLocalDate(firstDay),
+        dateTo: formatLocalDate(lastDay),
       };
     }
     case 'last-month': {
       const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
       return {
-        dateFrom: firstDay.toISOString().split('T')[0],
-        dateTo: lastDay.toISOString().split('T')[0],
+        dateFrom: formatLocalDate(firstDay),
+        dateTo: formatLocalDate(lastDay),
       };
     }
     case 'this-year': {
       const firstDay = new Date(now.getFullYear(), 0, 1);
       const lastDay = new Date(now.getFullYear(), 11, 31);
       return {
-        dateFrom: firstDay.toISOString().split('T')[0],
-        dateTo: lastDay.toISOString().split('T')[0],
+        dateFrom: formatLocalDate(firstDay),
+        dateTo: formatLocalDate(lastDay),
       };
     }
     case 'all':

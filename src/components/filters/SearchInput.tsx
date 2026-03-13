@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useT } from '../../lib/i18n';
 
 interface SearchInputProps {
@@ -8,60 +8,73 @@ interface SearchInputProps {
   debounceMs?: number;
 }
 
-export function SearchInput({ value, onChange, placeholder, debounceMs = 200 }: SearchInputProps) {
-  const t = useT();
-  const defaultPlaceholder = placeholder ?? t('common.search');
-  const [localValue, setLocalValue] = useState(value);
-  const timeoutRef = useRef<number | undefined>(undefined);
+export interface SearchInputRef {
+  focus: () => void;
+}
 
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+export const SearchInput = forwardRef<SearchInputRef, SearchInputProps>(
+  function SearchInput({ value, onChange, placeholder, debounceMs = 200 }, ref) {
+    const t = useT();
+    const defaultPlaceholder = placeholder ?? t('common.search');
+    const [localValue, setLocalValue] = useState(value);
+    const timeoutRef = useRef<number | undefined>(undefined);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = (newValue: string) => {
-    setLocalValue(newValue);
+    // Expose focus method via ref
+    useImperativeHandle(ref, () => ({
+      focus: () => inputRef.current?.focus(),
+    }));
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    useEffect(() => {
+      setLocalValue(value);
+    }, [value]);
 
-    timeoutRef.current = window.setTimeout(() => {
-      onChange(newValue);
-    }, debounceMs);
-  };
+    const handleChange = (newValue: string) => {
+      setLocalValue(newValue);
 
-  useEffect(() => {
-    return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-    };
-  }, []);
 
-  return (
-    <div className="search-input">
-      <SearchIcon />
-      <input
-        type="text"
-        value={localValue}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder={defaultPlaceholder}
-      />
-      {localValue && (
-        <button
-          onClick={() => {
-            setLocalValue('');
-            onChange('');
-          }}
-          className="btn-ghost"
-          style={{ padding: 0, width: 20, height: 20 }}
-        >
-          <XIcon />
-        </button>
-      )}
-    </div>
-  );
-}
+      timeoutRef.current = window.setTimeout(() => {
+        onChange(newValue);
+      }, debounceMs);
+    };
+
+    useEffect(() => {
+      return () => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+      };
+    }, []);
+
+    return (
+      <div className="search-input">
+        <SearchIcon />
+        <input
+          ref={inputRef}
+          type="text"
+          value={localValue}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder={defaultPlaceholder}
+        />
+        {localValue && (
+          <button
+            onClick={() => {
+              setLocalValue('');
+              onChange('');
+            }}
+            className="btn-ghost"
+            style={{ padding: 0, width: 20, height: 20 }}
+          >
+            <XIcon />
+          </button>
+        )}
+      </div>
+    );
+  }
+);
 
 function SearchIcon() {
   return (

@@ -1,13 +1,14 @@
 /**
  * Demo Projects Generator
  *
- * Creates 15 realistic projects linked to demo clients.
+ * Creates 15 realistic projects linked to demo clients,
+ * inheriting profileId from their associated client.
  */
 
 import type { Project } from '../../types';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES } from '../constants';
-import { getDemoClientIds } from './clients';
+import { getDemoClientIds, getDemoClientProfileMap } from './clients';
 
 const rng = new SeededRandom(DEMO_SEED + 1); // Different seed for variety
 
@@ -32,19 +33,22 @@ const PROJECT_DATA = [
 
 export function createDemoProjects(): Project[] {
   const clientIds = getDemoClientIds();
+  const clientProfileMap = getDemoClientProfileMap();
   const baseDate = new Date();
   baseDate.setMonth(baseDate.getMonth() - 7); // Created 7 months ago
 
   return PROJECT_DATA.map((data, index) => {
     const createdAt = new Date(baseDate);
     createdAt.setDate(createdAt.getDate() + rng.int(0, 45));
+    const clientId = clientIds[data.clientIndex];
 
     return {
       id: `${DEMO_PREFIXES.project}${String(index + 1).padStart(3, '0')}`,
       name: data.name,
-      clientId: clientIds[data.clientIndex],
+      clientId,
       field: data.field,
       notes: `مشروع ${data.field} للعميل`,
+      profileId: clientProfileMap.get(clientId),
       createdAt: createdAt.toISOString(),
       updatedAt: createdAt.toISOString(),
     };
@@ -64,6 +68,26 @@ export function getDemoProjectClientMap(): Map<string, string> {
   PROJECT_DATA.forEach((data, index) => {
     const projectId = `${DEMO_PREFIXES.project}${String(index + 1).padStart(3, '0')}`;
     map.set(projectId, clientIds[data.clientIndex]);
+  });
+
+  return map;
+}
+
+/**
+ * Get a map of project ID to profile ID for multi-profile support
+ */
+export function getDemoProjectProfileMap(): Map<string, string> {
+  const clientIds = getDemoClientIds();
+  const clientProfileMap = getDemoClientProfileMap();
+  const map = new Map<string, string>();
+
+  PROJECT_DATA.forEach((data, index) => {
+    const projectId = `${DEMO_PREFIXES.project}${String(index + 1).padStart(3, '0')}`;
+    const clientId = clientIds[data.clientIndex];
+    const profileId = clientProfileMap.get(clientId);
+    if (profileId) {
+      map.set(projectId, profileId);
+    }
   });
 
   return map;

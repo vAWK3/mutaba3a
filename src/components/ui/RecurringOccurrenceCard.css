@@ -1,0 +1,172 @@
+/* RecurringOccurrenceCard styles */
+
+.recurring-occurrence-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+}
+
+.recurring-occurrence-card[role="button"] {
+  cursor: pointer;
+}
+
+.recurring-occurrence-card[role="button"]:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-hover);
+}
+
+.recurring-occurrence-card.compact {
+  padding: 0.75rem;
+  gap: 0.5rem;
+}
+
+/* State-based border colors */
+.recurring-occurrence-card.state-overdue {
+  border-left: 3px solid var(--error-fg);
+}
+
+.recurring-occurrence-card.state-due {
+  border-left: 3px solid var(--warning-fg);
+}
+
+.recurring-occurrence-card.state-snoozed {
+  border-left: 3px solid var(--info-fg);
+  opacity: 0.8;
+}
+
+.recurring-occurrence-card.state-projected {
+  border-left: 3px solid var(--text-secondary);
+}
+
+/* Main content row */
+.occurrence-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.occurrence-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.occurrence-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.occurrence-vendor {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.occurrence-category {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: white;
+  width: fit-content;
+}
+
+.occurrence-amount {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Meta row */
+.occurrence-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.occurrence-date {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.occurrence-state {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.occurrence-state.state-overdue {
+  background: var(--error-bg);
+  color: var(--error-fg);
+}
+
+.occurrence-state.state-due {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+.occurrence-state.state-snoozed {
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+
+.occurrence-state.state-projected {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+/* Actions */
+.occurrence-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.occurrence-actions .btn {
+  flex: 1;
+}
+
+/* List */
+.recurring-occurrence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Empty state */
+.recurring-occurrence-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.recurring-occurrence-empty .empty-message {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.recurring-occurrence-empty .empty-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}

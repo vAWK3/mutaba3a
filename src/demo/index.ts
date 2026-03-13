@@ -27,7 +27,7 @@ export { SeededRandom, seededRandom } from './prng';
 export { useDemoStore } from './demoStore';
 
 // Seed data utilities
-export { seedDemoData, hasDemoData, removeDemoData, getDemoProfileId } from './seedData';
+export { seedDemoData, hasDemoData, removeDemoData, getDemoProfileIds } from './seedData';
 
 // Cleanup utilities
 export { resetDemoMode, isDemoModeActive, getDemoModeStatus } from './cleanup';

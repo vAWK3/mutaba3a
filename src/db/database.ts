@@ -11,6 +11,7 @@ import type {
   DocumentSequence,
   Expense,
   RecurringRule,
+  RecurringOccurrence,
   Receipt,
   ExpenseCategory,
   Vendor,
@@ -50,6 +51,7 @@ export class MiniCrmDatabase extends Dexie {
   // Expense tables (profile-scoped)
   expenses!: Table<Expense, string>;
   recurringRules!: Table<RecurringRule, string>;
+  recurringOccurrences!: Table<RecurringOccurrence, string>;
   receipts!: Table<Receipt, string>;
   expenseCategories!: Table<ExpenseCategory, string>;
   vendors!: Table<Vendor, string>;
@@ -536,6 +538,215 @@ export class MiniCrmDatabase extends Dexie {
       // Engagement tables unchanged
       engagements: 'id, profileId, clientId, projectId, type, category, status, primaryLanguage, createdAt, updatedAt, archivedAt',
       engagementVersions: 'id, engagementId, versionNumber, status, createdAt',
+    });
+
+    // Version 13: Add profileId to clients, projects, transactions for multi-profile support
+    this.version(13).stores({
+      // Core tables with profileId index for multi-profile filtering
+      clients: 'id, name, profileId, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, profileId, clientId, field, createdAt, updatedAt, archivedAt',
+      transactions: 'id, kind, status, profileId, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt',
+      categories: 'id, kind, name',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt, [baseCurrency+quoteCurrency]',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt, [businessProfileId+type+number], lockedAt, archivedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables unchanged
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+
+      // Engagement tables unchanged
+      engagements: 'id, profileId, clientId, projectId, type, category, status, primaryLanguage, createdAt, updatedAt, archivedAt',
+      engagementVersions: 'id, engagementId, versionNumber, status, createdAt',
+    }).upgrade(async (tx) => {
+      // Migration: Assign all existing clients, projects, and transactions to default profile
+      const profiles = await tx.table('businessProfiles').toArray();
+      if (profiles.length === 0) return;
+
+      const defaultProfile = profiles.find((p: { isDefault?: boolean }) => p.isDefault) || profiles[0];
+      const defaultProfileId = defaultProfile.id;
+
+      // Migrate clients
+      await tx.table('clients').toCollection().modify((client: { profileId?: string }) => {
+        if (!client.profileId) {
+          client.profileId = defaultProfileId;
+        }
+      });
+
+      // Migrate projects
+      await tx.table('projects').toCollection().modify((project: { profileId?: string }) => {
+        if (!project.profileId) {
+          project.profileId = defaultProfileId;
+        }
+      });
+
+      // Migrate transactions
+      await tx.table('transactions').toCollection().modify((transaction: { profileId?: string }) => {
+        if (!transaction.profileId) {
+          transaction.profileId = defaultProfileId;
+        }
+      });
+    });
+
+    // Version 14: Add receivedAmountMinor for partial payments support
+    this.version(14).stores({
+      // Core tables unchanged (no schema change, just data migration)
+      clients: 'id, name, profileId, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, profileId, clientId, field, createdAt, updatedAt, archivedAt',
+      transactions: 'id, kind, status, profileId, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt',
+      categories: 'id, kind, name',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt, [baseCurrency+quoteCurrency]',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt, [businessProfileId+type+number], lockedAt, archivedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, frequency, startDate, isPaused, createdAt',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables unchanged
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+
+      // Engagement tables unchanged
+      engagements: 'id, profileId, clientId, projectId, type, category, status, primaryLanguage, createdAt, updatedAt, archivedAt',
+      engagementVersions: 'id, engagementId, versionNumber, status, createdAt',
+    }).upgrade(tx => {
+      // Migration: Initialize receivedAmountMinor for existing transactions
+      // - For paid income: set receivedAmountMinor = amountMinor
+      // - For unpaid income: set receivedAmountMinor = 0
+      // - For expenses: leave undefined
+      return tx.table('transactions').toCollection().modify((transaction: {
+        kind?: string;
+        status?: string;
+        amountMinor?: number;
+        receivedAmountMinor?: number;
+      }) => {
+        if (transaction.kind === 'income') {
+          if (transaction.status === 'paid') {
+            transaction.receivedAmountMinor = transaction.amountMinor || 0;
+          } else {
+            transaction.receivedAmountMinor = 0;
+          }
+        }
+      });
+    });
+
+    // Version 15: Add RecurringOccurrence table for recurring expense tracking
+    this.version(15).stores({
+      // Core tables unchanged
+      clients: 'id, name, profileId, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, profileId, clientId, field, createdAt, updatedAt, archivedAt',
+      transactions: 'id, kind, status, profileId, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt',
+      categories: 'id, kind, name',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt, [baseCurrency+quoteCurrency]',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt, [businessProfileId+type+number], lockedAt, archivedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables - add recurringOccurrenceId index and enhance recurringRules
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, recurringOccurrenceId, createdAt, deletedAt',
+      // Enhanced recurringRules with new fields
+      recurringRules: 'id, profileId, categoryId, vendorId, frequency, dayOfMonth, monthOfYear, scope, startDate, isPaused, createdAt, deletedAt',
+      // NEW: recurringOccurrences - only persisted when user acts
+      recurringOccurrences: 'id, ruleId, profileId, expectedDate, status, fulfilledExpenseId, snoozeUntil, [ruleId+expectedDate], [profileId+status]',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables unchanged
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+
+      // Engagement tables unchanged
+      engagements: 'id, profileId, clientId, projectId, type, category, status, primaryLanguage, createdAt, updatedAt, archivedAt',
+      engagementVersions: 'id, engagementId, versionNumber, status, createdAt',
+    }).upgrade(async (tx) => {
+      // Migration: set defaults for existing recurring rules
+      await tx.table('recurringRules').toCollection().modify((rule: {
+        dayOfMonth?: number;
+        monthOfYear?: number;
+        frequency?: string;
+        startDate?: string;
+        scope?: string;
+        reminderDaysBefore?: number;
+      }) => {
+        // Infer dayOfMonth from startDate if available
+        if (!rule.dayOfMonth && rule.startDate) {
+          const day = new Date(rule.startDate).getDate();
+          rule.dayOfMonth = Math.min(day, 28); // Cap at 28
+        } else if (!rule.dayOfMonth) {
+          rule.dayOfMonth = 1; // Fallback only if no startDate
+        }
+
+        // Set scope default
+        if (!rule.scope) {
+          rule.scope = 'general';
+        }
+
+        // Set reminder default
+        if (rule.reminderDaysBefore === undefined) {
+          rule.reminderDaysBefore = 0;
+        }
+
+        // For yearly frequency, infer monthOfYear from startDate
+        if (rule.frequency === 'yearly' && !rule.monthOfYear && rule.startDate) {
+          rule.monthOfYear = new Date(rule.startDate).getMonth() + 1;
+        }
+      });
     });
   }
 }

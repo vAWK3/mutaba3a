@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Drawer } from './Drawer';
 import { SearchInput } from '../filters';
 import { useDrawerStore } from '../../lib/stores';
-import { useTransactions, useTransactionDisplay } from '../../hooks/useQueries';
+import { useTransactionDisplay } from '../../hooks/useQueries';
+import { useIncome } from '../../hooks/useIncomeQueries';
 import {
   useRetainerMatchSuggestions,
   useDueItems,
@@ -369,8 +370,8 @@ function TransactionSelector({ onSelect, onCreateNew }: TransactionSelectorProps
   const [search, setSearch] = useState('');
 
   // Get paid income transactions that are not linked to projected income
-  const { data: transactions = [], isLoading } = useTransactions({
-    kind: 'income',
+  // useIncome already filters by kind='income'
+  const { data: transactions = [], isLoading } = useIncome({
     status: 'paid',
     sort: { by: 'occurredAt', dir: 'desc' },
     limit: 50,

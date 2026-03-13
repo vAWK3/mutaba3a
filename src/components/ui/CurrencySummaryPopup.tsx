@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useFxRate } from '../../hooks/useFxRate';
 import { getUnifiedTotalWithEur } from '../../lib/fx';
 import { formatAmount, cn } from '../../lib/utils';
@@ -36,7 +37,9 @@ export function CurrencySummaryPopup({
   className,
 }: CurrencySummaryPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const { rate: usdToIlsRate, source: usdSource } = useFxRate('USD', 'ILS');
   const { rate: eurToIlsRate, source: eurSource } = useFxRate('EUR', 'ILS');
   const { language } = useLanguage();
@@ -46,14 +49,32 @@ export function CurrencySummaryPopup({
   // Calculate unified total including EUR
   const unifiedTotal = getUnifiedTotalWithEur(usdAmountMinor, ilsAmountMinor, eurAmountMinor, usdToIlsRate, eurToIlsRate);
 
-  // Overall source status could be used for unified indicator if needed
-  // const overallSource = usdSource === 'none' || eurSource === 'none' ? 'none' :
-  //                       usdSource === 'cached' || eurSource === 'cached' ? 'cached' : 'live';
+  // Update dropdown position when opened
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const isRTL = document.documentElement.dir === 'rtl';
+
+      // Position below the trigger, aligned to start (left in LTR, right in RTL)
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: isRTL
+          ? Math.max(8, rect.right - 180) // 180px is min-width
+          : Math.max(8, rect.left),
+      });
+    }
+  }, [isOpen]);
 
   // Close popup when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     }
@@ -76,6 +97,33 @@ export function CurrencySummaryPopup({
       document.addEventListener('keydown', handleEscape);
       return () => document.removeEventListener('keydown', handleEscape);
     }
+  }, [isOpen]);
+
+  // Reposition on scroll/resize
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function updatePosition() {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        const isRTL = document.documentElement.dir === 'rtl';
+
+        setDropdownPosition({
+          top: rect.bottom + 4,
+          left: isRTL
+            ? Math.max(8, rect.right - 180)
+            : Math.max(8, rect.left),
+        });
+      }
+    }
+
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [isOpen]);
 
   // Build fallback display string when rate unavailable
@@ -104,7 +152,7 @@ export function CurrencySummaryPopup({
   const colorClass = getColorClass();
 
   return (
-    <div ref={containerRef} className={cn('currency-summary-popup', className)}>
+    <div className={cn('currency-summary-popup', className)}>
       {label && <span className="currency-summary-label">{label}</span>}
       <div className="currency-summary-main">
         <span className={cn('currency-summary-amount', colorClass, size === 'large' && 'large')}>
@@ -113,6 +161,7 @@ export function CurrencySummaryPopup({
             : buildFallbackDisplay()}
         </span>
         <button
+          ref={triggerRef}
           type="button"
           className="currency-summary-toggle"
           onClick={() => setIsOpen(!isOpen)}
@@ -126,8 +175,16 @@ export function CurrencySummaryPopup({
         </button>
       </div>
 
-      {isOpen && (
-        <div className="currency-summary-dropdown">
+      {isOpen && createPortal(
+        <div
+          ref={dropdownRef}
+          className="currency-summary-dropdown"
+          style={{
+            position: 'fixed',
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+          }}
+        >
           <div className="currency-breakdown-row">
             <span className="currency-breakdown-label">USD</span>
             <span className={cn('currency-breakdown-value', colorClass)}>
@@ -168,7 +225,8 @@ export function CurrencySummaryPopup({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

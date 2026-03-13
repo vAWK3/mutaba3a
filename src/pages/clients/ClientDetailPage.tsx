@@ -10,17 +10,19 @@ import {
   useClientSummary,
   useTransactions,
   useProjects,
-  useMarkTransactionPaid,
+  useProjectSummaries,
 } from '../../hooks/useQueries';
+import { useReceivables, useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { TxStatus, QueryFilters } from '../../types';
+import type { TxKind, TxStatus, QueryFilters } from '../../types';
 
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' });
-  const { openTransactionDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
-  const markPaidMutation = useMarkTransactionPaid();
+  const { openIncomeDrawer, openExpenseDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
+  const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -36,7 +38,22 @@ export function ClientDetailPage() {
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
   });
-  const { data: projects = [] } = useProjects(clientId);
+  // Note: Projects are fetched for potential future use in tabs
+  useProjects(clientId);
+
+  // Fetch project summaries for financial data and filter by client
+  const { data: allProjectSummaries = [] } = useProjectSummaries();
+  const projectSummaries = useMemo(() =>
+    allProjectSummaries.filter(ps => ps.clientId === clientId),
+    [allProjectSummaries, clientId]
+  );
+
+  // Calculate total expenses for this client's projects
+  const totalExpenses = useMemo(() => ({
+    USD: projectSummaries.reduce((sum, p) => sum + (p.expensesMinorUSD ?? 0), 0),
+    ILS: projectSummaries.reduce((sum, p) => sum + (p.expensesMinorILS ?? 0), 0),
+    EUR: projectSummaries.reduce((sum, p) => sum + (p.expensesMinorEUR ?? 0), 0),
+  }), [projectSummaries]);
 
   // Always fetch all currencies (no currency filter)
   const queryFilters = useMemo((): QueryFilters => ({
@@ -48,24 +65,32 @@ export function ClientDetailPage() {
     sort: { by: 'occurredAt', dir: 'desc' },
   }), [clientId, dateRange, statusFilter, search]);
 
-  const receivablesFilters = useMemo((): QueryFilters => ({
+  // Receivables filters use the dedicated useReceivables hook
+
+  // Recent activity - last 5 transactions for quick view in Summary tab
+  const recentActivityFilters = useMemo((): QueryFilters => ({
     clientId,
-    kind: 'income',
-    status: 'unpaid',
-    sort: { by: 'dueDate', dir: 'asc' },
+    sort: { by: 'occurredAt', dir: 'desc' },
+    limit: 5,
   }), [clientId]);
 
   const { data: transactions = [] } = useTransactions(queryFilters);
-  const { data: receivables = [] } = useTransactions(receivablesFilters);
+  const { data: receivables = [] } = useReceivables({ clientId, sort: { by: 'dueDate', dir: 'asc' } });
+  const { data: recentActivity = [] } = useTransactions(recentActivityFilters);
 
-  const handleRowClick = (id: string) => {
-    openTransactionDrawer({ mode: 'edit', transactionId: id });
+  const handleRowClick = (id: string, kind: TxKind) => {
+    if (kind === 'expense') {
+      openExpenseDrawer({ mode: 'edit', expenseId: id });
+    } else {
+      openIncomeDrawer({ mode: 'edit', transactionId: id });
+    }
   };
 
-  const handleAddTransaction = () => {
-    openTransactionDrawer({
+  const handleAddIncome = () => {
+    openIncomeDrawer({
       mode: 'create',
       defaultClientId: clientId,
+      defaultStatus: 'earned',
     });
   };
 
@@ -136,6 +161,15 @@ export function ClientDetailPage() {
                 type="neutral"
               />
             </div>
+            <div className="inline-stat">
+              <span className="inline-stat-label">{t('clients.columns.expenses')}</span>
+              <CurrencySummaryPopup
+                usdAmountMinor={totalExpenses.USD}
+                ilsAmountMinor={totalExpenses.ILS}
+                eurAmountMinor={totalExpenses.EUR}
+                type="expense"
+              />
+            </div>
           </div>
         )}
 
@@ -190,8 +224,74 @@ export function ClientDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* Recent Activity Section */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h4>{t('clients.detail.recentActivity')}</h4>
+                {recentActivity.length > 0 && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setActiveTab('transactions')}
+                  >
+                    {t('clients.detail.viewAllTransactions')}
+                  </button>
+                )}
+              </div>
+              {recentActivity.length === 0 ? (
+                <p className="text-muted">{t('clients.detail.noRecentActivity')}</p>
+              ) : (
+                <div className="recent-activity-list">
+                  {recentActivity.map((tx) => {
+                    const isReceivable = tx.kind === 'income' && tx.status === 'unpaid';
+                    return (
+                      <div
+                        key={tx.id}
+                        className="recent-activity-item clickable"
+                        onClick={() => handleRowClick(tx.id, tx.kind)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 0',
+                          borderBottom: '1px solid var(--color-border)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                          <span className="text-muted text-sm" style={{ minWidth: 80 }}>
+                            {formatDate(tx.occurredAt, locale)}
+                          </span>
+                          <span
+                            className={cn(
+                              'type-badge',
+                              tx.kind === 'expense' && 'expense',
+                              tx.kind === 'income' && tx.status === 'paid' && 'income',
+                              isReceivable && 'receivable'
+                            )}
+                          >
+                            {isReceivable ? t('transactions.type.receivable') : tx.kind === 'income' ? t('transactions.type.income') : t('transactions.type.expense')}
+                          </span>
+                          <span className="text-secondary" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {tx.projectName || tx.categoryName || '-'}
+                          </span>
+                        </div>
+                        <span className="amount-cell" style={{ fontWeight: 500 }}>
+                          <AmountWithConversion
+                            amountMinor={tx.amountMinor}
+                            currency={tx.currency}
+                            type={tx.kind === 'income' ? 'income' : 'expense'}
+                            showExpenseSign={tx.kind === 'expense'}
+                          />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', gap: 12 }}>
-              <button className="btn btn-primary" onClick={handleAddTransaction}>
+              <button className="btn btn-primary" onClick={handleAddIncome}>
                 {t('transactions.addTransaction')}
               </button>
               <button
@@ -206,7 +306,7 @@ export function ClientDetailPage() {
 
         {activeTab === 'projects' && (
           <>
-            {projects.length === 0 ? (
+            {projectSummaries.length === 0 ? (
               <div className="empty-state">
                 <h3 className="empty-state-title">{t('clients.detail.noProjects')}</h3>
                 <p className="empty-state-description">{t('clients.detail.noProjectsHint')}</p>
@@ -224,23 +324,66 @@ export function ClientDetailPage() {
                     <tr>
                       <th>{t('projects.columns.project')}</th>
                       <th>{t('projects.columns.field')}</th>
+                      <th style={{ textAlign: 'end' }}>{t('projects.columns.received')}</th>
+                      <th style={{ textAlign: 'end' }}>{t('projects.columns.unpaid')}</th>
+                      <th style={{ textAlign: 'end' }}>{t('projects.columns.expenses')}</th>
+                      <th style={{ textAlign: 'end' }}>{t('projects.columns.net')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {projects.map((project) => (
-                      <tr key={project.id}>
-                        <td>
-                          <Link
-                            to="/projects/$projectId"
-                            params={{ projectId: project.id }}
-                            style={{ fontWeight: 500 }}
-                          >
-                            {project.name}
-                          </Link>
-                        </td>
-                        <td className="text-secondary">{project.field || '-'}</td>
-                      </tr>
-                    ))}
+                    {projectSummaries.map((project) => {
+                      const netUSD = (project.paidIncomeMinorUSD ?? 0) - (project.expensesMinorUSD ?? 0);
+                      const netILS = (project.paidIncomeMinorILS ?? 0) - (project.expensesMinorILS ?? 0);
+                      const netEUR = (project.paidIncomeMinorEUR ?? 0) - (project.expensesMinorEUR ?? 0);
+                      const isNegativeNet = netUSD + netILS + netEUR < 0;
+
+                      return (
+                        <tr key={project.id}>
+                          <td>
+                            <Link
+                              to="/projects/$projectId"
+                              params={{ projectId: project.id }}
+                              style={{ fontWeight: 500 }}
+                            >
+                              {project.name}
+                            </Link>
+                          </td>
+                          <td className="text-secondary">{project.field || '-'}</td>
+                          <td className="amount-cell">
+                            <CurrencySummaryPopup
+                              usdAmountMinor={project.paidIncomeMinorUSD ?? 0}
+                              ilsAmountMinor={project.paidIncomeMinorILS ?? 0}
+                              eurAmountMinor={project.paidIncomeMinorEUR ?? 0}
+                              type="income"
+                            />
+                          </td>
+                          <td className="amount-cell">
+                            <CurrencySummaryPopup
+                              usdAmountMinor={project.unpaidIncomeMinorUSD ?? 0}
+                              ilsAmountMinor={project.unpaidIncomeMinorILS ?? 0}
+                              eurAmountMinor={project.unpaidIncomeMinorEUR ?? 0}
+                              type="neutral"
+                            />
+                          </td>
+                          <td className="amount-cell">
+                            <CurrencySummaryPopup
+                              usdAmountMinor={project.expensesMinorUSD ?? 0}
+                              ilsAmountMinor={project.expensesMinorILS ?? 0}
+                              eurAmountMinor={project.expensesMinorEUR ?? 0}
+                              type="expense"
+                            />
+                          </td>
+                          <td className={`amount-cell net-cell ${isNegativeNet ? 'negative' : 'positive'}`}>
+                            <CurrencySummaryPopup
+                              usdAmountMinor={netUSD}
+                              ilsAmountMinor={netILS}
+                              eurAmountMinor={netEUR}
+                              type="net"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -274,11 +417,15 @@ export function ClientDetailPage() {
                       const isOverdue = daysUntilDue < 0;
 
                       return (
-                        <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id)}>
+                        <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id, tx.kind)}>
                           <td>{tx.dueDate ? formatDate(tx.dueDate, locale) : '-'}</td>
                           <td className="text-secondary">{tx.projectName || '-'}</td>
                           <td className="amount-cell" style={{ color: 'var(--color-warning)' }}>
-                            {formatAmount(tx.amountMinor, tx.currency, locale)}
+                            <AmountWithConversion
+                              amountMinor={tx.amountMinor}
+                              currency={tx.currency}
+                              type="neutral"
+                            />
                           </td>
                           <td className={isOverdue ? 'text-danger' : 'text-muted'}>
                             {isOverdue ? Math.abs(daysUntilDue) : '-'}
@@ -302,7 +449,7 @@ export function ClientDetailPage() {
                                   label: t('common.duplicate'),
                                   icon: <CopyIcon size={16} />,
                                   onClick: () =>
-                                    openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                                    openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id }),
                                 },
                               ]}
                             />
@@ -333,7 +480,7 @@ export function ClientDetailPage() {
               <div className="empty-state">
                 <h3 className="empty-state-title">{t('clients.detail.noTransactions')}</h3>
                 <p className="empty-state-description">{t('clients.detail.noTransactionsHint')}</p>
-                <button className="btn btn-primary" onClick={handleAddTransaction}>
+                <button className="btn btn-primary" onClick={handleAddIncome}>
                   {t('transactions.addTransaction')}
                 </button>
               </div>
@@ -358,7 +505,7 @@ export function ClientDetailPage() {
                       const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
 
                       return (
-                        <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id)}>
+                        <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id, tx.kind)}>
                           <td>{formatDate(tx.occurredAt, locale)}</td>
                           <td>
                             <span
@@ -374,15 +521,13 @@ export function ClientDetailPage() {
                           </td>
                           <td className="text-secondary">{tx.projectName || '-'}</td>
                           <td className="text-secondary">{tx.categoryName || '-'}</td>
-                          <td
-                            className={cn(
-                              'amount-cell',
-                              tx.kind === 'income' && 'amount-positive',
-                              tx.kind === 'expense' && 'amount-negative'
-                            )}
-                          >
-                            {tx.kind === 'expense' ? '-' : ''}
-                            {formatAmount(tx.amountMinor, tx.currency, locale)}
+                          <td className="amount-cell">
+                            <AmountWithConversion
+                              amountMinor={tx.amountMinor}
+                              currency={tx.currency}
+                              type={tx.kind === 'income' ? 'income' : 'expense'}
+                              showExpenseSign={tx.kind === 'expense'}
+                            />
                           </td>
                           <td>
                             {tx.kind === 'income' && (
@@ -415,7 +560,7 @@ export function ClientDetailPage() {
                                   label: t('common.duplicate'),
                                   icon: <CopyIcon size={16} />,
                                   onClick: () =>
-                                    openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                                    openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id }),
                                 },
                               ]}
                             />

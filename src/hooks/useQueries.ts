@@ -45,21 +45,22 @@ function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryCli
 export const queryKeys = {
   transactions: (filters: QueryFilters) => ['transactions', filters] as const,
   transaction: (id: string) => ['transaction', id] as const,
-  overviewTotals: (dateFrom: string, dateTo: string, currency?: Currency) =>
-    ['overviewTotals', { dateFrom, dateTo, currency }] as const,
-  overviewTotalsByCurrency: (dateFrom: string, dateTo: string) =>
-    ['overviewTotalsByCurrency', { dateFrom, dateTo }] as const,
-  attentionReceivables: (currency?: Currency) => ['attentionReceivables', { currency }] as const,
-  clients: () => ['clients'] as const,
+  overviewTotals: (dateFrom: string, dateTo: string, currency?: Currency, profileId?: string) =>
+    ['overviewTotals', { dateFrom, dateTo, currency, profileId }] as const,
+  overviewTotalsByCurrency: (dateFrom: string, dateTo: string, profileId?: string) =>
+    ['overviewTotalsByCurrency', { dateFrom, dateTo, profileId }] as const,
+  attentionReceivables: (currency?: Currency, profileId?: string) =>
+    ['attentionReceivables', { currency, profileId }] as const,
+  clients: (profileId?: string) => ['clients', { profileId }] as const,
   client: (id: string) => ['client', id] as const,
-  clientSummaries: (currency?: Currency, search?: string) =>
-    ['clientSummaries', { currency, search }] as const,
+  clientSummaries: (profileId?: string, currency?: Currency, search?: string) =>
+    ['clientSummaries', { profileId, currency, search }] as const,
   clientSummary: (id: string, dateFrom?: string, dateTo?: string, currency?: Currency) =>
     ['clientSummary', id, { dateFrom, dateTo, currency }] as const,
-  projects: (clientId?: string) => ['projects', { clientId }] as const,
+  projects: (profileId?: string, clientId?: string) => ['projects', { profileId, clientId }] as const,
   project: (id: string) => ['project', id] as const,
-  projectSummaries: (currency?: Currency, search?: string, field?: string) =>
-    ['projectSummaries', { currency, search, field }] as const,
+  projectSummaries: (profileId?: string, currency?: Currency, search?: string, field?: string) =>
+    ['projectSummaries', { profileId, currency, search, field }] as const,
   projectSummary: (id: string, dateFrom?: string, dateTo?: string, currency?: Currency) =>
     ['projectSummary', id, { dateFrom, dateTo, currency }] as const,
   categories: (kind?: 'income' | 'expense') => ['categories', { kind }] as const,
@@ -76,6 +77,18 @@ export const queryKeys = {
 };
 
 // Transaction hooks
+/**
+ * @deprecated Use `useIncome` from `useIncomeQueries.ts` for income-specific queries.
+ * This generic hook is kept for legacy mixed views (transactions ledger, overview, etc.)
+ * that show both income and old-style project expenses until the next release migration.
+ *
+ * For income-only queries, use:
+ * - `useIncome` for fetching income transactions
+ * - `useReceivables` for unpaid income
+ * - `useMarkIncomePaid` for marking income as paid
+ *
+ * For expenses, use hooks from `useExpenseQueries.ts`.
+ */
 export function useTransactions(filters: QueryFilters) {
   return useQuery({
     queryKey: queryKeys.transactions(filters),
@@ -99,24 +112,24 @@ export function useTransactionDisplay(id: string | undefined) {
   });
 }
 
-export function useOverviewTotals(dateFrom: string, dateTo: string, currency?: Currency) {
+export function useOverviewTotals(dateFrom: string, dateTo: string, currency?: Currency, profileId?: string) {
   return useQuery({
-    queryKey: queryKeys.overviewTotals(dateFrom, dateTo, currency),
-    queryFn: () => transactionRepo.getOverviewTotals({ dateFrom, dateTo, currency }),
+    queryKey: queryKeys.overviewTotals(dateFrom, dateTo, currency, profileId),
+    queryFn: () => transactionRepo.getOverviewTotals({ dateFrom, dateTo, currency, profileId }),
   });
 }
 
-export function useOverviewTotalsByCurrency(dateFrom: string, dateTo: string) {
+export function useOverviewTotalsByCurrency(dateFrom: string, dateTo: string, profileId?: string) {
   return useQuery({
-    queryKey: queryKeys.overviewTotalsByCurrency(dateFrom, dateTo),
-    queryFn: () => transactionRepo.getOverviewTotalsByCurrency({ dateFrom, dateTo }),
+    queryKey: queryKeys.overviewTotalsByCurrency(dateFrom, dateTo, profileId),
+    queryFn: () => transactionRepo.getOverviewTotalsByCurrency({ dateFrom, dateTo, profileId }),
   });
 }
 
-export function useAttentionReceivables(currency?: Currency) {
+export function useAttentionReceivables(currency?: Currency, profileId?: string) {
   return useQuery({
-    queryKey: queryKeys.attentionReceivables(currency),
-    queryFn: () => transactionRepo.getAttentionReceivables({ currency }),
+    queryKey: queryKeys.attentionReceivables(currency, profileId),
+    queryFn: () => transactionRepo.getAttentionReceivables({ currency, profileId }),
   });
 }
 
@@ -140,11 +153,25 @@ export function useUpdateTransaction() {
   });
 }
 
+/**
+ * @deprecated Use `useMarkIncomePaid` from `useIncomeQueries.ts` instead.
+ * This hook is kept for backwards compatibility until the next release migration.
+ */
 export function useMarkTransactionPaid() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) => transactionRepo.markPaid(id),
+    onSuccess: () => invalidateTransactionQueries(queryClient),
+  });
+}
+
+export function useRecordPartialPayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
+      transactionRepo.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -177,10 +204,10 @@ export function useUnarchiveTransaction() {
 }
 
 // Client hooks
-export function useClients() {
+export function useClients(profileId?: string) {
   return useQuery({
-    queryKey: queryKeys.clients(),
-    queryFn: () => clientRepo.list(),
+    queryKey: queryKeys.clients(profileId),
+    queryFn: () => clientRepo.list({ profileId }),
   });
 }
 
@@ -192,10 +219,10 @@ export function useClient(id: string) {
   });
 }
 
-export function useClientSummaries(currency?: Currency, search?: string) {
+export function useClientSummaries(profileId?: string, currency?: Currency, search?: string) {
   return useQuery({
-    queryKey: queryKeys.clientSummaries(currency, search),
-    queryFn: () => clientSummaryRepo.list({ currency, search }),
+    queryKey: queryKeys.clientSummaries(profileId, currency, search),
+    queryFn: () => clientSummaryRepo.list({ profileId, currency, search }),
   });
 }
 
@@ -248,10 +275,10 @@ export function useArchiveClient() {
 }
 
 // Project hooks
-export function useProjects(clientId?: string) {
+export function useProjects(profileId?: string, clientId?: string) {
   return useQuery({
-    queryKey: queryKeys.projects(clientId),
-    queryFn: () => projectRepo.list({ clientId }),
+    queryKey: queryKeys.projects(profileId, clientId),
+    queryFn: () => projectRepo.list({ profileId, clientId }),
   });
 }
 
@@ -263,10 +290,10 @@ export function useProject(id: string) {
   });
 }
 
-export function useProjectSummaries(currency?: Currency, search?: string, field?: string) {
+export function useProjectSummaries(profileId?: string, currency?: Currency, search?: string, field?: string) {
   return useQuery({
-    queryKey: queryKeys.projectSummaries(currency, search, field),
-    queryFn: () => projectSummaryRepo.list({ currency, search, field }),
+    queryKey: queryKeys.projectSummaries(profileId, currency, search, field),
+    queryFn: () => projectSummaryRepo.list({ profileId, currency, search, field }),
   });
 }
 

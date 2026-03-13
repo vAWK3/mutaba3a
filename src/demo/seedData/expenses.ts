@@ -1,14 +1,15 @@
 /**
  * Demo Expenses Generator
  *
- * Creates profile-scoped expenses with recurring rules.
+ * Creates profile-scoped expenses with recurring rules,
+ * distributed across multiple business profiles.
  */
 
 import type { Expense, RecurringRule } from '../../types';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES } from '../constants';
-import { getDemoProfileId } from './profile';
-import { getDemoProfileExpenseCategoryIds } from './categories';
+import { getDemoProfileIds, getDemoProfileCount } from './profile';
+import { getDemoProfileExpenseCategoryIdsByProfile } from './categories';
 
 const rng = new SeededRandom(DEMO_SEED + 6);
 
@@ -33,8 +34,7 @@ const RECURRING_EXPENSES = [
 ];
 
 export function createDemoRecurringRules(): RecurringRule[] {
-  const profileId = getDemoProfileId();
-  const categoryIds = getDemoProfileExpenseCategoryIds();
+  const profileIds = getDemoProfileIds();
   const now = new Date().toISOString();
 
   // Start date 12 months ago (one full year)
@@ -42,26 +42,50 @@ export function createDemoRecurringRules(): RecurringRule[] {
   startDate.setMonth(startDate.getMonth() - 11);
   startDate.setDate(1);
 
-  return RECURRING_EXPENSES.map((expense, index) => ({
-    id: `${DEMO_PREFIXES.recurringRule}${String(index + 1).padStart(3, '0')}`,
-    profileId,
-    title: expense.title,
-    vendor: expense.vendor,
-    categoryId: categoryIds[expense.categoryIndex],
-    amountMinor: expense.amount * 100 * (expense.frequency === 'monthly' ? 1 : 1), // USD amounts
-    currency: 'USD',
-    frequency: expense.frequency,
-    startDate: startDate.toISOString().split('T')[0],
-    endMode: 'noEnd',
-    isPaused: false,
-    createdAt: now,
-    updatedAt: now,
-  }));
+  const rules: RecurringRule[] = [];
+  let ruleIndex = 1;
+
+  // Create recurring rules for each profile
+  profileIds.forEach((profileId, profileIdx) => {
+    const categoryIds = getDemoProfileExpenseCategoryIdsByProfile(profileIdx);
+
+    // Each profile gets 2-3 recurring expenses
+    const profileExpenses = RECURRING_EXPENSES.slice(
+      profileIdx * 2,
+      profileIdx * 2 + (profileIdx === 0 ? 2 : profileIdx === 1 ? 2 : RECURRING_EXPENSES.length - 4)
+    );
+
+    // If we've exhausted the array, wrap around
+    const expensesToUse = profileExpenses.length > 0 ? profileExpenses : [RECURRING_EXPENSES[profileIdx % RECURRING_EXPENSES.length]];
+
+    expensesToUse.forEach((expense) => {
+      rules.push({
+        id: `${DEMO_PREFIXES.recurringRule}${String(ruleIndex++).padStart(3, '0')}`,
+        profileId,
+        title: expense.title,
+        vendor: expense.vendor,
+        categoryId: categoryIds[expense.categoryIndex % categoryIds.length],
+        amountMinor: expense.amount * 100,
+        currency: 'USD' as const,
+        frequency: expense.frequency,
+        dayOfMonth: 1,
+        startDate: startDate.toISOString().split('T')[0],
+        endMode: 'noEnd' as const,
+        scope: 'general' as const,
+        reminderDaysBefore: 0,
+        isPaused: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+  });
+
+  return rules;
 }
 
 export function createDemoExpenses(): Expense[] {
-  const profileId = getDemoProfileId();
-  const categoryIds = getDemoProfileExpenseCategoryIds();
+  const profileIds = getDemoProfileIds();
+  const profileCount = getDemoProfileCount();
   const referenceDate = new Date(); // Use current date, not frozen time
   const expenses: Expense[] = [];
   let expenseIndex = 1;
@@ -74,7 +98,7 @@ export function createDemoExpenses(): Expense[] {
     monthDate.setMonth(monthDate.getMonth() + monthOffset);
     monthDate.setDate(1);
 
-    // Add recurring expenses
+    // Add recurring expenses (each rule is already assigned to a profile)
     recurringRules.forEach((rule) => {
       // Skip yearly expenses except in month -11 (start of year range)
       if (rule.frequency === 'yearly' && monthOffset !== -11) return;
@@ -86,7 +110,7 @@ export function createDemoExpenses(): Expense[] {
 
       expenses.push({
         id: `${DEMO_PREFIXES.expense}${String(expenseIndex++).padStart(3, '0')}`,
-        profileId,
+        profileId: rule.profileId,
         title: rule.title,
         vendor: rule.vendor,
         categoryId: rule.categoryId,
@@ -99,13 +123,18 @@ export function createDemoExpenses(): Expense[] {
       });
     });
 
-    // Add 2-4 one-time expenses per month
+    // Add 2-4 one-time expenses per month, distributed across profiles
     const oneTimeCount = rng.int(2, 4);
     const selectedExpenses = rng.pickMany(ONE_TIME_EXPENSES, oneTimeCount);
 
-    selectedExpenses.forEach((template) => {
+    selectedExpenses.forEach((template, idx) => {
       const occurredAt = new Date(monthDate);
       occurredAt.setDate(rng.int(1, 28));
+
+      // Distribute one-time expenses across profiles
+      const profileIdx = (monthOffset + 12 + idx) % profileCount;
+      const profileId = profileIds[profileIdx];
+      const categoryIds = getDemoProfileExpenseCategoryIdsByProfile(profileIdx);
 
       const currency = rng.chance(0.7) ? 'ILS' : 'USD';
       const amountMinor = rng.amountMinor(
@@ -120,7 +149,7 @@ export function createDemoExpenses(): Expense[] {
         profileId,
         title: template.title,
         vendor: template.vendor,
-        categoryId: categoryIds[template.categoryIndex],
+        categoryId: categoryIds[template.categoryIndex % categoryIds.length],
         amountMinor,
         currency,
         occurredAt: occurredAt.toISOString().split('T')[0],

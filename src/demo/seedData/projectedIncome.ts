@@ -3,18 +3,17 @@
  *
  * Creates projected income entries from retainer agreements.
  * Includes past payments (received), current due, and upcoming.
+ * Inherits profileId from the associated retainer.
  */
 
 import type { ProjectedIncome, ProjectedIncomeState } from '../../types';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES, DEFAULT_FROZEN_TIME } from '../constants';
-import { getDemoProfileId } from './profile';
 import { getDemoRetainerData } from './retainers';
 
 const rng = new SeededRandom(DEMO_SEED + 3);
 
 export function createDemoProjectedIncome(): ProjectedIncome[] {
-  const profileId = getDemoProfileId();
   const retainers = getDemoRetainerData();
   const projectedIncomes: ProjectedIncome[] = [];
 
@@ -95,7 +94,7 @@ export function createDemoProjectedIncome(): ProjectedIncome[] {
 
       projectedIncomes.push({
         id: `${DEMO_PREFIXES.projectedIncome}${String(projectedIndex++).padStart(3, '0')}`,
-        profileId,
+        profileId: retainer.profileId,
         sourceType: 'retainer',
         sourceId: retainer.id,
         clientId: retainer.clientId,

@@ -1,10 +1,28 @@
 import { db } from './database';
+import { completeMigrationSafety, validateMigration, autoFixMigrationIssues } from './migration-safety';
+import type { MigrationValidationResult } from './migration-safety';
+
+// Store last migration result for debugging
+let lastMigrationResult: MigrationValidationResult | null = null;
+
+/**
+ * Get the last migration validation result (for debugging)
+ */
+export function getLastMigrationResult(): MigrationValidationResult | null {
+  return lastMigrationResult;
+}
 
 /**
  * Initialize the database with default settings if not already present.
  * Does NOT seed any sample data - fresh installs start empty.
+ *
+ * Also runs migration safety checks:
+ * - Creates backup if migration occurred
+ * - Validates data integrity
+ * - Auto-fixes common issues
  */
 export async function initDatabase(): Promise<void> {
+  // First, ensure default settings exist
   const existingSettings = await db.settings.get('default');
   if (!existingSettings) {
     await db.settings.put({
@@ -15,6 +33,38 @@ export async function initDatabase(): Promise<void> {
     });
     console.log('Database initialized with default settings');
   }
+
+  // Run migration safety checks
+  try {
+    lastMigrationResult = await completeMigrationSafety();
+    if (lastMigrationResult) {
+      if (lastMigrationResult.success) {
+        console.log('[Migration] Completed successfully');
+      } else {
+        console.warn('[Migration] Completed with issues:', lastMigrationResult.issues);
+      }
+    }
+  } catch (e) {
+    console.error('[Migration] Safety check failed:', e);
+  }
+}
+
+/**
+ * Re-validate and fix migration issues manually
+ * Useful for debugging or recovery
+ */
+export async function repairDatabase(): Promise<MigrationValidationResult> {
+  console.log('[Database] Running repair...');
+
+  // Run auto-fix first
+  const fixedCount = await autoFixMigrationIssues();
+  console.log(`[Database] Auto-fixed ${fixedCount} records`);
+
+  // Then validate
+  const result = await validateMigration();
+  lastMigrationResult = result;
+
+  return result;
 }
 
 /**

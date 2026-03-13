@@ -11,18 +11,31 @@ import type {
  */
 function shouldRuleOccurInMonth(rule: RecurringRule, year: number, month: number): boolean {
   const startDate = new Date(rule.startDate);
-  const checkDate = new Date(year, month - 1, 1);
+  // Extract year/month from startDate to avoid timezone comparison issues
+  const startYear = startDate.getFullYear();
+  const startMonth = startDate.getMonth() + 1;
 
-  // Rule hasn't started yet
-  if (checkDate < startDate) return false;
+  // Rule hasn't started yet - compare year/month numerically
+  if (year < startYear || (year === startYear && month < startMonth)) return false;
 
   // Check end conditions
   if (rule.endMode === 'endOfYear') {
-    const ruleEndYear = startDate.getFullYear();
+    const ruleEndYear = startYear;
     if (year > ruleEndYear) return false;
   } else if (rule.endMode === 'untilDate' && rule.endDate) {
     const endDate = new Date(rule.endDate);
-    if (checkDate > endDate) return false;
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth() + 1;
+    const endDay = endDate.getDate();
+    const ruleDay = startDate.getDate();
+
+    // Check if current year/month is past the end date
+    if (year > endYear) return false;
+    if (year === endYear) {
+      if (month > endMonth) return false;
+      // If same month as end date, check if occurrence day would be past end day
+      if (month === endMonth && ruleDay > endDay) return false;
+    }
   }
   // 'noEnd' has no end date check
 

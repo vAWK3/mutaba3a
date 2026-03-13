@@ -1,12 +1,13 @@
 /**
  * Demo Categories Generator
  *
- * Creates income and expense categories for demo transactions.
+ * Creates income and expense categories for demo transactions,
+ * with expense categories duplicated per profile.
  */
 
 import type { Category, ExpenseCategory } from '../../types';
 import { DEMO_PREFIXES } from '../constants';
-import { getDemoProfileId } from './profile';
+import { getDemoProfileIds } from './profile';
 
 // Income categories (for transactions)
 const INCOME_CATEGORIES = [
@@ -61,14 +62,24 @@ export function createDemoCategories(): Category[] {
 }
 
 export function createDemoExpenseCategories(): ExpenseCategory[] {
-  const profileId = getDemoProfileId();
+  const profileIds = getDemoProfileIds();
+  const categories: ExpenseCategory[] = [];
 
-  return PROFILE_EXPENSE_CATEGORIES.map((cat, index) => ({
-    id: `${DEMO_PREFIXES.expenseCategory}${String(index + 1).padStart(3, '0')}`,
-    profileId,
-    name: cat.name,
-    color: cat.color,
-  }));
+  // Create expense categories for each profile
+  profileIds.forEach((profileId, profileIdx) => {
+    PROFILE_EXPENSE_CATEGORIES.forEach((cat, catIdx) => {
+      // ID format: demo_exp_cat_<profileIdx>_<catIdx>
+      const id = `${DEMO_PREFIXES.expenseCategory}${profileIdx}_${String(catIdx + 1).padStart(2, '0')}`;
+      categories.push({
+        id,
+        profileId,
+        name: cat.name,
+        color: cat.color,
+      });
+    });
+  });
+
+  return categories;
 }
 
 export function getDemoIncomeCategoryIds(): string[] {
@@ -83,8 +94,17 @@ export function getDemoExpenseCategoryIds(): string[] {
   );
 }
 
-export function getDemoProfileExpenseCategoryIds(): string[] {
-  return PROFILE_EXPENSE_CATEGORIES.map((_, index) =>
-    `${DEMO_PREFIXES.expenseCategory}${String(index + 1).padStart(3, '0')}`
+/**
+ * Get expense category IDs for a specific profile by index
+ */
+export function getDemoProfileExpenseCategoryIdsByProfile(profileIdx: number): string[] {
+  return PROFILE_EXPENSE_CATEGORIES.map((_, catIdx) =>
+    `${DEMO_PREFIXES.expenseCategory}${profileIdx}_${String(catIdx + 1).padStart(2, '0')}`
   );
+}
+
+/** @deprecated Use getDemoProfileExpenseCategoryIdsByProfile for multi-profile support */
+export function getDemoProfileExpenseCategoryIds(): string[] {
+  // Return first profile's categories for backwards compatibility
+  return getDemoProfileExpenseCategoryIdsByProfile(0);
 }

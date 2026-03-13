@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { db } from '../../db';
 import { useT } from '../../lib/i18n';
@@ -128,7 +129,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
 
-  return (
+  return createPortal(
     <>
       <div className="modal-overlay" onClick={onClose} />
       <div
@@ -205,7 +206,8 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

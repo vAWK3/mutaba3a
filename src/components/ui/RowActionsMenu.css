@@ -34,13 +34,10 @@
 }
 
 .row-actions-menu {
-  position: absolute;
-  top: 100%;
-  inset-inline-end: 0;
-  z-index: 100;
+  /* Position set via inline styles when using portal */
+  z-index: 9999;
 
   min-width: 140px;
-  margin-top: var(--space-1);
   padding: var(--space-1);
 
   background-color: var(--surface);

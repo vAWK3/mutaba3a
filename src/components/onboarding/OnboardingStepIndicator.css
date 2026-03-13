@@ -1,0 +1,50 @@
+.onboarding-step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: var(--space-6);
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+}
+
+.step-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  border: 2px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: all 0.2s ease;
+}
+
+.step-circle.current {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-subtle);
+}
+
+.step-circle.completed {
+  border-color: var(--success);
+  background: var(--success);
+  color: white;
+}
+
+.step-line {
+  width: 48px;
+  height: 2px;
+  background: var(--border-subtle);
+  transition: background 0.2s ease;
+}
+
+.step-line.completed {
+  background: var(--success);
+}

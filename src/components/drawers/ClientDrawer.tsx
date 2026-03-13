@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore } from '../../lib/stores';
+import { useOnboardingStore } from '../../lib/onboardingStore';
 import { useClient, useCreateClient, useUpdateClient, useArchiveClient } from '../../hooks/useQueries';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
@@ -21,6 +22,7 @@ export function ClientDrawer() {
   const { clientDrawer, closeClientDrawer } = useDrawerStore();
   const { mode, clientId } = clientDrawer;
   const t = useT();
+  const { currentStep, completeStep } = useOnboardingStore();
 
   const { data: existingClient, isLoading: clientLoading } = useClient(clientId || '');
   const createMutation = useCreateClient();
@@ -61,7 +63,11 @@ export function ClientDrawer() {
       if (mode === 'edit' && clientId) {
         await updateMutation.mutateAsync({ id: clientId, data: clientData });
       } else {
-        await createMutation.mutateAsync(clientData);
+        const newClient = await createMutation.mutateAsync(clientData);
+        // Advance onboarding if we're on the client step
+        if (currentStep === 'client') {
+          completeStep('client', newClient.id);
+        }
       }
       closeClientDrawer();
     } catch (error) {

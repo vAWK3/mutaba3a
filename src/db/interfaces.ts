@@ -38,6 +38,8 @@ import type {
   Vendor,
   MonthCloseStatus,
   RecurringRule,
+  RecurringOccurrence,
+  RecurringOccurrenceStatus,
   RetainerAgreement,
   ProjectedIncome,
 } from '../types';
@@ -59,7 +61,7 @@ export interface BaseRepository<T, CreateData, ID = string> {
 // ============================================================================
 
 export interface IClientRepository extends BaseRepository<Client, Omit<Client, 'id' | 'createdAt' | 'updatedAt'>> {
-  list(includeArchived?: boolean): Promise<Client[]>;
+  list(filters?: { profileId?: string; includeArchived?: boolean }): Promise<Client[]>;
   archive(id: string): Promise<void>;
 }
 
@@ -68,7 +70,7 @@ export interface IClientRepository extends BaseRepository<Client, Omit<Client, '
 // ============================================================================
 
 export interface IProjectRepository extends BaseRepository<Project, Omit<Project, 'id' | 'createdAt' | 'updatedAt'>> {
-  list(filters?: { clientId?: string; includeArchived?: boolean }): Promise<Project[]>;
+  list(filters?: { profileId?: string; clientId?: string; includeArchived?: boolean }): Promise<Project[]>;
   archive(id: string): Promise<void>;
 }
 
@@ -92,9 +94,9 @@ export interface ITransactionRepository extends BaseRepository<Transaction, Omit
   archive(id: string): Promise<void>;
   unarchive(id: string): Promise<void>;
   isLocked(id: string): Promise<boolean>;
-  getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency }): Promise<OverviewTotals>;
-  getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string }): Promise<TransactionTotalsByCurrency>;
-  getAttentionReceivables(filters: { currency?: Currency }): Promise<TransactionDisplay[]>;
+  getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals>;
+  getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency>;
+  getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]>;
 }
 
 // ============================================================================
@@ -102,7 +104,7 @@ export interface ITransactionRepository extends BaseRepository<Transaction, Omit
 // ============================================================================
 
 export interface IProjectSummaryRepository {
-  list(filters?: { currency?: Currency; search?: string; field?: string }): Promise<ProjectSummary[]>;
+  list(filters?: { profileId?: string; currency?: Currency; search?: string; field?: string }): Promise<ProjectSummary[]>;
   get(projectId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ProjectSummary | undefined>;
 }
 
@@ -111,7 +113,7 @@ export interface IProjectSummaryRepository {
 // ============================================================================
 
 export interface IClientSummaryRepository {
-  list(filters?: { currency?: Currency; search?: string }): Promise<ClientSummary[]>;
+  list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]>;
   get(clientId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ClientSummary | undefined>;
 }
 
@@ -232,10 +234,36 @@ export interface IMonthCloseStatusRepository {
 // Recurring Rule Repository Interface
 // ============================================================================
 
-export interface IRecurringRuleRepository extends BaseRepository<RecurringRule, Omit<RecurringRule, 'id' | 'createdAt'>> {
-  list(filters?: { profileId?: string; isPaused?: boolean }): Promise<RecurringRule[]>;
+export interface IRecurringRuleRepository extends BaseRepository<RecurringRule, Omit<RecurringRule, 'id' | 'createdAt' | 'updatedAt'>> {
+  list(filters?: {
+    profileId?: string;
+    isPaused?: boolean;
+    scope?: 'general' | 'project';
+  }): Promise<RecurringRule[]>;
+  listActive(profileId: string): Promise<RecurringRule[]>;
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
+  softDelete(id: string): Promise<void>;
+}
+
+// ============================================================================
+// Recurring Occurrence Repository Interface
+// ============================================================================
+
+export interface IRecurringOccurrenceRepository extends BaseRepository<RecurringOccurrence, Omit<RecurringOccurrence, 'id' | 'createdAt' | 'updatedAt'>> {
+  // Query - always profile-scoped
+  list(filters: {
+    profileId: string;              // REQUIRED
+    ruleId?: string;
+    status?: RecurringOccurrenceStatus | RecurringOccurrenceStatus[];
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<RecurringOccurrence[]>;
+
+  getByRuleAndDate(ruleId: string, expectedDate: string): Promise<RecurringOccurrence | undefined>;
+
+  // Get history for a specific rule
+  getHistoryForRule(ruleId: string): Promise<RecurringOccurrence[]>;
 }
 
 // ============================================================================
@@ -283,6 +311,7 @@ export interface IRepositoryProvider {
   vendors: IVendorRepository;
   monthCloseStatuses: IMonthCloseStatusRepository;
   recurringRules: IRecurringRuleRepository;
+  recurringOccurrences: IRecurringOccurrenceRepository;
   retainerAgreements: IRetainerAgreementRepository;
   projectedIncome: IProjectedIncomeRepository;
 }

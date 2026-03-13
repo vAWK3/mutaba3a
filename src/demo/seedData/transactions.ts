@@ -13,8 +13,9 @@ import type { Transaction, Currency, TxKind, TxStatus } from '../../types';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES, DEMO_CONFIG } from '../constants';
 import { getDemoClientIds } from './clients';
-import { getDemoProjectIds, getDemoProjectClientMap } from './projects';
+import { getDemoProjectIds, getDemoProjectClientMap, getDemoProjectProfileMap } from './projects';
 import { getDemoIncomeCategoryIds, getDemoExpenseCategoryIds } from './categories';
+import { getDemoProfileIds } from './profile';
 
 const rng = new SeededRandom(DEMO_SEED + 4);
 
@@ -96,6 +97,8 @@ export function createDemoTransactions(): Transaction[] {
   const clientIds = getDemoClientIds();
   const projectIds = getDemoProjectIds();
   const projectClientMap = getDemoProjectClientMap();
+  const projectProfileMap = getDemoProjectProfileMap();
+  const profileIds = getDemoProfileIds();
   const incomeCategoryIds = getDemoIncomeCategoryIds();
   const expenseCategoryIds = getDemoExpenseCategoryIds();
 
@@ -166,6 +169,11 @@ export function createDemoTransactions(): Transaction[] {
 
       const now = new Date().toISOString();
 
+      // Determine profileId: for income, inherit from project; for expenses, pick random profile
+      const profileId = template.kind === 'income'
+        ? projectProfileMap.get(projectId)
+        : rng.pick(profileIds);
+
       transactions.push({
         id: `${DEMO_PREFIXES.transaction}${String(txIndex).padStart(3, '0')}`,
         kind: template.kind,
@@ -179,6 +187,7 @@ export function createDemoTransactions(): Transaction[] {
         occurredAt,
         dueDate,
         paidAt,
+        profileId,
         createdAt: now,
         updatedAt: now,
       });
@@ -186,10 +195,10 @@ export function createDemoTransactions(): Transaction[] {
   }
 
   // Add a few overdue receivables for demo visibility
-  addOverdueReceivables(transactions, clientIds, projectIds, projectClientMap, incomeCategoryIds, referenceDate);
+  addOverdueReceivables(transactions, clientIds, projectIds, projectClientMap, projectProfileMap, incomeCategoryIds, referenceDate);
 
   // Add a few due soon receivables
-  addDueSoonReceivables(transactions, clientIds, projectIds, projectClientMap, incomeCategoryIds, referenceDate);
+  addDueSoonReceivables(transactions, clientIds, projectIds, projectClientMap, projectProfileMap, incomeCategoryIds, referenceDate);
 
   return transactions;
 }
@@ -199,6 +208,7 @@ function addOverdueReceivables(
   clientIds: string[],
   projectIds: string[],
   projectClientMap: Map<string, string>,
+  projectProfileMap: Map<string, string>,
   incomeCategoryIds: string[],
   referenceDate: Date
 ) {
@@ -207,6 +217,7 @@ function addOverdueReceivables(
     const txIndex = transactions.length + 1;
     const projectId = rng.pick(projectIds);
     const clientId = projectClientMap.get(projectId) || rng.pick(clientIds);
+    const profileId = projectProfileMap.get(projectId);
 
     const daysOverdue = rng.int(5, 30);
     const dueDate = new Date(referenceDate);
@@ -235,6 +246,7 @@ function addOverdueReceivables(
       currency,
       occurredAt: occurredDate.toISOString().split('T')[0],
       dueDate: dueDate.toISOString().split('T')[0],
+      profileId,
       createdAt: now,
       updatedAt: now,
     });
@@ -246,6 +258,7 @@ function addDueSoonReceivables(
   clientIds: string[],
   projectIds: string[],
   projectClientMap: Map<string, string>,
+  projectProfileMap: Map<string, string>,
   incomeCategoryIds: string[],
   referenceDate: Date
 ) {
@@ -254,6 +267,7 @@ function addDueSoonReceivables(
     const txIndex = transactions.length + 1;
     const projectId = rng.pick(projectIds);
     const clientId = projectClientMap.get(projectId) || rng.pick(clientIds);
+    const profileId = projectProfileMap.get(projectId);
 
     const daysUntilDue = rng.int(1, 7);
     const dueDate = new Date(referenceDate);
@@ -282,6 +296,7 @@ function addDueSoonReceivables(
       currency,
       occurredAt: occurredDate.toISOString().split('T')[0],
       dueDate: dueDate.toISOString().split('T')[0],
+      profileId,
       createdAt: now,
       updatedAt: now,
     });

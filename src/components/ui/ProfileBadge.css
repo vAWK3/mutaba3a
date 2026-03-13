@@ -1,0 +1,40 @@
+/* ProfileBadge Component Styles */
+
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--weight-semibold);
+  color: white;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.profile-badge-sm {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.profile-badge-md {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+/* ProfileBadge with name */
+.profile-badge-with-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.profile-badge-name {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}

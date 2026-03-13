@@ -14,6 +14,9 @@ export type ReportType = 'summary' | 'by-project' | 'by-client' | 'expenses-by-p
 export type TxKind = 'income' | 'expense';
 export type TxStatus = 'paid' | 'unpaid';
 
+// Payment status (computed from receivedAmountMinor vs amountMinor)
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
+
 // Client entity
 export interface Client {
   id: string;
@@ -21,6 +24,8 @@ export interface Client {
   email?: string;
   phone?: string;
   notes?: string;
+  /** Business profile this client belongs to */
+  profileId?: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -33,6 +38,8 @@ export interface Project {
   clientId?: string;
   field?: string;
   notes?: string;
+  /** Business profile this project belongs to */
+  profileId?: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -60,6 +67,10 @@ export interface Transaction {
   dueDate?: string;
   paidAt?: string;
   notes?: string;
+  /** Amount received so far (for partial payments on income) */
+  receivedAmountMinor?: number;
+  /** Business profile this transaction belongs to */
+  profileId?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -99,6 +110,8 @@ export interface QueryFilters {
   status?: TxStatus | 'overdue';
   clientId?: string;
   projectId?: string;
+  /** Filter by business profile (undefined = all profiles) */
+  profileId?: string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -170,6 +183,10 @@ export interface TransactionDisplay extends Transaction {
   projectName?: string;
   categoryName?: string;
   daysOverdue?: number;
+  /** Computed payment status (only for income transactions) */
+  paymentStatus?: PaymentStatus;
+  /** Remaining amount to be paid (only for income transactions) */
+  remainingAmountMinor?: number;
 }
 
 // ============================================================================
@@ -387,6 +404,7 @@ export interface Expense {
   occurredAt: string;
   notes?: string;
   recurringRuleId?: string;
+  recurringOccurrenceId?: string; // FK to persisted occurrence
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -398,16 +416,95 @@ export interface RecurringRule {
   profileId: string;
   title: string;
   vendor?: string;
+  vendorId?: string;
   categoryId?: string;
   amountMinor: number;
   currency: Currency;
   frequency: ExpenseFrequency;
+  dayOfMonth: number;              // 1-28 (avoids end-of-month edge cases)
+  monthOfYear?: number;            // 1-12, REQUIRED when frequency='yearly'
   startDate: string;
   endMode: RecurringEndMode;
   endDate?: string;
+  projectId?: string;              // Optional: link to project
+  scope: 'general' | 'project';    // General or project-scoped expense
+  notes?: string;                  // Default notes for occurrences
+  reminderDaysBefore: number;      // Days before due to show reminder (default: 0)
   isPaused: boolean;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;              // Soft delete support
+}
+
+// Recurring Occurrence status (only what needs persistence)
+export type RecurringOccurrenceStatus =
+  | 'snoozed'           // User deferred, will resurface
+  | 'resolved_paid'     // User confirmed → Expense created
+  | 'resolved_skipped'; // User skipped, no expense
+
+// Computed display states (NOT persisted)
+export type ComputedOccurrenceState =
+  | 'projected'   // Future, not yet due
+  | 'due'         // Within reminder window or on expected date
+  | 'overdue';    // Past expected date, no action taken
+
+// Recurring Occurrence entity (persisted only when user acts)
+export interface RecurringOccurrence {
+  id: string;
+  ruleId: string;                  // FK to RecurringRule
+  profileId: string;               // REQUIRED - copied from rule, explicit scoping
+  expectedDate: string;            // ISO date (YYYY-MM-DD)
+  amountMinorSnapshot: number;     // Amount at time rule was checked
+  currencySnapshot: Currency;      // Currency (never changes)
+  status: RecurringOccurrenceStatus;
+
+  // Resolution tracking
+  fulfilledExpenseId?: string;     // FK to Expense if resolved_paid
+  resolvedAt?: string;             // ISO timestamp when resolved (paid or skipped)
+  snoozeUntil?: string;            // ISO date if snoozed
+
+  // Override fields (user can adjust before confirming)
+  actualAmountMinor?: number;      // If user edited amount
+  actualPaidDate?: string;         // Actual payment date (may differ from expected)
+  notes?: string;                  // Per-occurrence notes
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Virtual Occurrence (computed, not persisted)
+export interface VirtualOccurrence {
+  ruleId: string;
+  profileId: string;
+  expectedDate: string;
+  amountMinor: number;
+  currency: Currency;
+  computedState: ComputedOccurrenceState;
+
+  // Check if persisted occurrence exists
+  persistedOccurrence?: RecurringOccurrence;
+}
+
+// Virtual Occurrence with resolved display names
+export interface VirtualOccurrenceDisplay extends VirtualOccurrence {
+  // Resolved from rule
+  ruleTitle: string;
+  vendor?: string;
+  vendorName?: string;
+  categoryId?: string;
+  categoryName?: string;
+  categoryColor?: string;
+  projectId?: string;
+  projectName?: string;
+
+  // Computed
+  daysUntilDue: number;           // Negative if overdue
+  isOverdue: boolean;
+  isUpcoming: boolean;            // Due but not overdue
+
+  // Display helpers
+  effectiveAmount: number;        // From rule or override
+  effectiveCurrency: Currency;
 }
 
 // Receipt entity (stores file as base64, can be linked to expense)
@@ -444,6 +541,8 @@ export interface ExpenseFilters {
   profileId?: string;
   year?: number;
   month?: number;
+  dateFrom?: string;
+  dateTo?: string;
   categoryId?: string;
   currency?: Currency;
   search?: string;
@@ -461,6 +560,15 @@ export interface ReceiptFilters {
   unlinkedOnly?: boolean;
   limit?: number;
   offset?: number;
+}
+
+// Query filters for recurring occurrences
+export interface RecurringOccurrenceFilters {
+  profileId: string;              // REQUIRED for proper scoping
+  ruleId?: string;
+  status?: RecurringOccurrenceStatus | RecurringOccurrenceStatus[];
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 // Expense with resolved names for display
@@ -706,6 +814,104 @@ export interface RetainerMatchSuggestion {
 }
 
 // ============================================================================
+// Forecast KPI Types (Financial Intelligence)
+// ============================================================================
+
+/**
+ * Amount broken down by currency. Never silently summed across currencies.
+ */
+export interface AmountByCurrency {
+  USD: number;
+  ILS: number;
+  EUR: number;
+}
+
+/**
+ * Options for forecast calculations.
+ * Explicit about what data sources are included.
+ */
+export interface ForecastOptions {
+  /** Include unpaid income (transactions with kind='income' and status='unpaid') due this month */
+  includeUnpaidIncome: boolean;
+  /** Include projected retainer income (from ProjectedIncome table) expected this month */
+  includeProjectedRetainer: boolean;
+  /** Opening balance to start calculations from (default: 0 per currency) */
+  openingBalance?: AmountByCurrency;
+}
+
+/**
+ * Forecast KPIs for the Home page predictive snapshot.
+ * All amounts in minor units (cents/agorot).
+ *
+ * Methodology:
+ * - willMakeIt = cashOnHand + coming - leaving (end-of-month forecast)
+ * - cashOnHand = openingBalance + paid inflows - paid outflows (actuals to date)
+ * - coming = unpaid income due this month + projected retainer income
+ * - leaving = known upcoming expenses this month
+ */
+export interface ForecastKPIs {
+  /** End-of-month projected position (cashOnHand + coming - leaving) */
+  willMakeIt: AmountByCurrency;
+  /** Current balance based on actuals only (no unpaid, no projections) */
+  cashOnHand: AmountByCurrency;
+  /** Expected inflows: unpaid income due this month + projected retainer */
+  coming: AmountByCurrency;
+  /** Expected outflows: known expenses for rest of month */
+  leaving: AmountByCurrency;
+  /** Net forecast (coming - leaving) */
+  netForecast: AmountByCurrency;
+  /** What data sources were included in this calculation */
+  includedSources: {
+    unpaidIncome: boolean;
+    projectedRetainer: boolean;
+  };
+}
+
+/**
+ * Month actuals for the collapsible row on Home.
+ * Only includes realized transactions, no projections.
+ */
+export interface MonthActuals {
+  /** Month in YYYY-MM format */
+  month: string;
+  /** Total received (paid income) */
+  received: AmountByCurrency;
+  /** Total unpaid income (receivables) */
+  unpaid: AmountByCurrency;
+  /** Total expenses */
+  expenses: AmountByCurrency;
+  /** Net (received - expenses) */
+  net: AmountByCurrency;
+}
+
+/**
+ * Attention item for the Home page feed.
+ * Replaces GuidanceItem with clearer semantics.
+ */
+export interface AttentionItem {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  category: 'collect' | 'reduce' | 'hygiene';
+  title: string;
+  description: string;
+  /** Impact amount in minor units */
+  impactMinor: number;
+  impactCurrency: Currency;
+  /** IDs of related transactions/expenses */
+  relatedEntityIds: string[];
+  /** Primary action button */
+  action?: {
+    label: string;
+    /** Action type determines routing behavior */
+    type: 'openIncomeDrawer' | 'navigateToIncome' | 'navigateToInsights';
+    /** Entity ID for drawer actions */
+    entityId?: string;
+    /** URL params for navigation actions */
+    urlParams?: Record<string, string>;
+  };
+}
+
+// ============================================================================
 // Money Answers Types (Unified Financial Cockpit)
 // ============================================================================
 
@@ -803,6 +1009,21 @@ export interface MoneyAnswersFilters {
   month?: string; // YYYY-MM
   year?: number;
   currency: Currency;
+  /**
+   * Include unpaid income (transactions with kind='income' and status='unpaid').
+   * Terminology note: per ADR-010, "receivables" are just unpaid income, not a separate entity.
+   * @default true
+   */
+  includeUnpaidIncome?: boolean;
+  /**
+   * Include projected retainer income (from ProjectedIncome table).
+   * @default true
+   */
+  includeProjectedRetainer?: boolean;
+
+  // DEPRECATED: Use includeUnpaidIncome instead
+  /** @deprecated Use includeUnpaidIncome instead */
   includeReceivables?: boolean;
+  /** @deprecated Use includeProjectedRetainer instead */
   includeProjections?: boolean;
 }

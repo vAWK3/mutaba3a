@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { Suspense } from 'react';
-import { createRouter, createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
+import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AppShell } from './components/layout';
 
 // Keep OverviewPage eager (it's the landing page)
@@ -42,27 +42,29 @@ const overviewRoute = createRoute({
   component: OverviewPage,
 });
 
-// Transactions route with search params
-interface TransactionsSearch {
-  dateFrom?: string;
-  dateTo?: string;
-  currency?: 'USD' | 'ILS';
-  kind?: 'income' | 'expense';
-  status?: 'paid' | 'unpaid' | 'overdue';
-}
+// Income route (dedicated income tracking page)
+const incomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/income',
+  component: lazyPage(() => import('./pages/income'), 'IncomePage'),
+});
 
+// Insights route (consolidates reports and money-answers)
+const insightsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights',
+  component: lazyPage(() => import('./pages/insights'), 'InsightsPage'),
+});
+
+// Transactions route (legacy redirect to /income)
 const transactionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/transactions',
-  component: lazyPage(() => import('./pages/transactions/TransactionsPage'), 'TransactionsPage'),
-  validateSearch: (search: Record<string, unknown>): TransactionsSearch => {
-    return {
-      dateFrom: typeof search.dateFrom === 'string' ? search.dateFrom : undefined,
-      dateTo: typeof search.dateTo === 'string' ? search.dateTo : undefined,
-      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
-      kind: search.kind === 'income' || search.kind === 'expense' ? search.kind : undefined,
-      status: search.status === 'paid' || search.status === 'unpaid' || search.status === 'overdue' ? search.status : undefined,
-    };
+  beforeLoad: ({ search }) => {
+    throw redirect({
+      to: '/income',
+      search: search as Record<string, unknown>,
+    });
   },
 });
 
@@ -92,11 +94,13 @@ const clientDetailRoute = createRoute({
   component: lazyPage(() => import('./pages/clients/ClientDetailPage'), 'ClientDetailPage'),
 });
 
-// Reports route
+// Reports route (legacy redirect to /insights)
 const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
-  component: lazyPage(() => import('./pages/reports/ReportsPage'), 'ReportsPage'),
+  beforeLoad: () => {
+    throw redirect({ to: '/insights' });
+  },
 });
 
 // Documents routes
@@ -157,9 +161,17 @@ interface ExpensesSearch {
   categoryId?: string;
 }
 
+// Main expenses route - uses the new question-first ExpensesLedgerPage
 const expensesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses',
+  component: lazyPage(() => import('./pages/expenses/ExpensesLedgerPage'), 'ExpensesLedgerPage'),
+});
+
+// Profile-based expenses route - legacy profile expense tracking
+const expenseProfilesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/profiles',
   component: lazyPage(() => import('./pages/expenses/ExpensesPage'), 'ExpensesPage'),
   validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
     return {
@@ -293,15 +305,13 @@ const engagementEditRoute = createRoute({
 });
 
 // ============================================================================
-// Money Answers Route
+// Money Answers Route (Cash Flow Timeline)
 // ============================================================================
 
-// Money Answers search params
 interface MoneyAnswersSearch {
   mode?: 'month' | 'year';
-  month?: string;
   year?: number;
-  currency?: 'USD' | 'ILS';
+  month?: string;
   includeReceivables?: boolean;
   includeProjections?: boolean;
 }
@@ -313,9 +323,8 @@ const moneyAnswersRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): MoneyAnswersSearch => {
     return {
       mode: search.mode === 'month' || search.mode === 'year' ? search.mode : undefined,
-      month: typeof search.month === 'string' ? search.month : undefined,
       year: typeof search.year === 'number' ? search.year : undefined,
-      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
+      month: typeof search.month === 'string' ? search.month : undefined,
       includeReceivables: typeof search.includeReceivables === 'boolean' ? search.includeReceivables : undefined,
       includeProjections: typeof search.includeProjections === 'boolean' ? search.includeProjections : undefined,
     };
@@ -341,6 +350,10 @@ const monthCloseRoute = createRoute({
 // Create route tree
 const routeTree = rootRoute.addChildren([
   overviewRoute,
+  // New question-first routes
+  incomeRoute,
+  insightsRoute,
+  // Legacy routes (kept for backwards compatibility)
   transactionsRoute,
   projectsRoute,
   projectDetailRoute,
@@ -352,6 +365,7 @@ const routeTree = rootRoute.addChildren([
   documentEditRoute,
   // Expense routes
   expensesRoute,
+  expenseProfilesRoute,
   profileExpensesRoute,
   profileReceiptsRoute,
   expensesOverviewRoute,

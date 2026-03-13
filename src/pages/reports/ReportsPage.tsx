@@ -1,3 +1,9 @@
+/**
+ * @deprecated This page is deprecated as of 2026-03-13.
+ * The /reports route now redirects to /insights (InsightsPage).
+ * This code is kept for reference and potential future reuse.
+ * See: docs/ux-redesign/UX-REDESIGN-SPEC.md
+ */
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { DateRangeControl, SearchInput } from '../../components/filters';
@@ -117,8 +123,8 @@ export function ReportsPage() {
     currency: currencyFilter,
   });
 
-  const { data: projectSummaries = [], isLoading: projLoading } = useProjectSummaries(currencyFilter, search);
-  const { data: clientSummaries = [], isLoading: clientLoading } = useClientSummaries(currencyFilter, search);
+  const { data: projectSummaries = [], isLoading: projLoading } = useProjectSummaries(undefined, currencyFilter, search);
+  const { data: clientSummaries = [], isLoading: clientLoading } = useClientSummaries(undefined, currencyFilter, search);
 
   const isLoading = txLoading || projLoading || clientLoading;
 

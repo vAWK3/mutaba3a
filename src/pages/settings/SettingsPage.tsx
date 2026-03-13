@@ -45,6 +45,7 @@ function ProfileActionsMenu({
   isSetDefaultPending,
   isArchivePending,
 }: ProfileActionsMenuProps) {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -94,7 +95,7 @@ function ProfileActionsMenu({
               setIsOpen(false);
             }}
           >
-            Edit
+            {t('common.edit')}
           </button>
           {!profile.isDefault && (
             <button
@@ -105,21 +106,21 @@ function ProfileActionsMenu({
               }}
               disabled={isSetDefaultPending}
             >
-              Set as Default
+              {t('settings.profile.setDefault')}
             </button>
           )}
           {!profile.isDefault && (
             <button
               className="add-menu-item text-danger"
               onClick={() => {
-                if (confirm('Are you sure you want to archive this business profile?')) {
+                if (confirm(t('settings.profile.confirmArchive'))) {
                   onArchive();
                   setIsOpen(false);
                 }
               }}
               disabled={isArchivePending}
             >
-              Archive
+              {t('common.archive')}
             </button>
           )}
         </div>
@@ -155,21 +156,21 @@ export function SettingsPage() {
   const archiveMutation = useArchiveBusinessProfile();
   const { openBusinessProfileDrawer } = useDrawerStore();
 
-  const handleCurrencyToggle = (currency: Currency) => {
-    if (!settings) return;
+  // const handleCurrencyToggle = (currency: Currency) => {
+  //   if (!settings) return;
 
-    const current = settings.enabledCurrencies;
-    const isEnabled = current.includes(currency);
+  //   const current = settings.enabledCurrencies;
+  //   const isEnabled = current.includes(currency);
 
-    // Don't allow disabling if only one currency is enabled
-    if (isEnabled && current.length === 1) return;
+  //   // Don't allow disabling if only one currency is enabled
+  //   if (isEnabled && current.length === 1) return;
 
-    const updated = isEnabled
-      ? current.filter((c) => c !== currency)
-      : [...current, currency];
+  //   const updated = isEnabled
+  //     ? current.filter((c) => c !== currency)
+  //     : [...current, currency];
 
-    updateMutation.mutate({ enabledCurrencies: updated });
-  };
+  //   updateMutation.mutate({ enabledCurrencies: updated });
+  // };
 
   const handleDefaultCurrencyChange = (currency: Currency) => {
     updateMutation.mutate({ defaultCurrency: currency });
@@ -253,18 +254,18 @@ export function SettingsPage() {
         {/* Business Profiles */}
         <div className="settings-section">
           <div className="settings-section-header">
-            <h3 className="settings-section-title">Business Profiles</h3>
+            <h3 className="settings-section-title">{t('settings.profile.title')}</h3>
             <button
               className="btn btn-sm btn-secondary"
               onClick={() => openBusinessProfileDrawer({ mode: 'create' })}
             >
-              + Add Profile
+              {t('settings.profile.addProfile')}
             </button>
           </div>
 
           {businessProfiles.length === 0 ? (
             <div className="text-muted text-sm">
-              No business profiles yet. Create one to start issuing invoices.
+              {t('settings.profile.empty')}
             </div>
           ) : (
             <div className="business-profiles-list">
@@ -292,7 +293,7 @@ export function SettingsPage() {
                         {profile.email}
                         {profile.isDefault && (
                           <span className="badge badge-primary" style={{ marginInlineStart: 8 }}>
-                            Default
+                            {t('settings.profile.default')}
                           </span>
                         )}
                       </div>
@@ -316,7 +317,7 @@ export function SettingsPage() {
         <div className="settings-section">
           <h3 className="settings-section-title">{t('settings.currency.title')}</h3>
 
-          <div className="settings-row">
+          {/* <div className="settings-row">
             <div>
               <div className="settings-label">{t('settings.currency.enabled')}</div>
               <div className="settings-description">{t('settings.currency.enabledDesc')}</div>
@@ -332,7 +333,7 @@ export function SettingsPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </div> */}
 
           <div className="settings-row">
             <div>
@@ -418,7 +419,7 @@ export function SettingsPage() {
                 rel="noopener noreferrer"
                 className="btn btn-secondary"
               >
-                Buy Me a Coffee
+                {t('settings.about.buyMeCoffee')}
               </a>
               <a
                 href="https://ko-fi.com/elmokhtbr"
@@ -426,7 +427,7 @@ export function SettingsPage() {
                 rel="noopener noreferrer"
                 className="btn btn-secondary"
               >
-                Ko-fi
+                {t('settings.about.kofi')}
               </a>
             </div>
           </div>

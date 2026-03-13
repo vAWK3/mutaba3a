@@ -79,7 +79,7 @@ export function HeroSection() {
 
             <p className="hero-alt-link">
               {t('landing.hero.orTry')}{' '}
-              <a href="/app" className="hero-web-link">
+              <a href="/app?demo=1" className="hero-web-link">
                 {t('landing.hero.webApp')}
               </a>
             </p>

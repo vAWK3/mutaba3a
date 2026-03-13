@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore } from '../../lib/stores';
+import { useOnboardingStore } from '../../lib/onboardingStore';
 import {
   useProject,
   useCreateProject,
@@ -29,6 +30,7 @@ export function ProjectDrawer() {
   const { projectDrawer, closeProjectDrawer } = useDrawerStore();
   const { mode, projectId, defaultClientId } = projectDrawer;
   const t = useT();
+  const { currentStep, completeStep } = useOnboardingStore();
 
   const { data: existingProject, isLoading: projectLoading } = useProject(projectId || '');
   const { data: clients = [] } = useClients();
@@ -70,7 +72,11 @@ export function ProjectDrawer() {
       if (mode === 'edit' && projectId) {
         await updateMutation.mutateAsync({ id: projectId, data: projectData });
       } else {
-        await createMutation.mutateAsync(projectData);
+        const newProject = await createMutation.mutateAsync(projectData);
+        // Advance onboarding if we're on the project step
+        if (currentStep === 'project') {
+          completeStep('project', newProject.id);
+        }
       }
       closeProjectDrawer();
     } catch (error) {

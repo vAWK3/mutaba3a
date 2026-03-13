@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
+import { useProfileAwareAction } from '../../hooks/useProfileAwareAction';
+import { ProfileQuickPicker } from '../ui/ProfileQuickPicker';
 import { useDrawerStore } from '../../lib/stores';
 import { useT, useDirection } from '../../lib/i18n';
 
@@ -58,9 +60,33 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot, hideAddMenu 
 function AddMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { openTransactionDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
-  const navigate = useNavigate();
+  const { openIncomeDrawer, openExpenseDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
   const t = useT();
+
+  // Profile-aware actions for income and expense
+  const incomeAction = useProfileAwareAction({
+    onExecute: (profileId) => {
+      openIncomeDrawer({ mode: 'create', defaultStatus: 'earned', defaultProfileId: profileId });
+    },
+  });
+
+  const expenseAction = useProfileAwareAction({
+    onExecute: (profileId) => {
+      openExpenseDrawer({ mode: 'create', defaultProfileId: profileId });
+    },
+  });
+
+  const clientAction = useProfileAwareAction({
+    onExecute: (profileId) => {
+      openClientDrawer({ mode: 'create', defaultProfileId: profileId });
+    },
+  });
+
+  const projectAction = useProfileAwareAction({
+    onExecute: (profileId) => {
+      openProjectDrawer({ mode: 'create', defaultProfileId: profileId });
+    },
+  });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -94,68 +120,71 @@ function AddMenu() {
     };
   }, [isOpen]);
 
+  const handleAction = (action: 'income' | 'expense' | 'client' | 'project', event: React.MouseEvent<HTMLElement>) => {
+    setIsOpen(false);
+    switch (action) {
+      case 'income':
+        incomeAction.trigger(event);
+        break;
+      case 'expense':
+        expenseAction.trigger(event);
+        break;
+      case 'client':
+        clientAction.trigger(event);
+        break;
+      case 'project':
+        projectAction.trigger(event);
+        break;
+    }
+  };
+
   return (
-    <div className="add-menu-container" ref={containerRef}>
-      <button className="btn btn-primary" onClick={() => setIsOpen(!isOpen)}>
-        <PlusIcon />
-        {t('common.add')}
-      </button>
-      {isOpen && (
-        <div className="add-menu">
-          <button
-            className="add-menu-item"
-            onClick={() => {
-              openTransactionDrawer({ mode: 'create', defaultKind: 'income' });
-              setIsOpen(false);
-            }}
-          >
-            <DollarIcon className="nav-icon" />
-            {t('addMenu.income')}
-          </button>
-          <button
-            className="add-menu-item"
-            onClick={() => {
-              openTransactionDrawer({ mode: 'create', defaultKind: 'expense' });
-              setIsOpen(false);
-            }}
-          >
-            <MinusIcon className="nav-icon" />
-            {t('addMenu.expense')}
-          </button>
-          <button
-            className="add-menu-item"
-            onClick={() => {
-              openProjectDrawer({ mode: 'create' });
-              setIsOpen(false);
-            }}
-          >
-            <FolderPlusIcon className="nav-icon" />
-            {t('addMenu.project')}
-          </button>
-          <button
-            className="add-menu-item"
-            onClick={() => {
-              openClientDrawer({ mode: 'create' });
-              setIsOpen(false);
-            }}
-          >
-            <UserPlusIcon className="nav-icon" />
-            {t('addMenu.client')}
-          </button>
-          <div className="add-menu-divider" />
-          <button
-            className="add-menu-item"
-            onClick={() => {
-              navigate({ to: '/documents/new' });
-              setIsOpen(false);
-            }}
-          >
-            <DocumentPlusIcon className="nav-icon" />
-            {t('addMenu.document')}
-          </button>
-        </div>
-      )}
-    </div>
+    <>
+      <div className="add-menu-container" ref={containerRef}>
+        <button className="btn btn-primary" onClick={() => setIsOpen(!isOpen)}>
+          <PlusIcon />
+          {t('common.add')}
+        </button>
+        {isOpen && (
+          <div className="add-menu">
+            <button
+              className="add-menu-item"
+              onClick={(e) => handleAction('income', e)}
+            >
+              <DollarIcon className="nav-icon" />
+              {t('addMenu.income')}
+            </button>
+            <button
+              className="add-menu-item"
+              onClick={(e) => handleAction('expense', e)}
+            >
+              <MinusIcon className="nav-icon" />
+              {t('addMenu.expense')}
+            </button>
+            <button
+              className="add-menu-item"
+              onClick={(e) => handleAction('project', e)}
+            >
+              <FolderPlusIcon className="nav-icon" />
+              {t('addMenu.project')}
+            </button>
+            <button
+              className="add-menu-item"
+              onClick={(e) => handleAction('client', e)}
+            >
+              <UserPlusIcon className="nav-icon" />
+              {t('addMenu.client')}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Profile quick pickers for each action type */}
+      <ProfileQuickPicker {...incomeAction.pickerProps} />
+      <ProfileQuickPicker {...expenseAction.pickerProps} />
+      <ProfileQuickPicker {...clientAction.pickerProps} />
+      <ProfileQuickPicker {...projectAction.pickerProps} />
+    </>
   );
 }
 
@@ -195,14 +224,6 @@ function UserPlusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-    </svg>
-  );
-}
-
-function DocumentPlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
     </svg>
   );
 }

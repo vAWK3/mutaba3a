@@ -203,10 +203,27 @@ function normalizeProjectedIncome(
 
 export const moneyEventRepo = {
   /**
-   * Get all money events for a given month and currency
+   * Get all money events for a given month and currency.
+   *
+   * Terminology (per ADR-010):
+   * - "Unpaid income" = transaction with kind='income' and status='unpaid'
+   * - "Projected retainer" = expected payment from ProjectedIncome table
    */
   async getMoneyEvents(filters: MoneyAnswersFilters): Promise<MoneyEvent[]> {
-    const { month, currency, includeReceivables = true, includeProjections = true } = filters;
+    const {
+      month,
+      currency,
+      // New terminology (preferred)
+      includeUnpaidIncome,
+      includeProjectedRetainer,
+      // Deprecated but supported for backwards compatibility
+      includeReceivables,
+      includeProjections,
+    } = filters;
+
+    // Support both old and new parameter names
+    const shouldIncludeUnpaidIncome = includeUnpaidIncome ?? includeReceivables ?? true;
+    const shouldIncludeProjectedRetainer = includeProjectedRetainer ?? includeProjections ?? true;
 
     if (!month) {
       throw new Error('Month is required for money events');
@@ -225,7 +242,7 @@ export const moneyEventRepo = {
     const retainers = await db.retainerAgreements.toArray();
     const retainerMap = new Map(retainers.map(r => [r.id, r.title]));
 
-    // 1. Get transactions (income paid, income unpaid if includeReceivables, expenses)
+    // 1. Get transactions (paid income, unpaid income if shouldIncludeUnpaidIncome, expenses)
     const transactions = await db.transactions
       .filter(tx => {
         if (tx.deletedAt) return false;
@@ -244,8 +261,8 @@ export const moneyEventRepo = {
         // Filter by date range
         if (eventDate < start || eventDate > end) return false;
 
-        // Filter unpaid income if not including receivables
-        if (!includeReceivables && tx.kind === 'income' && tx.status === 'unpaid') {
+        // Filter out unpaid income if not including it
+        if (!shouldIncludeUnpaidIncome && tx.kind === 'income' && tx.status === 'unpaid') {
           return false;
         }
 
@@ -271,8 +288,8 @@ export const moneyEventRepo = {
       events.push(normalizeExpense(exp, exp.vendorId ? vendorMap.get(exp.vendorId) : exp.vendor));
     }
 
-    // 3. Get projected income (retainers) if includeProjections
-    if (includeProjections) {
+    // 3. Get projected retainer income if shouldIncludeProjectedRetainer
+    if (shouldIncludeProjectedRetainer) {
       const projectedIncomeItems = await db.projectedIncome
         .filter(pi => {
           if (pi.currency !== currency) return false;
@@ -437,15 +454,15 @@ export const moneyEventRepo = {
         severity: 'critical',
         category: 'collect',
         title: `${overdueEvents.length} payment${overdueEvents.length > 1 ? 's' : ''} overdue 30+ days`,
-        description: 'These receivables are significantly overdue. Consider following up urgently.',
+        description: 'This unpaid income is significantly overdue. Consider following up urgently.',
         impactMinor: totalOverdue,
         impactCurrency: filters.currency,
         relatedEventIds: overdueEvents.map(e => e.id),
-        primaryAction: { label: 'View Details', type: 'viewReceivables' },
+        primaryAction: { label: 'View Unpaid', type: 'navigateToIncome' },
       });
     }
 
-    // Rule 2: Large overdue (critical) - single receivable > 20% of month avg
+    // Rule 2: Large overdue (critical) - single unpaid income > 20% of month avg
     const largeOverdueEvents = events.filter(e =>
       e.direction === 'inflow' &&
       e.state === 'overdue' &&
@@ -463,7 +480,7 @@ export const moneyEventRepo = {
           impactMinor: event.amountMinor,
           impactCurrency: filters.currency,
           relatedEventIds: [event.id],
-          primaryAction: { label: 'Mark Paid', type: 'markPaid', payload: { eventId: event.sourceEntityId } },
+          primaryAction: { label: 'Mark Paid', type: 'openIncomeDrawer', payload: { entityId: event.sourceEntityId } },
         });
       }
     }
@@ -488,11 +505,11 @@ export const moneyEventRepo = {
         impactMinor: totalDueSoon,
         impactCurrency: filters.currency,
         relatedEventIds: dueSoonEvents.map(e => e.id),
-        primaryAction: { label: 'View Details', type: 'viewReceivables' },
+        primaryAction: { label: 'View Unpaid', type: 'navigateToIncome' },
       });
     }
 
-    // Rule 4: Retainer overdue (warning)
+    // Rule 4: Projected retainer overdue (warning)
     const retainerOverdue = events.filter(e =>
       e.source === 'retainer' &&
       (e.state === 'overdue' || e.state === 'missed')
@@ -533,7 +550,7 @@ export const moneyEventRepo = {
       });
     }
 
-    // Rule 6: Missing due dates (info)
+    // Rule 6: Unpaid income missing due dates (info)
     const missingDueDates = events.filter(e =>
       e.direction === 'inflow' &&
       e.state === 'unpaid' &&
@@ -545,12 +562,12 @@ export const moneyEventRepo = {
         id: 'missing-due-dates',
         severity: 'info',
         category: 'hygiene',
-        title: `${missingDueDates.length} receivable${missingDueDates.length > 1 ? 's' : ''} without due date`,
+        title: `${missingDueDates.length} unpaid invoice${missingDueDates.length > 1 ? 's' : ''} without due date`,
         description: 'Add due dates to track payment timelines better.',
         impactMinor: missingDueDates.reduce((sum, e) => sum + e.amountMinor, 0),
         impactCurrency: filters.currency,
         relatedEventIds: missingDueDates.map(e => e.id),
-        primaryAction: { label: 'View Details', type: 'viewReceivables' },
+        primaryAction: { label: 'View Unpaid', type: 'navigateToIncome' },
       });
     }
 
@@ -627,8 +644,8 @@ export const moneyEventRepo = {
     const events = await this.getMoneyEvents({
       month: monthKey,
       currency,
-      includeReceivables: true,
-      includeProjections: true,
+      includeUnpaidIncome: true,
+      includeProjectedRetainer: true,
     });
 
     return events.filter(e => e.eventDate === date);
@@ -644,13 +661,16 @@ export const moneyEventRepo = {
   },
 
   /**
-   * Get year summary with all month summaries and yearly totals
+   * Get year summary with all month summaries and yearly totals.
+   *
+   * @param includeUnpaidIncome - Include unpaid income (transactions with status='unpaid')
+   * @param includeProjectedRetainer - Include projected retainer income
    */
   async getYearSummary(
     year: number,
     currency: Currency,
-    includeReceivables: boolean = true,
-    includeProjections: boolean = true
+    includeUnpaidIncome: boolean = true,
+    includeProjectedRetainer: boolean = true
   ): Promise<import('../types').YearSummary> {
     const monthKeys = this.getYearMonthKeys(year);
     const months: import('../types').MonthSummary[] = [];
@@ -668,8 +688,8 @@ export const moneyEventRepo = {
       const summary = await this.getMonthSummary({
         month: monthKey,
         currency,
-        includeReceivables,
-        includeProjections,
+        includeUnpaidIncome,
+        includeProjectedRetainer,
       });
       months.push(summary);
 
@@ -730,19 +750,22 @@ export const moneyEventRepo = {
   },
 
   /**
-   * Get year summary for both currencies (for unified display)
+   * Get year summary for both currencies (for unified display).
+   *
+   * @param includeUnpaidIncome - Include unpaid income (transactions with status='unpaid')
+   * @param includeProjectedRetainer - Include projected retainer income
    */
   async getYearSummaryBothCurrencies(
     year: number,
-    includeReceivables: boolean = true,
-    includeProjections: boolean = true
+    includeUnpaidIncome: boolean = true,
+    includeProjectedRetainer: boolean = true
   ): Promise<{
     USD: import('../types').YearSummary;
     ILS: import('../types').YearSummary;
   }> {
     const [usdSummary, ilsSummary] = await Promise.all([
-      this.getYearSummary(year, 'USD', includeReceivables, includeProjections),
-      this.getYearSummary(year, 'ILS', includeReceivables, includeProjections),
+      this.getYearSummary(year, 'USD', includeUnpaidIncome, includeProjectedRetainer),
+      this.getYearSummary(year, 'ILS', includeUnpaidIncome, includeProjectedRetainer),
     ]);
 
     return {
@@ -752,14 +775,17 @@ export const moneyEventRepo = {
   },
 
   /**
-   * Get month KPIs for both currencies (for unified display)
+   * Get month KPIs for both currencies (for unified display).
+   *
+   * @param includeUnpaidIncome - Include unpaid income (transactions with status='unpaid')
+   * @param includeProjectedRetainer - Include projected retainer income
    */
   async getMonthKPIsBothCurrencies(
     month: string,
     openingBalanceMinorUSD: number = 0,
     openingBalanceMinorILS: number = 0,
-    includeReceivables: boolean = true,
-    includeProjections: boolean = true
+    includeUnpaidIncome: boolean = true,
+    includeProjectedRetainer: boolean = true
   ): Promise<{
     USD: {
       willMakeItMinor: number;
@@ -777,8 +803,8 @@ export const moneyEventRepo = {
     };
   }> {
     const [usdKPIs, ilsKPIs] = await Promise.all([
-      this.getMonthKPIs({ month, currency: 'USD', includeReceivables, includeProjections }, openingBalanceMinorUSD),
-      this.getMonthKPIs({ month, currency: 'ILS', includeReceivables, includeProjections }, openingBalanceMinorILS),
+      this.getMonthKPIs({ month, currency: 'USD', includeUnpaidIncome, includeProjectedRetainer }, openingBalanceMinorUSD),
+      this.getMonthKPIs({ month, currency: 'ILS', includeUnpaidIncome, includeProjectedRetainer }, openingBalanceMinorILS),
     ]);
 
     return {

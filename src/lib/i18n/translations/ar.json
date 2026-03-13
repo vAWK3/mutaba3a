@@ -22,14 +22,36 @@
     "previous": "السابق",
     "next": "التالي",
     "uncategorized": "بدون فئة",
-    "noResults": "لا توجد نتائج"
+    "noResults": "لا توجد نتائج",
+    "errorMessage": "حدث خطأ. يرجى المحاولة مرة أخرى.",
+    "sort": {
+      "nameAZ": "الاسم (أ-ي)",
+      "nameZA": "الاسم (ي-أ)",
+      "valueHigh": "القيمة (الأعلى أولاً)",
+      "valueLow": "القيمة (الأقل أولاً)",
+      "unpaidHigh": "المستحق (الأعلى أولاً)",
+      "unpaidLow": "المستحق (الأقل أولاً)",
+      "activityRecent": "النشاط الأحدث",
+      "activityOldest": "النشاط الأقدم",
+      "netHigh": "الصافي (الأعلى أولاً)",
+      "netLow": "الصافي (الأقل أولاً)"
+    }
+  },
+  "currency": {
+    "USD": "دولار",
+    "ILS": "شيكل",
+    "EUR": "يورو",
+    "all": "الكل"
   },
   "toast": {
     "transactionDuplicated": "تم إنشاء المعاملة",
     "transactionUndone": "تم التراجع عن المعاملة"
   },
   "nav": {
+    "home": "الرئيسية",
     "overview": "نظرة عامة",
+    "income": "الإيرادات",
+    "insights": "التحليلات",
     "projects": "المشاريع",
     "clients": "العملاء",
     "transactions": "المعاملات",
@@ -45,16 +67,20 @@
     "collapse": "طي الشريط الجانبي",
     "expand": "توسيع الشريط الجانبي",
     "sections": {
+      "main": "الرئيسية",
+      "workspace": "مساحة العمل",
       "work": "العمل",
       "money": "المالية",
       "system": "النظام"
     },
     "newMenu": {
+      "income": "إضافة إيراد",
+      "expense": "إضافة مصروف",
+      "client": "إضافة عميل",
+      "project": "إضافة مشروع",
       "document": "مستند جديد",
       "engagement": "عقد جديد",
-      "transaction": "معاملة جديدة",
-      "client": "عميل جديد",
-      "expense": "مصروف جديد"
+      "transaction": "معاملة جديدة"
     }
   },
   "addMenu": {
@@ -72,6 +98,8 @@
     "addTransaction": "إضافة معاملة",
     "searchPlaceholder": "بحث في المعاملات...",
     "confirmDelete": "هل أنت متأكد من حذف هذه المعاملة؟",
+    "generateInvoice": "إنشاء فاتورة",
+    "viewInvoice": "عرض الفاتورة",
     "type": {
       "income": "إيراد",
       "expense": "مصروف",
@@ -80,9 +108,20 @@
     "status": {
       "paid": "مدفوع",
       "unpaid": "غير مدفوع",
+      "partial": "جزئي ({percent}%)",
       "overdue": "متأخر {days} يوم",
       "dueIn": "مستحق خلال {days} يوم",
       "dueToday": "مستحق اليوم"
+    },
+    "partialPayment": {
+      "title": "تسجيل دفعة",
+      "received": "المحصّل حتى الآن",
+      "remaining": "المتبقي",
+      "amount": "مبلغ الدفعة",
+      "record": "تسجيل الدفعة",
+      "markFullyPaid": "تسديد كامل المبلغ",
+      "paymentRecorded": "تم تسجيل الدفعة",
+      "recordPayment": "تسجيل دفعة"
     },
     "columns": {
       "date": "التاريخ",
@@ -91,12 +130,13 @@
       "project": "المشروع",
       "category": "الفئة",
       "amount": "المبلغ",
-      "status": "الحالة"
+      "status": "الحالة",
+      "description": "الوصف"
     },
     "hasDocument": "مرتبط بمستند"
   },
   "overview": {
-    "title": "نظرة عامة",
+    "title": "الرئيسية",
     "kpi": {
       "paidIncome": "الإيرادات المحصّلة",
       "unpaidReceivables": "المستحقات غير المحصّلة",
@@ -106,7 +146,80 @@
     "needsAttention": "يتطلب الانتباه",
     "noAttention": "لا توجد مستحقات متأخرة أو قادمة",
     "recentActivity": "النشاط الأخير",
-    "noRecent": "لا توجد معاملات حديثة"
+    "noRecent": "لا توجد معاملات حديثة",
+    "welcome": {
+      "title": "مرحباً بك في متابعة",
+      "description": "ابدأ بتتبع التدفق النقدي عبر إضافة أول عميل أو مشروع أو إيراد.",
+      "addClient": "إضافة عميل",
+      "addProject": "إضافة مشروع",
+      "addIncome": "إضافة إيراد"
+    }
+  },
+  "onboarding": {
+    "title": "البدء",
+    "subtitle": "لنقم بإعداد تتبع التدفق النقدي",
+    "step1": {
+      "title": "أضف أول عميل",
+      "description": "ابدأ بإضافة عميل تعمل معه"
+    },
+    "step2": {
+      "title": "أنشئ مشروعاً",
+      "description": "نظّم العمل تحت مشاريع"
+    },
+    "step3": {
+      "title": "سجّل إيراداً",
+      "description": "تتبع أول دفعة لك"
+    },
+    "skip": "تخطي الآن",
+    "complete": "الذهاب للوحة التحكم",
+    "stepOf": "الخطوة {current} من {total}"
+  },
+  "home": {
+    "forecast": {
+      "willMakeIt": "هل سأتدبّر الأمر؟",
+      "willMakeItHelp": "توقعات نهاية الشهر: نقدك الحالي مضافاً إليه الدخل المتوقع ومخصوماً منه المصروفات القادمة. يفترض تحصيل الفواتير غير المدفوعة بحلول تاريخ استحقاقها.",
+      "endOfMonth": "توقعات نهاية الشهر",
+      "cashOnHand": "النقد المتاح",
+      "cashOnHandHelp": "رصيدك الحالي بناءً على الدخل المحصّل والمصروفات الفعلية حتى الآن. لا يشمل الفواتير غير المدفوعة أو التوقعات.",
+      "currentBalance": "الرصيد الحالي",
+      "comingLeaving": "الوارد / الخارج",
+      "comingLeavingHelp": "الوارد: الدخل غير المحصّل المستحق هذا الشهر بالإضافة إلى مدفوعات العقود المتكررة المتوقعة. الخارج: المصروفات المعروفة المجدولة لبقية الشهر.",
+      "coming": "وارد",
+      "leaving": "خارج",
+      "net": "صافي"
+    },
+    "actuals": {
+      "title": "الأرقام الفعلية لهذا الشهر",
+      "received": "محصّل",
+      "unpaid": "غير محصّل",
+      "expenses": "مصروفات",
+      "net": "صافي"
+    },
+    "attention": {
+      "title": "يحتاج انتباه",
+      "viewAll": "عرض الكل",
+      "empty": "كل شيء تمام! لا توجد عناصر تحتاج انتباه.",
+      "markPaid": "تم الدفع",
+      "viewDetails": "عرض",
+      "viewUnpaid": "عرض غير المحصّل",
+      "showMore": "عرض {count} المزيد",
+      "showLess": "عرض أقل"
+    }
+  },
+  "income": {
+    "empty": "لا توجد إيرادات بعد",
+    "emptyHint": "أضف أول إيراد للبدء في التتبع",
+    "addIncome": "إضافة إيراد",
+    "summary": {
+      "received": "المحصّل",
+      "unpaid": "غير المحصّل"
+    },
+    "status": {
+      "all": "الكل",
+      "unpaid": "غير مدفوع",
+      "received": "مدفوع",
+      "overdue": "متأخر"
+    }
   },
   "projects": {
     "title": "المشاريع",
@@ -123,11 +236,20 @@
       "project": "المشروع",
       "client": "العميل",
       "field": "المجال",
+      "received": "المحصّل",
       "paid": "المحصّل",
       "unpaid": "غير المحصّل",
       "expenses": "المصروفات",
       "net": "الصافي",
       "lastActivity": "آخر نشاط"
+    },
+    "summary": {
+      "projectsCount": "{count} مشاريع",
+      "projectsCountOne": "مشروع واحد",
+      "totalReceived": "إجمالي المحصّل",
+      "totalUnpaid": "إجمالي غير المحصّل",
+      "totalExpenses": "إجمالي المصروفات",
+      "totalNet": "إجمالي الصافي"
     },
     "tabs": {
       "summary": "ملخص",
@@ -161,10 +283,18 @@
     "columns": {
       "client": "العميل",
       "activeProjects": "المشاريع النشطة",
+      "received": "المحصّل",
       "paidIncome": "الإيرادات المحصّلة",
       "unpaid": "غير المحصّل",
+      "expenses": "المصروفات",
       "lastPayment": "آخر دفعة",
       "lastActivity": "آخر نشاط"
+    },
+    "summary": {
+      "clientsCount": "{count} عملاء",
+      "clientsCountOne": "عميل واحد",
+      "totalReceived": "إجمالي المحصّل",
+      "totalUnpaid": "إجمالي غير المحصّل"
     },
     "tabs": {
       "summary": "ملخص",
@@ -176,6 +306,9 @@
       "clientDetails": "تفاصيل العميل",
       "email": "البريد الإلكتروني",
       "phone": "الهاتف",
+      "recentActivity": "النشاط الأخير",
+      "noRecentActivity": "لا يوجد نشاط حديث",
+      "viewAllTransactions": "عرض كل المعاملات",
       "noProjects": "لا توجد مشاريع",
       "noProjectsHint": "أضف أول مشروع لهذا العميل.",
       "noReceivables": "لا توجد مستحقات",
@@ -189,9 +322,48 @@
       "action": "إجراء"
     }
   },
+  "insights": {
+    "title": "التحليلات",
+    "tabs": {
+      "summary": "ملخص",
+      "clients": "العملاء",
+      "projects": "المشاريع",
+      "expenses": "المصروفات",
+      "unpaid": "غير المحصّل"
+    },
+    "period": {
+      "month": "شهر",
+      "year": "سنة"
+    },
+    "toggles": {
+      "includeUnpaid": "تضمين الدخل غير المحصّل",
+      "includeProjected": "تضمين العقود المتوقعة"
+    },
+    "cashFlowTimeline": {
+      "title": "مخطط التدفق النقدي",
+      "hint": "عرض التدفقات اليومية الواردة والصادرة مع منتقي تاريخ مخصص"
+    },
+    "yearInsights": {
+      "title": "تحليلات السنة"
+    },
+    "monthlyTrend": {
+      "title": "الاتجاه الشهري",
+      "income": "الدخل",
+      "expenses": "المصروفات",
+      "net": "الصافي",
+      "noData": "لا توجد بيانات لهذه الفترة"
+    },
+    "unpaid": {
+      "byClient": "المستحقات حسب العميل",
+      "byProject": "المستحقات حسب المشروع",
+      "totalUnpaid": "إجمالي غير المحصّل",
+      "invoices": "فواتير"
+    }
+  },
   "reports": {
     "title": "التقارير",
     "exportCsv": "تصدير CSV",
+    "print": "طباعة",
     "presets": {
       "summary": "ملخص",
       "thisMonth": "هذا الشهر",
@@ -270,6 +442,14 @@
   },
   "settings": {
     "title": "الإعدادات",
+    "profile": {
+      "title": "الملفات التجارية",
+      "addProfile": "+ إضافة ملف",
+      "setDefault": "تعيين كافتراضي",
+      "default": "افتراضي",
+      "confirmArchive": "هل أنت متأكد من أرشفة هذا الملف التجاري؟",
+      "empty": "لا توجد ملفات تجارية حتى الآن. أنشئ واحداً لبدء إصدار الفواتير."
+    },
     "language": {
       "title": "اللغة",
       "description": "اختر لغتك المفضلة"
@@ -336,7 +516,9 @@
       "name": "متابعة - نظام إدارة مصغّر",
       "description": "أداة تتبع مالي تعمل محلياً للمستقلين والشركات الصغيرة. بياناتك محفوظة محلياً في متصفحك باستخدام IndexedDB.",
       "support": "ادعم هذا المشروع",
-      "supportDesc": "إذا وجدت هذه الأداة مفيدة، فكّر في دعم تطويرها"
+      "supportDesc": "إذا وجدت هذه الأداة مفيدة، فكّر في دعم تطويرها",
+      "buyMeCoffee": "اشترِ لي قهوة",
+      "kofi": "Ko-fi"
     },
     "updates": {
       "title": "التحديثات",
@@ -378,6 +560,15 @@
     "addRecurring": "إضافة متكرر",
     "empty": "لا توجد مصروفات",
     "emptyHint": "أضف أول مصروف للبدء",
+    "summary": {
+      "total": "إجمالي المصروفات",
+      "thisMonth": "هذا الشهر"
+    },
+    "view": {
+      "list": "قائمة",
+      "byCategory": "حسب الفئة",
+      "byProject": "حسب المشروع"
+    },
     "emptyProfiles": "لا توجد ملفات تعريف",
     "emptyProfilesHint": "أنشئ ملف تعريف لتتبع المصروفات",
     "emptyExpenses": "لا توجد مصروفات",
@@ -385,6 +576,9 @@
     "emptyExpensesHint": "أضف أول مصروف للبدء",
     "searchPlaceholder": "بحث في المصروفات...",
     "confirmDelete": "هل أنت متأكد من حذف هذا المصروف؟",
+    "confirmDeleteFromRecurring": "هذا المصروف تم إنشاؤه من قاعدة متكررة. هل تريد حذفه؟",
+    "fromRecurring": "تم إنشاؤه من قاعدة مصروف متكررة",
+    "recurringBadge": "متكرر",
     "confirmDeleteRule": "هل أنت متأكد من حذف هذه القاعدة المتكررة؟",
     "year": "السنة",
     "month": "الشهر",
@@ -395,7 +589,14 @@
     "totalILS": "الإجمالي (شيكل)",
     "viewReceipts": "عرض الإيصالات",
     "manageReceipts": "إدارة الإيصالات",
+    "manageRecurring": "إدارة المتكررة",
     "allProfilesOverview": "نظرة عامة على جميع الملفات",
+    "allProfiles": "جميع الملفات",
+    "currentProfile": "الحالي: {name}",
+    "profileMode": "وضع الملف الشخصي",
+    "profileSpecificTools": "أدوات خاصة بالملف",
+    "profileSpecificToolsHint": "الجداول المتكررة والمدفوعات المستحقة والتوقعات تتطلب اختيار ملف محدد.",
+    "openProfile": "افتح {name}",
     "recurringRules": "القواعد المتكررة",
     "fromRecurring": "من قاعدة متكررة",
     "monthly": "شهرياً",
@@ -482,7 +683,55 @@
       "pause": "إيقاف",
       "resume": "استئناف",
       "paused": "متوقف",
-      "active": "نشط"
+      "active": "نشط",
+      "dayOfMonth": "يوم الشهر",
+      "monthOfYear": "الشهر",
+      "reminderDays": "أيام التذكير",
+      "reminderDaysHint": "أيام قبل الاستحقاق لعرض التذكير",
+      "scope": "النطاق",
+      "scopeGeneral": "عام",
+      "scopeProject": "مشروع",
+      "occurrence": {
+        "title": "مصروف متكرر",
+        "confirmPayment": "تأكيد الدفع",
+        "skip": "تخطي",
+        "skipConfirm": "هل أنت متأكد من تخطي هذا المصروف؟",
+        "snooze": "تأجيل",
+        "snoozeUntil": "تأجيل حتى",
+        "markPaid": "تم الدفع",
+        "expectedOn": "متوقع في",
+        "actualDate": "التاريخ الفعلي",
+        "editAmount": "تعديل المبلغ",
+        "notes": "ملاحظات",
+        "notesPlaceholder": "أي ملاحظات عن هذا الدفع...",
+        "state": {
+          "projected": "متوقع",
+          "due": "مستحق",
+          "overdue": "متأخر",
+          "snoozed": "مؤجل",
+          "paid": "مدفوع",
+          "skipped": "متخطى"
+        },
+        "dueIn": "مستحق خلال {days} أيام",
+        "dueToday": "مستحق اليوم",
+        "overdueDays": "متأخر {days} أيام",
+        "snoozedUntil": "مؤجل حتى {date}",
+        "empty": "لا توجد مصروفات متكررة قادمة",
+        "emptyHint": "أنشئ قاعدة متكررة لرؤية الدفعات القادمة",
+        "needsAttention": "تحتاج انتباه",
+        "confirmSkip": "هل أنت متأكد من تخطي هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء."
+      },
+      "rule": {
+        "new": "قاعدة متكررة جديدة",
+        "edit": "تعديل القاعدة المتكررة",
+        "title": "العنوان",
+        "titlePlaceholder": "مثل: إيجار المكتب، الاشتراكات",
+        "amount": "المبلغ",
+        "history": "سجل الدفعات",
+        "noHistory": "لا يوجد سجل دفعات حتى الآن",
+        "deleteConfirm": "هل أنت متأكد من حذف هذه القاعدة المتكررة؟ لن تتأثر المصروفات السابقة."
+      },
+      "forecast": "المصروفات القادمة"
     },
     "columns": {
       "date": "التاريخ",
@@ -785,6 +1034,17 @@
     }
   },
   "drawer": {
+    "income": {
+      "title": "إيراد جديد",
+      "editTitle": "تعديل الإيراد",
+      "statusEarned": "مُستحق",
+      "statusEarnedHint": "عمل منجز، لم يُفوتر بعد",
+      "statusInvoiced": "مُفوتر",
+      "statusInvoicedHint": "فاتورة مُرسلة، بانتظار الدفع",
+      "statusReceived": "مُستلم",
+      "statusReceivedHint": "تم استلام الدفعة",
+      "dueDate": "تاريخ الاستحقاق"
+    },
     "transaction": {
       "new": "معاملة جديدة",
       "edit": "تعديل المعاملة",
@@ -799,6 +1059,8 @@
       "currency": "العملة",
       "date": "التاريخ",
       "dueDate": "تاريخ الاستحقاق",
+      "profile": "الملف التجاري",
+      "profilePlaceholder": "اختر ملف...",
       "client": "العميل",
       "clientPlaceholder": "اختر عميل...",
       "project": "المشروع",
@@ -913,7 +1175,8 @@
     "required": "هذا الحقل مطلوب",
     "amountRequired": "المبلغ مطلوب",
     "dateRequired": "التاريخ مطلوب",
-    "nameRequired": "الاسم مطلوب"
+    "nameRequired": "الاسم مطلوب",
+    "profileRequired": "الملف التجاري مطلوب"
   },
   "time": {
     "today": "اليوم",
@@ -953,7 +1216,17 @@
     "addProfile": "إضافة ملف تجاري",
     "manageProfiles": "إدارة الملفات",
     "switchTo": "التبديل إلى {name}",
-    "current": "الحالي"
+    "current": "الحالي",
+    "allProfiles": "جميع الملفات"
+  },
+  "profile": {
+    "select": "اختر الملف",
+    "selectPrompt": "لأي ملف تريد الإضافة؟",
+    "choose": "اختر الملف",
+    "change": "تغيير",
+    "badge": {
+      "viewingAll": "عرض جميع الملفات"
+    }
   },
   "documentGuard": {
     "title": "ملف النشاط التجاري مطلوب",

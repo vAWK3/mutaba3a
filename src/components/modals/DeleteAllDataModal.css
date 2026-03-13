@@ -3,7 +3,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 100;
+  z-index: 10000;
   animation: fadeIn 150ms ease;
 }
 
@@ -13,14 +13,14 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--surface, var(--surface, #111827));
+  background: var(--surface, #FFFFFF);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-3, 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15));
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
   overflow: hidden;
-  z-index: 101;
+  z-index: 10001;
   animation: modalIn 200ms ease;
   outline: none;
 }

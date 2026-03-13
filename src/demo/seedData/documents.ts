@@ -1,14 +1,15 @@
 /**
  * Demo Documents Generator
  *
- * Creates invoices with mixed statuses for demo visibility.
+ * Creates invoices with mixed statuses for demo visibility,
+ * inheriting profileId from the associated client.
  */
 
 import type { Document, DocumentSequence, DocumentStatus, DocumentItem } from '../../types';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES, DEFAULT_FROZEN_TIME } from '../constants';
-import { getDemoProfileId } from './profile';
-import { getDemoClientIds } from './clients';
+import { getDemoProfileIds } from './profile';
+import { getDemoClientIds, getDemoClientProfileMap } from './clients';
 
 const rng = new SeededRandom(DEMO_SEED + 5);
 
@@ -90,14 +91,15 @@ function calculateTotals(items: DocumentItem[], taxRate: number) {
 }
 
 export function createDemoDocuments(): Document[] {
-  const profileId = getDemoProfileId();
   const clientIds = getDemoClientIds();
+  const clientProfileMap = getDemoClientProfileMap();
   const referenceDate = new Date(DEFAULT_FROZEN_TIME);
   const documents: Document[] = [];
 
   DOCUMENT_CONFIGS.forEach((config, index) => {
     const docNum = index + 1;
     const clientId = rng.pick(clientIds);
+    const profileId = clientProfileMap.get(clientId) || getDemoProfileIds()[0];
 
     const issueDate = new Date(referenceDate);
     issueDate.setDate(issueDate.getDate() - config.daysAgo);
@@ -159,29 +161,33 @@ export function createDemoDocuments(): Document[] {
 }
 
 export function createDemoDocumentSequences(): DocumentSequence[] {
-  const profileId = getDemoProfileId();
+  const profileIds = getDemoProfileIds();
   const now = new Date().toISOString();
+  const sequences: DocumentSequence[] = [];
 
-  return [
-    {
-      id: `${DEMO_PREFIXES.documentSequence}invoice`,
+  // Create document sequences for each profile
+  profileIds.forEach((profileId, idx) => {
+    sequences.push({
+      id: `${DEMO_PREFIXES.documentSequence}invoice_${idx}`,
       businessProfileId: profileId,
       documentType: 'invoice',
-      lastNumber: DOCUMENT_CONFIGS.length,
+      lastNumber: idx === 0 ? DOCUMENT_CONFIGS.length : 0,
       prefix: 'INV',
       prefixEnabled: true,
       updatedAt: now,
-    },
-    {
-      id: `${DEMO_PREFIXES.documentSequence}receipt`,
+    });
+    sequences.push({
+      id: `${DEMO_PREFIXES.documentSequence}receipt_${idx}`,
       businessProfileId: profileId,
       documentType: 'receipt',
       lastNumber: 0,
       prefix: 'REC',
       prefixEnabled: true,
       updatedAt: now,
-    },
-  ];
+    });
+  });
+
+  return sequences;
 }
 
 export function getDemoDocumentIds(): string[] {

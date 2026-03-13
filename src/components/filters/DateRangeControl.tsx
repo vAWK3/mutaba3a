@@ -10,6 +10,13 @@ interface DateRangeControlProps {
   onChange: (dateFrom: string, dateTo: string) => void;
 }
 
+// Format date as dd/MM/YYYY
+function formatDateDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  const [year, month, day] = dateStr.split('-');
+  return `${day}/${month}/${year}`;
+}
+
 export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeControlProps) {
   const t = useT();
   const [showCustomPicker, setShowCustomPicker] = useState(false);
@@ -90,6 +97,17 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
         ))}
         <option value="custom">{t('filters.custom')}</option>
       </select>
+
+      {/* Show date range display for presets (not custom) */}
+      {!isCustomActive && dateFrom && dateTo && (
+        <span className="date-range-display" style={{
+          color: 'var(--color-text-muted)',
+          fontSize: 'var(--font-size-sm)',
+          whiteSpace: 'nowrap'
+        }}>
+          {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
+        </span>
+      )}
 
       {isCustomActive && (
         <div className="custom-date-inputs" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>

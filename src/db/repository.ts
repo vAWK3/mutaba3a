@@ -18,6 +18,7 @@ import type {
   DocumentFilters,
   DocumentDisplay,
   DocumentType,
+  PaymentStatus,
 } from '../types';
 import {
   aggregateTransactionTotals,
@@ -45,12 +46,17 @@ function todayISO(): string {
 
 // Client Repository
 export const clientRepo = {
-  async list(includeArchived = false): Promise<Client[]> {
-    let query = db.clients.toCollection();
-    if (!includeArchived) {
-      query = db.clients.filter((c) => !c.archivedAt);
-    }
-    return query.sortBy('name');
+  async list(filters?: { profileId?: string; includeArchived?: boolean }): Promise<Client[]> {
+    const { profileId, includeArchived = false } = filters || {};
+    const results = await db.clients.toArray();
+
+    return results
+      .filter((c) => {
+        if (!includeArchived && c.archivedAt) return false;
+        if (profileId && c.profileId !== profileId) return false;
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async get(id: string): Promise<Client | undefined> {
@@ -84,14 +90,13 @@ export const clientRepo = {
 
 // Project Repository
 export const projectRepo = {
-  async list(filters?: { clientId?: string; includeArchived?: boolean }): Promise<Project[]> {
-    const collection = db.projects.toCollection();
-
-    const results = await collection.toArray();
+  async list(filters?: { profileId?: string; clientId?: string; includeArchived?: boolean }): Promise<Project[]> {
+    const results = await db.projects.toArray();
     return results
       .filter((p) => {
         if (!filters?.includeArchived && p.archivedAt) return false;
         if (filters?.clientId && p.clientId !== filters.clientId) return false;
+        if (filters?.profileId && p.profileId !== filters.profileId) return false;
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -179,6 +184,7 @@ export const transactionRepo = {
       if (filters.kind && tx.kind !== filters.kind) return false;
       if (filters.clientId && tx.clientId !== filters.clientId) return false;
       if (filters.projectId && tx.projectId !== filters.projectId) return false;
+      if (filters.profileId && tx.profileId !== filters.profileId) return false;
 
       if (filters.status) {
         if (filters.status === 'overdue') {
@@ -249,6 +255,23 @@ export const transactionRepo = {
     const category = tx.categoryId ? await db.categories.get(tx.categoryId) : undefined;
     const today = todayISO();
 
+    // Compute payment status and remaining amount for income transactions
+    let paymentStatus: PaymentStatus | undefined;
+    let remainingAmountMinor: number | undefined;
+
+    if (tx.kind === 'income') {
+      const received = tx.receivedAmountMinor ?? 0;
+      remainingAmountMinor = Math.max(0, tx.amountMinor - received);
+
+      if (tx.status === 'paid' || received >= tx.amountMinor) {
+        paymentStatus = 'paid';
+      } else if (received > 0) {
+        paymentStatus = 'partial';
+      } else {
+        paymentStatus = 'unpaid';
+      }
+    }
+
     return {
       ...tx,
       clientName: client?.name,
@@ -258,6 +281,8 @@ export const transactionRepo = {
         tx.kind === 'income' && tx.status === 'unpaid' && tx.dueDate && tx.dueDate < today
           ? Math.floor((new Date(today).getTime() - new Date(tx.dueDate).getTime()) / (1000 * 60 * 60 * 24))
           : undefined,
+      paymentStatus,
+      remainingAmountMinor,
     };
   },
 
@@ -298,9 +323,48 @@ export const transactionRepo = {
 
   async markPaid(id: string): Promise<void> {
     const now = nowISO();
+    const tx = await db.transactions.get(id);
     await db.transactions.update(id, {
       status: 'paid',
       paidAt: now,
+      // Set receivedAmountMinor to full amount when marking as fully paid
+      receivedAmountMinor: tx?.amountMinor ?? 0,
+      updatedAt: now,
+    });
+  },
+
+  /**
+   * Record a partial payment on an income transaction.
+   * Accumulates with any existing received amount.
+   * Automatically marks as paid when full amount is received.
+   */
+  async recordPartialPayment(id: string, paymentAmountMinor: number): Promise<void> {
+    if (paymentAmountMinor <= 0) {
+      throw new PartialPaymentError('Payment amount must be positive', id);
+    }
+
+    const tx = await db.transactions.get(id);
+    if (!tx) {
+      throw new PartialPaymentError('Transaction not found', id);
+    }
+
+    if (tx.kind !== 'income') {
+      throw new PartialPaymentError('Partial payments only apply to income', id);
+    }
+
+    if (tx.status === 'paid') {
+      throw new PartialPaymentError('Transaction is already fully paid', id);
+    }
+
+    const currentReceived = tx.receivedAmountMinor ?? 0;
+    const newReceived = Math.min(currentReceived + paymentAmountMinor, tx.amountMinor);
+    const isNowFullyPaid = newReceived >= tx.amountMinor;
+
+    const now = nowISO();
+    await db.transactions.update(id, {
+      receivedAmountMinor: newReceived,
+      status: isNowFullyPaid ? 'paid' : 'unpaid',
+      paidAt: isNowFullyPaid ? now : undefined,
       updatedAt: now,
     });
   },
@@ -332,23 +396,31 @@ export const transactionRepo = {
     return !!tx?.lockedAt;
   },
 
-  async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency }): Promise<OverviewTotals> {
+  async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals> {
     const transactions = await db.transactions.toArray();
-    const filtered = filterTransactionsByDateAndCurrency(transactions, filters);
+    // Apply profile filter first
+    const profileFiltered = filters.profileId
+      ? transactions.filter((tx) => tx.profileId === filters.profileId)
+      : transactions;
+    const filtered = filterTransactionsByDateAndCurrency(profileFiltered, filters);
     return aggregateTransactionTotals(filtered);
   },
 
-  async getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string }): Promise<TransactionTotalsByCurrency> {
+  async getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency> {
     const transactions = await db.transactions.toArray();
+    // Apply profile filter first
+    const profileFiltered = filters.profileId
+      ? transactions.filter((tx) => tx.profileId === filters.profileId)
+      : transactions;
     // Filter by date only, not currency - we want all currencies
-    const filtered = filterTransactionsByDateAndCurrency(transactions, {
+    const filtered = filterTransactionsByDateAndCurrency(profileFiltered, {
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
     });
     return aggregateTransactionTotalsByCurrency(filtered);
   },
 
-  async getAttentionReceivables(filters: { currency?: Currency }): Promise<TransactionDisplay[]> {
+  async getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]> {
     const today = todayISO();
     const sevenDaysFromNow = new Date();
     sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
@@ -357,6 +429,7 @@ export const transactionRepo = {
     const transactions = await this.list({
       kind: 'income',
       currency: filters.currency,
+      profileId: filters.profileId,
     });
 
     return transactions.filter((tx) => {
@@ -372,8 +445,8 @@ export const transactionRepo = {
 
 // Project Summary Repository
 export const projectSummaryRepo = {
-  async list(filters?: { currency?: Currency; search?: string; field?: string }): Promise<ProjectSummary[]> {
-    const projects = await projectRepo.list();
+  async list(filters?: { profileId?: string; currency?: Currency; search?: string; field?: string }): Promise<ProjectSummary[]> {
+    const projects = await projectRepo.list({ profileId: filters?.profileId });
     const clients = await db.clients.toArray();
     const transactions = await db.transactions.toArray();
 
@@ -474,8 +547,8 @@ export const projectSummaryRepo = {
 
 // Client Summary Repository
 export const clientSummaryRepo = {
-  async list(filters?: { currency?: Currency; search?: string }): Promise<ClientSummary[]> {
-    const clients = await clientRepo.list();
+  async list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]> {
+    const clients = await clientRepo.list({ profileId: filters?.profileId });
     const projects = await db.projects.toArray();
     const transactions = await db.transactions.toArray();
 
@@ -822,6 +895,16 @@ export class TransactionLockedError extends Error {
     this.name = 'TransactionLockedError';
     this.transactionId = transactionId;
     this.lockedByDocumentId = lockedByDocumentId;
+  }
+}
+
+// Custom error for partial payment violations
+export class PartialPaymentError extends Error {
+  transactionId: string;
+  constructor(message: string, transactionId: string) {
+    super(message);
+    this.name = 'PartialPaymentError';
+    this.transactionId = transactionId;
   }
 }
 

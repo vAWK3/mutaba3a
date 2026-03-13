@@ -1,14 +1,15 @@
 /**
  * Demo Retainer Agreements Generator
  *
- * Creates 3 realistic retainer agreements with active clients.
+ * Creates 3 realistic retainer agreements with active clients,
+ * inheriting profileId from the associated client.
  */
 
 import type { RetainerAgreement } from '../../types';
 import { DEMO_PREFIXES } from '../constants';
-import { getDemoProfileId } from './profile';
-import { getDemoClientIds } from './clients';
+import { getDemoClientIds, getDemoClientProfileMap } from './clients';
 import { getDemoProjectIds } from './projects';
+import { getDemoProfileIds } from './profile';
 
 // Retainer configurations
 const RETAINER_DATA = [
@@ -39,8 +40,8 @@ const RETAINER_DATA = [
 ] as const;
 
 export function createDemoRetainers(): RetainerAgreement[] {
-  const profileId = getDemoProfileId();
   const clientIds = getDemoClientIds();
+  const clientProfileMap = getDemoClientProfileMap();
   const projectIds = getDemoProjectIds();
 
   // Start date 12 months ago (one full year)
@@ -50,11 +51,13 @@ export function createDemoRetainers(): RetainerAgreement[] {
 
   return RETAINER_DATA.map((data, index) => {
     const now = new Date().toISOString();
+    const clientId = clientIds[data.clientIndex];
+    const profileId = clientProfileMap.get(clientId) || getDemoProfileIds()[0];
 
     return {
       id: `${DEMO_PREFIXES.retainer}${String(index + 1).padStart(3, '0')}`,
       profileId,
-      clientId: clientIds[data.clientIndex],
+      clientId,
       projectId: projectIds[data.projectIndex],
       title: data.title,
       currency: 'ILS',
@@ -78,14 +81,19 @@ export function getDemoRetainerIds(): string[] {
 
 export function getDemoRetainerData() {
   const clientIds = getDemoClientIds();
+  const clientProfileMap = getDemoClientProfileMap();
   const projectIds = getDemoProjectIds();
 
-  return RETAINER_DATA.map((data, index) => ({
-    id: `${DEMO_PREFIXES.retainer}${String(index + 1).padStart(3, '0')}`,
-    clientId: clientIds[data.clientIndex],
-    projectId: projectIds[data.projectIndex],
-    amountMinor: data.amountILS * 100,
-    cadence: data.cadence,
-    paymentDay: data.paymentDay,
-  }));
+  return RETAINER_DATA.map((data, index) => {
+    const clientId = clientIds[data.clientIndex];
+    return {
+      id: `${DEMO_PREFIXES.retainer}${String(index + 1).padStart(3, '0')}`,
+      clientId,
+      projectId: projectIds[data.projectIndex],
+      profileId: clientProfileMap.get(clientId) || getDemoProfileIds()[0],
+      amountMinor: data.amountILS * 100,
+      cadence: data.cadence,
+      paymentDay: data.paymentDay,
+    };
+  });
 }

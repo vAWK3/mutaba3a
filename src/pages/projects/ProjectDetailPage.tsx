@@ -5,16 +5,18 @@ import { SearchInput, StatusSegment, DateRangeControl } from '../../components/f
 import { RowActionsMenu } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
-import { useProject, useProjectSummary, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
+import { useProject, useProjectSummary, useTransactions } from '../../hooks/useQueries';
+import { useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { TxStatus, QueryFilters } from '../../types';
+import type { TxKind, TxStatus, QueryFilters } from '../../types';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
-  const { openTransactionDrawer, openProjectDrawer } = useDrawerStore();
-  const markPaidMutation = useMarkTransactionPaid();
+  const { openIncomeDrawer, openExpenseDrawer, openProjectDrawer } = useDrawerStore();
+  const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -44,15 +46,20 @@ export function ProjectDetailPage() {
 
   const { data: transactions = [] } = useTransactions(queryFilters);
 
-  const handleRowClick = (id: string) => {
-    openTransactionDrawer({ mode: 'edit', transactionId: id });
+  const handleRowClick = (id: string, kind: TxKind) => {
+    if (kind === 'expense') {
+      openExpenseDrawer({ mode: 'edit', expenseId: id });
+    } else {
+      openIncomeDrawer({ mode: 'edit', transactionId: id });
+    }
   };
 
-  const handleAddTransaction = () => {
-    openTransactionDrawer({
+  const handleAddIncome = () => {
+    openIncomeDrawer({
       mode: 'create',
       defaultProjectId: projectId,
       defaultClientId: project?.clientId,
+      defaultStatus: 'earned',
     });
   };
 
@@ -179,7 +186,7 @@ export function ProjectDetailPage() {
                 </div>
               )}
             </div>
-            <button className="btn btn-primary" onClick={handleAddTransaction}>
+            <button className="btn btn-primary" onClick={handleAddIncome}>
               {t('transactions.addTransaction')}
             </button>
           </div>
@@ -201,7 +208,7 @@ export function ProjectDetailPage() {
               <div className="empty-state">
                 <h3 className="empty-state-title">{t('projects.detail.noTransactions')}</h3>
                 <p className="empty-state-description">{t('projects.detail.noTransactionsHint')}</p>
-                <button className="btn btn-primary" onClick={handleAddTransaction}>
+                <button className="btn btn-primary" onClick={handleAddIncome}>
                   {t('transactions.addTransaction')}
                 </button>
               </div>
@@ -226,7 +233,7 @@ export function ProjectDetailPage() {
                       const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
 
                       return (
-                        <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id)}>
+                        <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id, tx.kind)}>
                           <td>{formatDate(tx.occurredAt, locale)}</td>
                           <td>
                             <span
@@ -242,15 +249,13 @@ export function ProjectDetailPage() {
                           </td>
                           <td className="text-secondary">{tx.clientName || '-'}</td>
                           <td className="text-secondary">{tx.categoryName || '-'}</td>
-                          <td
-                            className={cn(
-                              'amount-cell',
-                              tx.kind === 'income' && 'amount-positive',
-                              tx.kind === 'expense' && 'amount-negative'
-                            )}
-                          >
-                            {tx.kind === 'expense' ? '-' : ''}
-                            {formatAmount(tx.amountMinor, tx.currency, locale)}
+                          <td className="amount-cell">
+                            <AmountWithConversion
+                              amountMinor={tx.amountMinor}
+                              currency={tx.currency}
+                              type={tx.kind === 'income' ? 'income' : 'expense'}
+                              showExpenseSign={tx.kind === 'expense'}
+                            />
                           </td>
                           <td>
                             {tx.kind === 'income' && (
@@ -282,8 +287,13 @@ export function ProjectDetailPage() {
                                 {
                                   label: t('common.duplicate'),
                                   icon: <CopyIcon size={16} />,
-                                  onClick: () =>
-                                    openTransactionDrawer({ mode: 'create', duplicateFromId: tx.id }),
+                                  onClick: () => {
+                                    if (tx.kind === 'expense') {
+                                      openExpenseDrawer({ mode: 'create' });
+                                    } else {
+                                      openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id });
+                                    }
+                                  },
                                 },
                               ]}
                             />

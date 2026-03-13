@@ -10,7 +10,7 @@ import type { DemoDataStats } from '../types';
 import { DEMO_ID_PREFIX } from '../constants';
 
 // Import generators
-import { createDemoProfile, getDemoProfileId } from './profile';
+import { createDemoProfiles, getDemoProfileIds } from './profile';
 import { createDemoClients } from './clients';
 import { createDemoProjects } from './projects';
 import { createDemoCategories, createDemoExpenseCategories } from './categories';
@@ -83,8 +83,8 @@ export async function seedDemoData(): Promise<DemoDataStats> {
   // First, remove any existing demo data for idempotency
   await removeDemoData();
 
-  // Generate all demo data
-  const profile = createDemoProfile();
+  // Generate all demo data (order matters for dependencies)
+  const profiles = createDemoProfiles();
   const clients = createDemoClients();
   const projects = createDemoProjects();
   const categories = createDemoCategories();
@@ -116,7 +116,7 @@ export async function seedDemoData(): Promise<DemoDataStats> {
     ],
     async () => {
       // Insert in dependency order
-      await db.businessProfiles.put(profile);
+      await db.businessProfiles.bulkPut(profiles);
       await db.clients.bulkPut(clients);
       await db.projects.bulkPut(projects);
       await db.categories.bulkPut(categories);
@@ -131,10 +131,10 @@ export async function seedDemoData(): Promise<DemoDataStats> {
     }
   );
 
-  console.log('Demo data seeded successfully');
+  console.log(`Demo data seeded successfully: ${profiles.length} profiles, ${clients.length} clients, ${projects.length} projects, ${transactions.length} transactions`);
 
   return {
-    businessProfiles: 1,
+    businessProfiles: profiles.length,
     clients: clients.length,
     projects: projects.length,
     transactions: transactions.length,
@@ -148,4 +148,4 @@ export async function seedDemoData(): Promise<DemoDataStats> {
 }
 
 // Re-export utilities
-export { getDemoProfileId };
+export { getDemoProfileIds };

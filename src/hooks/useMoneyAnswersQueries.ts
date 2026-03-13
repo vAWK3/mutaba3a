@@ -16,8 +16,8 @@ export const moneyAnswersQueryKeys = {
     ['moneyMonthKPIs', filters, openingBalance] as const,
   guidance: (filters: MoneyAnswersFilters) => ['moneyGuidance', filters] as const,
   dayEvents: (date: string, currency: Currency) => ['moneyDayEvents', date, currency] as const,
-  yearSummary: (year: number, currency: Currency, includeReceivables: boolean, includeProjections: boolean) =>
-    ['moneyYearSummary', year, currency, includeReceivables, includeProjections] as const,
+  yearSummary: (year: number, currency: Currency, includeUnpaidIncome: boolean, includeProjectedRetainer: boolean) =>
+    ['moneyYearSummary', year, currency, includeUnpaidIncome, includeProjectedRetainer] as const,
 };
 
 // ============================================================================
@@ -131,49 +131,58 @@ export function useDayEvents(date: string, currency: Currency) {
 }
 
 /**
- * Get year summary with all month summaries and yearly totals
+ * Get year summary with all month summaries and yearly totals.
+ *
+ * @param includeUnpaidIncome - Include unpaid income (transactions with status='unpaid')
+ * @param includeProjectedRetainer - Include projected retainer income
  */
 export function useYearSummary(
   year: number,
   currency: Currency,
-  includeReceivables: boolean = true,
-  includeProjections: boolean = true
+  includeUnpaidIncome: boolean = true,
+  includeProjectedRetainer: boolean = true
 ) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.yearSummary(year, currency, includeReceivables, includeProjections),
-    queryFn: () => moneyEventRepo.getYearSummary(year, currency, includeReceivables, includeProjections),
+    queryKey: moneyAnswersQueryKeys.yearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer),
+    queryFn: () => moneyEventRepo.getYearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer),
     enabled: !!year && !!currency,
   });
 }
 
 /**
- * Get year summary for both currencies (for unified display)
+ * Get year summary for both currencies (for unified display).
+ *
+ * @param includeUnpaidIncome - Include unpaid income (transactions with status='unpaid')
+ * @param includeProjectedRetainer - Include projected retainer income
  */
 export function useYearSummaryBothCurrencies(
   year: number,
-  includeReceivables: boolean = true,
-  includeProjections: boolean = true
+  includeUnpaidIncome: boolean = true,
+  includeProjectedRetainer: boolean = true
 ) {
   return useQuery({
-    queryKey: ['moneyYearSummaryBoth', year, includeReceivables, includeProjections] as const,
-    queryFn: () => moneyEventRepo.getYearSummaryBothCurrencies(year, includeReceivables, includeProjections),
+    queryKey: ['moneyYearSummaryBoth', year, includeUnpaidIncome, includeProjectedRetainer] as const,
+    queryFn: () => moneyEventRepo.getYearSummaryBothCurrencies(year, includeUnpaidIncome, includeProjectedRetainer),
     enabled: !!year,
   });
 }
 
 /**
- * Get month KPIs for both currencies (for unified display)
+ * Get month KPIs for both currencies (for unified display).
+ *
+ * @param includeUnpaidIncome - Include unpaid income (transactions with status='unpaid')
+ * @param includeProjectedRetainer - Include projected retainer income
  */
 export function useMonthKPIsBothCurrencies(
   month: string,
   openingBalanceMinorUSD: number = 0,
   openingBalanceMinorILS: number = 0,
-  includeReceivables: boolean = true,
-  includeProjections: boolean = true
+  includeUnpaidIncome: boolean = true,
+  includeProjectedRetainer: boolean = true
 ) {
   return useQuery({
-    queryKey: ['moneyMonthKPIsBoth', month, openingBalanceMinorUSD, openingBalanceMinorILS, includeReceivables, includeProjections] as const,
-    queryFn: () => moneyEventRepo.getMonthKPIsBothCurrencies(month, openingBalanceMinorUSD, openingBalanceMinorILS, includeReceivables, includeProjections),
+    queryKey: ['moneyMonthKPIsBoth', month, openingBalanceMinorUSD, openingBalanceMinorILS, includeUnpaidIncome, includeProjectedRetainer] as const,
+    queryFn: () => moneyEventRepo.getMonthKPIsBothCurrencies(month, openingBalanceMinorUSD, openingBalanceMinorILS, includeUnpaidIncome, includeProjectedRetainer),
     enabled: !!month,
   });
 }

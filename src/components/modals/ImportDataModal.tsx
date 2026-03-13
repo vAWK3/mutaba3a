@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
@@ -176,8 +177,9 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
         // Import clients (check for duplicates by email)
         if (fileData.clients?.length) {
           for (const client of fileData.clients as { id: string; email?: string }[]) {
+            // Use filter instead of where since email is not indexed
             const existing = client.email
-              ? await db.clients.where('email').equals(client.email).first()
+              ? await db.clients.filter(c => c.email === client.email).first()
               : null;
             if (!existing) {
               await db.clients.add({ ...client, id: crypto.randomUUID() } as Parameters<typeof db.clients.add>[0]);
@@ -269,7 +271,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
   const isV2Format = fileData?.version === 2 && fileData?.profile;
   const profileName = fileData?.profile?.name || fileData?.profile?.nameEn || 'Unknown';
 
-  return (
+  return createPortal(
     <>
       <div className="modal-overlay" onClick={onClose} />
       <div
@@ -453,7 +455,8 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

@@ -51,3 +51,44 @@ export function isLinux(): boolean {
   const userAgent = navigator.userAgent?.toLowerCase() || '';
   return platform.includes('linux') || userAgent.includes('linux');
 }
+
+// --- Version change handling ---
+
+const LAST_KNOWN_VERSION_KEY = 'app-last-known-version';
+const UPDATE_CACHE_KEYS = [
+  'update-banner-dismissed-version',
+  'tauri-updater-last-check',
+  'update-check-result',
+  'latest-release-info',
+];
+
+/**
+ * Check if app version changed since last run.
+ * If so, clear update-related caches to ensure users see the correct version
+ * after installing a new DMG (macOS preserves localStorage across installs).
+ *
+ * Call this early in app initialization.
+ */
+export function handleVersionChange(currentVersion: string): void {
+  if (typeof localStorage === 'undefined') return;
+
+  try {
+    const lastKnownVersion = localStorage.getItem(LAST_KNOWN_VERSION_KEY);
+
+    if (lastKnownVersion && lastKnownVersion !== currentVersion) {
+      // Version changed! Clear update-related caches
+      console.log(
+        `[platform] App version changed from ${lastKnownVersion} to ${currentVersion}, clearing update caches`
+      );
+      for (const key of UPDATE_CACHE_KEYS) {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      }
+    }
+
+    // Always update the stored version
+    localStorage.setItem(LAST_KNOWN_VERSION_KEY, currentVersion);
+  } catch {
+    // Ignore storage errors (private browsing, quota exceeded, etc.)
+  }
+}

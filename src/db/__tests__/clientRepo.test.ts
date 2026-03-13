@@ -84,7 +84,7 @@ describe('clientRepo', () => {
       const toArchive = await clientRepo.create(createTestClient({ name: 'To Archive' }));
       await clientRepo.archive(toArchive.id);
 
-      const clients = await clientRepo.list(true);
+      const clients = await clientRepo.list({ includeArchived: true });
 
       expect(clients).toHaveLength(2);
     });

@@ -54,17 +54,18 @@ Test coverage has been improved but still needs work.
 **Status**: In Progress
 **Priority**: Medium
 **Introduced**: 2024-06
-**Updated**: 2026-02-09
+**Updated**: 2026-03-13
 **Impact**: Desktop app uses IndexedDB instead of native SQLite
 
 **Description**:
 Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds for better performance and native file system integration. Currently, both web and desktop use IndexedDB via Dexie.
 
-**Current State (2026-02-09)**:
+**Current State (2026-03-13)**:
 - ✅ Repository interfaces created (`src/db/interfaces.ts`)
 - ✅ All repository operations documented with TypeScript interfaces
 - ✅ Current Dexie implementation satisfies the interfaces
-- Schema version at 12 with all tables defined
+- ✅ Migration Safety Layer implemented (`src/db/migration-safety.ts`)
+- Schema version at 14 with all tables defined
 
 **Repository Interfaces Created**:
 - `IClientRepository`, `IProjectRepository`, `ICategoryRepository`
@@ -83,6 +84,7 @@ Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds fo
 4. Add migration logic for existing IndexedDB data → SQLite
 5. Test sync operations with SQLite backend
 6. Benchmark performance improvements
+7. Implement SQLite-native backup (file copy) for Tauri builds
 
 **Migration Path**:
 1. **Phase 1** (Complete): Define interfaces for all repositories
@@ -90,6 +92,8 @@ Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds fo
 3. **Phase 3**: Add platform detection and factory pattern
 4. **Phase 4**: Data migration from IndexedDB to SQLite
 5. **Phase 5**: Remove IndexedDB code from Tauri builds
+
+**Note**: Migration Safety Layer is already in place for IndexedDB. When migrating to SQLite, the backup strategy should use native file system backup (copy .db file before migration) instead of the IndexedDB-based backup.
 
 **Effort**: Large
 

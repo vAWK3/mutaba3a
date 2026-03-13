@@ -1,174 +1,109 @@
 import { useState } from 'react';
 import { TopBar } from '../../components/layout';
-import { DateRangeControl } from '../../components/filters';
-import { CheckIcon } from '../../components/icons';
 import { TransactionTypeBadge } from '../../components/transactions';
-import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
-import { useOverviewTotalsByCurrency, useAttentionReceivables, useTransactions, useMarkTransactionPaid } from '../../hooks/useQueries';
+import {
+  PredictiveKpiStrip,
+  MonthActualsRow,
+  AttentionFeed,
+} from '../../components/home';
+import { OnboardingOverlay } from '../../components/onboarding';
+import {
+  useTransactions,
+  useClients,
+} from '../../hooks/useQueries';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { useOnboardingStore } from '../../lib/onboardingStore';
+import { formatDate, getDateRangePreset } from '../../lib/utils';
+import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import type { TxKind } from '../../types';
 
-//TODO: remove initial sample data and remove button of "reset to sample data"
-//TODO: add button to "delete all data", but automatically export all data as separate csv files clients/projects/transactions and only after saving the file then proceed user to confirm that data is backed up then delete
-
-
+/**
+ * OverviewPage (Home)
+ *
+ * Per design doc: Current month operating view
+ * - Answers "Am I okay?" via PredictiveKpiStrip
+ * - Answers "What needs attention?" via AttentionFeed
+ * - Shows month actuals in collapsible row
+ * - Recent activity for context
+ *
+ * No date range selector - Home is always current month.
+ */
 export function OverviewPage() {
-  const { openTransactionDrawer } = useDrawerStore();
-  const markPaidMutation = useMarkTransactionPaid();
+  const { openIncomeDrawer, openExpenseDrawer } = useDrawerStore();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
+  const { skipped, isOnboardingComplete } = useOnboardingStore();
 
-  const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
+  // Get active profile filter (undefined in "All Profiles" mode)
+  const profileId = useProfileFilter();
 
-  // Always fetch all currencies - no currency filter
-  const { data: byCurrencyTotals, isLoading: totalsLoading } = useOverviewTotalsByCurrency(
-    dateRange.dateFrom,
-    dateRange.dateTo
-  );
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
-  const { data: attentionItems = [] } = useAttentionReceivables();
+  // Current month date range for recent activity
+  const currentMonthRange = getDateRangePreset('this-month');
 
+  // Check if user has any data (for empty state)
+  const { data: allClients = [] } = useClients(profileId);
+
+  // Fetch all transactions (no date filter) to check if user has any data
+  const { data: allTransactions = [] } = useTransactions({ limit: 1, profileId });
+
+  // Recent transactions for this month
   const { data: recentTransactions = [] } = useTransactions({
-    dateFrom: dateRange.dateFrom,
-    dateTo: dateRange.dateTo,
+    dateFrom: currentMonthRange.dateFrom,
+    dateTo: currentMonthRange.dateTo,
+    profileId,
     limit: 10,
     sort: { by: 'occurredAt', dir: 'desc' },
   });
 
-  const handleRowClick = (id: string) => {
-    openTransactionDrawer({ mode: 'edit', transactionId: id });
+  // Determine if this is a new user (no clients and no transactions)
+  const isNewUser = allClients.length === 0 && allTransactions.length === 0;
+
+  // Show onboarding for new users who haven't skipped or completed it
+  const showOnboarding = isNewUser && !skipped && !isOnboardingComplete() && !onboardingDismissed;
+
+  const handleRowClick = (id: string, kind: TxKind) => {
+    if (kind === 'expense') {
+      openExpenseDrawer({ mode: 'edit', expenseId: id });
+    } else {
+      openIncomeDrawer({ mode: 'edit', transactionId: id });
+    }
   };
 
-  const handleMarkPaid = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    await markPaidMutation.mutateAsync(id);
+  const handleOnboardingComplete = () => {
+    setOnboardingDismissed(true);
   };
+
+  // Render onboarding for new users
+  if (showOnboarding) {
+    return (
+      <>
+        <TopBar title={t('overview.title')} />
+        <div className="page-content">
+          <OnboardingOverlay onComplete={handleOnboardingComplete} />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <TopBar
-        title={t('overview.title')}
-        filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24, flexWrap: 'nowrap' }}>
-            <DateRangeControl
-              dateFrom={dateRange.dateFrom}
-              dateTo={dateRange.dateTo}
-              onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
-            />
-          </div>
-        }
-      />
+      <TopBar title={t('overview.title')} />
       <div className="page-content">
-        {/* KPI Cards */}
-        {totalsLoading ? (
-          <div className="kpi-row">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="kpi-card">
-                <div className="kpi-label">{t('common.loading')}</div>
-                <div className="kpi-value">-</div>
-              </div>
-            ))}
-          </div>
-        ) : byCurrencyTotals ? (
-          <div className="kpi-row">
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.paidIncome')}</div>
-              <CurrencySummaryPopup
-                usdAmountMinor={byCurrencyTotals.USD.paidIncomeMinor}
-                ilsAmountMinor={byCurrencyTotals.ILS.paidIncomeMinor}
-                eurAmountMinor={byCurrencyTotals.EUR.paidIncomeMinor}
-                type="income"
-                size="large"
-              />
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.unpaidReceivables')}</div>
-              <CurrencySummaryPopup
-                usdAmountMinor={byCurrencyTotals.USD.unpaidIncomeMinor}
-                ilsAmountMinor={byCurrencyTotals.ILS.unpaidIncomeMinor}
-                eurAmountMinor={byCurrencyTotals.EUR.unpaidIncomeMinor}
-                type="neutral"
-                size="large"
-              />
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.expenses')}</div>
-              <CurrencySummaryPopup
-                usdAmountMinor={byCurrencyTotals.USD.expensesMinor}
-                ilsAmountMinor={byCurrencyTotals.ILS.expensesMinor}
-                eurAmountMinor={byCurrencyTotals.EUR.expensesMinor}
-                type="expense"
-                size="large"
-              />
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">{t('overview.kpi.net')}</div>
-              <CurrencySummaryPopup
-                usdAmountMinor={byCurrencyTotals.USD.paidIncomeMinor - byCurrencyTotals.USD.expensesMinor}
-                ilsAmountMinor={byCurrencyTotals.ILS.paidIncomeMinor - byCurrencyTotals.ILS.expensesMinor}
-                eurAmountMinor={byCurrencyTotals.EUR.paidIncomeMinor - byCurrencyTotals.EUR.expensesMinor}
-                type="net"
-                size="large"
-              />
-            </div>
-          </div>
-        ) : null}
+        {/* Predictive KPI Strip - "Will I Make It?", "Cash on Hand", "Coming/Leaving" */}
+        <PredictiveKpiStrip />
 
-        {/* Two column layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-          {/* Needs Attention */}
-          <div className="attention-list">
-            <div className="attention-header">
-              <h3 className="attention-title">{t('overview.needsAttention')}</h3>
-            </div>
-            {attentionItems.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                {t('overview.noAttention')}
-              </div>
-            ) : (
-              attentionItems.slice(0, 5).map((item) => {
-                const daysUntil = item.dueDate ? getDaysUntil(item.dueDate) : 0;
-                const isOverdue = daysUntil < 0;
+        {/* Month Actuals Row - Collapsible summary of actual received/unpaid/expenses/net */}
+        <MonthActualsRow />
 
-                return (
-                  <div
-                    key={item.id}
-                    className="attention-item"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleRowClick(item.id)}
-                  >
-                    <div className="attention-info">
-                      <span className="attention-client">{item.clientName || t('common.noClient')}</span>
-                      <span className="attention-meta">
-                        {item.projectName || t('common.noProject')} •{' '}
-                        {isOverdue ? (
-                          <span className="text-danger">{t('time.daysOverdue', { days: Math.abs(daysUntil) })}</span>
-                        ) : daysUntil === 0 ? (
-                          <span className="text-warning">{t('transactions.status.dueToday')}</span>
-                        ) : (
-                          <span className="text-warning">{t('time.dueInDays', { days: daysUntil })}</span>
-                        )}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span className={cn('attention-amount', isOverdue ? 'text-danger' : 'text-warning')}>
-                        {formatAmount(item.amountMinor, item.currency, locale)}
-                      </span>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={(e) => handleMarkPaid(e, item.id)}
-                        title={t('common.markPaid')}
-                      >
-                        <CheckIcon />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+        {/* Two column layout: Attention Feed + Recent Activity */}
+        <div className="home-two-column">
+          {/* Needs Attention - Severity-sorted action items */}
+          <AttentionFeed />
 
           {/* Recent Activity */}
           <div className="card">
@@ -176,7 +111,7 @@ export function OverviewPage() {
               <h3 className="card-title">{t('overview.recentActivity')}</h3>
             </div>
             {recentTransactions.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+              <div className="card-empty">
                 {t('overview.noRecent')}
               </div>
             ) : (
@@ -187,24 +122,25 @@ export function OverviewPage() {
                       <tr
                         key={tx.id}
                         className="clickable"
-                        onClick={() => handleRowClick(tx.id)}
+                        onClick={() => handleRowClick(tx.id, tx.kind)}
                       >
                         <td style={{ width: 80 }}>{formatDate(tx.occurredAt, locale)}</td>
                         <td>
                           <TransactionTypeBadge kind={tx.kind} status={tx.status} />
                         </td>
-                        <td className="text-secondary" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <td
+                          className="text-secondary"
+                          style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        >
                           {tx.clientName || tx.title || '-'}
                         </td>
-                        <td
-                          className={cn(
-                            'amount-cell',
-                            tx.kind === 'income' && 'amount-positive',
-                            tx.kind === 'expense' && 'amount-negative'
-                          )}
-                        >
-                          {tx.kind === 'expense' ? '-' : ''}
-                          {formatAmount(tx.amountMinor, tx.currency, locale)}
+                        <td className="amount-cell">
+                          <AmountWithConversion
+                            amountMinor={tx.amountMinor}
+                            currency={tx.currency}
+                            type={tx.kind === 'income' ? 'income' : 'expense'}
+                            showExpenseSign={tx.kind === 'expense'}
+                          />
                         </td>
                       </tr>
                     ))}

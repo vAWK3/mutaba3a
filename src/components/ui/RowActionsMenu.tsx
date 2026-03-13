@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreIcon } from '../icons';
 import './RowActionsMenu.css';
 
@@ -15,11 +16,39 @@ interface RowActionsMenuProps {
 
 export function RowActionsMenu({ actions }: RowActionsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
+  // Update menu position when opened
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const menuWidth = 140; // min-width from CSS
+
+      // Position below the trigger, aligned to the end (right in LTR, left in RTL)
+      const isRTL = document.documentElement.dir === 'rtl';
+      const left = isRTL
+        ? rect.left
+        : rect.right - menuWidth;
+
+      setMenuPosition({
+        top: rect.bottom + 4, // 4px gap (--space-1)
+        left: Math.max(8, left), // Keep at least 8px from edge
+      });
+    }
+  }, [isOpen]);
+
+  // Handle click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     }
@@ -33,6 +62,7 @@ export function RowActionsMenu({ actions }: RowActionsMenuProps) {
     };
   }, [isOpen]);
 
+  // Handle escape key
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -46,6 +76,33 @@ export function RowActionsMenu({ actions }: RowActionsMenuProps) {
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  // Reposition on scroll/resize
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function updatePosition() {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        const menuWidth = 140;
+        const isRTL = document.documentElement.dir === 'rtl';
+        const left = isRTL ? rect.left : rect.right - menuWidth;
+
+        setMenuPosition({
+          top: rect.bottom + 4,
+          left: Math.max(8, left),
+        });
+      }
+    }
+
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
     };
   }, [isOpen]);
 
@@ -63,8 +120,9 @@ export function RowActionsMenu({ actions }: RowActionsMenuProps) {
   };
 
   return (
-    <div className="row-actions-container" ref={containerRef}>
+    <div className="row-actions-container">
       <button
+        ref={triggerRef}
         type="button"
         className="row-actions-trigger"
         onClick={handleToggle}
@@ -73,8 +131,18 @@ export function RowActionsMenu({ actions }: RowActionsMenuProps) {
       >
         <MoreIcon size={18} />
       </button>
-      {isOpen && (
-        <div className="row-actions-menu" role="menu">
+      {isOpen && createPortal(
+        <div
+          ref={menuRef}
+          className="row-actions-menu"
+          role="menu"
+          style={{
+            position: 'fixed',
+            top: menuPosition.top,
+            left: menuPosition.left,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
           {actions.map((action, index) => (
             <button
               key={index}
@@ -87,7 +155,8 @@ export function RowActionsMenu({ actions }: RowActionsMenuProps) {
               <span>{action.label}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

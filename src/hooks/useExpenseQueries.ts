@@ -193,14 +193,15 @@ export function useDeleteExpense() {
 export function useRecurringRules(profileId?: string) {
   return useQuery({
     queryKey: expenseQueryKeys.recurringRules(profileId),
-    queryFn: () => recurringRuleRepo.list(profileId),
+    queryFn: () => recurringRuleRepo.list({ profileId }),
   });
 }
 
 export function useActiveRecurringRules(profileId?: string) {
   return useQuery({
     queryKey: expenseQueryKeys.activeRecurringRules(profileId),
-    queryFn: () => recurringRuleRepo.listActive(profileId),
+    queryFn: () => recurringRuleRepo.listActive(profileId!),
+    enabled: !!profileId,
   });
 }
 

@@ -302,14 +302,14 @@ prepare_release_artifacts() {
     mkdir -p "$RELEASE_DIR"
 
     # Versioned filenames (for archival)
-    local versioned_dmg="mutaba3a-v${version}-macos-universal.dmg"
+    local versioned_dmg="mutaba3a-v${version}-macos-arm64.dmg"
     local versioned_dmg_path="$RELEASE_DIR/$versioned_dmg"
-    local versioned_checksum_file="$RELEASE_DIR/mutaba3a-v${version}-macos-universal.sha256"
+    local versioned_checksum_file="$RELEASE_DIR/mutaba3a-v${version}-macos-arm64.sha256"
 
     # Stable filenames (for Netlify redirects)
-    local stable_dmg="mutaba3a-macos-universal.dmg"
+    local stable_dmg="mutaba3a-macos-arm64.dmg"
     local stable_dmg_path="$RELEASE_DIR/$stable_dmg"
-    local stable_checksum_file="$RELEASE_DIR/mutaba3a-macos-universal.dmg.sha256"
+    local stable_checksum_file="$RELEASE_DIR/mutaba3a-macos-arm64.dmg.sha256"
 
     # Copy DMG to versioned path
     cp "$source_dmg" "$versioned_dmg_path"
@@ -378,11 +378,28 @@ sign_update_artifact() {
     echo -e "${BLUE}Signing update artifact...${NC}"
 
     # Use Tauri CLI to sign the artifact
+    # The CLI outputs a message like:
+    #   Your file was signed successfully...
+    #   Public signature:
+    #   <base64 signature>
+    #   Make sure to include this...
+    # We need to extract ONLY the base64 signature (starts with "dW50cnVzdGVk")
+    local cli_output
+    cli_output=$(npx @tauri-apps/cli signer sign "$artifact_path" --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" 2>/dev/null)
+
+    if [[ -z "$cli_output" ]]; then
+        echo -e "${RED}Error: Failed to sign artifact${NC}"
+        return 1
+    fi
+
+    # Extract only the base64 signature line (starts with dW50cnVzdGVk which is base64 for "untrusted comment")
     local signature
-    signature=$(npx @tauri-apps/cli signer sign "$artifact_path" --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" 2>/dev/null)
+    signature=$(echo "$cli_output" | grep -E '^dW50cnVzdGVk' | head -1)
 
     if [[ -z "$signature" ]]; then
-        echo -e "${RED}Error: Failed to sign artifact${NC}"
+        echo -e "${RED}Error: Could not extract signature from CLI output${NC}"
+        echo -e "${YELLOW}CLI output was:${NC}"
+        echo "$cli_output"
         return 1
     fi
 
@@ -796,9 +813,9 @@ deploy_web() {
     echo -e "${GREEN}Web version v$1 deployed to main${NC}"
 }
 
-# Build Tauri for Mac
+# Build Tauri for Mac (Apple Silicon only)
 build_mac() {
-    echo -e "${BLUE}Building Tauri for macOS...${NC}"
+    echo -e "${BLUE}Building Tauri for macOS (Apple Silicon)...${NC}"
 
     # Check if on macOS
     if [[ "$OSTYPE" != "darwin"* ]]; then
@@ -809,9 +826,39 @@ build_mac() {
     echo -e "${BLUE}Cleaning Rust build cache...${NC}"
     cargo clean --manifest-path src-tauri/Cargo.toml
 
-    npm run tauri build -- --target universal-apple-darwin 2>/dev/null || npm run tauri build
+    echo ""
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║  ${BOLD}Tauri Build Process${NC}${CYAN}                                       ║${NC}"
+    echo -e "${CYAN}║                                                            ║${NC}"
+    echo -e "${CYAN}║  ${NC}This will run in sequence:${CYAN}                                ║${NC}"
+    echo -e "${CYAN}║    ${NC}1. Frontend build (Vite) - ~10 seconds${CYAN}                  ║${NC}"
+    echo -e "${CYAN}║    ${NC}2. Rust compilation (cargo) - ~2-5 minutes${CYAN}              ║${NC}"
+    echo -e "${CYAN}║    ${NC}3. App bundling & code signing - ~1-2 minutes${CYAN}           ║${NC}"
+    echo -e "${CYAN}║    ${NC}4. Notarization with Apple - ~2-5 minutes${CYAN}               ║${NC}"
+    echo -e "${CYAN}║                                                            ║${NC}"
+    echo -e "${CYAN}║  ${YELLOW}⏳ Total expected time: 5-15 minutes${NC}${CYAN}                      ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
 
-    echo -e "${GREEN}macOS build complete!${NC}"
+    echo -e "${YELLOW}▶ Starting Tauri build for aarch64-apple-darwin...${NC}"
+    echo ""
+
+    if npm run tauri build; then
+        echo ""
+        echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║  ✓ macOS build complete (Apple Silicon)                    ║${NC}"
+        echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    else
+        echo ""
+        echo -e "${RED}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║  ✗ Tauri build failed!                                     ║${NC}"
+        echo -e "${RED}║                                                            ║${NC}"
+        echo -e "${RED}║  Check the error messages above for details.               ║${NC}"
+        echo -e "${RED}╚════════════════════════════════════════════════════════════╝${NC}"
+        exit 1
+    fi
+
+    echo ""
     echo -e "Build output: ${BLUE}src-tauri/target/release/bundle/${NC}"
 }
 
