@@ -165,6 +165,7 @@ export function IncomeDrawer() {
     // The UI shows Earned/Invoiced/Received, but storage is simplified
     const status: TxStatus = data.incomeStatus === 'received' ? 'paid' : 'unpaid';
 
+    const amountMinor = parseAmountToMinor(data.amount);
     const txData = {
       kind: 'income' as const,
       status,
@@ -172,11 +173,12 @@ export function IncomeDrawer() {
       title: data.title || undefined,
       clientId: data.clientId || undefined,
       projectId: data.projectId || undefined,
-      amountMinor: parseAmountToMinor(data.amount),
+      amountMinor,
       currency: data.currency as Currency,
       occurredAt: new Date(data.occurredAt).toISOString(),
       dueDate: (data.incomeStatus !== 'received' && data.dueDate) ? data.dueDate : undefined,
-      paidAt: status === 'paid' ? new Date().toISOString() : undefined,
+      paidAt: status === 'paid' ? new Date().toISOString() : null,
+      receivedAmountMinor: status === 'paid' ? amountMinor : null,
       notes: data.notes || undefined,
     };
 

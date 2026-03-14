@@ -12,9 +12,8 @@
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu, AmountWithConversion } from '../../components/ui';
+import { EmptyState, RowActionsMenu, AmountWithConversion, PaymentStatusBadge } from '../../components/ui';
 import { CheckIcon, CopyIcon } from '../../components/icons';
-import { TransactionStatusCell } from '../../components/transactions';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome, useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import type { IncomeFilters } from '../../hooks/useIncomeQueries';
@@ -23,6 +22,7 @@ import { useDrawerStore } from '../../lib/stores';
 import {
   formatDate,
   formatDateCompact,
+  formatAmount,
   getDateRangePreset,
   cn,
 } from '../../lib/utils';
@@ -32,7 +32,7 @@ import { useT, useLanguage, getLocale } from '../../lib/i18n';
 type IncomeStatusFilter = 'all' | 'unpaid' | 'received' | 'overdue';
 
 export function IncomePage() {
-  const { openTransactionDrawer } = useDrawerStore();
+  const { openTransactionDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
@@ -200,24 +200,47 @@ export function IncomePage() {
                     <td>{tx.clientName || t('common.noClient')}</td>
                     {!isCompact && <td className="text-secondary">{tx.projectName || '-'}</td>}
                     <td>
-                      <TransactionStatusCell
-                        kind="income"
-                        status={tx.status}
-                        dueDate={tx.dueDate}
-                      />
+                      {tx.paymentStatus ? (
+                        <PaymentStatusBadge
+                          paymentStatus={tx.paymentStatus}
+                          amountMinor={tx.amountMinor}
+                          receivedAmountMinor={tx.receivedAmountMinor}
+                        />
+                      ) : (
+                        <span className={cn('status-badge', tx.status === 'paid' ? 'paid' : 'unpaid')}>
+                          {tx.status === 'paid' ? t('transactions.status.paid') : t('transactions.status.unpaid')}
+                        </span>
+                      )}
+                      {tx.daysOverdue !== undefined && tx.daysOverdue > 0 && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '2px' }}>
+                          {t('transactions.status.overdue', { days: tx.daysOverdue })}
+                        </div>
+                      )}
                     </td>
                     <td className="amount-cell">
-                      <AmountWithConversion
-                        amountMinor={tx.amountMinor}
-                        currency={tx.currency}
-                        type="income"
-                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                        <AmountWithConversion
+                          amountMinor={tx.amountMinor}
+                          currency={tx.currency}
+                          type="income"
+                        />
+                        {tx.receivedAmountMinor && tx.receivedAmountMinor > 0 && tx.paymentStatus === 'partial' && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                            {t('transactions.partialPayment.received')}: {formatAmount(tx.receivedAmountMinor, tx.currency, locale)}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <RowActionsMenu
                         actions={[
-                          ...(tx.status === 'unpaid'
+                          ...(tx.status === 'unpaid' && tx.paymentStatus !== 'paid'
                             ? [
+                                {
+                                  label: t('transactions.partialPayment.recordPayment'),
+                                  icon: <CheckIcon size={16} />,
+                                  onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
+                                },
                                 {
                                   label: t('common.markPaid'),
                                   icon: <CheckIcon size={16} />,

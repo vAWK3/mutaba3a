@@ -358,4 +358,70 @@ describe('IncomeDrawer', () => {
       expect(amountInput.value).toBe('250');
     }, { timeout: 3000 });
   });
+
+  it('should clear paidAt and receivedAmountMinor when changing from received to invoiced', async () => {
+    const user = userEvent.setup();
+
+    // Create a paid transaction
+    const tx = await transactionRepo.create({
+      kind: 'income',
+      status: 'paid',
+      profileId: testProfileId,
+      amountMinor: 50000, // $500
+      currency: 'USD',
+      occurredAt: '2024-03-15T10:00:00Z',
+      paidAt: '2024-03-15T10:00:00Z',
+      receivedAmountMinor: 50000,
+      title: 'Paid invoice',
+    });
+
+    // Verify initial state
+    const initialTx = await transactionRepo.get(tx.id);
+    expect(initialTx?.status).toBe('paid');
+    expect(initialTx?.paidAt).toBe('2024-03-15T10:00:00Z');
+    expect(initialTx?.receivedAmountMinor).toBe(50000);
+
+    // Set drawer to edit mode
+    useDrawerStore.setState({
+      incomeDrawer: { isOpen: true, mode: 'edit', transactionId: tx.id },
+    });
+
+    render(
+      <TestWrapper>
+        <IncomeDrawer />
+      </TestWrapper>
+    );
+
+    // Wait for form to load
+    await waitFor(() => {
+      expect(screen.getByText('Edit Income')).toBeInTheDocument();
+    });
+
+    // Should show "Received" as active since status is 'paid'
+    await waitFor(() => {
+      const receivedButton = screen.getByText('Received');
+      expect(receivedButton.closest('button')).toHaveClass('active');
+    });
+
+    // Click on Invoiced status
+    const invoicedButton = screen.getByText('Invoiced');
+    await user.click(invoicedButton);
+
+    // Wait for the status to change in the UI
+    await waitFor(() => {
+      expect(invoicedButton.closest('button')).toHaveClass('active');
+    });
+
+    // Submit the form
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await user.click(saveButton);
+
+    // Wait for update to complete and verify paidAt and receivedAmountMinor are cleared
+    await waitFor(async () => {
+      const updatedTx = await transactionRepo.get(tx.id);
+      expect(updatedTx?.status).toBe('unpaid');
+      expect(updatedTx?.paidAt).toBeNull();
+      expect(updatedTx?.receivedAmountMinor).toBeNull();
+    });
+  });
 });

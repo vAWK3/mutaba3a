@@ -252,12 +252,37 @@ export const transactionRepo = {
       filtered = filtered.slice(0, filters.limit);
     }
 
-    return filtered.map((tx) => ({
-      ...tx,
-      clientName: tx.clientId ? clientMap.get(tx.clientId) : undefined,
-      projectName: tx.projectId ? projectMap.get(tx.projectId) : undefined,
-      categoryName: tx.categoryId ? categoryMap.get(tx.categoryId) : undefined,
-    }));
+    return filtered.map((tx) => {
+      // Compute payment status and remaining amount for income transactions
+      let paymentStatus: PaymentStatus | undefined;
+      let remainingAmountMinor: number | undefined;
+
+      if (tx.kind === 'income') {
+        const received = tx.receivedAmountMinor ?? 0;
+        remainingAmountMinor = Math.max(0, tx.amountMinor - received);
+
+        if (tx.status === 'paid' || received >= tx.amountMinor) {
+          paymentStatus = 'paid';
+        } else if (received > 0) {
+          paymentStatus = 'partial';
+        } else {
+          paymentStatus = 'unpaid';
+        }
+      }
+
+      return {
+        ...tx,
+        clientName: tx.clientId ? clientMap.get(tx.clientId) : undefined,
+        projectName: tx.projectId ? projectMap.get(tx.projectId) : undefined,
+        categoryName: tx.categoryId ? categoryMap.get(tx.categoryId) : undefined,
+        daysOverdue:
+          tx.kind === 'income' && tx.status === 'unpaid' && tx.dueDate && tx.dueDate < today
+            ? Math.floor((new Date(today).getTime() - new Date(tx.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+            : undefined,
+        paymentStatus,
+        remainingAmountMinor,
+      };
+    });
   },
 
   async get(id: string): Promise<Transaction | undefined> {

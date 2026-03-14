@@ -2,20 +2,20 @@ import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
-import { RowActionsMenu } from '../../components/ui';
+import { RowActionsMenu, PaymentStatusBadge } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useProject, useProjectSummary, useTransactions } from '../../hooks/useQueries';
 import { useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatDate, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
 import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { TxKind, TxStatus, QueryFilters } from '../../types';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
-  const { openIncomeDrawer, openExpenseDrawer, openProjectDrawer } = useDrawerStore();
+  const { openIncomeDrawer, openExpenseDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
@@ -250,15 +250,35 @@ export function ProjectDetailPage() {
                           <td className="text-secondary">{tx.clientName || '-'}</td>
                           <td className="text-secondary">{tx.categoryName || '-'}</td>
                           <td className="amount-cell">
-                            <AmountWithConversion
-                              amountMinor={tx.amountMinor}
-                              currency={tx.currency}
-                              type={tx.kind === 'income' ? 'income' : 'expense'}
-                              showExpenseSign={tx.kind === 'expense'}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                              <AmountWithConversion
+                                amountMinor={tx.amountMinor}
+                                currency={tx.currency}
+                                type={tx.kind === 'income' ? 'income' : 'expense'}
+                                showExpenseSign={tx.kind === 'expense'}
+                              />
+                              {tx.kind === 'income' && tx.receivedAmountMinor && tx.receivedAmountMinor > 0 && tx.paymentStatus === 'partial' && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                                  {t('transactions.partialPayment.received')}: {formatAmount(tx.receivedAmountMinor, tx.currency, locale)}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td>
-                            {tx.kind === 'income' && (
+                            {tx.kind === 'income' && tx.paymentStatus ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <PaymentStatusBadge
+                                  paymentStatus={tx.paymentStatus}
+                                  amountMinor={tx.amountMinor}
+                                  receivedAmountMinor={tx.receivedAmountMinor}
+                                />
+                                {isOverdue && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--error)' }}>
+                                    {t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}
+                                  </div>
+                                )}
+                              </div>
+                            ) : tx.kind === 'income' && (
                               <>
                                 {tx.status === 'paid' ? (
                                   <span className="status-badge paid">{t('transactions.status.paid')}</span>
@@ -266,7 +286,7 @@ export function ProjectDetailPage() {
                                   <span className="status-badge overdue">{t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}</span>
                                 ) : (
                                   <span className="status-badge unpaid">
-                                    {daysUntilDue === 0 ? t('transactions.status.dueToday') : t('transactions.status.dueIn', { days: daysUntilDue ??0 })}
+                                    {daysUntilDue === 0 ? t('transactions.status.dueToday') : t('transactions.status.dueIn', { days: daysUntilDue ?? 0 })}
                                   </span>
                                 )}
                               </>
@@ -275,8 +295,13 @@ export function ProjectDetailPage() {
                           <td>
                             <RowActionsMenu
                               actions={[
-                                ...(isReceivable
+                                ...(isReceivable && tx.paymentStatus !== 'paid'
                                   ? [
+                                      {
+                                        label: t('transactions.partialPayment.recordPayment'),
+                                        icon: <CheckIcon size={16} />,
+                                        onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
+                                      },
                                       {
                                         label: t('common.markPaid'),
                                         icon: <CheckIcon size={16} />,

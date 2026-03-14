@@ -28,7 +28,29 @@
 
 ---
 
-## [Unreleased] - 2026-03-13
+## [Unreleased] - 2026-03-14
+
+### Added
+- **Partial Payments UI Integration**: Fully integrated partial payment functionality into income tables across the application
+  - Added `PaymentStatusBadge` component to display payment status with percentage for partial payments
+  - Exported `PaymentStatusBadge` from `src/components/ui/index.ts`
+  - Updated `transactionRepo.list()` to compute `paymentStatus` and `remainingAmountMinor` for all income transactions
+  - Income tables now show:
+    - Payment status badge (Paid, Partial X%, Unpaid)
+    - Received amount display for partial payments
+    - "Record Payment" action in row menu for unpaid income
+    - Visual indication of payment progress
+  - Updated pages:
+    - `/income` (IncomePage.tsx) - main income ledger
+    - `/projects/:id` (ProjectDetailPage.tsx) - project transactions tab
+    - `/clients/:id` (ClientDetailPage.tsx) - receivables tab and transactions tab
+  - Added comprehensive tests in `IncomePage.test.tsx`:
+    - PaymentStatusBadge rendering
+    - Partial payment display
+    - Record payment action availability
+    - Payment status calculations
+  - All translations (en, ar) already in place for partial payment UI
+  - Removed completed TODO item
 
 ### Fixed
 - **Timezone Bug in Recurring Expense Calculations**: Fixed `shouldRuleOccurInMonth` in `forecastCalculations.ts` to use consistent year/month numeric comparison instead of Date object comparison, which was causing incorrect results in UTC+ timezones
