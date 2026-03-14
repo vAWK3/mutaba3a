@@ -65,8 +65,17 @@ export const clientRepo = {
 
   async create(data: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>): Promise<Client> {
     const now = nowISO();
+
+    // Auto-assign default profile if no profileId provided
+    let profileId = data.profileId;
+    if (!profileId) {
+      const defaultProfile = await businessProfileRepo.getDefault();
+      profileId = defaultProfile?.id;
+    }
+
     const client: Client = {
       ...data,
+      profileId,
       id: generateId(),
       createdAt: now,
       updatedAt: now,
@@ -108,8 +117,17 @@ export const projectRepo = {
 
   async create(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
     const now = nowISO();
+
+    // Auto-assign default profile if no profileId provided
+    let profileId = data.profileId;
+    if (!profileId) {
+      const defaultProfile = await businessProfileRepo.getDefault();
+      profileId = defaultProfile?.id;
+    }
+
     const project: Project = {
       ...data,
+      profileId,
       id: generateId(),
       createdAt: now,
       updatedAt: now,

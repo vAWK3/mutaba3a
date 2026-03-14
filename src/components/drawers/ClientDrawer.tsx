@@ -1,19 +1,21 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore } from '../../lib/stores';
 import { useOnboardingStore } from '../../lib/onboardingStore';
-import { useClient, useCreateClient, useUpdateClient, useArchiveClient } from '../../hooks/useQueries';
+import { useClient, useCreateClient, useUpdateClient, useArchiveClient, useBusinessProfiles } from '../../hooks/useQueries';
+import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  email: z.union([z.string().email('Invalid email'), z.literal('')]).optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
+  profileId: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -24,6 +26,8 @@ export function ClientDrawer() {
   const t = useT();
   const { currentStep, completeStep } = useOnboardingStore();
 
+  const { activeProfile } = useActiveProfile();
+  const { data: profiles = [] } = useBusinessProfiles();
   const { data: existingClient, isLoading: clientLoading } = useClient(clientId || '');
   const createMutation = useCreateClient();
   const updateMutation = useUpdateClient();
@@ -36,6 +40,7 @@ export function ClientDrawer() {
       email: '',
       phone: '',
       notes: '',
+      profileId: activeProfile?.id || '',
     },
   });
 
@@ -47,9 +52,10 @@ export function ClientDrawer() {
         email: existingClient.email || '',
         phone: existingClient.phone || '',
         notes: existingClient.notes || '',
+        profileId: existingClient.profileId || activeProfile?.id || '',
       });
     }
-  }, [existingClient, form]);
+  }, [existingClient, form, activeProfile]);
 
   const onSubmit = async (data: FormData) => {
     const clientData = {
@@ -57,6 +63,7 @@ export function ClientDrawer() {
       email: data.email || undefined,
       phone: data.phone || undefined,
       notes: data.notes || undefined,
+      profileId: data.profileId || undefined,
     };
 
     try {
@@ -146,6 +153,26 @@ export function ClientDrawer() {
             <p className="form-error">{t('validation.nameRequired')}</p>
           )}
         </div>
+
+        {profiles.length > 1 && (
+          <div className="form-group">
+            <label className="form-label">{t('common.profile')}</label>
+            <Controller
+              name="profileId"
+              control={form.control}
+              render={({ field }) => (
+                <select className="select" style={{ width: '100%' }} {...field}>
+                  <option value="">{t('common.defaultProfile')}</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            />
+          </div>
+        )}
 
         <div className="form-group">
           <label className="form-label">{t('drawer.client.email')}</label>

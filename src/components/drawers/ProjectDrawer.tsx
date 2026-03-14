@@ -11,7 +11,9 @@ import {
   useUpdateProject,
   useArchiveProject,
   useClients,
+  useBusinessProfiles,
 } from '../../hooks/useQueries';
+import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
@@ -22,6 +24,7 @@ const schema = z.object({
   clientId: z.string().optional(),
   field: z.string().optional(),
   notes: z.string().optional(),
+  profileId: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -32,6 +35,8 @@ export function ProjectDrawer() {
   const t = useT();
   const { currentStep, completeStep } = useOnboardingStore();
 
+  const { activeProfile } = useActiveProfile();
+  const { data: profiles = [] } = useBusinessProfiles();
   const { data: existingProject, isLoading: projectLoading } = useProject(projectId || '');
   const { data: clients = [] } = useClients();
   const createMutation = useCreateProject();
@@ -45,6 +50,7 @@ export function ProjectDrawer() {
       clientId: defaultClientId || '',
       field: '',
       notes: '',
+      profileId: activeProfile?.id || '',
     },
   });
 
@@ -56,9 +62,10 @@ export function ProjectDrawer() {
         clientId: existingProject.clientId || '',
         field: existingProject.field || '',
         notes: existingProject.notes || '',
+        profileId: existingProject.profileId || activeProfile?.id || '',
       });
     }
-  }, [existingProject, form]);
+  }, [existingProject, form, activeProfile]);
 
   const onSubmit = async (data: FormData) => {
     const projectData = {
@@ -66,6 +73,7 @@ export function ProjectDrawer() {
       clientId: data.clientId || undefined,
       field: data.field || undefined,
       notes: data.notes || undefined,
+      profileId: data.profileId || undefined,
     };
 
     try {
@@ -155,6 +163,26 @@ export function ProjectDrawer() {
             <p className="form-error">{t('validation.nameRequired')}</p>
           )}
         </div>
+
+        {profiles.length > 1 && (
+          <div className="form-group">
+            <label className="form-label">{t('common.profile')}</label>
+            <Controller
+              name="profileId"
+              control={form.control}
+              render={({ field }) => (
+                <select className="select" style={{ width: '100%' }} {...field}>
+                  <option value="">{t('common.defaultProfile')}</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            />
+          </div>
+        )}
 
         <div className="form-group">
           <label className="form-label">{t('drawer.project.client')}</label>

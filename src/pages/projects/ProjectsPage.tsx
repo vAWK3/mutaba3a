@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
-import { useProjectSummaries } from '../../hooks/useQueries';
+import { OrphanedRecordsModal } from '../../components/modals';
+import { useProjectSummaries, useProjects } from '../../hooks/useQueries';
 import { useSortState } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
@@ -16,6 +17,7 @@ export function ProjectsPage() {
   const { openProjectDrawer } = useDrawerStore();
   const t = useT();
   const [search, setSearch] = useState('');
+  const [showOrphanedModal, setShowOrphanedModal] = useState(false);
 
   // URL-persisted sorting
   const { sortField, sortDir, setSort } = useSortState<SortField>({
@@ -26,6 +28,17 @@ export function ProjectsPage() {
 
   // Get active profile filter (undefined in "All Profiles" mode)
   const profileId = useProfileFilter();
+
+  // Fetch all projects to check for orphaned records
+  const { data: allProjects = [] } = useProjects(undefined, undefined);
+
+  // Check for orphaned projects and show modal
+  useEffect(() => {
+    const orphanedProjects = allProjects.filter((p) => !p.profileId && !p.archivedAt);
+    if (orphanedProjects.length > 0 && !showOrphanedModal) {
+      setShowOrphanedModal(true);
+    }
+  }, [allProjects, showOrphanedModal]);
 
   // Always fetch all currencies - no currency filter
   const { data: rawProjects = [], isLoading } = useProjectSummaries(profileId, undefined, search);
@@ -96,6 +109,11 @@ export function ProjectsPage() {
 
   return (
     <>
+      <OrphanedRecordsModal
+        isOpen={showOrphanedModal}
+        onClose={() => setShowOrphanedModal(false)}
+        type="projects"
+      />
       <TopBar title={t('projects.title')} />
       <div className="page-content">
         <div className="filters-row">

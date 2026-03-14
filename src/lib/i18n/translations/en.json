@@ -1788,5 +1788,59 @@
       "projections": "Projections (CSV)",
       "assumptions": "Assumptions (CSV)"
     }
+  },
+  "orphanedRecords": {
+    "title": "Assign Profiles",
+    "description": {
+      "clients": "The following clients don't have a profile assigned. Please assign them to a profile to continue.",
+      "projects": "The following projects don't have a profile assigned. Please assign them to a profile to continue."
+    },
+    "assignAllToDefault": "Assign All to Default Profile",
+    "assignIndividually": "Assign Individually",
+    "or": "or"
+  },
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "archive": "Archive",
+    "add": "Add",
+    "edit": "Edit",
+    "view": "View",
+    "loading": "Loading...",
+    "downloading": "Downloading...",
+    "search": "Search...",
+    "close": "Close",
+    "confirm": "Confirm",
+    "noClient": "No client",
+    "noProject": "No project",
+    "all": "All",
+    "markPaid": "Mark Paid",
+    "duplicate": "Duplicate",
+    "undo": "Undo",
+    "previous": "Previous",
+    "next": "Next",
+    "uncategorized": "Uncategorized",
+    "noResults": "No results found",
+    "errorMessage": "An error occurred. Please try again.",
+    "client": "Client",
+    "project": "Project",
+    "profile": "Profile",
+    "selectProfile": "Select Profile...",
+    "defaultProfile": "Default Profile",
+    "default": "Default",
+    "sort": {
+      "nameAZ": "Name (A-Z)",
+      "nameZA": "Name (Z-A)",
+      "valueHigh": "Value (High to Low)",
+      "valueLow": "Value (Low to High)",
+      "unpaidHigh": "Unpaid (High to Low)",
+      "unpaidLow": "Unpaid (Low to High)",
+      "activityRecent": "Recent Activity",
+      "activityOldest": "Oldest Activity",
+      "netHigh": "Net (High to Low)",
+      "netLow": "Net (Low to High)"
+    }
   }
 }

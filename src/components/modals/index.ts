@@ -5,3 +5,4 @@ export { ImportDataModal } from './ImportDataModal';
 export { ProfilePickerModal } from './ProfilePickerModal';
 export { WelcomeModal } from './WelcomeModal';
 export { RecurringConfirmModal, RecurringSnoozeModal } from './RecurringConfirmModal';
+export { OrphanedRecordsModal } from './OrphanedRecordsModal';

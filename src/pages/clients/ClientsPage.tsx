@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
-import { useClientSummaries } from '../../hooks/useQueries';
+import { OrphanedRecordsModal } from '../../components/modals';
+import { useClientSummaries, useClients } from '../../hooks/useQueries';
 import { useSortState } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
@@ -18,6 +19,7 @@ export function ClientsPage() {
   const { language } = useLanguage();
   const locale = getLocale(language);
   const [search, setSearch] = useState('');
+  const [showOrphanedModal, setShowOrphanedModal] = useState(false);
 
   // URL-persisted sorting
   const { sortField, sortDir, setSort } = useSortState<SortField>({
@@ -28,6 +30,17 @@ export function ClientsPage() {
 
   // Get active profile filter (undefined in "All Profiles" mode)
   const profileId = useProfileFilter();
+
+  // Fetch all clients to check for orphaned records
+  const { data: allClients = [] } = useClients(undefined);
+
+  // Check for orphaned clients and show modal
+  useEffect(() => {
+    const orphanedClients = allClients.filter((c) => !c.profileId && !c.archivedAt);
+    if (orphanedClients.length > 0 && !showOrphanedModal) {
+      setShowOrphanedModal(true);
+    }
+  }, [allClients, showOrphanedModal]);
 
   // Always fetch all currencies - no currency filter
   const { data: rawClients = [], isLoading } = useClientSummaries(profileId, undefined, search);
@@ -82,6 +95,11 @@ export function ClientsPage() {
 
   return (
     <>
+      <OrphanedRecordsModal
+        isOpen={showOrphanedModal}
+        onClose={() => setShowOrphanedModal(false)}
+        type="clients"
+      />
       <TopBar title={t('clients.title')} />
       <div className="page-content">
         <div className="filters-row">
