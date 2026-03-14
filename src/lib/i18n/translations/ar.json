@@ -52,6 +52,7 @@
     "overview": "نظرة عامة",
     "income": "الإيرادات",
     "insights": "التحليلات",
+    "planning": "التخطيط",
     "projects": "المشاريع",
     "clients": "العملاء",
     "transactions": "المعاملات",
@@ -473,16 +474,28 @@
       "export": "تصدير البيانات",
       "exportDesc": "تنزيل نسخة احتياطية من جميع بياناتك",
       "exportBtn": "تصدير JSON",
+      "exportFormat": "صيغة التصدير",
+      "exportFormatCSV": "CSV (موصى به)",
+      "exportFormatJSON": "JSON (قديم)",
+      "exportFormatCSVDesc": "يمكن فتح صيغة CSV في Excel/Sheets وإعادة استيرادها باستخدام أداة الاستيراد.",
+      "exportFormatJSONDesc": "تشمل صيغة JSON جميع البيانات بما في ذلك المستندات والإعدادات. استخدمها للنسخ الاحتياطية الكاملة.",
+      "exportComplete": "اكتمل التصدير",
+      "exportCompleteDesc": "تم تصدير بياناتك بنجاح.",
+      "selectProfileDesc": "اختر ملفاً تجارياً للتصدير. سيتم تضمين جميع المستندات والعملاء والمشاريع والمعاملات المرتبطة بهذا الملف.",
       "exporting": "جارٍ التصدير...",
       "exported": "تم التصدير بنجاح!",
       "exportFailed": "فشل التصدير",
+      "exportFailedRetry": "فشل التصدير. يرجى المحاولة مرة أخرى.",
+      "noProfilesFound": "لم يتم العثور على ملفات تجارية. قم بإنشاء ملف أولاً.",
       "import": "استيراد البيانات",
-      "importDesc": "استعادة من ملف نسخة احتياطية (يستبدل جميع البيانات)",
-      "importBtn": "استيراد JSON",
+      "importDesc": "استعادة من ملف نسخة احتياطية أو قالب CSV",
+      "importBtn": "استيراد البيانات",
       "importing": "جارٍ الاستيراد...",
       "imported": "تم الاستيراد بنجاح! جارٍ التحديث...",
       "importFailed": "فشل الاستيراد: {error}",
       "invalidFile": "صيغة ملف النسخة الاحتياطية غير صالحة",
+      "downloadTemplate": "تحميل قالب CSV",
+      "downloadTemplateBtn": "تحميل قالب CSV",
       "deleteAll": "حذف جميع البيانات",
       "deleteAllDesc": "حذف جميع البيانات المحلية نهائياً",
       "deleteAllBtn": "حذف جميع البيانات",
@@ -1672,13 +1685,12 @@
         "retainers": "3 اتفاقيات عقود فعّالة",
         "expenses": "25+ مصروف مع تصنيفات"
       },
-      "confirmLabel": "اكتب \"{word}\" للتأكيد:",
       "seeding": "جاري إنشاء البيانات التوضيحية...",
       "successTitle": "تم تفعيل وضع العرض",
       "successDesc": "تم إنشاء البيانات النموذجية. ستتم إعادة تحميل الصفحة لعرض البيانات.",
       "errorTitle": "فشل إنشاء البيانات التوضيحية",
       "errorDesc": "حدث خطأ أثناء إنشاء البيانات التوضيحية. يرجى المحاولة مرة أخرى.",
-      "seedButton": "إنشاء البيانات التوضيحية",
+      "seedButton": "عرض العرض التوضيحي",
       "doneButton": "ابدأ",
       "tryAgain": "حاول مجدداً"
     },
@@ -1699,6 +1711,118 @@
       "projects": "مشاريع",
       "transactions": "معاملات",
       "documents": "مستندات"
+    }
+  },
+  "planning": {
+    "title": "التخطيط المالي",
+    "subtitle": "نمذجة الإيرادات والمصروفات واحتياجات التمويل المتوقعة",
+    "confirmDeleteAssumption": "هل أنت متأكد من حذف هذا الافتراض؟",
+    "plan": {
+      "new": "خطة جديدة",
+      "defaultName": "خطتي",
+      "name": "اسم الخطة",
+      "description": "الوصف",
+      "startMonth": "شهر البداية",
+      "horizon": "أفق التخطيط",
+      "horizonMonths": "{months} شهر",
+      "status": "الحالة",
+      "currency": "العملة",
+      "rename": "إعادة تسمية",
+      "confirmDelete": "هل أنت متأكد من حذف هذه الخطة؟ لا يمكن التراجع عن هذا الإجراء."
+    },
+    "summary": {
+      "ask": "طلب التمويل",
+      "monthlyBurn": "الحرق الشهري",
+      "monthlyRevenue": "متوسط الإيرادات الشهرية",
+      "runway": "المدرج",
+      "months": "شهر",
+      "breakEven": "نقطة التعادل",
+      "notReached": "لم تتحقق",
+      "worstDip": "أسوأ انخفاض نقدي",
+      "bufferNeeded": "الاحتياطي المطلوب"
+    },
+    "assumptions": {
+      "title": "الافتراضات",
+      "new": "افتراض جديد",
+      "edit": "تعديل الافتراض",
+      "label": "التسمية",
+      "labelPlaceholder": "مثال: دخل العقد الشهري",
+      "category": "الفئة",
+      "type": "النوع",
+      "amount": "المبلغ",
+      "currency": "العملة",
+      "startMonth": "شهر البداية",
+      "endMonth": "شهر النهاية",
+      "notes": "ملاحظات",
+      "notesPlaceholder": "أضف أي ملاحظات حول هذا الافتراض...",
+      "addFirst": "إضافة {category}",
+      "categories": {
+        "revenue": "الإيرادات",
+        "expense": "المصروفات",
+        "funding": "التمويل",
+        "hiring": "التوظيف",
+        "other": "أخرى"
+      },
+      "types": {
+        "oneTime": "مرة واحدة",
+        "recurring": "متكرر",
+        "milestone": "إنجاز",
+        "percentage": "نسبة مئوية"
+      },
+      "frequency": {
+        "label": "التكرار",
+        "monthly": "شهري",
+        "quarterly": "ربع سنوي",
+        "yearly": "سنوي"
+      },
+      "confidence": {
+        "label": "الثقة",
+        "confirmed": "مؤكد",
+        "likely": "محتمل",
+        "roughGuess": "تخمين تقريبي"
+      }
+    },
+    "scenarios": {
+      "base": "الأساسي",
+      "conservative": "المتحفظ",
+      "optimistic": "المتفائل"
+    },
+    "timeline": {
+      "title": "التدفق النقدي الشهري",
+      "cashIn": "الوارد",
+      "cashOut": "الصادر",
+      "startingCash": "البداية",
+      "endingCash": "النهاية"
+    },
+    "insights": {
+      "title": "الرؤى",
+      "negativeCash": "يصبح النقد سالباً في {month}. ستحتاج {amount} لتغطية العجز.",
+      "lowRunway": "متبقي {months} شهر فقط من المدرج. فكر في تمديد جدول التمويل.",
+      "lowConfidenceAssumptions": "{count} افتراضات ذات ثقة منخفضة. راجع هذه التقديرات وتحقق منها.",
+      "breakEvenReached": "نقطة التعادل متوقعة في {month}. استمر في مراقبة معدل الحرق.",
+      "selfSustaining": "خطتك مستدامة ذاتياً! لا حاجة لتمويل خارجي.",
+      "highBurnRate": "معدل الحرق ({burn}) يتجاوز الإيرادات المتوقعة ({revenue})."
+    },
+    "ask": {
+      "title": "حاسبة التمويل",
+      "mode": "وضع الطلب",
+      "manual": "يدوي",
+      "calculated": "محسوب",
+      "minimum": "الحد الأدنى للبقاء",
+      "comfortable": "مريح",
+      "growth": "للنمو"
+    },
+    "emptyState": {
+      "title": "ابدأ تخطيط ماليتك",
+      "description": "أنشئ خطة مالية لنمذجة إيراداتك ومصروفاتك واحتياجات التمويل خلال 12-24 شهراً القادمة.",
+      "cta": "أنشئ خطتك الأولى",
+      "noProfile": "يرجى إنشاء ملف تجاري أولاً لبدء التخطيط.",
+      "noProjections": "أضف افتراضات لمشاهدة توقعاتك المالية"
+    },
+    "export": {
+      "button": "تصدير",
+      "projections": "التوقعات (CSV)",
+      "assumptions": "الافتراضات (CSV)"
     }
   }
 }

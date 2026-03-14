@@ -1,0 +1,253 @@
+.csv-validation-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 60vh;
+}
+
+/* Stats Summary */
+.validation-stats {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.validation-stats .stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.validation-stats .stat-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.validation-stats .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.validation-stats .stat-new .stat-value {
+  color: #059669;
+}
+
+.validation-stats .stat-duplicate .stat-value {
+  color: #d97706;
+}
+
+.validation-stats .stat-error .stat-value {
+  color: #dc2626;
+}
+
+.validation-stats .stat-selected .stat-value {
+  color: #2563eb;
+}
+
+/* Table */
+.validation-table-container {
+  overflow-y: auto;
+  max-height: 400px;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+}
+
+.validation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.validation-table thead {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+  z-index: 10;
+}
+
+.validation-table th {
+  padding: 0.75rem 0.5rem;
+  text-align: left;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.validation-table td {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.validation-table .col-checkbox {
+  width: 40px;
+  text-align: center;
+}
+
+.validation-table .col-status {
+  width: 100px;
+}
+
+.validation-table .col-type {
+  width: 80px;
+}
+
+.validation-table .col-name {
+  width: 200px;
+  font-weight: 500;
+}
+
+.validation-table .col-details {
+  width: 200px;
+}
+
+.validation-table .col-issues {
+  min-width: 250px;
+}
+
+/* Row States */
+.validation-row {
+  transition: background-color 0.15s;
+}
+
+.validation-row.selected {
+  background-color: #eff6ff;
+}
+
+.validation-row.error {
+  background-color: #fef2f2;
+}
+
+.validation-row.duplicate {
+  background-color: #fffbeb;
+}
+
+.validation-row:hover {
+  background-color: #f8fafc;
+}
+
+.validation-row.selected:hover {
+  background-color: #dbeafe;
+}
+
+/* Status */
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  margin-right: 0.5rem;
+}
+
+.status-icon.status-new {
+  background-color: #d1fae5;
+  color: #059669;
+}
+
+.status-icon.status-duplicate {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+.status-icon.status-error {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+/* Type Badge */
+.type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background-color: #e0e7ff;
+  color: #4338ca;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Details */
+.details-text {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.details-text > div {
+  margin-bottom: 0.125rem;
+}
+
+/* Issues */
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.issue {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.issue.error {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.issue.warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.issue-icon {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+/* Notices */
+.validation-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.validation-notice.error-notice {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.validation-notice.duplicate-notice {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid: #bfdbfe;
+}
+
+.notice-icon {
+  font-size: 1.25rem;
+}
+
+/* Text utilities */
+.text-muted {
+  color: #94a3b8;
+  font-style: italic;
+}

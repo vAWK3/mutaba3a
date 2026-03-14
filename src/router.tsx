@@ -142,6 +142,13 @@ const profileDetailRoute = createRoute({
   component: lazyPage(() => import('./pages/settings/ProfileDetailPage'), 'ProfileDetailPage'),
 });
 
+// Import data route (under settings)
+const importDataRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/import',
+  component: lazyPage(() => import('./pages/settings/ImportDataPage'), 'ImportDataPage'),
+});
+
 // Theme demo route (for visual testing)
 const themeDemoRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -305,6 +312,27 @@ const engagementEditRoute = createRoute({
 });
 
 // ============================================================================
+// Financial Planning Routes
+// ============================================================================
+
+interface PlanningSearch {
+  plan?: string;
+  scenario?: string;
+}
+
+const planningRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/planning',
+  component: lazyPage(() => import('./pages/planning'), 'PlanningPage'),
+  validateSearch: (search: Record<string, unknown>): PlanningSearch => {
+    return {
+      plan: typeof search.plan === 'string' ? search.plan : undefined,
+      scenario: typeof search.scenario === 'string' ? search.scenario : undefined,
+    };
+  },
+});
+
+// ============================================================================
 // Money Answers Route (Cash Flow Timeline)
 // ============================================================================
 
@@ -379,10 +407,13 @@ const routeTree = rootRoute.addChildren([
   engagementEditRoute,
   // Money Answers route
   moneyAnswersRoute,
+  // Financial Planning route
+  planningRoute,
   // Reports route
   reportsRoute,
   settingsRoute,
   profileDetailRoute,
+  importDataRoute,
   themeDemoRoute,
 ]);
 

@@ -10,7 +10,7 @@ import {
 } from '../../hooks/useQueries';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useTheme, type ThemeMode } from '../../lib/theme';
-import { DeleteAllDataModal, ExportDataModal, ImportDataModal } from '../../components/modals';
+import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
 import { useDrawerStore } from '../../lib/stores';
@@ -146,7 +146,6 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
   const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
 
@@ -373,7 +372,7 @@ export function SettingsPage() {
               <div className="settings-label">{t('settings.data.import')}</div>
               <div className="settings-description">{t('settings.data.importDesc')}</div>
             </div>
-            <button className="btn btn-secondary" onClick={() => setShowImportModal(true)}>
+            <button className="btn btn-secondary" onClick={() => navigate({ to: '/settings/import' })}>
               {t('settings.data.importBtn')}
             </button>
           </div>
@@ -508,11 +507,6 @@ export function SettingsPage() {
       {/* Export Data Modal */}
       {showExportModal && (
         <ExportDataModal onClose={() => setShowExportModal(false)} />
-      )}
-
-      {/* Import Data Modal */}
-      {showImportModal && (
-        <ImportDataModal onClose={() => setShowImportModal(false)} />
       )}
 
       {/* Delete All Data Modal */}

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { db } from '../../db';
 import { useT } from '../../lib/i18n';
+import { exportDataToCSV, downloadTextFile } from '../../utils/csv';
 import type { BusinessProfile } from '../../types';
 import './DeleteAllDataModal.css';
 
@@ -11,6 +12,7 @@ interface ExportDataModalProps {
 }
 
 type ExportStatus = 'idle' | 'exporting' | 'done' | 'error';
+type ExportFormat = 'json' | 'csv';
 
 export function ExportDataModal({ onClose }: ExportDataModalProps) {
   const t = useT();
@@ -18,6 +20,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
   const { data: profiles = [] } = useBusinessProfiles();
 
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
 
   // Handle ESC key
@@ -94,31 +97,42 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
       // Get FX rates (shared, include all)
       const fxRates = await db.fxRates.toArray();
 
-      // Build export data
-      const exportData = {
-        version: 2,
-        exportedAt: new Date().toISOString(),
-        profileId: selectedProfileId,
-        profile,
-        documentSequences,
-        documents,
-        transactions,
-        clients,
-        projects,
-        fxRates,
-      };
-
-      // Download as JSON
-      const json = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const profileName = profile.nameEn || profile.name || 'profile';
       const safeName = profileName.replace(/[^a-zA-Z0-9]/g, '-');
-      a.download = `mutaba3a-${safeName}-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      if (exportFormat === 'csv') {
+        // Export as CSV using the import template format
+        const csvContent = exportDataToCSV({
+          clients,
+          projects,
+          transactions,
+        });
+        downloadTextFile(`mutaba3a-${safeName}-${dateStr}.csv`, csvContent);
+      } else {
+        // Export as JSON (legacy format)
+        const exportData = {
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          profileId: selectedProfileId,
+          profile,
+          documentSequences,
+          documents,
+          transactions,
+          clients,
+          projects,
+          fxRates,
+        };
+
+        const json = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mutaba3a-${safeName}-${dateStr}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
 
       setExportStatus('done');
     } catch (error) {
@@ -153,21 +167,46 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
           {exportStatus === 'done' ? (
             <div className="export-success">
               <CheckCircleIcon />
-              <h3>Export Complete</h3>
-              <p>Your data has been exported successfully.</p>
+              <h3>{t('settings.data.exportComplete')}</h3>
+              <p>{t('settings.data.exportCompleteDesc')}</p>
               <button className="btn btn-primary" onClick={onClose}>
-                Close
+                {t('common.close')}
               </button>
             </div>
           ) : (
             <>
+              <div style={{ marginBottom: 24 }}>
+                <label className="settings-label" style={{ marginBottom: 8, display: 'block' }}>
+                  {t('settings.data.exportFormat')}
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className={`btn btn-sm ${exportFormat === 'csv' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setExportFormat('csv')}
+                  >
+                    {t('settings.data.exportFormatCSV')}
+                  </button>
+                  <button
+                    className={`btn btn-sm ${exportFormat === 'json' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setExportFormat('json')}
+                  >
+                    {t('settings.data.exportFormatJSON')}
+                  </button>
+                </div>
+                <p className="text-muted text-sm" style={{ marginTop: 8 }}>
+                  {exportFormat === 'csv'
+                    ? t('settings.data.exportFormatCSVDesc')
+                    : t('settings.data.exportFormatJSONDesc')}
+                </p>
+              </div>
+
               <p className="text-muted" style={{ marginBottom: 16 }}>
-                Select a business profile to export. All documents, clients, projects, and transactions associated with this profile will be included.
+                {t('settings.data.selectProfileDesc')}
               </p>
 
               {profiles.length === 0 ? (
                 <div className="text-muted text-center" style={{ padding: '24px 0' }}>
-                  No business profiles found. Create a profile first.
+                  {t('settings.data.noProfilesFound')}
                 </div>
               ) : (
                 <div className="profile-select-list">
@@ -184,7 +223,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
 
               {exportStatus === 'error' && (
                 <div className="status-error" style={{ marginTop: 12 }}>
-                  Export failed. Please try again.
+                  {t('settings.data.exportFailedRetry')}
                 </div>
               )}
             </>

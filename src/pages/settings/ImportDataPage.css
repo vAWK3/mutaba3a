@@ -1,0 +1,325 @@
+.import-data-page {
+  min-height: 100vh;
+  background: #f8fafc;
+  padding: 2rem;
+}
+
+.import-data-page .page-header {
+  max-width: 1200px;
+  margin: 0 auto 2rem;
+}
+
+.import-data-page .page-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 1rem 0 0;
+}
+
+.import-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  padding: 2rem;
+}
+
+/* Step: Select */
+.import-step-select {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.import-dropzone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  padding: 4rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f8fafc;
+}
+
+.import-dropzone:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.import-dropzone svg {
+  margin: 0 auto 1rem;
+  color: #64748b;
+}
+
+.import-dropzone h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.import-dropzone p {
+  color: #64748b;
+  margin: 0;
+}
+
+.import-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.import-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.import-help {
+  background: #f1f5f9;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+.import-help h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.75rem;
+}
+
+.import-help ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.import-help li {
+  margin-bottom: 0.5rem;
+}
+
+/* Step: Preview */
+.import-step-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.import-file-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.import-file-info svg {
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.import-file-info .file-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}
+
+.import-file-info .file-meta {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.profile-select-section {
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+}
+
+.profile-select-section h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 1rem;
+}
+
+.profile-select-section .select {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.profile-select-section .help-text {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.import-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  color: #991b1b;
+}
+
+.import-warning svg {
+  flex-shrink: 0;
+}
+
+.import-warning p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.import-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.5rem;
+  color: #1e40af;
+}
+
+.import-info svg {
+  flex-shrink: 0;
+}
+
+.import-info p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Step: Validate */
+.import-step-validate {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.import-step-validate h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+/* Step: Importing */
+.import-step-importing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.import-step-importing .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.import-step-importing h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.import-step-importing p {
+  color: #64748b;
+  margin: 0;
+}
+
+/* Step: Done */
+.import-step-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.import-step-done .success-icon {
+  color: #10b981;
+  margin-bottom: 1.5rem;
+}
+
+.import-step-done h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.75rem;
+}
+
+.import-step-done p {
+  color: #64748b;
+  margin: 0 0 2rem;
+}
+
+/* Step: Error */
+.import-step-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.import-step-error .error-icon {
+  color: #ef4444;
+  margin-bottom: 1.5rem;
+}
+
+.import-step-error h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.75rem;
+}
+
+.import-step-error p {
+  margin: 0 0 2rem;
+}
+
+/* Text utilities */
+.text-danger {
+  color: #dc2626;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .import-data-page {
+    padding: 1rem;
+  }
+
+  .import-content {
+    padding: 1.5rem;
+  }
+
+  .import-dropzone {
+    padding: 3rem 1.5rem;
+  }
+}
