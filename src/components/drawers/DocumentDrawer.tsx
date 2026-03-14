@@ -178,7 +178,9 @@ export function DocumentDrawer() {
   const taxRate = watch('taxRate');
   const vatEnabled = watch('vatEnabled');
   const watchedItems = watch('items');
-  const watchedPayments = watch('payments') || [];
+  const watchedPaymentsRaw = watch('payments');
+  const watchedPayments = useMemo(() => watchedPaymentsRaw || [], [watchedPaymentsRaw]);
+  const watchedBusinessProfileId = watch('businessProfileId');
 
   // Field arrays for items and payments
   const {
@@ -199,8 +201,7 @@ export function DocumentDrawer() {
     name: 'payments',
   });
 
-  // Calculate totals - use JSON.stringify to detect deep changes in items array
-  const watchedItemsJson = JSON.stringify(watchedItems);
+  // Calculate totals
   const totals = useMemo(() => {
     const items = watchedItems || [];
     const subtotal = items.reduce((sum, item) => {
@@ -220,7 +221,7 @@ export function DocumentDrawer() {
     const total = subtotal + tax;
 
     return { subtotal, tax, total };
-  }, [watchedItemsJson, taxRate, vatEnabled]);
+  }, [watchedItems, taxRate, vatEnabled]);
 
   // Total payments amount
   const totalPaidMinor = useMemo(() => {
@@ -267,13 +268,13 @@ export function DocumentDrawer() {
 
   // Update defaults when business profile changes
   useEffect(() => {
-    const profileId = form.getValues('businessProfileId');
+    const profileId = watchedBusinessProfileId;
     const profile = businessProfiles.find((p) => p.id === profileId);
     if (profile && mode === 'create' && !existingDoc) {
       setValue('currency', profile.defaultCurrency);
       setValue('language', profile.defaultLanguage);
     }
-  }, [form.watch('businessProfileId'), businessProfiles, mode, existingDoc, setValue]);
+  }, [watchedBusinessProfileId, businessProfiles, mode, existingDoc, setValue]);
 
   // Pre-fill from reference document (for credit notes)
   useEffect(() => {

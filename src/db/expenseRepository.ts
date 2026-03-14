@@ -45,8 +45,15 @@ export const expenseRepo = {
       }
     });
 
+    // Log filtering for debugging
+    const deletedCount = expenses.filter(e => e.deletedAt).length;
+    console.log(`[expenseRepo.list] Total expenses: ${expenses.length}, Deleted: ${deletedCount}, includeDeleted: ${filters.includeDeleted}`);
+
     let filtered = expenses.filter((e) => {
-      if (!filters.includeDeleted && e.deletedAt) return false;
+      if (!filters.includeDeleted && e.deletedAt) {
+        console.log(`[expenseRepo.list] Filtering out deleted expense: ${e.id}, deletedAt: ${e.deletedAt}`);
+        return false;
+      }
       if (filters.profileId && e.profileId !== filters.profileId) return false;
       if (filters.categoryId && e.categoryId !== filters.categoryId) return false;
       if (filters.currency && e.currency !== filters.currency) return false;
@@ -144,7 +151,18 @@ export const expenseRepo = {
   },
 
   async softDelete(id: string): Promise<void> {
-    await db.expenses.update(id, { deletedAt: nowISO(), updatedAt: nowISO() });
+    const deleteTimestamp = nowISO();
+    const result = await db.expenses.update(id, {
+      deletedAt: deleteTimestamp,
+      updatedAt: deleteTimestamp
+    });
+
+    if (result === 0) {
+      console.warn(`[expenseRepo.softDelete] No expense found with id: ${id}`);
+      throw new Error(`Expense not found: ${id}`);
+    }
+
+    console.log(`[expenseRepo.softDelete] Successfully soft-deleted expense ${id} at ${deleteTimestamp}`);
   },
 
   async delete(id: string): Promise<void> {

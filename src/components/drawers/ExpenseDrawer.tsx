@@ -20,6 +20,7 @@ import {
 import { VendorTypeahead } from '../ui/VendorTypeahead';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT, useLanguage } from '../../lib/i18n';
+import { useToast } from '../../lib/toastStore';
 import { ALL_CATEGORIES } from '../../db/defaultExpenseCategories';
 import type { Currency, ExpenseFrequency, RecurringEndMode } from '../../types';
 
@@ -86,6 +87,7 @@ export function ExpenseDrawer() {
   const { mode, expenseId, recurringRuleId, defaultProfileId, isRecurring, prefillData, linkReceiptId } = expenseDrawer;
   const t = useT();
   const { language } = useLanguage();
+  const { showToast } = useToast();
 
   const { data: profiles = [] } = useBusinessProfiles();
   const { data: existingExpense, isLoading: expenseLoading } = useExpense(expenseId || '');
@@ -259,17 +261,21 @@ export function ExpenseDrawer() {
       if (!confirm(t('expenses.confirmDelete'))) return;
       try {
         await deleteRuleMutation.mutateAsync(recurringRuleId);
+        showToast(t('expenses.recurringDeleteSuccess') || 'Recurring rule deleted successfully');
         closeExpenseDrawer();
       } catch (error) {
         console.error('Failed to delete recurring rule:', error);
+        showToast(t('expenses.deleteError') || 'Failed to delete recurring rule', { duration: 5000 });
       }
     } else if (expenseId) {
       if (!confirm(t('expenses.confirmDelete'))) return;
       try {
         await deleteExpenseMutation.mutateAsync(expenseId);
+        showToast(t('expenses.deleteSuccess') || 'Expense deleted successfully');
         closeExpenseDrawer();
       } catch (error) {
         console.error('Failed to delete expense:', error);
+        showToast(t('expenses.deleteError') || 'Failed to delete expense', { duration: 5000 });
       }
     }
   };

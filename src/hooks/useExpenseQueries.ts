@@ -83,6 +83,14 @@ function invalidateExpenseQueries(queryClient: ReturnType<typeof useQueryClient>
   queryClient.invalidateQueries({ queryKey: ['expenseYearlyTotals'] });
   queryClient.invalidateQueries({ queryKey: ['allProfilesExpenseTotals'] });
   queryClient.invalidateQueries({ queryKey: ['expenseForecast'] });
+  // Invalidate recurring occurrence queries (for expenses from recurring rules)
+  queryClient.invalidateQueries({ queryKey: ['virtualOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: ['dueOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: ['recurringOccurrences'] });
+  // Invalidate month close queries (expense changes affect month status)
+  queryClient.invalidateQueries({ queryKey: ['monthCloseStatus'] });
+  queryClient.invalidateQueries({ queryKey: ['monthCloseComputed'] });
+  queryClient.invalidateQueries({ queryKey: ['monthCloseList'] });
 }
 
 function invalidateRecurringRuleQueries(queryClient: ReturnType<typeof useQueryClient>) {

@@ -271,7 +271,7 @@ describe('ClientDrawer', () => {
     it('should allow selecting a profile', async () => {
       const user = userEvent.setup();
 
-      const profile1 = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Profile 1',
         email: 'profile1@example.com',
         businessType: 'none',
@@ -323,7 +323,7 @@ describe('ClientDrawer', () => {
     });
 
     it('should pre-populate with default profile', async () => {
-      const profile1 = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Profile 1',
         email: 'profile1@example.com',
         businessType: 'none',

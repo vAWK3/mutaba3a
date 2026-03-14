@@ -145,6 +145,10 @@ export function ProfileDetailPage() {
     },
   });
 
+  // Extract watched values
+  const watchedDefaultTaxRate = form.watch('defaultTaxRate');
+  const watchedAllowedCurrencies = form.watch('allowedCurrencies');
+
   // Reset form when profile loads
   useEffect(() => {
     if (profile) {
@@ -697,7 +701,7 @@ export function ProfileDetailPage() {
                   step="0.01"
                   min="0"
                   max="100"
-                  value={(form.watch('defaultTaxRate') ?? 0.17) * 100}
+                  value={(watchedDefaultTaxRate ?? 0.17) * 100}
                   onChange={(e) => form.setValue('defaultTaxRate', parseFloat(e.target.value) / 100 || 0)}
                 />
                 <span className="text-muted">%</span>
@@ -727,7 +731,7 @@ export function ProfileDetailPage() {
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={form.watch('allowedCurrencies')?.includes('USD') ?? true}
+                    checked={watchedAllowedCurrencies?.includes('USD') ?? true}
                     onChange={(e) => {
                       const current = form.getValues('allowedCurrencies') || ['USD', 'ILS'];
                       if (e.target.checked) {
@@ -742,7 +746,7 @@ export function ProfileDetailPage() {
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={form.watch('allowedCurrencies')?.includes('ILS') ?? true}
+                    checked={watchedAllowedCurrencies?.includes('ILS') ?? true}
                     onChange={(e) => {
                       const current = form.getValues('allowedCurrencies') || ['USD', 'ILS'];
                       if (e.target.checked) {

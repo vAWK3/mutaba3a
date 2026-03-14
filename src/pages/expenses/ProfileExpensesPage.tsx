@@ -16,6 +16,7 @@ import {
   useExpenseCategories,
   useSeedExpenseCategories,
 } from '../../hooks/useExpenseQueries';
+import { useToast } from '../../lib/toastStore';
 import {
   useDueOccurrences,
   useVirtualOccurrences,
@@ -38,6 +39,7 @@ export function ProfileExpensesPage() {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
+  const { showToast } = useToast();
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -403,7 +405,15 @@ export function ProfileExpensesPage() {
                             variant: 'danger',
                             onClick: () => {
                               if (confirm(t('expenses.confirmDelete'))) {
-                                deleteExpenseMutation.mutate(expense.id);
+                                deleteExpenseMutation.mutate(expense.id, {
+                                  onSuccess: () => {
+                                    showToast(t('expenses.deleteSuccess') || 'Expense deleted successfully');
+                                  },
+                                  onError: (error) => {
+                                    console.error('Failed to delete expense:', error);
+                                    showToast(t('expenses.deleteError') || 'Failed to delete expense', { duration: 5000 });
+                                  },
+                                });
                               }
                             },
                           },

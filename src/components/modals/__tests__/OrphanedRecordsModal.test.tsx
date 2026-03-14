@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../../db/database';
-import { clientRepo, projectRepo, businessProfileRepo } from '../../../db/repository';
+import { clientRepo, businessProfileRepo } from '../../../db/repository';
 import { OrphanedRecordsModal } from '../OrphanedRecordsModal';
 import { LanguageProvider } from '../../../lib/i18n';
 
@@ -71,7 +71,7 @@ describe('OrphanedRecordsModal', () => {
     });
 
     it('should render orphaned clients in table', async () => {
-      const profile = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Default Profile',
         email: 'default@example.com',
         businessType: 'none',
@@ -194,7 +194,7 @@ describe('OrphanedRecordsModal', () => {
     it('should allow individual profile assignment', async () => {
       const user = userEvent.setup();
 
-      const profile1 = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Profile 1',
         email: 'profile1@example.com',
         businessType: 'none',

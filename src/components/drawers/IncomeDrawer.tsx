@@ -177,8 +177,8 @@ export function IncomeDrawer() {
       currency: data.currency as Currency,
       occurredAt: new Date(data.occurredAt).toISOString(),
       dueDate: (data.incomeStatus !== 'received' && data.dueDate) ? data.dueDate : undefined,
-      paidAt: status === 'paid' ? new Date().toISOString() : null,
-      receivedAmountMinor: status === 'paid' ? amountMinor : null,
+      paidAt: status === 'paid' ? new Date().toISOString() : undefined,
+      receivedAmountMinor: status === 'paid' ? amountMinor : undefined,
       notes: data.notes || undefined,
     };
 

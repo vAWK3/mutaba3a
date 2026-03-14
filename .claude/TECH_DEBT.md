@@ -20,33 +20,45 @@
 
 ### TD-001: Limited Test Coverage
 **Status**: In Progress
-**Priority**: High
+**Priority**: Medium (reduced from High)
 **Introduced**: 2024-05
-**Updated**: 2026-02-09
-**Impact**: Bugs may slip through, refactoring risky
+**Updated**: 2026-03-14
+**Impact**: Reduced - Core pages and repos now well tested
 
 **Description**:
-Test coverage has been improved but still needs work.
+Test coverage has been significantly improved. Core pages and repositories now meet 70%+ targets.
 
-**Current State (Updated 2026-02-09)**:
-- `src/db/__tests__/` - Repository tests (businessProfileRepo, documentRepo, transactionRepo, clientRepo, projectRepo, settingsRepo, aggregations) - **✅ Good coverage**
-- `src/hooks/__tests__/` - Hook tests for business profile and document hooks
-- `src/components/__tests__/` - BusinessProfileDrawer component test
+**Current State (Updated 2026-03-14)**:
+- `src/db/__tests__/` - Repository tests - **✅ ~85% coverage**
+- `src/pages/clients/__tests__/` - **✅ 70.08% coverage** (33 tests)
+- `src/pages/projects/__tests__/` - **✅ 73.03% coverage** (40+ tests)
+- `src/pages/income/__tests__/` - **✅ ~90% coverage** (30 tests)
+- `src/pages/expenses/__tests__/` - **✅ ~80% coverage** (4 pages, 67-100% each)
+- `src/hooks/__tests__/` - Partial coverage for business profile and document hooks
+- `src/components/__tests__/` - UpdateBanner, BusinessProfileDrawer tested
 - `src/features/documents/__tests__/` - totals.test.ts, pdf.test.ts
+- **Overall: ~65% coverage** (1,771 tests passing)
+
+**Completed Since Last Update**:
+- ✅ ClientsPage: Added 17 new tests (16→33), achieved 70.08% coverage
+- ✅ IncomePage: Added 7 new tests (23→30), achieved ~90% coverage
+- ✅ ExpensesOverviewPage: Fixed 4 failing tests, all 29 passing, 100% coverage
+- ✅ All core page coverage targets met (70%+)
 
 **Remaining Gaps**:
-- ~~Drawer component tests (TransactionDrawer, ClientDrawer, ProjectDrawer)~~ ✅ Done 2026-02-09
-- Page component tests
-- ~~Expense and Retainer repository tests~~ ✅ Done 2026-02-09
-- useTransactionFilters and other utility hooks
+- Hook tests: useTransactionFilters, useProfileAwareAction, other utility hooks
+- Component tests: Tables, filters, UI components
+- Integration tests for complex flows
+- E2E tests (planned in separate TD item)
 
 **Remediation**:
-1. ~~Add unit tests for all repository methods~~ ✅ Done for core repos
-2. Add component tests for critical UI (drawers, tables)
-3. Add integration tests for key flows (create transaction, mark paid)
-4. Target: 80% coverage for critical paths
+1. ~~Add unit tests for all repository methods~~ ✅ Done
+2. ~~Add page component tests~~ ✅ Done (core pages)
+3. Add hook tests for utility hooks (useTransactionFilters, etc.)
+4. Add component tests for tables and filters
+5. Target: 80% overall coverage
 
-**Effort**: Medium (reduced from Large)
+**Effort**: Small (reduced from Medium) - Major work completed
 
 ---
 

@@ -9,7 +9,7 @@
   left: 0;
   right: 0;
   z-index: 100;
-  background: var(--bg-elevated);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-3);
@@ -30,13 +30,13 @@
   text-align: start;
   cursor: pointer;
   font-size: var(--text-sm);
-  color: var(--text-primary);
+  color: var(--text);
   transition: background 0.15s;
 }
 
 .vendor-typeahead-option:hover,
 .vendor-typeahead-option.highlighted {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
 }
 
 .vendor-typeahead-option.is-new {
@@ -46,7 +46,7 @@
 
 .vendor-typeahead-option.is-new:hover,
 .vendor-typeahead-option.is-new.highlighted {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
 }
 
 .vendor-typeahead-create-label {

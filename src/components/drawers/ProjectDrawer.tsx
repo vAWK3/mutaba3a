@@ -164,7 +164,7 @@ export function ProjectDrawer() {
           )}
         </div>
 
-        {profiles.length > 1 && (
+        {profiles.length > 0 && (
           <div className="form-group">
             <label className="form-label">{t('common.profile')}</label>
             <Controller

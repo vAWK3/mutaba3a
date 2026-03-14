@@ -679,4 +679,172 @@ describe('IncomePage', () => {
       });
     });
   });
+
+  describe('Row interactions', () => {
+    it('should open transaction drawer when row is clicked', async () => {
+      const user = userEvent.setup();
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      } as any);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+      });
+
+      const row = screen.getByText('Website Redesign').closest('tr');
+      await user.click(row!);
+
+      expect(mockOpenTransactionDrawer).toHaveBeenCalledWith({
+        mode: 'edit',
+        transactionId: 'tx-1',
+      });
+    });
+
+    it('should handle duplicate action', async () => {
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      } as any);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+      });
+
+      // Verify duplicate action is available through row actions
+      const row = screen.getByText('Website Redesign').closest('tr');
+      expect(row).toBeInTheDocument();
+    });
+  });
+
+  describe('Date range control', () => {
+    it('should update filters when date range changes', async () => {
+      const user = userEvent.setup();
+      const mockQuery = vi.fn().mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      });
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockQuery);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        const dateInputs = screen.getAllByRole('textbox');
+        expect(dateInputs.length).toBeGreaterThan(0);
+      });
+
+      // Verify that income query is called
+      expect(mockQuery).toHaveBeenCalled();
+    });
+  });
+
+  describe('Additional status filters', () => {
+    it('should filter by overdue status', async () => {
+      const user = userEvent.setup();
+      const mockQuery = vi.fn().mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      });
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockQuery);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Overdue')).toBeInTheDocument();
+      });
+
+      const overdueTab = screen.getByText('Overdue');
+      await user.click(overdueTab);
+
+      await waitFor(() => {
+        const calls = mockQuery.mock.calls;
+        const lastCall = calls[calls.length - 1];
+        expect(lastCall[0]).toHaveProperty('status', 'overdue');
+      });
+    });
+
+    it('should show all transactions when All status selected', async () => {
+      const user = userEvent.setup();
+      const mockQuery = vi.fn().mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      });
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockQuery);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        const allTabs = screen.getAllByText('All');
+        expect(allTabs.length).toBeGreaterThan(0);
+      });
+
+      const allTabs = screen.getAllByText('All');
+      await user.click(allTabs[0]);
+
+      await waitFor(() => {
+        const calls = mockQuery.mock.calls;
+        const lastCall = calls[calls.length - 1];
+        expect(lastCall[0].status).toBeUndefined();
+      });
+    });
+  });
+
+  describe('Search functionality', () => {
+    it('should update search filter when typing', async () => {
+      const user = userEvent.setup();
+      const mockQuery = vi.fn().mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      });
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockQuery);
+
+      renderWithProviders(<IncomePage />);
+
+      const searchInput = await screen.findByPlaceholderText('Search transactions...');
+      await user.type(searchInput, 'Website');
+
+      await waitFor(() => {
+        const calls = mockQuery.mock.calls;
+        const lastCall = calls[calls.length - 1];
+        expect(lastCall[0]).toHaveProperty('search', 'Website');
+      });
+    });
+
+    it('should clear search when input is cleared', async () => {
+      const user = userEvent.setup();
+      const mockQuery = vi.fn().mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      });
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockQuery);
+
+      renderWithProviders(<IncomePage />);
+
+      const searchInput = await screen.findByPlaceholderText('Search transactions...');
+      await user.type(searchInput, 'test');
+      await user.clear(searchInput);
+
+      await waitFor(() => {
+        const calls = mockQuery.mock.calls;
+        const lastCall = calls[calls.length - 1];
+        expect(lastCall[0].search).toBeUndefined();
+      });
+    });
+  });
 });

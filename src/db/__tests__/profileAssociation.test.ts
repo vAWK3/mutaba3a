@@ -76,7 +76,7 @@ describe('Profile Association - Auto-assignment', () => {
 
     it('should not assign profile when no default is set', async () => {
       // Create profile without isDefault flag
-      const profile = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Only Profile',
         email: 'only@example.com',
         businessType: 'none',

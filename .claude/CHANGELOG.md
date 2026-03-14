@@ -30,6 +30,20 @@
 
 ## [Unreleased] - 2026-03-14
 
+### Changed
+- **ProjectDrawer Profile Selector**: Profile selector now displays when at least one profile exists (changed from requiring 2+ profiles)
+  - Updated condition from `profiles.length > 1` to `profiles.length > 0` in `src/components/drawers/ProjectDrawer.tsx:167`
+  - Makes profile association explicit and visible even for single-profile users
+  - Aligns with UX principle of making profile relationships transparent
+  - Added 5 comprehensive tests for profile selector behavior in `ProjectDrawer.test.tsx`:
+    - Shows selector when one profile exists
+    - Shows selector when multiple profiles exist
+    - Allows selecting a profile
+    - Pre-populates with active profile
+    - Hides selector when no profiles exist
+  - Files changed: `ProjectDrawer.tsx`, `ProjectDrawer.test.tsx`
+  - Test status: 13 passing (2 skipped)
+
 ### Added
 - **Partial Payments UI Integration**: Fully integrated partial payment functionality into income tables across the application
   - Added `PaymentStatusBadge` component to display payment status with percentage for partial payments

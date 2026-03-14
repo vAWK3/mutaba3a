@@ -7,10 +7,18 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ExpensesOverviewPage } from '../ExpensesOverviewPage';
 import type { ProfileExpenseSummary } from '../../../types';
+import type { ReactNode } from 'react';
+
+// Type definitions for mock components
+interface LinkProps {
+  children: ReactNode;
+  to: string;
+  params?: Record<string, unknown>;
+}
 
 // Mock router
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, params }: any) => (
+  Link: ({ children, to, params }: LinkProps) => (
     <a href={to} data-params={JSON.stringify(params)}>
       {children}
     </a>
@@ -124,7 +132,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -139,7 +147,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -153,7 +161,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -169,7 +177,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -187,7 +195,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: true,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -201,7 +209,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: true,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -217,7 +225,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -232,7 +240,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -249,7 +257,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -263,7 +271,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -278,7 +286,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -293,7 +301,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -310,7 +318,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -328,7 +336,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -342,7 +350,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -358,7 +366,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -373,7 +381,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -392,7 +400,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -407,7 +415,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -422,7 +430,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -440,7 +448,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -455,7 +463,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -471,7 +479,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -486,7 +494,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -526,7 +534,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -563,7 +571,7 @@ describe('ExpensesOverviewPage', () => {
           },
         ],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -589,7 +597,7 @@ describe('ExpensesOverviewPage', () => {
           },
         ],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 
@@ -603,7 +611,7 @@ describe('ExpensesOverviewPage', () => {
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: [mockProfileSummaries[0]],
         isLoading: false,
-      } as any);
+      } as unknown);
 
       renderWithProviders(<ExpensesOverviewPage />);
 

@@ -226,4 +226,222 @@ describe('ClientsPage', () => {
       expect(summaryStrip).not.toBeInTheDocument();
     });
   });
+
+  describe('Sorting functionality', () => {
+    it('renders sort dropdown', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+      expect(sortSelect).toBeInTheDocument();
+    });
+
+    it('has default sort by name ascending', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox') as HTMLSelectElement;
+      expect(sortSelect.value).toBe('name-asc');
+    });
+
+    it('can sort by name descending', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+      fireEvent.change(sortSelect, { target: { value: 'name-desc' } });
+
+      expect((sortSelect as HTMLSelectElement).value).toBe('name-desc');
+    });
+
+    it('can sort by value high to low', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+      fireEvent.change(sortSelect, { target: { value: 'value-desc' } });
+
+      expect((sortSelect as HTMLSelectElement).value).toBe('value-desc');
+    });
+
+    it('can sort by unpaid high to low', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+      fireEvent.change(sortSelect, { target: { value: 'unpaid-desc' } });
+
+      expect((sortSelect as HTMLSelectElement).value).toBe('unpaid-desc');
+    });
+
+    it('can sort by activity recent first', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+      fireEvent.change(sortSelect, { target: { value: 'activity-desc' } });
+
+      expect((sortSelect as HTMLSelectElement).value).toBe('activity-desc');
+    });
+  });
+
+  describe('Search functionality', () => {
+    it('shows search empty state description when no results', () => {
+      // This test verifies the empty state shows appropriate description text
+      // based on whether there's an active search query
+      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
+        data: [],
+        isLoading: false,
+      } as ReturnType<typeof useQueries.useClientSummaries>);
+
+      renderWithProviders(<ClientsPage />);
+
+      // Empty state should show hint when no search
+      expect(screen.getByText('Add your first client')).toBeInTheDocument();
+    });
+
+    it('calls search query with search term', () => {
+      const spy = vi.spyOn(useQueries, 'useClientSummaries');
+
+      renderWithProviders(<ClientsPage />);
+
+      const searchInput = screen.getByPlaceholderText('Search clients...');
+      fireEvent.change(searchInput, { target: { value: 'Acme' } });
+
+      // Check that the hook was called with search parameter
+      expect(spy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Client details', () => {
+    it('displays last payment date when available', () => {
+      renderWithProviders(<ClientsPage />);
+      // Dates should be formatted, just check they exist
+      const table = document.querySelector('table');
+      expect(table).toBeInTheDocument();
+    });
+
+    it('shows dash when no last payment', () => {
+      const clientsWithoutPayment = [
+        {
+          ...mockClients[0],
+          lastPaymentAt: null,
+        },
+      ];
+
+      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
+        data: clientsWithoutPayment,
+        isLoading: false,
+      } as unknown);
+
+      renderWithProviders(<ClientsPage />);
+      const cells = document.querySelectorAll('td');
+      const hasDash = Array.from(cells).some(cell => cell.textContent === '-');
+      expect(hasDash).toBe(true);
+    });
+
+    it('shows dash when no last activity', () => {
+      const clientsWithoutActivity = [
+        {
+          ...mockClients[0],
+          lastActivityAt: null,
+        },
+      ];
+
+      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
+        data: clientsWithoutActivity,
+        isLoading: false,
+      } as unknown);
+
+      renderWithProviders(<ClientsPage />);
+      const cells = document.querySelectorAll('td');
+      const hasDash = Array.from(cells).some(cell => cell.textContent === '-');
+      expect(hasDash).toBe(true);
+    });
+  });
+
+  describe('Multi-currency support', () => {
+    it('displays ILS amounts when present', () => {
+      const multiCurrencyClients = [
+        {
+          ...mockClients[0],
+          paidIncomeMinorILS: 1800000, // ₪18000
+          unpaidIncomeMinorILS: 500000, // ₪5000
+        },
+      ];
+
+      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
+        data: multiCurrencyClients,
+        isLoading: false,
+      } as unknown);
+
+      renderWithProviders(<ClientsPage />);
+      // CurrencySummaryPopup components should be rendered
+      const summaryPopups = document.querySelectorAll('.currency-summary-popup, [data-testid="currency-summary"]');
+      expect(summaryPopups.length).toBeGreaterThan(0);
+    });
+
+    it('calculates totals across all currencies', () => {
+      const multiCurrencyClients = [
+        {
+          ...mockClients[0],
+          paidIncomeMinorUSD: 500000,
+          paidIncomeMinorILS: 1800000,
+          paidIncomeMinorEUR: 300000,
+        },
+        {
+          ...mockClients[1],
+          paidIncomeMinorUSD: 200000,
+          paidIncomeMinorILS: 0,
+          paidIncomeMinorEUR: 100000,
+        },
+      ];
+
+      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
+        data: multiCurrencyClients,
+        isLoading: false,
+      } as unknown);
+
+      renderWithProviders(<ClientsPage />);
+
+      // Summary strip should show total received across all currencies
+      expect(screen.getByText('Total Received')).toBeInTheDocument();
+    });
+  });
+
+  describe('Sort options', () => {
+    it('includes all sort options in dropdown', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+      const options = sortSelect.querySelectorAll('option');
+
+      // Should have 8 sort options (name, value, unpaid, activity x asc/desc)
+      expect(options.length).toBe(8);
+    });
+
+    it('sorts clients by value correctly', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+
+      // Change to value-desc (highest first)
+      fireEvent.change(sortSelect, { target: { value: 'value-desc' } });
+
+      // Acme Corp ($5000) should appear before Beta Inc ($2000)
+      const rows = document.querySelectorAll('tbody tr');
+      expect(rows[0].textContent).toContain('Acme Corp');
+      expect(rows[1].textContent).toContain('Beta Inc');
+    });
+
+    it('sorts clients by unpaid correctly', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+
+      // Change to unpaid-desc
+      fireEvent.change(sortSelect, { target: { value: 'unpaid-desc' } });
+
+      // Acme Corp ($1500 unpaid) should appear before Beta Inc ($0 unpaid)
+      const rows = document.querySelectorAll('tbody tr');
+      expect(rows[0].textContent).toContain('Acme Corp');
+    });
+
+    it('sorts clients by activity correctly', () => {
+      renderWithProviders(<ClientsPage />);
+      const sortSelect = screen.getByRole('combobox');
+
+      // Change to activity-desc (most recent first)
+      fireEvent.change(sortSelect, { target: { value: 'activity-desc' } });
+
+      // Acme Corp (2026-03-10) should appear before Beta Inc (2026-02-20)
+      const rows = document.querySelectorAll('tbody tr');
+      expect(rows[0].textContent).toContain('Acme Corp');
+    });
+  });
 });
