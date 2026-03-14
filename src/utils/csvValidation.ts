@@ -194,8 +194,7 @@ export function validateCSVImport(
       row,
       index,
       Array.from(csvClients),
-      Array.from(csvProjects),
-      Array.from(csvClients)
+      Array.from(csvProjects)
     );
   });
 }

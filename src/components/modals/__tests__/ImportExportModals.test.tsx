@@ -289,6 +289,10 @@ describe('ExportDataModal', () => {
       expect(screen.getByText('Test Business')).toBeInTheDocument();
     });
 
+    // Select JSON format (CSV is default)
+    const jsonFormatButton = screen.getByRole('button', { name: /JSON/i });
+    await userEvent.click(jsonFormatButton);
+
     const exportButton = screen.getByRole('button', { name: /Export Test Business/i });
     await userEvent.click(exportButton);
 
@@ -371,7 +375,7 @@ describe('ImportDataModal', () => {
       </TestWrapper>
     );
 
-    expect(screen.getByText(/Drop a .json file here/i)).toBeInTheDocument();
+    expect(screen.getByText(/Drop a .json or .csv file here/i)).toBeInTheDocument();
   });
 
   it('should close when cancel is clicked', async () => {
@@ -410,7 +414,7 @@ describe('ImportDataModal', () => {
       </TestWrapper>
     );
 
-    const dropZone = screen.getByText(/Drop a .json file here/i).parentElement;
+    const dropZone = screen.getByText(/Drop a .json or .csv file here/i).parentElement;
     expect(dropZone).toBeInTheDocument();
 
     // Create a non-JSON file
@@ -424,7 +428,7 @@ describe('ImportDataModal', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Please drop a .json file/i)).toBeInTheDocument();
+      expect(screen.getByText(/Please drop a .json or .csv file/i)).toBeInTheDocument();
     });
   });
 
@@ -543,7 +547,7 @@ describe('ImportDataModal', () => {
     expect(createNewOption).toBeChecked();
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     // Wait for import to complete
@@ -599,7 +603,7 @@ describe('ImportDataModal', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     // Wait for import to complete
@@ -762,7 +766,7 @@ describe('ImportDataModal', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     // Wait for import to complete
@@ -838,7 +842,7 @@ describe('ImportDataModal', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     await waitFor(() => {
@@ -885,7 +889,7 @@ describe('ImportDataModal', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     await waitFor(() => {
@@ -937,7 +941,7 @@ describe('ImportDataModal', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     await waitFor(() => {
@@ -986,7 +990,7 @@ describe('ImportDataModal', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     await waitFor(() => {
@@ -1104,7 +1108,7 @@ describe('Import/Export Round Trip', () => {
     });
 
     // Click import button
-    const importButton = screen.getByRole('button', { name: /^Import$/i });
+    const importButton = screen.getByRole('button', { name: /Import JSON/i });
     await userEvent.click(importButton);
 
     await waitFor(() => {
