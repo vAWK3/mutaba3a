@@ -158,6 +158,12 @@ function Build-Windows {
     Write-Info "Building Tauri for Windows..."
     Write-Host ""
 
+    # Clean build caches to ensure fresh version embedding
+    Write-Info "Cleaning build caches..."
+    if (Test-Path "dist-desktop") { Remove-Item -Recurse -Force "dist-desktop" }
+    if (Test-Path "dist-web") { Remove-Item -Recurse -Force "dist-web" }
+    cargo clean --manifest-path src-tauri/Cargo.toml
+
     npm run tauri build
 
     if ($LASTEXITCODE -ne 0) {

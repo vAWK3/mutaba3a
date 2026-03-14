@@ -45,6 +45,12 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Clean Rust build cache
+        shell: pwsh
+        run: |
+          Write-Host "Cleaning Rust build cache to ensure fresh version embedding..."
+          cargo clean --manifest-path src-tauri/Cargo.toml
+
       - name: Build Tauri Windows app
         run: npm run tauri build
 
