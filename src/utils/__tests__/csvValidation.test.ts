@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateCSVRow, ValidationStatus, type CSVValidationResult } from '../csvValidation';
+import { validateCSVRow, ValidationStatus } from '../csvValidation';
 
 describe('CSV Validation', () => {
   describe('validateCSVRow', () => {

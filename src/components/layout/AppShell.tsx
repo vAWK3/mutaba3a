@@ -9,6 +9,7 @@ import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
 import { RetainerDrawer } from "../drawers/RetainerDrawer";
 import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
 import { PartialPaymentDrawer } from "../drawers/PartialPaymentDrawer";
+import { PlanAssumptionDrawer } from "../drawers/PlanAssumptionDrawer";
 import { WelcomeModal, DemoSeedModal } from "../modals";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
@@ -41,6 +42,7 @@ export function AppShell({ children }: AppShellProps) {
     retainerMatchingDrawer,
     partialPaymentDrawer,
     closePartialPaymentDrawer,
+    planAssumptionDrawer,
   } = useDrawerStore();
 
   const { showConfirmModal, setShowConfirmModal, isActive } = useDemoStore();
@@ -134,6 +136,11 @@ export function AppShell({ children }: AppShellProps) {
             transactionId={partialPaymentDrawer.transactionId}
             onClose={closePartialPaymentDrawer}
           />
+        </InlineErrorBoundary>
+      )}
+      {planAssumptionDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <PlanAssumptionDrawer />
         </InlineErrorBoundary>
       )}
 

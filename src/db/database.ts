@@ -18,6 +18,9 @@ import type {
   MonthCloseStatus,
   RetainerAgreement,
   ProjectedIncome,
+  Plan,
+  PlanAssumption,
+  PlanScenario,
 } from '../types';
 import type {
   Engagement,
@@ -64,6 +67,11 @@ export class MiniCrmDatabase extends Dexie {
   // Engagement tables
   engagements!: Table<Engagement, string>;
   engagementVersions!: Table<EngagementVersion, string>;
+
+  // Financial planning tables
+  plans!: Table<Plan, string>;
+  planAssumptions!: Table<PlanAssumption, string>;
+  planScenarios!: Table<PlanScenario, string>;
 
   // Sync tables
   localDevice!: Table<LocalDevice, string>;
@@ -747,6 +755,54 @@ export class MiniCrmDatabase extends Dexie {
           rule.monthOfYear = new Date(rule.startDate).getMonth() + 1;
         }
       });
+    });
+
+    // Version 16: Add Financial Planning tables
+    this.version(16).stores({
+      // Core tables unchanged
+      clients: 'id, name, profileId, createdAt, updatedAt, archivedAt',
+      projects: 'id, name, profileId, clientId, field, createdAt, updatedAt, archivedAt',
+      transactions: 'id, kind, status, profileId, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt',
+      categories: 'id, kind, name',
+      fxRates: 'id, baseCurrency, quoteCurrency, effectiveDate, createdAt, [baseCurrency+quoteCurrency]',
+      settings: 'id',
+
+      // Sync tables unchanged
+      localDevice: 'id',
+      trustedPeers: 'id, pairingCode, status, pairedAt',
+      opLog: 'id, hlc, [entityType+entityId], createdBy, appliedAt',
+      peerCursors: 'peerId',
+      entityFieldMeta: '[entityType+entityId+field], hlc',
+      moneyEventVersions: 'id, transactionId, hlc, isActive, createdBy',
+      conflictQueue: 'id, entityType, entityId, status, detectedAt',
+      syncHistory: 'id, peerId, method, status, completedAt',
+
+      // Document tables unchanged
+      businessProfiles: 'id, name, isDefault, createdAt, archivedAt',
+      documents: 'id, number, type, status, businessProfileId, clientId, issueDate, dueDate, createdAt, updatedAt, deletedAt, [businessProfileId+type+number], lockedAt, archivedAt',
+      documentSequences: 'id, [businessProfileId+documentType]',
+
+      // Expense tables unchanged
+      expenses: 'id, profileId, categoryId, vendorId, currency, occurredAt, recurringRuleId, recurringOccurrenceId, createdAt, deletedAt',
+      recurringRules: 'id, profileId, categoryId, vendorId, frequency, dayOfMonth, monthOfYear, scope, startDate, isPaused, createdAt, deletedAt',
+      recurringOccurrences: 'id, ruleId, profileId, expectedDate, status, fulfilledExpenseId, snoozeUntil, [ruleId+expectedDate], [profileId+status]',
+      receipts: 'id, profileId, expenseId, vendorId, monthKey, createdAt',
+      expenseCategories: 'id, profileId, name',
+      vendors: 'id, profileId, canonicalName, createdAt',
+      monthCloseStatuses: 'id, profileId, monthKey, isClosed',
+
+      // Retainer tables unchanged
+      retainerAgreements: 'id, profileId, clientId, projectId, status, currency, startDate, createdAt, archivedAt',
+      projectedIncome: 'id, profileId, sourceId, clientId, expectedDate, state, currency, [sourceId+periodStart+periodEnd]',
+
+      // Engagement tables unchanged
+      engagements: 'id, profileId, clientId, projectId, type, category, status, primaryLanguage, createdAt, updatedAt, archivedAt',
+      engagementVersions: 'id, engagementId, versionNumber, status, createdAt',
+
+      // NEW: Financial Planning tables
+      plans: 'id, profileId, status, startMonth, createdAt, archivedAt',
+      planAssumptions: 'id, planId, profileId, category, type, confidence, startMonth, scenarioId, [planId+category]',
+      planScenarios: 'id, planId, profileId, isDefault, [planId+isDefault]',
     });
   }
 }

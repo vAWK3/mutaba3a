@@ -1027,3 +1027,121 @@ export interface MoneyAnswersFilters {
   /** @deprecated Use includeProjectedRetainer instead */
   includeProjections?: boolean;
 }
+
+// ============================================================================
+// Financial Planning Types
+// ============================================================================
+
+export type PlanStatus = 'draft' | 'active' | 'archived';
+export type AssumptionCategory = 'revenue' | 'expense' | 'funding' | 'hiring' | 'other';
+export type AssumptionType = 'one_time' | 'recurring' | 'milestone' | 'percentage';
+export type AssumptionFrequency = 'monthly' | 'quarterly' | 'yearly';
+export type AssumptionConfidence = 'confirmed' | 'likely' | 'rough_guess';
+
+export interface Plan {
+  id: string;
+  profileId: string;
+  name: string;
+  description?: string;
+  currency: Currency;
+  startMonth: string;           // YYYY-MM
+  horizonMonths: 12 | 18 | 24;
+  status: PlanStatus;
+  askMode: 'manual' | 'calculated';
+  manualAskMinor?: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export interface PlanAssumption {
+  id: string;
+  planId: string;
+  profileId: string;
+  category: AssumptionCategory;
+  type: AssumptionType;
+  label: string;
+  amountMinor: number;
+  currency: Currency;
+  startMonth: string;
+  endMonth?: string;
+  frequency?: AssumptionFrequency;
+  dayOfMonth?: number;
+  confidence: AssumptionConfidence;
+  scenarioId?: string;          // null = applies to all scenarios
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanScenario {
+  id: string;
+  planId: string;
+  profileId: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  revenueMultiplier?: number;
+  expenseMultiplier?: number;
+  revenueDelayMonths?: number;
+  fundingDelayMonths?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Computed types (not persisted)
+export interface MonthProjection {
+  month: string;
+  openingCashMinor: number;
+  cashInMinor: number;
+  cashOutMinor: number;
+  netFlowMinor: number;
+  closingCashMinor: number;
+  confidenceScore: number;
+  events: ProjectionEvent[];
+}
+
+export interface ProjectionEvent {
+  type: 'funding' | 'hire' | 'big_cost' | 'milestone' | 'break_even' | 'negative_cash';
+  label: string;
+  amountMinor?: number;
+}
+
+export interface CurrencyBreakdown {
+  usdMinor: number;
+  ilsMinor: number;
+  eurMinor: number;
+}
+
+export interface PlanSummary {
+  askMinor: number;
+  askRange: {
+    minimumSurvivableMinor: number;
+    comfortableMinor: number;
+    growthMinor: number;
+  };
+  monthlyBurnMinor: number;
+  expectedMonthlyRevenueMinor: number;
+  runwayMonths: number;
+  breakEvenMonth?: string;
+  worstCashDipMinor: number;
+  bufferNeededMinor: number;
+  // Currency breakdowns for multi-currency display
+  askByCurrency: CurrencyBreakdown;
+  burnByCurrency: CurrencyBreakdown;
+  revenueByCurrency: CurrencyBreakdown;
+  worstDipByCurrency: CurrencyBreakdown;
+  bufferByCurrency: CurrencyBreakdown;
+}
+
+export interface PlanInsight {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  messageKey: string;
+  variables?: Record<string, string | number>;
+}
+
+export interface PlanFilters {
+  profileId?: string;
+  status?: PlanStatus;
+}

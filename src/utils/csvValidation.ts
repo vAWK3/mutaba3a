@@ -26,8 +26,7 @@ export function validateCSVRow(
   row: Record<string, string>,
   rowIndex: number,
   existingClients: string[] = [],
-  existingProjects: string[] = [],
-  availableClients: string[] = []
+  existingProjects: string[] = []
 ): CSVValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -52,13 +51,13 @@ export function validateCSVRow(
       validateClient(row, errors, warnings, existingClients);
       break;
     case 'project':
-      validateProject(row, errors, warnings, existingProjects, availableClients);
+      validateProject(row, errors, warnings, existingProjects);
       break;
     case 'income':
-      validateIncome(row, errors, warnings);
+      validateIncome(row, errors);
       break;
     case 'expense':
-      validateExpense(row, errors, warnings);
+      validateExpense(row, errors);
       break;
   }
 
@@ -95,8 +94,7 @@ function validateProject(
   row: Record<string, string>,
   errors: string[],
   warnings: string[],
-  existingProjects: string[],
-  _availableClients: string[]
+  existingProjects: string[]
 ): void {
   const name = row.name?.trim();
   const field = row.field?.trim();
@@ -119,8 +117,7 @@ function validateProject(
 
 function validateIncome(
   row: Record<string, string>,
-  errors: string[],
-  _warnings: string[]
+  errors: string[]
 ): void {
   const amount = row.amount?.trim();
   const currency = row.currency?.trim();
@@ -148,8 +145,7 @@ function validateIncome(
 
 function validateExpense(
   row: Record<string, string>,
-  errors: string[],
-  _warnings: string[]
+  errors: string[]
 ): void {
   const amount = row.amount?.trim();
   const currency = row.currency?.trim();

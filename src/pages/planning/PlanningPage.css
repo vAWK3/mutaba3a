@@ -1,0 +1,633 @@
+.planning-page {
+  padding: 1.5rem;
+  max-width: 1400px;
+}
+
+.planning-page .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.planning-page .header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.planning-page .page-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.planning-page .page-subtitle {
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0;
+}
+
+.planning-page .plan-select {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--bg-primary);
+  font-size: 0.875rem;
+}
+
+/* Loading state */
+.planning-page .loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+/* Empty state */
+.planning-page .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  border: 2px dashed var(--border-color);
+}
+
+.planning-page .empty-state-content h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.planning-page .empty-state-content p {
+  color: var(--text-secondary);
+  margin: 0 0 1.5rem;
+  max-width: 400px;
+}
+
+/* Summary Strip */
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-card {
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.summary-card-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.summary-card-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-card-value.positive {
+  color: var(--color-success);
+}
+
+.summary-card-value.negative {
+  color: var(--color-danger);
+}
+
+.summary-card-value.warning {
+  color: var(--color-warning);
+}
+
+/* Scenario Tabs */
+.scenario-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--bg-secondary);
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  width: fit-content;
+}
+
+.scenario-tab {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.scenario-tab:hover {
+  background: var(--bg-tertiary);
+}
+
+.scenario-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Planning Grid */
+.planning-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .planning-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.planning-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.planning-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Monthly Timeline */
+.monthly-timeline {
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.monthly-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.monthly-timeline-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.timeline-chart {
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.timeline-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.timeline-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease;
+}
+
+.timeline-bar.in {
+  background: var(--color-success);
+}
+
+.timeline-bar.out {
+  background: var(--color-danger);
+}
+
+.timeline-month-label {
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+  transform: rotate(-45deg);
+  white-space: nowrap;
+}
+
+.timeline-balance-line {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Assumption Panel */
+.assumption-panel {
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.assumption-panel-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.assumption-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.assumption-panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.assumption-category {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.assumption-category:last-child {
+  border-bottom: none;
+}
+
+.assumption-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  background: var(--bg-tertiary);
+}
+
+.assumption-category-header:hover {
+  background: var(--bg-hover);
+}
+
+.category-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 0.125rem 0.375rem;
+  border-radius: 1rem;
+}
+
+.category-total {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.assumption-list {
+  padding: 0.5rem 0;
+}
+
+.assumption-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.assumption-item:hover {
+  background: var(--bg-hover);
+}
+
+.assumption-item-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.assumption-label {
+  font-size: 0.875rem;
+}
+
+.assumption-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.assumption-amount {
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.assumption-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+}
+
+/* Insight Panel */
+.insight-panel {
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.insight-panel h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.insight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bg-primary);
+}
+
+.insight-item.critical {
+  border-left: 3px solid var(--color-danger);
+}
+
+.insight-item.warning {
+  border-left: 3px solid var(--color-warning);
+}
+
+.insight-item.info {
+  border-left: 3px solid var(--color-info);
+}
+
+.insight-icon {
+  font-size: 1rem;
+}
+
+.insight-message {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Confidence Badges (inline) */
+.confidence-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 0.25rem;
+}
+
+.confidence-indicator.confirmed {
+  background: var(--color-success);
+}
+
+.confidence-indicator.likely {
+  background: var(--color-warning);
+}
+
+.confidence-indicator.rough_guess {
+  background: var(--color-danger);
+}
+
+/* Add Assumption Button */
+.add-assumption-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px dashed var(--border-color);
+  background: transparent;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.add-assumption-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--bg-hover);
+}
+
+/* Export Dropdown */
+.header-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.export-dropdown {
+  position: relative;
+}
+
+.export-dropdown:hover .export-menu,
+.export-dropdown:focus-within .export-menu {
+  display: flex;
+}
+
+.export-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-direction: column;
+  min-width: 160px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .export-menu {
+  background-color: #1f2937;
+}
+
+.export-menu button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition: background 0.2s;
+}
+
+.export-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.export-menu button:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Empty timeline state */
+.empty-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  border: 2px dashed var(--border-color);
+  min-height: 200px;
+}
+
+.empty-timeline p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Plan name section */
+.plan-name-section {
+  display: flex;
+  align-items: center;
+}
+
+.plan-name-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plan-name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.plan-name-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plan-name-input {
+  width: 200px;
+}
+
+/* Plan actions dropdown */
+.plan-actions-dropdown {
+  position: relative;
+}
+
+.btn-icon {
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  border-radius: 0.25rem;
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.plan-actions-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+}
+
+.plan-actions-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-direction: column;
+  min-width: 140px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.plan-actions-menu.open {
+  display: flex;
+}
+
+/* Ensure solid background in both light and dark modes */
+.plan-actions-menu {
+  background-color: #ffffff;
+}
+
+[data-theme="dark"] .plan-actions-menu {
+  background-color: #1f2937;
+}
+
+.plan-actions-menu button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition: background 0.2s;
+}
+
+.plan-actions-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.plan-actions-menu button.danger {
+  color: var(--color-danger);
+}
+
+.plan-actions-menu button.danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+}
+
+.plan-actions-menu button:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Small button variant */
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}

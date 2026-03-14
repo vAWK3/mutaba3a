@@ -5,6 +5,9 @@ import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
 import { useT } from '../../lib/i18n';
 import { useBusinessProfiles } from '../../hooks/useQueries';
+import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
+import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
+import { CSVValidationPreview } from '../csv/CSVValidationPreview';
 import type { BusinessProfile } from '../../types';
 import './DeleteAllDataModal.css';
 
@@ -13,8 +16,9 @@ interface ImportDataModalProps {
   onSuccess?: () => void;
 }
 
-type ImportStep = 'select' | 'preview' | 'importing' | 'done' | 'error';
+type ImportStep = 'select' | 'preview' | 'validate' | 'importing' | 'done' | 'error';
 type ImportMode = 'create' | 'merge' | 'legacy';
+type FileType = 'json' | 'csv';
 
 interface FileData {
   version?: number;
@@ -31,6 +35,13 @@ interface FileData {
   exportedAt?: string;
 }
 
+interface CSVPreviewData {
+  clients: number;
+  projects: number;
+  income: number;
+  expenses: number;
+}
+
 export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
   const t = useT();
   const queryClient = useQueryClient();
@@ -41,6 +52,11 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
   const [step, setStep] = useState<ImportStep>('select');
   const [fileData, setFileData] = useState<FileData | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [fileType, setFileType] = useState<FileType>('json');
+  const [csvPreview, setCsvPreview] = useState<CSVPreviewData | null>(null);
+  const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
+  const [csvValidationResults, setCsvValidationResults] = useState<CSVValidationResult[]>([]);
+  const [selectedRowIndices, setSelectedRowIndices] = useState<number[]>([]);
   const [importMode, setImportMode] = useState<ImportMode>('create');
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
@@ -68,32 +84,60 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
   const handleFileSelect = useCallback(async (file: File) => {
     try {
       const text = await file.text();
-      const data = JSON.parse(text) as FileData;
+      const isCSV = file.name.toLowerCase().endsWith('.csv');
 
       setFileName(file.name);
-      setFileData(data);
+      setFileType(isCSV ? 'csv' : 'json');
 
-      // Determine if v2 (profile-scoped) or v1 (legacy)
-      if (data.version === 2 && data.profile) {
-        // Check if profile already exists
-        const existingProfile = existingProfiles.find(
-          (p) => p.id === data.profileId || p.email === data.profile?.email
-        );
-        if (existingProfile) {
-          setSelectedProfileId(existingProfile.id);
-          setImportMode('merge');
-        } else {
-          setImportMode('create');
+      if (isCSV) {
+        // Parse CSV
+        const rows = parseCSV(text);
+
+        if (rows.length === 0) {
+          setError('CSV file is empty');
+          return;
         }
-      } else {
-        // Legacy format
-        setImportMode('legacy');
-      }
 
-      setStep('preview');
-      setError('');
+        // Count entities by type
+        const preview: CSVPreviewData = {
+          clients: rows.filter(r => r.type === 'client').length,
+          projects: rows.filter(r => r.type === 'project').length,
+          income: rows.filter(r => r.type === 'income').length,
+          expenses: rows.filter(r => r.type === 'expense').length,
+        };
+
+        setCsvRows(rows);
+        setCsvPreview(preview);
+        setImportMode('create'); // CSV always creates new data
+        setStep('preview');
+        setError('');
+      } else {
+        // Parse JSON
+        const data = JSON.parse(text) as FileData;
+        setFileData(data);
+
+        // Determine if v2 (profile-scoped) or v1 (legacy)
+        if (data.version === 2 && data.profile) {
+          // Check if profile already exists
+          const existingProfile = existingProfiles.find(
+            (p) => p.id === data.profileId || p.email === data.profile?.email
+          );
+          if (existingProfile) {
+            setSelectedProfileId(existingProfile.id);
+            setImportMode('merge');
+          } else {
+            setImportMode('create');
+          }
+        } else {
+          // Legacy format
+          setImportMode('legacy');
+        }
+
+        setStep('preview');
+        setError('');
+      }
     } catch (err) {
-      setError('Failed to read file. Please select a valid JSON file.');
+      setError(`Failed to read file. Please select a valid ${file.name.endsWith('.csv') ? 'CSV' : 'JSON'} file.`);
       console.error('File read error:', err);
     }
   }, [existingProfiles]);
@@ -101,15 +145,41 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.json')) {
+    if (file && (file.name.endsWith('.json') || file.name.endsWith('.csv'))) {
       handleFileSelect(file);
     } else {
-      setError('Please drop a .json file');
+      setError('Please drop a .json or .csv file');
     }
   }, [handleFileSelect]);
 
+  const handleDownloadTemplate = useCallback(() => {
+    const template = generateImportTemplate();
+    downloadTextFile('mutaba3a-import-template.csv', template);
+  }, []);
+
+  const handleValidateCSV = useCallback(async () => {
+    // Get existing clients and projects for duplicate detection
+    const existingClients = await db.clients.toArray();
+    const existingProjects = await db.projects.toArray();
+
+    const clientNames = existingClients.map(c => c.name);
+    const projectNames = existingProjects.map(p => p.name);
+
+    // Validate all rows
+    const results = validateCSVImport(csvRows, clientNames, projectNames);
+    setCsvValidationResults(results);
+
+    // Auto-select valid rows
+    const validIndices = results
+      .map((r, i) => (r.status !== 'error' ? i : -1))
+      .filter(i => i !== -1);
+    setSelectedRowIndices(validIndices);
+
+    setStep('validate');
+  }, [csvRows]);
+
   const handleImport = async () => {
-    if (!fileData) return;
+    if (!fileData && csvRows.length === 0) return;
 
     setStep('importing');
     setError('');
@@ -117,7 +187,147 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
     try {
       const stats = { profiles: 0, documents: 0, transactions: 0 };
 
-      if (importMode === 'legacy') {
+      if (fileType === 'csv') {
+        // CSV import - only import selected rows
+        const selectedRows = csvRows.filter((_, index) => selectedRowIndices.includes(index));
+
+        // Maps to track name -> ID for resolving references
+        const clientNameToId = new Map<string, string>();
+        const projectNameToId = new Map<string, string>();
+
+        // Group selected rows by type
+        const clientRows = selectedRows.filter(r => r.type === 'client');
+        const projectRows = selectedRows.filter(r => r.type === 'project');
+        const incomeRows = selectedRows.filter(r => r.type === 'income');
+        const expenseRows = selectedRows.filter(r => r.type === 'expense');
+
+        // 1. Import clients first
+        for (const row of clientRows) {
+          if (!row.name) continue;
+
+          // Check if client exists by name
+          const existing = await db.clients.where('name').equals(row.name).first();
+
+          if (existing) {
+            // Use existing client
+            clientNameToId.set(row.name, existing.id);
+          } else {
+            // Create new client
+            const clientId = crypto.randomUUID();
+            await db.clients.add({
+              id: clientId,
+              name: row.name,
+              email: row.email || undefined,
+              phone: row.phone || undefined,
+              notes: row.notes || undefined,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+            clientNameToId.set(row.name, clientId);
+          }
+        }
+
+        // 2. Import projects second
+        for (const row of projectRows) {
+          if (!row.name) continue;
+
+          // Resolve client reference
+          const clientId = row.client ? clientNameToId.get(row.client) : undefined;
+
+          // Check if project exists by name
+          const existing = await db.projects.where('name').equals(row.name).first();
+
+          if (existing) {
+            // Use existing project
+            projectNameToId.set(row.name, existing.id);
+          } else {
+            // Create new project
+            const projectId = crypto.randomUUID();
+            await db.projects.add({
+              id: projectId,
+              name: row.name,
+              clientId,
+              field: row.field || undefined,
+              notes: row.notes || undefined,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+            projectNameToId.set(row.name, projectId);
+          }
+        }
+
+        // 3. Import income transactions
+        for (const row of incomeRows) {
+          if (!row.amount || !row.currency || !row.date) continue;
+
+          const clientId = row.client ? clientNameToId.get(row.client) : undefined;
+          const projectId = row.project ? projectNameToId.get(row.project) : undefined;
+
+          const amountMinor = Math.round(parseFloat(row.amount) * 100);
+          const status = row.status === 'paid' ? 'paid' : 'unpaid';
+
+          await db.transactions.add({
+            id: crypto.randomUUID(),
+            kind: 'income',
+            status,
+            title: row.name || 'Income',
+            clientId,
+            projectId,
+            amountMinor,
+            currency: row.currency as 'USD' | 'ILS' | 'EUR',
+            occurredAt: row.date,
+            dueDate: row.dueDate || undefined,
+            paidAt: row.paidAt || (status === 'paid' ? row.date : undefined),
+            notes: row.notes || undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          stats.transactions++;
+        }
+
+        // 4. Import expense transactions
+        for (const row of expenseRows) {
+          if (!row.amount || !row.currency || !row.date) continue;
+
+          const clientId = row.client ? clientNameToId.get(row.client) : undefined;
+          const projectId = row.project ? projectNameToId.get(row.project) : undefined;
+
+          const amountMinor = Math.round(parseFloat(row.amount) * 100);
+
+          // Find or create category
+          let categoryId: string | undefined;
+          if (row.category) {
+            const existingCategory = await db.categories.where('name').equals(row.category).first();
+            if (existingCategory) {
+              categoryId = existingCategory.id;
+            } else {
+              categoryId = crypto.randomUUID();
+              await db.categories.add({
+                id: categoryId,
+                kind: 'expense',
+                name: row.category,
+              });
+            }
+          }
+
+          await db.transactions.add({
+            id: crypto.randomUUID(),
+            kind: 'expense',
+            status: 'paid',
+            title: row.name || 'Expense',
+            clientId,
+            projectId,
+            categoryId,
+            amountMinor,
+            currency: row.currency as 'USD' | 'ILS' | 'EUR',
+            occurredAt: row.date,
+            notes: row.notes || undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          stats.transactions++;
+        }
+      } else if (importMode === 'legacy' && fileData) {
         // Legacy import - clear and import all data
         await clearDatabase();
 
@@ -140,7 +350,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
         if (fileData.settings?.length) {
           await db.settings.bulkAdd(fileData.settings as Parameters<typeof db.settings.bulkAdd>[0]);
         }
-      } else if (importMode === 'create' && fileData.profile) {
+      } else if (importMode === 'create' && fileData && fileData.profile) {
         // Create new profile with new ID
         const newProfileId = crypto.randomUUID();
         const profile = {
@@ -217,7 +427,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
             }
           }
         }
-      } else if (importMode === 'merge' && selectedProfileId) {
+      } else if (importMode === 'merge' && selectedProfileId && fileData) {
         // Merge into existing profile
         // Update profile fields
         if (fileData.profile) {
@@ -294,48 +504,86 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
 
         <div className="modal-body">
           {step === 'select' && (
-            <div
-              className="import-dropzone"
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <UploadIcon />
-              <p>Drop a .json file here or click to select</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileSelect(file);
-                }}
-              />
-              {error && <p className="text-danger text-sm">{error}</p>}
-            </div>
+            <>
+              <div
+                className="import-dropzone"
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <UploadIcon />
+                <p>Drop a .json or .csv file here or click to select</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,.csv"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  }}
+                />
+                {error && <p className="text-danger text-sm">{error}</p>}
+              </div>
+              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleDownloadTemplate}
+                  style={{ fontSize: '0.875rem' }}
+                >
+                  {t('settings.data.downloadTemplate') || 'Download CSV Template'}
+                </button>
+              </div>
+            </>
           )}
 
-          {step === 'preview' && fileData && (
+          {step === 'preview' && (fileData || csvPreview) && (
             <>
               <div className="import-file-info">
                 <FileIcon />
                 <div>
                   <div className="import-file-name">{fileName}</div>
                   <div className="import-file-meta text-muted text-sm">
-                    {isV2Format ? (
+                    {fileType === 'csv' && csvPreview ? (
+                      <>
+                        CSV Import: {csvPreview.clients} clients, {csvPreview.projects} projects, {csvPreview.income} income, {csvPreview.expenses} expenses
+                      </>
+                    ) : isV2Format ? (
                       <>Profile: {profileName}</>
                     ) : (
                       <>Legacy format (all data)</>
                     )}
-                    {fileData.exportedAt && (
+                    {fileData?.exportedAt && (
                       <> &middot; Exported: {new Date(fileData.exportedAt).toLocaleDateString()}</>
                     )}
                   </div>
                 </div>
               </div>
 
-              {isV2Format && (
+              {fileType === 'csv' && existingProfiles.length > 0 && (
+                <div className="import-mode-select">
+                  <h4>Select Business Profile</h4>
+                  <div className="import-profile-select">
+                    <select
+                      className="select"
+                      value={selectedProfileId || ''}
+                      onChange={(e) => setSelectedProfileId(e.target.value)}
+                    >
+                      <option value="">Select a profile...</option>
+                      {existingProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.nameEn && `(${p.nameEn})`}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="text-muted text-sm" style={{ marginTop: '0.5rem' }}>
+                      Choose which business profile to associate imported data with
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isV2Format && fileData && (
                 <div className="import-mode-select">
                   <h4>Import Options</h4>
                   <label className="import-mode-option">
@@ -389,14 +637,32 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
                 </div>
               )}
 
-              {!isV2Format && (
+              {!isV2Format && fileType === 'json' && (
                 <div className="modal-warning">
                   <WarningIcon />
                   <p>This is a legacy backup file. Importing will replace all existing data.</p>
                 </div>
               )}
 
+              {fileType === 'csv' && (
+                <div className="modal-info" style={{ padding: '1rem', backgroundColor: '#e0f2fe', borderRadius: '0.5rem', marginTop: '1rem' }}>
+                  <p style={{ margin: 0, color: '#075985', fontSize: '0.875rem' }}>
+                    <strong>CSV Import:</strong> New data will be added without replacing existing records. Clients and projects are matched by name.
+                  </p>
+                </div>
+              )}
+
               {error && <p className="text-danger text-sm">{error}</p>}
+            </>
+          )}
+
+          {step === 'validate' && (
+            <>
+              <h3 style={{ marginBottom: '1rem' }}>Validate CSV Data</h3>
+              <CSVValidationPreview
+                results={csvValidationResults}
+                onSelectionChange={setSelectedRowIndices}
+              />
             </>
           )}
 
@@ -438,19 +704,42 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
           )}
         </div>
 
-        {(step === 'select' || step === 'preview') && (
+        {(step === 'select' || step === 'preview' || step === 'validate') && (
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={onClose}>
               {t('common.cancel')}
             </button>
-            {step === 'preview' && (
+            {step === 'preview' && fileType === 'json' && (
               <button
                 className="btn btn-primary"
                 onClick={handleImport}
                 disabled={importMode === 'merge' && !selectedProfileId}
               >
-                Import
+                Import JSON
               </button>
+            )}
+            {step === 'preview' && fileType === 'csv' && (
+              <button
+                className="btn btn-primary"
+                onClick={handleValidateCSV}
+                disabled={existingProfiles.length > 0 && !selectedProfileId}
+              >
+                Next: Validate
+              </button>
+            )}
+            {step === 'validate' && (
+              <>
+                <button className="btn btn-secondary" onClick={() => setStep('preview')}>
+                  Back
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleImport}
+                  disabled={selectedRowIndices.length === 0}
+                >
+                  Import {selectedRowIndices.length} Row{selectedRowIndices.length !== 1 ? 's' : ''}
+                </button>
+              </>
             )}
           </div>
         )}

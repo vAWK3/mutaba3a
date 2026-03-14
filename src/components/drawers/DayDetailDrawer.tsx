@@ -63,8 +63,8 @@ export function DayDetailDrawer({ date, onClose }: DayDetailDrawerProps) {
   }, [onClose]);
 
   // Separate inflows and outflows
-  const inflows = events?.filter(e => e.direction === 'inflow') || [];
-  const outflows = events?.filter(e => e.direction === 'outflow') || [];
+  const inflows = useMemo(() => events?.filter(e => e.direction === 'inflow') || [], [events]);
+  const outflows = useMemo(() => events?.filter(e => e.direction === 'outflow') || [], [events]);
 
   // Calculate totals by currency
   const totals = useMemo(() => {

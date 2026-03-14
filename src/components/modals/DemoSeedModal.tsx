@@ -2,13 +2,13 @@
  * Demo Seed Modal
  *
  * Confirmation modal for activating demo mode and seeding demo data.
- * Requires typing "SEED" to confirm, following the DeleteAllDataModal pattern.
+ * Shows what demo data will be created and allows one-click confirmation.
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n';
-import { useDemoStore, seedDemoData, DEMO_CONFIRM_WORD } from '../../demo';
+import { useDemoStore, seedDemoData } from '../../demo';
 import type { DemoDataStats } from '../../demo';
 import './DemoSeedModal.css';
 
@@ -23,7 +23,6 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
   const queryClient = useQueryClient();
   const modalRef = useRef<HTMLDivElement>(null);
 
-  const [confirmText, setConfirmText] = useState('');
   const [seedStatus, setSeedStatus] = useState<SeedStatus>('idle');
   const [seedError, setSeedError] = useState<string | null>(null);
   const [stats, setStats] = useState<DemoDataStats | null>(null);
@@ -50,10 +49,6 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
   }, []);
 
   const handleSeed = async () => {
-    if (confirmText.toUpperCase() !== DEMO_CONFIRM_WORD) {
-      return;
-    }
-
     setSeedStatus('seeding');
     setSeedError(null);
 
@@ -83,7 +78,7 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
     }
   };
 
-  const canSeed = confirmText.toUpperCase() === DEMO_CONFIRM_WORD && seedStatus === 'idle';
+  const canSeed = seedStatus === 'idle';
 
   return (
     <>
@@ -133,21 +128,6 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
                 </ul>
               </div>
 
-              {/* Confirmation input */}
-              <div className="demo-confirm">
-                <label htmlFor="confirm-input">
-                  {t('demo.modal.confirmLabel', { word: DEMO_CONFIRM_WORD })}
-                </label>
-                <input
-                  id="confirm-input"
-                  type="text"
-                  value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
-                  placeholder={DEMO_CONFIRM_WORD}
-                  className="input"
-                  autoComplete="off"
-                />
-              </div>
             </>
           )}
 

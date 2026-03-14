@@ -1754,6 +1754,7 @@
       "title": "Monthly Cash Flow",
       "cashIn": "Cash In",
       "cashOut": "Cash Out",
+      "netFlow": "Net Flow",
       "startingCash": "Starting",
       "endingCash": "Ending"
     },

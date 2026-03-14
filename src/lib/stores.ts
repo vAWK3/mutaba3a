@@ -185,6 +185,24 @@ interface DrawerState {
   };
   openPartialPaymentDrawer: (options: { transactionId: string }) => void;
   closePartialPaymentDrawer: () => void;
+
+  // Plan assumption drawer (Financial Planning)
+  planAssumptionDrawer: {
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    planId?: string;
+    assumptionId?: string;
+    defaultCategory?: 'revenue' | 'expense' | 'funding' | 'hiring' | 'other';
+    defaultProfileId?: string;
+  };
+  openPlanAssumptionDrawer: (options?: {
+    mode?: 'create' | 'edit';
+    planId?: string;
+    assumptionId?: string;
+    defaultCategory?: 'revenue' | 'expense' | 'funding' | 'hiring' | 'other';
+    defaultProfileId?: string;
+  }) => void;
+  closePlanAssumptionDrawer: () => void;
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
@@ -490,6 +508,30 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       partialPaymentDrawer: {
         isOpen: false,
         transactionId: undefined,
+      },
+    }),
+
+  // Plan assumption drawer (Financial Planning)
+  planAssumptionDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openPlanAssumptionDrawer: (options) =>
+    set({
+      planAssumptionDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        planId: options?.planId,
+        assumptionId: options?.assumptionId,
+        defaultCategory: options?.defaultCategory,
+        defaultProfileId: options?.defaultProfileId,
+      },
+    }),
+  closePlanAssumptionDrawer: () =>
+    set({
+      planAssumptionDrawer: {
+        isOpen: false,
+        mode: 'create',
       },
     }),
 }));

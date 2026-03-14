@@ -49,19 +49,37 @@ export function CurrencySummaryPopup({
   // Calculate unified total including EUR
   const unifiedTotal = getUnifiedTotalWithEur(usdAmountMinor, ilsAmountMinor, eurAmountMinor, usdToIlsRate, eurToIlsRate);
 
+  // Calculate dropdown position with overflow prevention
+  const calculatePosition = (rect: DOMRect) => {
+    const isRTL = document.documentElement.dir === 'rtl';
+    const dropdownHeight = 160; // Approximate height of the dropdown
+    const dropdownWidth = 180; // min-width of dropdown
+    const padding = 8;
+
+    // Check if dropdown would overflow bottom of viewport
+    const wouldOverflowBottom = rect.bottom + 4 + dropdownHeight > window.innerHeight;
+
+    // If it would overflow, show above the trigger instead
+    const top = wouldOverflowBottom
+      ? Math.max(padding, rect.top - dropdownHeight - 4)
+      : rect.bottom + 4;
+
+    // Calculate left position ensuring it doesn't overflow horizontally
+    let left: number;
+    if (isRTL) {
+      left = Math.max(padding, Math.min(rect.right - dropdownWidth, window.innerWidth - dropdownWidth - padding));
+    } else {
+      left = Math.max(padding, Math.min(rect.left, window.innerWidth - dropdownWidth - padding));
+    }
+
+    return { top, left };
+  };
+
   // Update dropdown position when opened
   useEffect(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      const isRTL = document.documentElement.dir === 'rtl';
-
-      // Position below the trigger, aligned to start (left in LTR, right in RTL)
-      setDropdownPosition({
-        top: rect.bottom + 4,
-        left: isRTL
-          ? Math.max(8, rect.right - 180) // 180px is min-width
-          : Math.max(8, rect.left),
-      });
+      setDropdownPosition(calculatePosition(rect));
     }
   }, [isOpen]);
 
@@ -106,14 +124,7 @@ export function CurrencySummaryPopup({
     function updatePosition() {
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
-        const isRTL = document.documentElement.dir === 'rtl';
-
-        setDropdownPosition({
-          top: rect.bottom + 4,
-          left: isRTL
-            ? Math.max(8, rect.right - 180)
-            : Math.max(8, rect.left),
-        });
+        setDropdownPosition(calculatePosition(rect));
       }
     }
 
