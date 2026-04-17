@@ -26,7 +26,7 @@ export function ProjectsPage() {
     validFields: ['name', 'net', 'unpaid', 'activity'],
   });
 
-  // Get active profile filter (undefined in "All Profiles" mode)
+  // Get active profile - STRICT MODE: always operates on active profile only
   const profileId = useProfileFilter();
 
   // Fetch all projects to check for orphaned records

@@ -119,6 +119,71 @@ jobs:
             echo "has_exe=false" >> $env:GITHUB_OUTPUT
           }
 
+      - name: Build and sign NSIS updater bundle
+        id: updater
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ("${{ steps.artifacts.outputs.has_exe }}" -ne "true") {
+            Write-Warning "No NSIS setup.exe was built; skipping updater bundle."
+            Write-Warning "Auto-update on Windows requires the NSIS installer target."
+            echo "has_updater=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Warning "TAURI_SIGNING_PRIVATE_KEY secret is not set; skipping Windows updater bundle."
+            Write-Warning "Add it in repo Settings -> Secrets and variables -> Actions to enable auto-update on Windows."
+            echo "has_updater=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $version = "${{ steps.version.outputs.version }}"
+          $releaseDir = "release-artifacts"
+          $exeVersionedPath = "${{ steps.artifacts.outputs.exe_versioned_path }}"
+
+          # Tauri v2's NSIS updater downloads a .nsis.zip, extracts it, and runs
+          # the setup exe inside (install mode comes from tauri.conf.json).
+          $zipName = "mutaba3a-v$version-windows-x64-setup.nsis.zip"
+          $zipPath = Join-Path $releaseDir $zipName
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+
+          Compress-Archive -Path $exeVersionedPath -DestinationPath $zipPath -Force
+          Write-Host "Created updater zip: $zipPath"
+
+          # Sign with the same minisign key deploy.sh uses on macOS. The CLI
+          # writes a .sig sidecar and prints the base64 signature to stdout.
+          $cliOutput = npx --yes @tauri-apps/cli signer sign $zipPath `
+              --private-key $env:TAURI_SIGNING_PRIVATE_KEY `
+              --password $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD 2>&1 | Out-String
+
+          $signatureLine = ($cliOutput -split "`r?`n" |
+              Where-Object { $_ -match '^dW50cnVzdGVk' } |
+              Select-Object -First 1)
+
+          if ([string]::IsNullOrEmpty($signatureLine)) {
+            Write-Error "Could not extract base64 signature from tauri signer output."
+            Write-Host "CLI output was:"
+            Write-Host $cliOutput
+            exit 1
+          }
+
+          $sigPath = "$zipPath.sig"
+          if (-not (Test-Path $sigPath)) {
+            Write-Error "Expected .sig sidecar not produced at $sigPath"
+            exit 1
+          }
+
+          Write-Host "Signed updater bundle (signature length: $($signatureLine.Length) chars)"
+
+          echo "has_updater=true" >> $env:GITHUB_OUTPUT
+          echo "updater_zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+          echo "updater_zip_name=$zipName" >> $env:GITHUB_OUTPUT
+          echo "updater_sig_path=$sigPath" >> $env:GITHUB_OUTPUT
+          echo "updater_signature=$signatureLine" >> $env:GITHUB_OUTPUT
+
       - name: Generate SHA256 checksums
         id: checksums
         shell: pwsh
@@ -183,6 +248,12 @@ jobs:
             $files += "${{ steps.checksums.outputs.exe_stable_checksum_path }}"
           }
 
+          if ("${{ steps.updater.outputs.has_updater }}" -eq "true") {
+            # Signed NSIS updater bundle + sidecar signature
+            $files += "${{ steps.updater.outputs.updater_zip_path }}"
+            $files += "${{ steps.updater.outputs.updater_sig_path }}"
+          }
+
           Write-Host "Files to upload:"
           $files | ForEach-Object { Write-Host "  - $_" }
 
@@ -214,6 +285,62 @@ jobs:
 
           Write-Error "Failed to upload artifacts after $maxRetries attempts"
           exit 1
+
+      - name: Patch latest.json with windows-x86_64 entry
+        if: steps.updater.outputs.has_updater == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.event.release.tag_name || inputs.tag }}"
+          $zipName = "${{ steps.updater.outputs.updater_zip_name }}"
+          $signature = "${{ steps.updater.outputs.updater_signature }}"
+
+          $workDir = "manifest-patch"
+          New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+          Set-Location $workDir
+
+          # deploy.sh is expected to publish a darwin-aarch64-only latest.json
+          # when cutting the mac release. We read it back, splice in the windows
+          # platform, and re-upload. If it's missing, fail loudly — we refuse to
+          # publish a windows-only manifest that would break mac auto-update.
+          gh release download $tag --pattern latest.json
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "latest.json")) {
+            Write-Error "latest.json not found on release $tag. Run the mac release pipeline first (scripts/deploy.sh -> option 2)."
+            exit 1
+          }
+
+          $archiveUrl = "https://github.com/${{ github.repository }}/releases/download/$tag/$zipName"
+          $manifest = Get-Content "latest.json" -Raw | ConvertFrom-Json
+
+          if (-not $manifest.platforms) {
+            $manifest | Add-Member -NotePropertyName platforms -NotePropertyValue ([pscustomobject]@{}) -Force
+          }
+
+          $winEntry = [pscustomobject]@{
+            signature = $signature
+            url       = $archiveUrl
+          }
+
+          if ($manifest.platforms.PSObject.Properties.Name -contains "windows-x86_64") {
+            $manifest.platforms."windows-x86_64" = $winEntry
+          } else {
+            $manifest.platforms | Add-Member -NotePropertyName "windows-x86_64" -NotePropertyValue $winEntry -Force
+          }
+
+          $manifest | ConvertTo-Json -Depth 10 |
+              Set-Content -Path "latest.json" -Encoding UTF8NoBOM -NoNewline
+
+          Write-Host "Patched manifest:"
+          Get-Content "latest.json"
+          Write-Host ""
+
+          gh release upload $tag "latest.json" --clobber
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to upload patched latest.json"
+            exit 1
+          }
+          Write-Host "latest.json patched with windows-x86_64 entry."
 
       - name: Summary
         shell: pwsh
@@ -248,6 +375,17 @@ jobs:
           Write-Host "MSI SHA256: ${{ steps.checksums.outputs.msi_hash }}"
           if ("${{ steps.artifacts.outputs.has_exe }}" -eq "true") {
             Write-Host "EXE SHA256: ${{ steps.checksums.outputs.exe_hash }}"
+          }
+          Write-Host ""
+          if ("${{ steps.updater.outputs.has_updater }}" -eq "true") {
+            Write-Host "Auto-update (Windows): ENABLED" -ForegroundColor Green
+            Write-Host "  - ${{ steps.updater.outputs.updater_zip_name }}"
+            Write-Host "  - ${{ steps.updater.outputs.updater_zip_name }}.sig"
+            Write-Host "  - latest.json patched with windows-x86_64"
+          } else {
+            Write-Host "Auto-update (Windows): DISABLED" -ForegroundColor Yellow
+            Write-Host "  Set TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+            Write-Host "  in repo Settings -> Secrets and variables -> Actions to enable."
           }
           Write-Host ""
           Write-Host "Release URL: https://github.com/${{ github.repository }}/releases/tag/$tag"

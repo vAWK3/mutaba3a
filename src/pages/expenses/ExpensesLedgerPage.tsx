@@ -8,12 +8,12 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl, type SearchInputRef } from '../../components/filters';
 import { EmptyState, RowActionsMenu, AmountWithConversion, RecurringOccurrenceList } from '../../components/ui';
 import { RecurringConfirmModal, RecurringSnoozeModal } from '../../components/modals';
-import { CopyIcon, TrashIcon, InfoIcon } from '../../components/icons';
+import { CopyIcon, TrashIcon } from '../../components/icons';
 import {
   useOverviewTotalsByCurrency,
 } from '../../hooks/useQueries';
@@ -50,21 +50,25 @@ interface GroupedExpenses {
 
 export function ExpensesLedgerPage() {
   const { openExpenseDrawer } = useDrawerStore();
-  const navigate = useNavigate();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
   const isCompact = useIsCompactTable();
 
-  // Get active profile context
-  const { isAllProfiles, activeProfile, setActiveProfile, profiles, showAllProfilesOption } = useActiveProfile();
+  // Get active profile - STRICT MODE: always operates on active profile only
+  const { activeProfile } = useActiveProfile();
   const profileId = useProfileFilter();
 
-  // Navigate to profile-specific route
-  const handleNavigateToProfile = (id: string) => {
-    setActiveProfile(id); // Keep store in sync
-    navigate({ to: '/expenses/profile/$profileId', params: { profileId: id } });
-  };
+  // Validate that we have a valid profile
+  if (!activeProfile || !profileId) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: 'var(--muted)' }}>
+          {t('expenses.noProfileSelected')}
+        </p>
+      </div>
+    );
+  }
 
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
   const [viewMode, setViewMode] = useState<ExpenseView>('list');
@@ -107,10 +111,10 @@ export function ExpensesLedgerPage() {
   // Fetch totals for summary strip
   const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo, profileId);
 
-  // Recurring expense occurrences (only when a profile is selected)
-  const { data: dueOccurrences = [] } = useDueOccurrences(profileId || '');
+  // Recurring expense occurrences for active profile
+  const { data: dueOccurrences = [] } = useDueOccurrences(profileId);
   const { data: allOccurrences = [] } = useVirtualOccurrences(
-    profileId || '',
+    profileId,
     dateRange.dateFrom,
     dateRange.dateTo
   );
@@ -275,33 +279,6 @@ export function ExpensesLedgerPage() {
         }
       />
       <div className="page-content">
-        {/* Profile Mode Indicator */}
-        {showAllProfilesOption && (
-          <div className="expenses-mode-indicator" role="group" aria-label={t('expenses.profileMode')}>
-            <button
-              type="button"
-              className={cn('expenses-mode-button', isAllProfiles && 'expenses-mode-button-active')}
-              onClick={() => setActiveProfile('all')}
-            >
-              {t('expenses.allProfiles')}
-            </button>
-            {/* Profile selector - show all available profiles */}
-            {profiles.map((profile) => (
-              <button
-                key={profile.id}
-                type="button"
-                className={cn(
-                  'expenses-mode-button',
-                  !isAllProfiles && activeProfile?.id === profile.id && 'expenses-mode-button-active'
-                )}
-                onClick={() => handleNavigateToProfile(profile.id)}
-              >
-                {profile.name}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Summary Strip */}
         {totals && (
           <div className="expenses-summary-strip">
@@ -351,44 +328,8 @@ export function ExpensesLedgerPage() {
           </Link>
         </div>
 
-        {/* Profile-Specific Tools Card - shown when in All Profiles mode */}
-        {isAllProfiles && showAllProfilesOption && (
-          <div className="profile-required-card" style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 12,
-            padding: 16,
-            marginBottom: 16,
-            background: 'var(--surface-raised)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-          }}>
-            <InfoIcon width={20} height={20} style={{ color: 'var(--muted)', flexShrink: 0, marginTop: 2 }} />
-            <div style={{ flex: 1 }}>
-              <h4 style={{ margin: 0, marginBottom: 4, fontSize: 14, fontWeight: 600 }}>
-                {t('expenses.profileSpecificTools')}
-              </h4>
-              <p style={{ margin: 0, marginBottom: 12, fontSize: 13, color: 'var(--muted)' }}>
-                {t('expenses.profileSpecificToolsHint')}
-              </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {profiles.map((profile) => (
-                  <button
-                    key={profile.id}
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleNavigateToProfile(profile.id)}
-                  >
-                    {t('expenses.openProfile', { name: profile.name })}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Due Occurrences Section - only when profile is selected */}
-        {profileId && dueOccurrences.length > 0 && (
+        {/* Due Occurrences Section */}
+        {dueOccurrences.length > 0 && (
           <div className="due-occurrences-section" style={{ marginBottom: 16 }}>
             <button
               className="recurring-rules-header"
@@ -412,8 +353,8 @@ export function ExpensesLedgerPage() {
           </div>
         )}
 
-        {/* Forecast Section - only when profile is selected */}
-        {profileId && forecastOccurrences.length > 0 && (
+        {/* Forecast Section */}
+        {forecastOccurrences.length > 0 && (
           <div className="forecast-section" style={{ marginBottom: 16 }}>
             <button
               className="recurring-rules-header"

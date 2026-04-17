@@ -104,10 +104,16 @@ export function useActiveProfile(): UseActiveProfileReturn {
 
 /**
  * Helper hook to get a profile filter value for queries.
- * Returns undefined when in 'all' mode (no filtering),
- * or the specific profile ID when in single-profile mode.
+ * 
+ * **STRICT MODE**: Always returns the active profile ID.
+ * Never returns undefined. This enforces strict single-profile operation
+ * on all pages - data is never mixed from multiple profiles.
+ * 
+ * If "all profiles" mode is needed (e.g., dashboard aggregates),
+ * use useActiveProfile().isAllProfiles directly and handle it explicitly.
  */
-export function useProfileFilter(): string | undefined {
-  const { isAllProfiles, activeProfileId } = useActiveProfile();
-  return isAllProfiles ? undefined : activeProfileId;
+export function useProfileFilter(): string {
+  const { activeProfileId } = useActiveProfile();
+  // Always return a valid profileId - never undefined for strict isolation
+  return activeProfileId;
 }

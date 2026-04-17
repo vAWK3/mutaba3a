@@ -421,21 +421,17 @@ generate_update_manifest() {
 
     local archive_url="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$tag/$UPDATE_ARCHIVE_NAME"
 
-    # Create the manifest
+    # Only emit platforms we actually ship a correct, signed artifact for.
+    # We build arm64 only, so listing darwin-universal / darwin-x86_64 pointing at
+    # the arm64 archive is a lie: signature verifies (same bytes) but the binary
+    # won't run on Intel, and older Tauri plugin versions throw on the mismatch.
+    # windows-x86_64 is added later by .github/workflows/build-windows.yml.
     cat > "$manifest_path" << EOF
 {
   "version": "$version",
   "notes": "Release $tag",
   "pub_date": "$pub_date",
   "platforms": {
-    "darwin-universal": {
-      "signature": "$UPDATE_SIGNATURE",
-      "url": "$archive_url"
-    },
-    "darwin-x86_64": {
-      "signature": "$UPDATE_SIGNATURE",
-      "url": "$archive_url"
-    },
     "darwin-aarch64": {
       "signature": "$UPDATE_SIGNATURE",
       "url": "$archive_url"

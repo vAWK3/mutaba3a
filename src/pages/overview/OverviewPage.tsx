@@ -37,7 +37,7 @@ export function OverviewPage() {
   const locale = getLocale(language);
   const { skipped, isOnboardingComplete } = useOnboardingStore();
 
-  // Get active profile filter (undefined in "All Profiles" mode)
+  // Get active profile - STRICT MODE: always operates on active profile only
   const profileId = useProfileFilter();
 
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
