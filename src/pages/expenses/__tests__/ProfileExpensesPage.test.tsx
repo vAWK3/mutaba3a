@@ -108,7 +108,8 @@ vi.mock('../../../lib/stores', () => ({
 
 // Mock UI components that render complex data
 vi.mock('../../components/ui', () => ({
-  RowActionsMenu: ({ actions }: RowActionsMenuProps) => <div data-testid="row-actions-menu" />,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  RowActionsMenu: (props: RowActionsMenuProps) => <div data-testid="row-actions-menu" />,
   RecurringOccurrenceList: ({ occurrences }: RecurringOccurrenceListProps) => (
     <div data-testid="recurring-occurrence-list">
       {occurrences?.length || 0} occurrences

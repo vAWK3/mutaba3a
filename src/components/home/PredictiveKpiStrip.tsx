@@ -20,6 +20,7 @@ import { formatAmount, cn } from '../../lib/utils';
 import { getCurrentMonthKey } from '../../lib/monthDetection';
 import { useLanguage, getLocale, useT } from '../../lib/i18n';
 import { useFxRate } from '../../hooks/useFxRate';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getUnifiedTotalWithEur } from '../../lib/fx';
 import { useMonthKPIsBothCurrencies } from '../../hooks/useMoneyAnswersQueries';
 import { InfoIcon } from '../icons';
@@ -295,6 +296,7 @@ export interface PredictiveKpiStripProps {
 export function PredictiveKpiStrip({ className }: PredictiveKpiStripProps) {
   const t = useT();
   const currentMonth = getCurrentMonthKey();
+  const profileId = useProfileFilter();
 
   // Fetch forecast KPIs for current month (both currencies)
   // Home always includes unpaid income and projected retainer
@@ -303,7 +305,8 @@ export function PredictiveKpiStrip({ className }: PredictiveKpiStripProps) {
     0, // opening balance USD
     0, // opening balance ILS
     true, // includeUnpaidIncome
-    true  // includeProjectedRetainer
+    true, // includeProjectedRetainer
+    profileId
   );
 
   if (isLoading || !kpis) {

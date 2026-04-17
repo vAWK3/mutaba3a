@@ -9,6 +9,7 @@ import {
   useProjectSummaries,
   useClientSummaries,
 } from '../../hooks/useQueries';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { formatAmount, getDateRangePreset, cn, getDaysUntil } from '../../lib/utils';
 import type { CurrencyMode, Currency, TransactionDisplay } from '../../types';
@@ -103,6 +104,7 @@ export function InsightsPage() {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
+  const profileId = useProfileFilter();
 
   // State
   const [activeTab, setActiveTab] = useState<InsightsTab>('summary');
@@ -114,13 +116,14 @@ export function InsightsPage() {
 
   // Fetch data
   const { data: transactions = [], isLoading: txLoading } = useTransactions({
+    profileId,
     dateFrom: dateRange.dateFrom,
     dateTo: dateRange.dateTo,
     currency: currencyFilter,
   });
 
-  const { data: projectSummaries = [], isLoading: projLoading } = useProjectSummaries(currencyFilter);
-  const { data: clientSummaries = [], isLoading: clientLoading } = useClientSummaries(currencyFilter);
+  const { data: projectSummaries = [], isLoading: projLoading } = useProjectSummaries(profileId, currencyFilter);
+  const { data: clientSummaries = [], isLoading: clientLoading } = useClientSummaries(profileId, currencyFilter);
 
   const isLoading = txLoading || projLoading || clientLoading;
 

@@ -50,6 +50,10 @@ vi.mock('../../../lib/monthDetection', () => ({
   getCurrentMonthKey: () => '2026-03',
 }));
 
+vi.mock('../../../hooks/useActiveProfile', () => ({
+  useProfileFilter: () => 'profile-1',
+}));
+
 // Mock guidance data
 const mockGuidanceItems: GuidanceItem[] = [
   {

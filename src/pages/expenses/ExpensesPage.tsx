@@ -55,6 +55,10 @@ export function ExpensesPage() {
             <ForecastIcon />
             <span>{t('expenses.forecast')}</span>
           </Link>
+          <Link to="/expenses/vendors" className="expense-quick-link">
+            <VendorsIcon />
+            <span>{t('expenses.vendors.title')}</span>
+          </Link>
         </div>
 
         {/* Grand Totals */}
@@ -162,6 +166,18 @@ function ForecastIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941"
+      />
+    </svg>
+  );
+}
+
+function VendorsIcon() {
+  return (
+    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 6.75h3m-3 4.5h3m-3 4.5h3M4.5 19.5h14.25A2.25 2.25 0 0 0 21 17.25v-10.5A2.25 2.25 0 0 0 18.75 4.5H4.5A2.25 2.25 0 0 0 2.25 6.75v10.5A2.25 2.25 0 0 0 4.5 19.5Zm3.75-9h.008v.008H8.25V10.5Zm0 4.5h.008v.008H8.25V15Z"
       />
     </svg>
   );

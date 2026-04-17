@@ -67,6 +67,7 @@
     "retainers": "العقود المتكررة",
     "moneyAnswers": "إجابات",
     "expenses": "المصروفات",
+    "suppliers": "الموردون",
     "reports": "التقارير",
     "settings": "الإعدادات",
     "download": "تحميل",
@@ -612,6 +613,7 @@
     "viewReceipts": "عرض الإيصالات",
     "manageReceipts": "إدارة الإيصالات",
     "manageRecurring": "إدارة المتكررة",
+    "noProfileSelected": "يرجى اختيار ملف تجاري أولاً.",
     "allProfilesOverview": "نظرة عامة على جميع الملفات",
     "allProfiles": "جميع الملفات",
     "currentProfile": "الحالي: {name}",
@@ -630,6 +632,20 @@
     "profileNotFoundHint": "قد يكون هذا الملف محذوفاً أو غير موجود",
     "untitled": "بدون عنوان",
     "unknownProfile": "ملف غير معروف",
+    "vendors": {
+      "title": "الموردون",
+      "hint": "يتم إنشاء الموردين تلقائياً عند إضافة مصروف. لا يمكن إنشاء مورد من هذه الشاشة.",
+      "backToExpenses": "العودة إلى المصروفات",
+      "definedVendors": "الموردون المعرّفون",
+      "activeInYear": "نشطون في {year}",
+      "expenseCount": "عدد المصروفات",
+      "showMonthlyVariation": "عرض شهري",
+      "hideMonthlyVariation": "إخفاء شهري",
+      "month": "الشهر",
+      "delta": "الفرق",
+      "empty": "لا يوجد موردون بعد",
+      "emptyHint": "أضف مصروفاً مع اسم مورد لإنشاء أول مورد."
+    },
     "overview": {
       "title": "نظرة عامة على المصروفات",
       "allProfiles": "جميع الملفات",
@@ -1270,6 +1286,22 @@
   },
   "vendor": {
     "createNew": "إنشاء جديد"
+  },
+  "suppliers": {
+    "title": "الموردون",
+    "hint": "يتم جمع الموردين من المصروفات. أضف مصروفاً مع اسم مورد لرؤيته هنا.",
+    "noProfile": "يرجى اختيار ملف أولاً.",
+    "year": "السنة",
+    "totalSuppliers": "الموردون النشطون",
+    "name": "المورد",
+    "expenses": "المصروفات",
+    "totalSpent": "إجمالي الإنفاق",
+    "showMonthly": "شهري",
+    "hideMonthly": "إخفاء",
+    "month": "الشهر",
+    "delta": "التغيير",
+    "empty": "لا يوجد موردون بعد",
+    "emptyHint": "أضف مصروفاً مع اسم مورد لرؤية الموردين هنا."
   },
   "receipts": {
     "suggestions": {

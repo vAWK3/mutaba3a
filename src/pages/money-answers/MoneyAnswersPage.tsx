@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { useSearch, useNavigate } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n';
 import { useDrawerStore } from '../../lib/stores';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import type { MoneyAnswersFilters } from '../../types';
 import { useDailyAggregates, useGuidance, useMonthKPIsBothCurrencies } from '../../hooks/useMoneyAnswersQueries';
 import { UnifiedKpiStrip } from './components/UnifiedKpiStrip';
@@ -49,6 +50,7 @@ export function MoneyAnswersPage() {
   const t = useT();
   const navigate = useNavigate();
   const search = useSearch({ from: '/money-answers' });
+  const profileId = useProfileFilter();
 
   // Get drawer state
   const dayDetailDrawer = useDrawerStore((s) => s.dayDetailDrawer);
@@ -64,10 +66,11 @@ export function MoneyAnswersPage() {
   const filters: MoneyAnswersFilters = useMemo(() => ({
     month: search.month || getCurrentMonth(),
     year,
+    profileId,
     currency: 'USD', // Default, but we fetch both currencies
     includeReceivables: search.includeReceivables !== false,
     includeProjections: search.includeProjections !== false,
-  }), [search.month, search.includeReceivables, search.includeProjections, year]);
+  }), [search.month, search.includeReceivables, search.includeProjections, year, profileId]);
 
   // Opening balance (could be stored in settings, for now default to 0)
   const openingBalanceMinorUSD = 0;
@@ -79,7 +82,8 @@ export function MoneyAnswersPage() {
     openingBalanceMinorUSD,
     openingBalanceMinorILS,
     filters.includeReceivables ?? true,
-    filters.includeProjections ?? true
+    filters.includeProjections ?? true,
+    profileId
   );
 
   // Fetch daily aggregates for both currencies
@@ -220,6 +224,7 @@ export function MoneyAnswersPage() {
         {mode === 'year' ? (
           <UnifiedYearModeView
             year={year}
+            profileId={profileId}
             includeReceivables={filters.includeReceivables ?? true}
             includeProjections={filters.includeProjections ?? true}
             onMonthClick={handleMonthClick}

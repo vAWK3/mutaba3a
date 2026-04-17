@@ -5,7 +5,7 @@ import { persist } from 'zustand/middleware';
  * Profile Store
  *
  * Manages the active profile context for the application.
- * Supports "All Profiles" aggregate mode ('all') or a specific profile ID.
+ * Uses a single concrete profile ID at a time.
  *
  * @see .claude/designs/multi-profile.md for design decisions
  */
@@ -13,7 +13,7 @@ import { persist } from 'zustand/middleware';
 export type ActiveProfileId = string | 'all';
 
 interface ProfileState {
-  /** The currently active profile ID, or 'all' for aggregate view */
+  /** The currently active profile ID */
   activeProfileId: ActiveProfileId;
 
   /** Set the active profile */
@@ -26,7 +26,7 @@ interface ProfileState {
 /**
  * Profile store with localStorage persistence.
  * Default is empty string - the useActiveProfile hook will resolve this
- * to the first profile or 'all' based on business logic.
+ * to the first/default profile based on business logic.
  */
 export const useProfileStore = create<ProfileState>()(
   persist(

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
@@ -35,12 +35,10 @@ export function ClientsPage() {
   const { data: allClients = [] } = useClients(undefined);
 
   // Check for orphaned clients and show modal
-  useEffect(() => {
-    const orphanedClients = allClients.filter((c) => !c.profileId && !c.archivedAt);
-    if (orphanedClients.length > 0 && !showOrphanedModal) {
-      setShowOrphanedModal(true);
-    }
-  }, [allClients, showOrphanedModal]);
+  const hasOrphanedClients = allClients.some((c) => !c.profileId && !c.archivedAt);
+  if (hasOrphanedClients && !showOrphanedModal) {
+    setShowOrphanedModal(true);
+  }
 
   // Always fetch all currencies - no currency filter
   const { data: rawClients = [], isLoading } = useClientSummaries(profileId, undefined, search);

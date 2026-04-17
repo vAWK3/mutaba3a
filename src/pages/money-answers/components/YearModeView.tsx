@@ -7,6 +7,7 @@ import { YearInsightsPanel } from './YearInsightsPanel';
 
 interface YearModeViewProps {
   year: number;
+  profileId?: string;
   currency: Currency;
   includeReceivables: boolean;
   includeProjections: boolean;
@@ -15,6 +16,7 @@ interface YearModeViewProps {
 
 export function YearModeView({
   year,
+  profileId,
   currency,
   includeReceivables,
   includeProjections,
@@ -26,7 +28,8 @@ export function YearModeView({
     year,
     currency,
     includeReceivables,
-    includeProjections
+    includeProjections,
+    profileId
   );
 
   if (isLoading) {

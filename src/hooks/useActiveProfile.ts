@@ -7,30 +7,30 @@ import type { BusinessProfile } from '../types';
  * useActiveProfile Hook
  *
  * Provides access to the active profile context with business logic:
- * - Returns the active profile (or undefined for 'all' mode)
+ * - Returns the active profile
  * - Handles profile resolution when store has empty/invalid ID
- * - Provides helpers for checking "All Profiles" mode
+ * - Maintains strict single-profile behavior
  *
  * Design decisions:
- * - Default to first profile for new installs (not 'all')
- * - Show "All Profiles" option only when 2+ profiles exist
+ * - Default to first profile for new installs
+ * - Never allow aggregate "all profiles" mode from the sidebar switcher
  * - Auto-switch to remaining profile if viewing deleted profile
  */
 
 interface UseActiveProfileReturn {
-  /** Whether we're in "All Profiles" aggregate mode */
+  /** Whether we're in "All Profiles" aggregate mode (always false in strict mode) */
   isAllProfiles: boolean;
 
-  /** The active profile ID, or 'all' for aggregate mode */
+  /** The active profile ID */
   activeProfileId: ActiveProfileId;
 
-  /** The active profile object (undefined in 'all' mode) */
+  /** The active profile object */
   activeProfile: BusinessProfile | undefined;
 
   /** All available profiles */
   profiles: BusinessProfile[];
 
-  /** Whether "All Profiles" option should be shown (2+ profiles) */
+  /** Whether "All Profiles" option should be shown (always false in strict mode) */
   showAllProfilesOption: boolean;
 
   /** Set the active profile */
@@ -49,9 +49,9 @@ export function useActiveProfile(): UseActiveProfileReturn {
 
   // Determine effective active profile ID with fallback logic
   const effectiveProfileId = useMemo<ActiveProfileId>(() => {
-    // If 'all' is explicitly set, use it (but only if multiple profiles exist)
+    // Strict mode: if legacy "all" value is present, fall back to a concrete profile
     if (storedId === 'all') {
-      return profiles.length >= 2 ? 'all' : (profiles[0]?.id ?? '');
+      return defaultProfile?.id ?? profiles[0]?.id ?? '';
     }
 
     // If a specific profile ID is set, verify it exists
@@ -70,21 +70,18 @@ export function useActiveProfile(): UseActiveProfileReturn {
     }
   }, [isLoading, storedId, effectiveProfileId, setActiveProfile]);
 
-  const isAllProfiles = effectiveProfileId === 'all';
+  const isAllProfiles = false;
 
   const activeProfile = useMemo(() => {
-    if (isAllProfiles) return undefined;
     return profiles.find((p) => p.id === effectiveProfileId);
-  }, [isAllProfiles, profiles, effectiveProfileId]);
+  }, [profiles, effectiveProfileId]);
 
-  const showAllProfilesOption = profiles.length >= 2;
+  const showAllProfilesOption = false;
 
   const handleSetActiveProfile = useCallback(
     (id: ActiveProfileId) => {
-      // Validate the ID before setting
-      if (id === 'all' && profiles.length >= 2) {
-        setActiveProfile('all');
-      } else if (profiles.some((p) => p.id === id)) {
+      // Strict mode: only concrete profile IDs are valid
+      if (id !== 'all' && profiles.some((p) => p.id === id)) {
         setActiveProfile(id);
       }
     },
@@ -104,13 +101,10 @@ export function useActiveProfile(): UseActiveProfileReturn {
 
 /**
  * Helper hook to get a profile filter value for queries.
- * 
+ *
  * **STRICT MODE**: Always returns the active profile ID.
  * Never returns undefined. This enforces strict single-profile operation
  * on all pages - data is never mixed from multiple profiles.
- * 
- * If "all profiles" mode is needed (e.g., dashboard aggregates),
- * use useActiveProfile().isAllProfiles directly and handle it explicitly.
  */
 export function useProfileFilter(): string {
   const { activeProfileId } = useActiveProfile();

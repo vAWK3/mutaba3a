@@ -69,6 +69,7 @@ vi.mock('../../../hooks/useMediaQuery', () => ({
 
 // Mock profile aware hooks
 vi.mock('../../../hooks/useActiveProfile', () => ({
+  useProfileFilter: () => 'profile-1',
   useActiveProfile: () => ({
     activeProfileId: null,
     setActiveProfile: vi.fn(),
@@ -98,11 +99,13 @@ const mockTotals = {
   },
 };
 
+const mockUseOverviewTotalsByCurrency = vi.fn(() => ({
+  data: mockTotals,
+  isLoading: false,
+}));
+
 vi.mock('../../../hooks/useQueries', () => ({
-  useOverviewTotalsByCurrency: () => ({
-    data: mockTotals,
-    isLoading: false,
-  }),
+  useOverviewTotalsByCurrency: (...args: unknown[]) => mockUseOverviewTotalsByCurrency(...args),
   useBusinessProfiles: () => ({ data: [], isLoading: false }),
   useDefaultBusinessProfile: () => ({ data: null, isLoading: false }),
 }));
@@ -222,6 +225,30 @@ describe('IncomePage', () => {
   });
 
   describe('Page rendering', () => {
+    it('should pass active profile to totals and income queries', async () => {
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      const useIncomeSpy = vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: [],
+        isLoading: false,
+      } as any);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(useIncomeSpy).toHaveBeenCalled();
+        expect(mockUseOverviewTotalsByCurrency).toHaveBeenCalled();
+      });
+
+      expect(useIncomeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ profileId: 'profile-1' })
+      );
+      expect(mockUseOverviewTotalsByCurrency).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        'profile-1'
+      );
+    });
+
     it('should render page title in top bar', async () => {
       const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
@@ -588,7 +615,6 @@ describe('IncomePage', () => {
     });
 
     it('should show "Record Payment" action for unpaid transactions', async () => {
-      const user = userEvent.setup();
       const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
@@ -611,7 +637,6 @@ describe('IncomePage', () => {
     });
 
     it('should open partial payment drawer when "Record Payment" is clicked', async () => {
-      const user = userEvent.setup();
       const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[1]], // Beta Inc - unpaid transaction
@@ -725,7 +750,6 @@ describe('IncomePage', () => {
 
   describe('Date range control', () => {
     it('should update filters when date range changes', async () => {
-      const user = userEvent.setup();
       const mockQuery = vi.fn().mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,

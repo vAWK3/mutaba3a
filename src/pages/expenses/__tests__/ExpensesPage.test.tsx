@@ -443,7 +443,6 @@ describe('ExpensesPage', () => {
 
   describe('Receipt links', () => {
     it('should stop propagation when clicking view receipts', async () => {
-      const user = userEvent.setup();
       const useExpenseQueries = await import('../../../hooks/useExpenseQueries');
       vi.spyOn(useExpenseQueries, 'useAllProfilesExpenseTotals').mockReturnValue({
         data: mockProfileSummaries,

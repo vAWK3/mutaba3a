@@ -59,17 +59,6 @@ export function ExpensesLedgerPage() {
   const { activeProfile } = useActiveProfile();
   const profileId = useProfileFilter();
 
-  // Validate that we have a valid profile
-  if (!activeProfile || !profileId) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p style={{ color: 'var(--muted)' }}>
-          {t('expenses.noProfileSelected')}
-        </p>
-      </div>
-    );
-  }
-
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
   const [viewMode, setViewMode] = useState<ExpenseView>('list');
   const [search, setSearch] = useState('');
@@ -109,12 +98,12 @@ export function ExpensesLedgerPage() {
   }, [openExpenseDrawer]);
 
   // Fetch totals for summary strip
-  const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo, profileId);
+  const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo, profileId ?? '');
 
   // Recurring expense occurrences for active profile
-  const { data: dueOccurrences = [] } = useDueOccurrences(profileId);
+  const { data: dueOccurrences = [] } = useDueOccurrences(profileId ?? '');
   const { data: allOccurrences = [] } = useVirtualOccurrences(
-    profileId,
+    profileId ?? '',
     dateRange.dateFrom,
     dateRange.dateTo
   );
@@ -177,6 +166,17 @@ export function ExpensesLedgerPage() {
 
   // Delete mutation
   const deleteExpenseMutation = useDeleteExpense();
+
+  // Validate that we have a valid profile
+  if (!activeProfile || !profileId) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: 'var(--muted)' }}>
+          {t('expenses.noProfileSelected')}
+        </p>
+      </div>
+    );
+  }
 
   const handleRowClick = (id: string) => {
     openExpenseDrawer({ mode: 'edit', expenseId: id });
@@ -322,6 +322,9 @@ export function ExpensesLedgerPage() {
             onChange={setSearch}
             placeholder={t('transactions.searchPlaceholder')}
           />
+          <Link to="/expenses/vendors" className="btn btn-ghost btn-sm">
+            {t('expenses.vendors.title')}
+          </Link>
           {/* Link to profile expenses for recurring management */}
           <Link to="/expenses/profiles" className="btn btn-ghost btn-sm">
             {t('expenses.manageRecurring')}

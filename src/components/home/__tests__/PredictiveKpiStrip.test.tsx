@@ -37,6 +37,10 @@ vi.mock('../../../lib/monthDetection', () => ({
   getCurrentMonthKey: () => '2026-03',
 }));
 
+vi.mock('../../../hooks/useActiveProfile', () => ({
+  useProfileFilter: () => 'profile-1',
+}));
+
 // Mock FX calculation
 vi.mock('../../../lib/fx', () => ({
   getUnifiedTotalWithEur: (usd: number, ils: number, _eur: number, rate: number) =>

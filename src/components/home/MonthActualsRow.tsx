@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useMonthSummary } from '../../hooks/useMoneyAnswersQueries';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getCurrentMonthKey } from '../../lib/monthDetection';
 import { formatAmount, cn } from '../../lib/utils';
 import { useFxRate } from '../../hooks/useFxRate';
@@ -40,6 +41,7 @@ export function MonthActualsRow({ className }: MonthActualsRowProps) {
   const locale = getLocale(language);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { rate: usdToIlsRate } = useFxRate('USD', 'ILS');
+  const profileId = useProfileFilter();
 
   const currentMonth = getCurrentMonthKey();
 
@@ -62,6 +64,7 @@ export function MonthActualsRow({ className }: MonthActualsRowProps) {
   // Fetch month summary for both currencies
   const { data: summaryUSD, isLoading: loadingUSD } = useMonthSummary({
     month: currentMonth,
+    profileId,
     currency: 'USD',
     includeUnpaidIncome: true,
     includeProjectedRetainer: false, // Actuals only
@@ -69,6 +72,7 @@ export function MonthActualsRow({ className }: MonthActualsRowProps) {
 
   const { data: summaryILS, isLoading: loadingILS } = useMonthSummary({
     month: currentMonth,
+    profileId,
     currency: 'ILS',
     includeUnpaidIncome: true,
     includeProjectedRetainer: false, // Actuals only

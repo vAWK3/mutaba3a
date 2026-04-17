@@ -97,6 +97,7 @@ function normalizeTransaction(
 
   return {
     id: `tx-${tx.id}`,
+    profileId: tx.profileId,
     direction,
     source,
     state,
@@ -213,6 +214,7 @@ export const moneyEventRepo = {
     const {
       month,
       currency,
+      profileId,
       // New terminology (preferred)
       includeUnpaidIncome,
       includeProjectedRetainer,
@@ -233,19 +235,26 @@ export const moneyEventRepo = {
     const events: MoneyEvent[] = [];
 
     // Load reference data
-    const clients = await db.clients.toArray();
+    const clients = await db.clients
+      .filter(c => !profileId || c.profileId === profileId)
+      .toArray();
     const clientMap = new Map(clients.map(c => [c.id, c.name]));
 
-    const vendors = await db.vendors.toArray();
+    const vendors = await db.vendors
+      .filter(v => !profileId || v.profileId === profileId)
+      .toArray();
     const vendorMap = new Map(vendors.map(v => [v.id, v.canonicalName]));
 
-    const retainers = await db.retainerAgreements.toArray();
+    const retainers = await db.retainerAgreements
+      .filter(r => !profileId || r.profileId === profileId)
+      .toArray();
     const retainerMap = new Map(retainers.map(r => [r.id, r.title]));
 
     // 1. Get transactions (paid income, unpaid income if shouldIncludeUnpaidIncome, expenses)
     const transactions = await db.transactions
       .filter(tx => {
         if (tx.deletedAt) return false;
+        if (profileId && tx.profileId !== profileId) return false;
         if (tx.currency !== currency) return false;
 
         // Determine the relevant date for filtering
@@ -278,6 +287,7 @@ export const moneyEventRepo = {
     const expenses = await db.expenses
       .filter(exp => {
         if (exp.deletedAt) return false;
+        if (profileId && exp.profileId !== profileId) return false;
         if (exp.currency !== currency) return false;
         const date = exp.occurredAt.split('T')[0];
         return date >= start && date <= end;
@@ -292,6 +302,7 @@ export const moneyEventRepo = {
     if (shouldIncludeProjectedRetainer) {
       const projectedIncomeItems = await db.projectedIncome
         .filter(pi => {
+          if (profileId && pi.profileId !== profileId) return false;
           if (pi.currency !== currency) return false;
           if (pi.state === 'canceled') return false;
           return pi.expectedDate >= start && pi.expectedDate <= end;
@@ -639,11 +650,12 @@ export const moneyEventRepo = {
   /**
    * Get events for a specific day
    */
-  async getDayEvents(date: string, currency: Currency): Promise<MoneyEvent[]> {
+  async getDayEvents(date: string, currency: Currency, profileId?: string): Promise<MoneyEvent[]> {
     const monthKey = date.substring(0, 7); // YYYY-MM
     const events = await this.getMoneyEvents({
       month: monthKey,
       currency,
+      profileId,
       includeUnpaidIncome: true,
       includeProjectedRetainer: true,
     });
@@ -670,7 +682,8 @@ export const moneyEventRepo = {
     year: number,
     currency: Currency,
     includeUnpaidIncome: boolean = true,
-    includeProjectedRetainer: boolean = true
+    includeProjectedRetainer: boolean = true,
+    profileId?: string
   ): Promise<import('../types').YearSummary> {
     const monthKeys = this.getYearMonthKeys(year);
     const months: import('../types').MonthSummary[] = [];
@@ -687,6 +700,7 @@ export const moneyEventRepo = {
     for (const monthKey of monthKeys) {
       const summary = await this.getMonthSummary({
         month: monthKey,
+        profileId,
         currency,
         includeUnpaidIncome,
         includeProjectedRetainer,
@@ -720,6 +734,7 @@ export const moneyEventRepo = {
       const yearEnd = `${year}-12-31`;
       const projectedIncomeItems = await db.projectedIncome
         .filter(pi => {
+          if (profileId && pi.profileId !== profileId) return false;
           if (pi.currency !== currency) return false;
           return pi.expectedDate >= yearStart && pi.expectedDate <= yearEnd;
         })
@@ -758,14 +773,15 @@ export const moneyEventRepo = {
   async getYearSummaryBothCurrencies(
     year: number,
     includeUnpaidIncome: boolean = true,
-    includeProjectedRetainer: boolean = true
+    includeProjectedRetainer: boolean = true,
+    profileId?: string
   ): Promise<{
     USD: import('../types').YearSummary;
     ILS: import('../types').YearSummary;
   }> {
     const [usdSummary, ilsSummary] = await Promise.all([
-      this.getYearSummary(year, 'USD', includeUnpaidIncome, includeProjectedRetainer),
-      this.getYearSummary(year, 'ILS', includeUnpaidIncome, includeProjectedRetainer),
+      this.getYearSummary(year, 'USD', includeUnpaidIncome, includeProjectedRetainer, profileId),
+      this.getYearSummary(year, 'ILS', includeUnpaidIncome, includeProjectedRetainer, profileId),
     ]);
 
     return {
@@ -785,7 +801,8 @@ export const moneyEventRepo = {
     openingBalanceMinorUSD: number = 0,
     openingBalanceMinorILS: number = 0,
     includeUnpaidIncome: boolean = true,
-    includeProjectedRetainer: boolean = true
+    includeProjectedRetainer: boolean = true,
+    profileId?: string
   ): Promise<{
     USD: {
       willMakeItMinor: number;
@@ -803,8 +820,8 @@ export const moneyEventRepo = {
     };
   }> {
     const [usdKPIs, ilsKPIs] = await Promise.all([
-      this.getMonthKPIs({ month, currency: 'USD', includeUnpaidIncome, includeProjectedRetainer }, openingBalanceMinorUSD),
-      this.getMonthKPIs({ month, currency: 'ILS', includeUnpaidIncome, includeProjectedRetainer }, openingBalanceMinorILS),
+      this.getMonthKPIs({ month, profileId, currency: 'USD', includeUnpaidIncome, includeProjectedRetainer }, openingBalanceMinorUSD),
+      this.getMonthKPIs({ month, profileId, currency: 'ILS', includeUnpaidIncome, includeProjectedRetainer }, openingBalanceMinorILS),
     ]);
 
     return {

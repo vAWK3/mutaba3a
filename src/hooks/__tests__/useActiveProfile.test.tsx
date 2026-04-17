@@ -111,17 +111,17 @@ describe('useActiveProfile', () => {
       });
     });
 
-    it('should show all profiles option when 2+ profiles exist', async () => {
+    it('should not show all profiles option when 2+ profiles exist', async () => {
       const { result } = renderHook(() => useActiveProfile(), {
         wrapper: createWrapper(),
       });
 
       await waitFor(() => {
-        expect(result.current.showAllProfilesOption).toBe(true);
+        expect(result.current.showAllProfilesOption).toBe(false);
       });
     });
 
-    it('should support "all" mode when multiple profiles exist', async () => {
+    it('should fallback to default profile when stored value is "all"', async () => {
       (profileStore.useProfileStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
         activeProfileId: 'all',
         setActiveProfile: mockSetActiveProfile,
@@ -132,11 +132,11 @@ describe('useActiveProfile', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isAllProfiles).toBe(true);
+        expect(result.current.isAllProfiles).toBe(false);
       });
 
-      expect(result.current.activeProfileId).toBe('all');
-      expect(result.current.activeProfile).toBeUndefined();
+      expect(result.current.activeProfileId).toBe('profile-1');
+      expect(result.current.activeProfile).toEqual(mockProfile1);
     });
 
     it('should return specific profile when selected', async () => {
@@ -170,7 +170,7 @@ describe('useActiveProfile', () => {
       expect(mockSetActiveProfile).toHaveBeenCalledWith('profile-2');
     });
 
-    it('should allow setting to all mode', async () => {
+    it('should ignore setting to all mode', async () => {
       const { result } = renderHook(() => useActiveProfile(), {
         wrapper: createWrapper(),
       });
@@ -183,7 +183,7 @@ describe('useActiveProfile', () => {
         result.current.setActiveProfile('all');
       });
 
-      expect(mockSetActiveProfile).toHaveBeenCalledWith('all');
+      expect(mockSetActiveProfile).not.toHaveBeenCalledWith('all');
     });
 
     it('should not set invalid profile ID via handleSetActiveProfile', async () => {
@@ -340,7 +340,7 @@ describe('useProfileFilter', () => {
     });
   });
 
-  it('should return undefined when in all profiles mode', async () => {
+  it('should return default profile ID when stored value is all', async () => {
     (profileStore.useProfileStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       activeProfileId: 'all',
       setActiveProfile: mockSetActiveProfile,
@@ -351,7 +351,7 @@ describe('useProfileFilter', () => {
     });
 
     await waitFor(() => {
-      expect(result.current).toBeUndefined();
+      expect(result.current).toBe('profile-1');
     });
   });
 });

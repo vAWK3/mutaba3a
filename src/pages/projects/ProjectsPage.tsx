@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
@@ -33,12 +33,10 @@ export function ProjectsPage() {
   const { data: allProjects = [] } = useProjects(undefined, undefined);
 
   // Check for orphaned projects and show modal
-  useEffect(() => {
-    const orphanedProjects = allProjects.filter((p) => !p.profileId && !p.archivedAt);
-    if (orphanedProjects.length > 0 && !showOrphanedModal) {
-      setShowOrphanedModal(true);
-    }
-  }, [allProjects, showOrphanedModal]);
+  const hasOrphanedProjects = allProjects.some((p) => !p.profileId && !p.archivedAt);
+  if (hasOrphanedProjects && !showOrphanedModal) {
+    setShowOrphanedModal(true);
+  }
 
   // Always fetch all currencies - no currency filter
   const { data: rawProjects = [], isLoading } = useProjectSummaries(profileId, undefined, search);

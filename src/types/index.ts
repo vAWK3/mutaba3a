@@ -1008,6 +1008,7 @@ export interface GuidanceItem {
 export interface MoneyAnswersFilters {
   month?: string; // YYYY-MM
   year?: number;
+  profileId?: string;
   currency: Currency;
   /**
    * Include unpaid income (transactions with kind='income' and status='unpaid').

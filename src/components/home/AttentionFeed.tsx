@@ -17,6 +17,7 @@ import { useNavigate, Link } from '@tanstack/react-router';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useDrawerStore } from '../../lib/stores';
 import { useGuidance } from '../../hooks/useMoneyAnswersQueries';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getCurrentMonthKey } from '../../lib/monthDetection';
 import { formatAmount, cn } from '../../lib/utils';
 import type { GuidanceItem, Currency } from '../../types';
@@ -35,12 +36,14 @@ export interface AttentionFeedProps {
 export function AttentionFeed({ className }: AttentionFeedProps) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
+  const profileId = useProfileFilter();
 
   const currentMonth = getCurrentMonthKey();
 
   // Fetch guidance items for both currencies
   const { data: guidanceUSD = [], isLoading: loadingUSD } = useGuidance({
     month: currentMonth,
+    profileId,
     currency: 'USD',
     includeUnpaidIncome: true,
     includeProjectedRetainer: true,
@@ -48,6 +51,7 @@ export function AttentionFeed({ className }: AttentionFeedProps) {
 
   const { data: guidanceILS = [], isLoading: loadingILS } = useGuidance({
     month: currentMonth,
+    profileId,
     currency: 'ILS',
     includeUnpaidIncome: true,
     includeProjectedRetainer: true,
@@ -124,7 +128,7 @@ export function AttentionFeed({ className }: AttentionFeedProps) {
         <>
           <ul className="attention-list" role="list" aria-label={t('home.attention.title')}>
             {visibleItems.map(item => (
-              <AttentionItem key={item.id} item={item} />
+              <AttentionItem key={`${item.id}-${item.impactCurrency}`} item={item} />
             ))}
           </ul>
 

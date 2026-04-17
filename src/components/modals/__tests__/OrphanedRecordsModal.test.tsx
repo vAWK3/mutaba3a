@@ -111,7 +111,7 @@ describe('OrphanedRecordsModal', () => {
     });
 
     it('should show default profile in assign all button', async () => {
-      const profile = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'My Default Profile',
         email: 'default@example.com',
         businessType: 'none',
@@ -259,7 +259,7 @@ describe('OrphanedRecordsModal', () => {
     });
 
     it('should not show archived clients', async () => {
-      const profile = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Default Profile',
         email: 'default@example.com',
         businessType: 'none',
@@ -294,7 +294,7 @@ describe('OrphanedRecordsModal', () => {
 
   describe('Projects mode', () => {
     it('should render orphaned projects in table', async () => {
-      const profile = await businessProfileRepo.create({
+      await businessProfileRepo.create({
         name: 'Default Profile',
         email: 'default@example.com',
         businessType: 'none',

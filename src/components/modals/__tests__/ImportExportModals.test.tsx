@@ -7,6 +7,7 @@ import { db } from '../../../db/database';
 import { ExportDataModal } from '../ExportDataModal';
 import { ImportDataModal } from '../ImportDataModal';
 import { LanguageProvider } from '../../../lib/i18n';
+import * as csvUtils from '../../../utils/csv';
 import type { BusinessProfile, Client, Project, Transaction, Document, DocumentSequence, FxRate } from '../../../types';
 
 function createTestQueryClient() {
@@ -302,6 +303,37 @@ describe('ExportDataModal', () => {
 
     // Verify download filename pattern
     expect(capturedDownloadName).toMatch(/^mutaba3a-Test-Business-EN-\d{4}-\d{2}-\d{2}\.json$/);
+  });
+
+  it('should export profile transactions in CSV even when not linked to documents', async () => {
+    await db.businessProfiles.add(mockBusinessProfile);
+    await db.clients.add(mockClient);
+    await db.projects.add(mockProject);
+    await db.transactions.add(mockTransaction);
+
+    const downloadSpy = vi.spyOn(csvUtils, 'downloadTextFile').mockImplementation(() => {});
+
+    render(
+      <TestWrapper>
+        <ExportDataModal onClose={mockOnClose} />
+      </TestWrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Business')).toBeInTheDocument();
+    });
+
+    const exportButton = screen.getByRole('button', { name: /Export Test Business/i });
+    await userEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(downloadSpy).toHaveBeenCalled();
+    });
+
+    const [, csvContent] = downloadSpy.mock.calls[0];
+    expect(typeof csvContent).toBe('string');
+    expect(csvContent).toContain('income');
+    expect(csvContent).toContain('Test Transaction');
   });
 
   it('should show success message after export', async () => {

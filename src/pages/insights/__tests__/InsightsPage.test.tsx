@@ -7,6 +7,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { InsightsPage } from '../InsightsPage';
 import * as useQueries from '../../../hooks/useQueries';
 
+vi.mock('../../../hooks/useActiveProfile', () => ({
+  useProfileFilter: () => 'profile-1',
+  useActiveProfile: () => ({
+    isAllProfiles: false,
+    activeProfileId: 'profile-1',
+    activeProfile: { id: 'profile-1', name: 'Test Business' },
+    profiles: [{ id: 'profile-1', name: 'Test Business' }],
+    showAllProfilesOption: false,
+    setActiveProfile: vi.fn(),
+    isLoading: false,
+  }),
+}));
+
 // Mock router
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => ({ tab: undefined }),
@@ -147,6 +160,16 @@ describe('InsightsPage', () => {
   });
 
   describe('Page structure', () => {
+    it('passes active profile to data queries', () => {
+      renderWithProviders(<InsightsPage />);
+
+      expect(useQueries.useTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ profileId: 'profile-1' })
+      );
+      expect(useQueries.useProjectSummaries).toHaveBeenCalledWith('profile-1', undefined);
+      expect(useQueries.useClientSummaries).toHaveBeenCalledWith('profile-1', undefined);
+    });
+
     it('renders the page title', () => {
       renderWithProviders(<InsightsPage />);
       expect(screen.getByText('Insights')).toBeInTheDocument();

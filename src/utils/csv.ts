@@ -44,7 +44,20 @@ export function downloadTextFile(
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  const canAttachToDom =
+    typeof HTMLElement !== 'undefined' &&
+    a instanceof HTMLElement &&
+    !!document.body;
+
+  if (canAttachToDom) {
+    a.style.display = 'none';
+    document.body.appendChild(a);
+  }
   a.click();
+
+  if (canAttachToDom) {
+    document.body.removeChild(a);
+  }
   URL.revokeObjectURL(url);
 }
 

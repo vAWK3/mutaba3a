@@ -15,9 +15,10 @@ export const moneyAnswersQueryKeys = {
   monthKPIs: (filters: MoneyAnswersFilters, openingBalance: number) =>
     ['moneyMonthKPIs', filters, openingBalance] as const,
   guidance: (filters: MoneyAnswersFilters) => ['moneyGuidance', filters] as const,
-  dayEvents: (date: string, currency: Currency) => ['moneyDayEvents', date, currency] as const,
-  yearSummary: (year: number, currency: Currency, includeUnpaidIncome: boolean, includeProjectedRetainer: boolean) =>
-    ['moneyYearSummary', year, currency, includeUnpaidIncome, includeProjectedRetainer] as const,
+  dayEvents: (date: string, currency: Currency, profileId?: string) =>
+    ['moneyDayEvents', date, currency, profileId] as const,
+  yearSummary: (year: number, currency: Currency, includeUnpaidIncome: boolean, includeProjectedRetainer: boolean, profileId?: string) =>
+    ['moneyYearSummary', year, currency, includeUnpaidIncome, includeProjectedRetainer, profileId] as const,
 };
 
 // ============================================================================
@@ -122,10 +123,10 @@ export function useGuidance(filters: MoneyAnswersFilters) {
 /**
  * Get events for a specific day
  */
-export function useDayEvents(date: string, currency: Currency) {
+export function useDayEvents(date: string, currency: Currency, profileId?: string) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.dayEvents(date, currency),
-    queryFn: () => moneyEventRepo.getDayEvents(date, currency),
+    queryKey: moneyAnswersQueryKeys.dayEvents(date, currency, profileId),
+    queryFn: () => moneyEventRepo.getDayEvents(date, currency, profileId),
     enabled: !!date && !!currency,
   });
 }
@@ -140,11 +141,12 @@ export function useYearSummary(
   year: number,
   currency: Currency,
   includeUnpaidIncome: boolean = true,
-  includeProjectedRetainer: boolean = true
+  includeProjectedRetainer: boolean = true,
+  profileId?: string
 ) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.yearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer),
-    queryFn: () => moneyEventRepo.getYearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer),
+    queryKey: moneyAnswersQueryKeys.yearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer, profileId),
+    queryFn: () => moneyEventRepo.getYearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer, profileId),
     enabled: !!year && !!currency,
   });
 }
@@ -158,11 +160,12 @@ export function useYearSummary(
 export function useYearSummaryBothCurrencies(
   year: number,
   includeUnpaidIncome: boolean = true,
-  includeProjectedRetainer: boolean = true
+  includeProjectedRetainer: boolean = true,
+  profileId?: string
 ) {
   return useQuery({
-    queryKey: ['moneyYearSummaryBoth', year, includeUnpaidIncome, includeProjectedRetainer] as const,
-    queryFn: () => moneyEventRepo.getYearSummaryBothCurrencies(year, includeUnpaidIncome, includeProjectedRetainer),
+    queryKey: ['moneyYearSummaryBoth', year, includeUnpaidIncome, includeProjectedRetainer, profileId] as const,
+    queryFn: () => moneyEventRepo.getYearSummaryBothCurrencies(year, includeUnpaidIncome, includeProjectedRetainer, profileId),
     enabled: !!year,
   });
 }
@@ -178,11 +181,12 @@ export function useMonthKPIsBothCurrencies(
   openingBalanceMinorUSD: number = 0,
   openingBalanceMinorILS: number = 0,
   includeUnpaidIncome: boolean = true,
-  includeProjectedRetainer: boolean = true
+  includeProjectedRetainer: boolean = true,
+  profileId?: string
 ) {
   return useQuery({
-    queryKey: ['moneyMonthKPIsBoth', month, openingBalanceMinorUSD, openingBalanceMinorILS, includeUnpaidIncome, includeProjectedRetainer] as const,
-    queryFn: () => moneyEventRepo.getMonthKPIsBothCurrencies(month, openingBalanceMinorUSD, openingBalanceMinorILS, includeUnpaidIncome, includeProjectedRetainer),
+    queryKey: ['moneyMonthKPIsBoth', month, openingBalanceMinorUSD, openingBalanceMinorILS, includeUnpaidIncome, includeProjectedRetainer, profileId] as const,
+    queryFn: () => moneyEventRepo.getMonthKPIsBothCurrencies(month, openingBalanceMinorUSD, openingBalanceMinorILS, includeUnpaidIncome, includeProjectedRetainer, profileId),
     enabled: !!month,
   });
 }

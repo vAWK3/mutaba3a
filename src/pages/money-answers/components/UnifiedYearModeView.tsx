@@ -7,6 +7,7 @@ import { UnifiedMonthlyTrendBars } from './UnifiedMonthlyTrendBars';
 
 interface UnifiedYearModeViewProps {
   year: number;
+  profileId?: string;
   includeReceivables: boolean;
   includeProjections: boolean;
   onMonthClick: (monthKey: string) => void;
@@ -14,6 +15,7 @@ interface UnifiedYearModeViewProps {
 
 export function UnifiedYearModeView({
   year,
+  profileId,
   includeReceivables,
   includeProjections,
   onMonthClick,
@@ -23,7 +25,8 @@ export function UnifiedYearModeView({
   const { data: yearSummaries, isLoading } = useYearSummaryBothCurrencies(
     year,
     includeReceivables,
-    includeProjections
+    includeProjections,
+    profileId
   );
 
   if (isLoading) {

@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useDrawerStore } from '../../lib/stores';
 import { useDayEvents } from '../../hooks/useMoneyAnswersQueries';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useFxRate } from '../../hooks/useFxRate';
 import { getUnifiedTotal } from '../../lib/fx';
 import { formatAmount as formatAmountUtil } from '../../lib/utils';
@@ -37,10 +38,11 @@ export function DayDetailDrawer({ date, onClose }: DayDetailDrawerProps) {
   const openTransactionDrawer = useDrawerStore((s) => s.openTransactionDrawer);
   const openExpenseDrawer = useDrawerStore((s) => s.openExpenseDrawer);
   const { rate } = useFxRate('USD', 'ILS');
+  const profileId = useProfileFilter();
 
   // Fetch events for both currencies
-  const { data: eventsUSD, isLoading: loadingUSD } = useDayEvents(date, 'USD');
-  const { data: eventsILS, isLoading: loadingILS } = useDayEvents(date, 'ILS');
+  const { data: eventsUSD, isLoading: loadingUSD } = useDayEvents(date, 'USD', profileId);
+  const { data: eventsILS, isLoading: loadingILS } = useDayEvents(date, 'ILS', profileId);
 
   const isLoading = loadingUSD || loadingILS;
 

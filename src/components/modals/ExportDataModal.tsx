@@ -14,6 +14,19 @@ interface ExportDataModalProps {
 type ExportStatus = 'idle' | 'exporting' | 'done' | 'error';
 type ExportFormat = 'json' | 'csv';
 
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    result.push(item);
+  }
+
+  return result;
+}
+
 export function ExportDataModal({ onClose }: ExportDataModalProps) {
   const t = useT();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -22,6 +35,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
+  const [exportError, setExportError] = useState<string>('');
 
   // Handle ESC key
   useEffect(() => {
@@ -53,6 +67,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
     if (!selectedProfileId) return;
 
     setExportStatus('exporting');
+    setExportError('');
     try {
       // Get the selected profile
       const profile = await db.businessProfiles.get(selectedProfileId);
@@ -68,8 +83,11 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
         .filter((s) => s.businessProfileId === selectedProfileId)
         .toArray();
 
-      // Get unique client IDs from documents
+      // Build seed IDs from profile-scoped and document-linked entities.
+      // This keeps exports complete for current profile-scoped data and also
+      // supports older records where profileId may be missing.
       const clientIds = new Set<string>();
+      const projectIds = new Set<string>();
       const transactionIds = new Set<string>();
 
       documents.forEach((doc) => {
@@ -79,20 +97,56 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
         }
       });
 
-      // Get clients
-      const clients = await db.clients
-        .filter((c) => clientIds.has(c.id) && !c.archivedAt)
+      const profileClients = await db.clients
+        .filter((c) => c.profileId === selectedProfileId && !c.archivedAt)
         .toArray();
 
-      // Get projects for these clients
-      const projects = await db.projects
-        .filter((p) => !!p.clientId && clientIds.has(p.clientId!) && !p.archivedAt)
+      const profileProjects = await db.projects
+        .filter((p) => p.profileId === selectedProfileId && !p.archivedAt)
         .toArray();
 
-      // Get transactions linked to documents
-      const transactions = await db.transactions
-        .filter((t) => transactionIds.has(t.id) && !t.deletedAt)
+      const profileTransactions = await db.transactions
+        .filter((t) => t.profileId === selectedProfileId && !t.deletedAt)
         .toArray();
+
+      profileClients.forEach((c) => clientIds.add(c.id));
+      profileProjects.forEach((p) => projectIds.add(p.id));
+      profileTransactions.forEach((t) => {
+        if (t.clientId) clientIds.add(t.clientId);
+        if (t.projectId) projectIds.add(t.projectId);
+      });
+
+      const relatedClients = await db.clients
+        .filter((c) => !c.archivedAt && (c.profileId === selectedProfileId || !c.profileId) && clientIds.has(c.id))
+        .toArray();
+
+      relatedClients.forEach((c) => clientIds.add(c.id));
+
+      const relatedProjects = await db.projects
+        .filter((p) => {
+          if (p.archivedAt) return false;
+          if (p.profileId && p.profileId !== selectedProfileId) return false;
+          if (projectIds.has(p.id)) return true;
+          return !!p.clientId && clientIds.has(p.clientId);
+        })
+        .toArray();
+
+      relatedProjects.forEach((p) => projectIds.add(p.id));
+
+      const relatedTransactions = await db.transactions
+        .filter((t) => {
+          if (t.deletedAt) return false;
+          if (t.profileId && t.profileId !== selectedProfileId) return false;
+          if (transactionIds.has(t.id)) return true;
+          if (t.projectId && projectIds.has(t.projectId)) return true;
+          if (t.clientId && clientIds.has(t.clientId)) return true;
+          return false;
+        })
+        .toArray();
+
+      const clients = uniqueById([...profileClients, ...relatedClients]);
+      const projects = uniqueById([...profileProjects, ...relatedProjects]);
+      const transactions = uniqueById([...profileTransactions, ...relatedTransactions]);
 
       // Get FX rates (shared, include all)
       const fxRates = await db.fxRates.toArray();
@@ -125,18 +179,17 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
         };
 
         const json = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `mutaba3a-${safeName}-${dateStr}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadTextFile(
+          `mutaba3a-${safeName}-${dateStr}.json`,
+          json,
+          'application/json;charset=utf-8'
+        );
       }
 
       setExportStatus('done');
     } catch (error) {
       setExportStatus('error');
+      setExportError(error instanceof Error ? error.message : 'Unknown export error');
       console.error('Export failed:', error);
     }
   };
@@ -224,6 +277,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
               {exportStatus === 'error' && (
                 <div className="status-error" style={{ marginTop: 12 }}>
                   {t('settings.data.exportFailedRetry')}
+                  {exportError ? ` (${exportError})` : ''}
                 </div>
               )}
             </>

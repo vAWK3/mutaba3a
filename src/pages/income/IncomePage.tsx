@@ -16,6 +16,7 @@ import { EmptyState, RowActionsMenu, AmountWithConversion, PaymentStatusBadge } 
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome, useMarkIncomePaid } from '../../hooks/useIncomeQueries';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 import type { IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useIsCompactTable } from '../../hooks/useMediaQuery';
 import { useDrawerStore } from '../../lib/stores';
@@ -38,17 +39,19 @@ export function IncomePage() {
   const { language } = useLanguage();
   const locale = getLocale(language);
   const isCompact = useIsCompactTable();
+  const profileId = useProfileFilter();
 
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
   const [statusFilter, setStatusFilter] = useState<IncomeStatusFilter>('all');
   const [search, setSearch] = useState('');
 
   // Fetch totals for summary strip
-  const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo);
+  const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo, profileId);
 
   // Build query filters - income only (useIncome already filters by kind='income')
   const queryFilters = useMemo((): IncomeFilters => {
     const filters: IncomeFilters = {
+      profileId,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
       search: search || undefined,
@@ -64,7 +67,7 @@ export function IncomePage() {
     }
 
     return filters;
-  }, [dateRange, statusFilter, search]);
+  }, [profileId, dateRange, statusFilter, search]);
 
   const { data: transactions = [], isLoading } = useIncome(queryFilters);
 

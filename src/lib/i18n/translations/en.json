@@ -67,6 +67,7 @@
     "retainers": "Retainers",
     "moneyAnswers": "Answers",
     "expenses": "Expenses",
+    "suppliers": "Suppliers",
     "reports": "Reports",
     "settings": "Settings",
     "download": "Download",
@@ -612,6 +613,7 @@
     "viewReceipts": "View Receipts",
     "manageReceipts": "Manage Receipts",
     "manageRecurring": "Manage Recurring",
+    "noProfileSelected": "Please select a business profile first.",
     "allProfilesOverview": "All Profiles Overview",
     "allProfiles": "All Profiles",
     "currentProfile": "Current: {name}",
@@ -629,6 +631,20 @@
     "profileNotFoundHint": "This profile may have been deleted or doesn't exist",
     "untitled": "Untitled",
     "unknownProfile": "Unknown Profile",
+    "vendors": {
+      "title": "Vendors",
+      "hint": "Vendors are created automatically when you add expenses. You can’t create vendors from this screen.",
+      "backToExpenses": "Back to Expenses",
+      "definedVendors": "Defined Vendors",
+      "activeInYear": "Active in {year}",
+      "expenseCount": "Expenses",
+      "showMonthlyVariation": "Show Monthly",
+      "hideMonthlyVariation": "Hide Monthly",
+      "month": "Month",
+      "delta": "Delta",
+      "empty": "No vendors yet",
+      "emptyHint": "Add an expense with a vendor name to create your first vendor."
+    },
     "overview": {
       "title": "Expenses Overview",
       "allProfiles": "All Profiles",
@@ -1001,6 +1017,22 @@
   },
   "vendor": {
     "createNew": "Create new"
+  },
+  "suppliers": {
+    "title": "Suppliers",
+    "hint": "Suppliers are collected from your expenses. Add an expense with a vendor to see them here.",
+    "noProfile": "Please select a profile first.",
+    "year": "Year",
+    "totalSuppliers": "Active Suppliers",
+    "name": "Supplier",
+    "expenses": "Expenses",
+    "totalSpent": "Total Spent",
+    "showMonthly": "Monthly",
+    "hideMonthly": "Hide",
+    "month": "Month",
+    "delta": "Change",
+    "empty": "No suppliers yet",
+    "emptyHint": "Add an expense with a vendor name to see your suppliers here."
   },
   "receipts": {
     "suggestions": {

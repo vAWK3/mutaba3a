@@ -235,6 +235,19 @@ const expensesForecastRoute = createRoute({
   },
 });
 
+// Suppliers route (top-level vendor/supplier view)
+const suppliersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/suppliers',
+  component: lazyPage(() => import('./pages/suppliers'), 'SuppliersPage'),
+});
+
+const expensesVendorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/expenses/vendors',
+  component: lazyPage(() => import('./pages/expenses/VendorsPage'), 'VendorsPage'),
+});
+
 // ============================================================================
 // Retainer Routes
 // ============================================================================
@@ -398,6 +411,8 @@ const routeTree = rootRoute.addChildren([
   profileReceiptsRoute,
   expensesOverviewRoute,
   expensesForecastRoute,
+  expensesVendorsRoute,
+  suppliersRoute,
   monthCloseRoute,
   // Retainer routes
   retainersRoute,
