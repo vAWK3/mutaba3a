@@ -621,6 +621,104 @@ td {
   gap: var(--space-3);
 }
 
+.topbar-profile-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.topbar-profile-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Orphaned Records Banner */
+.orphaned-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.orphaned-banner-icon {
+  color: var(--warning);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.orphaned-banner-text {
+  flex: 1;
+}
+
+.orphaned-banner-action {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.orphaned-banner-action:hover {
+  text-decoration: underline;
+}
+
+.orphaned-banner-dismiss {
+  background: none;
+  border: none;
+  padding: var(--space-1);
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  border-radius: var(--radius-sm);
+}
+
+.orphaned-banner-dismiss:hover {
+  background: var(--surface-hover);
+}
+
+/* Cross-profile badges on client cards */
+.cross-profile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.cross-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+
+.cross-profile-badge-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: var(--weight-semibold);
+}
+
 .breadcrumbs {
   display: flex;
   align-items: center;

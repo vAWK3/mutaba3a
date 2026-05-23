@@ -1,4 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { withErrorToast } from './useMutationWithFeedback';
+
+function useRetainerMutationWithToast<TData, TError extends Error, TVariables>(
+  opts: Parameters<typeof useMutation<TData, TError, TVariables>>[0]
+) {
+  return useMutation(withErrorToast(opts));
+}
 import {
   retainerRepo,
   projectedIncomeRepo,
@@ -122,7 +129,7 @@ export function useRetainerSummary(profileId?: string, currency?: Currency) {
 export function useCreateRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (data: Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>) =>
       retainerRepo.create(data),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
@@ -135,7 +142,7 @@ export function useCreateRetainer() {
 export function useUpdateRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<RetainerAgreement> }) =>
       retainerRepo.update(id, data),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
@@ -148,7 +155,7 @@ export function useUpdateRetainer() {
 export function useArchiveRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (id: string) => retainerRepo.archive(id),
     onSuccess: () => invalidateRetainerQueries(queryClient),
   });
@@ -160,7 +167,7 @@ export function useArchiveRetainer() {
 export function useActivateRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (id: string) => retainerRepo.activate(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
@@ -172,7 +179,7 @@ export function useActivateRetainer() {
 export function usePauseRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (id: string) => retainerRepo.pause(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
@@ -184,7 +191,7 @@ export function usePauseRetainer() {
 export function useResumeRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (id: string) => retainerRepo.resume(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
@@ -196,7 +203,7 @@ export function useResumeRetainer() {
 export function useEndRetainer() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (id: string) => retainerRepo.end(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
@@ -258,7 +265,7 @@ export function useForecastItems(dateFrom: string, dateTo: string, currency?: Cu
 export function useMarkProjectedIncomeMissed() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: (id: string) => markProjectedIncomeMissed(id),
     onSuccess: () => invalidateProjectedIncomeQueries(queryClient),
   });
@@ -270,7 +277,7 @@ export function useMarkProjectedIncomeMissed() {
 export function useUpdateDueStates() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: () => scheduleGenerator.updateDueStates(),
     onSuccess: () => invalidateProjectedIncomeQueries(queryClient),
   });
@@ -311,7 +318,7 @@ export function useAllRetainerMatchSuggestions() {
 export function useMatchTransaction() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: ({
       projectedIncomeId,
       transactionId,
@@ -334,7 +341,7 @@ export function useMatchTransaction() {
 export function useUnmatchTransaction() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRetainerMutationWithToast({
     mutationFn: ({
       projectedIncomeId,
       transactionId,

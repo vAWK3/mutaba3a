@@ -8,8 +8,9 @@
  * For mixed views (income + old-style expenses), use useTransactions from useQueries.ts.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { transactionRepo } from '../db';
+import { useMutationWithFeedback } from './useMutationWithFeedback';
 import type { QueryFilters, Transaction, Currency, TxStatus } from '../types';
 
 // ============================================================================
@@ -165,10 +166,11 @@ export function useAttentionReceivables(currency?: Currency, profileId?: string)
 export function useCreateIncome() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: (data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) =>
       transactionRepo.create({ ...data, kind: 'income' }),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to create income. Please try again.',
   });
 }
 
@@ -178,10 +180,11 @@ export function useCreateIncome() {
 export function useUpdateIncome() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: ({ id, data }: { id: string; data: Partial<Transaction> }) =>
       transactionRepo.update(id, data),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to update income. Please try again.',
   });
 }
 
@@ -191,9 +194,10 @@ export function useUpdateIncome() {
 export function useMarkIncomePaid() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: (id: string) => transactionRepo.markPaid(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to mark as paid. Please try again.',
   });
 }
 
@@ -203,10 +207,11 @@ export function useMarkIncomePaid() {
 export function useRecordIncomePartialPayment() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
       transactionRepo.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to record payment. Please try again.',
   });
 }
 
@@ -216,9 +221,10 @@ export function useRecordIncomePartialPayment() {
 export function useDeleteIncome() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: (id: string) => transactionRepo.softDelete(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to delete income. Please try again.',
   });
 }
 
@@ -228,9 +234,10 @@ export function useDeleteIncome() {
 export function useArchiveIncome() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: (id: string) => transactionRepo.archive(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to archive income. Please try again.',
   });
 }
 
@@ -240,8 +247,9 @@ export function useArchiveIncome() {
 export function useUnarchiveIncome() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutationWithFeedback({
     mutationFn: (id: string) => transactionRepo.unarchive(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
+    errorMessage: 'Failed to unarchive income. Please try again.',
   });
 }

@@ -5,9 +5,12 @@ export interface ToastAction {
   onClick: () => void;
 }
 
+export type ToastType = 'success' | 'error' | 'info';
+
 export interface Toast {
   id: string;
   message: string;
+  type?: ToastType;
   action?: ToastAction;
   duration: number;
 }
@@ -44,10 +47,10 @@ export function useToast() {
 
   const showToast = (
     message: string,
-    options?: { action?: ToastAction; duration?: number }
+    options?: { action?: ToastAction; duration?: number; type?: ToastType }
   ) => {
     const duration = options?.duration ?? (options?.action ? 5000 : 3000);
-    return addToast({ message, action: options?.action, duration });
+    return addToast({ message, type: options?.type, action: options?.action, duration });
   };
 
   return { showToast, removeToast };

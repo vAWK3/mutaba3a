@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  accumulateIncomeAmount,
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
   aggregateTransactionTotalsWithActivity,
@@ -89,6 +90,66 @@ describe('aggregateTransactionTotals', () => {
   });
 });
 
+describe('accumulateIncomeAmount', () => {
+  it('should return full amount as paid for paid transactions', () => {
+    const tx = createTransaction({ kind: 'income', status: 'paid', amountMinor: 10000 });
+    const result = accumulateIncomeAmount(tx);
+    expect(result.paid).toBe(10000);
+    expect(result.unpaid).toBe(0);
+  });
+
+  it('should return full amount as unpaid when no partial payment', () => {
+    const tx = createTransaction({ kind: 'income', status: 'unpaid', amountMinor: 10000 });
+    const result = accumulateIncomeAmount(tx);
+    expect(result.paid).toBe(0);
+    expect(result.unpaid).toBe(10000);
+  });
+
+  it('should split amount correctly for partial payments', () => {
+    const tx = createTransaction({
+      kind: 'income', status: 'unpaid', amountMinor: 10000, receivedAmountMinor: 3000,
+    });
+    const result = accumulateIncomeAmount(tx);
+    expect(result.paid).toBe(3000);
+    expect(result.unpaid).toBe(7000);
+  });
+
+  it('should handle receivedAmountMinor equal to amountMinor on unpaid tx', () => {
+    const tx = createTransaction({
+      kind: 'income', status: 'unpaid', amountMinor: 10000, receivedAmountMinor: 10000,
+    });
+    const result = accumulateIncomeAmount(tx);
+    expect(result.paid).toBe(10000);
+    expect(result.unpaid).toBe(0);
+  });
+});
+
+describe('aggregateTransactionTotals — partial payments', () => {
+  it('should split partial payment into paid and unpaid portions', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'income', status: 'unpaid', amountMinor: 10000, receivedAmountMinor: 5000,
+      }),
+    ];
+    const result = aggregateTransactionTotals(transactions);
+    expect(result.paidIncomeMinor).toBe(5000);
+    expect(result.unpaidIncomeMinor).toBe(5000);
+  });
+
+  it('should handle mix of paid, unpaid, and partial transactions', () => {
+    const transactions = [
+      createTransaction({ kind: 'income', status: 'paid', amountMinor: 20000 }),
+      createTransaction({ kind: 'income', status: 'unpaid', amountMinor: 10000, receivedAmountMinor: 3000 }),
+      createTransaction({ kind: 'income', status: 'unpaid', amountMinor: 5000 }),
+      createTransaction({ kind: 'expense', status: 'paid', amountMinor: 8000 }),
+    ];
+    const result = aggregateTransactionTotals(transactions);
+    expect(result.paidIncomeMinor).toBe(23000); // 20000 + 3000
+    expect(result.unpaidIncomeMinor).toBe(12000); // 7000 + 5000
+    expect(result.expensesMinor).toBe(8000);
+  });
+});
+
 describe('aggregateTransactionTotalsByCurrency', () => {
   it('should return zeros for all currencies with empty array', () => {
     const result = aggregateTransactionTotalsByCurrency([]);
@@ -123,6 +184,24 @@ describe('aggregateTransactionTotalsByCurrency', () => {
 
     expect(result.USD.paidIncomeMinor).toBe(15000);
     expect(result.USD.unpaidIncomeMinor).toBe(3000);
+  });
+});
+
+describe('aggregateTransactionTotalsByCurrency — partial payments', () => {
+  it('should split partial payment per currency correctly', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'income', status: 'unpaid', amountMinor: 10000, receivedAmountMinor: 4000, currency: 'USD',
+      }),
+      createTransaction({
+        kind: 'income', status: 'unpaid', amountMinor: 20000, receivedAmountMinor: 5000, currency: 'ILS',
+      }),
+    ];
+    const result = aggregateTransactionTotalsByCurrency(transactions);
+    expect(result.USD.paidIncomeMinor).toBe(4000);
+    expect(result.USD.unpaidIncomeMinor).toBe(6000);
+    expect(result.ILS.paidIncomeMinor).toBe(5000);
+    expect(result.ILS.unpaidIncomeMinor).toBe(15000);
   });
 });
 

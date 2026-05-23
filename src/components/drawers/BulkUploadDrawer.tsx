@@ -161,7 +161,7 @@ export function BulkUploadDrawer({
           // Read file and create receipt
           const base64Data = await readFileAsBase64(file.file);
 
-          const receipts = await bulkCreateMutation.mutateAsync([
+          const receipts = (await bulkCreateMutation.mutateAsync([
             {
               profileId,
               monthKey,
@@ -170,7 +170,7 @@ export function BulkUploadDrawer({
               sizeBytes: file.file.size,
               data: base64Data,
             },
-          ]);
+          ])) as Array<{ id: string }>;
 
           updatedFiles[i] = {
             ...file,

@@ -40,7 +40,14 @@ export function ToastContainer() {
   return (
     <div className="toast-container">
       {toasts.map((toast) => (
-        <div key={toast.id} className="toast" role="status" aria-live="polite">
+        <div key={toast.id} className={`toast${toast.type === 'error' ? ' toast-error' : ''}`} role="status" aria-live={toast.type === 'error' ? 'assertive' : 'polite'}>
+          {toast.type === 'error' && (
+            <svg className="toast-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
+              <line x1="8" y1="4.5" x2="8" y2="8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
+            </svg>
+          )}
           <span className="toast-message">{toast.message}</span>
           {toast.action && (
             <button

@@ -200,6 +200,9 @@ export function createDemoTransactions(): Transaction[] {
   // Add a few due soon receivables
   addDueSoonReceivables(transactions, clientIds, projectIds, projectClientMap, projectProfileMap, incomeCategoryIds, referenceDate);
 
+  // Add partial payment transactions to showcase receivedAmountMinor
+  addPartialPayments(transactions, clientIds, projectIds, projectClientMap, projectProfileMap, incomeCategoryIds, referenceDate);
+
   return transactions;
 }
 
@@ -293,6 +296,63 @@ function addDueSoonReceivables(
       projectId,
       categoryId: rng.pick(incomeCategoryIds),
       amountMinor,
+      currency,
+      occurredAt: occurredDate.toISOString().split('T')[0],
+      dueDate: dueDate.toISOString().split('T')[0],
+      profileId,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
+function addPartialPayments(
+  transactions: Transaction[],
+  clientIds: string[],
+  projectIds: string[],
+  projectClientMap: Map<string, string>,
+  projectProfileMap: Map<string, string>,
+  incomeCategoryIds: string[],
+  referenceDate: Date
+) {
+  // Add 3 partial payment transactions (unpaid with receivedAmountMinor > 0)
+  const partialPaymentTitles = ['دفعة جزئية مستلمة', 'قسط أول من أصل اثنين', 'سلفة على المشروع'];
+
+  for (let i = 0; i < 3; i++) {
+    const txIndex = transactions.length + 1;
+    const projectId = rng.pick(projectIds);
+    const clientId = projectClientMap.get(projectId) || rng.pick(clientIds);
+    const profileId = projectProfileMap.get(projectId);
+
+    // Occurred 2-6 weeks ago, due within the next 2 weeks
+    const occurredDate = new Date(referenceDate);
+    occurredDate.setDate(occurredDate.getDate() - rng.int(14, 42));
+
+    const dueDate = new Date(referenceDate);
+    dueDate.setDate(dueDate.getDate() + rng.int(-3, 14));
+
+    const currency: Currency = rng.chance(0.7) ? 'ILS' : 'USD';
+    const amountMinor = rng.amountMinor(
+      currency === 'ILS' ? 3000 : 800,
+      currency === 'ILS' ? 12000 : 3000
+    );
+
+    // Received 30-70% of the total
+    const receivedRatio = 0.3 + rng.next() * 0.4;
+    const receivedAmountMinor = Math.round(amountMinor * receivedRatio);
+
+    const now = new Date().toISOString();
+
+    transactions.push({
+      id: `${DEMO_PREFIXES.transaction}${String(txIndex).padStart(3, '0')}`,
+      kind: 'income',
+      status: 'unpaid',
+      title: partialPaymentTitles[i],
+      clientId,
+      projectId,
+      categoryId: rng.pick(incomeCategoryIds),
+      amountMinor,
+      receivedAmountMinor,
       currency,
       occurredAt: occurredDate.toISOString().split('T')[0],
       dueDate: dueDate.toISOString().split('T')[0],

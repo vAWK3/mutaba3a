@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
+import { EmptyState } from '../../components/ui';
 import { OrphanedRecordsModal } from '../../components/modals';
 import { useProjectSummaries, useProjects } from '../../hooks/useQueries';
 import { useSortState } from '../../hooks/useSortState';
@@ -140,15 +141,18 @@ export function ProjectsPage() {
             <div className="spinner" />
           </div>
         ) : projects.length === 0 ? (
-          <div className="empty-state">
-            <h3 className="empty-state-title">{t('projects.empty')}</h3>
-            <p className="empty-state-description">
-              {search ? t('projects.emptySearch') : t('projects.emptyHint')}
-            </p>
-            <button className="btn btn-primary" onClick={() => openProjectDrawer({ mode: 'create' })}>
-              {t('projects.addProject')}
-            </button>
-          </div>
+          <EmptyState
+            title={search && allProjects.length > 0
+              ? t('projects.emptyFiltered') || 'No projects match your search'
+              : t('projects.empty')}
+            description={search && allProjects.length > 0
+              ? `${allProjects.length} ${t('projects.emptyFilteredCount') || 'projects total.'}`
+              : search ? t('projects.emptySearch') : t('projects.emptyHint')}
+            action={search && allProjects.length > 0
+              ? { label: t('projects.clearSearch') || 'Clear search', onClick: () => setSearch('') }
+              : { label: t('projects.addProject'), onClick: () => openProjectDrawer({ mode: 'create' }) }
+            }
+          />
         ) : (
           <>
             {/* Summary strip */}

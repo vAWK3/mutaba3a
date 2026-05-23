@@ -11,6 +11,9 @@ import {
 import { useT, useLanguage } from '../../lib/i18n';
 import { useTheme, type ThemeMode } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
+import { runIntegrityCheck } from '../../db/integrityCheck';
+import { exportBackup, restoreFromBackup } from '../../db/backup';
+import { useToast } from '../../lib/toastStore';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
 import { useDrawerStore } from '../../lib/stores';
@@ -504,6 +507,9 @@ export function SettingsPage() {
         </div>
       </div>
 
+      {/* Data Tools Section */}
+      <DataToolsSection />
+
       {/* Export Data Modal */}
       {showExportModal && (
         <ExportDataModal onClose={() => setShowExportModal(false)} />
@@ -517,5 +523,96 @@ export function SettingsPage() {
         />
       )}
     </>
+  );
+}
+
+function DataToolsSection() {
+  const t = useT();
+  const { showToast } = useToast();
+  const [integrityResult, setIntegrityResult] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const handleIntegrityCheck = async () => {
+    setIsChecking(true);
+    try {
+      const result = await runIntegrityCheck();
+      if (result.isClean) {
+        setIntegrityResult(`All ${result.totalRecords} records verified. No issues found.`);
+        showToast('Data integrity check passed', { type: 'success' });
+      } else {
+        const issues = result.orphanedRecords.length + result.brokenReferences.length;
+        setIntegrityResult(`Found ${issues} issue${issues !== 1 ? 's' : ''} across ${result.totalRecords} records.`);
+        showToast(`${issues} data integrity issue${issues !== 1 ? 's' : ''} found`, { type: 'error' });
+      }
+    } catch {
+      showToast('Integrity check failed', { type: 'error' });
+    }
+    setIsChecking(false);
+  };
+
+  const handleExportBackup = async () => {
+    try {
+      await exportBackup();
+      showToast('Backup downloaded', { type: 'success' });
+    } catch {
+      showToast('Backup failed', { type: 'error' });
+    }
+  };
+
+  const handleImportBackup = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const json = await file.text();
+        const result = await restoreFromBackup(json);
+        showToast(`Restored ${result.recordsRestored} records from backup (v${result.backupVersion})`, { type: 'success' });
+        window.location.reload();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Import failed', { type: 'error' });
+      }
+    };
+    input.click();
+  };
+
+  return (
+    <div className="settings-section">
+      <h2 className="settings-section-title">{t('settings.dataTools')}</h2>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-label">{t('settings.integrityCheck')}</div>
+          <div className="settings-description">
+            {integrityResult || t('settings.integrityCheckDesc')}
+          </div>
+        </div>
+        <button className="btn btn-secondary" onClick={handleIntegrityCheck} disabled={isChecking}>
+          {isChecking ? t('settings.integrityCheckRunning') : t('settings.integrityCheckRun')}
+        </button>
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-label">{t('settings.backup')}</div>
+          <div className="settings-description">{t('settings.backupDesc')}</div>
+        </div>
+        <button className="btn btn-secondary" onClick={handleExportBackup}>
+          {t('settings.backupExport')}
+        </button>
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-label">{t('settings.importBackup')}</div>
+          <div className="settings-description">{t('settings.importBackupDesc')}</div>
+        </div>
+        <button className="btn btn-ghost" onClick={handleImportBackup}>
+          {t('settings.importBackupBtn')}
+        </button>
+      </div>
+    </div>
   );
 }

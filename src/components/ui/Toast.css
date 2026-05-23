@@ -70,6 +70,16 @@
   }
 }
 
+/* Error variant */
+.toast-error {
+  border-inline-start: 3px solid var(--error);
+}
+
+.toast-error .toast-icon {
+  color: var(--error);
+  flex-shrink: 0;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .toast {

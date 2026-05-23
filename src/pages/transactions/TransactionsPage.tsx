@@ -99,6 +99,10 @@ export function TransactionsPage() {
   }, [dateRange, typeFilter, statusFilter, search]);
 
   const { data: transactions = [], isLoading } = useTransactions(queryFilters);
+  // Unfiltered count for filter-aware empty state
+  const { data: allTransactions = [] } = useTransactions({});
+  const totalCount = allTransactions.length;
+  const hasActiveFilters = !!(search || typeFilter || statusFilter || dateRange.dateFrom);
   const isCompact = useIsCompactTable();
 
   // Helper to get status for the compact mode dot
@@ -156,12 +160,27 @@ export function TransactionsPage() {
           </div>
         ) : transactions.length === 0 ? (
           <EmptyState
-            title={t('transactions.empty')}
-            description={search ? t('transactions.emptySearch') : t('transactions.emptyHint')}
-            action={{
-              label: t('transactions.addTransaction'),
-              onClick: () => openIncomeDrawer({ mode: "create", defaultStatus: "earned" }),
-            }}
+            title={hasActiveFilters && totalCount > 0
+              ? t('transactions.emptyFiltered')
+              : t('transactions.empty')}
+            description={hasActiveFilters && totalCount > 0
+              ? `${t('transactions.emptyFilteredHint')} ${totalCount} ${t('transactions.emptyFilteredCount')}`
+              : search ? t('transactions.emptySearch') : t('transactions.emptyHint')}
+            action={hasActiveFilters && totalCount > 0
+              ? {
+                  label: t('transactions.clearFilters'),
+                  onClick: () => {
+                    setSearch('');
+                    setTypeFilter(undefined);
+                    setStatusFilter(undefined);
+                    setDateRange(getDateRangePreset('all'));
+                  },
+                }
+              : {
+                  label: t('transactions.addTransaction'),
+                  onClick: () => openIncomeDrawer({ mode: "create", defaultStatus: "earned" }),
+                }
+            }
           />
         ) : (
           <div className="data-table">

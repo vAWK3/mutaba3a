@@ -10,6 +10,13 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { withErrorToast } from './useMutationWithFeedback';
+
+function useRecurringMutationWithToast<TData, TError extends Error, TVariables>(
+  opts: Parameters<typeof useMutation<TData, TError, TVariables>>[0]
+) {
+  return useMutation(withErrorToast(opts));
+}
 import {
   getVirtualOccurrences,
   getDueOccurrences,
@@ -192,9 +199,9 @@ export function useRecurringRule(id: string | undefined) {
 export function useConfirmRecurringPayment() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (params: ConfirmPaymentParams) => confirmPayment(params),
-    onSuccess: (_expense, params) => {
+    onSuccess: (_expense: unknown, params: ConfirmPaymentParams) => {
       // Invalidate related queries
       queryClient.invalidateQueries({
         queryKey: ['virtualOccurrences'],
@@ -222,9 +229,9 @@ export function useConfirmRecurringPayment() {
 export function useSkipRecurringOccurrence() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (params: SkipOccurrenceParams) => skipOccurrence(params),
-    onSuccess: (_, params) => {
+    onSuccess: (_: unknown, params: SkipOccurrenceParams) => {
       queryClient.invalidateQueries({
         queryKey: ['virtualOccurrences'],
       });
@@ -247,9 +254,9 @@ export function useSkipRecurringOccurrence() {
 export function useSnoozeRecurringOccurrence() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (params: SnoozeOccurrenceParams) => snoozeOccurrence(params),
-    onSuccess: (_, params) => {
+    onSuccess: (_: unknown, params: SnoozeOccurrenceParams) => {
       queryClient.invalidateQueries({
         queryKey: ['virtualOccurrences'],
       });
@@ -272,7 +279,7 @@ export function useSnoozeRecurringOccurrence() {
 export function useCreateRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (params: CreateRecurringRuleParams) => createRecurringRule(params),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -297,12 +304,12 @@ export function useCreateRecurringRule() {
 export function useUpdateRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: async ({ id, data }: { id: string; data: Partial<RecurringRule> }) => {
       await recurringRuleRepo.update(id, data);
       return recurringRuleRepo.get(id);
     },
-    onSuccess: (_, { id }) => {
+    onSuccess: (_: unknown, { id }: { id: string; data: Partial<RecurringRule> }) => {
       queryClient.invalidateQueries({
         queryKey: ['recurringRules'],
       });
@@ -328,7 +335,7 @@ export function useUpdateRecurringRule() {
 export function usePauseRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (id: string) => recurringRuleRepo.pause(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -353,7 +360,7 @@ export function usePauseRecurringRule() {
 export function useResumeRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (id: string) => recurringRuleRepo.resume(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -378,7 +385,7 @@ export function useResumeRecurringRule() {
 export function useDeleteRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useRecurringMutationWithToast({
     mutationFn: (id: string) => recurringRuleRepo.softDelete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({

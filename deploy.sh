@@ -341,17 +341,44 @@ prepare_release_artifacts() {
 }
 
 # Create tar.gz archive for Tauri updater (required format)
+# Tauri v2 updater on macOS expects a .tar.gz containing the .app bundle,
+# NOT the DMG. The updater extracts the archive and replaces the running
+# .app with the one inside.
 create_update_archive() {
     local version=$1
-    local source_dmg=$2
+    # $2 is the source_dmg path, but we need the .app bundle instead
 
     echo -e "${BLUE}Creating update archive for Tauri updater...${NC}"
 
     local archive_name="mutaba3a-v${version}-macos-arm64.tar.gz"
     local archive_path="$RELEASE_DIR/$archive_name"
 
-    # Create tar.gz from the DMG
-    tar -czf "$archive_path" -C "$(dirname "$source_dmg")" "$(basename "$source_dmg")"
+    # Find the .app bundle from the Tauri build output
+    local app_bundle=""
+    local search_paths=(
+        "src-tauri/target/release/bundle/macos"
+        "src-tauri/target/universal-apple-darwin/release/bundle/macos"
+    )
+
+    for search_path in "${search_paths[@]}"; do
+        if [[ -d "$search_path" ]]; then
+            app_bundle=$(find "$search_path" -maxdepth 1 -name "*.app" -type d | head -1)
+            if [[ -n "$app_bundle" && -d "$app_bundle" ]]; then
+                break
+            fi
+        fi
+    done
+
+    if [[ -z "$app_bundle" || ! -d "$app_bundle" ]]; then
+        echo -e "${RED}Error: No .app bundle found in build output${NC}"
+        echo -e "${YELLOW}Expected location: src-tauri/target/**/bundle/macos/*.app${NC}"
+        return 1
+    fi
+
+    echo -e "  ${CYAN}→${NC} Using .app bundle: $app_bundle"
+
+    # Create tar.gz from the .app bundle (what Tauri updater expects)
+    tar -czf "$archive_path" -C "$(dirname "$app_bundle")" "$(basename "$app_bundle")"
 
     if [[ ! -f "$archive_path" ]]; then
         echo -e "${RED}Error: Failed to create update archive${NC}"

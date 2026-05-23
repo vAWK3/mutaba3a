@@ -80,6 +80,7 @@ export interface Transaction {
   lockedAt?: string;           // ISO timestamp - locked when linked doc exported
   lockedByDocumentId?: string; // ID of document that caused lock
   archivedAt?: string;         // ISO timestamp when archived
+  needsReview?: boolean;       // Set during migration v17 for records needing user confirmation
 }
 
 // FX Rate entity
@@ -116,6 +117,7 @@ export interface QueryFilters {
   limit?: number;
   offset?: number;
   sort?: { by: string; dir: 'asc' | 'desc' };
+  includeArchived?: boolean;
 }
 
 // Overview totals
@@ -929,7 +931,7 @@ export type MoneyEventSource =
 
 // Money Event State
 export type MoneyEventState =
-  | 'paid' | 'unpaid' | 'overdue' | 'upcoming' | 'missed' | 'cancelled';
+  | 'paid' | 'unpaid' | 'partial' | 'overdue' | 'upcoming' | 'missed' | 'cancelled';
 
 // Confidence Level
 export type MoneyConfidence = 'high' | 'medium' | 'low';
@@ -942,6 +944,7 @@ export interface MoneyEvent {
   source: MoneyEventSource;
   state: MoneyEventState;
   amountMinor: number;
+  receivedAmountMinor?: number;
   currency: Currency;
   eventDate: string;        // Primary: paidAt || dueDate || expectedDate || occurredAt
   dueDate?: string;

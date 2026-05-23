@@ -70,9 +70,13 @@ function normalizeTransaction(
 
   if (tx.kind === 'income') {
     direction = 'inflow';
-    if (tx.status === 'paid') {
+    const received = tx.receivedAmountMinor ?? 0;
+    if (tx.status === 'paid' || received >= tx.amountMinor) {
       source = 'actual_income';
       state = 'paid';
+    } else if (received > 0) {
+      source = 'receivable';
+      state = 'partial';
     } else {
       source = 'receivable';
       if (tx.dueDate && tx.dueDate < today) {
@@ -102,6 +106,7 @@ function normalizeTransaction(
     source,
     state,
     amountMinor: tx.amountMinor,
+    receivedAmountMinor: tx.receivedAmountMinor,
     currency: tx.currency,
     eventDate,
     dueDate: tx.dueDate,

@@ -22,7 +22,7 @@ export function RetainersPage() {
   // Update due states on mount
   const updateDueStates = useUpdateDueStates();
   useState(() => {
-    updateDueStates.mutate();
+    updateDueStates.mutate(undefined);
   });
 
   // Get profiles

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { withErrorToast } from './useMutationWithFeedback';
 import {
   expenseRepo,
   recurringRuleRepo,
@@ -165,10 +166,16 @@ export function useAllProfilesExpenseTotals(year: number) {
   });
 }
 
+function useExpenseMutationWithToast<TData, TError extends Error, TVariables>(
+  opts: Parameters<typeof useMutation<TData, TError, TVariables>>[0]
+) {
+  return useMutation(withErrorToast(opts));
+}
+
 export function useCreateExpense() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (data: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) =>
       expenseRepo.create(data),
     onSuccess: () => invalidateExpenseQueries(queryClient),
@@ -178,7 +185,7 @@ export function useCreateExpense() {
 export function useUpdateExpense() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<Expense> }) =>
       expenseRepo.update(id, data),
     onSuccess: () => invalidateExpenseQueries(queryClient),
@@ -188,7 +195,7 @@ export function useUpdateExpense() {
 export function useDeleteExpense() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => expenseRepo.softDelete(id),
     onSuccess: () => invalidateExpenseQueries(queryClient),
   });
@@ -224,7 +231,7 @@ export function useRecurringRule(id: string) {
 export function useCreateRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (data: Omit<RecurringRule, 'id' | 'createdAt' | 'updatedAt'>) =>
       recurringRuleRepo.create(data),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
@@ -234,7 +241,7 @@ export function useCreateRecurringRule() {
 export function useUpdateRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<RecurringRule> }) =>
       recurringRuleRepo.update(id, data),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
@@ -244,7 +251,7 @@ export function useUpdateRecurringRule() {
 export function usePauseRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => recurringRuleRepo.pause(id),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
@@ -253,7 +260,7 @@ export function usePauseRecurringRule() {
 export function useResumeRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => recurringRuleRepo.resume(id),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
@@ -262,7 +269,7 @@ export function useResumeRecurringRule() {
 export function useDeleteRecurringRule() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => recurringRuleRepo.delete(id),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
@@ -306,7 +313,7 @@ export function useReceiptsByMonth(profileId: string, monthKey: string) {
 export function useCreateReceipt() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (data: Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>) =>
       receiptRepo.create(data),
     onSuccess: () => invalidateReceiptQueries(queryClient),
@@ -316,7 +323,7 @@ export function useCreateReceipt() {
 export function useUpdateReceipt() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<Receipt> }) =>
       receiptRepo.update(id, data),
     onSuccess: () => invalidateReceiptQueries(queryClient),
@@ -326,7 +333,7 @@ export function useUpdateReceipt() {
 export function useDeleteReceipt() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => receiptRepo.delete(id),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
@@ -335,7 +342,7 @@ export function useDeleteReceipt() {
 export function useLinkReceiptToExpense() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ receiptId, expenseId }: { receiptId: string; expenseId: string }) =>
       receiptRepo.linkToExpense(receiptId, expenseId),
     onSuccess: () => invalidateReceiptQueries(queryClient),
@@ -345,7 +352,7 @@ export function useLinkReceiptToExpense() {
 export function useUnlinkReceipt() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (receiptId: string) => receiptRepo.unlinkFromExpense(receiptId),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
@@ -374,7 +381,7 @@ export function useExpenseCategory(id: string) {
 export function useCreateExpenseCategory() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (data: Omit<ExpenseCategory, 'id'>) =>
       expenseCategoryRepo.create(data),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
@@ -384,7 +391,7 @@ export function useCreateExpenseCategory() {
 export function useUpdateExpenseCategory() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<ExpenseCategory> }) =>
       expenseCategoryRepo.update(id, data),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
@@ -394,7 +401,7 @@ export function useUpdateExpenseCategory() {
 export function useDeleteExpenseCategory() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => expenseCategoryRepo.delete(id),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
   });
@@ -445,7 +452,7 @@ import { seedExpenseCategories, type CategoryPreset } from '../db/defaultExpense
 export function useSeedExpenseCategories() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({
       profileId,
       preset,
@@ -482,7 +489,7 @@ export function useVendor(id: string) {
 export function useCreateVendor() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (data: Omit<Vendor, 'id' | 'createdAt' | 'updatedAt'>) =>
       vendorRepo.create(data),
     onSuccess: () => invalidateVendorQueries(queryClient),
@@ -492,7 +499,7 @@ export function useCreateVendor() {
 export function useUpdateVendor() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<Vendor> }) =>
       vendorRepo.update(id, data),
     onSuccess: () => invalidateVendorQueries(queryClient),
@@ -502,7 +509,7 @@ export function useUpdateVendor() {
 export function useDeleteVendor() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (id: string) => vendorRepo.delete(id),
     onSuccess: () => {
       invalidateVendorQueries(queryClient);
@@ -515,7 +522,7 @@ export function useDeleteVendor() {
 export function useFindOrCreateVendor() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ profileId, rawVendor }: { profileId: string; rawVendor: string }) =>
       vendorRepo.findOrCreate(profileId, rawVendor),
     onSuccess: () => invalidateVendorQueries(queryClient),
@@ -525,7 +532,7 @@ export function useFindOrCreateVendor() {
 export function useMergeVendors() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ targetId, sourceId }: { targetId: string; sourceId: string }) =>
       vendorRepo.mergeVendors(targetId, sourceId),
     onSuccess: () => {
@@ -539,7 +546,7 @@ export function useMergeVendors() {
 export function useAddVendorAlias() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ vendorId, alias }: { vendorId: string; alias: string }) =>
       vendorRepo.addAlias(vendorId, alias),
     onSuccess: () => invalidateVendorQueries(queryClient),
@@ -569,7 +576,7 @@ export function useUnlinkedReceiptsWithSuggestions(profileId: string) {
 export function useCreateExpenseAndLinkReceipt() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({
       expenseData,
       receiptId,
@@ -590,7 +597,7 @@ export function useCreateExpenseAndLinkReceipt() {
 // ============================================================================
 
 export function useCheckReceiptDuplicate() {
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({
       profileId,
       fileName,
@@ -608,7 +615,7 @@ export function useCheckReceiptDuplicate() {
 export function useBulkCreateReceipts() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: (receipts: Array<Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>>) =>
       createReceiptsBulk(receipts),
     onSuccess: () => {
@@ -649,7 +656,7 @@ export function useMonthCloseList(profileId: string) {
 export function useUpdateMonthCloseChecklist() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({
       profileId,
       monthKey,
@@ -666,7 +673,7 @@ export function useUpdateMonthCloseChecklist() {
 export function useCloseMonth() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({
       profileId,
       monthKey,
@@ -683,7 +690,7 @@ export function useCloseMonth() {
 export function useReopenMonth() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useExpenseMutationWithToast({
     mutationFn: ({ profileId, monthKey }: { profileId: string; monthKey: string }) =>
       monthCloseRepo.reopenMonth(profileId, monthKey),
     onSuccess: () => invalidateMonthCloseQueries(queryClient),

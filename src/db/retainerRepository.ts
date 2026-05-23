@@ -1,4 +1,5 @@
 import { db } from './database';
+import { excludeDeleted } from './baseQuery';
 import type {
   RetainerAgreement,
   RetainerAgreementDisplay,
@@ -844,7 +845,7 @@ export const retainerMatching = {
         (t) =>
           t.kind === 'income' &&
           t.status === 'paid' &&
-          !t.deletedAt &&
+          excludeDeleted(t) &&
           !t.linkedProjectedIncomeId
       )
       .toArray();

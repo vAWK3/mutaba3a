@@ -240,7 +240,7 @@ export function ExpenseDrawer() {
         if (mode === 'edit' && expenseId) {
           await updateExpenseMutation.mutateAsync({ id: expenseId, data: expenseData });
         } else {
-          const createdExpense = await createExpenseMutation.mutateAsync(expenseData);
+          const createdExpense = (await createExpenseMutation.mutateAsync(expenseData)) as { id: string } | undefined;
           // Link receipt if provided
           if (linkReceiptId && createdExpense) {
             await linkReceiptMutation.mutateAsync({

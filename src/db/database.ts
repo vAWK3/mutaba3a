@@ -804,6 +804,62 @@ export class MiniCrmDatabase extends Dexie {
       planAssumptions: 'id, planId, profileId, category, type, confidence, startMonth, scenarioId, [planId+category]',
       planScenarios: 'id, planId, profileId, isDefault, [planId+isDefault]',
     });
+
+    // V17: Enforce profileId on all core entities + needsReview flag for migration wizard
+    this.version(17).stores({
+      // Add needsReview index to transactions for migration wizard queries
+      transactions: 'id, kind, status, profileId, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, linkedProjectedIncomeId, lockedAt, archivedAt, needsReview',
+    }).upgrade(async (tx) => {
+      // Phase 1: Auto-backfill profileId on all records missing it
+      const profiles = await tx.table('businessProfiles').toArray();
+      const defaultProfile = profiles.find((p: { isDefault?: boolean }) => p.isDefault);
+
+      let migratedProfile = defaultProfile;
+      const needsUserReview = !defaultProfile;
+
+      if (!migratedProfile) {
+        // No default profile exists - create a "Migrated" profile
+        const now = new Date().toISOString();
+        migratedProfile = {
+          id: crypto.randomUUID(),
+          name: 'Migrated',
+          isDefault: true,
+          createdAt: now,
+        };
+        await tx.table('businessProfiles').add(migratedProfile);
+      }
+
+      const profileId = migratedProfile.id;
+
+      // Backfill transactions
+      await tx.table('transactions')
+        .filter((t: { profileId?: string; deletedAt?: string }) => !t.profileId && !t.deletedAt)
+        .modify((t: { profileId: string; needsReview?: boolean }) => {
+          t.profileId = profileId;
+          if (needsUserReview) t.needsReview = true;
+        });
+
+      // Backfill expenses
+      await tx.table('expenses')
+        .filter((e: { profileId?: string; deletedAt?: string }) => !e.profileId && !e.deletedAt)
+        .modify((e: { profileId: string }) => {
+          e.profileId = profileId;
+        });
+
+      // Backfill projects
+      await tx.table('projects')
+        .filter((p: { profileId?: string }) => !p.profileId)
+        .modify((p: { profileId: string }) => {
+          p.profileId = profileId;
+        });
+
+      // Backfill clients
+      await tx.table('clients')
+        .filter((c: { profileId?: string }) => !c.profileId)
+        .modify((c: { profileId: string }) => {
+          c.profileId = profileId;
+        });
+    });
   }
 }
 

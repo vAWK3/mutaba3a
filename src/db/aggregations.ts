@@ -35,8 +35,20 @@ export interface EntityMaps {
 }
 
 /**
+ * Compute paid and unpaid amounts for an income transaction,
+ * correctly handling partial payments via receivedAmountMinor.
+ */
+export function accumulateIncomeAmount(tx: Transaction): { paid: number; unpaid: number } {
+  if (tx.status === 'paid') {
+    return { paid: tx.amountMinor, unpaid: 0 };
+  }
+  const received = tx.receivedAmountMinor ?? 0;
+  return { paid: received, unpaid: tx.amountMinor - received };
+}
+
+/**
  * Aggregate transaction totals (paid income, unpaid income, expenses).
- * This is the most duplicated logic in the repository.
+ * Handles partial payments correctly via accumulateIncomeAmount.
  */
 export function aggregateTransactionTotals(transactions: Transaction[]): TransactionTotals {
   let paidIncomeMinor = 0;
@@ -45,11 +57,9 @@ export function aggregateTransactionTotals(transactions: Transaction[]): Transac
 
   for (const tx of transactions) {
     if (tx.kind === 'income') {
-      if (tx.status === 'paid') {
-        paidIncomeMinor += tx.amountMinor;
-      } else {
-        unpaidIncomeMinor += tx.amountMinor;
-      }
+      const { paid, unpaid } = accumulateIncomeAmount(tx);
+      paidIncomeMinor += paid;
+      unpaidIncomeMinor += unpaid;
     } else {
       expensesMinor += tx.amountMinor;
     }
@@ -76,11 +86,9 @@ export function aggregateTransactionTotalsByCurrency(
     if (!currencyTotals) continue; // Skip unknown currencies
 
     if (tx.kind === 'income') {
-      if (tx.status === 'paid') {
-        currencyTotals.paidIncomeMinor += tx.amountMinor;
-      } else {
-        currencyTotals.unpaidIncomeMinor += tx.amountMinor;
-      }
+      const { paid, unpaid } = accumulateIncomeAmount(tx);
+      currencyTotals.paidIncomeMinor += paid;
+      currencyTotals.unpaidIncomeMinor += unpaid;
     } else {
       currencyTotals.expensesMinor += tx.amountMinor;
     }
@@ -105,13 +113,11 @@ export function aggregateTransactionTotalsWithActivity(
 
   for (const tx of transactions) {
     if (tx.kind === 'income') {
-      if (tx.status === 'paid') {
-        paidIncomeMinor += tx.amountMinor;
-        if (options.trackPayments && (!lastPaymentAt || (tx.paidAt && tx.paidAt > lastPaymentAt))) {
-          lastPaymentAt = tx.paidAt;
-        }
-      } else {
-        unpaidIncomeMinor += tx.amountMinor;
+      const { paid, unpaid } = accumulateIncomeAmount(tx);
+      paidIncomeMinor += paid;
+      unpaidIncomeMinor += unpaid;
+      if (options.trackPayments && tx.status === 'paid' && (!lastPaymentAt || (tx.paidAt && tx.paidAt > lastPaymentAt))) {
+        lastPaymentAt = tx.paidAt;
       }
     } else {
       expensesMinor += tx.amountMinor;

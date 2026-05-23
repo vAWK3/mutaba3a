@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useProfileAwareAction } from '../../hooks/useProfileAwareAction';
+import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { ProfileQuickPicker } from '../ui/ProfileQuickPicker';
+import { ProfileBadge } from '../ui/ProfileBadge';
 import { useDrawerStore } from '../../lib/stores';
 import { useT, useDirection } from '../../lib/i18n';
 
@@ -50,6 +52,7 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot, hideAddMenu 
         {filterSlot}
       </div>
       <div className="topbar-right">
+        <ActiveProfileIndicator />
         {rightSlot}
         {!hideAddMenu && <AddMenu />}
       </div>
@@ -185,6 +188,20 @@ function AddMenu() {
       <ProfileQuickPicker {...clientAction.pickerProps} />
       <ProfileQuickPicker {...projectAction.pickerProps} />
     </>
+  );
+}
+
+function ActiveProfileIndicator() {
+  const { activeProfile, profiles } = useActiveProfile();
+
+  // Only show if there are multiple profiles
+  if (!activeProfile || profiles.length <= 1) return null;
+
+  return (
+    <div className="topbar-profile-indicator" title={activeProfile.name}>
+      <ProfileBadge profile={activeProfile} size="sm" />
+      <span className="topbar-profile-name">{activeProfile.name}</span>
+    </div>
   );
 }
 

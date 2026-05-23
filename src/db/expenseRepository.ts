@@ -1,4 +1,5 @@
 import { db } from './database';
+import { excludeDeleted } from './baseQuery';
 import type {
   Expense,
   RecurringRule,
@@ -50,10 +51,7 @@ export const expenseRepo = {
     console.log(`[expenseRepo.list] Total expenses: ${expenses.length}, Deleted: ${deletedCount}, includeDeleted: ${filters.includeDeleted}`);
 
     let filtered = expenses.filter((e) => {
-      if (!filters.includeDeleted && e.deletedAt) {
-        console.log(`[expenseRepo.list] Filtering out deleted expense: ${e.id}, deletedAt: ${e.deletedAt}`);
-        return false;
-      }
+      if (!filters.includeDeleted && !excludeDeleted(e)) return false;
       if (filters.profileId && e.profileId !== filters.profileId) return false;
       if (filters.categoryId && e.categoryId !== filters.categoryId) return false;
       if (filters.currency && e.currency !== filters.currency) return false;
@@ -181,7 +179,7 @@ export const expenseRepo = {
       .where('profileId')
       .equals(profileId)
       .filter((e) => {
-        if (e.deletedAt) return false;
+        if (!excludeDeleted(e)) return false;
         const expenseYear = new Date(e.occurredAt).getFullYear();
         return expenseYear === year;
       })
@@ -261,7 +259,7 @@ export const recurringRuleRepo = {
     const rules = await db.recurringRules.toArray();
 
     return rules.filter((r) => {
-      if (r.deletedAt) return false;
+      if (!excludeDeleted(r)) return false;
       if (filters?.profileId && r.profileId !== filters.profileId) return false;
       if (filters?.isPaused !== undefined && r.isPaused !== filters.isPaused) return false;
       if (filters?.scope && r.scope !== filters.scope) return false;
@@ -275,7 +273,7 @@ export const recurringRuleRepo = {
 
   async get(id: string): Promise<RecurringRule | undefined> {
     const rule = await db.recurringRules.get(id);
-    if (rule?.deletedAt) return undefined;
+    if (rule && !excludeDeleted(rule)) return undefined;
     return rule;
   },
 

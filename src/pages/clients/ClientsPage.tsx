@@ -3,8 +3,11 @@ import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
+import { EmptyState } from '../../components/ui';
 import { OrphanedRecordsModal } from '../../components/modals';
-import { useClientSummaries, useClients } from '../../hooks/useQueries';
+import { useClientSummaries, useClients, useBusinessProfiles } from '../../hooks/useQueries';
+import { useQuery } from '@tanstack/react-query';
+import { getCrossProfileClientStats } from '../../db/crossProfileStats';
 import { useSortState } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
@@ -42,6 +45,15 @@ export function ClientsPage() {
 
   // Always fetch all currencies - no currency filter
   const { data: rawClients = [], isLoading } = useClientSummaries(profileId, undefined, search);
+
+  // Cross-profile badges: only query if multiple profiles exist
+  const { data: profiles = [] } = useBusinessProfiles();
+  const hasMultipleProfiles = profiles.filter(p => !p.archivedAt).length > 1;
+  const { data: crossProfileStats } = useQuery({
+    queryKey: ['crossProfileClientStats'],
+    queryFn: getCrossProfileClientStats,
+    enabled: hasMultipleProfiles,
+  });
 
   // Sort clients
   const clients = useMemo(() => {
@@ -126,15 +138,18 @@ export function ClientsPage() {
             <div className="spinner" />
           </div>
         ) : clients.length === 0 ? (
-          <div className="empty-state">
-            <h3 className="empty-state-title">{t('clients.empty')}</h3>
-            <p className="empty-state-description">
-              {search ? t('clients.emptySearch') : t('clients.emptyHint')}
-            </p>
-            <button className="btn btn-primary" onClick={() => openClientDrawer({ mode: 'create' })}>
-              {t('clients.addClient')}
-            </button>
-          </div>
+          <EmptyState
+            title={search && allClients.length > 0
+              ? t('clients.emptyFiltered') || 'No clients match your search'
+              : t('clients.empty')}
+            description={search && allClients.length > 0
+              ? `${allClients.length} ${t('clients.emptyFilteredCount') || 'clients total.'}`
+              : search ? t('clients.emptySearch') : t('clients.emptyHint')}
+            action={search && allClients.length > 0
+              ? { label: t('clients.clearSearch') || 'Clear search', onClick: () => setSearch('') }
+              : { label: t('clients.addClient'), onClick: () => openClientDrawer({ mode: 'create' }) }
+            }
+          />
         ) : (
           <>
             {/* Summary strip */}
@@ -186,6 +201,18 @@ export function ClientsPage() {
                       >
                         {client.name}
                       </Link>
+                      {crossProfileStats?.has(client.id) && (
+                        <div className="cross-profile-badges">
+                          {crossProfileStats.get(client.id)!.map((stat) => (
+                            <span key={stat.profileId} className="cross-profile-badge" title={stat.profileName}>
+                              <span className="cross-profile-badge-initial">
+                                {stat.profileName.charAt(0).toUpperCase()}
+                              </span>
+                              {stat.txCount} txns
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="text-secondary">{client.activeProjectCount}</td>
                     <td className="amount-cell">

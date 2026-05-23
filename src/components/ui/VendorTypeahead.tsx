@@ -138,10 +138,10 @@ export function VendorTypeahead({
       if (option.isNew) {
         // Create new vendor
         try {
-          const newVendor = await findOrCreateMutation.mutateAsync({
+          const newVendor = (await findOrCreateMutation.mutateAsync({
             profileId,
             rawVendor: option.name,
-          });
+          })) as { id: string; canonicalName: string };
           setInputValue(newVendor.canonicalName);
           onChange(newVendor.canonicalName, newVendor.id);
         } catch {

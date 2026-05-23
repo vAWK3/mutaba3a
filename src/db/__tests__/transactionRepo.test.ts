@@ -119,6 +119,37 @@ describe('transactionRepo', () => {
       expect(transactions[0].title).toBe('Keep');
     });
 
+    it('should exclude archived transactions by default', async () => {
+      await transactionRepo.create(createTestTransaction({ title: 'Active' }));
+      const toArchive = await transactionRepo.create(createTestTransaction({ title: 'Archived' }));
+      await transactionRepo.archive(toArchive.id);
+
+      const transactions = await transactionRepo.list();
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0].title).toBe('Active');
+    });
+
+    it('should include archived transactions when includeArchived is true', async () => {
+      await transactionRepo.create(createTestTransaction({ title: 'Active' }));
+      const toArchive = await transactionRepo.create(createTestTransaction({ title: 'Archived' }));
+      await transactionRepo.archive(toArchive.id);
+
+      const transactions = await transactionRepo.list({ includeArchived: true });
+      expect(transactions).toHaveLength(2);
+    });
+
+    it('should filter by profileId using baseQuery helper', async () => {
+      await transactionRepo.create(createTestTransaction({ title: 'Profile A', profileId: 'profile-a' }));
+      await transactionRepo.create(createTestTransaction({ title: 'Profile B', profileId: 'profile-b' }));
+
+      const profileA = await transactionRepo.list({ profileId: 'profile-a' });
+      expect(profileA).toHaveLength(1);
+      expect(profileA[0].title).toBe('Profile A');
+
+      const all = await transactionRepo.list();
+      expect(all).toHaveLength(2);
+    });
+
     it('should include resolved client and project names', async () => {
       await transactionRepo.create(
         createTestTransaction({

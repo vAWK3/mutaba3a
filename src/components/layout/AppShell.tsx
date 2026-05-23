@@ -10,7 +10,8 @@ import { RetainerDrawer } from "../drawers/RetainerDrawer";
 import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
 import { PartialPaymentDrawer } from "../drawers/PartialPaymentDrawer";
 import { PlanAssumptionDrawer } from "../drawers/PlanAssumptionDrawer";
-import { WelcomeModal, DemoSeedModal } from "../modals";
+import { WelcomeModal, DemoSeedModal, MigrationWizard } from "../modals";
+import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
 import { DemoBanner } from "../ui/DemoBanner";
@@ -87,6 +88,7 @@ export function AppShell({ children }: AppShellProps) {
       <SidebarNav />
       <main className="main-content">
         <ConflictBanner />
+        <OrphanedRecordsBanner />
         {children}
       </main>
 
@@ -152,6 +154,7 @@ export function AppShell({ children }: AppShellProps) {
       <ImportBundleModal />
       <PairingModal />
       <WelcomeModal />
+      <MigrationWizard />
 
       {showConfirmModal && (
         <DemoSeedModal onClose={() => setShowConfirmModal(false)} />

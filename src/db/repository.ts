@@ -20,6 +20,7 @@ import type {
   DocumentType,
   PaymentStatus,
 } from '../types';
+import { excludeDeleted, scopeToProfile } from './baseQuery';
 import {
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
@@ -195,14 +196,15 @@ export const transactionRepo = {
     const today = todayISO();
 
     let filtered = transactions.filter((tx) => {
-      if (tx.deletedAt) return false;
+      if (!excludeDeleted(tx)) return false;
+      if (tx.archivedAt && !filters.includeArchived) return false;
+      if (!scopeToProfile(tx, filters.profileId)) return false;
       if (filters.dateFrom && tx.occurredAt < filters.dateFrom) return false;
       if (filters.dateTo && tx.occurredAt > filters.dateTo + 'T23:59:59') return false;
       if (filters.currency && tx.currency !== filters.currency) return false;
       if (filters.kind && tx.kind !== filters.kind) return false;
       if (filters.clientId && tx.clientId !== filters.clientId) return false;
       if (filters.projectId && tx.projectId !== filters.projectId) return false;
-      if (filters.profileId && tx.profileId !== filters.profileId) return false;
 
       if (filters.status) {
         if (filters.status === 'overdue') {

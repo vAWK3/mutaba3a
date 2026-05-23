@@ -8,8 +8,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n';
-import { useDemoStore, seedDemoData } from '../../demo';
+import { useDemoStore, seedDemoData, getDemoProfileIds } from '../../demo';
 import type { DemoDataStats } from '../../demo';
+import { useProfileStore } from '../../lib/profileStore';
 import './DemoSeedModal.css';
 
 interface DemoSeedModalProps {
@@ -28,6 +29,7 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
   const [stats, setStats] = useState<DemoDataStats | null>(null);
 
   const { activateDemo } = useDemoStore();
+  const { setActiveProfile } = useProfileStore();
 
   // Handle ESC key
   useEffect(() => {
@@ -59,6 +61,12 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
 
       // Activate demo mode in store
       activateDemo();
+
+      // Switch to the first demo profile so seeded data is visible
+      const demoProfileIds = getDemoProfileIds();
+      if (demoProfileIds.length > 0) {
+        setActiveProfile(demoProfileIds[0]);
+      }
 
       // Invalidate all queries to refresh UI
       queryClient.invalidateQueries();
