@@ -53,6 +53,8 @@ export const expenseRepo = {
     let filtered = expenses.filter((e) => {
       if (!filters.includeDeleted && !excludeDeleted(e)) return false;
       if (filters.profileId && e.profileId !== filters.profileId) return false;
+      if (filters.clientId && e.clientId !== filters.clientId) return false;
+      if (filters.projectId && e.projectId !== filters.projectId) return false;
       if (filters.categoryId && e.categoryId !== filters.categoryId) return false;
       if (filters.currency && e.currency !== filters.currency) return false;
 

@@ -10,8 +10,9 @@ import {
   documentRepo,
   documentSequenceRepo,
   businessProfileRepo,
+  paymentRecordRepo,
 } from '../db';
-import { syncedBusinessProfileRepo } from '../sync/core/synced-repository';
+import { syncedBusinessProfileRepo, syncedPaymentRecordRepo, syncedTransactionRepo } from '../sync/core/synced-repository';
 import type {
   QueryFilters,
   Transaction,
@@ -74,6 +75,8 @@ export const queryKeys = {
   businessProfiles: () => ['businessProfiles'] as const,
   businessProfile: (id: string) => ['businessProfile', id] as const,
   defaultBusinessProfile: () => ['defaultBusinessProfile'] as const,
+  // Payment Record keys
+  paymentRecords: (transactionId: string) => ['paymentRecords', transactionId] as const,
 };
 
 // Transaction hooks
@@ -161,7 +164,7 @@ export function useMarkTransactionPaid() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => transactionRepo.markPaid(id),
+    mutationFn: (id: string) => syncedTransactionRepo.markPaid(id),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -171,8 +174,62 @@ export function useRecordPartialPayment() {
 
   return useMutation({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      transactionRepo.recordPartialPayment(id, paymentAmountMinor),
+      syncedTransactionRepo.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateTransactionQueries(queryClient),
+  });
+}
+
+// Payment Record hooks
+
+function invalidatePaymentRecordQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  transactionId: string
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.paymentRecords(transactionId) });
+  invalidateTransactionQueries(queryClient);
+}
+
+export function usePaymentRecords(transactionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.paymentRecords(transactionId!),
+    queryFn: () => paymentRecordRepo.listByTransaction(transactionId!),
+    enabled: !!transactionId,
+  });
+}
+
+export function useCreatePaymentRecord() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }) =>
+      syncedPaymentRecordRepo.create(data),
+    onSuccess: (_result, variables) =>
+      invalidatePaymentRecordQueries(queryClient, variables.transactionId),
+  });
+}
+
+export function useUpdatePaymentRecord() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (vars: {
+      id: string;
+      transactionId: string;
+      data: { amountMinor?: number; paidAt?: string; notes?: string };
+    }) => syncedPaymentRecordRepo.update(vars.id, vars.data),
+    onSuccess: (_result, variables) =>
+      invalidatePaymentRecordQueries(queryClient, variables.transactionId),
+  });
+}
+
+export function useDeletePaymentRecord() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (vars: { id: string; transactionId: string }) =>
+      syncedPaymentRecordRepo.delete(vars.id),
+    onSuccess: (_result, variables) =>
+      invalidatePaymentRecordQueries(queryClient, variables.transactionId),
   });
 }
 

@@ -10,6 +10,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { transactionRepo } from '../db';
+import { syncedTransactionRepo } from '../sync/core/synced-repository';
 import { useMutationWithFeedback } from './useMutationWithFeedback';
 import type { QueryFilters, Transaction, Currency, TxStatus } from '../types';
 
@@ -195,7 +196,7 @@ export function useMarkIncomePaid() {
   const queryClient = useQueryClient();
 
   return useMutationWithFeedback({
-    mutationFn: (id: string) => transactionRepo.markPaid(id),
+    mutationFn: (id: string) => syncedTransactionRepo.markPaid(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to mark as paid. Please try again.',
   });
@@ -209,7 +210,7 @@ export function useRecordIncomePartialPayment() {
 
   return useMutationWithFeedback({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      transactionRepo.recordPartialPayment(id, paymentAmountMinor),
+      syncedTransactionRepo.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to record payment. Please try again.',
   });

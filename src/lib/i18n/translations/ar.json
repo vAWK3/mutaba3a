@@ -133,7 +133,18 @@
       "record": "تسجيل الدفعة",
       "markFullyPaid": "تسديد كامل المبلغ",
       "paymentRecorded": "تم تسجيل الدفعة",
-      "recordPayment": "تسجيل دفعة"
+      "recordPayment": "تسجيل دفعة",
+      "history": "سجل الدفعات",
+      "noPayments": "لا توجد دفعات مسجلة بعد",
+      "editPayment": "تعديل الدفعة",
+      "updatePayment": "تحديث الدفعة",
+      "deletePayment": "حذف الدفعة",
+      "deleteConfirm": "هل أنت متأكد من حذف هذه الدفعة؟",
+      "paymentDeleted": "تم حذف الدفعة",
+      "paymentUpdated": "تم تحديث الدفعة",
+      "date": "تاريخ الدفعة",
+      "notes": "ملاحظات",
+      "migratedNote": "تم الترحيل من الإجمالي المتراكم"
     },
     "columns": {
       "date": "التاريخ",
@@ -1114,7 +1125,7 @@
       "profile": "الملف التجاري",
       "profilePlaceholder": "اختر ملف...",
       "client": "العميل",
-      "clientPlaceholder": "اختر عميل...",
+      "clientPlaceholder": "ابحث أو أنشئ عميل...",
       "project": "المشروع",
       "projectPlaceholder": "اختر مشروع...",
       "category": "الفئة",
@@ -1165,6 +1176,10 @@
       "date": "التاريخ",
       "vendor": "المورد",
       "vendorPlaceholder": "اسم الشركة أو المورد...",
+      "client": "العميل",
+      "clientPlaceholder": "ابحث أو أنشئ عميل...",
+      "project": "المشروع",
+      "projectPlaceholder": "ابحث أو أنشئ مشروع...",
       "category": "الفئة",
       "categoryPlaceholder": "اختر فئة...",
       "title": "العنوان",
@@ -1299,8 +1314,14 @@
       }
     }
   },
+  "client": {
+    "createNew": "إنشاء جديد"
+  },
   "vendor": {
     "createNew": "إنشاء جديد"
+  },
+  "project": {
+    "createNew": "إنشاء مشروع جديد"
   },
   "suppliers": {
     "title": "الموردون",

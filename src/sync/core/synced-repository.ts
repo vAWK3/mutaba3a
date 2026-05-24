@@ -17,6 +17,7 @@ import {
   fxRateRepo,
   businessProfileRepo,
   documentRepo,
+  paymentRecordRepo,
 } from '../../db/repository';
 import { captureOp } from './ops-engine';
 import type {
@@ -27,6 +28,7 @@ import type {
   FxRate,
   BusinessProfile,
   Document,
+  PaymentRecord,
 } from '../../types';
 import type { EntityType } from './ops-types';
 
@@ -180,6 +182,22 @@ export const syncedTransactionRepo = {
         entityId: id,
         opType: 'mark_paid',
         value: tx.paidAt,
+      });
+    }
+  },
+
+  async recordPartialPayment(id: string, paymentAmountMinor: number): Promise<void> {
+    await transactionRepo.recordPartialPayment(id, paymentAmountMinor);
+    // The payment record creation is captured by syncedPaymentRecordRepo internally
+    // We capture the transaction update as well
+    const tx = await transactionRepo.get(id);
+    if (tx) {
+      await captureOp({
+        entityType: 'transaction',
+        entityId: id,
+        opType: 'update',
+        field: 'receivedAmountMinor',
+        value: tx.receivedAmountMinor,
       });
     }
   },
@@ -360,6 +378,43 @@ export const syncedDocumentRepo = {
         linkedTransactionIds: updated.linkedTransactionIds,
       }, existing);
     }
+  },
+};
+
+// ============================================================================
+// Synced Payment Record Repository
+// ============================================================================
+
+export const syncedPaymentRecordRepo = {
+  // Read operations - pass through unchanged
+  get: paymentRecordRepo.get.bind(paymentRecordRepo),
+  listByTransaction: paymentRecordRepo.listByTransaction.bind(paymentRecordRepo),
+
+  // Write operations - capture ops
+  async create(data: {
+    transactionId: string;
+    amountMinor: number;
+    paidAt: string;
+    notes?: string;
+  }): Promise<PaymentRecord> {
+    const record = await paymentRecordRepo.create(data);
+    await captureCreateOp('paymentRecord', record);
+    return record;
+  },
+
+  async update(id: string, data: {
+    amountMinor?: number;
+    paidAt?: string;
+    notes?: string;
+  }): Promise<void> {
+    const existing = await paymentRecordRepo.get(id);
+    await paymentRecordRepo.update(id, data);
+    await captureUpdateOps('paymentRecord', id, data, existing);
+  },
+
+  async delete(id: string): Promise<void> {
+    await paymentRecordRepo.delete(id);
+    await captureDeleteOp('paymentRecord', id);
   },
 };
 

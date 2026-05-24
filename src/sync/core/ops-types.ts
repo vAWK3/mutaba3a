@@ -81,7 +81,7 @@ export interface DiscoveredPeer {
 // Operation Types
 // ============================================================================
 
-export type EntityType = 'client' | 'project' | 'transaction' | 'category' | 'fxRate' | 'document' | 'businessProfile';
+export type EntityType = 'client' | 'project' | 'transaction' | 'category' | 'fxRate' | 'document' | 'businessProfile' | 'paymentRecord';
 
 export type OpType =
   // CRUD operations

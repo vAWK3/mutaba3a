@@ -21,6 +21,7 @@ import type {
   Plan,
   PlanAssumption,
   PlanScenario,
+  PaymentRecord,
 } from '../types';
 import type {
   Engagement,
@@ -72,6 +73,9 @@ export class MiniCrmDatabase extends Dexie {
   plans!: Table<Plan, string>;
   planAssumptions!: Table<PlanAssumption, string>;
   planScenarios!: Table<PlanScenario, string>;
+
+  // Payment records table
+  paymentRecords!: Table<PaymentRecord, string>;
 
   // Sync tables
   localDevice!: Table<LocalDevice, string>;
@@ -859,6 +863,54 @@ export class MiniCrmDatabase extends Dexie {
         .modify((c: { profileId: string }) => {
           c.profileId = profileId;
         });
+    });
+
+    // V18: Payment records table -- individual payment entries for partial payment tracking
+    this.version(18).stores({
+      paymentRecords: 'id, transactionId, paidAt, deletedAt',
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const transactions = await tx.table('transactions').toArray();
+
+      for (const t of transactions) {
+        if (t.kind !== 'income' || t.deletedAt) continue;
+
+        const receivedAmount = t.receivedAmountMinor ?? 0;
+
+        if (receivedAmount > 0) {
+          // Transaction has partial payments -- create a record for the accumulated total
+          await tx.table('paymentRecords').add({
+            id: crypto.randomUUID(),
+            transactionId: t.id,
+            amountMinor: receivedAmount,
+            paidAt: t.paidAt || t.updatedAt || t.createdAt,
+            notes: 'Migrated from accumulated total',
+            createdAt: now,
+            updatedAt: now,
+          });
+        } else if (t.status === 'paid') {
+          // Pre-v14 paid transaction with no receivedAmountMinor -- create a full payment record
+          await tx.table('paymentRecords').add({
+            id: crypto.randomUUID(),
+            transactionId: t.id,
+            amountMinor: t.amountMinor,
+            paidAt: t.paidAt || t.updatedAt || t.createdAt,
+            notes: 'Migrated from accumulated total',
+            createdAt: now,
+            updatedAt: now,
+          });
+          // Also backfill receivedAmountMinor on the transaction
+          await tx.table('transactions').update(t.id, {
+            receivedAmountMinor: t.amountMinor,
+            updatedAt: now,
+          });
+        }
+      }
+    });
+
+    // V19: Add clientId and projectId to expenses table for client/project association
+    this.version(19).stores({
+      expenses: 'id, profileId, clientId, projectId, categoryId, vendorId, currency, occurredAt, recurringRuleId, recurringOccurrenceId, createdAt, deletedAt',
     });
   }
 }

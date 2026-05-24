@@ -9,7 +9,6 @@ import {
   useCreateTransaction,
   useUpdateTransaction,
   useDeleteTransaction,
-  useClients,
   useProjects,
   useBusinessProfiles,
 } from '../../hooks/useQueries';
@@ -17,6 +16,9 @@ import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
+import { ClientTypeahead } from '../ui/ClientTypeahead';
+import { ProjectTypeahead } from '../ui/ProjectTypeahead';
+import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import type { TxStatus, Currency } from '../../types';
 
 /**
@@ -55,7 +57,6 @@ export function IncomeDrawer() {
 
   const { data: existingTx, isLoading: txLoading } = useTransaction(transactionId || '');
   const { data: sourceTx } = useTransaction(duplicateFromId || '');
-  const { data: clients = [] } = useClients();
   const { data: projectsData = [] } = useProjects();
   const { data: businessProfiles = [] } = useBusinessProfiles();
 
@@ -154,10 +155,8 @@ export function IncomeDrawer() {
     }
   }, [duplicateFromId, sourceTx, mode, reset, initialProfileId]);
 
-  // Filter projects by selected client
-  const filteredProjects = selectedClientId
-    ? projectsData.filter((p) => p.clientId === selectedClientId)
-    : projectsData;
+  // Bi-directional cascade between client and project fields
+  useClientProjectCascade({ form, projectsData });
 
   const onSubmit = async (data: FormData) => {
     // Map income status to database status
@@ -375,14 +374,11 @@ export function IncomeDrawer() {
             name="clientId"
             control={form.control}
             render={({ field }) => (
-              <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">{t('drawer.transaction.clientPlaceholder')}</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
+              <ClientTypeahead
+                profileId={watchedProfileId}
+                value={field.value || ''}
+                onChange={field.onChange}
+              />
             )}
           />
         </div>
@@ -394,14 +390,12 @@ export function IncomeDrawer() {
             name="projectId"
             control={form.control}
             render={({ field }) => (
-              <select className="select" style={{ width: '100%' }} {...field}>
-                <option value="">{t('drawer.transaction.projectPlaceholder')}</option>
-                {filteredProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+              <ProjectTypeahead
+                profileId={watchedProfileId}
+                clientId={selectedClientId || undefined}
+                value={field.value || ''}
+                onChange={field.onChange}
+              />
             )}
           />
         </div>

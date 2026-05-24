@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { transactionRepo, clientRepo } from '../repository';
+import { transactionRepo, clientRepo, paymentRecordRepo } from '../repository';
 import type { Client } from '../../types';
 
 describe('transactionRepo.partialPayment', () => {
@@ -11,6 +11,7 @@ describe('transactionRepo.partialPayment', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.categories.clear();
+    await db.paymentRecords.clear();
 
     testClient = await clientRepo.create({ name: 'Test Client', email: 'client@test.com' });
   });
@@ -20,6 +21,7 @@ describe('transactionRepo.partialPayment', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.categories.clear();
+    await db.paymentRecords.clear();
   });
 
   describe('recordPartialPayment', () => {
@@ -87,8 +89,8 @@ describe('transactionRepo.partialPayment', () => {
       await transactionRepo.recordPartialPayment(tx.id, 6000); // More than remaining
 
       const updated = await transactionRepo.get(tx.id);
-      // Should cap at total amount
-      expect(updated?.receivedAmountMinor).toBe(10000);
+      // Overpayment is allowed -- stores actual sum, not capped
+      expect(updated?.receivedAmountMinor).toBe(11000);
       expect(updated?.status).toBe('paid');
     });
 
@@ -139,6 +141,23 @@ describe('transactionRepo.partialPayment', () => {
       await expect(
         transactionRepo.recordPartialPayment(tx.id, 1000)
       ).rejects.toThrow('Partial payments only apply to income');
+    });
+
+    it('should create a PaymentRecord when recording a partial payment', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-01-15',
+      });
+
+      await transactionRepo.recordPartialPayment(tx.id, 3000);
+
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records).toHaveLength(1);
+      expect(records[0].amountMinor).toBe(3000);
+      expect(records[0].transactionId).toBe(tx.id);
     });
   });
 
@@ -211,14 +230,20 @@ describe('transactionRepo.partialPayment', () => {
         amountMinor: 10000,
         currency: 'USD',
         occurredAt: '2024-01-15',
-        receivedAmountMinor: 3000, // Previously received partial payment
       });
+
+      // Record a partial payment first (creates a PaymentRecord)
+      await transactionRepo.recordPartialPayment(tx.id, 3000);
 
       await transactionRepo.markPaid(tx.id);
 
       const updated = await transactionRepo.get(tx.id);
       expect(updated?.status).toBe('paid');
       expect(updated?.receivedAmountMinor).toBe(10000);
+
+      // Should have 2 payment records: 3000 + 7000
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records).toHaveLength(2);
     });
   });
 });

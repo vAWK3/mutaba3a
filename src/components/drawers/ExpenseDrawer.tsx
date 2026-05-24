@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore } from '../../lib/stores';
-import { useBusinessProfiles } from '../../hooks/useQueries';
+import { useBusinessProfiles, useProjects } from '../../hooks/useQueries';
 import {
   useExpense,
   useCreateExpense,
@@ -18,6 +18,9 @@ import {
   useLinkReceiptToExpense,
 } from '../../hooks/useExpenseQueries';
 import { VendorTypeahead } from '../ui/VendorTypeahead';
+import { ClientTypeahead } from '../ui/ClientTypeahead';
+import { ProjectTypeahead } from '../ui/ProjectTypeahead';
+import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
@@ -33,6 +36,8 @@ const schema = z.object({
   title: z.string().optional(),
   vendor: z.string().optional(),
   vendorId: z.string().optional(),
+  clientId: z.string().optional(),
+  projectId: z.string().optional(),
   categoryId: z.string().min(1, 'Category is required'),
   notes: z.string().optional(),
   // Recurring fields
@@ -106,6 +111,8 @@ export function ExpenseDrawer() {
       title: prefillData?.title || '',
       vendor: prefillData?.vendor || '',
       vendorId: prefillData?.vendorId || '',
+      clientId: '',
+      projectId: '',
       categoryId: prefillData?.categoryId || '',
       notes: '',
       frequency: 'monthly',
@@ -119,8 +126,13 @@ export function ExpenseDrawer() {
   const selectedExpenseType = watch('expenseType');
   const selectedProfileId = watch('profileId');
   const selectedEndMode = watch('endMode');
+  const selectedClientId = watch('clientId');
 
   const { data: profileCategories = [] } = useExpenseCategories(selectedProfileId);
+  const { data: projectsData = [] } = useProjects();
+
+  // Bi-directional cascade between client and project fields
+  useClientProjectCascade({ form, projectsData });
 
   // Use ALL_CATEGORIES as fallback when profile has no categories
   const fallbackCategories = useMemo(() =>
@@ -155,6 +167,8 @@ export function ExpenseDrawer() {
         title: existingExpense.title || '',
         vendor: existingExpense.vendor || '',
         vendorId: existingExpense.vendorId || '',
+        clientId: existingExpense.clientId || '',
+        projectId: existingExpense.projectId || '',
         categoryId: existingExpense.categoryId || '',
         notes: existingExpense.notes || '',
         frequency: 'monthly',
@@ -230,6 +244,8 @@ export function ExpenseDrawer() {
           title: data.title || undefined,
           vendor: data.vendor || undefined,
           vendorId: data.vendorId || undefined,
+          clientId: data.clientId || undefined,
+          projectId: data.projectId || undefined,
           categoryId: data.categoryId || undefined,
           amountMinor: parseAmountToMinor(data.amount),
           currency: data.currency as Currency,
@@ -517,6 +533,43 @@ export function ExpenseDrawer() {
                   field.onChange(value);
                   setValue('vendorId', vendorId || '');
                 }}
+                disabled={!selectedProfileId}
+              />
+            )}
+          />
+        </div>
+
+        {/* Client (optional) */}
+        <div className="form-group">
+          <label className="form-label">{t('drawer.expense.client')}</label>
+          <Controller
+            name="clientId"
+            control={form.control}
+            render={({ field }) => (
+              <ClientTypeahead
+                profileId={selectedProfileId}
+                value={field.value || ''}
+                onChange={field.onChange}
+                placeholder={t('drawer.expense.clientPlaceholder')}
+                disabled={!selectedProfileId}
+              />
+            )}
+          />
+        </div>
+
+        {/* Project (optional) */}
+        <div className="form-group">
+          <label className="form-label">{t('drawer.expense.project')}</label>
+          <Controller
+            name="projectId"
+            control={form.control}
+            render={({ field }) => (
+              <ProjectTypeahead
+                profileId={selectedProfileId}
+                clientId={selectedClientId || undefined}
+                value={field.value || ''}
+                onChange={field.onChange}
+                placeholder={t('drawer.expense.projectPlaceholder')}
                 disabled={!selectedProfileId}
               />
             )}

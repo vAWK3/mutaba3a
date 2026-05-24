@@ -1,0 +1,97 @@
+.entity-typeahead {
+  position: relative;
+  width: 100%;
+}
+
+.entity-typeahead-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.entity-typeahead-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 12px; /* 44px touch target for mobile a11y */
+  border: none;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.entity-typeahead-option:hover,
+.entity-typeahead-option.highlighted {
+  background: var(--surface-hover);
+}
+
+.entity-typeahead-option.is-new {
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.entity-typeahead-option.is-new:hover,
+.entity-typeahead-option.is-new.highlighted {
+  background: var(--surface-hover);
+}
+
+.entity-typeahead-create-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.entity-typeahead-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-typeahead-secondary {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 2px 6px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+}
+
+/* RTL support */
+[dir="rtl"] .entity-typeahead-option {
+  text-align: end;
+}
+
+/* Cascade auto-fill animation */
+@keyframes cascade-flash {
+  0% { background-color: transparent; }
+  30% { background-color: var(--cascade-flash, rgba(37, 99, 235, 0.08)); }
+  100% { background-color: transparent; }
+}
+
+.entity-typeahead.cascade-flash .input {
+  animation: cascade-flash var(--cascade-flash-duration, 500ms) ease-in-out;
+}
+
+/* Create success animation */
+@keyframes create-success {
+  0% { border-color: var(--border); }
+  30% { border-color: var(--success, #16A34A); }
+  100% { border-color: var(--border); }
+}
+
+.entity-typeahead.create-success .input {
+  animation: create-success var(--create-success-duration, 200ms) ease-out;
+}

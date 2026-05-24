@@ -133,7 +133,18 @@
       "record": "Record Payment",
       "markFullyPaid": "Mark Fully Paid",
       "paymentRecorded": "Payment recorded",
-      "recordPayment": "Record Payment"
+      "recordPayment": "Record Payment",
+      "history": "Payment History",
+      "noPayments": "No payments recorded yet",
+      "editPayment": "Edit Payment",
+      "updatePayment": "Update Payment",
+      "deletePayment": "Delete Payment",
+      "deleteConfirm": "Are you sure you want to delete this payment?",
+      "paymentDeleted": "Payment deleted",
+      "paymentUpdated": "Payment updated",
+      "date": "Payment date",
+      "notes": "Notes",
+      "migratedNote": "Migrated from accumulated total"
     },
     "columns": {
       "date": "Date",
@@ -845,7 +856,7 @@
       "profile": "Business Profile",
       "profilePlaceholder": "Select profile...",
       "client": "Client",
-      "clientPlaceholder": "Select client...",
+      "clientPlaceholder": "Search or create client...",
       "project": "Project",
       "projectPlaceholder": "Select project...",
       "category": "Category",
@@ -896,6 +907,10 @@
       "date": "Date",
       "vendor": "Vendor",
       "vendorPlaceholder": "Business or vendor name...",
+      "client": "Client",
+      "clientPlaceholder": "Search or create client...",
+      "project": "Project",
+      "projectPlaceholder": "Search or create project...",
       "category": "Category",
       "categoryPlaceholder": "Select category...",
       "title": "Title",
@@ -1030,8 +1045,14 @@
       }
     }
   },
+  "client": {
+    "createNew": "Create new"
+  },
   "vendor": {
     "createNew": "Create new"
+  },
+  "project": {
+    "createNew": "Create new project"
   },
   "suppliers": {
     "title": "Suppliers",

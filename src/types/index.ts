@@ -83,6 +83,18 @@ export interface Transaction {
   needsReview?: boolean;       // Set during migration v17 for records needing user confirmation
 }
 
+// Payment Record entity (individual payment on an income transaction)
+export interface PaymentRecord {
+  id: string;
+  transactionId: string;
+  amountMinor: number;       // Payment amount in minor units (cents)
+  paidAt: string;            // ISO date -- when this specific payment was made
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;        // Soft delete
+}
+
 // FX Rate entity
 export interface FxRate {
   id: string;
@@ -400,6 +412,8 @@ export interface Expense {
   title?: string;
   vendor?: string;
   vendorId?: string; // Reference to normalized vendor
+  clientId?: string; // Optional: associate expense with a client
+  projectId?: string; // Optional: associate expense with a project
   categoryId?: string;
   amountMinor: number;
   currency: Currency;
@@ -541,6 +555,8 @@ export interface ExpenseCategory {
 // Query filters for expenses
 export interface ExpenseFilters {
   profileId?: string;
+  clientId?: string;
+  projectId?: string;
   year?: number;
   month?: number;
   dateFrom?: string;

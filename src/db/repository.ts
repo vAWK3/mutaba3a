@@ -19,6 +19,7 @@ import type {
   DocumentDisplay,
   DocumentType,
   PaymentStatus,
+  PaymentRecord,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
 import {
@@ -367,20 +368,34 @@ export const transactionRepo = {
   },
 
   async markPaid(id: string): Promise<void> {
-    const now = nowISO();
     const tx = await db.transactions.get(id);
-    await db.transactions.update(id, {
-      status: 'paid',
-      paidAt: now,
-      // Set receivedAmountMinor to full amount when marking as fully paid
-      receivedAmountMinor: tx?.amountMinor ?? 0,
-      updatedAt: now,
-    });
+    if (!tx) return;
+
+    const currentReceived = tx.receivedAmountMinor ?? 0;
+    const remaining = tx.amountMinor - currentReceived;
+
+    if (remaining > 0) {
+      // Create a payment record for the remaining amount
+      await paymentRecordRepo.create({
+        transactionId: id,
+        amountMinor: remaining,
+        paidAt: nowISO(),
+      });
+    } else {
+      // Already fully covered by payment records, just update status
+      const now = nowISO();
+      await db.transactions.update(id, {
+        status: 'paid',
+        paidAt: now,
+        receivedAmountMinor: tx.amountMinor,
+        updatedAt: now,
+      });
+    }
   },
 
   /**
    * Record a partial payment on an income transaction.
-   * Accumulates with any existing received amount.
+   * Creates a PaymentRecord and recalculates the transaction total.
    * Automatically marks as paid when full amount is received.
    */
   async recordPartialPayment(id: string, paymentAmountMinor: number): Promise<void> {
@@ -401,16 +416,10 @@ export const transactionRepo = {
       throw new PartialPaymentError('Transaction is already fully paid', id);
     }
 
-    const currentReceived = tx.receivedAmountMinor ?? 0;
-    const newReceived = Math.min(currentReceived + paymentAmountMinor, tx.amountMinor);
-    const isNowFullyPaid = newReceived >= tx.amountMinor;
-
-    const now = nowISO();
-    await db.transactions.update(id, {
-      receivedAmountMinor: newReceived,
-      status: isNowFullyPaid ? 'paid' : 'unpaid',
-      paidAt: isNowFullyPaid ? now : undefined,
-      updatedAt: now,
+    await paymentRecordRepo.create({
+      transactionId: id,
+      amountMinor: paymentAmountMinor,
+      paidAt: nowISO(),
     });
   },
 
@@ -953,6 +962,18 @@ export class PartialPaymentError extends Error {
   }
 }
 
+// Custom error for payment record violations
+export class PaymentRecordError extends Error {
+  paymentRecordId?: string;
+  transactionId?: string;
+  constructor(message: string, opts?: { paymentRecordId?: string; transactionId?: string }) {
+    super(message);
+    this.name = 'PaymentRecordError';
+    this.paymentRecordId = opts?.paymentRecordId;
+    this.transactionId = opts?.transactionId;
+  }
+}
+
 export const documentRepo = {
   async list(filters: DocumentFilters = {}): Promise<DocumentDisplay[]> {
     const documents = await db.documents.toArray();
@@ -1292,5 +1313,126 @@ export const documentRepo = {
    */
   async unarchive(id: string): Promise<void> {
     await db.documents.update(id, { archivedAt: undefined, updatedAt: nowISO() });
+  },
+};
+
+// ============================================================================
+// Payment Record Repository
+// ============================================================================
+
+/**
+ * Recalculate a transaction's receivedAmountMinor from its payment records.
+ * Uses db.transactions.update() directly to bypass lockedAt check --
+ * payments are allowed on locked transactions.
+ */
+async function recalculateReceivedAmount(transactionId: string): Promise<void> {
+  const tx = await db.transactions.get(transactionId);
+  if (!tx) return;
+
+  const records = await db.paymentRecords
+    .where('transactionId')
+    .equals(transactionId)
+    .filter((r) => !r.deletedAt)
+    .toArray();
+
+  const sum = records.reduce((acc, r) => acc + r.amountMinor, 0);
+  const isNowFullyPaid = sum >= tx.amountMinor;
+  const now = nowISO();
+
+  await db.transactions.update(transactionId, {
+    receivedAmountMinor: sum,
+    status: isNowFullyPaid ? 'paid' : 'unpaid',
+    paidAt: isNowFullyPaid ? (tx.paidAt || now) : undefined,
+    updatedAt: now,
+  });
+}
+
+export { recalculateReceivedAmount };
+
+export const paymentRecordRepo = {
+  async create(data: {
+    transactionId: string;
+    amountMinor: number;
+    paidAt: string;
+    notes?: string;
+  }): Promise<PaymentRecord> {
+    if (data.amountMinor <= 0) {
+      throw new PaymentRecordError('Payment amount must be positive', { transactionId: data.transactionId });
+    }
+
+    const tx = await db.transactions.get(data.transactionId);
+    if (!tx) {
+      throw new PaymentRecordError('Transaction not found', { transactionId: data.transactionId });
+    }
+    if (tx.kind !== 'income') {
+      throw new PaymentRecordError('Payment records only apply to income transactions', { transactionId: data.transactionId });
+    }
+
+    const now = nowISO();
+    const record: PaymentRecord = {
+      id: generateId(),
+      transactionId: data.transactionId,
+      amountMinor: data.amountMinor,
+      paidAt: data.paidAt,
+      notes: data.notes,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {
+      await db.paymentRecords.add(record);
+      await recalculateReceivedAmount(data.transactionId);
+    });
+
+    return record;
+  },
+
+  async update(id: string, data: {
+    amountMinor?: number;
+    paidAt?: string;
+    notes?: string;
+  }): Promise<void> {
+    const record = await db.paymentRecords.get(id);
+    if (!record) {
+      throw new PaymentRecordError('Payment record not found', { paymentRecordId: id });
+    }
+    if (record.deletedAt) {
+      throw new PaymentRecordError('Payment record has been deleted', { paymentRecordId: id });
+    }
+    if (data.amountMinor !== undefined && data.amountMinor <= 0) {
+      throw new PaymentRecordError('Payment amount must be positive', { paymentRecordId: id, transactionId: record.transactionId });
+    }
+
+    await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {
+      await db.paymentRecords.update(id, { ...data, updatedAt: nowISO() });
+      await recalculateReceivedAmount(record.transactionId);
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    const record = await db.paymentRecords.get(id);
+    if (!record) {
+      throw new PaymentRecordError('Payment record not found', { paymentRecordId: id });
+    }
+
+    const now = nowISO();
+    await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {
+      await db.paymentRecords.update(id, { deletedAt: now, updatedAt: now });
+      await recalculateReceivedAmount(record.transactionId);
+    });
+  },
+
+  async get(id: string): Promise<PaymentRecord | undefined> {
+    return db.paymentRecords.get(id);
+  },
+
+  async listByTransaction(transactionId: string): Promise<PaymentRecord[]> {
+    const records = await db.paymentRecords
+      .where('transactionId')
+      .equals(transactionId)
+      .filter((r) => !r.deletedAt)
+      .toArray();
+
+    return records.sort((a, b) => a.paidAt.localeCompare(b.paidAt));
   },
 };

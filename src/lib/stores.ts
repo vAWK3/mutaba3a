@@ -182,8 +182,10 @@ interface DrawerState {
   partialPaymentDrawer: {
     isOpen: boolean;
     transactionId?: string;
+    editingPaymentRecordId?: string;
   };
   openPartialPaymentDrawer: (options: { transactionId: string }) => void;
+  editPaymentRecord: (options: { transactionId: string; paymentRecordId: string }) => void;
   closePartialPaymentDrawer: () => void;
 
   // Plan assumption drawer (Financial Planning)
@@ -501,6 +503,15 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       partialPaymentDrawer: {
         isOpen: true,
         transactionId: options.transactionId,
+        editingPaymentRecordId: undefined,
+      },
+    }),
+  editPaymentRecord: (options) =>
+    set({
+      partialPaymentDrawer: {
+        isOpen: true,
+        transactionId: options.transactionId,
+        editingPaymentRecordId: options.paymentRecordId,
       },
     }),
   closePartialPaymentDrawer: () =>
@@ -508,6 +519,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       partialPaymentDrawer: {
         isOpen: false,
         transactionId: undefined,
+        editingPaymentRecordId: undefined,
       },
     }),
 

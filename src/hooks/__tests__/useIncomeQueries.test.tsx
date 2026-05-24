@@ -13,6 +13,7 @@ import {
   useMarkIncomePaid,
 } from '../useIncomeQueries';
 import { transactionRepo } from '../../db';
+import { syncedTransactionRepo } from '../../sync/core/synced-repository';
 
 // Mock the database
 vi.mock('../../db', () => ({
@@ -23,6 +24,14 @@ vi.mock('../../db', () => ({
     update: vi.fn(),
     softDelete: vi.fn(),
     markPaid: vi.fn(),
+  },
+}));
+
+// Mock the synced repository (used by payment-related mutations)
+vi.mock('../../sync/core/synced-repository', () => ({
+  syncedTransactionRepo: {
+    markPaid: vi.fn(),
+    recordPartialPayment: vi.fn(),
   },
 }));
 
@@ -301,7 +310,7 @@ describe('Mutation Hooks', () => {
   describe('useMarkIncomePaid', () => {
     it('should mark income as paid', async () => {
       const mockIncome = { id: 'tx-1', status: 'paid' };
-      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
+      (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
 
       const { result } = renderHook(
         () => useMarkIncomePaid(),
@@ -312,7 +321,7 @@ describe('Mutation Hooks', () => {
         await result.current.mutateAsync('tx-1');
       });
 
-      expect(transactionRepo.markPaid).toHaveBeenCalledWith('tx-1');
+      expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1');
     });
   });
 });
