@@ -1,4 +1,5 @@
 # TODO
+//TODO: I don't see where the partial payment/payment record happens in UI
 //TODO: Show "What's new" on first run after update to confirm version changed
 //TODO: implement pnl-summary.md
 //TODO: implement 70% test coverage
