@@ -1,5 +1,6 @@
 import type { Currency } from '../types';
 import type { Language } from './i18n';
+import { formatLocalDate, todayLocalISO, daysUntilDue } from './dates';
 
 /**
  * Get the locale string for Intl APIs based on language
@@ -145,24 +146,15 @@ export function formatRelativeDate(isoString: string, t?: TranslationFn): string
   return t('time.yearsAgo', { years: Math.floor(diffDays / 365) });
 }
 
-export function getDaysUntil(dateString: string): number {
-  const target = new Date(dateString);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  const diffMs = target.getTime() - now.getTime();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-}
-
 /**
- * Format a Date to YYYY-MM-DD string in local timezone.
- * Unlike toISOString(), this preserves the local date.
+ * Days from today until `dateString` (date-only). 0 = today, negative = past.
+ *
+ * Delegates to the canonical local-date logic in ./dates. The previous
+ * implementation parsed the date as UTC midnight and then compared against
+ * local midnight, which was off by one day for every timezone west of UTC.
  */
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+export function getDaysUntil(dateString: string): number {
+  return daysUntilDue(dateString, todayLocalISO());
 }
 
 export function getDateRangePreset(preset: 'this-month' | 'last-month' | 'this-year' | 'all'): { dateFrom: string; dateTo: string } {
@@ -210,8 +202,15 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Today's date as YYYY-MM-DD in the user's LOCAL timezone.
+ *
+ * Used both for overdue comparisons and as the default date on new records.
+ * Previously derived from toISOString(), i.e. the UTC date, so a user in
+ * Asia/Jerusalem adding income at 01:00 got it dated yesterday.
+ */
 export function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayLocalISO();
 }
 
 export function nowISO(): string {

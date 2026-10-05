@@ -21,16 +21,21 @@ import type {
   ForecastOptions,
   MonthActuals,
 } from '../types';
+import { todayLocalISO } from './dates';
 
 // ============================================================================
 // Date Utilities
 // ============================================================================
 
 /**
- * Get today's date in ISO format (YYYY-MM-DD)
+ * Get today's date in ISO format (YYYY-MM-DD), in the user's LOCAL timezone.
+ *
+ * Re-exported from ./dates so there is one definition of "today" in the
+ * codebase. Previously a UTC-based duplicate, which reported the wrong
+ * calendar day for part of every day.
  */
 export function getTodayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayLocalISO();
 }
 
 /**

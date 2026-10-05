@@ -22,6 +22,7 @@ import type {
   PaymentRecord,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
+import { todayLocalISO } from '../lib/dates';
 import {
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
@@ -42,8 +43,9 @@ function nowISO(): string {
   return new Date().toISOString();
 }
 
+/** Today in the user's LOCAL timezone. See src/lib/dates.ts. */
 function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayLocalISO();
 }
 
 // Client Repository
