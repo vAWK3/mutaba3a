@@ -27,6 +27,7 @@ import {
   getDateRangePreset,
   cn,
 } from '../../lib/utils';
+import { todayLocalISO, isOverdueReceivable } from '../../lib/dates';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 
@@ -87,15 +88,18 @@ export function IncomePage() {
     openTransactionDrawer({ mode: 'create', defaultStatus: 'earned' });
   };
 
-  // Status tab counts
+  // Status tab counts.
+  //
+  // The overdue count MUST use the same predicate as the repository's
+  // 'overdue' status filter, or the badge disagrees with the list it opens.
+  // It previously compared a date-only string against the current instant,
+  // which counted items due today as overdue in every timezone.
   const counts = useMemo(() => {
+    const today = todayLocalISO();
     const all = transactions.length;
     const unpaid = transactions.filter((tx) => tx.status === 'unpaid').length;
     const received = transactions.filter((tx) => tx.status === 'paid').length;
-    const overdue = transactions.filter((tx) => {
-      if (tx.status !== 'unpaid' || !tx.dueDate) return false;
-      return new Date(tx.dueDate) < new Date();
-    }).length;
+    const overdue = transactions.filter((tx) => isOverdueReceivable(tx, today)).length;
     return { all, unpaid, received, overdue };
   }, [transactions]);
 

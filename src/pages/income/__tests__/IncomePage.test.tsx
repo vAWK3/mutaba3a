@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -219,9 +219,27 @@ function renderWithProviders(component: React.ReactNode) {
   );
 }
 
+/**
+ * The fixtures above are dated relative to this instant -- tx-3 is 13 days
+ * past its 2026-03-01 due date, which is what `daysOverdue: 13` encodes.
+ *
+ * Pinning the clock is required, not cosmetic: the overdue tab count is
+ * computed from "today", so without a fixed clock this suite silently rots as
+ * the calendar advances. It did: every unpaid fixture fell into the past and
+ * the count became 3 instead of 1 (MUT-17, MUT-21).
+ */
+const FIXED_NOW = new Date(2026, 2, 14, 12, 0, 0); // 2026-03-14 12:00 local
+
 describe('IncomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // shouldAdvanceTime keeps Testing Library's waitFor from deadlocking.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(FIXED_NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('Page rendering', () => {
@@ -308,7 +326,9 @@ describe('IncomePage', () => {
       renderWithProviders(<IncomePage />);
 
       await waitFor(() => {
-        // All: 4, Unpaid: 3, Received: 1, Overdue: 1
+        // All: 4, Unpaid: 3, Received: 1, Overdue: 1.
+        // Only tx-3 (due 2026-03-01) is past the pinned 2026-03-14 clock;
+        // tx-2 (03-20) and tx-4 (03-25) are still in the future.
         const allTab = screen.getByRole('tab', { name: /All/ });
         const unpaidTab = screen.getByRole('tab', { name: /Unpaid/ });
         const receivedTab = screen.getByRole('tab', { name: /Received/ });
@@ -317,6 +337,53 @@ describe('IncomePage', () => {
         expect(allTab.textContent).toContain('4');
         expect(unpaidTab.textContent).toContain('3');
         expect(receivedTab.textContent).toContain('1');
+        expect(overdueTab.textContent).toContain('1');
+      });
+    });
+
+    // MUT-17: the badge used to compare a date-only string against the current
+    // instant, so an invoice due TODAY was counted overdue while the repository's
+    // 'overdue' filter excluded it -- badge said 1, the list it opened showed 0.
+    it('should not count income due today as overdue', async () => {
+      const dueToday: TransactionDisplay = {
+        ...mockIncomeTransactions[1],
+        id: 'tx-due-today',
+        status: 'unpaid',
+        dueDate: '2026-03-14', // the pinned "today"
+      };
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: [dueToday],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        const overdueTab = screen.getByRole('tab', { name: /Overdue/ });
+        expect(overdueTab.textContent).toContain('0');
+      });
+    });
+
+    it('should count income due yesterday as overdue', async () => {
+      const dueYesterday: TransactionDisplay = {
+        ...mockIncomeTransactions[1],
+        id: 'tx-due-yesterday',
+        status: 'unpaid',
+        dueDate: '2026-03-13',
+      };
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: [dueYesterday],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        const overdueTab = screen.getByRole('tab', { name: /Overdue/ });
         expect(overdueTab.textContent).toContain('1');
       });
     });
