@@ -1,4 +1,4 @@
-import { getDaysUntil } from '../../lib/utils';
+import { todayLocalISO, daysOverdue, daysUntilDue } from '../../lib/dates';
 import { useT } from '../../lib/i18n';
 import type { TxKind, TxStatus } from '../../types';
 
@@ -24,22 +24,29 @@ export function TransactionStatusCell({ kind, status, dueDate }: TransactionStat
     return <span className="status-badge paid">{t('transactions.status.paid')}</span>;
   }
 
-  const daysUntilDue = dueDate ? getDaysUntil(dueDate) : null;
-  const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
+  // Classified with the shared predicate so this badge can never disagree with
+  // the Overdue filter or the counts on other screens.
+  const today = todayLocalISO();
+  const row = { kind, status, dueDate };
 
-  if (isOverdue) {
+  // daysOverdue is undefined exactly when the row is not overdue, so it doubles
+  // as the check and narrows the type in one call.
+  const overdueDays = daysOverdue(row, today);
+  if (overdueDays !== undefined) {
     return (
       <span className="status-badge overdue">
-        {t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}
+        {t('transactions.status.overdue', { days: overdueDays })}
       </span>
     );
   }
 
+  const dueInDays = dueDate ? daysUntilDue(dueDate, today) : null;
+
   return (
     <span className="status-badge unpaid">
-      {daysUntilDue === 0
+      {dueInDays === 0
         ? t('transactions.status.dueToday')
-        : t('transactions.status.dueIn', { days: daysUntilDue ?? 0 })}
+        : t('transactions.status.dueIn', { days: dueInDays ?? 0 })}
     </span>
   );
 }

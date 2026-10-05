@@ -14,7 +14,8 @@ import {
 } from '../../hooks/useQueries';
 import { useReceivables, useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { formatDate, formatAmount, getDateRangePreset, cn } from '../../lib/utils';
+import { todayLocalISO, isOverdueReceivable, daysOverdue, daysUntilDue } from '../../lib/dates';
 import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { TxKind, TxStatus, QueryFilters } from '../../types';
@@ -26,6 +27,9 @@ export function ClientDetailPage() {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
+
+  // One "today" for the whole render, so every row is classified consistently.
+  const today = todayLocalISO();
 
   const [activeTab, setActiveTab] = useState<'summary' | 'projects' | 'receivables' | 'transactions'>('summary');
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
@@ -413,8 +417,8 @@ export function ClientDetailPage() {
                   </thead>
                   <tbody>
                     {receivables.map((tx) => {
-                      const daysUntilDue = tx.dueDate ? getDaysUntil(tx.dueDate) : 0;
-                      const isOverdue = daysUntilDue < 0;
+                      const isOverdue = isOverdueReceivable(tx, today);
+                      const overdueDays = daysOverdue(tx, today) ?? 0;
 
                       return (
                         <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id, tx.kind)}>
@@ -435,7 +439,7 @@ export function ClientDetailPage() {
                             </div>
                           </td>
                           <td className={isOverdue ? 'text-danger' : 'text-muted'}>
-                            {isOverdue ? Math.abs(daysUntilDue) : '-'}
+                            {isOverdue ? overdueDays : '-'}
                           </td>
                           <td>
                             {tx.paymentStatus ? (
@@ -447,7 +451,7 @@ export function ClientDetailPage() {
                                 />
                                 {isOverdue && (
                                   <div style={{ fontSize: '0.75rem', color: 'var(--error)' }}>
-                                    {Math.abs(daysUntilDue)} {t('clients.receivables.daysOverdue')}
+                                    {overdueDays} {t('clients.receivables.daysOverdue')}
                                   </div>
                                 )}
                               </div>
@@ -528,8 +532,9 @@ export function ClientDetailPage() {
                   <tbody>
                     {transactions.map((tx) => {
                       const isReceivable = tx.kind === 'income' && tx.status === 'unpaid';
-                      const daysUntilDue = tx.dueDate ? getDaysUntil(tx.dueDate) : null;
-                      const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
+                      const isOverdue = isOverdueReceivable(tx, today);
+                      const overdueDays = daysOverdue(tx, today) ?? 0;
+                      const dueInDays = tx.dueDate ? daysUntilDue(tx.dueDate, today) : null;
 
                       return (
                         <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id, tx.kind)}>
@@ -573,7 +578,7 @@ export function ClientDetailPage() {
                                 />
                                 {isOverdue && (
                                   <div style={{ fontSize: '0.75rem', color: 'var(--error)' }}>
-                                    {t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}
+                                    {t('transactions.status.overdue', { days: overdueDays })}
                                   </div>
                                 )}
                               </div>
@@ -582,10 +587,10 @@ export function ClientDetailPage() {
                                 {tx.status === 'paid' ? (
                                   <span className="status-badge paid">{t('transactions.status.paid')}</span>
                                 ) : isOverdue ? (
-                                  <span className="status-badge overdue">{t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}</span>
+                                  <span className="status-badge overdue">{t('transactions.status.overdue', { days: overdueDays })}</span>
                                 ) : (
                                   <span className="status-badge unpaid">
-                                    {daysUntilDue === 0 ? t('transactions.status.dueToday') : t('transactions.status.dueIn', { days: daysUntilDue ?? 0 })}
+                                    {dueInDays === 0 ? t('transactions.status.dueToday') : t('transactions.status.dueIn', { days: dueInDays ?? 0 })}
                                   </span>
                                 )}
                               </>
