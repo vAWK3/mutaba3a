@@ -5,6 +5,7 @@
 pub mod commands;
 pub mod crypto;
 pub mod discovery;
+pub mod oauth_callback;
 pub mod pairing;
 pub mod persistence;
 pub mod server;

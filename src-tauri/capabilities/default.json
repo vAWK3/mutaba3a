@@ -15,6 +15,10 @@
     {
       "identifier": "fs:allow-write",
       "allow": [{ "path": "$DOCUMENT/Mutaba3a/**" }]
+    },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://*.malafat.app/*" }]
     }
   ]
 }

@@ -4,6 +4,7 @@ use sync::commands::{
     cancel_pairing_session, clear_pending_sync_ops, decrypt_bundle, discover_lan_peers,
     encrypt_bundle, get_hostname, get_local_sync_ops_count, get_paired_devices, get_pairing_status,
     get_pending_sync_ops, get_sync_server_port, is_sync_server_running, revoke_paired_device,
+    await_oauth_callback, bind_oauth_callback, cancel_oauth_callback,
     start_pairing_session, start_sync_server, stop_sync_server, store_local_sync_op, SyncState,
 };
 
@@ -13,6 +14,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_fs::init())
+        // Opens the OAuth authorize URL in the user's real browser. OAuth 2.1 BCP
+        // forbids an embedded user-agent: our webview could read the session.
+        .plugin(tauri_plugin_opener::init())
         .manage(SyncState::default())
         .invoke_handler(tauri::generate_handler![
             // Sync server
@@ -38,6 +42,10 @@ pub fn run() {
             // Local ops (outgoing to mobile)
             store_local_sync_op,
             get_local_sync_ops_count,
+            // OAuth loopback callback (MUT-28)
+            bind_oauth_callback,
+            await_oauth_callback,
+            cancel_oauth_callback,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

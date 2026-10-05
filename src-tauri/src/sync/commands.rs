@@ -4,6 +4,7 @@
 
 use super::crypto::{decrypt, encrypt, EncryptedBundle};
 use super::discovery::{discover_peers, DiscoveredPeer, MdnsAdvertiser};
+use super::oauth_callback::{bind_loopback_callback, BoundCallback};
 use super::pairing::{PairStartResponse, PairStatusResponse};
 use super::persistence::{PairedDevice, PersistenceManager};
 use super::server::SyncServer;
@@ -11,8 +12,14 @@ use serde::Serialize;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{Manager, State};
 use tokio::sync::Mutex as TokioMutex;
+
+/// How long we wait for the user to finish in their browser before giving the
+/// port back. Long enough to read a consent screen and log in; short enough
+/// that an abandoned attempt does not hold the port all session.
+const OAUTH_CALLBACK_TIMEOUT_SECS: u64 = 300;
 
 /// Shared queue for pending sync operations (received from mobile)
 pub type PendingOpsQueue = Arc<TokioMutex<VecDeque<serde_json::Value>>>;
@@ -29,6 +36,8 @@ pub struct SyncState {
     pub pending_ops: PendingOpsQueue,
     /// Local operations created on desktop (for sync to mobile)
     pub local_ops: LocalOpsStore,
+    /// A loopback listener awaiting one OAuth redirect, if a sign-in is in flight.
+    pub oauth_callback: TokioMutex<Option<BoundCallback>>,
 }
 
 impl Default for SyncState {
@@ -39,6 +48,7 @@ impl Default for SyncState {
             config_dir: Mutex::new(None),
             pending_ops: Arc::new(TokioMutex::new(VecDeque::new())),
             local_ops: Arc::new(TokioMutex::new(Vec::new())),
+            oauth_callback: TokioMutex::new(None),
         }
     }
 }
@@ -362,4 +372,69 @@ pub async fn get_local_sync_ops_count(
 // Add chrono dependency for timestamp handling
 mod chrono {
     pub use ::chrono::*;
+}
+
+// ============================================================================
+// OAuth loopback callback (MUT-28)
+// ============================================================================
+//
+// Three commands rather than one, because the frontend must know which port was
+// actually bound BEFORE it opens the browser: `redirect_uri` has to name that
+// port, and Malafat matches it exactly.
+//
+//   bind_oauth_callback(ports)   -> port
+//   ...frontend builds the authorize URL and opens the system browser...
+//   await_oauth_callback()       -> raw query string
+//
+// The raw query is returned unparsed. `state` is compared in the frontend
+// (parseCallbackParams) so there is exactly one implementation of that check.
+
+/// Bind a loopback listener and report the port it got.
+///
+/// `ports` must come from the frontend's OAUTH_LOOPBACK_PORTS, which is the
+/// same list published in our CIMD document. An unregistered port would be
+/// refused by the server without a redirect.
+#[tauri::command]
+pub async fn bind_oauth_callback(
+    state: State<'_, SyncState>,
+    ports: Vec<u16>,
+) -> Result<u16, String> {
+    let bound = bind_loopback_callback(&ports).await?;
+    let port = bound.port();
+
+    // Replacing any previous listener drops it, which releases its port. A user
+    // who abandoned one sign-in and started another should not be blocked by
+    // their own stale attempt.
+    let mut slot = state.oauth_callback.lock().await;
+    *slot = Some(bound);
+
+    Ok(port)
+}
+
+/// Wait for the redirect and return its raw query string.
+#[tauri::command]
+pub async fn await_oauth_callback(
+    state: State<'_, SyncState>,
+    timeout_secs: Option<u64>,
+) -> Result<String, String> {
+    // Take the listener out before awaiting so the state lock is not held for
+    // the whole five minutes — otherwise cancel_oauth_callback could not run.
+    let bound = {
+        let mut slot = state.oauth_callback.lock().await;
+        slot.take()
+    };
+
+    let bound = bound.ok_or_else(|| "No OAuth sign-in is in progress".to_string())?;
+    let timeout = Duration::from_secs(timeout_secs.unwrap_or(OAUTH_CALLBACK_TIMEOUT_SECS));
+    bound.wait(timeout).await
+}
+
+/// Abandon an in-flight sign-in and release the port.
+#[tauri::command]
+pub async fn cancel_oauth_callback(state: State<'_, SyncState>) -> Result<(), String> {
+    let mut slot = state.oauth_callback.lock().await;
+    // Dropping BoundCallback drops its shutdown sender, which ends the server
+    // task and frees the port.
+    *slot = None;
+    Ok(())
 }
