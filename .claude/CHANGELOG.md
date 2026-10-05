@@ -29,6 +29,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-05 — Updater signing key rotation
+
+### Changed
+- Rotated the Tauri updater public key in `src-tauri/tauri.conf.json` to the
+  keypair with minisign fingerprint `AB7B64537B1DE22C` (was `BEDF931CA1D6C777`).
+  The matching private key is what `deploy.sh` and `build-windows.yml` sign
+  release artifacts with, via `TAURI_SIGNING_PRIVATE_KEY`.
+- Consequence: builds already installed in the field carry the old public key,
+  so they will reject updates signed with the new private key. Clients on an
+  older build need a manual reinstall to rejoin the update channel.
+
+---
+
 ## [Unreleased] - 2026-10-05 — MUT-28 OAuth client for Malafat workspaces
 
 ### Added
