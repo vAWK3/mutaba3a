@@ -28,6 +28,45 @@
 
 import type { PkcePair } from './oauth-pkce';
 
+/**
+ * Our published Client ID Metadata Document URL, and therefore our client_id —
+ * Malafat compares the two byte for byte.
+ *
+ * The `.json` suffix is load-bearing: Malafat refuses a document whose
+ * content-type is not JSON, and Netlify's SPA fallback would serve index.html
+ * as text/html for an extensionless path.
+ */
+export const CIMD_CLIENT_ID = 'https://mutaba3a.app/.well-known/oauth-client.json';
+
+/**
+ * Loopback ports we are willing to bind, in preference order.
+ *
+ * RFC 8252 asks native clients to use an ephemeral port, but Malafat matches
+ * redirect_uris exactly (authorization-request-service.ts:106), so every port
+ * must be pre-registered in the CIMD document. Fixed ports are the consequence;
+ * the fallbacks exist because a single port would let any process squatting it
+ * block sign-in with no recovery.
+ *
+ * Changing this list REQUIRES republishing the CIMD document — the test in
+ * __tests__/cimd-document.test.ts enforces that they agree.
+ */
+export const OAUTH_LOOPBACK_PORTS = [14100, 14101, 14102, 14103] as const;
+
+/** Every redirect URI we may present, in the exact spelling the server matches. */
+export function loopbackRedirectUris(): string[] {
+  return OAUTH_LOOPBACK_PORTS.flatMap((port) => [
+    `http://127.0.0.1:${port}/callback`,
+    `http://localhost:${port}/callback`,
+  ]);
+}
+
+/** The redirect URI for a port the loopback listener actually bound. */
+export function redirectUriForPort(port: number): string {
+  // 127.0.0.1 rather than localhost: it cannot be redirected by a hosts-file
+  // entry, and it avoids an IPv6-vs-IPv4 resolution mismatch with the listener.
+  return `http://127.0.0.1:${port}/callback`;
+}
+
 export interface AuthorizationServerMetadata {
   issuer: string;
   authorization_endpoint: string;

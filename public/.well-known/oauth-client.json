@@ -1,0 +1,16 @@
+{
+  "client_id": "https://mutaba3a.app/.well-known/oauth-client.json",
+  "client_name": "Mutaba3a",
+  "client_uri": "https://mutaba3a.app",
+  "logo_uri": "https://mutaba3a.app/icons/icon-192.png",
+  "redirect_uris": [
+    "http://127.0.0.1:14100/callback",
+    "http://localhost:14100/callback",
+    "http://127.0.0.1:14101/callback",
+    "http://localhost:14101/callback",
+    "http://127.0.0.1:14102/callback",
+    "http://localhost:14102/callback",
+    "http://127.0.0.1:14103/callback",
+    "http://localhost:14103/callback"
+  ]
+}
