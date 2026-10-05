@@ -33,9 +33,18 @@ confirmed broken under `TZ=America/New_York` and pass only on a UTC+n machine:
 - `src/db/forecastCalculations.ts` — 2 failures in `forecastCalculations.test.ts > generateVirtualExpenses` (end-of-month clamping, endOfYear end mode)
 - `src/features/documents/pdf` — `pdf.test.ts > Date Formatting > should format dates in DD/MM/YYYY format`
 
-Also out of scope and still holding their own overdue semantics:
-`retainerRepository.ts:406` (`ProjectedIncome`, keyed on `expectedDate`) and the
-recurring-expense occurrence states.
+**Two private UTC-based `todayISO()` copies remain** (found during QA
+reconciliation of MUT-17). Both are in domains ADR-022 scoped out, so neither
+affects receivable overdue, but both are the same class of defect:
+
+- `src/db/retainerRepository.ts:29` — feeds the `ProjectedIncome` overdue
+  comparison at `:406`, keyed on `expectedDate`
+- `src/services/recurringExpenseService.ts:32` — recurring-expense occurrence
+  states
+
+For the record, MUT-17 found **six** `todayISO`/`getTodayISO` definitions in
+total, not the three its description listed. Four now delegate to
+`todayLocalISO()`; these two do not.
 
 **Resolution**: audit each remaining site, classify it as instant (keep
 `toISOString()`) or calendar date (move to `src/lib/dates.ts`), and fix the

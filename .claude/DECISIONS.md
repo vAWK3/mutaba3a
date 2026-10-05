@@ -614,7 +614,7 @@ Every predicate takes `today` as an explicit argument, which keeps it pure and t
 
 **Scope**: receivable date logic only. `toISOString()` remains correct for instants — HLC timestamps, sync bundles, backup filenames, `nowISO()`. Do not blanket-replace it.
 
-**Not covered**: `ProjectedIncome` overdue in `retainerRepository.ts` and recurring-expense occurrence states are separate entities with their own semantics.
+**Not covered**: `ProjectedIncome` overdue in `retainerRepository.ts` and recurring-expense occurrence states are separate entities with their own semantics. Both still carry a private UTC-based `todayISO()` (`retainerRepository.ts:29`, `recurringExpenseService.ts:32`) — tracked as TD-014.
 
 **Reference**: `src/lib/dates.ts`, `src/lib/__tests__/dates.test.ts`, MUT-17
 

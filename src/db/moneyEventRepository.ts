@@ -1,4 +1,5 @@
 import { db } from './database';
+import { todayLocalISO, isOverdueReceivable } from '../lib/dates';
 import type {
   Currency,
   MoneyEvent,
@@ -20,8 +21,14 @@ import type {
 // Utility Functions
 // ============================================================================
 
+/**
+ * Today in the user's LOCAL timezone. Delegates to src/lib/dates.ts so this
+ * module shares the one definition of "today" (ADR-022). Previously a private
+ * UTC-based copy, which reported the wrong calendar day for part of every day
+ * and made this screen's overdue states disagree with every other screen.
+ */
 function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayLocalISO();
 }
 
 function getMonthRange(monthKey: string): { start: string; end: string } {
@@ -79,11 +86,7 @@ function normalizeTransaction(
       state = 'partial';
     } else {
       source = 'receivable';
-      if (tx.dueDate && tx.dueDate < today) {
-        state = 'overdue';
-      } else {
-        state = 'unpaid';
-      }
+      state = isOverdueReceivable(tx, today) ? 'overdue' : 'unpaid';
     }
   } else {
     direction = 'outflow';

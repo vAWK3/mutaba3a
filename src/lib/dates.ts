@@ -67,16 +67,6 @@ function dayIndex(dateOnly: string): number {
   return Date.UTC(year, month - 1, day) / MS_PER_DAY;
 }
 
-/** True for a well-formed YYYY-MM-DD string with a real calendar date. */
-export function isValidDateOnly(value: string | undefined | null): boolean {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  if (month < 1 || month > 12 || day < 1) return false;
-  // Reject Feb 30 and friends by round-tripping through a UTC date.
-  const d = new Date(Date.UTC(year, month - 1, day));
-  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
-}
-
 /**
  * Whole calendar days from `fromISO` to `toISO`. Positive when `toISO` is later.
  * Exact across DST boundaries.

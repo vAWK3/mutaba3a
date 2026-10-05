@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   formatLocalDate,
   todayLocalISO,
-  isValidDateOnly,
   daysBetweenLocal,
   daysUntilDue,
   isReceivable,
@@ -70,27 +69,6 @@ describe('dates', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date(2026, 9, 5, 9, 0));
       expect(todayLocalISO()).toBe('2026-10-05');
-    });
-  });
-
-  describe('isValidDateOnly', () => {
-    it.each(['2026-10-05', '2026-01-01', '2024-02-29'])('accepts %s', (v) => {
-      expect(isValidDateOnly(v)).toBe(true);
-    });
-
-    it.each([
-      undefined,
-      null,
-      '',
-      '2026-10-5',
-      '2026/10/05',
-      '2026-13-01',
-      '2026-02-30',
-      '2026-00-10',
-      '2026-10-05T00:00:00Z',
-      'not-a-date',
-    ])('rejects %s', (v) => {
-      expect(isValidDateOnly(v as string | undefined | null)).toBe(false);
     });
   });
 
