@@ -12,7 +12,7 @@
 | **Data Access** | Repository Pattern, Query Hooks, Mutations |
 | **State** | URL State, Zustand Stores, Form State |
 | **Components** | Drawer Pattern, Filter Pattern, Table Pattern |
-| **Utilities** | Amount Formatting, Date Handling, i18n |
+| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
 
@@ -505,46 +505,63 @@ parseAmountToMinor('19.99');         // → 1999
 
 ### Pattern: Date Handling
 
-All dates stored as ISO strings. Use helpers for display and calculations.
+All dates stored as ISO strings. **All date-only logic lives in
+`src/lib/dates.ts`** — see ADR-022. Two invariants:
+
+1. "Today" is the user's **local** calendar date, never `toISOString()` (which
+   gives the UTC date and is the wrong day for part of every day).
+2. Day arithmetic uses a `Date.UTC`-based day ordinal, so it is exact across
+   DST. Subtracting local `Date`s gives 0.958 or 1.042 days on a 23- or
+   25-hour day and truncates wrong.
+
+Predicates take `today` explicitly, so they are pure and timezone-independent.
+`todayLocalISO()` is the only clock read.
 
 ```typescript
-// src/lib/utils.ts
+// src/lib/dates.ts
+import {
+  todayLocalISO,          // user's local YYYY-MM-DD; the only clock read
+  daysBetweenLocal,       // exact whole days, DST-safe
+  daysUntilDue,           // 0 = due today, negative = past
+  isOverdueReceivable,    // ADR-010: unpaid income, dueDate < today
+  daysOverdue,            // whole days overdue, or undefined when not overdue
+  isDueSoon,              // due within N days; excludes already-overdue
+} from '../lib/dates';
 
-export function formatDate(isoDate: string, format: 'short' | 'long' = 'short'): string {
-  const date = new Date(isoDate);
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: format === 'short' ? 'medium' : 'long',
-  }).format(date);
-}
+// Compute `today` ONCE per render or query, not per row.
+const today = todayLocalISO();
+const overdue = rows.filter((tx) => isOverdueReceivable(tx, today));
 
-export function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-export function nowISO(): string {
-  return new Date().toISOString();
-}
-
-export function daysBetween(date1: string, date2: string): number {
-  const d1 = new Date(date1);
-  const d2 = new Date(date2);
-  return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-export function isOverdue(dueDate: string): boolean {
-  return dueDate < todayISO();
-}
-
-// Month range helpers
-export function getMonthRange(monthOffset = 0): { from: string; to: string } {
-  const now = new Date();
-  const targetMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-  const from = targetMonth.toISOString().split('T')[0];
-  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);
-  const to = lastDay.toISOString().split('T')[0];
-  return { from, to };
-}
+// daysOverdue is undefined exactly when not overdue, so it doubles as the
+// check and narrows the type in one call:
+const days = daysOverdue(tx, today);
+if (days !== undefined) { /* render "N days overdue" */ }
 ```
+
+**Never** reimplement overdue inline. Five sites had each rolled their own and
+they disagreed with each other (MUT-17). In particular:
+
+```typescript
+// WRONG — compares a date-only string against the current instant, so an item
+// due today is overdue in every timezone.
+new Date(tx.dueDate) < new Date()
+
+// WRONG — forgets that overdue applies only to unpaid income, so a paid
+// invoice or an expense with a past due date renders as overdue.
+getDaysUntil(tx.dueDate) < 0
+
+// WRONG — the UTC date, not the user's date.
+new Date().toISOString().split('T')[0]
+```
+
+`toISOString()` is still correct for **instants** — `nowISO()`, HLC timestamps,
+sync bundles, backup filenames. The rule above is about date-only values.
+
+**Testing**: `vitest.config.ts` pins `TZ` (default `Asia/Jerusalem`, which
+observes DST). Run `npm run test:tz` to exercise the suite west of UTC. Any
+test asserting on dates must pin the clock with
+`vi.useFakeTimers({ shouldAdvanceTime: true })` and `vi.setSystemTime(...)`;
+`shouldAdvanceTime` keeps Testing Library's `waitFor` from deadlocking.
 
 ---
 

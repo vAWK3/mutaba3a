@@ -444,7 +444,30 @@ npm run test -- -t "creates a transaction"
 
 # E2E (when implemented)
 npm run test:e2e
+
+# Timezone matrix -- runs the suite west of UTC (America/New_York)
+npm run test:tz
 ```
+
+### Timezone discipline (ADR-022)
+
+`vitest.config.ts` pins `TZ`, defaulting to `Asia/Jerusalem` (the primary user
+timezone, and it observes DST). Before this was pinned, results depended on the
+developer's machine: the suite showed 22 failures in `Asia/Jerusalem` and 29 in
+`America/New_York`, hiding 7 latent timezone bugs including 3 in
+`getDaysUntil`'s own tests.
+
+Rules for any date-sensitive test:
+
+- Pin the clock. `vi.useFakeTimers({ shouldAdvanceTime: true })` plus
+  `vi.setSystemTime(...)`. `shouldAdvanceTime` is required or Testing Library's
+  `waitFor` deadlocks.
+- Express fixture dates relative to the pinned clock, not as literals with an
+  explanatory comment. `IncomePage.test.tsx` hardcoded March 2026 dates and
+  rotted silently as the calendar advanced (MUT-21).
+- Assert the boundaries explicitly: due yesterday, due today, due tomorrow, no
+  due date, paid-but-past-due.
+- Run `npm run test:tz` before landing anything that touches dates.
 
 ### CI Configuration
 

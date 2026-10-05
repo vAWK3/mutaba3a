@@ -18,6 +18,34 @@
 
 ## Open Debt
 
+### TD-014: Remaining UTC Date Derivations Outside Receivables
+**Status**: Open
+**Added**: 2026-10-05
+**Impact**: Three test failures appear only west of UTC; latent off-by-one-day bugs in non-receivable date logic
+
+MUT-17 unified receivable date logic into `src/lib/dates.ts` (ADR-022) but
+deliberately scoped out the rest. `grep -rn "toISOString().split('T')\[0\]" src`
+still reports ~45 occurrences across ~26 files. Most are **correct** — instants
+for HLC timestamps, sync bundles and backup filenames — but these three are
+confirmed broken under `TZ=America/New_York` and pass only on a UTC+n machine:
+
+- `src/lib/aggregations.ts` `getDaysInMonth` — `aggregations.test.ts > Date Utilities > getDaysInMonth > should return all days in March`
+- `src/db/forecastCalculations.ts` — 2 failures in `forecastCalculations.test.ts > generateVirtualExpenses` (end-of-month clamping, endOfYear end mode)
+- `src/features/documents/pdf` — `pdf.test.ts > Date Formatting > should format dates in DD/MM/YYYY format`
+
+Also out of scope and still holding their own overdue semantics:
+`retainerRepository.ts:406` (`ProjectedIncome`, keyed on `expectedDate`) and the
+recurring-expense occurrence states.
+
+**Resolution**: audit each remaining site, classify it as instant (keep
+`toISOString()`) or calendar date (move to `src/lib/dates.ts`), and fix the
+three confirmed failures. Verify with `npm run test:tz`.
+
+**Effort**: Medium — mechanical, but each site needs classifying rather than
+blanket-replacing.
+
+---
+
 ### TD-001: Limited Test Coverage
 **Status**: In Progress
 **Priority**: Medium (reduced from High)

@@ -28,6 +28,65 @@
 
 ---
 
+## [Unreleased] - 2026-10-05
+
+### Fixed
+- **Overdue computed five different ways, all off by a day in some timezone** (MUT-17)
+  - `/income`'s Overdue tab badge counted items due today as overdue while the
+    repository's `overdue` filter excluded them: the badge said 1 and the list
+    it opened showed 0. Three screens gave three answers for the same row.
+  - Root cause: three duplicate helpers derived "today" as
+    `new Date().toISOString().split('T')[0]` — the **UTC** date. In
+    Asia/Jerusalem 00:00–03:00 local that is yesterday (overdue items
+    under-reported); in America/New_York after ~20:00 it is tomorrow (items due
+    today reported overdue).
+  - `getDaysUntil` parsed its argument as UTC midnight and compared against
+    local midnight, so it was one day off for every timezone west of UTC. Its
+    tests passed only because the dev machine is UTC+3; they failed 3/3 under
+    `TZ=America/New_York`.
+  - **New records got the wrong default date**: `IncomeDrawer`,
+    `ExpenseDrawer`, `RetainerDrawer` and `RecurringRuleDrawer` seed from
+    `todayISO()`, so a Jerusalem user adding income at 01:00 got it dated
+    yesterday.
+  - `getAttentionReceivables` derived its 7-day bound via `toISOString()` on a
+    local-shifted `Date`, so the window was a day off west of UTC.
+  - `ClientDetailPage`'s transactions tab classified overdue as
+    `daysUntilDue < 0` without checking the row was unpaid income, so a paid
+    invoice or an expense with a past due date rendered as overdue.
+  - Files: added `src/lib/dates.ts` + `src/lib/__tests__/dates.test.ts`;
+    changed `src/lib/utils.ts`, `src/lib/aggregations.ts`,
+    `src/db/repository.ts`, `src/pages/income/IncomePage.tsx`,
+    `src/pages/clients/ClientDetailPage.tsx`,
+    `src/components/transactions/TransactionStatusCell.tsx`,
+    `vitest.config.ts`, `package.json`.
+  - Test status: 50 new tests in `dates.test.ts`, green from UTC-10 to UTC+14.
+    Full suite Asia/Jerusalem 22 → 21 failures, America/New_York 29 → 25. All
+    remaining failures pre-existing and separately ticketed (MUT-19, MUT-20,
+    and 4 out-of-scope UTC sites).
+
+### Added
+- **`src/lib/dates.ts`**: canonical date-only logic — `todayLocalISO`,
+  `daysBetweenLocal`, `daysUntilDue`, `isOverdueReceivable`, `daysOverdue`,
+  `isDueSoon`, `isValidDateOnly`. Pure predicates taking `today` explicitly;
+  `Date.UTC`-based day ordinals so arithmetic is exact across DST. See ADR-022.
+- **Timezone-pinned tests**: `vitest.config.ts` sets `TZ` (default
+  `Asia/Jerusalem`) so date tests are deterministic; `npm run test:tz` runs the
+  suite under `America/New_York`. Previously results depended on the
+  developer's machine and 7 timezone bugs were invisible.
+- **Boundary tests** on `IncomePage`: due today is not overdue, due yesterday
+  is. Suite clock pinned to 2026-03-14, the instant its fixtures were always
+  written against (closes most of MUT-21).
+
+### Technical
+- Removed the private `formatLocalDate` duplicate from `src/lib/utils.ts` and
+  the private `todayISO` copy from `src/db/repository.ts`.
+- `getDaysUntil` is now a one-line delegate, kept for display-only call sites
+  (Insights/Reports CSV columns, `ProjectDetailPage`, `TransactionsPage`).
+- Zero inline overdue expressions remain in `repository.ts` or
+  `aggregations.ts`.
+
+---
+
 ## [Unreleased] - 2026-03-14
 
 ### Changed

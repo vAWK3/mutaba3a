@@ -412,6 +412,7 @@ mini-crm/
 │   │   ├── i18n/             # Translations
 │   │   ├── theme/            # Theme system
 │   │   ├── stores.ts         # Zustand stores
+│   │   ├── dates.ts          # Date-only logic: overdue, due-soon (ADR-022)
 │   │   └── utils.ts          # Formatting helpers
 │   │
 │   ├── sync/                  # Sync system

@@ -30,6 +30,7 @@
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
 | ADR-021 | Question-First UX Redesign | Active | 2026-03 |
+| ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
 
 ---
 
@@ -277,6 +278,9 @@ formatAmount(1999, 'USD'); // → "$19.99"
 - Receivables computed from transactions
 - "Mark as Paid" just updates status
 - Overdue logic: `status='unpaid' && dueDate < today`
+- **Amendment 2026-10 (ADR-022)**: "today" here means the user's **local
+  calendar date**, not the UTC date. An item due today is NOT overdue. Use the
+  helpers in `src/lib/dates.ts`; never reimplement this comparison inline.
 
 **Queries**:
 ```typescript
@@ -581,6 +585,38 @@ formatCurrency(1999, 'USD')      // → "$19.99" or "١٩٫٩٩ $"
 - Phase 4: Insights consolidation
 
 **Reference**: `docs/ux-redesign/UX-REDESIGN-SPEC.md`, `docs/ux-redesign/IMPLEMENTATION-PLAN.md`
+
+---
+
+## ADR-022: Local Calendar Date as the Basis for Overdue
+
+**Status**: Active
+**Date**: 2026-10
+**Context**: ADR-010 defined overdue as `status='unpaid' && dueDate < today` but never defined "today". Five sites had each reimplemented the comparison, and three duplicate helpers derived "today" as `new Date().toISOString().split('T')[0]` — the **UTC** date. The result was contradictory numbers on the product's core question (MUT-17):
+
+- `/income`'s Overdue tab badge counted items due today as overdue while the repository's `overdue` filter excluded them, so the badge said 1 and the list it opened showed 0.
+- In Asia/Jerusalem between 00:00 and 03:00 local, "today" was yesterday, so genuinely overdue items were not reported.
+- In America/New_York after ~20:00 local, "today" was tomorrow, so items due today were reported overdue.
+- `getDaysUntil` parsed its argument as UTC midnight and compared against local midnight, returning a value one day off for every timezone west of UTC. Its tests passed only because the development machine was UTC+3.
+
+**Decision**: All date-only logic lives in `src/lib/dates.ts`, with two invariants:
+
+1. **"Today" is the user's local calendar date.** Derived from `getFullYear/getMonth/getDate`, never from `toISOString()`. `todayLocalISO()` is the only function in the codebase that reads the clock for this purpose.
+2. **Day arithmetic goes through a `Date.UTC`-based day ordinal.** Subtracting local `Date` objects is unsafe across DST: a calendar day is 23 or 25 hours, so dividing milliseconds by 86,400,000 yields 0.958 or 1.042 and truncates to the wrong integer. Asia/Jerusalem observes DST, so this is a live concern.
+
+Every predicate takes `today` as an explicit argument, which keeps it pure and timezone-independent.
+
+**Consequences**:
+- One definition of overdue; the badge can never disagree with the list.
+- `isOverdueReceivable` and `isDueSoon` partition receivables, so Home's two lists cannot double-count or drop a row.
+- New records get the user's actual date. The four drawers seed from `todayISO()`, so a Jerusalem user adding income at 01:00 previously got it dated yesterday.
+- Tests must pin the timezone. `vitest.config.ts` sets `TZ` (default `Asia/Jerusalem`); `npm run test:tz` runs the suite west of UTC. Without this, date bugs are invisible on a UTC+n machine.
+
+**Scope**: receivable date logic only. `toISOString()` remains correct for instants — HLC timestamps, sync bundles, backup filenames, `nowISO()`. Do not blanket-replace it.
+
+**Not covered**: `ProjectedIncome` overdue in `retainerRepository.ts` and recurring-expense occurrence states are separate entities with their own semantics.
+
+**Reference**: `src/lib/dates.ts`, `src/lib/__tests__/dates.test.ts`, MUT-17
 
 ---
 
