@@ -21,7 +21,7 @@ import type {
   ForecastOptions,
   MonthActuals,
 } from '../types';
-import { todayLocalISO } from './dates';
+import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon } from './dates';
 
 // ============================================================================
 // Date Utilities
@@ -520,12 +520,9 @@ export function findOverdueUnpaidIncome(
 
   return transactions.filter(tx => {
     if (tx.deletedAt) return false;
-    if (tx.kind !== 'income') return false;
-    if (tx.status !== 'unpaid') return false;
-    if (!tx.dueDate) return false;
-
-    const daysOverdue = daysBetween(tx.dueDate, today);
-    return daysOverdue > daysThreshold;
+    if (!isOverdueReceivable(tx, today)) return false;
+    // daysThreshold lets callers ask for "more than N days overdue" (ageing).
+    return daysOverdue(tx, today)! > daysThreshold;
   });
 }
 
@@ -540,12 +537,7 @@ export function findUnpaidIncomeDueSoon(
 
   return transactions.filter(tx => {
     if (tx.deletedAt) return false;
-    if (tx.kind !== 'income') return false;
-    if (tx.status !== 'unpaid') return false;
-    if (!tx.dueDate) return false;
-
-    const daysUntilDue = daysBetween(today, tx.dueDate);
-    return daysUntilDue >= 0 && daysUntilDue <= daysWindow;
+    return isDueSoon(tx, today, daysWindow);
   });
 }
 

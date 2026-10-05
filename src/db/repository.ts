@@ -22,7 +22,7 @@ import type {
   PaymentRecord,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
-import { todayLocalISO } from '../lib/dates';
+import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
 import {
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
@@ -211,7 +211,7 @@ export const transactionRepo = {
 
       if (filters.status) {
         if (filters.status === 'overdue') {
-          if (!(tx.kind === 'income' && tx.status === 'unpaid' && tx.dueDate && tx.dueDate < today)) {
+          if (!isOverdueReceivable(tx, today)) {
             return false;
           }
         } else if (tx.status !== filters.status) {
@@ -280,10 +280,7 @@ export const transactionRepo = {
         clientName: tx.clientId ? clientMap.get(tx.clientId) : undefined,
         projectName: tx.projectId ? projectMap.get(tx.projectId) : undefined,
         categoryName: tx.categoryId ? categoryMap.get(tx.categoryId) : undefined,
-        daysOverdue:
-          tx.kind === 'income' && tx.status === 'unpaid' && tx.dueDate && tx.dueDate < today
-            ? Math.floor((new Date(today).getTime() - new Date(tx.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-            : undefined,
+        daysOverdue: daysOverdue(tx, today),
         paymentStatus,
         remainingAmountMinor,
       };
@@ -325,10 +322,7 @@ export const transactionRepo = {
       clientName: client?.name,
       projectName: project?.name,
       categoryName: category?.name,
-      daysOverdue:
-        tx.kind === 'income' && tx.status === 'unpaid' && tx.dueDate && tx.dueDate < today
-          ? Math.floor((new Date(today).getTime() - new Date(tx.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-          : undefined,
+      daysOverdue: daysOverdue(tx, today),
       paymentStatus,
       remainingAmountMinor,
     };
@@ -478,9 +472,6 @@ export const transactionRepo = {
 
   async getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]> {
     const today = todayISO();
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-    const sevenDaysISO = sevenDaysFromNow.toISOString().split('T')[0];
 
     const transactions = await this.list({
       kind: 'income',
@@ -489,9 +480,10 @@ export const transactionRepo = {
     });
 
     return transactions.filter((tx) => {
-      if (tx.status !== 'unpaid' || !tx.dueDate) return false;
-      // Overdue or due in next 7 days
-      return tx.dueDate < today || tx.dueDate <= sevenDaysISO;
+      // Overdue, or due within the next 7 days. The previous implementation
+      // derived its 7-day bound via toISOString(), i.e. the UTC date, so the
+      // window was a day off west of UTC.
+      return isOverdueReceivable(tx, today) || isDueSoon(tx, today);
     }).sort((a, b) => {
       // Sort by due date ascending (most urgent first)
       return (a.dueDate || '').localeCompare(b.dueDate || '');
