@@ -18,6 +18,31 @@
 
 ## Open Debt
 
+### TD-015: OAuth Refresh Tokens Have No Durable, Secure Store
+**Status**: Open
+**Added**: 2026-10-05
+**Impact**: Connecting to a Malafat workspace does not survive an app restart
+
+`InMemoryTokenStore` (`src/services/tokenStore.ts`) holds tokens for the
+process lifetime only, so every restart forces a re-auth. That is the safe
+failure and was chosen deliberately over writing a long-lived credential to
+IndexedDB or a plain file. The fix is the OS keychain (Keychain / Credential
+Manager / libsecret), which in Tauri 2 needs a plugin and a narrow capability.
+The `TokenStore` port exists so this can be swapped without touching the flow.
+Introduced by MUT-28.
+
+### TD-016: CI Does Not Run `cargo test`
+**Status**: Open
+**Added**: 2026-10-05
+**Impact**: 14 Rust tests had never executed once
+
+`src-tauri` had no `[dev-dependencies]` section while
+`src/sync/persistence.rs:279` had referenced `tempfile::tempdir` since it was
+written. The Rust test target therefore failed to compile, and nothing noticed —
+which means CI never ran `cargo test`. MUT-28 declared the dependency and all 14
+pre-existing tests (pairing, persistence, crypto) now pass. The gap to close is
+the CI step, not the dependency.
+
 ### TD-014: Remaining UTC Date Derivations Outside Receivables
 **Status**: Open
 **Added**: 2026-10-05

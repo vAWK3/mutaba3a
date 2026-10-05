@@ -26,6 +26,42 @@
 - Refactoring, dependencies, infrastructure
 ```
 
+
+---
+
+## [Unreleased] - 2026-10-05 — MUT-28 OAuth client for Malafat workspaces
+
+### Added
+- PKCE S256 helpers (`src/sync/transport/oauth-pkce.ts`), verified against the
+  RFC 7636 Appendix B test vector. `plain` is not implemented.
+- Malafat authorization-code client (`oauth-client.ts`): RFC 8414 discovery,
+  authorize URL, callback parsing, code exchange, refreshing.
+- Flow orchestrator (`oauth-flow.ts`): connect, refresh, disconnect. Owns the
+  guarantee that revoked consent clears a token and never application data.
+- Token storage port (`src/services/tokenStore.ts`), keyed per workspace origin
+  so one lawyer can serve two firms.
+- Published CIMD document at `public/.well-known/oauth-client.json`, with a test
+  that re-states Malafat's own validation rules against the shipped artifact.
+- Rust loopback callback listener (`src-tauri/src/sync/oauth_callback.rs`) plus
+  `bind_oauth_callback` / `await_oauth_callback` / `cancel_oauth_callback`.
+  Binds 127.0.0.1 only, serves exactly one redirect, releases its port on every
+  exit path.
+- `tauri-plugin-opener`, scoped to `https://*.malafat.app/*`, to open the
+  authorize page in the system browser rather than the webview.
+
+### Fixed
+- Declared `tempfile` as a `[dev-dependency]`. The Rust test target had never
+  compiled, so 14 pre-existing tests had never run. They pass (see TD-016).
+
+### Technical
+- 79 new assertions; `cargo test --lib` 24 passed, `vitest` 2024 passed.
+- Verified empirically that Vite ships `public/.well-known/` into `dist-web`.
+- Findings: `.claude/designs/mut-28-oauth-client-findings.md`. Three Malafat-side
+  policy gaps (MCP gate, missing money scopes, one-grant-per-user vs a
+  multi-device desktop app) are recorded on MAL-870 and MUT-28.
+- New decision: ADR-023. ADR-005 and ADR-013 remain Active and unoverridden —
+  that is MUT-30's job and gates any cloud sync shipping.
+
 ---
 
 ## [Unreleased] - 2026-10-05

@@ -582,3 +582,17 @@ export function createTransactions(count: number): Transaction[] {
 - Don't write flaky async tests
 - Don't depend on test order
 - Don't test third-party libraries
+
+### MUT-28 — OAuth client for Malafat workspaces
+
+| Area | File | Coverage |
+|---|---|---|
+| PKCE S256 | `src/sync/transport/__tests__/oauth-pkce.test.ts` | RFC 7636 Appendix B vector, charset/length bounds, no `plain` |
+| Authorization-code client | `__tests__/oauth-client.test.ts` | discovery, authorize URL, state/error handling, exchange, rotation |
+| Flow orchestration | `__tests__/oauth-flow.test.ts` | bind-before-open ordering, revocation clears tokens only, transient failure keeps them |
+| Published CIMD document | `__tests__/cimd-document.test.ts` | mirrors Malafat's validation; ports match the code |
+| Loopback listener (Rust) | `src-tauri/src/sync/oauth_callback.rs` | loopback-only bind, port fallback, single-shot, timeout releases port |
+
+Not covered by automated tests (requires a provisioned staging tenant, see the
+findings doc): live CIMD fetch, consent screen, grant appearing and revoking in
+Malafat Settings, and the firm-level MCP gate.

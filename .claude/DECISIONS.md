@@ -31,6 +31,7 @@
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
 | ADR-021 | Question-First UX Redesign | Active | 2026-03 |
 | ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
+| ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth | Active | 2026-10 |
 
 ---
 
@@ -645,3 +646,49 @@ Every predicate takes `today` as an explicit argument, which keeps it pure and t
 - [Option 1]: [Why rejected]
 - [Option 2]: [Why rejected]
 ```
+
+---
+
+## ADR-023: Reuse Malafat's OAuth 2.1 Server for Workspace Auth
+
+**Status**: Active
+**Date**: 2026-10
+**Context**: MUT-28, under epic MUT-25. Connecting Mutaba3a to a Malafat
+workspace needs authentication, and Mutaba3a has no account system. Malafat
+already runs a per-tenant OAuth 2.1 authorization server (CIMD registration,
+PKCE, rotating refresh tokens, user-revocable grants) built for MCP clients.
+
+**Decision**: Mutaba3a authenticates as a public OAuth client of the tenant's
+own subdomain. It builds no account system, no password storage, and no session
+of its own. The tenant is the origin — Malafat resolves the firm from the
+subdomain before any token lookup, so there is no tenant parameter.
+
+Supporting choices, each with a test that pins it:
+- PKCE S256 only. `plain` is not implemented, so a downgrade is unrepresentable.
+- Loopback redirect on a pre-registered fixed port, because the server matches
+  `redirect_uris` exactly and an ephemeral port fails closed.
+- The authorize page opens in the system browser, never the webview — an
+  embedded user-agent can read the user's Malafat session.
+- State is compared in one place (TypeScript), not in both the Rust listener
+  and the frontend.
+
+**Consequences**:
+- No auth subsystem to build, own or secure.
+- Mutaba3a inherits Malafat's revocation semantics, including that a revoked
+  grant must degrade to local-only without touching local data.
+- Mutaba3a inherits Malafat's scope vocabulary, which has no money scopes yet;
+  adding them is a Malafat product decision (MAL-870).
+- A fixed-port redirect means a port collision is a user-visible failure, which
+  is why four ports are registered rather than one.
+
+**Alternatives Considered**:
+- Own account system: months of work, and a second credential store holding
+  privileged data. Rejected.
+- Device-code flow: no consent-screen branding, worse UX on a machine that has
+  a browser. Rejected.
+- Embedded webview for authorize: forbidden by OAuth 2.1 BCP. Rejected.
+
+**Does NOT supersede**: ADR-005 (No Server Backend) and ADR-013 (Local-Only
+Sync) remain Active and in conflict with cloud sync. Overriding them is MUT-30's
+job and must happen before any cloud sync ships. This ADR covers only how a
+client authenticates when that work is approved.
