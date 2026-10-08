@@ -10,8 +10,9 @@ variable "region" {
 }
 
 variable "environment" {
-  description = "staging issues and accepts `test` API keys; production issues and accepts `live` keys (config.API_KEY_ENVIRONMENT). Keys can never cross environments."
+  description = "production (the only environment for now) issues and accepts `live` API keys; a future staging would issue `test` keys (config.API_KEY_ENVIRONMENT). Keys can never cross environments."
   type        = string
+  default     = "production"
   validation {
     condition     = contains(["staging", "production"], var.environment)
     error_message = "environment must be staging or production."
@@ -19,12 +20,12 @@ variable "environment" {
 }
 
 variable "image_tag" {
-  description = "Tag of the mutaba3a-api and mutaba3a-api-migrate images to run (the short git SHA that scripts/deploy.sh built). Also reported as SERVICE_VERSION."
+  description = "Tag of the mutaba3a-api image to run (the short git SHA that scripts/deploy.sh built and pushed from your Docker daemon). Also reported as SERVICE_VERSION."
   type        = string
 }
 
 variable "artifact_repository" {
-  description = "Artifact Registry repository name that holds both images."
+  description = "Artifact Registry repository name that holds the image."
   type        = string
   default     = "mutaba3a"
 }
@@ -36,9 +37,9 @@ variable "db_tier" {
 }
 
 variable "db_availability" {
-  description = "REGIONAL (HA) for production, ZONAL for staging."
+  description = "REGIONAL (HA) or ZONAL. Production runs REGIONAL."
   type        = string
-  default     = "ZONAL"
+  default     = "REGIONAL"
   validation {
     condition     = contains(["REGIONAL", "ZONAL"], var.db_availability)
     error_message = "db_availability must be REGIONAL or ZONAL."
@@ -58,7 +59,7 @@ variable "deletion_protection" {
 }
 
 variable "min_instances" {
-  description = "Cloud Run minimum instances. 1 in production avoids cold starts on the first Malafat request of the day; 0 is fine for staging."
+  description = "Cloud Run minimum instances. 1 avoids cold starts on the first Malafat request of the day."
   type        = number
   default     = 1
 }

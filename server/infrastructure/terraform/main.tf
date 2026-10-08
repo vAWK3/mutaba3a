@@ -1,24 +1,27 @@
-# Mutaba3a hosted API — one environment (staging or production) in one region.
+# Mutaba3a hosted API — production in one region (a staging environment can be added later).
 #
 # Shape mirrors Malafat's infrastructure/terraform/modules/regional-stack:
-# Cloud SQL + Cloud Run + Secret Manager + a dedicated service account, with
-# the migration step as a Cloud Run job that runs before each service rollout
-# (ADR-025 §9). Terraform owns every resource including the running image tag;
-# scripts/deploy.sh builds the images and then applies this with -var image_tag.
+# Cloud SQL + Cloud Run + Secret Manager + a dedicated service account.
+# Terraform owns every resource including the running image tag. Everything
+# that can run on the operator's machine does (ADR-026): scripts/deploy.sh
+# builds the image with the local Docker daemon, pushes it, runs
+# `prisma migrate deploy` through the Cloud SQL Auth Proxy, then applies this
+# with -var image_tag. Nothing builds or migrates inside GCP.
 
 locals {
   suffix          = var.environment == "production" ? "" : "-${var.environment}"
   key_environment = var.environment == "production" ? "live" : "test"
 
   service_name = "mutaba3a-api${local.suffix}"
-  job_name     = "mutaba3a-api-migrate${local.suffix}"
   instance_id  = "mutaba3a-pg${local.suffix}"
   db_name      = "mutaba3a"
   db_user      = "mutaba3a_api"
 
-  registry      = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_repository}"
-  api_image     = "${local.registry}/mutaba3a-api:${var.image_tag}"
-  migrate_image = "${local.registry}/mutaba3a-api-migrate:${var.image_tag}"
+  registry  = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_repository}"
+  api_image = "${local.registry}/mutaba3a-api:${var.image_tag}"
+
+  # Operator-side migrations: Cloud SQL Auth Proxy listens here (scripts/deploy.sh).
+  proxy_port = 5440
 
   secret_database_url = "mutaba3a-api-database-url${local.suffix}"
   secret_admin_token  = "mutaba3a-api-admin-token${local.suffix}"
@@ -40,7 +43,6 @@ resource "google_project_service" "apis" {
     "sqladmin.googleapis.com",
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
-    "cloudbuild.googleapis.com",
     "monitoring.googleapis.com",
   ])
   project            = var.project_id
@@ -49,7 +51,7 @@ resource "google_project_service" "apis" {
 }
 
 # ============================================================================
-# Artifact Registry (shared by staging and production in the same project)
+# Artifact Registry (images are built and pushed from the operator's machine)
 # ============================================================================
 
 resource "google_artifact_registry_repository" "images" {
@@ -57,7 +59,7 @@ resource "google_artifact_registry_repository" "images" {
   location      = var.region
   repository_id = var.artifact_repository
   format        = "DOCKER"
-  description   = "Mutaba3a API service and migration images"
+  description   = "Mutaba3a API service image"
   labels        = local.labels
 
   depends_on = [google_project_service.apis]
@@ -96,8 +98,9 @@ resource "google_sql_database_instance" "postgres" {
       }
     }
 
-    # No authorized networks: Cloud Run reaches the instance only through the
-    # Cloud SQL connector (unix socket), which authenticates with IAM.
+    # No authorized networks: Cloud Run reaches the instance through the Cloud
+    # SQL connector (unix socket) and the operator through the Cloud SQL Auth
+    # Proxy; both authenticate with IAM, so the public IP is never open.
     ip_configuration {
       ipv4_enabled = true
       ssl_mode     = "ENCRYPTED_ONLY"
@@ -207,61 +210,6 @@ resource "google_secret_manager_secret_iam_member" "api_reads_admin_token" {
   secret_id = google_secret_manager_secret.admin_token.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
-}
-
-# ============================================================================
-# Cloud Run job: prisma migrate deploy (run before every service rollout)
-# ============================================================================
-
-resource "google_cloud_run_v2_job" "migrate" {
-  project  = var.project_id
-  name     = local.job_name
-  location = var.region
-  labels   = local.labels
-
-  template {
-    task_count = 1
-    template {
-      service_account = google_service_account.api.email
-      max_retries     = 0
-      timeout         = "600s"
-
-      containers {
-        image = local.migrate_image
-
-        env {
-          name = "DATABASE_URL"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.database_url.secret_id
-              version = "latest"
-            }
-          }
-        }
-
-        volume_mounts {
-          name       = "cloudsql"
-          mount_path = "/cloudsql"
-        }
-      }
-
-      volumes {
-        name = "cloudsql"
-        cloud_sql_instance {
-          instances = [google_sql_database_instance.postgres.connection_name]
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [client, client_version]
-  }
-
-  depends_on = [
-    google_secret_manager_secret_version.database_url,
-    google_secret_manager_secret_iam_member.api_reads_database_url,
-  ]
 }
 
 # ============================================================================

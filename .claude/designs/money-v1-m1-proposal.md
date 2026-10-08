@@ -28,11 +28,11 @@ Shipped 2026-10-08, after the M1 code landed on `main` (ADR-026):
 
 | Artifact | Where |
 |---|---|
-| Terraform: Cloud SQL 16, secrets (generated), service account + IAM, Artifact Registry, migration job, service, uptime check | `server/infrastructure/terraform/` |
-| Rollout script: Cloud Build → migration job → apply → smoke | `server/scripts/deploy.sh`, `server/cloudbuild.yaml` |
+| Terraform: Cloud SQL 16, secrets (generated), service account + IAM, Artifact Registry, service, uptime check — production only | `server/infrastructure/terraform/` |
+| Rollout script, all on the operator's machine: local docker build + push → `prisma migrate deploy` via Cloud SQL Auth Proxy → apply → smoke | `server/scripts/deploy.sh` |
 | Smoke test (M1 exit criterion against a live deployment) | `server/src/smoke.ts`, `npm run smoke` |
 | CI (TD-019) | `.github/workflows/server-ci.yml` |
-| Dockerfile `migrate` target (the pruned runtime image could not run Prisma) | `server/Dockerfile` |
+| Dockerfile: single runtime image; migrations run from `server/` on the operator's machine, never in the image | `server/Dockerfile` |
 | Runbook: prerequisites → staging → proof → first firm → Malafat wiring → production → day 2 | `server/DEPLOYMENT.md` |
 | Malafat: `MUTABA3A_API_URL` mounted from `malafat-web-mutaba3a-api-url`, release gate + release step | `web/crm-platform/scripts/{release,check-required-secrets,release-steps}.ts` |
 
@@ -69,7 +69,7 @@ the previous key (60 tests).
 | Implementation merged | ✅ `main` (committed by the product owner 2026-10-08) | ✅ `main` |
 | OpenAPI updated | ✅ `server/openapi/openapi.yaml` | ✅ `openapi/openapi.yaml` regenerated |
 | Contract tests pass | ✅ route + store contract, in CI | ✅ 108 tests |
-| Migrations validated | ✅ locally + CI; Cloud SQL by `deploy.sh` (operator) | ✅ `release-steps.ts` carries the tenant step |
+| Migrations validated | ✅ locally + CI; against Cloud SQL by `deploy.sh` through the proxy (operator) | ✅ `release-steps.ts` carries the tenant step |
 | Authorization tests pass | ✅ every 401/403 code, isolation | ✅ role matrix |
 | Works against a real test MUT environment | ⏳ `DEPLOYMENT.md` §2–3 (operator) | ⏳ `DEPLOYMENT.md` §5 |
 | Errors handled explicitly | ✅ | ✅ closed reason vocabulary |

@@ -1,5 +1,5 @@
-# Copy to backend.<environment>.hcl (git-ignored) and pass with
-#   terraform init -backend-config=backend.<environment>.hcl
+# scripts/deploy.sh passes bucket and prefix itself from TF_STATE_BUCKET; this
+# file documents the shape for a manual `terraform init -backend-config=…`.
 # The bucket must exist, be in the same region, have versioning on, and be
 # readable only by operators: the state holds the database password and the
 # admin token.

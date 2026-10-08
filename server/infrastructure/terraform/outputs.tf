@@ -7,9 +7,15 @@ output "service_name" {
   value = google_cloud_run_v2_service.api.name
 }
 
-output "migrate_job_name" {
-  description = "Cloud Run job to execute before each rollout: gcloud run jobs execute <name> --wait"
-  value       = google_cloud_run_v2_job.migrate.name
+output "proxy_port" {
+  description = "Local port scripts/deploy.sh gives the Cloud SQL Auth Proxy for migrations."
+  value       = local.proxy_port
+}
+
+output "local_database_url" {
+  description = "DATABASE_URL for `prisma migrate deploy` from the operator's machine while the Cloud SQL Auth Proxy listens on proxy_port. Sensitive."
+  value       = "postgresql://${local.db_user}:${random_password.db.result}@127.0.0.1:${local.proxy_port}/${local.db_name}"
+  sensitive   = true
 }
 
 output "cloud_sql_connection_name" {
@@ -17,7 +23,7 @@ output "cloud_sql_connection_name" {
 }
 
 output "artifact_registry" {
-  description = "Image prefix: <registry>/mutaba3a-api:<tag> and <registry>/mutaba3a-api-migrate:<tag>"
+  description = "Image prefix: <registry>/mutaba3a-api:<tag>"
   value       = local.registry
 }
 

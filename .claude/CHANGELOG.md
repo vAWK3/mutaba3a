@@ -29,6 +29,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Deploy path revised: production only, everything local except hosting (ADR-026 rev. 2)
+
+### Changed
+- Product-owner direction after the first deploy artifacts landed on `main`:
+  no staging for now, and nothing runs in GCP that can run on the operator's
+  machine — build with the local Docker daemon and push, like Malafat's
+  `pnpm release`.
+- `server/scripts/deploy.sh` — no environment argument (production; a later
+  `ENVIRONMENT=staging` still works), `docker build --platform linux/amd64`
+  + `docker push` from the operator's daemon, `prisma migrate deploy` run from
+  `server/` through the **Cloud SQL Auth Proxy** on `127.0.0.1:5440`, then
+  `terraform apply -var image_tag`, then smoke. Checks for every tool up front.
+- `server/infrastructure/terraform` — the Cloud Run migration job and the
+  Cloud Build API are gone; `environment` defaults to `production`,
+  `db_availability` to `REGIONAL`; new outputs `proxy_port` and the sensitive
+  `local_database_url` for operator-side migrations and psql.
+- `server/Dockerfile` — back to a single runtime image (the `migrate` target
+  existed only for the job); `openssl` kept for Prisma on musl.
+- `.github/workflows/server-ci.yml` — builds the one image; still never pushes.
+- `server/DEPLOYMENT.md`, `server/README.md`, `.claude/INFRA.md`, ADR-026,
+  TEST_PLAN, CI_CD, TECH_DEBT (TD-019 wording), M1 proposal — rewritten for
+  the production-only, local-build flow.
+
+### Removed
+- `server/cloudbuild.yaml`, `server/infrastructure/terraform/staging.tfvars.example`.
+
+### Technical
+- Verification: `npm run typecheck`, `npm run lint`, `npm run test:db`
+  (65 tests), `npm run openapi:check`, `terraform fmt -check` + `validate`.
+
+---
+
 ## [Unreleased] - 2026-10-08 — Money v1 M1: the hosted API becomes deployable (TD-019, ADR-026)
 
 ### Added

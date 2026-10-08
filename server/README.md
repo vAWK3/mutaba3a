@@ -34,8 +34,8 @@ npm run smoke -- --url http://localhost:8787        # post-deploy checks, also r
 ```
 
 CI (`.github/workflows/server-ci.yml`) runs all of the above, the Postgres
-contract suite, both Docker image builds and `terraform validate` on every
-change under `server/`.
+contract suite, the Docker image build and `terraform validate` on every
+change under `server/`. It never pushes or deploys.
 
 ## API shape
 
@@ -51,15 +51,16 @@ Errors are always `{"error":{"code","message","details?","requestId"}}`; codes a
 ## Deploy (operator runs these; nothing here deploys itself)
 
 Infrastructure is Terraform (`infrastructure/terraform/`: Cloud SQL 16, Cloud
-Run service + migration job, Secret Manager, service account, Artifact
-Registry, uptime check) and the rollout is one script:
+Run service, Secret Manager, service account, Artifact Registry, uptime
+check) and the rollout is one script that runs on your machine, like Malafat's
+`pnpm release`:
 
 ```bash
-GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh staging
+GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh
 ```
 
-It builds both images with Cloud Build, runs `prisma migrate deploy` as a Cloud
-Run job, rolls the service, and runs `npm run smoke`. Staging runs with
-`API_KEY_ENVIRONMENT=test`, production with `live`, so keys can never cross
-environments. The step-by-step runbook, including provisioning the first firm
-and wiring Malafat, is **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+It builds the image with your Docker daemon and pushes it, runs
+`prisma migrate deploy` from here through the Cloud SQL Auth Proxy, applies
+Terraform with the new tag, and runs `npm run smoke`. Production only for now;
+it issues `live` keys. The step-by-step runbook, including provisioning the
+first firm and wiring Malafat, is **[DEPLOYMENT.md](./DEPLOYMENT.md)**.

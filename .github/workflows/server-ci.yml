@@ -1,9 +1,9 @@
 # CI for the hosted API in server/ (closes TD-019).
 #
-# Runs on every change under server/ (and to this file). Nothing here deploys:
-# the Docker build is a build-only proof that the image still assembles and
-# that the runtime image answers /health. Deploys are operator-run from
-# server/scripts/deploy.sh (ADR-025 §9, server/DEPLOYMENT.md).
+# Runs on every change under server/ (and to this file). Nothing here deploys
+# and nothing is pushed: the Docker build is a build-only proof that the image
+# still assembles and answers /health. Deploys are operator-run from
+# server/scripts/deploy.sh on the operator's machine (ADR-026, server/DEPLOYMENT.md).
 name: Server CI
 
 on:
@@ -69,15 +69,13 @@ jobs:
         run: npm run test:db
 
   docker:
-    name: Docker images build and the service answers /health
+    name: Docker image builds and the service answers /health
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Build the service image
-        run: docker build --target runtime -t mutaba3a-api:ci .
-      - name: Build the migration image
-        run: docker build --target migrate -t mutaba3a-api-migrate:ci .
+        run: docker build -t mutaba3a-api:ci .
       - name: Boot the service image and probe /health
         run: |
           docker run -d --name api -p 8787:8787 \
@@ -91,8 +89,6 @@ jobs:
             sleep 1
           done
           echo "service never answered /health"; docker logs api; exit 1
-      - name: The migration image carries the Prisma CLI
-        run: docker run --rm --entrypoint node_modules/.bin/prisma mutaba3a-api-migrate:ci --version
 
   terraform:
     name: Terraform format and validate

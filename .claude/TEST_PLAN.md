@@ -28,8 +28,8 @@
 
 Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
 Postgres contract suite against the docker container in `server/README.md`).
-CI: `.github/workflows/server-ci.yml` runs the whole set, plus both Docker
-builds and `terraform validate`, on every change under `server/`.
+CI: `.github/workflows/server-ci.yml` runs the whole set, plus the Docker
+build and `terraform validate`, on every change under `server/`.
 65 tests (7 files) at M1 + deploy wiring:
 
 | Area | File | What is pinned |
@@ -43,8 +43,8 @@ builds and `terraform validate`, on every change under `server/`.
 
 Required before M2: a contract test that Malafat's client fixtures match
 `openapi/openapi.yaml` (CI itself landed 2026-10-08, TD-019 resolved). Not
-covered by automation: the Terraform plan against a real project and the
-Cloud Build image build — both are exercised by the operator runbook
+covered by automation: the Terraform plan against a real project, the local
+image push and the proxy-run migration — all exercised by the operator runbook
 (`server/DEPLOYMENT.md` §2–3), whose smoke step is the M1 exit criterion.
 
 ---

@@ -210,7 +210,7 @@ The only workflow that runs on pull requests today. Scoped by `paths:` to
 | Job | What it proves |
 |-----|----------------|
 | `verify` | `npm ci`, `prisma generate`, type-check, lint, `openapi:check`, `prisma migrate deploy` + `npm run test:db` against a `postgres:16-alpine` service container (65 tests) |
-| `docker` | `docker build --target runtime` and `--target migrate`; boots the runtime image with a dummy `DATABASE_URL` and curls `/health`; checks the migrate image carries the Prisma CLI |
+| `docker` | `docker build` of the service image; boots it with a dummy `DATABASE_URL` and curls `/health`. Never pushes |
 | `terraform` | `terraform fmt -check -recursive`, `init -backend=false`, `validate` on `server/infrastructure/terraform` |
 
 Red `Server CI` = do not run `server/scripts/deploy.sh`. Deploys are
@@ -314,12 +314,14 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 ```bash
 cd server
-GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh staging|production
+GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh
 ```
 
-Cloud Build → migration job → Terraform apply → smoke test, in that order; the
-service is not rolled if `prisma migrate deploy` fails. Full runbook:
-`server/DEPLOYMENT.md`. Infra: `server/infrastructure/terraform/` (ADR-026).
+Runs on the operator's machine (ADR-026): local `docker build` + push →
+`prisma migrate deploy` through the Cloud SQL Auth Proxy → Terraform apply →
+smoke test, in that order; the service is not rolled if the migration fails.
+Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
+`server/infrastructure/terraform/`.
 
 ### Release Checklist
 

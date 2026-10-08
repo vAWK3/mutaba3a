@@ -413,9 +413,9 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 `.github/workflows/server-ci.yml` runs on every change under `server/`:
 type-check, lint, `openapi:check`, unit + route tests, the Postgres contract
-suite against a `postgres:16` service container, both Docker image builds
-(with a `/health` probe of the runtime image), and `terraform validate`.
-Deploys stay operator-run (`server/scripts/deploy.sh`).
+suite against a `postgres:16` service container, the Docker image build
+(with a `/health` probe), and `terraform validate`. CI never pushes or
+deploys; deploys run from the operator's machine (`server/scripts/deploy.sh`).
 
 ### TD-002: Reports Feature Incomplete
 **Status**: Resolved
