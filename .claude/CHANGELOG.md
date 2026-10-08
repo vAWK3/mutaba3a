@@ -29,6 +29,48 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 5: retainer changes, proration, cancel preview, reconcile script (`server/`)
+
+Brief `money-v1-m5-retainer-changes.md`, decided by the engineering owner under
+the "complete the epic" instruction. API version `1.4.0-m5`; additive
+(`RetainerChargesResponse.versions`, `RetainerCharge.version`,
+`Agreement.retainer.cancelEffectiveDate`, `FinalMonth` gains `PRORATE`).
+
+### Added
+- **Versions, not edits:** `retainer_versions` appends a version per change;
+  version 1 is synthesized from the agreement row (no backfill).
+  `generateCharges` prices each service month from the version in force for it
+  (`src/retainers/terms.ts`), honours a per-version billing day and end month,
+  and stamps `retainer_charges.version`. Charges already generated keep their
+  terms.
+- **Routes:** `POST /v1/retainers/{id}/changes/preview` (previous vs next terms
+  at the VAT rate in force on the effective month, `changed`,
+  `firstChargedMonth`, `chargesKept`, token), `POST /v1/retainers/{id}/changes`
+  (201, idempotent; token covers body + agreement version + latest version +
+  rate), `POST /v1/retainers/{id}/cancel/preview` (final month under FULL /
+  PRORATE / WAIVE, posted charge, credit with `limitedByPayments`,
+  `stoppedFrom`, `outstandingAfter`); `POST /v1/retainers/{id}/cancel` accepts
+  `PRORATE` and an optional `previewToken`, required whenever a credit is
+  created (422 `PREVIEW_TOKEN_REQUIRED`). Audit `retainer.changed`;
+  `receivable.credited` with `source: RETAINER_CANCEL`.
+- **Proration** (`src/retainers/proration.ts`): `amount × days ÷ daysInMonth`,
+  half-up, days = the cancellation day inclusive; VAT computed on the prorated
+  amount at the version's rate. A posted final month is adjusted by a credit
+  (WAIVE: the outstanding; PRORATE: the difference), never above the
+  outstanding — what was paid is not refunded; earlier credits are not credited
+  twice.
+- **Reconcile script:** `npm run reconcile [-- --dry]` walks every organization
+  (`organizations.list()`), posts due installments and charges in its timezone,
+  prints a per-organization summary; for cron / Cloud Scheduler (README).
+- **Published reasons:** 422 `CHANGE_EFFECTIVE_INVALID`,
+  `CHANGE_NOTHING_CHANGED`, `FINAL_MONTH_INVALID`, `PREVIEW_TOKEN_REQUIRED`;
+  409 `AGREEMENT_CANCELLED` on changing or previewing a cancelled retainer.
+- **Schema + migration `20261008220000_m5_retainer_versions_proration`.**
+- **Tests:** 295 (M5: terms 7, proration 6, schedule +1, store contract 3 ×
+  memory + Postgres, routes-m5 8 incl. the reconcile script).
+
+---
+
 ## [Unreleased] - 2026-10-08 — Money v1 Milestone 4: payments, allocations, reversals, credits, operations lookup (`server/`)
 
 All eight decisions of `money-v1-m4-payments-allocations.md` approved as

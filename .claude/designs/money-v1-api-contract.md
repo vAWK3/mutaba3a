@@ -72,7 +72,7 @@ As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default 
 | `POST /v1/payments/{id}/reverse` | `payments:write` + Idempotency-Key | `{ reason }`; undoes allocations atomically; second reversal → `409 CONFLICT` code `ALREADY_REVERSED` |
 | `GET /v1/operations/{idempotencyKey}` | `payments:read` | reconcile an unknown outcome: `PENDING / COMPLETED / FAILED` with the stored response (plan §12.7, §14.2) |
 
-### M5 — Recurring retainers (plan §5) — **basic form implemented in M3** (preview, create, charges, cancel FULL/WAIVE, reconcile); `/changes` with effective-dated versions, proration and credits remain M5
+### M5 — Recurring retainers (plan §5) — **basic form implemented in M3**; **changes, proration, cancel preview and the reconcile script implemented 2026-10-08** (`money-v1-m5-retainer-changes.md`, API `1.4.0-m5`): `POST /v1/retainers/{id}/changes/preview` + `/changes` (effective-dated versions, charges keep their terms), `POST /v1/retainers/{id}/cancel/preview`, cancel with `PRORATE` and a credit on an already-posted final month, `npm run reconcile` for a scheduler
 
 | Method & path | Scope | Notes |
 |---|---|---|

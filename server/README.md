@@ -48,12 +48,26 @@ change under `server/`. It never pushes or deploys.
 - `POST /v1/import/preview`, `POST /v1/import/commit` — batch link of an external system's customers and projects (≤ 500 rows; commit needs the preview's `previewToken`)
 - `GET /v1/vat-rates`, `PUT /v1/settings/vat` — the firm's effective-dated standard rate (basis points)
 - `POST /v1/agreements/preview`, `POST /v1/agreements`, `GET /v1/agreements[/{id}]`, `POST /v1/agreements/{id}/supplements`, `POST /v1/agreements/{id}/cancel`, `POST /v1/installments/{id}/trigger` — fixed-fee agreements; VAT treatment per item; installments post immediately, on a date, or manually; due dates from payment terms (default end of month)
-- `POST /v1/retainers/preview`, `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`, `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile` — recurring retainers, one charge per service month
+- `POST /v1/retainers/preview`, `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`, `POST /v1/retainers/{id}/changes/preview`, `POST /v1/retainers/{id}/changes`, `POST /v1/retainers/{id}/cancel/preview`, `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile` — recurring retainers, one charge per service month; effective-dated changes of terms (versions); cancel with FULL / PRORATE / WAIVE and a credit on an already-posted final month
+- `POST /v1/allocations/preview`, `POST /v1/payments`, `GET /v1/payments[/{id}]`, `POST /v1/payments/{id}/allocations`, `POST /v1/payments/{id}/reverse`, `POST|GET /v1/receivables/{id}/credits`, `GET /v1/operations/{idempotencyKey}` — payments, allocations, reversals, credits, lost-response lookup
 - `GET /v1/receivables[/{id}]` — what is owed, statuses computed in the organization timezone
 - `POST /admin/v1/organizations`, `GET /admin/v1/organizations/{id}`, `POST …/{id}/api-keys`, `POST /admin/v1/api-keys/{id}/revoke`, `GET …/{id}/audit` — operator only, `X-Admin-Token`
 - `GET /openapi.json` — the live contract; `openapi/openapi.yaml` is the committed copy
 
 Errors are always `{"error":{"code","message","details?","requestId"}}`; codes are listed in `src/errors.ts` and in the OpenAPI description.
+
+## Scheduled reconcile (operator)
+
+Charges and dated installments post lazily on reads. For organizations nobody
+reads for a while, run the reconcile on a schedule (Cloud Scheduler → Cloud Run
+job, or cron on any host with `DATABASE_URL`):
+
+```bash
+npm run reconcile            # every organization, in its own timezone; idempotent
+npm run reconcile -- --dry   # list organizations and "today" per timezone, post nothing
+```
+
+Daily at 00:30 in the firms' timezone is enough; running it hourly is harmless.
 
 ## Deploy (operator runs these; nothing here deploys itself)
 
