@@ -1,0 +1,46 @@
+{
+  "name": "@mutaba3a/api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mutaba3a hosted financial API — organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:db": "MUTABA3A_TEST_DATABASE_URL=${MUTABA3A_TEST_DATABASE_URL:-postgresql://mutaba3a:mutaba3a@localhost:54329/mutaba3a_test} vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "openapi:generate": "tsx src/scripts/export-openapi.ts",
+    "openapi:check": "tsx src/scripts/export-openapi.ts --check",
+    "provision": "tsx src/scripts/provision.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.4",
+    "@hono/zod-openapi": "1.6.3",
+    "@prisma/client": "6.19.3",
+    "hono": "4.13.13",
+    "pino": "10.4.0",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "22.20.5",
+    "eslint": "^9.39.2",
+    "globals": "^16.5.0",
+    "prisma": "6.19.3",
+    "tsx": "4.23.15",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^4.0.16"
+  }
+}

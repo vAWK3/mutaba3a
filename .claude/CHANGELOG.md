@@ -29,6 +29,50 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 1: hosted Mutaba3a API (`server/`)
+
+### Added
+- `server/` — a standalone npm package (`@mutaba3a/api`): the hosted,
+  organization-scoped financial API that Malafat's Money section calls
+  (MUT/MAL Money v1, Option B; ADR-024/025). Hono + zod-openapi, Prisma 6 on
+  Postgres, pino, vitest. Own lockfile, lint, Dockerfile and README.
+- Milestone 1 surface: `GET /health`, `GET /ready`, `GET /v1/integration`
+  (validate key; organization, masked key, scopes, missing scopes, binding),
+  `POST /v1/integration/bind` (idempotent tenant binding, ORGANIZATION_MISMATCH
+  on conflict), `POST /v1/integration/disconnect` (preserves history, revokes
+  the calling key), and operator provisioning under `/admin/v1/*` behind
+  `MUTABA3A_ADMIN_TOKEN` (organizations, API keys shown once, revoke, audit).
+- Cross-cutting: API-key auth (format, sha256 storage, constant-time compare,
+  live/test environment split, revocation, expiry), closed scope vocabulary,
+  per-key sliding-window rate limit with `X-RateLimit-*`/`Retry-After`,
+  `Idempotency-Key` middleware (replay / reuse-rejection / in-progress),
+  append-only audit, standard error envelope with stable codes, request ids,
+  decimal-safe `Money` (bigint minor units, string on the wire).
+- Prisma migration `20261008093850_m1_control_tables`: organizations,
+  api_keys, integrations, audit_events, idempotency_keys.
+- Generated contract `server/openapi/openapi.yaml` with `openapi:generate` /
+  `openapi:check`; `provision` CLI.
+- Tests: 59 (money, keys/scopes, rate limiter, LedgerStore contract against
+  memory and Postgres, route tests covering every auth failure code, scope
+  enforcement, idempotency, binding conflicts, disconnect, isolation).
+- Design artifacts: `.claude/designs/money-v1-repository-audit.md`,
+  `money-v1-api-contract.md`, `money-v1-m1-proposal.md`.
+
+### Changed
+- `eslint.config.js` ignores `server/` (it has its own config).
+- `.claude/DECISIONS.md`: ADR-024 overrides ADR-005 (MUT-30); ADR-025 records
+  the hosted-API architecture (MUT-32). ADR-013 is unchanged.
+
+### Technical
+- The desktop/PWA app (`src/`) is untouched; it imports nothing from
+  `server/`. Local-only operation remains a permanently supported mode.
+- `server/.npmrc` sets `legacy-peer-deps` to work around an npm 10.9 arborist
+  crash (`edgesOut`) when resolving zod 4 peer ranges.
+- Debt: TD-017 (per-instance rate limiter), TD-018 (operator-only
+  provisioning; no self-serve accounts), TD-019 (no CI for `server/`).
+
+---
+
 ## [Unreleased] - 2026-10-05 — Updater signing key rotation
 
 ### Changed

@@ -24,6 +24,25 @@
 
 ---
 
+## Hosted API (`server/`) — Money v1 M1 (added 2026-10-08)
+
+Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
+Postgres contract suite against the docker container in `server/README.md`).
+59 tests at M1:
+
+| Area | File | What is pinned |
+|------|------|----------------|
+| Money | `src/__tests__/money.test.ts` | canonical decimal parse/format, rejection of locale separators/exponents/over-precision, bigint precision, no cross-currency arithmetic |
+| Keys & scopes | `src/auth/__tests__/api-key.test.ts` | key format, sha256 storage, constant-time compare, masking never leaks the secret, unknown scope fails the whole list, non-hierarchical scopes |
+| Rate limit | `src/__tests__/rate-limit.test.ts` | sliding window, Retry-After, per-key isolation, prune |
+| Storage contract | `src/repositories/__tests__/store-contract.ts` run by `store-memory.test.ts` always and `store-prisma.test.ts` when `MUTABA3A_TEST_DATABASE_URL` is set | unique slug/prefix/hash, revoke-once, one tenant ↔ one organization, reconnect keeps id, audit ordering, idempotency new/in_progress/replay/mismatch/fail |
+| Routes | `src/__tests__/routes.test.ts` | health/ready, request ids, OpenAPI document, admin auth, provisioning + audit trail, every 401 code (UNAUTHENTICATED, INVALID_API_KEY, API_KEY_ENVIRONMENT_MISMATCH, API_KEY_REVOKED, API_KEY_EXPIRED), forged suffix with a real prefix, INSUFFICIENT_SCOPE details, missingScopes, 429 headers, Idempotency-Key required/replay/reuse, ORGANIZATION_MISMATCH both directions, disconnect revokes + reconnect keeps id, cross-organization isolation |
+
+Required before M2: a CI workflow (TD-019) and a contract test that Malafat's
+client fixtures match `openapi/openapi.yaml`.
+
+---
+
 ## Current Test Coverage
 
 ### Existing Test Files (Updated 2026-03-14)

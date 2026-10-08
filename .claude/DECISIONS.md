@@ -32,6 +32,8 @@
 | ADR-021 | Question-First UX Redesign | Active | 2026-03 |
 | ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
 | ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth | Active | 2026-10 |
+| ADR-024 | Override of ADR-005: A Hosted Mutaba3a Service Exists Beside the Local-First App | Active | 2026-10 |
+| ADR-025 | Hosted Financial API (Money v1 Option B): Organization-Scoped Ledger Service, Malafat as API-Key Client | Active | 2026-10 |
 
 ---
 
@@ -692,3 +694,100 @@ Supporting choices, each with a test that pins it:
 Sync) remain Active and in conflict with cloud sync. Overriding them is MUT-30's
 job and must happen before any cloud sync ships. This ADR covers only how a
 client authenticates when that work is approved.
+
+---
+
+## ADR-024: Override of ADR-005 — A Hosted Mutaba3a Service Exists Beside the Local-First App
+
+**Status**: Active (partial override of ADR-005; ADR-013 unchanged)
+**Date**: 2026-10-08
+**Context**: MUT-30 required an explicit override before any cloud work
+landed. The MUT/MAL Money v1 plan, confirmed by the product owner on
+2026-10-08 after the repository audit (`.claude/designs/money-v1-repository-audit.md`),
+chose MUT-25 **Option B**: a hosted, organization-scoped Mutaba3a financial
+API that Malafat calls with an API key.
+
+**What changes**: ADR-005's "no server backend" no longer describes the whole
+product. A server-side service now exists in `server/` (own package, own
+Postgres, own deploy). ADR-005's *reasoning* is preserved as a guarantee rather
+than an architecture rule:
+
+- **The desktop/PWA app is unchanged.** It stores nothing outside the device,
+  sends no telemetry, and works with no network. Nothing in `src/` imports
+  `server/`, and `server/` imports nothing from `src/` yet.
+- **Local-only mode is a permanently supported mode**, not a transition state.
+  A freelancer who never touches the hosted service loses nothing.
+- **ADR-013 (local-only sync) stays Active.** The hosted service is not a sync
+  target for the desktop in this decision. Making it one is a separate ADR,
+  gated on MUT-27 (op-log transport) and TD-015 (durable tokens).
+- **Firm data on the hosted service** is privileged client financial data and
+  must be encrypted at rest, regionally resident beside the firm's CRM (GCP
+  me-west1, matching Malafat), backed up, and deletable on request.
+
+**What replaces it**: ADR-025 below.
+
+**Why not the standing recommendation (Option A)**: the audit recommended A
+(ledger inside Malafat's tenant schema). The product owner chose B so that
+Mutaba3a remains the single owner of the financial domain and can serve
+customers other than Malafat with the same API (plan rules MUT-1, MUT-2, G7).
+The cost accepted with that choice: a second stateful service, its own
+credential vault on the Malafat side, and duplicated encryption/residency
+controls. Recorded so the trade is never re-litigated by accident.
+
+---
+
+## ADR-025: Hosted Financial API (Money v1 Option B)
+
+**Status**: Active
+**Date**: 2026-10-08
+**Context**: MUT-32 "Decide the architecture". Plan sections 2, 10, 11, 13, 14.
+
+**Decision**:
+
+1. **Package** — `server/` is a standalone npm package (`@mutaba3a/api`),
+   Node 22, TypeScript strict, Hono + `@hono/zod-openapi`, Prisma 6 on
+   Postgres, pino. It has its own lockfile, lint, tests and Dockerfile. The
+   root frontend toolchain ignores it (`eslint.config.js` globalIgnores).
+2. **Tenancy** — every row belongs to an `Organization`; every request is
+   authenticated by an organization-scoped API key and never carries an
+   organization id as input. Cross-organization reads are impossible by
+   construction, and the route tests assert it.
+3. **Credentials** — `mut_<env>_<prefix8>_<secret43>`; the service stores
+   `prefix` and `sha256(key)` only; lookup by unique prefix, constant-time hash
+   compare; `live` and `test` keys are accepted only by the matching
+   deployment; scopes are a closed, published, non-hierarchical vocabulary
+   (`src/auth/scopes.ts`); revocation and expiry are checked on every request,
+   uncached. Keys are issued by an operator through `/admin/v1/*` behind
+   `MUTABA3A_ADMIN_TOKEN` until a Mutaba3a account system exists (TD-018).
+4. **Contract** — OpenAPI 3.1 generated from the zod route definitions and
+   committed at `server/openapi/openapi.yaml`; `npm run openapi:check` fails
+   when code and spec drift (same discipline as Malafat ADR-033). Errors are
+   always `{ error: { code, message, details?, requestId } }` with codes from
+   `src/errors.ts`.
+5. **Idempotency** — every state-changing POST requires `Idempotency-Key`;
+   `(organization, key)` is unique; same fingerprint replays, different
+   fingerprint is rejected, 5xx releases the key (plan §14.2).
+6. **Money** — `bigint` minor units with a per-currency exponent internally,
+   canonical decimal strings on the wire, no `number` ever holds an amount
+   (`src/money.ts`). This is ADR-009 generalised; the desktop's `/100` stays
+   as-is until it adopts the shared module.
+7. **Storage port** — routes depend on `LedgerStore` (`src/repositories/ports.ts`);
+   Prisma and in-memory implementations run the same contract test suite.
+8. **Audit** — append-only `audit_events`; no update/delete path exists in
+   application code.
+9. **Deploy** — Cloud Run service + Cloud SQL + Secret Manager, migrations as
+   a separate job (`prisma migrate deploy`), never at container start.
+   Nothing in the repo deploys itself.
+
+**Consequences**:
+- Milestones M2–M6 of the plan add financial tables and routes to this
+  service; none of them change the desktop app.
+- Malafat stores the key encrypted per tenant and calls `/v1/*` server-side
+  only (plan MAL-4).
+- The in-process rate limiter is per instance (TD-017); a shared store is
+  required before the service scales horizontally.
+
+**Alternatives Considered**: Option A (ledger in Malafat's tenant schema,
+shared money-core package) — recommended by the audit, rejected by the
+product owner for ownership reasons (ADR-024). Option C (embed the web
+build) — rejected in MUT-25 for design/RTL/session mismatch.

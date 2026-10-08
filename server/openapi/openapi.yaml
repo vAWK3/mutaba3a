@@ -1,0 +1,835 @@
+openapi: 3.1.0
+info:
+  title: Mutaba3a Financial API
+  version: 1.0.0-m1
+  description: |-
+    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestone 1).
+
+    Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
+
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL. Every error is {"error":{"code","message","details?","requestId"}}.
+
+    Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.
+tags:
+  - name: Operations
+    description: Liveness and readiness
+  - name: Integration
+    description: Credential validation and tenant binding
+  - name: Admin
+    description: Operator provisioning
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      description: "Organization API key: `Authorization: Bearer mut_live_<prefix>_<secret>`"
+    adminToken:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+      description: Operator token (MUTABA3A_ADMIN_TOKEN). Provisioning only.
+  schemas:
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+        version:
+          type: string
+        time:
+          type: string
+          format: date-time
+      required:
+        - status
+        - version
+        - time
+    Ready:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+            - not_ready
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum:
+                - ok
+                - failed
+          required:
+            - database
+      required:
+        - status
+        - checks
+    IntegrationStatusResponse:
+      type: object
+      properties:
+        organization:
+          $ref: "#/components/schemas/Organization"
+        apiKey:
+          $ref: "#/components/schemas/ApiKeySummary"
+        requiredScopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scope"
+        missingScopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scope"
+        integration:
+          $ref: "#/components/schemas/Integration"
+        server:
+          type: object
+          properties:
+            version:
+              type: string
+            apiVersion:
+              type: string
+              enum:
+                - v1
+            time:
+              type: string
+              format: date-time
+          required:
+            - version
+            - apiVersion
+            - time
+      required:
+        - organization
+        - apiKey
+        - requiredScopes
+        - missingScopes
+        - integration
+        - server
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - defaultCurrency
+        - timezone
+        - createdAt
+    Currency:
+      type: string
+      enum:
+        - ILS
+        - USD
+        - EUR
+    ApiKeySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        environment:
+          type: string
+          enum:
+            - live
+            - test
+        masked:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scope"
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          nullable: true
+          format: date-time
+        expiresAt:
+          type: string
+          nullable: true
+          format: date-time
+        revokedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - name
+        - environment
+        - masked
+        - scopes
+        - createdAt
+        - lastUsedAt
+        - expiresAt
+        - revokedAt
+    Scope:
+      type: string
+      enum:
+        - integration:read
+        - integration:write
+        - customers:read
+        - customers:write
+        - projects:read
+        - projects:write
+        - agreements:read
+        - agreements:write
+        - payments:read
+        - payments:write
+        - attachments:read
+        - attachments:write
+        - summaries:read
+        - audit:read
+    Integration:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum:
+            - MALAFAT
+        externalTenantId:
+          type: string
+        displayName:
+          type: string
+        status:
+          type: string
+          enum:
+            - CONNECTED
+            - DISCONNECTED
+        connectedAt:
+          type: string
+          format: date-time
+        disconnectedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - provider
+        - externalTenantId
+        - displayName
+        - status
+        - connectedAt
+        - disconnectedAt
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                - UNAUTHENTICATED
+                - INVALID_API_KEY
+                - API_KEY_REVOKED
+                - API_KEY_EXPIRED
+                - API_KEY_ENVIRONMENT_MISMATCH
+                - ADMIN_UNAUTHORIZED
+                - INSUFFICIENT_SCOPE
+                - NOT_FOUND
+                - ORGANIZATION_MISMATCH
+                - CONFLICT
+                - OPERATION_IN_PROGRESS
+                - VALIDATION_FAILED
+                - IDEMPOTENCY_KEY_REUSED
+                - IDEMPOTENCY_KEY_REQUIRED
+                - RATE_LIMITED
+                - INTERNAL
+            message:
+              type: string
+            details:
+              nullable: true
+            requestId:
+              type: string
+          required:
+            - code
+            - message
+            - requestId
+      required:
+        - error
+    BindIntegrationResponse:
+      type: object
+      properties:
+        integration:
+          $ref: "#/components/schemas/Integration"
+        created:
+          type: boolean
+      required:
+        - integration
+        - created
+    BindIntegrationRequest:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum:
+            - MALAFAT
+        externalTenantId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+        - provider
+        - externalTenantId
+        - displayName
+    DisconnectIntegrationResponse:
+      type: object
+      properties:
+        integration:
+          $ref: "#/components/schemas/Integration"
+        apiKeyRevoked:
+          type: boolean
+          enum:
+            - true
+      required:
+        - integration
+        - apiKeyRevoked
+    CreateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          type: string
+          pattern: ^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
+      required:
+        - name
+        - defaultCurrency
+        - timezone
+    OrganizationDetail:
+      type: object
+      properties:
+        organization:
+          $ref: "#/components/schemas/Organization"
+        apiKeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeySummary"
+        integrations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Integration"
+      required:
+        - organization
+        - apiKeys
+        - integrations
+    CreateApiKeyResponse:
+      type: object
+      properties:
+        apiKey:
+          $ref: "#/components/schemas/ApiKeySummary"
+        secret:
+          type: string
+      required:
+        - apiKey
+        - secret
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scope"
+          minItems: 1
+        expiresAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - name
+        - scopes
+    RevokeApiKeyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - reason
+    AuditList:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+      required:
+        - events
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorType:
+          type: string
+          enum:
+            - API_KEY
+            - ADMIN
+            - SYSTEM
+        actorId:
+          type: string
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties:
+            nullable: true
+        requestId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - actorType
+        - actorId
+        - action
+        - entityType
+        - entityId
+        - requestId
+        - createdAt
+  parameters: {}
+paths:
+  /health:
+    get:
+      tags:
+        - Operations
+      summary: Liveness
+      responses:
+        "200":
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /ready:
+    get:
+      tags:
+        - Operations
+      summary: Readiness (database reachable)
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ready"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ready"
+  /v1/integration:
+    get:
+      tags:
+        - Integration
+      summary: Validate the API key and describe its organization, scopes and binding
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Credential is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationStatusResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/integration/bind:
+    post:
+      tags:
+        - Integration
+      summary: Bind this organization to the calling system’s tenant
+      description: Idempotent. Re-binding the same tenant returns the existing binding; binding a different tenant while one is CONNECTED is rejected with ORGANIZATION_MISMATCH. A DISCONNECTED binding to the same tenant is reconnected, keeping its id so external references survive (plan §10.4).
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindIntegrationRequest"
+      responses:
+        "200":
+          description: Already bound to this tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BindIntegrationResponse"
+        "201":
+          description: Bound
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BindIntegrationResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Bound to a different tenant, or the tenant is bound to another organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/integration/disconnect:
+    post:
+      tags:
+        - Integration
+      summary: Disconnect the binding and revoke the calling key
+      description: Financial history and external references are preserved (plan §10.4). The calling API key is revoked; the response is the last one it can make.
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisconnectIntegrationResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No binding exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/api-keys/self/revoke:
+    post:
+      tags:
+        - Integration
+      summary: "Revoke the calling key (rotation: validate the new key first, then call this with the old one)"
+      description: Idempotent. The binding is untouched; only this key stops working. Audited.
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeySummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/organizations:
+    post:
+      tags:
+        - Admin
+      summary: Create an organization
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrganizationRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Slug already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/organizations/{organizationId}:
+    get:
+      tags:
+        - Admin
+      summary: Inspect an organization, its keys (masked) and integrations
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      responses:
+        "200":
+          description: Organization detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationDetail"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/organizations/{organizationId}/api-keys:
+    post:
+      tags:
+        - Admin
+      summary: Issue an API key (secret returned once)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: Issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateApiKeyResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/api-keys/{apiKeyId}/revoke:
+    post:
+      tags:
+        - Admin
+      summary: Revoke an API key (idempotent)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: apiKeyId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeApiKeyRequest"
+      responses:
+        "200":
+          description: Revoked (or already revoked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeySummary"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/organizations/{organizationId}/audit:
+    get:
+      tags:
+        - Admin
+      summary: Read the organization’s audit trail (newest first)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"

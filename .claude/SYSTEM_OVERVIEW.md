@@ -201,6 +201,12 @@
 | Landing | Netlify | mutaba3a.app/ |
 | macOS | GitHub Releases | Auto-update via Tauri |
 | Windows | GitHub Releases | Auto-update via Tauri |
+| **Hosted API** (`server/`, since 2026-10-08) | Cloud Run + Cloud SQL (operator-deployed, not yet live) | Consumed by Malafat's Money section with an organization API key. Separate package, separate database, separate deploy. See ADR-024/025 and `server/README.md` |
+
+The hosted API does not change the privacy model of the app above this line:
+the desktop/PWA stores nothing off-device and never calls the hosted API. The
+hosted API holds *law-firm* ledgers for firms that connect from Malafat, and
+is subject to the encryption, residency and deletion obligations in ADR-024.
 
 ### Build Commands
 

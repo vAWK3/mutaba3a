@@ -18,6 +18,42 @@
 
 ## Open Debt
 
+### TD-017: Hosted API Rate Limiter Is Per Instance
+**Status**: Open
+**Added**: 2026-10-08
+**Impact**: On Cloud Run with more than one instance, a key's budget is per
+instance, so the effective limit is N × RATE_LIMIT_PER_MINUTE
+
+`server/src/rate-limit.ts` is an in-process sliding window behind a
+`RateLimiter` port. It is honest about what it is and stops a runaway client
+from exhausting one instance, but a shared store (Redis/Upstash, matching
+Malafat's choice) must replace it before the service scales horizontally.
+Routes do not change; only `index.ts` wiring does. Introduced by Money v1 M1.
+
+### TD-018: Organizations and API Keys Are Operator-Provisioned Only
+**Status**: Open
+**Added**: 2026-10-08
+**Impact**: A firm cannot create its own Mutaba3a organization or rotate its
+own key; an operator with MUTABA3A_ADMIN_TOKEN does it (`npm run provision`)
+
+Mutaba3a deliberately has no account system (ADR-023), and the plan's
+"the Partner obtains an API key from Mutaba3a" assumes one. Self-serve
+provisioning (accounts, org membership, key management UI) is a product
+decision, not an M1 gap; until then the admin API and CLI are the path.
+Introduced by Money v1 M1.
+
+### TD-019: No CI for `server/`
+**Status**: Open
+**Added**: 2026-10-08
+**Impact**: Type-check, lint, tests, `openapi:check` and the Docker build run
+only on a developer machine
+
+The repo's only workflow builds Windows installers on release (MUT-33 covers
+the frontend half of this). `server/` needs a workflow running
+`npm ci && npm run typecheck && npm run lint && npm test && npm run openapi:check`
+plus the Postgres contract suite against a service container, and a build of
+`server/Dockerfile`. Introduced by Money v1 M1.
+
 ### TD-015: OAuth Refresh Tokens Have No Durable, Secure Store
 **Status**: Open
 **Added**: 2026-10-05

@@ -1,0 +1,158 @@
+// Mutaba3a hosted ledger — Milestone 1 schema (MUT/MAL Money v1 plan, §3.1, §10, §14.2).
+//
+// Scope of this file: the control tables that make the service organization-
+// scoped and auditable before any financial object exists. Financial tables
+// (customers, projects, agreements, installments, receivables, payments,
+// allocations, reversals, attachments) arrive in M2–M6 as separate migrations.
+//
+// Invariants enforced here rather than in code:
+//   - An API key belongs to exactly one organization (FK).
+//   - A key prefix and a key hash are globally unique, so lookup by prefix is
+//     unambiguous and two keys can never share a secret.
+//   - One Malafat tenant binds to at most one organization, and one
+//     organization has at most one integration per provider.
+//   - An idempotency key is unique per organization, never globally, so two
+//     organizations cannot collide on client-generated keys.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Which deployment issued a key. A "test" key is rejected by a "live"
+/// deployment and vice versa (see config.API_KEY_ENVIRONMENT).
+enum ApiKeyEnvironment {
+  live
+  test
+}
+
+enum IntegrationProvider {
+  MALAFAT
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+}
+
+enum IdempotencyStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum AuditActorType {
+  API_KEY
+  ADMIN
+  SYSTEM
+}
+
+model Organization {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String   @unique
+  /// ISO 4217. Default for new projects; each project still carries its own.
+  defaultCurrency String   @db.VarChar(3)
+  /// IANA zone used by the recurring-charge scheduler (plan §5.4).
+  timezone        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  apiKeys         ApiKey[]
+  integrations    Integration[]
+  auditEvents     AuditEvent[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@map("organizations")
+}
+
+model ApiKey {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  name           String
+  environment    ApiKeyEnvironment
+  /// The public 8-character segment of the key, used for lookup and masking.
+  prefix         String            @unique @db.VarChar(8)
+  /// SHA-256 (hex) of the full key string. The key itself is never stored.
+  keyHash        String            @unique @db.VarChar(64)
+  /// Validated against auth/scopes.ts on every read; stored as text so a new
+  /// scope never needs a migration.
+  scopes         String[]
+  createdAt      DateTime          @default(now())
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  revokedReason  String?
+
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+/// A binding between an organization and an external system's tenant.
+/// Disconnecting flips status and keeps the row, so the external references
+/// recorded on customers/projects (M2) survive for a safe reconnection
+/// (plan §10.4).
+model Integration {
+  id                  String              @id @default(uuid()) @db.Uuid
+  organizationId      String              @db.Uuid
+  organization        Organization        @relation(fields: [organizationId], references: [id])
+  provider            IntegrationProvider
+  /// The external system's own tenant identifier (Malafat tenant id).
+  externalTenantId    String
+  displayName         String
+  status              IntegrationStatus
+  connectedByApiKeyId String?             @db.Uuid
+  connectedAt         DateTime
+  disconnectedAt      DateTime?
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([organizationId, provider])
+  @@unique([provider, externalTenantId])
+  @@map("integrations")
+}
+
+/// Append-only. No update or delete path exists in the application layer
+/// (plan §13.2, §15.2 "audit records cannot be modified through ordinary APIs").
+model AuditEvent {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  actorType      AuditActorType
+  /// API key id, admin principal, or null for SYSTEM.
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  requestId      String?
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}
+
+/// Plan §14.2: key, operation, request fingerprint, execution status and the
+/// stored outcome. Same key + same fingerprint replays the outcome; same key +
+/// different fingerprint is rejected.
+model IdempotencyKey {
+  organizationId String            @db.Uuid
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  key            String            @db.VarChar(128)
+  operation      String
+  fingerprint    String            @db.VarChar(64)
+  status         IdempotencyStatus
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime          @default(now())
+  completedAt    DateTime?
+
+  @@id([organizationId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}

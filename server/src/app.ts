@@ -1,0 +1,118 @@
+import { randomUUID } from 'node:crypto';
+import { OpenAPIHono } from '@hono/zod-openapi';
+import type { ApiKeyEnvironment } from './auth/api-key.js';
+import { apiKeyAuth, type AppEnv } from './auth/middleware.js';
+import { SCOPES } from './auth/scopes.js';
+import { ApiError, ERROR_CODES } from './errors.js';
+import type { Logger } from './logger.js';
+import type { RateLimiter } from './rate-limit.js';
+import type { LedgerStore } from './repositories/ports.js';
+import { adminAuth, adminRoutes } from './routes/admin.js';
+import { healthRoutes } from './routes/health.js';
+import { integrationRoutes } from './routes/integration.js';
+
+export interface AppDependencies {
+  store: LedgerStore;
+  logger: Logger;
+  rateLimiter: RateLimiter;
+  adminToken: string;
+  keyEnvironment: ApiKeyEnvironment;
+  version: string;
+  /** Injectable clock so tests can control expiry and rate windows. */
+  now?: () => Date;
+}
+
+export const API_TITLE = 'Mutaba3a Financial API';
+export const API_VERSION = '1.0.0-m1';
+
+/**
+ * Composes the HTTP application. No I/O happens here; everything it needs is
+ * injected, which is what lets the route tests run against MemoryLedgerStore
+ * and the contract tests against Postgres with the same app.
+ */
+export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
+  const now = deps.now ?? (() => new Date());
+
+  const app = new OpenAPIHono<AppEnv>({
+    defaultHook: (result, c) => {
+      if (!result.success) {
+        const err = new ApiError('VALIDATION_FAILED', 'Request validation failed', result.error.issues);
+        return c.json(err.toEnvelope(c.get('requestId')), err.status);
+      }
+      return undefined;
+    },
+  });
+
+  app.use('*', async (c, next) => {
+    const requestId = c.req.header('x-request-id') ?? randomUUID();
+    c.set('requestId', requestId);
+    c.set('now', now);
+    c.header('X-Request-Id', requestId);
+    c.header('Cache-Control', 'no-store');
+    const started = Date.now();
+    await next();
+    deps.logger.info(
+      { requestId, method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
+      'request',
+    );
+  });
+
+  app.onError((err, c) => {
+    const requestId = c.get('requestId') ?? 'unknown';
+    if (err instanceof ApiError) {
+      if (err.status >= 500) deps.logger.error({ requestId, err }, err.message);
+      return c.json(err.toEnvelope(requestId), err.status);
+    }
+    deps.logger.error({ requestId, err }, 'unhandled error');
+    const internal = new ApiError('INTERNAL', 'Unexpected server error');
+    return c.json(internal.toEnvelope(requestId), internal.status);
+  });
+
+  app.notFound((c) => {
+    const err = new ApiError('NOT_FOUND', `No route for ${c.req.method} ${c.req.path}`);
+    return c.json(err.toEnvelope(c.get('requestId')), err.status);
+  });
+
+  app.use('/v1/*', apiKeyAuth({ store: deps.store, environment: deps.keyEnvironment, rateLimiter: deps.rateLimiter }));
+  app.use('/admin/*', adminAuth(deps.adminToken));
+
+  app.route('/', healthRoutes(deps.store, deps.version));
+  app.route('/', integrationRoutes(deps.store, deps.version));
+  app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
+
+  app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
+    type: 'http',
+    scheme: 'bearer',
+    description: 'Organization API key: `Authorization: Bearer mut_live_<prefix>_<secret>`',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'adminToken', {
+    type: 'apiKey',
+    in: 'header',
+    name: 'X-Admin-Token',
+    description: 'Operator token (MUTABA3A_ADMIN_TOKEN). Provisioning only.',
+  });
+
+  app.doc('/openapi.json', {
+    openapi: '3.1.0',
+    info: {
+      title: API_TITLE,
+      version: API_VERSION,
+      description: [
+        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestone 1).',
+        '',
+        `Scopes: ${SCOPES.join(', ')}.`,
+        '',
+        `Error codes: ${Object.keys(ERROR_CODES).join(', ')}. Every error is {"error":{"code","message","details?","requestId"}}.`,
+        '',
+        'Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.',
+      ].join('\n'),
+    },
+    tags: [
+      { name: 'Operations', description: 'Liveness and readiness' },
+      { name: 'Integration', description: 'Credential validation and tenant binding' },
+      { name: 'Admin', description: 'Operator provisioning' },
+    ],
+  });
+
+  return app;
+}

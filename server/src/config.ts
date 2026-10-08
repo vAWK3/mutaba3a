@@ -1,0 +1,37 @@
+import { z } from 'zod';
+
+/**
+ * Validated process configuration. Fails fast at boot with a readable list of
+ * what is missing — a half-configured ledger service must not start.
+ *
+ * Nothing here is read anywhere else via `process.env`; every consumer takes
+ * a `Config` so tests can construct one without touching the environment.
+ */
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  DATABASE_URL: z.string().url(),
+  MUTABA3A_ADMIN_TOKEN: z.string().min(32, 'MUTABA3A_ADMIN_TOKEN must be at least 32 characters'),
+  API_KEY_ENVIRONMENT: z.enum(['live', 'test']),
+  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(300),
+  SERVICE_VERSION: z.string().min(1).default('0.0.0-dev'),
+});
+
+export type Config = z.infer<typeof envSchema>;
+
+export class ConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const parsed = envSchema.safeParse(env);
+  if (!parsed.success) {
+    const lines = parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
+    throw new ConfigError(`Invalid configuration:\n${lines.join('\n')}`);
+  }
+  return parsed.data;
+}
