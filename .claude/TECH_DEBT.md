@@ -35,18 +35,6 @@ Routes do not change; only `index.ts` wiring does. Introduced by Money v1 M1.
 Resolving this debt means replacing the limiter port implementation *and*
 loosening that validation in the same change.
 
-### TD-018: Organizations and API Keys Are Operator-Provisioned Only
-**Status**: Open
-**Added**: 2026-10-08
-**Impact**: A firm cannot create its own Mutaba3a organization or rotate its
-own key; an operator with MUTABA3A_ADMIN_TOKEN does it (`npm run provision`)
-
-Mutaba3a deliberately has no account system (ADR-023), and the plan's
-"the Partner obtains an API key from Mutaba3a" assumes one. Self-serve
-provisioning (accounts, org membership, key management UI) is a product
-decision, not an M1 gap; until then the admin API and CLI are the path.
-Introduced by Money v1 M1.
-
 ### TD-015: OAuth Refresh Tokens Have No Durable, Secure Store
 **Status**: Open
 **Added**: 2026-10-05
@@ -405,6 +393,17 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ## Resolved Debt
+
+### TD-018: Organizations and API Keys Are Operator-Provisioned Only
+**Status**: Accepted
+**Decided**: 2026-10-08 by the product owner
+**Original Priority**: Medium
+
+Keys stay operator-issued through `/admin/v1/*` and `npm run provision`; there
+will be no self-serve account, organization or key-management flow. Mutaba3a
+keeps no account system (ADR-023). Malafat's side records the same decision in
+its ADR-150 addendum (MAL-870). Revisit only if a customer other than Malafat
+needs keys without an operator.
 
 ### TD-019: No CI for `server/`
 **Status**: Resolved

@@ -29,6 +29,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — M2 design brief + test plan; TD-018 accepted
+
+### Added
+- `.claude/designs/money-v1-m2-customers-projects.md` — Milestone 2 design
+  brief (customers, projects, external references, import preview/commit,
+  pagination, optimistic concurrency). Six decisions listed for product-owner
+  approval; no code until approved (CLAUDE.md lifecycle).
+- `.claude/designs/money-v1-m2-customers-projects-tests.md` — the test plan
+  that lands first once approved.
+
+### Changed
+- `TECH_DEBT.md` TD-018 → **Accepted**: keys stay operator-issued, no
+  self-serve (product-owner decision; Malafat records the same in its
+  ADR-150 addendum together with MAL-870: Money included for every tenant as a
+  $0 Stripe add-on).
+
+---
+
 ## [Unreleased] - 2026-10-08 — Deploy path revised: production only, everything local except hosting (ADR-026 rev. 2)
 
 ### Changed
