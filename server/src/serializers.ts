@@ -4,6 +4,7 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type {
+  AttachmentRecord,
   AgreementRecord,
   AllocationRecord,
   ApiKeyRecord,
@@ -319,5 +320,26 @@ export function serializeRetainerTerms(t: RetainerTerms, currency: string) {
     paymentTerms: t.paymentTerms,
     endMonth: t.endMonth,
     reason: t.reason,
+  };
+}
+
+// ---- Milestone 6 ------------------------------------------------------------
+
+export function serializeAttachment(a: AttachmentRecord) {
+  return {
+    id: a.id,
+    kind: a.kind,
+    filename: a.filename,
+    mimeType: a.mimeType as 'application/pdf' | 'image/jpeg' | 'image/png',
+    sizeBytes: a.sizeBytes,
+    status: a.status,
+    customerId: a.customerId,
+    projectId: a.projectId,
+    paymentId: a.paymentId,
+    invoiceNumber: a.invoiceNumber,
+    invoiceDate: a.invoiceDate,
+    uploadedByKeyId: a.uploadedByKeyId,
+    createdAt: a.createdAt.toISOString(),
+    completedAt: iso(a.completedAt),
   };
 }

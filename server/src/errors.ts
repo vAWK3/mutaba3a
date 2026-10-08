@@ -28,6 +28,7 @@ export const ERROR_CODES = {
   IDEMPOTENCY_KEY_REQUIRED: 422,
   RATE_LIMITED: 429,
   INTERNAL: 500,
+  ATTACHMENTS_NOT_CONFIGURED: 503,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

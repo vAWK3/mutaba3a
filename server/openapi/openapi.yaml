@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.4.0-m5
+  version: 1.5.0-m6
   description: |-
-    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–4).
+    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–6).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.
 
@@ -15,13 +15,15 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
     Payments (M4): a receivable's outstanding = gross − paid − credited. Allocations never cross a customer or a currency. GET /v1/operations/{key} reconciles a lost response: COMPLETED with the stored body, PENDING, or 404 (never completed; retry with the same key is safe).
 
     Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page's nextCursor.
+
+    Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
   - name: Operations
     description: Liveness and readiness
@@ -287,6 +289,7 @@ components:
                 - IDEMPOTENCY_KEY_REQUIRED
                 - RATE_LIMITED
                 - INTERNAL
+                - ATTACHMENTS_NOT_CONFIGURED
             message:
               type: string
             details:
@@ -2570,6 +2573,517 @@ components:
         - responseStatus
         - createdAt
         - completedAt
+    OrganizationSummary:
+      type: object
+      properties:
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        currencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CurrencySummary"
+      required:
+        - asOf
+        - currencies
+    CurrencySummary:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        overdue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        dueToday:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        notYetDue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        unallocated:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        counts:
+          type: object
+          properties:
+            customers:
+              type: integer
+            overdueCustomers:
+              type: integer
+            unallocatedPayments:
+              type: integer
+          required:
+            - customers
+            - overdueCustomers
+            - unallocatedPayments
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerSummaryRow"
+      required:
+        - currency
+        - outstanding
+        - overdue
+        - dueToday
+        - notYetDue
+        - unallocated
+        - counts
+        - customers
+    CustomerSummaryRow:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        overdue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        dueToday:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        notYetDue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        unallocated:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        lastPaymentOn:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        status:
+          $ref: "#/components/schemas/CustomerSummaryStatus"
+      required:
+        - customerId
+        - outstanding
+        - overdue
+        - dueToday
+        - notYetDue
+        - unallocated
+        - lastPaymentOn
+        - status
+    CustomerSummaryStatus:
+      type: string
+      enum:
+        - SETTLED
+        - OVERDUE
+        - OUTSTANDING
+        - UP_TO_DATE
+    CustomerSummary:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        lastPaymentOn:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        currencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerCurrencySummary"
+      required:
+        - customerId
+        - asOf
+        - lastPaymentOn
+        - currencies
+    CustomerCurrencySummary:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        overdue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        dueToday:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        notYetDue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        unallocated:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        status:
+          $ref: "#/components/schemas/CustomerSummaryStatus"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectSummary"
+      required:
+        - currency
+        - outstanding
+        - overdue
+        - dueToday
+        - notYetDue
+        - unallocated
+        - status
+        - projects
+    ProjectSummary:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        currency:
+          $ref: "#/components/schemas/Currency"
+        kind:
+          type: string
+          enum:
+            - FIXED
+            - RETAINER
+            - NONE
+        agreed:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        monthly:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        posted:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        paid:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        credited:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        overdue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        dueToday:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        notYetDue:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        pending:
+          type: object
+          properties:
+            count:
+              type: integer
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - count
+            - amount
+        status:
+          $ref: "#/components/schemas/ProjectSummaryStatus"
+      required:
+        - projectId
+        - currency
+        - kind
+        - agreed
+        - monthly
+        - posted
+        - paid
+        - credited
+        - outstanding
+        - overdue
+        - dueToday
+        - notYetDue
+        - pending
+        - status
+    ProjectSummaryStatus:
+      type: string
+      enum:
+        - NONE
+        - PENDING
+        - OUTSTANDING
+        - PARTIALLY_PAID
+        - OVERDUE
+        - PAID_IN_FULL
+        - UP_TO_DATE
+        - CANCELLED
+        - SETTLED
+    ProjectSummaryResponse:
+      allOf:
+        - $ref: "#/components/schemas/ProjectSummary"
+        - type: object
+          properties:
+            asOf:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+          required:
+            - asOf
+    AuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorType:
+          type: string
+          enum:
+            - API_KEY
+            - ADMIN
+            - SYSTEM
+        actorId:
+          type: string
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties:
+            nullable: true
+        requestId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - actorType
+        - actorId
+        - action
+        - entityType
+        - entityId
+        - requestId
+        - createdAt
+    CreateUploadResponse:
+      type: object
+      properties:
+        attachment:
+          $ref: "#/components/schemas/Attachment"
+        upload:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            method:
+              type: string
+              enum:
+                - PUT
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+            expiresAt:
+              type: string
+              format: date-time
+          required:
+            - url
+            - method
+            - headers
+            - expiresAt
+      required:
+        - attachment
+        - upload
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/AttachmentKind"
+        filename:
+          type: string
+        mimeType:
+          $ref: "#/components/schemas/AttachmentMimeType"
+        sizeBytes:
+          type: integer
+        status:
+          $ref: "#/components/schemas/AttachmentStatus"
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        paymentId:
+          type: string
+          nullable: true
+          format: uuid
+        invoiceNumber:
+          type: string
+          nullable: true
+        invoiceDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        uploadedByKeyId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - kind
+        - filename
+        - mimeType
+        - sizeBytes
+        - status
+        - customerId
+        - projectId
+        - paymentId
+        - invoiceNumber
+        - invoiceDate
+        - uploadedByKeyId
+        - createdAt
+        - completedAt
+    AttachmentKind:
+      type: string
+      enum:
+        - INVOICE
+        - RECEIPT
+        - OTHER
+    AttachmentMimeType:
+      type: string
+      enum:
+        - application/pdf
+        - image/jpeg
+        - image/png
+    AttachmentStatus:
+      type: string
+      enum:
+        - PENDING_UPLOAD
+        - READY
+    CreateUploadRequest:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/AttachmentKind"
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 200
+        mimeType:
+          $ref: "#/components/schemas/AttachmentMimeType"
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+        customerId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+          maxLength: 80
+        invoiceDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - kind
+        - filename
+        - mimeType
+        - sizeBytes
+    AttachmentPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    AttachmentDownload:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        filename:
+          type: string
+        mimeType:
+          $ref: "#/components/schemas/AttachmentMimeType"
+      required:
+        - url
+        - expiresAt
+        - filename
+        - mimeType
     CreateOrganizationRequest:
       type: object
       properties:
@@ -2653,47 +3167,6 @@ components:
             $ref: "#/components/schemas/AuditEvent"
       required:
         - events
-    AuditEvent:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        actorType:
-          type: string
-          enum:
-            - API_KEY
-            - ADMIN
-            - SYSTEM
-        actorId:
-          type: string
-          nullable: true
-        action:
-          type: string
-        entityType:
-          type: string
-        entityId:
-          type: string
-          nullable: true
-        metadata:
-          type: object
-          additionalProperties:
-            nullable: true
-        requestId:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - actorType
-        - actorId
-        - action
-        - entityType
-        - entityId
-        - requestId
-        - createdAt
   parameters: {}
 paths:
   /health:
@@ -5411,6 +5884,535 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/organization:
+    get:
+      tags:
+        - Summaries
+      summary: Outstanding, overdue, due today, not yet due and unallocated per currency, with a row and a status per customer
+      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments. Due items are posted before the figures are read. ?currency= narrows to one block.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/Currency"
+          required: false
+          name: currency
+          in: query
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/customers/{customerId}:
+    get:
+      tags:
+        - Summaries
+      summary: "One customer: buckets, unallocated and status per currency, with a summary per project"
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: customerId
+          in: path
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerSummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/projects/{projectId}:
+    get:
+      tags:
+        - Summaries
+      summary: "One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status"
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: projectId
+          in: path
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummaryResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/audit:
+    get:
+      tags:
+        - Audit
+      summary: List audit events, oldest first, filtered by entity or action
+      description: entityType is the API’s entity name (payment, receivable, agreement, installment, retainer_charge, customer, project, attachment, …); entityId its id. Keyset pagination like every list.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+          required: false
+          name: entityType
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+          required: false
+          name: entityId
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+          required: false
+          name: action
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/attachments/uploads:
+    post:
+      tags:
+        - Attachments
+      summary: "Start an upload: a PENDING_UPLOAD attachment and a short-lived signed PUT URL"
+      description: PDF, JPEG or PNG up to 10 MB, linked to exactly one of customerId, projectId, paymentId. PUT the bytes to upload.url with upload.headers, then POST /v1/attachments/{id}/complete. The object key never contains the filename.
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUploadRequest"
+      responses:
+        "201":
+          description: Upload started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateUploadResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/attachments/{attachmentId}/complete:
+    post:
+      tags:
+        - Attachments
+      summary: "Finish an upload: verify the object and mark the attachment READY"
+      description: 422 UPLOAD_INCOMPLETE when no object exists yet; 422 UPLOAD_MISMATCH when its size or content type differ from what was declared. Idempotent once READY.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: attachmentId
+          in: path
+      responses:
+        "200":
+          description: READY
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/attachments:
+    get:
+      tags:
+        - Attachments
+      summary: List READY attachments of a customer, project or payment
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: customerId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: projectId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: paymentId
+          in: query
+        - schema:
+            $ref: "#/components/schemas/AttachmentKind"
+          required: false
+          name: kind
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/attachments/{attachmentId}/download:
+    get:
+      tags:
+        - Attachments
+      summary: A short-lived signed download URL for a READY attachment
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: attachmentId
+          in: path
+      responses:
+        "200":
+          description: Signed URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentDownload"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/attachments/{attachmentId}:
+    delete:
+      tags:
+        - Attachments
+      summary: Delete an attachment (soft delete; the object is removed)
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: attachmentId
+          in: path
+      responses:
+        "204":
+          description: Deleted (or already was)
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
           content:
             application/json:
               schema:

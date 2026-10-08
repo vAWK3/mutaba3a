@@ -3,6 +3,11 @@ import type { Scope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { ForeignKeyViolation, InsufficientCapacity, UniqueViolation } from './memory.js';
 import type {
+  AttachmentFilter,
+  AttachmentRepository,
+  AuditEventRecord,
+  AuditFilter,
+  CreateAttachmentInput,
   AppendVersionInput,
   RetainerVersionRecord,
   AgreementFilter,
@@ -156,6 +161,48 @@ export class PrismaLedgerStore implements LedgerStore {
         requestId: r.requestId,
         createdAt: r.createdAt,
       })),
+    list: async (organizationId, filter: AuditFilter, page) => {
+      const rows = await this.prisma.auditEvent.findMany({
+        where: { organizationId, ...(filter.entityType ? { entityType: filter.entityType } : {}), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...(filter.action ? { action: filter.action } : {}), ...cursorWhere(page) },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows.map(toAuditEvent), page);
+    },
+  };
+
+  readonly attachments: AttachmentRepository = {
+    create: async (input: Omit<CreateAttachmentInput, 'storageKey'>, at) => this.prisma.attachment.create({ data: { ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at } }),
+    setKey: async (organizationId, id, storageKey) => {
+      const { count } = await this.prisma.attachment.updateMany({ where: { id, organizationId }, data: { storageKey } });
+      return count === 1 ? this.prisma.attachment.findUnique({ where: { id } }) : null;
+    },
+    getById: (organizationId, id) => this.prisma.attachment.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    list: async (organizationId, filter: AttachmentFilter, page) => {
+      const rows = await this.prisma.attachment.findMany({
+        where: {
+          organizationId,
+          status: 'READY',
+          deletedAt: null,
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.projectId ? { projectId: filter.projectId } : {}),
+          ...(filter.paymentId ? { paymentId: filter.paymentId } : {}),
+          ...(filter.kind ? { kind: filter.kind } : {}),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    complete: async (organizationId, id, at) => {
+      await this.prisma.attachment.updateMany({ where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' }, data: { status: 'READY', completedAt: at } });
+      return this.prisma.attachment.findFirst({ where: { id, organizationId, deletedAt: null } });
+    },
+    softDelete: async (organizationId, id, at) => {
+      await this.prisma.attachment.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+      return this.prisma.attachment.findFirst({ where: { id, organizationId } });
+    },
   };
 
   readonly idempotency: IdempotencyRepository = {
@@ -690,6 +737,21 @@ class AlreadyPosted extends Error {}
 export type { AgreementRecord, RetainerChargeRecord, ReceivableRecord };
 
 /** Keyset condition for (createdAt, id) ascending. */
+function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditEventRecord['actorType']; actorId: string | null; action: string; entityType: string; entityId: string | null; metadata: unknown; requestId: string | null; createdAt: Date }): AuditEventRecord {
+  return {
+    id: r.id,
+    organizationId: r.organizationId,
+    actorType: r.actorType,
+    actorId: r.actorId,
+    action: r.action,
+    entityType: r.entityType,
+    entityId: r.entityId,
+    ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as Record<string, unknown> } : {}),
+    requestId: r.requestId,
+    createdAt: r.createdAt,
+  };
+}
+
 function cursorWhere(page: PageRequest): { OR?: Array<Record<string, unknown>> } {
   if (!page.cursor) return {};
   return {

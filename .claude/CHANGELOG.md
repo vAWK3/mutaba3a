@@ -29,6 +29,59 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 6: summaries, audit listing, attachments (`server/`)
+
+Brief `money-v1-m6-summaries-audit-attachments.md`, decided by the engineering
+owner under the "complete the epic" instruction. API version `1.5.0-m6`;
+additive. Closes the Money v1 server epic (M1–M6).
+
+### Added
+- **Summaries** (`src/summaries/compute.ts`, `src/routes/summaries.ts`):
+  `GET /v1/summaries/organization[?currency=]`, `/customers/{id}`,
+  `/projects/{id}`. Computed on read from OPEN receivables and POSTED payments:
+  exact day buckets (`outstanding = overdue + dueToday + notYetDue`),
+  unallocated funds, last payment date, and statuses — customer `SETTLED /
+  OVERDUE / OUTSTANDING / UP_TO_DATE`, fixed project `PENDING / OUTSTANDING /
+  PARTIALLY_PAID / OVERDUE / PAID_IN_FULL` (never `PAID_IN_FULL` while an
+  installment is pending), retainer `UP_TO_DATE / OUTSTANDING / OVERDUE /
+  CANCELLED / SETTLED`, `NONE` without agreements. Retainer `monthly` is the
+  gross of the terms in force (M5 versions). Scope `summaries:read`.
+- **Audit listing** `GET /v1/audit?entityType=&entityId=&action=&cursor=&limit=`
+  (scope `audit:read`), keyset-paginated like every list;
+  `AuditRepository.list`; index `(organizationId, entityType, entityId,
+  createdAt)`.
+- **Attachments** (`src/attachments/{rules,storage}.ts`,
+  `src/routes/attachments.ts`): `POST /v1/attachments/uploads` (PDF / JPEG /
+  PNG ≤ 10 MB, exactly one of customerId / projectId / paymentId, 201 with a
+  V4 signed PUT URL), `POST /v1/attachments/{id}/complete` (verifies the
+  object's size and type: `UPLOAD_INCOMPLETE` / `UPLOAD_MISMATCH`),
+  `GET /v1/attachments?…`, `GET /v1/attachments/{id}/download` (signed URL
+  with a safe `Content-Disposition`), `DELETE /v1/attachments/{id}` (soft
+  delete + object removal). Object key `org/{organizationId}/{attachmentId}`,
+  never the filename. `AttachmentStorage` port with `GcsAttachmentStorage`
+  (`@google-cloud/storage`, signBlob through the service account) and
+  `MemoryAttachmentStorage` (tests). Config `ATTACHMENTS_BUCKET` (optional →
+  503 `ATTACHMENTS_NOT_CONFIGURED`), `ATTACHMENTS_URL_TTL_SECONDS` (900).
+  Audit `attachment.uploaded`, `attachment.deleted`.
+- **Terraform:** private bucket (uniform access, public access prevention),
+  `roles/storage.objectAdmin` on it and `roles/iam.serviceAccountTokenCreator`
+  on the service account for itself, `storage` + `iamcredentials` APIs, the two
+  env vars on Cloud Run, output `attachments_bucket`.
+- **Schema + migration `20261008230000_m6_attachments_audit_index`.**
+- **Published reasons:** 422 `UPLOAD_INCOMPLETE`, `UPLOAD_MISMATCH`,
+  `ATTACHMENT_TARGET_REQUIRED`, `ATTACHMENT_TARGET_AMBIGUOUS`,
+  `MIME_TYPE_UNSUPPORTED`, `FILE_TOO_LARGE`, `FILENAME_INVALID`,
+  `ATTACHMENT_NOT_READY`; error code `ATTACHMENTS_NOT_CONFIGURED` (503).
+- **Tests:** 315 (M6: compute 7, rules 3, store contract 2 × memory +
+  Postgres, routes-m6 5).
+
+### Not done (brief §5.4, §7)
+- No malware scan before `READY`; `complete` checks size and type only. A
+  scanner on bucket events is the follow-up; the UI downloads, never renders
+  inline.
+
+---
+
 ## [Unreleased] - 2026-10-08 — Money v1 Milestone 5: retainer changes, proration, cancel preview, reconcile script (`server/`)
 
 Brief `money-v1-m5-retainer-changes.md`, decided by the engineering owner under

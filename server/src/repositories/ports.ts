@@ -149,9 +149,64 @@ export interface IntegrationRepository {
   disconnect(id: string, at: Date): Promise<IntegrationRecord | null>;
 }
 
+export interface AuditFilter {
+  entityType?: string;
+  entityId?: string;
+  action?: string;
+}
+
 export interface AuditRepository {
   append(event: AuditEventInput): Promise<AuditEventRecord>;
   listByOrganization(organizationId: string, limit: number): Promise<AuditEventRecord[]>;
+  /** M6: the organization's history filtered by entity / action, oldest first, keyset-paginated. */
+  list(organizationId: string, filter: AuditFilter, page: PageRequest): Promise<Page<AuditEventRecord>>;
+}
+
+// ---- Milestone 6: attachments ----------------------------------------------------
+
+export type AttachmentKind = 'INVOICE' | 'RECEIPT' | 'OTHER';
+export type AttachmentStatus = 'PENDING_UPLOAD' | 'READY';
+
+export interface CreateAttachmentInput {
+  organizationId: string;
+  kind: AttachmentKind;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  customerId: string | null;
+  projectId: string | null;
+  paymentId: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: IsoDate | null;
+  uploadedByKeyId: string | null;
+  requestId: string | null;
+}
+
+export interface AttachmentRecord extends CreateAttachmentInput {
+  id: string;
+  status: AttachmentStatus;
+  createdAt: Date;
+  completedAt: Date | null;
+  deletedAt: Date | null;
+}
+
+export interface AttachmentFilter {
+  customerId?: string;
+  projectId?: string;
+  paymentId?: string;
+  kind?: AttachmentKind;
+}
+
+export interface AttachmentRepository {
+  /** The row is created with a placeholder key; the caller derives the real key from the id and `setKey`s it (one round trip, no id guessing). */
+  create(input: Omit<CreateAttachmentInput, 'storageKey'>, at: Date): Promise<AttachmentRecord>;
+  setKey(organizationId: string, id: string, storageKey: string): Promise<AttachmentRecord | null>;
+  getById(organizationId: string, id: string): Promise<AttachmentRecord | null>;
+  /** READY attachments that are not deleted, oldest first. */
+  list(organizationId: string, filter: AttachmentFilter, page: PageRequest): Promise<Page<AttachmentRecord>>;
+  complete(organizationId: string, id: string, at: Date): Promise<AttachmentRecord | null>;
+  softDelete(organizationId: string, id: string, at: Date): Promise<AttachmentRecord | null>;
 }
 
 export interface IdempotencyRepository {
@@ -722,4 +777,5 @@ export interface LedgerStore {
   payments: PaymentRepository;
   /** Liveness of the backing store, for /ready. */
   ping(): Promise<void>;
+  attachments: AttachmentRepository;
 }

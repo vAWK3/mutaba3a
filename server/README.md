@@ -51,10 +51,23 @@ change under `server/`. It never pushes or deploys.
 - `POST /v1/retainers/preview`, `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`, `POST /v1/retainers/{id}/changes/preview`, `POST /v1/retainers/{id}/changes`, `POST /v1/retainers/{id}/cancel/preview`, `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile` — recurring retainers, one charge per service month; effective-dated changes of terms (versions); cancel with FULL / PRORATE / WAIVE and a credit on an already-posted final month
 - `POST /v1/allocations/preview`, `POST /v1/payments`, `GET /v1/payments[/{id}]`, `POST /v1/payments/{id}/allocations`, `POST /v1/payments/{id}/reverse`, `POST|GET /v1/receivables/{id}/credits`, `GET /v1/operations/{idempotencyKey}` — payments, allocations, reversals, credits, lost-response lookup
 - `GET /v1/receivables[/{id}]` — what is owed, statuses computed in the organization timezone
+- `GET /v1/summaries/organization[?currency=]`, `GET /v1/summaries/customers/{id}`, `GET /v1/summaries/projects/{id}` — outstanding split into overdue / due today / not yet due, unallocated, last payment, statuses; computed on read
+- `GET /v1/audit?entityType=&entityId=&action=` — the organization's financial history (API keys with `audit:read`)
+- `POST /v1/attachments/uploads`, `POST /v1/attachments/{id}/complete`, `GET /v1/attachments?customerId=|projectId=|paymentId=`, `GET /v1/attachments/{id}/download`, `DELETE /v1/attachments/{id}` — invoices and receipts behind short-lived signed URLs (needs `ATTACHMENTS_BUCKET`; otherwise 503 `ATTACHMENTS_NOT_CONFIGURED`)
 - `POST /admin/v1/organizations`, `GET /admin/v1/organizations/{id}`, `POST …/{id}/api-keys`, `POST /admin/v1/api-keys/{id}/revoke`, `GET …/{id}/audit` — operator only, `X-Admin-Token`
 - `GET /openapi.json` — the live contract; `openapi/openapi.yaml` is the committed copy
 
 Errors are always `{"error":{"code","message","details?","requestId"}}`; codes are listed in `src/errors.ts` and in the OpenAPI description.
+
+## Attachments bucket (operator)
+
+Terraform creates a private bucket (`<project>-mutaba3a-attachments`) and gives
+the API's service account object access plus `iam.serviceAccountTokenCreator`
+on itself, which is how V4 signed URLs are minted without a key file. The
+bucket name reaches the service as `ATTACHMENTS_BUCKET`; without it the
+attachments routes answer 503 and everything else works. Locally, set
+`ATTACHMENTS_BUCKET` to any bucket your `gcloud auth application-default
+login` identity can write to, or leave it unset.
 
 ## Scheduled reconcile (operator)
 

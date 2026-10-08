@@ -436,6 +436,15 @@ export const VALIDATION_REASONS = [
   'CHANGE_NOTHING_CHANGED',
   'FINAL_MONTH_INVALID',
   'PREVIEW_TOKEN_REQUIRED',
+  // M6
+  'UPLOAD_INCOMPLETE',
+  'UPLOAD_MISMATCH',
+  'ATTACHMENT_TARGET_REQUIRED',
+  'ATTACHMENT_TARGET_AMBIGUOUS',
+  'MIME_TYPE_UNSUPPORTED',
+  'FILE_TOO_LARGE',
+  'FILENAME_INVALID',
+  'ATTACHMENT_NOT_READY',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -932,3 +941,120 @@ export const OperationSchema = z
     completedAt: z.string().datetime().nullable(),
   })
   .openapi('Operation');
+
+// ---- Milestone 6: summaries, audit listing, attachments --------------------------
+
+export const CustomerSummaryStatusSchema = z.enum(['SETTLED', 'OVERDUE', 'OUTSTANDING', 'UP_TO_DATE']).openapi('CustomerSummaryStatus');
+export const ProjectSummaryStatusSchema = z.enum(['NONE', 'PENDING', 'OUTSTANDING', 'PARTIALLY_PAID', 'OVERDUE', 'PAID_IN_FULL', 'UP_TO_DATE', 'CANCELLED', 'SETTLED']).openapi('ProjectSummaryStatus');
+
+const bucketFields = { outstanding: AmountSchema, overdue: AmountSchema, dueToday: AmountSchema, notYetDue: AmountSchema };
+
+export const CustomerSummaryRowSchema = z
+  .object({ customerId: uuid, ...bucketFields, unallocated: AmountSchema, lastPaymentOn: IsoDateSchema.nullable(), status: CustomerSummaryStatusSchema })
+  .openapi('CustomerSummaryRow');
+
+export const CurrencySummarySchema = z
+  .object({
+    currency: CurrencySchema,
+    ...bucketFields,
+    unallocated: AmountSchema,
+    counts: z.object({ customers: z.number().int(), overdueCustomers: z.number().int(), unallocatedPayments: z.number().int() }),
+    customers: z.array(CustomerSummaryRowSchema),
+  })
+  .openapi('CurrencySummary');
+
+export const OrganizationSummarySchema = z.object({ asOf: IsoDateSchema, currencies: z.array(CurrencySummarySchema) }).openapi('OrganizationSummary');
+
+export const ProjectSummarySchema = z
+  .object({
+    projectId: uuid,
+    currency: CurrencySchema,
+    kind: z.enum(['FIXED', 'RETAINER', 'NONE']),
+    /** Fixed: the active agreement's gross total. */
+    agreed: AmountSchema.nullable(),
+    /** Retainer: the monthly gross of the terms in force. */
+    monthly: AmountSchema.nullable(),
+    posted: AmountSchema,
+    paid: AmountSchema,
+    credited: AmountSchema,
+    ...bucketFields,
+    pending: z.object({ count: z.number().int(), amount: AmountSchema }),
+    status: ProjectSummaryStatusSchema,
+  })
+  .openapi('ProjectSummary');
+
+export const CustomerCurrencySummarySchema = z
+  .object({ currency: CurrencySchema, ...bucketFields, unallocated: AmountSchema, status: CustomerSummaryStatusSchema, projects: z.array(ProjectSummarySchema) })
+  .openapi('CustomerCurrencySummary');
+
+export const CustomerSummarySchema = z
+  .object({ customerId: uuid, asOf: IsoDateSchema, lastPaymentOn: IsoDateSchema.nullable(), currencies: z.array(CustomerCurrencySummarySchema) })
+  .openapi('CustomerSummary');
+
+export const ProjectSummaryResponseSchema = ProjectSummarySchema.extend({ asOf: IsoDateSchema }).openapi('ProjectSummaryResponse');
+
+export const SummaryCurrencyQuerySchema = z.object({ currency: CurrencySchema.optional() });
+
+export const ListAuditQuerySchema = z.object({
+  ...pageQuery,
+  entityType: z.string().min(1).max(64).optional(),
+  entityId: z.string().min(1).max(128).optional(),
+  action: z.string().min(1).max(64).optional(),
+});
+export const AuditPageSchema = z.object({ items: z.array(AuditEventSchema), nextCursor: z.string().nullable() }).openapi('AuditPage');
+
+export const AttachmentKindSchema = z.enum(['INVOICE', 'RECEIPT', 'OTHER']).openapi('AttachmentKind');
+export const AttachmentStatusSchema = z.enum(['PENDING_UPLOAD', 'READY']).openapi('AttachmentStatus');
+export const AttachmentMimeTypeSchema = z.enum(['application/pdf', 'image/jpeg', 'image/png']).openapi('AttachmentMimeType');
+
+export const AttachmentSchema = z
+  .object({
+    id: uuid,
+    kind: AttachmentKindSchema,
+    filename: z.string(),
+    mimeType: AttachmentMimeTypeSchema,
+    sizeBytes: z.number().int(),
+    status: AttachmentStatusSchema,
+    customerId: uuid.nullable(),
+    projectId: uuid.nullable(),
+    paymentId: uuid.nullable(),
+    invoiceNumber: z.string().nullable(),
+    invoiceDate: IsoDateSchema.nullable(),
+    uploadedByKeyId: z.string().nullable(),
+    createdAt: z.string().datetime(),
+    completedAt: z.string().datetime().nullable(),
+  })
+  .openapi('Attachment');
+
+export const CreateUploadRequestSchema = z
+  .object({
+    kind: AttachmentKindSchema,
+    filename: z.string().min(1).max(200),
+    mimeType: AttachmentMimeTypeSchema,
+    sizeBytes: z.number().int().min(1).max(10 * 1024 * 1024),
+    customerId: uuid.optional(),
+    projectId: uuid.optional(),
+    paymentId: uuid.optional(),
+    invoiceNumber: z.string().max(80).optional(),
+    invoiceDate: IsoDateSchema.optional(),
+  })
+  .openapi('CreateUploadRequest');
+
+export const CreateUploadResponseSchema = z
+  .object({
+    attachment: AttachmentSchema,
+    upload: z.object({ url: z.string().url(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string().datetime() }),
+  })
+  .openapi('CreateUploadResponse');
+
+export const AttachmentDownloadSchema = z.object({ url: z.string().url(), expiresAt: z.string().datetime(), filename: z.string(), mimeType: AttachmentMimeTypeSchema }).openapi('AttachmentDownload');
+
+export const ListAttachmentsQuerySchema = z.object({
+  ...pageQuery,
+  customerId: uuid.optional(),
+  projectId: uuid.optional(),
+  paymentId: uuid.optional(),
+  kind: AttachmentKindSchema.optional(),
+});
+export const AttachmentPageSchema = z.object({ items: z.array(AttachmentSchema), nextCursor: z.string().nullable() }).openapi('AttachmentPage');
+export const AttachmentIdParamSchema = z.object({ attachmentId: uuid.openapi({ param: { name: 'attachmentId', in: 'path' } }) });

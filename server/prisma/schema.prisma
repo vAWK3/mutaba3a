@@ -154,6 +154,7 @@ model Organization {
   receivables        Receivable[]
   payments           Payment[]
 
+  attachments  Attachment[]
   @@map("organizations")
 }
 
@@ -221,6 +222,7 @@ model AuditEvent {
 
   @@index([organizationId, createdAt])
   @@index([entityType, entityId])
+  @@index([organizationId, entityType, entityId, createdAt])
   @@map("audit_events")
 }
 
@@ -589,4 +591,43 @@ model PaymentCounter {
 
   @@id([organizationId, year])
   @@map("payment_counters")
+}
+
+enum AttachmentKind {
+  INVOICE
+  RECEIPT
+  OTHER
+}
+
+enum AttachmentStatus {
+  PENDING_UPLOAD
+  READY
+}
+
+/// A file in the private attachments bucket (M6). Bytes never pass through the API; the key is org/{organizationId}/{id}.
+model Attachment {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  kind            AttachmentKind
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+  status          AttachmentStatus @default(PENDING_UPLOAD)
+  storageKey      String
+  customerId      String?          @db.Uuid
+  projectId       String?          @db.Uuid
+  paymentId       String?          @db.Uuid
+  invoiceNumber   String?
+  invoiceDate     String?          @db.VarChar(10)
+  uploadedByKeyId String?
+  requestId       String?
+  createdAt       DateTime         @default(now())
+  completedAt     DateTime?
+  deletedAt       DateTime?
+
+  @@index([organizationId, customerId, createdAt])
+  @@index([organizationId, projectId, createdAt])
+  @@index([organizationId, paymentId, createdAt])
+  @@map("attachments")
 }

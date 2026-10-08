@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
+  AttachmentFilter,
+  AttachmentRecord,
+  AttachmentRepository,
+  AuditFilter,
+  CreateAttachmentInput,
   AppendVersionInput,
   RetainerVersionRecord,
   AgreementFilter,
@@ -82,6 +87,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly recs = new Map<string, ReceivableRecord>();
   private readonly supps = new Map<string, SupplementRecord>();
   private readonly versions = new Map<string, RetainerVersionRecord>();
+  private readonly files = new Map<string, AttachmentRecord>();
   private readonly pays = new Map<string, PaymentRecord>();
   private readonly allocs = new Map<string, AllocationRecord>();
   private readonly credits = new Map<string, CreditRecord>();
@@ -198,6 +204,58 @@ export class MemoryLedgerStore implements LedgerStore {
         .slice(-limit)
         .reverse()
         .map((e) => ({ ...e })),
+    list: async (organizationId, filter: AuditFilter, page) =>
+      paginate(
+        this.events.filter((e) => e.organizationId === organizationId && (!filter.entityType || e.entityType === filter.entityType) && (!filter.entityId || e.entityId === filter.entityId) && (!filter.action || e.action === filter.action)),
+        page,
+      ),
+  };
+
+  readonly attachments: AttachmentRepository = {
+    create: async (input: Omit<CreateAttachmentInput, 'storageKey'>, at) => {
+      const record: AttachmentRecord = { id: randomUUID(), ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at, completedAt: null, deletedAt: null };
+      this.files.set(record.id, record);
+      return { ...record };
+    },
+    setKey: async (organizationId, id, storageKey) => {
+      const f = this.files.get(id);
+      if (!f || f.organizationId !== organizationId) return null;
+      f.storageKey = storageKey;
+      return { ...f };
+    },
+    getById: async (organizationId, id) => {
+      const f = this.files.get(id);
+      return f && f.organizationId === organizationId && !f.deletedAt ? { ...f } : null;
+    },
+    list: async (organizationId, filter: AttachmentFilter, page) =>
+      paginate(
+        [...this.files.values()].filter(
+          (f) =>
+            f.organizationId === organizationId &&
+            f.status === 'READY' &&
+            !f.deletedAt &&
+            (!filter.customerId || f.customerId === filter.customerId) &&
+            (!filter.projectId || f.projectId === filter.projectId) &&
+            (!filter.paymentId || f.paymentId === filter.paymentId) &&
+            (!filter.kind || f.kind === filter.kind),
+        ),
+        page,
+      ),
+    complete: async (organizationId, id, at) => {
+      const f = this.files.get(id);
+      if (!f || f.organizationId !== organizationId || f.deletedAt) return null;
+      if (f.status !== 'READY') {
+        f.status = 'READY';
+        f.completedAt = at;
+      }
+      return { ...f };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const f = this.files.get(id);
+      if (!f || f.organizationId !== organizationId) return null;
+      if (!f.deletedAt) f.deletedAt = at;
+      return { ...f };
+    },
   };
 
   readonly idempotency: IdempotencyRepository = {

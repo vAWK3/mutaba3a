@@ -2,7 +2,7 @@
   "name": "@mutaba3a/api",
   "private": true,
   "version": "0.1.0",
-  "description": "Mutaba3a hosted financial API \u2014 organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
+  "description": "Mutaba3a hosted financial API — organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -28,6 +28,7 @@
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
   },
   "dependencies": {
+    "@google-cloud/storage": "8.3.0",
     "@hono/node-server": "2.1.4",
     "@hono/zod-openapi": "1.6.3",
     "@prisma/client": "6.19.3",

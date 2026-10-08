@@ -83,7 +83,7 @@ As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default 
 | `GET /v1/retainers/{id}/charges` | `payments:read` | generated charges; unique per (agreement version, service period) |
 | `POST /v1/retainers/reconcile` | `agreements:write` | operator/scheduler: generate any missing charges up to today, idempotent, organization-scoped; the scheduler calls this per organization in its timezone |
 
-### M6 — Attachments, summaries, audit (plan §9, §11)
+### M6 — Attachments, summaries, audit (plan §9, §11) — **implemented 2026-10-08** (`money-v1-m6-summaries-audit-attachments.md`, API `1.5.0-m6`). As built: `GET /v1/summaries/organization[?currency=]` returns per-currency blocks with per-customer rows; `POST /v1/attachments/uploads` takes `customerId | projectId | paymentId`; `DELETE /v1/attachments/{id}` added; no malware scan (`complete` verifies size and type); `GET /v1/audit` filters by `entityType`, `entityId`, `action`
 
 | Method & path | Scope | Notes |
 |---|---|---|
