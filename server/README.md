@@ -1,6 +1,6 @@
 # Mutaba3a API (`server/`)
 
-The hosted, organization-scoped financial API that Malafat's Money section calls (MUT/MAL Money v1, Option B — see ADR-024/025 in `../.claude/DECISIONS.md`). Milestone 1 ships the control plane: organizations, API keys with scopes, the Malafat tenant binding, audit, idempotency, rate limiting, and the OpenAPI contract. Milestone 2 adds customers, projects, external references and batch import. Milestone 3 adds VAT rates, fixed-fee agreements with installments, basic retainers and receivables. Payments arrive in M4.
+The hosted, organization-scoped financial API that Malafat's Money section calls (MUT/MAL Money v1, Option B — see ADR-024/025 in `../.claude/DECISIONS.md`). Milestone 1 ships the control plane: organizations, API keys with scopes, the Malafat tenant binding, audit, idempotency, rate limiting, and the OpenAPI contract. Milestone 2 adds customers, projects, external references and batch import. Milestone 3 adds VAT rates, fixed-fee agreements with installments, basic retainers and receivables. Milestone 4 adds payments with previewed allocations, reversals, credits against posted receivables and the operations lookup.
 
 The desktop/PWA app in `../src` is unchanged and still works fully offline. This directory is a separate npm package with its own lockfile; nothing from `../src` is imported yet.
 

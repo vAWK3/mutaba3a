@@ -1098,3 +1098,25 @@ reads off a calendar (agreement date, due date, service month), with "today"
 computed in the organization's timezone; `DateTime` only for instants (posted
 at, created at). Lexicographic order is chronological, so no timezone can shift
 a due date.
+
+### Preview token = proof of "same balances" where the review shows balances (M4)
+The agreement/import tokens prove "same rows". A payment review shows what
+each receivable, matter and client will owe afterwards, so its token also hashes
+the `(id, version)` of every receivable the allocation could have touched
+(`payments/preview-token.ts`). Any payment or credit in between bumps a version
+and the post is refused as `PREVIEW_STALE`; the client previews again. The
+store adds a second line of defence: capacity is re-checked under row locks and
+a race surfaces as `InsufficientCapacity` → the same `PREVIEW_STALE`.
+
+### Denormalised sums live with the rows that justify them (M4)
+`receivables.paidMinor` / `creditedMinor` and `payments.allocatedMinor` are
+written in the same transaction as the allocation or credit row, and `status`
+is recomputed from the sums right there (`settleReceivable`). The contract test
+replays a sequence and asserts sums equal their rows. Nothing is ever edited or
+deleted: a reversal subtracts, a credit appends.
+
+### Credits are rows, not edits (M4)
+A posted receivable's `gross / net / vat` never change. What a firm forgives
+is a `receivable_credits` row with its own VAT split at the frozen rate;
+`outstanding = gross − paid − credited`. Credits count towards settlement
+(`PAID` at zero) but are not payments (`PARTIALLY_PAID` needs `paid > 0`).

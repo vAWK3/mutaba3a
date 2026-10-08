@@ -987,5 +987,7 @@ Before creating a new component:
 | `idempotency.ts`, `auth/middleware.ts` (`requireScope`) | M1 | every write / every route |
 | `smoke.ts` | post-deploy checks over injected fetch | `deploy.sh`, CI |
 | `dates.ts`, `vat.ts`, `preview-token.ts` | organization-timezone calendar math and payment terms; VAT math; generic preview proof | every financial route (M3+) |
-| `agreements/schedule.ts`, `agreements/supplement.ts`, `agreements/status.ts`, `agreements/compose.ts`, `agreements/posting.ts` | installment split; supplement distribution; item status; context/rate/treatment resolution; lazy posting | agreements, installments, retainers, receivables routes; M4 payments will read statuses and posting |
+| `agreements/schedule.ts`, `agreements/supplement.ts`, `agreements/status.ts`, `agreements/compose.ts`, `agreements/posting.ts` | installment split; supplement distribution; item status; context/rate/treatment resolution; lazy posting | agreements, installments, retainers, receivables routes; M4 payments read statuses (now credit-aware) and posting |
 | `retainers/schedule.ts` | chargeable months with end/cancel rules | retainers routes, reconcile |
+| `payments/allocate.ts`, `payments/credit.ts`, `payments/numbering.ts`, `payments/preview-token.ts` | allocation validation + strategies + resulting balances; credit VAT split; payment numbers; balance-covering preview token | payments, receivables (credits) routes; M6 summaries will reuse `outstandingOf` and the balance shapes |
+| `routes/operations.ts` | `GET /v1/operations/{key}` over `idempotency.get` | any client reconciling a lost response |

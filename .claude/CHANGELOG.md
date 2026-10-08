@@ -29,6 +29,61 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 4: payments, allocations, reversals, credits, operations lookup (`server/`)
+
+All eight decisions of `money-v1-m4-payments-allocations.md` approved as
+proposed. API version `1.3.0-m4`; additive (receivables gain `credited`).
+
+### Added
+- **Pure money math:** `src/payments/allocate.ts` (outstanding = gross − paid −
+  credited; explicit-set validation that never adjusts; `OLDEST_FIRST` and
+  `SETTLE_MATTERS` suggestions; resulting balances per receivable, project and
+  customer), `src/payments/credit.ts` (credit VAT split at the receivable's
+  frozen rate, `net + vat = credit`; capacity check), `src/payments/numbering.ts`
+  (`PAY-YYYY-NNNN`), `src/payments/preview-token.ts` (token over the allocation
+  set **and** the `(id, version)` of every eligible receivable — decision 2).
+- **Schema + migration `20261008205727_m4_payments_allocations_credits`:**
+  `payments` (number unique per organization, `allocatedMinor`, status
+  POSTED/REVERSED, reversal fields, `replacesPaymentId`), `payment_allocations`,
+  `receivable_credits` (append-only), `payment_counters` (per organization and
+  year, row-locked in the posting transaction); `receivables.creditedMinor`.
+- **Store:** `PaymentRepository` (create / allocate / reverse / list / replacedBy)
+  and `ReceivableRepository.{getByIds, listEligible, credit, listCredits}`,
+  `IdempotencyRepository.get`. Postgres locks each receivable (`FOR UPDATE`),
+  checks capacity under the lock and recomputes `status` from the sums; a race
+  the token did not catch surfaces as `InsufficientCapacity` → 409
+  `PREVIEW_STALE`. The memory store's `seedPaid` test hook is gone.
+- **Routes:** `POST /v1/allocations/preview` (new payment or `{ paymentId }`),
+  `POST /v1/payments`, `GET /v1/payments`, `GET /v1/payments/{id}`,
+  `POST /v1/payments/{id}/allocations`, `POST /v1/payments/{id}/reverse`,
+  `POST /v1/receivables/{id}/credits`, `GET /v1/receivables/{id}/credits`,
+  `GET /v1/operations/{idempotencyKey}`. Audit actions `payment.recorded`,
+  `payment.allocated`, `payment.reversed`, `receivable.settled`,
+  `receivable.credited`.
+- **Published reasons:** 422 `ALLOCATION_EXCEEDS_PAYMENT`,
+  `ALLOCATION_EXCEEDS_OUTSTANDING`, `ALLOCATION_DUPLICATE`,
+  `RECEIVABLE_NOT_FOUND`, `RECEIVABLE_NOT_OPEN`, `RECEIVABLE_CUSTOMER_MISMATCH`,
+  `PAYMENT_NOT_POSTED`, `NO_UNALLOCATED_FUNDS`, `CREDIT_EXCEEDS_OUTSTANDING`,
+  `REPLACES_NOT_REVERSED`, `REPLACES_CUSTOMER_MISMATCH`, `CUSTOMER_NOT_FOUND`;
+  409 `ALREADY_REVERSED`; preview warning `NO_ELIGIBLE_RECEIVABLES`.
+
+### Changed
+- `itemStatus` takes `creditedMinor`: credits count towards `PAID` but never
+  read as `PARTIALLY_PAID` (a credited, unpaid item stays `DUE` / `OVERDUE`).
+  Installment and charge statuses, `countOutstandingByProject` (archive guard)
+  and receivable `outstanding` all subtract credits.
+- `GET /v1/operations/{key}` is `PENDING | COMPLETED | 404`, not `FAILED`
+  (decision 7): a key released by a 5xx is reusable.
+
+### Technical
+- Tests: 268 (28 files), +88: `payments/__tests__/{allocate,credit,numbering}`,
+  `store-contract-m4.ts` (memory + Postgres, incl. 12 concurrent numbered
+  creates and a sums-equal-rows sequence), `routes-m4.test.ts`; the M3
+  receivable-status test now records a real payment. Postgres 16 ran locally
+  for the contract suite. `openapi:check` green; ESLint and `tsc` clean.
+
+---
+
 ## [Docs] - 2026-10-08 — Money v1 Milestone 4 design brief and test plan (proposed)
 
 ### Added

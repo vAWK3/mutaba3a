@@ -229,7 +229,7 @@ describe('lazy posting and triggers', () => {
 });
 
 describe('receivables', () => {
-  it('computes DUE / OVERDUE by the organization timezone and PARTIALLY_PAID / PAID from seeded payments', async () => {
+  it('computes DUE / OVERDUE by the organization timezone and PARTIALLY_PAID / PAID from real payments', async () => {
     const h = harness();
     const jerusalem = await firm(h, { timezone: 'Asia/Jerusalem' });
     const auckland = await firm(h, { timezone: 'Pacific/Auckland' });
@@ -243,9 +243,15 @@ describe('receivables', () => {
     expect((await read(await h.app.request('/v1/receivables', { headers: auckland.auth }))).items[0].status).toBe('OVERDUE');
 
     const rec = (await read(await h.app.request('/v1/receivables', { headers: jerusalem.auth }))).items[0];
-    h.store.seedPaid(rec.id, 50000n);
+    const pay = async (amount: string) => {
+      const body = { customerId: jerusalem.customer.id, currency: 'ILS', amount, allocations: [{ receivableId: rec.id, amount }] };
+      const preview = await read(await h.app.request('/v1/allocations/preview', json(body, jerusalem.auth)));
+      const res = await h.app.request('/v1/payments', json({ ...body, receivedOn: '2026-10-08', method: 'BANK', previewToken: preview.previewToken }, { ...jerusalem.auth, ...idem() }));
+      expect(res.status).toBe(201);
+    };
+    await pay('500.00');
     expect((await read(await h.app.request(`/v1/receivables/${rec.id}`, { headers: jerusalem.auth })))).toMatchObject({ status: 'PARTIALLY_PAID', paid: '500.00', outstanding: '680.00' });
-    h.store.seedPaid(rec.id, 118000n);
+    await pay('680.00');
     expect((await read(await h.app.request(`/v1/receivables/${rec.id}`, { headers: jerusalem.auth })))).toMatchObject({ status: 'PAID', outstanding: '0.00' });
     expect((await h.app.request(`/v1/receivables/${rec.id}`, { headers: auckland.auth })).status).toBe(404);
   });
@@ -440,8 +446,8 @@ describe('contract', () => {
   it('publishes every M3 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.2.0-m3');
-    expect(API_VERSION).toBe('1.2.0-m3');
+    expect(doc.info.version).toBe('1.3.0-m4');
+    expect(API_VERSION).toBe('1.3.0-m4');
     for (const path of ['/v1/vat-rates', '/v1/settings/vat', '/v1/agreements/preview', '/v1/agreements', '/v1/agreements/{agreementId}', '/v1/agreements/{agreementId}/supplements', '/v1/agreements/{agreementId}/cancel', '/v1/installments/{installmentId}/trigger', '/v1/retainers/preview', '/v1/retainers', '/v1/retainers/{agreementId}/charges', '/v1/retainers/{agreementId}/cancel', '/v1/retainers/reconcile', '/v1/receivables', '/v1/receivables/{receivableId}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

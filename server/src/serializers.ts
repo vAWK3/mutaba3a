@@ -4,7 +4,11 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type {
   AgreementRecord,
+  AllocationRecord,
   ApiKeyRecord,
+  CreditRecord,
+  IdempotencyRecord,
+  PaymentRecord,
   AuditEventRecord,
   CustomerRecord,
   ExternalReferenceRecord,
@@ -188,7 +192,7 @@ export function serializeSupplement(s: SupplementRecord, currency: string) {
 }
 
 export function receivableStatus(r: ReceivableRecord, today: IsoDate): ItemStatus {
-  return itemStatus({ voided: false, posted: true, dueDate: r.dueDate, grossMinor: r.grossMinor, paidMinor: r.paidMinor, today });
+  return itemStatus({ voided: false, posted: true, dueDate: r.dueDate, grossMinor: r.grossMinor, paidMinor: r.paidMinor, creditedMinor: r.creditedMinor, today });
 }
 
 export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
@@ -204,7 +208,8 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     vat: amt(r.vatMinor, r.currency),
     gross: amt(r.grossMinor, r.currency),
     paid: amt(r.paidMinor, r.currency),
-    outstanding: amt(r.grossMinor - r.paidMinor, r.currency),
+    credited: amt(r.creditedMinor, r.currency),
+    outstanding: amt(r.grossMinor - r.paidMinor - r.creditedMinor, r.currency),
     vatTreatment: r.vatTreatment,
     vatRateBasisPoints: r.vatRateBasisPoints,
     dueDate: r.dueDate,
@@ -230,5 +235,66 @@ export function serializeCharge(c: RetainerChargeRecord, receivable: ReceivableR
     status: receivable ? receivableStatus(receivable, today) : ('DUE' as ItemStatus),
     dueDate: receivable?.dueDate ?? c.chargeDate,
     postedAt: c.postedAt.toISOString(),
+  };
+}
+
+// ---- Milestone 4 ------------------------------------------------------------
+
+/** What is still owed on a receivable; what statuses and allocations are checked against. */
+export function outstandingMinor(r: Pick<ReceivableRecord, 'grossMinor' | 'paidMinor' | 'creditedMinor'>): bigint {
+  return r.grossMinor - r.paidMinor - r.creditedMinor;
+}
+
+export function serializeAllocation(a: AllocationRecord, receivable: ReceivableRecord | null, currency: string, today: IsoDate) {
+  return {
+    id: a.id,
+    receivableId: a.receivableId,
+    projectId: receivable?.projectId ?? '',
+    origin: receivable?.origin ?? ('INSTALLMENT' as const),
+    amount: amt(a.amountMinor, currency),
+    receivableOutstanding: receivable ? amt(outstandingMinor(receivable), currency) : amt(0n, currency),
+    receivableStatus: receivable ? receivableStatus(receivable, today) : ('DUE' as ItemStatus),
+    createdAt: a.createdAt.toISOString(),
+  };
+}
+
+export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType<typeof serializeAllocation>>, replacedByPaymentId: string | null) {
+  return {
+    id: p.id,
+    number: p.number,
+    customerId: p.customerId,
+    currency: p.currency as Currency,
+    amount: amt(p.amountMinor, p.currency),
+    allocated: amt(p.allocatedMinor, p.currency),
+    unallocated: amt(p.status === 'REVERSED' ? 0n : p.amountMinor - p.allocatedMinor, p.currency),
+    receivedOn: p.receivedOn,
+    method: p.method,
+    reference: p.reference,
+    notes: p.notes,
+    status: p.status,
+    reversedAt: iso(p.reversedAt),
+    reversalReason: p.reversalReason,
+    replacesPaymentId: p.replacesPaymentId,
+    replacedByPaymentId,
+    allocations,
+    version: p.version,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+  };
+}
+
+export function serializeCredit(c: CreditRecord, currency: string) {
+  return { id: c.id, receivableId: c.receivableId, amount: amt(c.amountMinor, currency), net: amt(c.netMinor, currency), vat: amt(c.vatMinor, currency), reason: c.reason, effectiveDate: c.effectiveDate, createdAt: c.createdAt.toISOString() };
+}
+
+export function serializeOperation(r: IdempotencyRecord) {
+  return {
+    key: r.key,
+    operation: r.operation,
+    status: r.status === 'COMPLETED' ? ('COMPLETED' as const) : ('PENDING' as const),
+    responseStatus: r.responseStatus,
+    response: r.responseBody ?? null,
+    createdAt: r.createdAt.toISOString(),
+    completedAt: iso(r.completedAt),
   };
 }

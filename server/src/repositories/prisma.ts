@@ -1,11 +1,17 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Scope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
-import { ForeignKeyViolation, UniqueViolation } from './memory.js';
+import { ForeignKeyViolation, InsufficientCapacity, UniqueViolation } from './memory.js';
 import type {
   AgreementFilter,
   AgreementRecord,
   AgreementRepository,
+  AllocationInput,
+  AllocationRecord,
+  CreditInput,
+  PaymentFilter,
+  PaymentRecord,
+  PaymentRepository,
   ApiKeyRecord,
   ApiKeyRepository,
   ApplySupplementInput,
@@ -188,6 +194,11 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     fail: async ({ organizationId, key }) => {
       await this.prisma.idempotencyKey.deleteMany({ where: { organizationId, key } });
+    },
+    get: async (organizationId, key) => {
+      const r = await this.prisma.idempotencyKey.findUnique({ where: { organizationId_key: { organizationId, key } } });
+      if (!r) return null;
+      return { organizationId: r.organizationId, key: r.key, operation: r.operation, fingerprint: r.fingerprint, status: r.status, responseStatus: r.responseStatus, responseBody: r.responseBody, createdAt: r.createdAt, completedAt: r.completedAt };
     },
   };
 
@@ -496,6 +507,27 @@ export class PrismaLedgerStore implements LedgerStore {
 
   readonly receivables: ReceivableRepository = {
     getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId } }),
+    getByIds: async (organizationId, ids) => {
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, id: { in: [...ids] } } });
+      const order = new Map(ids.map((id, i) => [id, i]));
+      return rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    },
+    listEligible: async (organizationId, customerId, currency) => {
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, status: 'OPEN' }, orderBy: [{ dueDate: 'asc' }, { postingDate: 'asc' }, { id: 'asc' }] });
+      return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n);
+    },
+    credit: async (organizationId, receivableId, input: CreditInput, at) => {
+      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId }, select: { id: true } });
+      if (!exists) return null;
+      return this.prisma.$transaction(async (tx) => {
+        const r = await lockReceivable(tx, receivableId);
+        if (r.status !== 'OPEN' || input.amountMinor > r.grossMinor - r.paidMinor - r.creditedMinor) throw new InsufficientCapacity(receivableId);
+        const credit = await tx.receivableCredit.create({ data: { organizationId, receivableId, ...input, createdAt: at } });
+        const receivable = await settleReceivable(tx, receivableId, { creditedMinor: { increment: input.amountMinor } });
+        return { receivable, credit };
+      });
+    },
+    listCredits: (organizationId, receivableId) => this.prisma.receivableCredit.findMany({ where: { organizationId, receivableId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
     list: async (organizationId, filter: ReceivableFilter, page) => {
       const rows = await this.prisma.receivable.findMany({
         where: {
@@ -513,9 +545,83 @@ export class PrismaLedgerStore implements LedgerStore {
       return toPage(rows, page);
     },
     countOutstandingByProject: async (organizationId, projectId) => {
-      const rows = await this.prisma.receivable.findMany({ where: { organizationId, projectId, status: 'OPEN' }, select: { grossMinor: true, paidMinor: true } });
-      return rows.filter((r) => r.grossMinor - r.paidMinor > 0n).length;
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, projectId, status: 'OPEN' }, select: { grossMinor: true, paidMinor: true, creditedMinor: true } });
+      return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n).length;
     },
+  };
+
+  readonly payments: PaymentRepository = {
+    create: async (input, at) => {
+      const customer = await this.prisma.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
+      if (!customer) throw new ForeignKeyViolation('payments.customerId');
+      const { allocations: requested, ...rest } = input;
+      const year = Number(input.receivedOn.slice(0, 4));
+      // The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once.
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await this.prisma.$transaction(async (tx) => {
+            const counter = await tx.paymentCounter.upsert({
+              where: { organizationId_year: { organizationId: input.organizationId, year } },
+              create: { organizationId: input.organizationId, year, next: 1 },
+              update: { next: { increment: 1 } },
+            });
+            const number = `PAY-${year}-${String(counter.next).padStart(4, '0')}`;
+            const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
+            const allocations = await applyAllocations(tx, payment, requested, at);
+            const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+            return { payment: fresh, allocations };
+          });
+        } catch (err) {
+          if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
+          throw err;
+        }
+      }
+    },
+    getById: (organizationId, id) => this.prisma.payment.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter: PaymentFilter, page) => {
+      const rows = await this.prisma.payment.findMany({
+        where: {
+          organizationId,
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.receivedBefore || filter.receivedAfter ? { receivedOn: { ...(filter.receivedBefore ? { lte: filter.receivedBefore } : {}), ...(filter.receivedAfter ? { gte: filter.receivedAfter } : {}) } } : {}),
+          ...(filter.projectId ? { allocations: { some: { receivable: { projectId: filter.projectId } } } } : {}),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    listAllocations: (organizationId, paymentId) => this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    allocate: async (organizationId, paymentId, requested, at) => {
+      const exists = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId }, select: { id: true } });
+      if (!exists) return null;
+      return this.prisma.$transaction(async (tx) => {
+        const [payment] = await tx.$queryRaw<Array<{ id: string; status: string; amountMinor: bigint; allocatedMinor: bigint }>>`SELECT "id", "status", "amountMinor", "allocatedMinor" FROM "payments" WHERE "id" = ${paymentId}::uuid FOR UPDATE`;
+        if (!payment || payment.status !== 'POSTED') throw new InsufficientCapacity(paymentId);
+        const total = requested.reduce((s, a) => s + a.amountMinor, 0n);
+        if (total > payment.amountMinor - payment.allocatedMinor) throw new InsufficientCapacity(paymentId);
+        const full = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+        const allocations = await applyAllocations(tx, full, requested, at);
+        return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), allocations };
+      });
+    },
+    reverse: async (organizationId, paymentId, reason, at) => {
+      const exists = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
+      if (!exists) return null;
+      return this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.payment.updateMany({ where: { id: paymentId, status: 'POSTED' }, data: { status: 'REVERSED', reversedAt: at, reversalReason: reason, allocatedMinor: 0n, version: { increment: 1 }, updatedAt: at } });
+        if (count !== 1) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
+        const allocations = await tx.paymentAllocation.findMany({ where: { paymentId } });
+        for (const a of allocations) {
+          await lockReceivable(tx, a.receivableId);
+          await settleReceivable(tx, a.receivableId, { paidMinor: { decrement: a.amountMinor } });
+        }
+        return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: true };
+      });
+    },
+    findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
   };
 
   private async entityIdsForExternal(organizationId: string, entityType: ExternalEntityType, filter: CustomerFilter | ProjectFilter): Promise<string[] | null> {
@@ -526,6 +632,38 @@ export class PrismaLedgerStore implements LedgerStore {
 }
 
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
+type Tx = Prisma.TransactionClient;
+
+/** Row lock so capacity checks and sum updates serialise per receivable. */
+async function lockReceivable(tx: Tx, receivableId: string): Promise<{ id: string; status: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint }> {
+  const rows = await tx.$queryRaw<Array<{ id: string; status: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint }>>`SELECT "id", "status", "grossMinor", "paidMinor", "creditedMinor" FROM "receivables" WHERE "id" = ${receivableId}::uuid FOR UPDATE`;
+  const row = rows[0];
+  if (!row) throw new ForeignKeyViolation('payment_allocations.receivableId');
+  return row;
+}
+
+/** Applies a sum change, then recomputes status from the sums and bumps the version. */
+async function settleReceivable(tx: Tx, receivableId: string, data: Prisma.ReceivableUpdateInput): Promise<ReceivableRecord> {
+  await tx.receivable.update({ where: { id: receivableId }, data });
+  const r = await tx.receivable.findUniqueOrThrow({ where: { id: receivableId } });
+  const status = r.grossMinor - r.paidMinor - r.creditedMinor > 0n ? 'OPEN' : 'SETTLED';
+  return tx.receivable.update({ where: { id: receivableId }, data: { status, version: { increment: 1 } } });
+}
+
+/** Allocation rows + receivable sums + payment allocated total, all inside the caller's transaction; capacity checked under row locks. */
+async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): Promise<AllocationRecord[]> {
+  const created: AllocationRecord[] = [];
+  let total = 0n;
+  for (const a of requested) {
+    const r = await lockReceivable(tx, a.receivableId);
+    if (r.status !== 'OPEN' || a.amountMinor <= 0n || a.amountMinor > r.grossMinor - r.paidMinor - r.creditedMinor) throw new InsufficientCapacity(a.receivableId);
+    created.push(await tx.paymentAllocation.create({ data: { organizationId: payment.organizationId, paymentId: payment.id, receivableId: a.receivableId, amountMinor: a.amountMinor, createdAt: at } }));
+    await settleReceivable(tx, a.receivableId, { paidMinor: { increment: a.amountMinor } });
+    total += a.amountMinor;
+  }
+  if (created.length > 0) await tx.payment.update({ where: { id: payment.id }, data: { allocatedMinor: { increment: total }, version: { increment: 1 }, updatedAt: at } });
+  return created;
+}
 
 /** Thrown inside the posting transaction to roll back a receivable another poster beat us to. */
 class AlreadyPosted extends Error {}

@@ -387,6 +387,8 @@ export const CONFLICT_REASONS = [
   'AGREEMENT_HAS_POSTED_RECEIVABLES',
   'AGREEMENT_CANCELLED',
   'PROJECT_HAS_OUTSTANDING',
+  // M4
+  'ALREADY_REVERSED',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -415,6 +417,20 @@ export const VALIDATION_REASONS = [
   'END_BEFORE_START',
   'DATE_INVALID',
   'TRIGGER_DATE_REQUIRED',
+  // M4
+  'ALLOCATION_EXCEEDS_PAYMENT',
+  'ALLOCATION_EXCEEDS_OUTSTANDING',
+  'ALLOCATION_DUPLICATE',
+  'RECEIVABLE_NOT_FOUND',
+  'RECEIVABLE_NOT_OPEN',
+  'RECEIVABLE_CUSTOMER_MISMATCH',
+  'PAYMENT_NOT_POSTED',
+  'NO_UNALLOCATED_FUNDS',
+  'CREDIT_EXCEEDS_OUTSTANDING',
+  'REPLACES_NOT_REVERSED',
+  'REPLACES_CUSTOMER_MISMATCH',
+  'NO_ELIGIBLE_RECEIVABLES',
+  'CUSTOMER_NOT_FOUND',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -597,6 +613,8 @@ export const ReceivableSchema = z
     vat: AmountSchema,
     gross: AmountSchema,
     paid: AmountSchema,
+    /** Σ credits (M4). outstanding = gross − paid − credited. */
+    credited: AmountSchema,
     outstanding: AmountSchema,
     vatTreatment: VatTreatmentSchema,
     vatRateBasisPoints: z.number().int(),
@@ -680,3 +698,151 @@ export const ReconcileResponseSchema = z
   .object({ installmentsPosted: z.number().int(), chargesCreated: z.number().int(), today: IsoDateSchema })
   .openapi('ReconcileResponse');
 
+
+// ---- Milestone 4: payments, allocations, reversals, credits, operations ----
+
+export const PaymentMethodSchema = z.enum(['CASH', 'BANK']).openapi('PaymentMethod');
+export const PaymentStatusSchema = z.enum(['POSTED', 'REVERSED']).openapi('PaymentStatus');
+export const AllocationStrategySchema = z.enum(['OLDEST_FIRST', 'SETTLE_MATTERS']).openapi('AllocationStrategy');
+
+export const AllocationRequestSchema = z.object({ receivableId: uuid, amount: AmountSchema }).openapi('AllocationRequest');
+
+const previewSource = {
+  /** A new payment: who, which currency, how much. */
+  customerId: uuid.optional(),
+  currency: CurrencySchema.optional(),
+  amount: AmountSchema.optional(),
+  /** Or a posted payment whose unallocated funds are being allocated. */
+  paymentId: uuid.optional(),
+};
+
+export const AllocationPreviewRequestSchema = z
+  .object({
+    ...previewSource,
+    strategy: AllocationStrategySchema.optional(),
+    /** Explicit set; wins over strategy. Absent with no strategy = everything unallocated. */
+    allocations: z.array(AllocationRequestSchema).max(200).optional(),
+  })
+  .openapi('AllocationPreviewRequest');
+
+export const BalanceSchema = z.object({ outstanding: AmountSchema, overdue: AmountSchema }).openapi('Balance');
+
+export const EligibleReceivableSchema = z
+  .object({ receivableId: uuid, projectId: uuid, agreementId: uuid.nullable(), origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']), dueDate: IsoDateSchema, gross: AmountSchema, outstanding: AmountSchema, status: ItemStatusSchema })
+  .openapi('EligibleReceivable');
+
+export const AllocationPreviewResponseSchema = z
+  .object({
+    customerId: uuid,
+    currency: CurrencySchema,
+    /** The amount available: the new payment's amount or the payment's unallocated funds. */
+    amount: AmountSchema,
+    allocations: z.array(AllocationRequestSchema),
+    allocated: AmountSchema,
+    unallocated: AmountSchema,
+    eligible: z.array(EligibleReceivableSchema),
+    balances: z.object({
+      receivables: z.array(z.object({ receivableId: uuid, projectId: uuid, outstandingBefore: AmountSchema, outstandingAfter: AmountSchema, statusBefore: ItemStatusSchema, statusAfter: ItemStatusSchema })),
+      projects: z.array(z.object({ projectId: uuid, before: BalanceSchema, after: BalanceSchema })),
+      customer: z.object({ before: BalanceSchema, after: BalanceSchema }),
+    }),
+    warnings: z.array(z.enum(['NO_ELIGIBLE_RECEIVABLES'])),
+    previewToken: z.string().length(64),
+  })
+  .openapi('AllocationPreviewResponse');
+
+export const CreatePaymentRequestSchema = z
+  .object({
+    customerId: uuid,
+    currency: CurrencySchema,
+    amount: AmountSchema,
+    receivedOn: IsoDateSchema,
+    method: PaymentMethodSchema,
+    reference: z.string().max(120).optional(),
+    notes: z.string().max(2000).optional(),
+    /** A REVERSED payment of the same customer this one corrects. */
+    replacesPaymentId: uuid.optional(),
+    allocations: z.array(AllocationRequestSchema).max(200),
+    previewToken: z.string().length(64),
+  })
+  .openapi('CreatePaymentRequest');
+
+export const AllocationSchema = z
+  .object({ id: uuid, receivableId: uuid, projectId: uuid, origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']), amount: AmountSchema, receivableOutstanding: AmountSchema, receivableStatus: ItemStatusSchema, createdAt: z.string().datetime() })
+  .openapi('Allocation');
+
+export const PaymentSchema = z
+  .object({
+    id: uuid,
+    number: z.string(),
+    customerId: uuid,
+    currency: CurrencySchema,
+    amount: AmountSchema,
+    allocated: AmountSchema,
+    unallocated: AmountSchema,
+    receivedOn: IsoDateSchema,
+    method: PaymentMethodSchema,
+    reference: z.string().nullable(),
+    notes: z.string().nullable(),
+    status: PaymentStatusSchema,
+    reversedAt: z.string().datetime().nullable(),
+    reversalReason: z.string().nullable(),
+    replacesPaymentId: uuid.nullable(),
+    replacedByPaymentId: uuid.nullable(),
+    allocations: z.array(AllocationSchema),
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('Payment');
+
+export const PaymentPageSchema = z.object({ items: z.array(PaymentSchema), nextCursor: z.string().nullable() }).openapi('PaymentPage');
+
+export const ListPaymentsQuerySchema = z.object({
+  ...pageQuery,
+  customerId: uuid.optional(),
+  /** Payments with at least one allocation on the project. */
+  projectId: uuid.optional(),
+  status: PaymentStatusSchema.optional(),
+  receivedBefore: IsoDateSchema.optional(),
+  receivedAfter: IsoDateSchema.optional(),
+});
+
+export const PaymentIdParamSchema = z.object({ paymentId: uuid });
+
+export const AllocatePaymentRequestSchema = z
+  .object({ allocations: z.array(AllocationRequestSchema).min(1).max(200), previewToken: z.string().length(64) })
+  .openapi('AllocatePaymentRequest');
+
+export const ReversePaymentRequestSchema = z.object({ reason: z.string().min(1).max(500) }).openapi('ReversePaymentRequest');
+
+export const CreditRequestSchema = z
+  .object({
+    /** Positive magnitude in the receivable's currency (gross). */
+    amount: AmountSchema,
+    reason: z.string().min(1).max(500),
+    /** Defaults to today in the organization timezone. */
+    effectiveDate: IsoDateSchema.optional(),
+  })
+  .openapi('CreditRequest');
+
+export const CreditSchema = z
+  .object({ id: uuid, receivableId: uuid, amount: AmountSchema, net: AmountSchema, vat: AmountSchema, reason: z.string(), effectiveDate: IsoDateSchema, createdAt: z.string().datetime() })
+  .openapi('Credit');
+
+export const CreditResponseSchema = z.object({ receivable: ReceivableSchema, credit: CreditSchema }).openapi('CreditResponse');
+export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, credits: z.array(CreditSchema) }).openapi('CreditsResponse');
+
+export const OperationKeyParamSchema = z.object({ idempotencyKey: z.string().min(8).max(128) });
+export const OperationSchema = z
+  .object({
+    key: z.string(),
+    operation: z.string(),
+    status: z.enum(['PENDING', 'COMPLETED']),
+    responseStatus: z.number().int().nullable(),
+    /** The stored response body, exactly as the original request received it. */
+    response: z.unknown().nullable(),
+    createdAt: z.string().datetime(),
+    completedAt: z.string().datetime().nullable(),
+  })
+  .openapi('Operation');

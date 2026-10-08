@@ -154,6 +154,8 @@ export interface AuditRepository {
 
 export interface IdempotencyRepository {
   claim(input: { organizationId: string; key: string; operation: string; fingerprint: string; at: Date }): Promise<IdempotencyClaim>;
+  /** The stored claim for GET /v1/operations/{key}; null when never claimed or released after a 5xx (M4). */
+  get(organizationId: string, key: string): Promise<IdempotencyRecord | null>;
   complete(input: { organizationId: string; key: string; responseStatus: number; responseBody: unknown; at: Date }): Promise<void>;
   /** Releases the key so a retry can run the operation again (used after a 5xx). */
   fail(input: { organizationId: string; key: string; at: Date }): Promise<void>;
@@ -440,8 +442,10 @@ export interface ReceivableRecord {
   grossMinor: bigint;
   vatTreatment: VatTreatment;
   vatRateBasisPoints: number;
-  /** Written by M4 payments; 0 until then. */
+  /** Sum of allocations from POSTED payments (M4). */
   paidMinor: bigint;
+  /** Sum of credits (M4). Outstanding = gross − paid − credited. */
+  creditedMinor: bigint;
   dueDate: IsoDate;
   postingDate: IsoDate;
   postedAt: Date;
@@ -545,9 +549,115 @@ export interface ReceivableFilter {
 
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
+  /** In the order of `ids`; unknown or foreign ids are skipped. */
+  getByIds(organizationId: string, ids: readonly string[]): Promise<ReceivableRecord[]>;
   list(organizationId: string, filter: ReceivableFilter, page: PageRequest): Promise<Page<ReceivableRecord>>;
+  /** OPEN receivables of the customer in the currency with outstanding > 0 — what a payment may be allocated to (M4). */
+  listEligible(organizationId: string, customerId: string, currency: string): Promise<ReceivableRecord[]>;
   /** OPEN receivables with outstanding > 0 on the project (archive guard). */
   countOutstandingByProject(organizationId: string, projectId: string): Promise<number>;
+  /** Appends a credit and moves credited_minor / status atomically; throws InsufficientCapacity if it exceeds the outstanding (M4). */
+  credit(organizationId: string, receivableId: string, input: CreditInput, at: Date): Promise<{ receivable: ReceivableRecord; credit: CreditRecord } | null>;
+  listCredits(organizationId: string, receivableId: string): Promise<CreditRecord[]>;
+}
+
+// ---- Milestone 4: payments, allocations, credits ----------------------------
+
+export type PaymentMethod = 'CASH' | 'BANK';
+export type PaymentStatus = 'POSTED' | 'REVERSED';
+
+export interface PaymentRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  /** PAY-YYYY-NNNN, gap-free per organization and year. */
+  number: string;
+  currency: string;
+  amountMinor: bigint;
+  /** Σ allocations; unallocated = amount − allocated. 0 once reversed. */
+  allocatedMinor: bigint;
+  receivedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  notes: string | null;
+  status: PaymentStatus;
+  reversedAt: Date | null;
+  reversalReason: string | null;
+  replacesPaymentId: string | null;
+  requestId: string | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AllocationRecord {
+  id: string;
+  organizationId: string;
+  paymentId: string;
+  receivableId: string;
+  amountMinor: bigint;
+  createdAt: Date;
+}
+
+export interface AllocationInput {
+  receivableId: string;
+  amountMinor: bigint;
+}
+
+export interface CreatePaymentInput {
+  organizationId: string;
+  customerId: string;
+  currency: string;
+  amountMinor: bigint;
+  receivedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  notes: string | null;
+  replacesPaymentId: string | null;
+  requestId: string | null;
+  allocations: AllocationInput[];
+}
+
+export interface CreditInput {
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  reason: string;
+  effectiveDate: IsoDate;
+  requestId: string | null;
+}
+
+export interface CreditRecord extends CreditInput {
+  id: string;
+  organizationId: string;
+  receivableId: string;
+  createdAt: Date;
+}
+
+export interface PaymentFilter {
+  customerId?: string;
+  /** Payments with at least one allocation on the project. */
+  projectId?: string;
+  status?: PaymentStatus;
+  receivedBefore?: IsoDate;
+  receivedAfter?: IsoDate;
+}
+
+export interface PaymentRepository {
+  /**
+   * Payment + allocations + receivable sums/status + number, one transaction.
+   * Throws InsufficientCapacity when a receivable can no longer absorb its allocation (a race the preview token did not catch).
+   */
+  create(input: CreatePaymentInput, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }>;
+  getById(organizationId: string, id: string): Promise<PaymentRecord | null>;
+  list(organizationId: string, filter: PaymentFilter, page: PageRequest): Promise<Page<PaymentRecord>>;
+  listAllocations(organizationId: string, paymentId: string): Promise<AllocationRecord[]>;
+  /** Appends allocations to a POSTED payment within its unallocated funds; same guarantees as create. Null when no such payment. */
+  allocate(organizationId: string, paymentId: string, allocations: AllocationInput[], at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
+  /** Undoes every allocation, zeroes allocated_minor, marks REVERSED. `changed` is false when it already was. */
+  reverse(organizationId: string, paymentId: string, reason: string, at: Date): Promise<{ payment: PaymentRecord; changed: boolean } | null>;
+  /** The POSTED payment that names this one as replacesPaymentId, if any. */
+  findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
 }
 
 export interface ExternalReferenceRepository {
@@ -569,6 +679,7 @@ export interface LedgerStore {
   vatRates: VatRateRepository;
   agreements: AgreementRepository;
   receivables: ReceivableRepository;
+  payments: PaymentRepository;
   /** Liveness of the backing store, for /ready. */
   ping(): Promise<void>;
 }

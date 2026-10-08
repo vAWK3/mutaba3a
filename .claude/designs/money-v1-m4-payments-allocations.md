@@ -1,6 +1,6 @@
 # Money v1 — Milestone 4: Payments, allocations, reversals and credits (design brief)
 
-- **Date:** 2026-10-08 · **Status:** proposed — awaiting product-owner approval of §3 before Phase 2
+- **Date:** 2026-10-08 · **Status:** approved as proposed (all eight decisions) and **implemented** the same day — CHANGELOG "Money v1 Milestone 4"; 268 tests green on memory and Postgres
 - **Tickets:** MUT-25 (epic), MAL-939 · **Contract:** `money-v1-api-contract.md` §3 M4 · **Plan:** §7, §12.5, §12.7, §14.2, §16 M4
 - **Repo side:** Mutaba3a `server/` only. The Malafat side (payment wizard Record → Allocate → Review, payment detail with reversal, credits from the supplement safeguard) follows in its own brief once this API exists, as M3 did.
 - **Bounded by:** ADR-024/025/026, the M3 brief (receivables exist only once posted; `paid_minor` reserved for M4; statuses computed in the organization timezone; "posted records keep what they were posted with"), ADR-004 (never sum across currencies), TD-018 (operator keys).

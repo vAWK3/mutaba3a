@@ -51,18 +51,15 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const paidByReceivable = await paidMap(organization.id, installments);
     return {
       agreement: serializeAgreement(agreement),
-      installments: installments.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, agreement, today, paidByReceivable.get(i.receivableId ?? '') ?? 0n) })),
+      installments: installments.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, agreement, today, paidByReceivable.get(i.receivableId ?? '')) })),
       supplements: supplements.map((s) => serializeSupplement(s, agreement.currency)),
     };
   }
 
-  async function paidMap(organizationId: string, installments: InstallmentRecord[]): Promise<Map<string, bigint>> {
-    const map = new Map<string, bigint>();
-    for (const i of installments) {
-      if (!i.receivableId) continue;
-      const r = await store.receivables.getById(organizationId, i.receivableId);
-      if (r) map.set(r.id, r.paidMinor);
-    }
+  async function paidMap(organizationId: string, installments: InstallmentRecord[]): Promise<Map<string, { paidMinor: bigint; creditedMinor: bigint }>> {
+    const map = new Map<string, { paidMinor: bigint; creditedMinor: bigint }>();
+    const receivables = await store.receivables.getByIds(organizationId, installments.map((i) => i.receivableId).filter((id): id is string => id !== null));
+    for (const r of receivables) map.set(r.id, { paidMinor: r.paidMinor, creditedMinor: r.creditedMinor });
     return map;
   }
 
@@ -301,7 +298,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         {
           agreement: serializeAgreement(result.record.agreement),
           supplement: serializeSupplement(result.record.supplement, agreement.currency),
-          installments: result.record.installments.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, result.record.agreement, today, paidByReceivable.get(i.receivableId ?? '') ?? 0n) })),
+          installments: result.record.installments.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, result.record.agreement, today, paidByReceivable.get(i.receivableId ?? '')) })),
           effect: { contractualDelta: body.amount, installmentsChanged: plan.changes.map((x) => x.id), installmentsCreated: createdIds },
         },
         200,
