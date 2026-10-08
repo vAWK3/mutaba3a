@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.1.0-m2
+  version: 1.2.0-m3
   description: |-
-    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–2).
+    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–3).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
@@ -13,7 +13,11 @@ info:
 
     PATCH routes require `If-Match: <version>` (optimistic concurrency).
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING.
+
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED (schema failures carry the zod issues in details instead).
+
+    Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
     Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page's nextCursor.
 tags:
@@ -27,6 +31,16 @@ tags:
     description: Single-currency containers for agreements, receivables and payments
   - name: Import
     description: Batch linking of an external system's customers and projects
+  - name: VAT
+    description: The firm's effective-dated standard rate
+  - name: Agreements
+    description: Fixed-fee agreements, installments, supplements
+  - name: Installments
+    description: Manual triggers
+  - name: Retainers
+    description: Recurring agreements and their monthly charges
+  - name: Receivables
+    description: What is owed
   - name: Admin
     description: Operator provisioning
 components:
@@ -339,6 +353,8 @@ components:
         notes:
           type: string
           nullable: true
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
         status:
           $ref: "#/components/schemas/EntityStatus"
         archivedAt:
@@ -362,12 +378,22 @@ components:
         - email
         - phone
         - notes
+        - vatTreatment
         - status
         - archivedAt
         - externalReference
         - version
         - createdAt
         - updatedAt
+    VatTreatment:
+      type: string
+      nullable: true
+      enum:
+        - STANDARD_RATED
+        - ZERO_RATED
+        - EXEMPT
+        - OUT_OF_SCOPE
+        - null
     EntityStatus:
       type: string
       enum:
@@ -408,6 +434,8 @@ components:
         notes:
           type: string
           maxLength: 4000
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
         externalReference:
           $ref: "#/components/schemas/ExternalReference"
       required:
@@ -446,6 +474,8 @@ components:
           type: string
           nullable: true
           maxLength: 4000
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
       additionalProperties: false
     Project:
       type: object
@@ -460,6 +490,8 @@ components:
           type: string
         currency:
           $ref: "#/components/schemas/Currency"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
         status:
           $ref: "#/components/schemas/EntityStatus"
         archivedAt:
@@ -482,6 +514,7 @@ components:
         - customerId
         - name
         - currency
+        - vatTreatment
         - status
         - archivedAt
         - externalReference
@@ -500,6 +533,8 @@ components:
           maxLength: 200
         currency:
           $ref: "#/components/schemas/Currency"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
         externalReference:
           $ref: "#/components/schemas/ExternalReference"
       required:
@@ -528,6 +563,8 @@ components:
           maxLength: 200
         currency:
           $ref: "#/components/schemas/Currency"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
       additionalProperties: false
     ImportPreviewResponse:
       type: object
@@ -742,6 +779,959 @@ components:
               maxLength: 64
           required:
             - previewToken
+    VatRatesResponse:
+      type: object
+      properties:
+        rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/VatRate"
+        current:
+          allOf:
+            - $ref: "#/components/schemas/VatRate"
+            - nullable: true
+      required:
+        - rates
+        - current
+    VatRate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rateBasisPoints:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        effectiveFrom:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - rateBasisPoints
+        - effectiveFrom
+        - createdAt
+    SetVatRateRequest:
+      type: object
+      properties:
+        rateBasisPoints:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          description: 1800 = 18 %
+        effectiveFrom:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - rateBasisPoints
+        - effectiveFrom
+    AgreementPreviewResponse:
+      type: object
+      properties:
+        totals:
+          type: object
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - amount
+            - net
+            - vat
+            - gross
+        vatRateBasisPoints:
+          type: integer
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        installments:
+          type: array
+          items:
+            type: object
+            properties:
+              position:
+                type: integer
+              label:
+                type: string
+              amount:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              net:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              vat:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              gross:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              vatTreatment:
+                $ref: "#/components/schemas/VatTreatment"
+              rateBasisPoints:
+                type: integer
+              trigger:
+                $ref: "#/components/schemas/InstallmentTrigger"
+              paymentTerms:
+                $ref: "#/components/schemas/PaymentTerms"
+              dueDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              status:
+                $ref: "#/components/schemas/ItemStatus"
+            required:
+              - position
+              - label
+              - amount
+              - net
+              - vat
+              - gross
+              - vatTreatment
+              - rateBasisPoints
+              - trigger
+              - paymentTerms
+              - dueDate
+              - status
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - totals
+        - vatRateBasisPoints
+        - vatTreatment
+        - currency
+        - installments
+        - previewToken
+    InstallmentTrigger:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/TriggerType"
+        date:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - type
+    TriggerType:
+      type: string
+      enum:
+        - IMMEDIATE
+        - DATE
+        - MANUAL
+    PaymentTerms:
+      type: string
+      nullable: true
+      enum:
+        - IMMEDIATE
+        - EOM
+        - EOM_15
+        - EOM_30
+        - EOM_45
+        - EOM_60
+        - null
+    ItemStatus:
+      type: string
+      enum:
+        - PENDING
+        - DUE
+        - OVERDUE
+        - PARTIALLY_PAID
+        - PAID
+        - VOID
+    AgreementPreviewRequest:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        agreementDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        description:
+          type: string
+          maxLength: 500
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstallmentSpec"
+          minItems: 1
+          maxItems: 60
+      required:
+        - projectId
+        - amount
+        - pricingBasis
+        - agreementDate
+        - installments
+    PricingBasis:
+      type: string
+      enum:
+        - VAT_EXCLUSIVE
+        - VAT_INCLUSIVE
+    InstallmentSpec:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        percentBasisPoints:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        trigger:
+          $ref: "#/components/schemas/InstallmentTrigger"
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - label
+        - trigger
+    AgreementDetail:
+      type: object
+      properties:
+        agreement:
+          $ref: "#/components/schemas/Agreement"
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Installment"
+        supplements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Supplement"
+      required:
+        - agreement
+        - installments
+        - supplements
+    Agreement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - FIXED
+            - RECURRING
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - CANCELLED
+        currency:
+          $ref: "#/components/schemas/Currency"
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        vatRateBasisPoints:
+          type: integer
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        agreementDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        description:
+          type: string
+          nullable: true
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        retainer:
+          type: object
+          nullable: true
+          properties:
+            startMonth:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+              description: Calendar month, YYYY-MM
+            billingDay:
+              type: integer
+            endMonth:
+              type: string
+              nullable: true
+              pattern: ^\d{4}-\d{2}$
+              description: Calendar month, YYYY-MM
+            cancelEffectiveMonth:
+              type: string
+              nullable: true
+              pattern: ^\d{4}-\d{2}$
+              description: Calendar month, YYYY-MM
+            finalMonth:
+              type: string
+              nullable: true
+              enum:
+                - FULL
+                - WAIVE
+                - null
+          required:
+            - startMonth
+            - billingDay
+            - endMonth
+            - cancelEffectiveMonth
+            - finalMonth
+        cancelledAt:
+          type: string
+          nullable: true
+          format: date-time
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - projectId
+        - customerId
+        - type
+        - status
+        - currency
+        - pricingBasis
+        - vatTreatment
+        - vatRateBasisPoints
+        - amount
+        - net
+        - vat
+        - gross
+        - agreementDate
+        - description
+        - paymentTerms
+        - retainer
+        - cancelledAt
+        - version
+        - createdAt
+        - updatedAt
+    Installment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+        label:
+          type: string
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        rateBasisPoints:
+          type: integer
+        trigger:
+          $ref: "#/components/schemas/InstallmentTrigger"
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        status:
+          $ref: "#/components/schemas/ItemStatus"
+        postedAt:
+          type: string
+          nullable: true
+          format: date-time
+        receivableId:
+          type: string
+          nullable: true
+          format: uuid
+        version:
+          type: integer
+      required:
+        - id
+        - position
+        - label
+        - amount
+        - net
+        - vat
+        - gross
+        - vatTreatment
+        - rateBasisPoints
+        - trigger
+        - paymentTerms
+        - dueDate
+        - status
+        - postedAt
+        - receivableId
+        - version
+    Supplement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        description:
+          type: string
+          nullable: true
+        effectiveDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        distribution:
+          type: string
+          enum:
+            - LAST_UNPOSTED
+            - PRORATE_UNPOSTED
+            - NEW_INSTALLMENT
+        resultingAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - amount
+        - description
+        - effectiveDate
+        - distribution
+        - resultingAmount
+        - createdAt
+    AgreementCreateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AgreementPreviewRequest"
+        - type: object
+          properties:
+            previewToken:
+              type: string
+              minLength: 64
+              maxLength: 64
+          required:
+            - previewToken
+    AgreementPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agreement"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    SupplementResponse:
+      type: object
+      properties:
+        agreement:
+          $ref: "#/components/schemas/Agreement"
+        supplement:
+          $ref: "#/components/schemas/Supplement"
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Installment"
+        effect:
+          type: object
+          properties:
+            contractualDelta:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            installmentsChanged:
+              type: array
+              items:
+                type: string
+                format: uuid
+            installmentsCreated:
+              type: array
+              items:
+                type: string
+                format: uuid
+          required:
+            - contractualDelta
+            - installmentsChanged
+            - installmentsCreated
+      required:
+        - agreement
+        - supplement
+        - installments
+        - effect
+    SupplementRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        description:
+          type: string
+          maxLength: 500
+        effectiveDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        distribution:
+          type: string
+          enum:
+            - LAST_UNPOSTED
+            - PRORATE_UNPOSTED
+            - NEW_INSTALLMENT
+        newInstallment:
+          type: object
+          properties:
+            label:
+              type: string
+              minLength: 1
+              maxLength: 80
+            vatTreatment:
+              $ref: "#/components/schemas/VatTreatment"
+            trigger:
+              $ref: "#/components/schemas/InstallmentTrigger"
+            paymentTerms:
+              $ref: "#/components/schemas/PaymentTerms"
+            dueDate:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+          required:
+            - label
+            - trigger
+      required:
+        - amount
+        - effectiveDate
+        - distribution
+    CancelAgreementRequest:
+      type: object
+      properties: {}
+    TriggerInstallmentResponse:
+      type: object
+      properties:
+        installment:
+          $ref: "#/components/schemas/Installment"
+        receivable:
+          $ref: "#/components/schemas/Receivable"
+        created:
+          type: boolean
+      required:
+        - installment
+        - receivable
+        - created
+    Receivable:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        agreementId:
+          type: string
+          nullable: true
+          format: uuid
+        origin:
+          type: string
+          enum:
+            - INSTALLMENT
+            - RETAINER_CHARGE
+            - ADJUSTMENT
+        originId:
+          type: string
+          nullable: true
+          format: uuid
+        currency:
+          $ref: "#/components/schemas/Currency"
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        paid:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        vatRateBasisPoints:
+          type: integer
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        postingDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        postedAt:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ItemStatus"
+        version:
+          type: integer
+      required:
+        - id
+        - customerId
+        - projectId
+        - agreementId
+        - origin
+        - originId
+        - currency
+        - net
+        - vat
+        - gross
+        - paid
+        - outstanding
+        - vatTreatment
+        - vatRateBasisPoints
+        - dueDate
+        - postingDate
+        - postedAt
+        - status
+        - version
+    TriggerInstallmentRequest:
+      type: object
+      properties:
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+    RetainerPreviewResponse:
+      type: object
+      properties:
+        monthly:
+          type: object
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - amount
+            - net
+            - vat
+            - gross
+        vatRateBasisPoints:
+          type: integer
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        chargesDueNow:
+          type: array
+          items:
+            type: object
+            properties:
+              serviceMonth:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+                description: Calendar month, YYYY-MM
+              chargeDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              dueDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+            required:
+              - serviceMonth
+              - chargeDate
+              - dueDate
+        nextChargeDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - monthly
+        - vatRateBasisPoints
+        - vatTreatment
+        - currency
+        - chargesDueNow
+        - nextChargeDate
+        - previewToken
+    RetainerPreviewRequest:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        monthlyAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        startMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        billingDay:
+          type: integer
+          minimum: 1
+          maximum: 28
+          default: 1
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        endMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        agreementDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        description:
+          type: string
+          maxLength: 500
+      required:
+        - projectId
+        - monthlyAmount
+        - pricingBasis
+        - startMonth
+    RetainerChargesResponse:
+      type: object
+      properties:
+        agreement:
+          $ref: "#/components/schemas/Agreement"
+        charges:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetainerCharge"
+      required:
+        - agreement
+        - charges
+    RetainerCharge:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        serviceMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        chargeDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        rateBasisPoints:
+          type: integer
+        receivableId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/ItemStatus"
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        postedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - serviceMonth
+        - chargeDate
+        - amount
+        - net
+        - vat
+        - gross
+        - vatTreatment
+        - rateBasisPoints
+        - receivableId
+        - status
+        - dueDate
+        - postedAt
+    RetainerCreateRequest:
+      allOf:
+        - $ref: "#/components/schemas/RetainerPreviewRequest"
+        - type: object
+          properties:
+            previewToken:
+              type: string
+              minLength: 64
+              maxLength: 64
+          required:
+            - previewToken
+    RetainerCancelRequest:
+      type: object
+      properties:
+        effectiveDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        finalMonth:
+          type: string
+          enum:
+            - FULL
+            - WAIVE
+      required:
+        - effectiveDate
+        - finalMonth
+    ReconcileResponse:
+      type: object
+      properties:
+        installmentsPosted:
+          type: integer
+        chargesCreated:
+          type: integer
+        today:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - installmentsPosted
+        - chargesCreated
+        - today
+    ReceivablePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Receivable"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
     CreateOrganizationRequest:
       type: object
       properties:
@@ -1671,7 +2661,7 @@ paths:
       tags:
         - Projects
       summary: Archive a project
-      description: Idempotent. From M3, refused while receivables are outstanding. Nothing is ever deleted.
+      description: Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding. Nothing is ever deleted.
       security:
         - apiKey: []
       parameters:
@@ -1711,6 +2701,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:
@@ -1822,6 +2818,964 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/vat-rates:
+    get:
+      tags:
+        - VAT
+      summary: List the firm’s VAT rates, newest first, with the one in force today
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Rates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VatRatesResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/settings/vat:
+    put:
+      tags:
+        - VAT
+      summary: Set the standard VAT rate from an effective date (append-only)
+      description: "The same effective date with the same rate is a no-op (200). The same date with a different rate is refused with 409 RATE_ALREADY_SET: history is immutable, add a later date instead. Posted records keep the rate they were posted with."
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetVatRateRequest"
+      responses:
+        "200":
+          description: Already set to this rate on this date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VatRate"
+        "201":
+          description: Rate recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VatRate"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/preview:
+    post:
+      tags:
+        - Agreements
+      summary: "Preview a fixed-fee agreement: totals, installments, due dates, preview token"
+      description: Writes nothing. The token covers the body and the VAT rate in force on agreementDate, so a rate change before create is refused with 409 PREVIEW_STALE.
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgreementPreviewRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementPreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements:
+    post:
+      tags:
+        - Agreements
+      summary: Create a fixed-fee agreement from a preview
+      description: Same body as the preview plus its previewToken. IMMEDIATE installments and DATE installments whose date has arrived are posted as receivables at once.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgreementCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Agreements
+      summary: List agreements (fixed and recurring)
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: projectId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: customerId
+          in: query
+        - schema:
+            type: string
+            enum:
+              - ACTIVE
+              - CANCELLED
+          required: false
+          name: status
+          in: query
+        - schema:
+            type: string
+            enum:
+              - FIXED
+              - RECURRING
+          required: false
+          name: type
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}:
+    get:
+      tags:
+        - Agreements
+      summary: Get an agreement with its installments and supplements
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+      responses:
+        "200":
+          description: The agreement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/supplements:
+    post:
+      tags:
+        - Agreements
+      summary: Change the contractual amount (positive or negative) on a fixed-fee agreement
+      description: "Uses the agreement’s frozen VAT rate. Positive: added to the last unposted installment, prorated across unposted ones, or a new installment. Negative: only within the unposted capacity; otherwise 422 SUPPLEMENT_EXCEEDS_UNPOSTED names the posted receivables (adjustments against them arrive with payments in M4)."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplementRequest"
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplementResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/cancel:
+    post:
+      tags:
+        - Agreements
+      summary: Cancel a fixed-fee agreement while nothing is posted
+      description: Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted. Retainers cancel through POST /v1/retainers/{id}/cancel.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelAgreementRequest"
+      responses:
+        "200":
+          description: Cancelled (or already was)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/installments/{installmentId}/trigger:
+    post:
+      tags:
+        - Installments
+      summary: Post a MANUAL installment (idempotent)
+      description: Creates the receivable, due per the installment’s or agreement’s payment terms unless dueDate is given. A second call returns the same receivable with created=false.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: installmentId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerInstallmentRequest"
+      responses:
+        "200":
+          description: Already posted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerInstallmentResponse"
+        "201":
+          description: Posted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerInstallmentResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/preview:
+    post:
+      tags:
+        - Retainers
+      summary: "Preview a recurring retainer: monthly totals, charges that would post now, preview token"
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetainerPreviewRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainerPreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers:
+    post:
+      tags:
+        - Retainers
+      summary: Create a recurring retainer from a preview
+      description: Charges for service months whose charge date has already arrived post immediately; later months post as their charge date arrives (lazily on reads, or through POST /v1/retainers/reconcile).
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetainerCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainerChargesResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/{agreementId}/charges:
+    get:
+      tags:
+        - Retainers
+      summary: The retainer and its charges to date
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+      responses:
+        "200":
+          description: Charges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainerChargesResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/{agreementId}/cancel:
+    post:
+      tags:
+        - Retainers
+      summary: Stop a retainer from an effective date (idempotent)
+      description: No charges after the effective month. FULL keeps the effective month’s charge; WAIVE skips it if it has not posted yet. Posted charges are never changed (credits arrive in M4).
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetainerCancelRequest"
+      responses:
+        "200":
+          description: Cancelled (or already was)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/reconcile:
+    post:
+      tags:
+        - Retainers
+      summary: Generate any missing charges and post any due installments up to today (idempotent)
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: What was posted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconcileResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/receivables:
+    get:
+      tags:
+        - Receivables
+      summary: List receivables
+      description: Posted items only. Dated installments and retainer charges whose date has arrived are posted before the list is read.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: customerId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: projectId
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Currency"
+          required: false
+          name: currency
+          in: query
+        - schema:
+            type: string
+            enum:
+              - OPEN
+              - SETTLED
+          required: false
+          name: status
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Calendar date in the organization timezone, YYYY-MM-DD
+          required: false
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+          name: dueBefore
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Calendar date in the organization timezone, YYYY-MM-DD
+          required: false
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+          name: dueAfter
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceivablePage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/receivables/{receivableId}:
+    get:
+      tags:
+        - Receivables
+      summary: Get a receivable
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receivableId
+          in: path
+      responses:
+        "200":
+          description: The receivable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receivable"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:

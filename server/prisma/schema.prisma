@@ -61,6 +61,65 @@ enum ExternalEntityType {
   PROJECT
 }
 
+enum VatTreatment {
+  STANDARD_RATED
+  ZERO_RATED
+  EXEMPT
+  OUT_OF_SCOPE
+}
+
+enum PricingBasis {
+  VAT_EXCLUSIVE
+  VAT_INCLUSIVE
+}
+
+enum AgreementType {
+  FIXED
+  RECURRING
+}
+
+enum AgreementStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum TriggerType {
+  IMMEDIATE
+  DATE
+  MANUAL
+}
+
+enum PaymentTerms {
+  IMMEDIATE
+  EOM
+  EOM_15
+  EOM_30
+  EOM_45
+  EOM_60
+}
+
+enum ReceivableOrigin {
+  INSTALLMENT
+  RETAINER_CHARGE
+  ADJUSTMENT
+}
+
+enum ReceivableStatus {
+  OPEN
+  SETTLED
+}
+
+enum FinalMonth {
+  FULL
+  WAIVE
+}
+
+enum SupplementDistribution {
+  LAST_UNPOSTED
+  PRORATE_UNPOSTED
+  NEW_INSTALLMENT
+}
+
 model Organization {
   id              String   @id @default(uuid()) @db.Uuid
   name            String
@@ -79,6 +138,9 @@ model Organization {
   customers          Customer[]
   projects           Project[]
   externalReferences ExternalReference[]
+  vatRates           VatRate[]
+  agreements         Agreement[]
+  receivables        Receivable[]
 
   @@map("organizations")
 }
@@ -175,21 +237,24 @@ model IdempotencyKey {
 /// The party money is owed by. Thin on purpose: Malafat holds the rich client
 /// record and names ours through an ExternalReference (M2 brief §2.1).
 model Customer {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  organization   Organization  @relation(fields: [organizationId], references: [id])
   name           String
   email          String?
   phone          String?
   notes          String?
-  status         EntityStatus @default(ACTIVE)
+  /// Default VAT treatment for this customer's items (e.g. OUT_OF_SCOPE for a foreign client).
+  vatTreatment   VatTreatment?
+  status         EntityStatus  @default(ACTIVE)
   archivedAt     DateTime?
   /// Optimistic concurrency: PATCH sends If-Match: <version>.
-  version        Int          @default(1)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @default(now())
+  version        Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
 
-  projects Project[]
+  projects   Project[]
+  agreements Agreement[]
 
   @@index([organizationId, createdAt, id])
   @@map("customers")
@@ -198,18 +263,22 @@ model Customer {
 /// The container every agreement, receivable and payment hangs off. One
 /// currency per project (ADR-004); locked once anything is posted (M3).
 model Project {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  customerId     String       @db.Uuid
-  customer       Customer     @relation(fields: [customerId], references: [id])
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  customerId     String        @db.Uuid
+  customer       Customer      @relation(fields: [customerId], references: [id])
   name           String
-  currency       String       @db.VarChar(3)
-  status         EntityStatus @default(ACTIVE)
+  currency       String        @db.VarChar(3)
+  /// Default VAT treatment for this project's items; null inherits the customer's.
+  vatTreatment   VatTreatment?
+  status         EntityStatus  @default(ACTIVE)
   archivedAt     DateTime?
-  version        Int          @default(1)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @default(now())
+  version        Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+
+  agreements Agreement[]
 
   @@index([organizationId, customerId])
   @@index([organizationId, createdAt, id])
@@ -232,4 +301,164 @@ model ExternalReference {
   @@unique([organizationId, provider, entityType, externalId])
   @@unique([provider, entityType, entityId])
   @@map("external_references")
+}
+
+// ---- Milestone 3: VAT rates, agreements, installments, retainer charges, receivables ----
+//
+// Amounts are BIGINT minor units (never float). Calendar dates are ISO strings
+// (YYYY-MM-DD / YYYY-MM) in VarChar columns: they are organization-timezone
+// calendar dates, not instants, and lexicographic order is chronological.
+
+/// The firm's standard VAT rate, effective-dated and append-only.
+model VatRate {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  rateBasisPoints Int
+  effectiveFrom   String       @db.VarChar(10)
+  createdAt       DateTime     @default(now())
+
+  @@unique([organizationId, effectiveFrom])
+  @@map("vat_rates")
+}
+
+model Agreement {
+  id                   String          @id @default(uuid()) @db.Uuid
+  organizationId       String          @db.Uuid
+  organization         Organization    @relation(fields: [organizationId], references: [id])
+  projectId            String          @db.Uuid
+  project              Project         @relation(fields: [projectId], references: [id])
+  customerId           String          @db.Uuid
+  customer             Customer        @relation(fields: [customerId], references: [id])
+  type                 AgreementType
+  status               AgreementStatus @default(ACTIVE)
+  currency             String          @db.VarChar(3)
+  pricingBasis         PricingBasis
+  vatTreatment         VatTreatment
+  /// Frozen at creation; 0 for non-standard treatments.
+  vatRateBasisPoints   Int
+  /// FIXED: contractual total in the pricing basis. RECURRING: the monthly amount.
+  amountMinor          BigInt
+  netMinor             BigInt
+  vatMinor             BigInt
+  grossMinor           BigInt
+  agreementDate        String          @db.VarChar(10)
+  description          String?
+  paymentTerms         PaymentTerms    @default(EOM)
+  startMonth           String?         @db.VarChar(7)
+  billingDay           Int?
+  endMonth             String?         @db.VarChar(7)
+  cancelEffectiveMonth String?         @db.VarChar(7)
+  finalMonth           FinalMonth?
+  cancelledAt          DateTime?
+  version              Int             @default(1)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @default(now())
+
+  installments Installment[]
+  charges      RetainerCharge[]
+  supplements  AgreementSupplement[]
+
+  @@index([organizationId, projectId])
+  @@index([organizationId, customerId])
+  @@index([organizationId, createdAt, id])
+  @@map("agreements")
+}
+
+model Installment {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @db.Uuid
+  agreementId     String        @db.Uuid
+  agreement       Agreement     @relation(fields: [agreementId], references: [id])
+  position        Int
+  label           String
+  amountMinor     BigInt
+  netMinor        BigInt
+  vatMinor        BigInt
+  grossMinor      BigInt
+  vatTreatment    VatTreatment
+  rateBasisPoints Int
+  triggerType     TriggerType
+  triggerDate     String?       @db.VarChar(10)
+  paymentTerms    PaymentTerms?
+  dueDateOverride String?       @db.VarChar(10)
+  postedAt        DateTime?
+  postingDate     String?       @db.VarChar(10)
+  receivableId    String?       @unique @db.Uuid
+  voidedAt        DateTime?
+  version         Int           @default(1)
+
+  @@unique([agreementId, position])
+  @@index([organizationId, triggerType, triggerDate])
+  @@map("installments")
+}
+
+model RetainerCharge {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  agreementId     String       @db.Uuid
+  agreement       Agreement    @relation(fields: [agreementId], references: [id])
+  serviceMonth    String       @db.VarChar(7)
+  chargeDate      String       @db.VarChar(10)
+  amountMinor     BigInt
+  netMinor        BigInt
+  vatMinor        BigInt
+  grossMinor      BigInt
+  vatTreatment    VatTreatment
+  rateBasisPoints Int
+  postedAt        DateTime
+  receivableId    String       @unique @db.Uuid
+  createdAt       DateTime     @default(now())
+
+  @@unique([agreementId, serviceMonth])
+  @@map("retainer_charges")
+}
+
+/// What is owed. Created only when an installment or charge posts.
+model Receivable {
+  id                 String           @id @default(uuid()) @db.Uuid
+  organizationId     String           @db.Uuid
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  customerId         String           @db.Uuid
+  projectId          String           @db.Uuid
+  agreementId        String?          @db.Uuid
+  origin             ReceivableOrigin
+  originId           String?          @db.Uuid
+  currency           String           @db.VarChar(3)
+  netMinor           BigInt
+  vatMinor           BigInt
+  grossMinor         BigInt
+  vatTreatment       VatTreatment
+  vatRateBasisPoints Int
+  /// Written by M4 payments.
+  paidMinor          BigInt           @default(0)
+  dueDate            String           @db.VarChar(10)
+  postingDate        String           @db.VarChar(10)
+  postedAt           DateTime
+  status             ReceivableStatus @default(OPEN)
+  version            Int              @default(1)
+  createdAt          DateTime         @default(now())
+
+  @@index([organizationId, customerId])
+  @@index([organizationId, projectId])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, createdAt, id])
+  @@map("receivables")
+}
+
+model AgreementSupplement {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  organizationId       String                 @db.Uuid
+  agreementId          String                 @db.Uuid
+  agreement            Agreement              @relation(fields: [agreementId], references: [id])
+  amountMinor          BigInt
+  description          String?
+  effectiveDate        String                 @db.VarChar(10)
+  distribution         SupplementDistribution
+  resultingAmountMinor BigInt
+  requestId            String?
+  createdAt            DateTime               @default(now())
+
+  @@index([agreementId, createdAt])
+  @@map("agreement_supplements")
 }

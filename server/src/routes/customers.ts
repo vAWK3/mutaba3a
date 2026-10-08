@@ -68,7 +68,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let customer: CustomerRecord;
       try {
         customer = await store.customers.create(
-          { organizationId: organization.id, name: body.name, email: body.email ?? null, phone: body.phone ?? null, notes: body.notes ?? null },
+          { organizationId: organization.id, name: body.name, email: body.email ?? null, phone: body.phone ?? null, notes: body.notes ?? null, vatTreatment: body.vatTreatment ?? null },
           now,
           reference,
         );
@@ -157,6 +157,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (body.email !== undefined) patch.email = body.email;
       if (body.phone !== undefined) patch.phone = body.phone;
       if (body.notes !== undefined) patch.notes = body.notes;
+      if (body.vatTreatment !== undefined) patch.vatTreatment = body.vatTreatment;
 
       const result = await store.customers.update(organization.id, c.req.valid('param').customerId, c.get('expectedVersion'), patch, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such customer');

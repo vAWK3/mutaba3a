@@ -986,3 +986,6 @@ Before creating a new component:
 | `import/plan.ts`, `import/preview-token.ts` | pure batch planner + preview proof | M2 import; template for M3 previews |
 | `idempotency.ts`, `auth/middleware.ts` (`requireScope`) | M1 | every write / every route |
 | `smoke.ts` | post-deploy checks over injected fetch | `deploy.sh`, CI |
+| `dates.ts`, `vat.ts`, `preview-token.ts` | organization-timezone calendar math and payment terms; VAT math; generic preview proof | every financial route (M3+) |
+| `agreements/schedule.ts`, `agreements/supplement.ts`, `agreements/status.ts`, `agreements/compose.ts`, `agreements/posting.ts` | installment split; supplement distribution; item status; context/rate/treatment resolution; lazy posting | agreements, installments, retainers, receivables routes; M4 payments will read statuses and posting |
+| `retainers/schedule.ts` | chargeable months with end/cancel rules | retainers routes, reconcile |

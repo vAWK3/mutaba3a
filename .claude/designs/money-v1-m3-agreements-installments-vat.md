@@ -1,6 +1,6 @@
 # Money v1 — Milestone 3: Fixed-fee agreements, installments and VAT (design brief)
 
-- **Date:** 2026-10-08 · **Status:** awaiting product-owner approval (CLAUDE.md lifecycle, Phase 1)
+- **Date:** 2026-10-08 · **Status:** approved with amendments (rev. 2) and **implemented** the same day — CHANGELOG "Money v1 Milestone 3"; 196 tests green
 - **Tickets:** MUT-25 (epic), MAL-939 · **Contract:** `money-v1-api-contract.md` §3 M3 · **Plan:** §3.4, §4, §6, §12.5
 - **Repo side:** Mutaba3a `server/` only. The Malafat side (agreement wizard, matter financial tab) follows in its own Confluence brief once this API exists.
 - **Bounded by:** ADR-024/025/026, the M2 brief (projects carry one currency; `hasPostedActivity` hook), MAL-870 (Money included), TD-018 (operator keys).
@@ -137,3 +137,52 @@ repositories/memory.ts · repositories/prisma.ts (BigInt columns) · store-contr
 7. **Out of scope for M3:** retainers, payments/allocations, invoice documents or numbering, summaries, agreement edits other than supplements and cancel.
 
 Approve all seven (or amend) and Phase 2 starts: tests first (`…-tests.md` is written), then `vat.ts` / `schedule.ts` / `status.ts`, the store, routes and OpenAPI.
+
+## 4. Revision 2 — product-owner amendments (2026-10-08)
+
+Decisions 1, 3, 4, 5 approved as written. Three amendments change the design:
+
+**A. VAT is per payable item, not per agreement (decision 2 amended).**
+Whether VAT applies depends on the matter type and on the client (local vs
+foreign). So:
+- The firm's effective-dated **rate** table stays (it is the standard rate; a
+  `STANDARD_RATED` item with no rate on its date is still refused).
+- The **treatment** (`STANDARD_RATED | ZERO_RATED | EXEMPT | OUT_OF_SCOPE`) is
+  resolved per item with a default chain: installment/charge override →
+  agreement → project `vatTreatment` → customer `vatTreatment` →
+  `STANDARD_RATED`. Customers and projects gain a nullable `vatTreatment`
+  (settable on create and PATCH), so a foreign client is marked once and every
+  matter under it inherits.
+- Consequence for the math (decision 1 restated): installments split the
+  **contractual amount in its pricing basis** (not the gross); each
+  installment's net / VAT / gross is computed from **its own** treatment and
+  the frozen rate; agreement totals are the sums. Rounding is still half-up
+  per item and the last installment still absorbs the split remainder. Sums
+  reconcile by construction.
+
+**B. Due dates default to end of month, with the plan's terms vocabulary
+(decision 6 amended).** `paymentTerms: IMMEDIATE | EOM | EOM_15 | EOM_30 |
+EOM_45 | EOM_60`, default `EOM`: due = end of the posting month (+ N days).
+Set per agreement, overridable per installment, and a manual trigger may pass
+an explicit `dueDate`. Same vocabulary for retainer charges.
+
+**C. Retainers are in scope, basic form only (decision 7 amended).** The plan's
+recurring agreement, without the full cycle:
+- `POST /v1/retainers/preview`, `POST /v1/retainers` (`type RECURRING`:
+  `monthlyAmount`, `pricingBasis`, `vatTreatment?`, `startMonth`,
+  `billingDay` 1–28 (default 1), `paymentTerms`, `endMonth?`).
+- Charges: one per service month, unique per (agreement, month), generated
+  idempotently up to today by `POST /v1/retainers/reconcile` and lazily on
+  reads (same mechanism as dated installments); each charge posts a
+  receivable (`origin RETAINER_CHARGE`) with its own treatment.
+- `GET /v1/retainers/{id}/charges`; retainers list through
+  `GET /v1/agreements?type=RECURRING`.
+- `POST /v1/retainers/{id}/cancel` `{ effectiveDate, finalMonth: FULL | WAIVE }`
+  — stops generation after the effective month; `WAIVE` skips the effective
+  month if not yet posted. **Not in M3:** effective-dated amendments
+  (`/changes`), proration, credits for posted charges — a change is cancel +
+  new retainer until M5.
+- Still out of scope: receiving payments (M4), invoice numbering, summaries.
+
+API version `1.2.0-m3`. Added `details.reason` values: `BILLING_DAY_INVALID`,
+`START_MONTH_INVALID`, `END_BEFORE_START`, `NOT_RECURRING`, `NOT_FIXED`.

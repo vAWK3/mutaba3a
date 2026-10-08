@@ -29,6 +29,73 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 3: agreements, installments, VAT, retainers, receivables (`server/`)
+
+Approved with amendments (brief rev. 2: VAT treatment per payable item with
+project/customer defaults; due dates default to end of month with the
+payment-terms vocabulary; retainers in basic form). API version `1.2.0-m3`;
+additive, M1/M2 routes unchanged except the project currency lock and the
+archive guard promised in M2.
+
+### Added
+- **Pure money math:** `src/vat.ts` (basis points, half-up `bigint` rounding,
+  exclusive/inclusive bases, four treatments), `src/agreements/schedule.ts`
+  (installments split the contractual amount in its basis, per-item VAT, last
+  absorbs the remainder, 1–60 items), `src/agreements/status.ts`
+  (`PENDING / DUE / OVERDUE / PARTIALLY_PAID / PAID / VOID`), `src/dates.ts`
+  (organization-timezone "today", ISO date arithmetic, `dueDateFor` with
+  `IMMEDIATE | EOM | EOM_15 | EOM_30 | EOM_45 | EOM_60`),
+  `src/retainers/schedule.ts` (chargeable service months, 120-month bound),
+  `src/preview-token.ts` (generic, canonical JSON, bigint-safe).
+- **Schema + migration `20261008192015_m3_agreements_installments_vat`:**
+  `vat_rates` (append-only, effective-dated), `agreements` (FIXED/RECURRING,
+  frozen rate, totals, terms, retainer fields), `installments`,
+  `retainer_charges` (unique per agreement + month), `receivables`
+  (created only when posted; `paid_minor` reserved for M4),
+  `agreement_supplements`; `vatTreatment` on customers and projects.
+  Amounts are `BIGINT`; calendar dates are ISO strings.
+- **Routes:** `GET /v1/vat-rates`, `PUT /v1/settings/vat`;
+  `POST /v1/agreements/preview`, `POST /v1/agreements`, `GET /v1/agreements`,
+  `GET /v1/agreements/{id}`, `POST …/{id}/supplements`, `POST …/{id}/cancel`;
+  `POST /v1/installments/{id}/trigger`; `POST /v1/retainers/preview`,
+  `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`,
+  `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile`;
+  `GET /v1/receivables`, `GET /v1/receivables/{id}`.
+- **Lazy posting** (`src/agreements/posting.ts`): dated installments and
+  retainer charges post when their date has arrived, on every read that
+  renders agreements or receivables and on reconcile; idempotent in the store
+  (receivable + marker in one transaction, unique charge per month).
+- **Preview tokens freeze the rate:** a VAT-rate change between preview and
+  create is `409 PREVIEW_STALE`.
+- **Supplements** (`src/agreements/supplement.ts`): last-unposted / prorate /
+  new installment; negative only within unposted capacity, otherwise
+  `422 SUPPLEMENT_EXCEEDS_UNPOSTED` with `requiresAdjustment` naming the
+  posted receivables.
+- Published `details.reason` vocabularies for 409 and 422 in the API
+  description (`CONFLICT_REASONS`, `VALIDATION_REASONS`).
+- **Tests (79 new, 196 total, 22 files):** unit (dates, VAT table, schedule,
+  status, retainer schedule, token), M3 storage contract on memory and
+  Postgres, `routes-m3.test.ts` (VAT rates, preview/create/stale token/rate
+  change, treatment chain, validation reasons, idempotent create + audit,
+  lazy posting across a timezone midnight, manual triggers, receivable
+  statuses in two timezones with seeded payments, filters, supplements in
+  all three distributions, cancel rules, currency lock + archive guard,
+  retainers preview/create/reconcile/cancel FULL vs WAIVE, contract).
+
+### Changed
+- `projects.hasPostedActivity` is now "has an agreement"; `POST /v1/projects/{id}/archive`
+  refuses with `409 PROJECT_HAS_OUTSTANDING`. `MemoryLedgerStore.markProjectPosted`
+  removed (`seedPaid` added for M4-shaped tests).
+- `openapi/openapi.yaml` regenerated (3990 lines).
+
+### Technical
+- Verification: typecheck, lint, `npm run test:db` (196), `openapi:check`.
+- Deferred to M4/M5 (brief rev. 2): payments and allocations, credits/
+  adjustments against posted receivables, retainer amendments and proration,
+  invoice numbering, summaries.
+
+---
+
 ## [Unreleased] - 2026-10-08 — M3 design brief + test plan (agreements, installments, VAT)
 
 ### Added

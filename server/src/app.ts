@@ -8,12 +8,17 @@ import type { Logger } from './logger.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
+import { agreementRoutes } from './routes/agreements.js';
 import { customerRoutes } from './routes/customers.js';
+import { installmentRoutes } from './routes/installments.js';
+import { receivableRoutes } from './routes/receivables.js';
+import { retainerRoutes } from './routes/retainers.js';
+import { vatRoutes } from './routes/vat.js';
 import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
 import { projectRoutes } from './routes/projects.js';
-import { CONFLICT_REASONS } from './schemas.js';
+import { CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
 
 export interface AppDependencies {
   store: LedgerStore;
@@ -27,7 +32,7 @@ export interface AppDependencies {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.1.0-m2';
+export const API_VERSION = '1.2.0-m3';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -85,6 +90,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', customerRoutes(deps.store));
   app.route('/', projectRoutes(deps.store));
   app.route('/', importRoutes(deps.store));
+  app.route('/', vatRoutes(deps.store));
+  app.route('/', agreementRoutes(deps.store));
+  app.route('/', installmentRoutes(deps.store));
+  app.route('/', retainerRoutes(deps.store));
+  app.route('/', receivableRoutes(deps.store));
   app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
@@ -105,7 +115,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       title: API_TITLE,
       version: API_VERSION,
       description: [
-        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–2).',
+        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–3).',
         '',
         `Scopes: ${SCOPES.join(', ')}.`,
         '',
@@ -117,6 +127,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         `409 CONFLICT responses carry details.reason, one of: ${CONFLICT_REASONS.join(', ')}.`,
         '',
+        `422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: ${VALIDATION_REASONS.join(', ')} (schema failures carry the zod issues in details instead).`,
+        '',
+        'Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).',
+        '',
         'Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page\'s nextCursor.',
       ].join('\n'),
     },
@@ -126,6 +140,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Customers', description: 'The parties money is owed by' },
       { name: 'Projects', description: 'Single-currency containers for agreements, receivables and payments' },
       { name: 'Import', description: 'Batch linking of an external system\'s customers and projects' },
+      { name: 'VAT', description: 'The firm\'s effective-dated standard rate' },
+      { name: 'Agreements', description: 'Fixed-fee agreements, installments, supplements' },
+      { name: 'Installments', description: 'Manual triggers' },
+      { name: 'Retainers', description: 'Recurring agreements and their monthly charges' },
+      { name: 'Receivables', description: 'What is owed' },
       { name: 'Admin', description: 'Operator provisioning' },
     ],
   });

@@ -1,6 +1,6 @@
 # Mutaba3a API (`server/`)
 
-The hosted, organization-scoped financial API that Malafat's Money section calls (MUT/MAL Money v1, Option B — see ADR-024/025 in `../.claude/DECISIONS.md`). Milestone 1 ships the control plane: organizations, API keys with scopes, the Malafat tenant binding, audit, idempotency, rate limiting, and the OpenAPI contract. Milestone 2 adds customers, projects, external references and batch import. Agreements, receivables and payments arrive in M3–M6.
+The hosted, organization-scoped financial API that Malafat's Money section calls (MUT/MAL Money v1, Option B — see ADR-024/025 in `../.claude/DECISIONS.md`). Milestone 1 ships the control plane: organizations, API keys with scopes, the Malafat tenant binding, audit, idempotency, rate limiting, and the OpenAPI contract. Milestone 2 adds customers, projects, external references and batch import. Milestone 3 adds VAT rates, fixed-fee agreements with installments, basic retainers and receivables. Payments arrive in M4.
 
 The desktop/PWA app in `../src` is unchanged and still works fully offline. This directory is a separate npm package with its own lockfile; nothing from `../src` is imported yet.
 
@@ -46,6 +46,10 @@ change under `server/`. It never pushes or deploys.
 - `POST /v1/customers`, `GET /v1/customers[?status=&externalId=&limit=&cursor=]`, `GET|PATCH /v1/customers/{id}`, `POST /v1/customers/{id}/archive` — M2; `PATCH` needs `If-Match: <version>`
 - `POST /v1/projects`, `GET /v1/projects[?customerId=&currency=&status=&externalId=…]`, `GET|PATCH /v1/projects/{id}`, `POST /v1/projects/{id}/archive` — one currency per project, locked once anything is posted
 - `POST /v1/import/preview`, `POST /v1/import/commit` — batch link of an external system's customers and projects (≤ 500 rows; commit needs the preview's `previewToken`)
+- `GET /v1/vat-rates`, `PUT /v1/settings/vat` — the firm's effective-dated standard rate (basis points)
+- `POST /v1/agreements/preview`, `POST /v1/agreements`, `GET /v1/agreements[/{id}]`, `POST /v1/agreements/{id}/supplements`, `POST /v1/agreements/{id}/cancel`, `POST /v1/installments/{id}/trigger` — fixed-fee agreements; VAT treatment per item; installments post immediately, on a date, or manually; due dates from payment terms (default end of month)
+- `POST /v1/retainers/preview`, `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`, `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile` — recurring retainers, one charge per service month
+- `GET /v1/receivables[/{id}]` — what is owed, statuses computed in the organization timezone
 - `POST /admin/v1/organizations`, `GET /admin/v1/organizations/{id}`, `POST …/{id}/api-keys`, `POST /admin/v1/api-keys/{id}/revoke`, `GET …/{id}/audit` — operator only, `X-Admin-Token`
 - `GET /openapi.json` — the live contract; `openapi/openapi.yaml` is the committed copy
 

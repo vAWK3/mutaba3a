@@ -1,5 +1,7 @@
 import type { ApiKeyEnvironment } from '../auth/api-key.js';
 import type { Scope } from '../auth/scopes.js';
+import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
+import type { PricingBasis, VatTreatment } from '../vat.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -189,6 +191,8 @@ export interface CustomerRecord {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  /** Default VAT treatment for this customer's items (M3; e.g. OUT_OF_SCOPE for a foreign client). Null = inherit STANDARD_RATED. */
+  vatTreatment: VatTreatment | null;
   status: EntityStatus;
   archivedAt: Date | null;
   /** Optimistic-concurrency version; starts at 1, +1 per write. */
@@ -203,6 +207,7 @@ export interface CreateCustomerInput {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  vatTreatment?: VatTreatment | null;
 }
 
 /** Absent key = unchanged; null = cleared. */
@@ -211,6 +216,7 @@ export interface UpdateCustomerPatch {
   email?: string | null;
   phone?: string | null;
   notes?: string | null;
+  vatTreatment?: VatTreatment | null;
 }
 
 export interface ProjectRecord {
@@ -220,6 +226,8 @@ export interface ProjectRecord {
   name: string;
   /** ISO 4217; one currency per project (plan §3.3, ADR-004). */
   currency: string;
+  /** Default VAT treatment for this project's items (M3). Null = inherit the customer's. */
+  vatTreatment: VatTreatment | null;
   status: EntityStatus;
   archivedAt: Date | null;
   version: number;
@@ -232,11 +240,13 @@ export interface CreateProjectInput {
   customerId: string;
   name: string;
   currency: string;
+  vatTreatment?: VatTreatment | null;
 }
 
 export interface UpdateProjectPatch {
   name?: string;
   currency?: string;
+  vatTreatment?: VatTreatment | null;
 }
 
 /** Keyset cursor: rows are ordered by (createdAt, id) ascending. */
@@ -285,12 +295,259 @@ export interface ProjectRepository {
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateProjectPatch, at: Date): Promise<UpdateResult<ProjectRecord>>;
   archive(organizationId: string, id: string, at: Date): Promise<ProjectRecord | null>;
   countActiveByCustomer(organizationId: string, customerId: string): Promise<number>;
-  /**
-   * True once anything financial has been posted against the project; the
-   * currency is then locked (brief §2.2). Always false in M2 — M3 wires it to
-   * agreements and receivables without touching the route.
-   */
+  /** True once the project has an agreement (M3 brief, decision 3): the currency is then locked. */
   hasPostedActivity(organizationId: string, id: string): Promise<boolean>;
+}
+
+// ---- Milestone 3: VAT rates, agreements, installments, retainer charges, receivables ----
+
+export interface VatRateRecord {
+  id: string;
+  organizationId: string;
+  rateBasisPoints: number;
+  effectiveFrom: IsoDate;
+  createdAt: Date;
+}
+
+export type VatRateUpsert = { outcome: 'created' | 'unchanged'; record: VatRateRecord } | { outcome: 'conflict'; record: VatRateRecord };
+
+export interface VatRateRepository {
+  /** Append-only by effective date: same date + same rate = unchanged; same date + other rate = conflict. */
+  upsert(organizationId: string, rateBasisPoints: number, effectiveFrom: IsoDate, at: Date): Promise<VatRateUpsert>;
+  /** Newest effective date first. */
+  list(organizationId: string): Promise<VatRateRecord[]>;
+  /** The rate in force on `date` (latest effectiveFrom ≤ date), or null. */
+  effectiveOn(organizationId: string, date: IsoDate): Promise<VatRateRecord | null>;
+}
+
+export type AgreementType = 'FIXED' | 'RECURRING';
+export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
+export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
+export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
+export type ReceivableStatus = 'OPEN' | 'SETTLED';
+export type FinalMonth = 'FULL' | 'WAIVE';
+export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT';
+
+export interface AgreementRecord {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  customerId: string;
+  type: AgreementType;
+  status: AgreementStatus;
+  currency: string;
+  pricingBasis: PricingBasis;
+  vatTreatment: VatTreatment;
+  /** Frozen at creation; supplements reuse it (decision 4). 0 for non-standard treatments. */
+  vatRateBasisPoints: number;
+  /** FIXED: contractual total in the pricing basis. RECURRING: the monthly amount. */
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  agreementDate: IsoDate;
+  description: string | null;
+  paymentTerms: PaymentTerms;
+  // RECURRING only
+  startMonth: IsoMonth | null;
+  billingDay: number | null;
+  endMonth: IsoMonth | null;
+  cancelEffectiveMonth: IsoMonth | null;
+  finalMonth: FinalMonth | null;
+  cancelledAt: Date | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateInstallmentInput {
+  position: number;
+  label: string;
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  vatTreatment: VatTreatment;
+  rateBasisPoints: number;
+  triggerType: TriggerType;
+  triggerDate: IsoDate | null;
+  paymentTerms: PaymentTerms | null;
+  dueDateOverride: IsoDate | null;
+}
+
+export interface CreateAgreementInput {
+  organizationId: string;
+  projectId: string;
+  customerId: string;
+  type: AgreementType;
+  currency: string;
+  pricingBasis: PricingBasis;
+  vatTreatment: VatTreatment;
+  vatRateBasisPoints: number;
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  agreementDate: IsoDate;
+  description: string | null;
+  paymentTerms: PaymentTerms;
+  startMonth: IsoMonth | null;
+  billingDay: number | null;
+  endMonth: IsoMonth | null;
+  installments: CreateInstallmentInput[];
+}
+
+export interface InstallmentRecord extends CreateInstallmentInput {
+  id: string;
+  organizationId: string;
+  agreementId: string;
+  postedAt: Date | null;
+  postingDate: IsoDate | null;
+  receivableId: string | null;
+  voidedAt: Date | null;
+  version: number;
+}
+
+export interface RetainerChargeRecord {
+  id: string;
+  organizationId: string;
+  agreementId: string;
+  serviceMonth: IsoMonth;
+  chargeDate: IsoDate;
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  vatTreatment: VatTreatment;
+  rateBasisPoints: number;
+  postedAt: Date;
+  receivableId: string;
+  createdAt: Date;
+}
+
+export interface ReceivableRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  projectId: string;
+  agreementId: string | null;
+  origin: ReceivableOrigin;
+  /** Installment id or charge id. */
+  originId: string | null;
+  currency: string;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  vatTreatment: VatTreatment;
+  vatRateBasisPoints: number;
+  /** Written by M4 payments; 0 until then. */
+  paidMinor: bigint;
+  dueDate: IsoDate;
+  postingDate: IsoDate;
+  postedAt: Date;
+  status: ReceivableStatus;
+  version: number;
+  createdAt: Date;
+}
+
+export interface PostingInput {
+  postingDate: IsoDate;
+  dueDate: IsoDate;
+  at: Date;
+}
+
+export interface SupplementInput {
+  amountMinor: bigint;
+  description: string | null;
+  effectiveDate: IsoDate;
+  distribution: SupplementDistribution;
+  requestId: string | null;
+}
+
+export interface SupplementRecord extends SupplementInput {
+  id: string;
+  organizationId: string;
+  agreementId: string;
+  resultingAmountMinor: bigint;
+  createdAt: Date;
+}
+
+export interface InstallmentAmountUpdate {
+  id: string;
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+}
+
+export interface ApplySupplementInput {
+  supplement: SupplementInput;
+  installmentUpdates: InstallmentAmountUpdate[];
+  newInstallments: CreateInstallmentInput[];
+  totals: { amountMinor: bigint; netMinor: bigint; vatMinor: bigint; grossMinor: bigint };
+  expectedVersion: number;
+}
+
+export interface AgreementFilter {
+  projectId?: string;
+  customerId?: string;
+  status?: AgreementStatus;
+  type?: AgreementType;
+}
+
+export interface CreateChargeInput {
+  organizationId: string;
+  agreementId: string;
+  customerId: string;
+  projectId: string;
+  currency: string;
+  serviceMonth: IsoMonth;
+  chargeDate: IsoDate;
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  vatTreatment: VatTreatment;
+  rateBasisPoints: number;
+  dueDate: IsoDate;
+}
+
+export interface AgreementRepository {
+  /** Agreement + installments atomically. */
+  create(input: CreateAgreementInput, at: Date): Promise<{ agreement: AgreementRecord; installments: InstallmentRecord[] }>;
+  getById(organizationId: string, id: string): Promise<AgreementRecord | null>;
+  list(organizationId: string, filter: AgreementFilter, page: PageRequest): Promise<Page<AgreementRecord>>;
+  listInstallments(organizationId: string, agreementId: string): Promise<InstallmentRecord[]>;
+  getInstallment(organizationId: string, id: string): Promise<InstallmentRecord | null>;
+  /** Creates the receivable and marks the installment, atomically; a second call returns the first receivable with created=false. */
+  postInstallment(organizationId: string, installmentId: string, input: PostingInput): Promise<{ installment: InstallmentRecord; receivable: ReceivableRecord; created: boolean } | null>;
+  /** DATE installments whose trigger date ≤ today, not posted, not voided, on ACTIVE agreements. */
+  listUnpostedDue(organizationId: string, today: IsoDate): Promise<InstallmentRecord[]>;
+  applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
+  listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
+  /** FIXED: status CANCELLED, unposted installments voided. RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
+  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
+  /** RECURRING agreements that may still generate charges (ACTIVE, or CANCELLED with a cancel month). */
+  listRetainers(organizationId: string): Promise<AgreementRecord[]>;
+  listCharges(organizationId: string, agreementId: string): Promise<RetainerChargeRecord[]>;
+  /** Charge + its receivable atomically; unique per (agreement, month) — a repeat returns the existing charge with created=false. */
+  createPostedCharge(input: CreateChargeInput, at: Date): Promise<{ charge: RetainerChargeRecord; receivable: ReceivableRecord; created: boolean }>;
+}
+
+export interface ReceivableFilter {
+  customerId?: string;
+  projectId?: string;
+  currency?: string;
+  dueBefore?: IsoDate;
+  dueAfter?: IsoDate;
+  status?: ReceivableStatus;
+}
+
+export interface ReceivableRepository {
+  getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
+  list(organizationId: string, filter: ReceivableFilter, page: PageRequest): Promise<Page<ReceivableRecord>>;
+  /** OPEN receivables with outstanding > 0 on the project (archive guard). */
+  countOutstandingByProject(organizationId: string, projectId: string): Promise<number>;
 }
 
 export interface ExternalReferenceRepository {
@@ -309,6 +566,9 @@ export interface LedgerStore {
   customers: CustomerRepository;
   projects: ProjectRepository;
   externalReferences: ExternalReferenceRepository;
+  vatRates: VatRateRepository;
+  agreements: AgreementRepository;
+  receivables: ReceivableRepository;
   /** Liveness of the backing store, for /ready. */
   ping(): Promise<void>;
 }

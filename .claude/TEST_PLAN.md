@@ -30,7 +30,7 @@ Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
 Postgres contract suite against the docker container in `server/README.md`).
 CI: `.github/workflows/server-ci.yml` runs the whole set, plus the Docker
 build and `terraform validate`, on every change under `server/`.
-117 tests (13 files) at M2:
+196 tests (22 files) at M3:
 
 | Area | File | What is pinned |
 |------|------|----------------|
@@ -39,6 +39,14 @@ build and `terraform validate`, on every change under `server/`.
 | Rate limit | `src/__tests__/rate-limit.test.ts` | sliding window, Retry-After, per-key isolation, prune |
 | Storage contract | `src/repositories/__tests__/store-contract.ts` run by `store-memory.test.ts` always and `store-prisma.test.ts` when `MUTABA3A_TEST_DATABASE_URL` is set | unique slug/prefix/hash, revoke-once, one tenant ↔ one organization, reconnect keeps id, audit ordering, idempotency new/in_progress/replay/mismatch/fail |
 | Smoke | `src/__tests__/smoke.test.ts` | `runSmoke` against the in-memory app: every unauthenticated check passes on a healthy deployment, version mismatch is the only failure when the tag differs, the admin round trip (provision → key → validate → revoke → `API_KEY_REVOKED`) passes and never logs a secret, a non-JSON 502 is reported not thrown, a wrong admin token stops the round trip after one step |
+| Dates | `src/__tests__/dates.test.ts` | organization-timezone today, ISO validation, day/month arithmetic across boundaries, payment-terms due dates |
+| VAT | `src/__tests__/vat.test.ts` | half-up symmetric rounding; table of exclusive/inclusive × treatments × 16/17/18 % with net + vat = gross on every row; rate bounds |
+| Schedule | `src/agreements/__tests__/schedule.test.ts` | exact sums, difference reporting, percent split with last-absorbs, mixed/empty/too-many/non-positive, per-installment treatment, inclusive reconciliation over 7 uneven items |
+| Status | `src/agreements/__tests__/status.test.ts` | every (voided, posted, due vs today, paid) cell |
+| Retainer schedule | `src/retainers/__tests__/schedule.test.ts` | validation, clamped charge dates, chargeable months with end/cancel FULL/WAIVE, 120-month bound |
+| Preview token | `src/__tests__/preview-token.test.ts` | canonical JSON (key order, bigint), changes per part, constant-time verify |
+| Storage contract (M3) | `store-contract-m3.ts` via memory + Postgres runners | VAT rates append-only + effectiveOn; atomic agreement + installments with BigInt > 2^53; post-once with receivable; due-unposted listing; supplement with version check; cancel voids unposted, idempotent; posted charges unique per month; receivable filters + outstanding count + isolation |
+| Routes (M3) | `src/__tests__/routes-m3.test.ts` | VAT rate scopes/conflict/current; preview totals + due dates; create + receivable; PREVIEW_STALE on body or rate change; VAT_RATE_MISSING vs foreign client vs per-installment override; validation reasons; idempotent create + audit; lazy DATE posting across Jerusalem midnight; manual trigger 201/200/NOT_MANUAL/AGREEMENT_CANCELLED; DUE vs OVERDUE by timezone, PARTIALLY_PAID/PAID via seeded payments; receivable filters + scope; supplements LAST_UNPOSTED / PRORATE / NEW_INSTALLMENT / exceeds-unposted with requiresAdjustment; cancel rules; CURRENCY_LOCKED + PROJECT_HAS_OUTSTANDING; retainers preview/create/lazy charge/reconcile counts/cancel FULL vs WAIVE/NOT_FIXED/NOT_RECURRING; OpenAPI paths + reasons + version |
 | Pagination | `src/__tests__/pagination.test.ts` | cursor round trip with ms precision, tampered/foreign cursors → VALIDATION_FAILED, limit default/cap |
 | Import planner | `src/import/__tests__/plan.test.ts`, `preview-token.test.ts` | every row of the brief's preview/commit table, batch customer resolution, first-occurrence-wins on duplicates, 500-row cap, input order; token stable/changes on rows, order, organization; constant-time verify |
 | Storage contract (M2) | `src/repositories/__tests__/store-contract-m2.ts` run by `store-memory-m2.test.ts` and `store-prisma-m2.test.ts` | organization scoping of get/list, external-reference uniqueness (by entity type, by entity), atomic create+reference (no orphan on failure), optimistic update updated/stale/not_found, idempotent archive, active-project count, filters, keyset pagination over 23 rows with equal timestamps |

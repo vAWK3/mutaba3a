@@ -288,7 +288,11 @@ describe('projects', () => {
     expect(ok.status).toBe(200);
     expect(await read(ok)).toMatchObject({ name: 'Case A', currency: 'USD', version: 2 });
 
-    h.store.markProjectPosted(p.id);
+    // M3: the currency locks as soon as the project has an agreement.
+    await h.app.request('/v1/settings/vat', json({ rateBasisPoints: 1800, effectiveFrom: '2020-01-01' }, auth, 'PUT'));
+    const body = { projectId: p.id, amount: '100.00', pricingBasis: 'VAT_EXCLUSIVE', agreementDate: '2026-10-08', paymentTerms: 'EOM', installments: [{ label: 'All', amount: '100.00', trigger: { type: 'MANUAL' } }] };
+    const preview = await read(await h.app.request('/v1/agreements/preview', json(body, auth)));
+    expect((await h.app.request('/v1/agreements', json({ ...body, previewToken: preview.previewToken }, { ...auth, ...idem() }))).status).toBe(201);
     const locked = await h.app.request(`/v1/projects/${p.id}`, json({ currency: 'EUR' }, { ...auth, 'if-match': '2' }, 'PATCH'));
     expect(locked.status).toBe(409);
     expect((await read(locked)).error.details).toMatchObject({ reason: 'CURRENCY_LOCKED' });
@@ -399,8 +403,8 @@ describe('contract', () => {
   it('publishes every M2 path and the reason vocabulary at API version 1.1.0-m2', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(API_VERSION).toBe('1.1.0-m2');
-    expect(doc.info.version).toBe('1.1.0-m2');
+    expect(doc.info.version).toBe(API_VERSION);
+    expect(API_VERSION).toBe('1.2.0-m3');
     for (const path of ['/v1/customers', '/v1/customers/{customerId}', '/v1/customers/{customerId}/archive', '/v1/projects', '/v1/projects/{projectId}', '/v1/projects/{projectId}/archive', '/v1/import/preview', '/v1/import/commit']) {
       expect(doc.paths[path], path).toBeDefined();
     }

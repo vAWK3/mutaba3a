@@ -3,9 +3,20 @@ import type { Scope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { ForeignKeyViolation, UniqueViolation } from './memory.js';
 import type {
+  AgreementFilter,
+  AgreementRecord,
+  AgreementRepository,
   ApiKeyRecord,
   ApiKeyRepository,
+  ApplySupplementInput,
   AuditRepository,
+  InstallmentRecord,
+  ReceivableFilter,
+  ReceivableRecord,
+  ReceivableRepository,
+  RetainerChargeRecord,
+  SupplementRecord,
+  VatRateRepository,
   CustomerFilter,
   CustomerRecord,
   CustomerRepository,
@@ -227,6 +238,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (patch.email !== undefined) data.email = patch.email;
       if (patch.phone !== undefined) data.phone = patch.phone;
       if (patch.notes !== undefined) data.notes = patch.notes;
+      if (patch.vatTreatment !== undefined) data.vatTreatment = patch.vatTreatment;
       const { count } = await this.prisma.customer.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
       const record = await this.prisma.customer.findFirst({ where: { id, organizationId } });
       if (!record) return { kind: 'not_found' };
@@ -278,6 +290,7 @@ export class PrismaLedgerStore implements LedgerStore {
       const data: Prisma.ProjectUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
       if (patch.name !== undefined) data.name = patch.name;
       if (patch.currency !== undefined) data.currency = patch.currency;
+      if (patch.vatTreatment !== undefined) data.vatTreatment = patch.vatTreatment;
       const { count } = await this.prisma.project.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
       const record = await this.prisma.project.findFirst({ where: { id, organizationId } });
       if (!record) return { kind: 'not_found' };
@@ -291,8 +304,218 @@ export class PrismaLedgerStore implements LedgerStore {
       return this.prisma.project.findFirst({ where: { id, organizationId } });
     },
     countActiveByCustomer: (organizationId, customerId) => this.prisma.project.count({ where: { organizationId, customerId, status: 'ACTIVE' } }),
-    // M3 wires this to agreements/receivables; nothing can be posted in M2.
-    hasPostedActivity: async () => false,
+    hasPostedActivity: async (organizationId, id) => (await this.prisma.agreement.count({ where: { organizationId, projectId: id } })) > 0,
+  };
+
+  readonly vatRates: VatRateRepository = {
+    upsert: async (organizationId, rateBasisPoints, effectiveFrom, at) => {
+      try {
+        const record = await this.prisma.vatRate.create({ data: { organizationId, rateBasisPoints, effectiveFrom, createdAt: at } });
+        return { outcome: 'created', record };
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+      }
+      const existing = await this.prisma.vatRate.findUnique({ where: { organizationId_effectiveFrom: { organizationId, effectiveFrom } } });
+      if (!existing) throw new Error('vat rate vanished between insert and read');
+      return existing.rateBasisPoints === rateBasisPoints ? { outcome: 'unchanged', record: existing } : { outcome: 'conflict', record: existing };
+    },
+    list: (organizationId) => this.prisma.vatRate.findMany({ where: { organizationId }, orderBy: { effectiveFrom: 'desc' } }),
+    effectiveOn: (organizationId, date) =>
+      this.prisma.vatRate.findFirst({ where: { organizationId, effectiveFrom: { lte: date } }, orderBy: { effectiveFrom: 'desc' } }),
+  };
+
+  readonly agreements: AgreementRepository = {
+    create: (input, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: input.organizationId }, select: { id: true } });
+          if (!project) throw new ForeignKeyViolation('agreements.projectId');
+          const { installments, ...rest } = input;
+          const agreement = await tx.agreement.create({ data: { ...rest, createdAt: at, updatedAt: at } });
+          const created: InstallmentRecord[] = [];
+          for (const spec of installments) {
+            created.push(await tx.installment.create({ data: { ...spec, organizationId: input.organizationId, agreementId: agreement.id } }));
+          }
+          return { agreement, installments: created };
+        }),
+      ),
+    getById: (organizationId, id) => this.prisma.agreement.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter: AgreementFilter, page) => {
+      const rows = await this.prisma.agreement.findMany({
+        where: {
+          organizationId,
+          ...(filter.projectId ? { projectId: filter.projectId } : {}),
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.type ? { type: filter.type } : {}),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    listInstallments: (organizationId, agreementId) => this.prisma.installment.findMany({ where: { organizationId, agreementId }, orderBy: { position: 'asc' } }),
+    getInstallment: (organizationId, id) => this.prisma.installment.findFirst({ where: { id, organizationId } }),
+    postInstallment: async (organizationId, installmentId, input) => {
+      const current = await this.prisma.installment.findFirst({ where: { id: installmentId, organizationId } });
+      if (!current) return null;
+      if (current.receivableId) {
+        const receivable = await this.prisma.receivable.findUnique({ where: { id: current.receivableId } });
+        return receivable ? { installment: current, receivable, created: false } : null;
+      }
+      const agreement = await this.prisma.agreement.findFirst({ where: { id: current.agreementId, organizationId } });
+      if (!agreement) return null;
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const receivable = await tx.receivable.create({
+            data: {
+              organizationId,
+              customerId: agreement.customerId,
+              projectId: agreement.projectId,
+              agreementId: agreement.id,
+              origin: 'INSTALLMENT',
+              originId: current.id,
+              currency: agreement.currency,
+              netMinor: current.netMinor,
+              vatMinor: current.vatMinor,
+              grossMinor: current.grossMinor,
+              vatTreatment: current.vatTreatment,
+              vatRateBasisPoints: current.rateBasisPoints,
+              dueDate: input.dueDate,
+              postingDate: input.postingDate,
+              postedAt: input.at,
+              createdAt: input.at,
+            },
+          });
+          // Only the first poster wins; the guard is the WHERE receivableId IS NULL.
+          const { count } = await tx.installment.updateMany({
+            where: { id: current.id, receivableId: null },
+            data: { receivableId: receivable.id, postedAt: input.at, postingDate: input.postingDate, version: { increment: 1 } },
+          });
+          if (count !== 1) throw new AlreadyPosted();
+          const installment = await tx.installment.findUniqueOrThrow({ where: { id: current.id } });
+          return { installment, receivable, created: true };
+        });
+      } catch (err) {
+        if (!(err instanceof AlreadyPosted)) throw err;
+        const installment = await this.prisma.installment.findFirstOrThrow({ where: { id: installmentId } });
+        const receivable = await this.prisma.receivable.findUniqueOrThrow({ where: { id: installment.receivableId ?? '' } });
+        return { installment, receivable, created: false };
+      }
+    },
+    listUnpostedDue: (organizationId, today) =>
+      this.prisma.installment.findMany({
+        where: { organizationId, triggerType: 'DATE', receivableId: null, voidedAt: null, triggerDate: { lte: today }, agreement: { status: 'ACTIVE' } },
+      }),
+    applySupplement: async (organizationId, agreementId, input: ApplySupplementInput, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const current = await tx.agreement.findFirst({ where: { id: agreementId, organizationId } });
+        if (!current) return { kind: 'not_found' as const };
+        const { count } = await tx.agreement.updateMany({
+          where: { id: agreementId, version: input.expectedVersion },
+          data: { ...input.totals, version: { increment: 1 }, updatedAt: at },
+        });
+        if (count !== 1) return { kind: 'stale' as const, record: { agreement: current, supplement: null as unknown as SupplementRecord, installments: [] } };
+        for (const u of input.installmentUpdates) {
+          await tx.installment.update({ where: { id: u.id }, data: { amountMinor: u.amountMinor, netMinor: u.netMinor, vatMinor: u.vatMinor, grossMinor: u.grossMinor, version: { increment: 1 } } });
+        }
+        for (const spec of input.newInstallments) {
+          await tx.installment.create({ data: { ...spec, organizationId, agreementId } });
+        }
+        const supplement = await tx.agreementSupplement.create({ data: { organizationId, agreementId, ...input.supplement, resultingAmountMinor: input.totals.amountMinor, createdAt: at } });
+        const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+        const installments = await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } });
+        return { kind: 'updated' as const, record: { agreement, supplement, installments } };
+      }),
+    listSupplements: (organizationId, agreementId) => this.prisma.agreementSupplement.findMany({ where: { organizationId, agreementId }, orderBy: { createdAt: 'asc' } }),
+    cancel: async (organizationId, agreementId, input, at) => {
+      await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.agreement.updateMany({
+          where: { id: agreementId, organizationId, status: 'ACTIVE' },
+          data: { status: 'CANCELLED', cancelledAt: at, cancelEffectiveMonth: input.cancelEffectiveMonth, finalMonth: input.finalMonth, version: { increment: 1 }, updatedAt: at },
+        });
+        if (count === 1) await tx.installment.updateMany({ where: { agreementId, receivableId: null, voidedAt: null }, data: { voidedAt: at } });
+      });
+      return this.prisma.agreement.findFirst({ where: { id: agreementId, organizationId } });
+    },
+    listRetainers: (organizationId) =>
+      this.prisma.agreement.findMany({ where: { organizationId, type: 'RECURRING', OR: [{ status: 'ACTIVE' }, { cancelEffectiveMonth: { not: null } }] } }),
+    listCharges: (organizationId, agreementId) => this.prisma.retainerCharge.findMany({ where: { organizationId, agreementId }, orderBy: { serviceMonth: 'asc' } }),
+    createPostedCharge: async (input, at) => {
+      const existing = await this.prisma.retainerCharge.findUnique({ where: { agreementId_serviceMonth: { agreementId: input.agreementId, serviceMonth: input.serviceMonth } } });
+      if (existing) return { charge: existing, receivable: await this.prisma.receivable.findUniqueOrThrow({ where: { id: existing.receivableId } }), created: false };
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const receivable = await tx.receivable.create({
+            data: {
+              organizationId: input.organizationId,
+              customerId: input.customerId,
+              projectId: input.projectId,
+              agreementId: input.agreementId,
+              origin: 'RETAINER_CHARGE',
+              currency: input.currency,
+              netMinor: input.netMinor,
+              vatMinor: input.vatMinor,
+              grossMinor: input.grossMinor,
+              vatTreatment: input.vatTreatment,
+              vatRateBasisPoints: input.rateBasisPoints,
+              dueDate: input.dueDate,
+              postingDate: input.chargeDate,
+              postedAt: at,
+              createdAt: at,
+            },
+          });
+          const charge = await tx.retainerCharge.create({
+            data: {
+              organizationId: input.organizationId,
+              agreementId: input.agreementId,
+              serviceMonth: input.serviceMonth,
+              chargeDate: input.chargeDate,
+              amountMinor: input.amountMinor,
+              netMinor: input.netMinor,
+              vatMinor: input.vatMinor,
+              grossMinor: input.grossMinor,
+              vatTreatment: input.vatTreatment,
+              rateBasisPoints: input.rateBasisPoints,
+              postedAt: at,
+              receivableId: receivable.id,
+              createdAt: at,
+            },
+          });
+          await tx.receivable.update({ where: { id: receivable.id }, data: { originId: charge.id } });
+          return { charge, receivable: { ...receivable, originId: charge.id }, created: true };
+        });
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        const raced = await this.prisma.retainerCharge.findUniqueOrThrow({ where: { agreementId_serviceMonth: { agreementId: input.agreementId, serviceMonth: input.serviceMonth } } });
+        return { charge: raced, receivable: await this.prisma.receivable.findUniqueOrThrow({ where: { id: raced.receivableId } }), created: false };
+      }
+    },
+  };
+
+  readonly receivables: ReceivableRepository = {
+    getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter: ReceivableFilter, page) => {
+      const rows = await this.prisma.receivable.findMany({
+        where: {
+          organizationId,
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.projectId ? { projectId: filter.projectId } : {}),
+          ...(filter.currency ? { currency: filter.currency } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.dueBefore || filter.dueAfter ? { dueDate: { ...(filter.dueBefore ? { lte: filter.dueBefore } : {}), ...(filter.dueAfter ? { gte: filter.dueAfter } : {}) } } : {}),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    countOutstandingByProject: async (organizationId, projectId) => {
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, projectId, status: 'OPEN' }, select: { grossMinor: true, paidMinor: true } });
+      return rows.filter((r) => r.grossMinor - r.paidMinor > 0n).length;
+    },
   };
 
   private async entityIdsForExternal(organizationId: string, entityType: ExternalEntityType, filter: CustomerFilter | ProjectFilter): Promise<string[] | null> {
@@ -303,6 +526,11 @@ export class PrismaLedgerStore implements LedgerStore {
 }
 
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
+
+/** Thrown inside the posting transaction to roll back a receivable another poster beat us to. */
+class AlreadyPosted extends Error {}
+
+export type { AgreementRecord, RetainerChargeRecord, ReceivableRecord };
 
 /** Keyset condition for (createdAt, id) ascending. */
 function cursorWhere(page: PageRequest): { OR?: Array<Record<string, unknown>> } {

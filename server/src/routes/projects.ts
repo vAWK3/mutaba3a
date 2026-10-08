@@ -71,7 +71,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       let project: ProjectRecord;
       try {
-        project = await store.projects.create({ organizationId: organization.id, customerId: body.customerId, name: body.name, currency: body.currency }, now, reference);
+        project = await store.projects.create({ organizationId: organization.id, customerId: body.customerId, name: body.name, currency: body.currency, vatTreatment: body.vatTreatment ?? null }, now, reference);
       } catch (err) {
         if (err instanceof UniqueViolation && reference) {
           const raced = await findByReference(store, organization.id, reference);
@@ -163,6 +163,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       const patch: UpdateProjectPatch = {};
       if (body.name !== undefined) patch.name = body.name;
+      if (body.vatTreatment !== undefined) patch.vatTreatment = body.vatTreatment;
       if (body.currency !== undefined && body.currency !== current.currency) {
         if (await store.projects.hasPostedActivity(organization.id, id)) {
           throw new ApiError('CONFLICT', 'Currency is locked: financial activity has been posted against this project', { reason: 'CURRENCY_LOCKED', currency: current.currency });
@@ -195,17 +196,19 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/projects/{projectId}/archive',
       tags: ['Projects'],
       summary: 'Archive a project',
-      description: 'Idempotent. From M3, refused while receivables are outstanding. Nothing is ever deleted.',
+      description: 'Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding. Nothing is ever deleted.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('projects:write'), idempotent(store, 'projects.archive')] as const,
       request: { params: ProjectIdParamSchema, headers: IdempotencyHeaderSchema },
-      responses: { 200: { description: 'Archived (or already was)', ...projectJson }, ...notFoundResponse, ...validationResponse, ...errorResponses },
+      responses: { 200: { description: 'Archived (or already was)', ...projectJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
       const { organization, apiKey } = c.get('auth');
       const project = await mustGet(store, organization.id, c.req.valid('param').projectId);
       const refs = await referencesByEntity(store, organization.id, 'PROJECT', [project.id]);
       if (project.status === 'ARCHIVED') return c.json(serializeProject(project, refs.get(project.id)), 200);
+      const outstanding = await store.receivables.countOutstandingByProject(organization.id, project.id);
+      if (outstanding > 0) throw new ApiError('CONFLICT', 'Receivables are outstanding on this project', { reason: 'PROJECT_HAS_OUTSTANDING', outstandingReceivables: outstanding });
       const archived = await store.projects.archive(organization.id, project.id, c.get('now')());
       if (!archived) throw new ApiError('NOT_FOUND', 'No such project');
       await store.audit.append({

@@ -201,7 +201,7 @@
 | Landing | Netlify | mutaba3a.app/ |
 | macOS | GitHub Releases | Auto-update via Tauri |
 | Windows | GitHub Releases | Auto-update via Tauri |
-| **Hosted API** (`server/`, since 2026-10-08) | GCP me-west1: Cloud Run service + migration job, Cloud SQL 16, Secret Manager — Terraform in `server/infrastructure/terraform/`, rolled out by `server/scripts/deploy.sh`, CI in `server-ci.yml`. Deployable; not yet deployed by an operator (runbook: `server/DEPLOYMENT.md`) | Consumed by Malafat's Money section with an organization API key. Separate package, separate database, separate deploy. Production only, `live` keys. M1 (integration, keys) and M2 (customers, projects, external references, import) implemented; M3+ pending. See ADR-024/025/026 and `.claude/designs/money-v1-*` |
+| **Hosted API** (`server/`, since 2026-10-08) | GCP me-west1: Cloud Run service + migration job, Cloud SQL 16, Secret Manager — Terraform in `server/infrastructure/terraform/`, rolled out by `server/scripts/deploy.sh`, CI in `server-ci.yml`. Deployable; not yet deployed by an operator (runbook: `server/DEPLOYMENT.md`) | Consumed by Malafat's Money section with an organization API key. Separate package, separate database, separate deploy. Production only, `live` keys. M1 (integration, keys), M2 (customers, projects, external references, import) and M3 (effective-dated VAT, fixed-fee agreements with installments and supplements, basic retainers with monthly charges, receivables with server-computed statuses) implemented; M4 payments next. See ADR-024/025/026 and `.claude/designs/money-v1-*` |
 
 The hosted API does not change the privacy model of the app above this line:
 the desktop/PWA stores nothing off-device and never calls the hosted API. The

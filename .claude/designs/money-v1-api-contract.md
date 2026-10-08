@@ -47,7 +47,7 @@
 
 External reference uniqueness as built: `(organization, provider, entityType, externalId)` — entity type added because a Malafat client and matter may share an id; plus one reference per entity per provider. Also shipped: `PATCH` with `If-Match`, `POST …/archive` (never delete), `GET` filters `status`, `customerId`, `currency`, `externalId`; conflicts carry `details.reason`. Import rows: `{ entityType: CUSTOMER|PROJECT, externalId, name, email?, phone? | currency, customerExternalId }`, ≤ 500 per call; commit is per-row and needs the preview's `previewToken`.
 
-### M3 — Fixed-fee agreements, installments, VAT (plan §3.4, §4, §6)
+### M3 — Fixed-fee agreements, installments, VAT (plan §3.4, §4, §6) — **implemented 2026-10-08** (`money-v1-m3-agreements-installments-vat.md` rev. 2)
 
 | Method & path | Scope | Notes |
 |---|---|---|
@@ -58,6 +58,8 @@ External reference uniqueness as built: `(organization, provider, entityType, ex
 | `POST /v1/installments/{id}/trigger` | `agreements:write` + Idempotency-Key | manual milestone; creates/activates the receivable; idempotent |
 | `GET /v1/receivables?customerId=&projectId=&currency=&status=` , `GET /v1/receivables/{id}` | `payments:read` | gross outstanding, due date, origin (installment / retainer charge / adjustment) |
 | `GET /v1/vat-rates`, `PUT /v1/settings/vat` | `agreements:read` / `agreements:write` | effective-dated rates per organization; posted records keep the rate they were posted with |
+
+As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default chain installment → agreement → project → customer → STANDARD_RATED; installments split the contractual amount in its pricing basis and compute VAT each; `paymentTerms` (`IMMEDIATE | EOM | EOM_15 | EOM_30 | EOM_45 | EOM_60`, default `EOM`) per agreement with per-installment override and an optional `dueDate`; `POST /v1/agreements/{id}/cancel` while nothing is posted; receivables carry `origin INSTALLMENT | RETAINER_CHARGE | ADJUSTMENT` and `outstanding`; business-rule 422s carry `details.reason` from the published list.
 
 ### M4 — Payments, allocations, reversals (plan §7)
 
@@ -70,7 +72,7 @@ External reference uniqueness as built: `(organization, provider, entityType, ex
 | `POST /v1/payments/{id}/reverse` | `payments:write` + Idempotency-Key | `{ reason }`; undoes allocations atomically; second reversal → `409 CONFLICT` code `ALREADY_REVERSED` |
 | `GET /v1/operations/{idempotencyKey}` | `payments:read` | reconcile an unknown outcome: `PENDING / COMPLETED / FAILED` with the stored response (plan §12.7, §14.2) |
 
-### M5 — Recurring retainers (plan §5)
+### M5 — Recurring retainers (plan §5) — **basic form implemented in M3** (preview, create, charges, cancel FULL/WAIVE, reconcile); `/changes` with effective-dated versions, proration and credits remain M5
 
 | Method & path | Scope | Notes |
 |---|---|---|

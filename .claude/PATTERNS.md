@@ -1077,3 +1077,24 @@ with `currentVersion`.
 creates entity + reference atomically otherwise, and treats a `UniqueViolation`
 on create as "someone else won the race" (re-lookup, 200). The reference lives
 in its own table keyed by `(organization, provider, entityType, externalId)`.
+
+### Money math is pure and tabular (M3)
+`vat.ts`, `agreements/schedule.ts`, `agreements/status.ts`, `retainers/schedule.ts`
+take plain inputs and return plain results or structured errors; no store, no
+clock, no `number` for an amount. Their tests are tables; a new rule is a new
+row. Routes only compose them.
+
+### Lazy posting instead of a scheduler (M3)
+Anything that "happens on a date" (a dated installment, a monthly charge) is
+materialised by `postDueItems` at the start of every read that would show it,
+and by `POST /v1/retainers/reconcile`. Correctness rests on the store making
+the operation idempotent (receivable + marker in one transaction; unique charge
+per month), not on running exactly once. A timer (M5) will call the same
+function.
+
+### Calendar dates are strings, instants are Dates
+`YYYY-MM-DD` / `YYYY-MM` strings in `VarChar` columns for anything the firm
+reads off a calendar (agreement date, due date, service month), with "today"
+computed in the organization's timezone; `DateTime` only for instants (posted
+at, created at). Lexicographic order is chronological, so no timezone can shift
+a due date.
