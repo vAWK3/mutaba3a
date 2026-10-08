@@ -47,7 +47,7 @@
 
 External reference uniqueness as built: `(organization, provider, entityType, externalId)` — entity type added because a Malafat client and matter may share an id; plus one reference per entity per provider. Also shipped: `PATCH` with `If-Match`, `POST …/archive` (never delete), `GET` filters `status`, `customerId`, `currency`, `externalId`; conflicts carry `details.reason`. Import rows: `{ entityType: CUSTOMER|PROJECT, externalId, name, email?, phone? | currency, customerExternalId }`, ≤ 500 per call; commit is per-row and needs the preview's `previewToken`.
 
-### M3 — Fixed-fee agreements, installments, VAT (plan §3.4, §4, §6) — **implemented 2026-10-08** (`money-v1-m3-agreements-installments-vat.md` rev. 2)
+### M3 — Fixed-fee agreements, installments, VAT (plan §3.4, §4, §6) — **implemented 2026-10-08** (`money-v1-m3-agreements-installments-vat.md` rev. 2; Malafat side `money-v1-m3-malafat-ui.md`, same day)
 
 | Method & path | Scope | Notes |
 |---|---|---|

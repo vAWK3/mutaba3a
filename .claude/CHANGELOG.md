@@ -29,6 +29,19 @@
 
 ---
 
+## [Docs] - 2026-10-08 — Money v1 Milestone 3, Malafat side: design brief and test plan
+
+### Added
+- `.claude/designs/money-v1-m3-malafat-ui.md` and `…-tests.md`: the Malafat
+  obligations of the M3 brief (§2.6) — VAT settings card, fee-agreement wizard
+  with the preview step, matter and client financial detail — designed and
+  implemented the same day in the Malafat repo (`crm-platform/.claude/
+  CHANGELOG.md` "Money v1 Milestone 3"). Kept here with the other Money v1
+  cross-repo artifacts because Malafat's repo rule forbids new Markdown and
+  Confluence was not reachable from the session. No `server/` change.
+
+---
+
 ## [Unreleased] - 2026-10-08 — Money v1 Milestone 3: agreements, installments, VAT, retainers, receivables (`server/`)
 
 Approved with amendments (brief rev. 2: VAT treatment per payable item with

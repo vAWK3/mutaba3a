@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-08 · **Status:** approved with amendments (rev. 2) and **implemented** the same day — CHANGELOG "Money v1 Milestone 3"; 196 tests green
 - **Tickets:** MUT-25 (epic), MAL-939 · **Contract:** `money-v1-api-contract.md` §3 M3 · **Plan:** §3.4, §4, §6, §12.5
-- **Repo side:** Mutaba3a `server/` only. The Malafat side (agreement wizard, matter financial tab) follows in its own Confluence brief once this API exists.
+- **Repo side:** Mutaba3a `server/` only. The Malafat side (agreement wizard, matter financial tab, VAT settings) is `money-v1-m3-malafat-ui.md`, implemented the same day.
 - **Bounded by:** ADR-024/025/026, the M2 brief (projects carry one currency; `hasPostedActivity` hook), MAL-870 (Money included), TD-018 (operator keys).
 
 ## 1. Problem and acceptance criteria
