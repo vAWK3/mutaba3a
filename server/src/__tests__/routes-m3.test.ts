@@ -329,6 +329,20 @@ describe('supplements and cancel', () => {
     expect((await h.app.request(`/v1/agreements/${a.agreement.id}/supplements`, json({ amount: '-10.00', effectiveDate: '2026-10-09', distribution: 'NEW_INSTALLMENT' }, { ...auth, ...idem() }))).status).toBe(422);
   });
 
+  it('a supplement\'s new IMMEDIATE installment posts at once (DUE with a receivable), like on creation', async () => {
+    const h = harness();
+    const { auth, project } = await firm(h);
+    const { body: a } = await previewAndCreate(h, auth, fixed(project.id, { installments: [{ label: 'All', amount: '1000.00', trigger: { type: 'IMMEDIATE' } }] }));
+    const created = await read(await h.app.request(`/v1/agreements/${a.agreement.id}/supplements`, json({ amount: '100.00', effectiveDate: '2026-10-09', distribution: 'NEW_INSTALLMENT', newInstallment: { label: 'Extra hearing', trigger: { type: 'IMMEDIATE' } } }, { ...auth, ...idem() })));
+    const extra = created.installments.find((i: Loose) => i.label === 'Extra hearing');
+    expect(extra).toMatchObject({ status: 'DUE', gross: '118.00' });
+    expect(extra.receivableId).toEqual(expect.any(String));
+    const receivables = await read(await h.app.request(`/v1/receivables?projectId=${project.id}`, { headers: auth }));
+    expect(receivables.items.map((r: Loose) => r.gross).sort()).toEqual(['118.00', '1180.00']);
+    const detail = await read(await h.app.request(`/v1/agreements/${a.agreement.id}`, { headers: auth }));
+    expect(detail.installments.filter((i: Loose) => i.receivableId)).toHaveLength(2);
+  });
+
   it('cancel only while nothing is posted; cancelled agreements refuse supplements', async () => {
     const h = harness();
     const { auth, project } = await firm(h);
@@ -428,7 +442,12 @@ describe('retainers', () => {
     expect((await read(await h.app.request(`/v1/retainers/${full.agreement.id}/charges`, { headers: auth }))).agreement).toMatchObject({ status: 'CANCELLED', retainer: { cancelEffectiveMonth: '2026-11', finalMonth: 'FULL' } });
     const again = await h.app.request(`/v1/retainers/${full.agreement.id}/cancel`, json({ effectiveDate: '2026-12-01', finalMonth: 'WAIVE' }, { ...auth, ...idem() }));
     expect(again.status).toBe(200);
-    expect((await read(again)).agreement.retainer.cancelEffectiveMonth).toBe('2026-11');
+    const againBody = await read(again);
+    expect(againBody.agreement.retainer.cancelEffectiveMonth).toBe('2026-11');
+    // Cancel answers with the retainer's charges view (versions + charges), the same shape as GET …/charges and POST …/changes.
+    expect(Object.keys(againBody).sort()).toEqual(['agreement', 'charges', 'versions']);
+    expect(againBody.charges.map((c: Loose) => c.serviceMonth)).toEqual(['2026-10', '2026-11']);
+    expect(againBody.versions).toHaveLength(1);
 
     const bad = async (over: Record<string, unknown>) => (await read(await h.app.request('/v1/retainers/preview', json(retainer(project.id, over), auth)))).error.details.reason;
     expect(await bad({ billingDay: 29 })).toBeUndefined(); // schema rejects 29 before the business rule (zod issues, no reason)
@@ -446,8 +465,8 @@ describe('contract', () => {
   it('publishes every M3 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.5.0-m6');
-    expect(API_VERSION).toBe('1.5.0-m6');
+    expect(doc.info.version).toBe('1.5.1-m6');
+    expect(API_VERSION).toBe('1.5.1-m6');
     for (const path of ['/v1/vat-rates', '/v1/settings/vat', '/v1/agreements/preview', '/v1/agreements', '/v1/agreements/{agreementId}', '/v1/agreements/{agreementId}/supplements', '/v1/agreements/{agreementId}/cancel', '/v1/installments/{installmentId}/trigger', '/v1/retainers/preview', '/v1/retainers', '/v1/retainers/{agreementId}/charges', '/v1/retainers/{agreementId}/cancel', '/v1/retainers/reconcile', '/v1/receivables', '/v1/receivables/{receivableId}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

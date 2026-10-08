@@ -41,7 +41,7 @@ export interface AppDependencies {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.5.0-m6';
+export const API_VERSION = '1.5.1-m6';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is

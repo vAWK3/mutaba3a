@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.5.0-m6
+  version: 1.5.1-m6
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–6).
 
@@ -5088,11 +5088,11 @@ paths:
               $ref: "#/components/schemas/RetainerCancelApplyRequest"
       responses:
         "200":
-          description: Cancelled (or already was)
+          description: "Cancelled (or already was): the retainer with its versions and charges, including the prorated or credited final month"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AgreementDetail"
+                $ref: "#/components/schemas/RetainerChargesResponse"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

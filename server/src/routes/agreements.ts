@@ -293,12 +293,20 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'agreement.supplemented', entityType: 'agreement', entityId: agreement.id, metadata: { supplementId: result.record.supplement.id, amount: body.amount, distribution: body.distribution }, requestId: c.get('requestId') });
       const createdIds = result.record.installments.filter((i) => !installments.some((x) => x.id === i.id)).map((i) => i.id);
-      const paidByReceivable = await paidMap(organization.id, result.record.installments);
+      // A new IMMEDIATE installment posts now, exactly as it would on an agreement's creation (found by the e2e run: it used to stay PENDING forever).
+      for (const i of result.record.installments) {
+        if (!createdIds.includes(i.id) || i.triggerType !== 'IMMEDIATE') continue;
+        const postingDate = postingDateFor(i, result.record.agreement.agreementDate, today);
+        const posted = await store.agreements.postInstallment(organization.id, i.id, { postingDate, dueDate: installmentDueDate(i, result.record.agreement, postingDate), at: now });
+        if (posted?.created) await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'installment.posted', entityType: 'installment', entityId: i.id, metadata: { agreementId: agreement.id, receivableId: posted.receivable.id, trigger: 'IMMEDIATE', supplementId: result.record.supplement.id }, requestId: c.get('requestId') });
+      }
+      const afterPosting = createdIds.length > 0 ? await store.agreements.listInstallments(organization.id, agreement.id) : result.record.installments;
+      const paidByReceivable = await paidMap(organization.id, afterPosting);
       return c.json(
         {
           agreement: serializeAgreement(result.record.agreement),
           supplement: serializeSupplement(result.record.supplement, agreement.currency),
-          installments: result.record.installments.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, result.record.agreement, today, paidByReceivable.get(i.receivableId ?? '')) })),
+          installments: afterPosting.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, result.record.agreement, today, paidByReceivable.get(i.receivableId ?? '')) })),
           effect: { contractualDelta: body.amount, installmentsChanged: plan.changes.map((x) => x.id), installmentsCreated: createdIds },
         },
         200,

@@ -12,7 +12,6 @@ import { cancelOutcome, type FinalMonthOption } from '../retainers/proration.js'
 import { chargeDate, chargeMonths, validateRetainerSpec } from '../retainers/schedule.js';
 import { applyChange, chargesKept, latestTerms, termsFor, termsTimeline, validateChange, type RetainerTerms, type TermsChange } from '../retainers/terms.js';
 import {
-  AgreementDetailSchema,
   AgreementIdParamSchema,
   ReconcileResponseSchema,
   RetainerCancelApplyRequestSchema,
@@ -368,7 +367,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:write'), idempotent(store, 'retainers.cancel')] as const,
       request: { params: AgreementIdParamSchema, headers: IdempotencyHeaderSchema, body: { required: true, content: { 'application/json': { schema: RetainerCancelApplyRequestSchema } } } },
-      responses: { 200: { description: 'Cancelled (or already was)', content: { 'application/json': { schema: AgreementDetailSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+      responses: { 200: { description: 'Cancelled (or already was): the retainer with its versions and charges, including the prorated or credited final month', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
       const { organization, apiKey } = c.get('auth');
@@ -396,8 +395,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         // A PRORATE final month that has not posted yet posts now (at the prorated amount) if its charge date has arrived.
         await generateCharges(store, organization, fresh, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId });
       }
-      const fresh = await mustGet(store, organization.id, agreement.id);
-      return c.json({ agreement: serializeAgreement(fresh), installments: [], supplements: [] }, 200);
+      return c.json(await chargesView(organization, agreement.id, today), 200);
     },
   );
 
