@@ -29,6 +29,66 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 M1: the hosted API becomes deployable (TD-019, ADR-026)
+
+### Added
+- `server/infrastructure/terraform/` — Terraform for one environment of the
+  hosted API: Cloud SQL Postgres 16 (db `mutaba3a`, user `mutaba3a_api`),
+  Secret Manager secrets with Terraform-generated values (database URL, admin
+  token), a least-privilege service account, Artifact Registry, a Cloud Run
+  **job** for `prisma migrate deploy`, the Cloud Run **service** with probes,
+  Cloud SQL volume and secret-backed env, public invoker, and an uptime check
+  with an optional alert. `environment` selects `-staging`/`test` keys vs
+  production/`live` keys. `max_instances` is validated to 1 (TD-017).
+- `server/scripts/deploy.sh` — the operator rollout: Cloud Build (or local
+  Docker) builds both images tagged with the git SHA, a targeted apply points
+  the migration job at the new image, the job runs and is waited on, the full
+  apply rolls the service with `SERVICE_VERSION=<sha>`, then the smoke test
+  runs. The service stays on the old revision if migrations fail.
+- `server/cloudbuild.yaml` — builds `mutaba3a-api` and `mutaba3a-api-migrate`
+  from the two Dockerfile targets.
+- `server/src/smoke.ts` + `src/scripts/smoke.ts` (`npm run smoke`) —
+  post-deploy checks over an injected `fetch`: health (+ expected version),
+  readiness, contract, three auth rejections, and with `MUTABA3A_ADMIN_TOKEN`
+  the M1 exit criterion end to end (provision → issue key → validate → revoke
+  → revoked key rejected). Never prints a secret. 5 tests in
+  `src/__tests__/smoke.test.ts` run it against the in-memory app.
+- `.github/workflows/server-ci.yml` — on every change under `server/`:
+  type-check, lint, `openapi:check`, unit + route tests, the Postgres contract
+  suite against a `postgres:16` service container, both Docker builds with a
+  `/health` probe of the runtime image and a Prisma CLI check of the migrate
+  image, `terraform fmt -check` + `validate`. Resolves TD-019.
+- `server/DEPLOYMENT.md` — the operator runbook: prerequisites, staging,
+  proof, provisioning the first firm, wiring Malafat (`malafat-web-mutaba3a-api-url`),
+  production, day-2 operations, the ticket-closure table and what comes next.
+- `.claude/INFRA.md` — created (CLAUDE.md listed it; it did not exist).
+
+### Fixed
+- `server/Dockerfile` — the migration story was broken: `npm prune --omit=dev`
+  removed the Prisma CLI from the runtime image, so the documented
+  `npx prisma migrate deploy` job would have tried to download it at run time.
+  The Dockerfile now has a `migrate` target (full dependency tree, no app code,
+  `CMD node_modules/.bin/prisma migrate deploy`) beside `runtime`, and both
+  stages install `openssl` for Prisma's musl engines. `.dockerignore` added.
+
+### Changed
+- `server/README.md` — Deploy section points at Terraform, `deploy.sh` and
+  `DEPLOYMENT.md`; Verify lists `npm run smoke` and CI.
+- `.claude/designs/money-v1-m1-proposal.md` — deployment steps replaced by the
+  shipped artifacts; acceptance table updated (implementation merged to main).
+
+### Technical
+- Malafat side (same day, its own changelog): `MUTABA3A_API_URL` is mounted
+  from the secret `malafat-web-mutaba3a-api-url` in `release.ts`, listed as
+  required by the secrets gate, with a release step to create it first.
+- Verification: `npm run typecheck`, `npm run lint`, `npm run test:db`
+  (65 tests, 7 files, Postgres 16), `npm run openapi:check`,
+  `terraform fmt -check` + `terraform validate` (google 5.45.2, random 3.6.3).
+  The Docker builds could not be run in the authoring environment (no daemon);
+  CI builds them on the first push.
+
+---
+
 ## [Unreleased] - 2026-10-08 — Money v1 Milestone 1: hosted Mutaba3a API (`server/`)
 
 ### Added

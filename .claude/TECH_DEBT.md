@@ -30,6 +30,11 @@ from exhausting one instance, but a shared store (Redis/Upstash, matching
 Malafat's choice) must replace it before the service scales horizontally.
 Routes do not change; only `index.ts` wiring does. Introduced by Money v1 M1.
 
+**Mitigation (2026-10-08)**: `infrastructure/terraform/variables.tf` validates
+`max_instances == 1`, so a deployment cannot scale horizontally by accident.
+Resolving this debt means replacing the limiter port implementation *and*
+loosening that validation in the same change.
+
 ### TD-018: Organizations and API Keys Are Operator-Provisioned Only
 **Status**: Open
 **Added**: 2026-10-08
@@ -41,18 +46,6 @@ Mutaba3a deliberately has no account system (ADR-023), and the plan's
 provisioning (accounts, org membership, key management UI) is a product
 decision, not an M1 gap; until then the admin API and CLI are the path.
 Introduced by Money v1 M1.
-
-### TD-019: No CI for `server/`
-**Status**: Open
-**Added**: 2026-10-08
-**Impact**: Type-check, lint, tests, `openapi:check` and the Docker build run
-only on a developer machine
-
-The repo's only workflow builds Windows installers on release (MUT-33 covers
-the frontend half of this). `server/` needs a workflow running
-`npm ci && npm run typecheck && npm run lint && npm test && npm run openapi:check`
-plus the Postgres contract suite against a service container, and a build of
-`server/Dockerfile`. Introduced by Money v1 M1.
 
 ### TD-015: OAuth Refresh Tokens Have No Durable, Secure Store
 **Status**: Open
@@ -412,6 +405,17 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ## Resolved Debt
+
+### TD-019: No CI for `server/`
+**Status**: Resolved
+**Resolved**: 2026-10-08
+**Original Priority**: High
+
+`.github/workflows/server-ci.yml` runs on every change under `server/`:
+type-check, lint, `openapi:check`, unit + route tests, the Postgres contract
+suite against a `postgres:16` service container, both Docker image builds
+(with a `/health` probe of the runtime image), and `terraform validate`.
+Deploys stay operator-run (`server/scripts/deploy.sh`).
 
 ### TD-002: Reports Feature Incomplete
 **Status**: Resolved

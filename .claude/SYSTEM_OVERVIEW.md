@@ -201,7 +201,7 @@
 | Landing | Netlify | mutaba3a.app/ |
 | macOS | GitHub Releases | Auto-update via Tauri |
 | Windows | GitHub Releases | Auto-update via Tauri |
-| **Hosted API** (`server/`, since 2026-10-08) | Cloud Run + Cloud SQL (operator-deployed, not yet live) | Consumed by Malafat's Money section with an organization API key. Separate package, separate database, separate deploy. See ADR-024/025 and `server/README.md` |
+| **Hosted API** (`server/`, since 2026-10-08) | GCP me-west1: Cloud Run service + migration job, Cloud SQL 16, Secret Manager — Terraform in `server/infrastructure/terraform/`, rolled out by `server/scripts/deploy.sh`, CI in `server-ci.yml`. Deployable; not yet deployed by an operator (runbook: `server/DEPLOYMENT.md`) | Consumed by Malafat's Money section with an organization API key. Separate package, separate database, separate deploy. Staging accepts `test` keys, production `live`. See ADR-024/025/026 |
 
 The hosted API does not change the privacy model of the app above this line:
 the desktop/PWA stores nothing off-device and never calls the hosted API. The

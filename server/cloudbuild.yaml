@@ -1,0 +1,35 @@
+# Cloud Build: build and push both images for one commit.
+#
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_REGION=me-west1,_REPO=mutaba3a,SHORT_SHA=$(git rev-parse --short HEAD) .
+#
+# scripts/deploy.sh runs this for you. The build context is server/ only; the
+# desktop app at the repository root is never uploaded.
+substitutions:
+  _REGION: me-west1
+  _REPO: mutaba3a
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-runtime
+    args:
+      - build
+      - --target=runtime
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api:${SHORT_SHA}
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api:latest
+      - .
+  - name: gcr.io/cloud-builders/docker
+    id: build-migrate
+    args:
+      - build
+      - --target=migrate
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api-migrate:${SHORT_SHA}
+      - --tag=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api-migrate:latest
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api:latest
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api-migrate:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/mutaba3a-api-migrate:latest
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

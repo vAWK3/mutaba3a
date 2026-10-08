@@ -1,0 +1,7 @@
+# Copy to backend.<environment>.hcl (git-ignored) and pass with
+#   terraform init -backend-config=backend.<environment>.hcl
+# The bucket must exist, be in the same region, have versioning on, and be
+# readable only by operators: the state holds the database password and the
+# admin token.
+bucket = "mutaba3a-terraform-state"
+prefix = "mutaba3a-api/production"

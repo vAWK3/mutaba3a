@@ -202,6 +202,20 @@ jobs:
 
 ---
 
+### 3a. Server CI (`.github/workflows/server-ci.yml`, since 2026-10-08)
+
+The only workflow that runs on pull requests today. Scoped by `paths:` to
+`server/**`; three jobs, no deploy:
+
+| Job | What it proves |
+|-----|----------------|
+| `verify` | `npm ci`, `prisma generate`, type-check, lint, `openapi:check`, `prisma migrate deploy` + `npm run test:db` against a `postgres:16-alpine` service container (65 tests) |
+| `docker` | `docker build --target runtime` and `--target migrate`; boots the runtime image with a dummy `DATABASE_URL` and curls `/health`; checks the migrate image carries the Prisma CLI |
+| `terraform` | `terraform fmt -check -recursive`, `init -backend=false`, `validate` on `server/infrastructure/terraform` |
+
+Red `Server CI` = do not run `server/scripts/deploy.sh`. Deploys are
+operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
+
 ### 3. Web Deploy (Netlify Configuration)
 
 **`netlify.toml`**:
@@ -295,6 +309,17 @@ jobs:
    - Build Windows (.msi, .exe) on windows-latest
    - Create GitHub release with artifacts
 4. **Auto-update**: Tauri apps check for updates on launch
+
+### Hosted API Deployment (operator, manual)
+
+```bash
+cd server
+GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh staging|production
+```
+
+Cloud Build → migration job → Terraform apply → smoke test, in that order; the
+service is not rolled if `prisma migrate deploy` fails. Full runbook:
+`server/DEPLOYMENT.md`. Infra: `server/infrastructure/terraform/` (ADR-026).
 
 ### Release Checklist
 

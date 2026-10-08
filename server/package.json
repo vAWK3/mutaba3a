@@ -21,7 +21,9 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "openapi:generate": "tsx src/scripts/export-openapi.ts",
     "openapi:check": "tsx src/scripts/export-openapi.ts --check",
-    "provision": "tsx src/scripts/provision.ts"
+    "provision": "tsx src/scripts/provision.ts",
+    "smoke": "tsx src/scripts/smoke.ts",
+    "docker:build": "docker build --target runtime -t mutaba3a-api:local . && docker build --target migrate -t mutaba3a-api-migrate:local ."
   },
   "dependencies": {
     "@hono/node-server": "2.1.4",

@@ -28,7 +28,9 @@
 
 Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
 Postgres contract suite against the docker container in `server/README.md`).
-59 tests at M1:
+CI: `.github/workflows/server-ci.yml` runs the whole set, plus both Docker
+builds and `terraform validate`, on every change under `server/`.
+65 tests (7 files) at M1 + deploy wiring:
 
 | Area | File | What is pinned |
 |------|------|----------------|
@@ -36,10 +38,14 @@ Postgres contract suite against the docker container in `server/README.md`).
 | Keys & scopes | `src/auth/__tests__/api-key.test.ts` | key format, sha256 storage, constant-time compare, masking never leaks the secret, unknown scope fails the whole list, non-hierarchical scopes |
 | Rate limit | `src/__tests__/rate-limit.test.ts` | sliding window, Retry-After, per-key isolation, prune |
 | Storage contract | `src/repositories/__tests__/store-contract.ts` run by `store-memory.test.ts` always and `store-prisma.test.ts` when `MUTABA3A_TEST_DATABASE_URL` is set | unique slug/prefix/hash, revoke-once, one tenant ↔ one organization, reconnect keeps id, audit ordering, idempotency new/in_progress/replay/mismatch/fail |
+| Smoke | `src/__tests__/smoke.test.ts` | `runSmoke` against the in-memory app: every unauthenticated check passes on a healthy deployment, version mismatch is the only failure when the tag differs, the admin round trip (provision → key → validate → revoke → `API_KEY_REVOKED`) passes and never logs a secret, a non-JSON 502 is reported not thrown, a wrong admin token stops the round trip after one step |
 | Routes | `src/__tests__/routes.test.ts` | health/ready, request ids, OpenAPI document, admin auth, provisioning + audit trail, every 401 code (UNAUTHENTICATED, INVALID_API_KEY, API_KEY_ENVIRONMENT_MISMATCH, API_KEY_REVOKED, API_KEY_EXPIRED), forged suffix with a real prefix, INSUFFICIENT_SCOPE details, missingScopes, 429 headers, Idempotency-Key required/replay/reuse, ORGANIZATION_MISMATCH both directions, disconnect revokes + reconnect keeps id, cross-organization isolation |
 
-Required before M2: a CI workflow (TD-019) and a contract test that Malafat's
-client fixtures match `openapi/openapi.yaml`.
+Required before M2: a contract test that Malafat's client fixtures match
+`openapi/openapi.yaml` (CI itself landed 2026-10-08, TD-019 resolved). Not
+covered by automation: the Terraform plan against a real project and the
+Cloud Build image build — both are exercised by the operator runbook
+(`server/DEPLOYMENT.md` §2–3), whose smoke step is the M1 exit criterion.
 
 ---
 

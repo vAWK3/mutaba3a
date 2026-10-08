@@ -22,15 +22,22 @@
 | ADR override (MUT-30) and architecture ADR (MUT-32) | `.claude/DECISIONS.md` ADR-024/025 | ✅ |
 | Knowledge files | CHANGELOG, TECH_DEBT (TD-017/018/019), TEST_PLAN, SYSTEM_OVERVIEW | ✅ |
 
-### Deployment steps (operator; nothing here is executed by the agent)
+### Deployment (operator; nothing here is executed by the agent)
 
-1. Cloud SQL: database `mutaba3a`, role `mutaba3a_api`, in the same region as Malafat (`me-west1`).
-2. Secret Manager: `mutaba3a-api-database-url`, `mutaba3a-api-admin-token` (≥ 32 random bytes).
-3. Artifact Registry + Cloud Build: `docker build -f server/Dockerfile server/` tagged with the git SHA.
-4. Cloud Run **job** `mutaba3a-api-migrate`: image above, command `npx prisma migrate deploy`; run before every service deploy.
-5. Cloud Run **service** `mutaba3a-api`: env `NODE_ENV=production`, `API_KEY_ENVIRONMENT=live` (staging: `test`), `RATE_LIMIT_PER_MINUTE`, `SERVICE_VERSION=<sha>`, secrets mounted as env; Cloud SQL connection attached; min instances 1 (the rate limiter is per instance, TD-017).
-6. Provision the first firm: `MUTABA3A_ADMIN_TOKEN=… npm run provision -- --url https://api.mutaba3a.app --name "<firm>" --currency ILS --timezone Asia/Jerusalem`; hand the printed secret to the Partner over a secure channel.
-7. Terraform: add a `mutaba3a-api` module beside Malafat's `regional-stack` (same shape: `google_cloud_run_v2_service`, `google_sql_database`, secret references). Not written in M1; the Malafat terraform module is the template.
+Shipped 2026-10-08, after the M1 code landed on `main` (ADR-026):
+
+| Artifact | Where |
+|---|---|
+| Terraform: Cloud SQL 16, secrets (generated), service account + IAM, Artifact Registry, migration job, service, uptime check | `server/infrastructure/terraform/` |
+| Rollout script: Cloud Build → migration job → apply → smoke | `server/scripts/deploy.sh`, `server/cloudbuild.yaml` |
+| Smoke test (M1 exit criterion against a live deployment) | `server/src/smoke.ts`, `npm run smoke` |
+| CI (TD-019) | `.github/workflows/server-ci.yml` |
+| Dockerfile `migrate` target (the pruned runtime image could not run Prisma) | `server/Dockerfile` |
+| Runbook: prerequisites → staging → proof → first firm → Malafat wiring → production → day 2 | `server/DEPLOYMENT.md` |
+| Malafat: `MUTABA3A_API_URL` mounted from `malafat-web-mutaba3a-api-url`, release gate + release step | `web/crm-platform/scripts/{release,check-required-secrets,release-steps}.ts` |
+
+The earlier seven-step list (Cloud SQL by hand, secrets by hand, a Terraform
+module "not written in M1") is superseded by the table above.
 
 ## 2. Malafat side — implemented 2026-10-08 (same session)
 
@@ -59,15 +66,15 @@ the previous key (60 tests).
 
 | Criterion | MUT | MAL |
 |---|---|---|
-| Implementation merged | local, uncommitted (no auto-push per policy) | pending |
-| OpenAPI updated | ✅ `server/openapi/openapi.yaml` | pending (`openapi.yaml` after routes) |
-| Contract tests pass | ✅ route + store contract | pending |
-| Migrations validated | ✅ locally; Cloud SQL pending operator | pending |
-| Authorization tests pass | ✅ every 401/403 code, isolation | pending |
-| Works against a real test MUT environment | pending operator deploy of staging | pending |
-| Errors handled explicitly | ✅ | pending |
+| Implementation merged | ✅ `main` (committed by the product owner 2026-10-08) | ✅ `main` |
+| OpenAPI updated | ✅ `server/openapi/openapi.yaml` | ✅ `openapi/openapi.yaml` regenerated |
+| Contract tests pass | ✅ route + store contract, in CI | ✅ 108 tests |
+| Migrations validated | ✅ locally + CI; Cloud SQL by `deploy.sh` (operator) | ✅ `release-steps.ts` carries the tenant step |
+| Authorization tests pass | ✅ every 401/403 code, isolation | ✅ role matrix |
+| Works against a real test MUT environment | ⏳ `DEPLOYMENT.md` §2–3 (operator) | ⏳ `DEPLOYMENT.md` §5 |
+| Errors handled explicitly | ✅ | ✅ closed reason vocabulary |
 | No known financial-integrity defect | n/a in M1 (no financial objects yet) | n/a |
-| Docs reflect behaviour | ✅ README, ADRs, contract doc | pending |
+| Docs reflect behaviour | ✅ README, ADRs, contract doc, DEPLOYMENT.md | ✅ CHANGELOG, ADR-150, INFRA |
 
 ## 4. Risks and open product decisions
 
@@ -75,5 +82,5 @@ the previous key (60 tests).
 2. **Hosting cost and residency.** A second Cloud Run service + Cloud SQL database. Residency must match the firm's CRM region; multi-region later means multiple deployments.
 3. **Desktop ↔ hosted service.** ADR-013 still forbids cloud sync for the desktop. The Mutaba3a desktop cannot see a firm's hosted ledger until a further ADR + MUT-27 transport land. Malafat's Money works without it.
 4. **Rate limiting across instances (TD-017)** before horizontal scaling.
-5. **CI (TD-019)** for `server/`.
+5. ~~CI (TD-019) for `server/`~~ — resolved 2026-10-08 (`server-ci.yml`).
 6. **Domain gaps are the real M2–M6 work:** allocations, reversals, installments, agreements, effective-dated VAT, retainer charges and scheduler all have to be built new (audit §2.2); the desktop contributes disciplines and a few pure modules, not objects.

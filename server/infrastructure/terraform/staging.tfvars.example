@@ -1,0 +1,10 @@
+# Copy to staging.tfvars (git-ignored). image_tag is passed by scripts/deploy.sh.
+project_id          = "your-gcp-project"
+region              = "me-west1"
+environment         = "staging"
+db_tier             = "db-f1-micro"
+db_availability     = "ZONAL"
+db_backup_enabled   = false
+deletion_protection = false
+min_instances       = 0
+log_level           = "debug"

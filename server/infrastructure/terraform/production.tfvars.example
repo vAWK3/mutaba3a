@@ -1,0 +1,11 @@
+# Copy to production.tfvars (git-ignored). image_tag is passed by scripts/deploy.sh.
+project_id          = "your-gcp-project"
+region              = "me-west1"
+environment         = "production"
+db_tier             = "db-g1-small"
+db_availability     = "REGIONAL"
+db_backup_enabled   = true
+deletion_protection = true
+min_instances       = 1
+log_level           = "info"
+# alert_notification_channels = ["projects/your-gcp-project/notificationChannels/1234567890"]

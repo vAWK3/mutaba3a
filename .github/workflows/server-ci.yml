@@ -1,0 +1,111 @@
+# CI for the hosted API in server/ (closes TD-019).
+#
+# Runs on every change under server/ (and to this file). Nothing here deploys:
+# the Docker build is a build-only proof that the image still assembles and
+# that the runtime image answers /health. Deploys are operator-run from
+# server/scripts/deploy.sh (ADR-025 §9, server/DEPLOYMENT.md).
+name: Server CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/server-ci.yml'
+  pull_request:
+    paths:
+      - 'server/**'
+      - '.github/workflows/server-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: server-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  verify:
+    name: Type-check, lint, tests, OpenAPI drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mutaba3a
+          POSTGRES_PASSWORD: mutaba3a
+          POSTGRES_DB: mutaba3a_test
+        ports: ['54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U mutaba3a -d mutaba3a_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      MUTABA3A_TEST_DATABASE_URL: postgresql://mutaba3a:mutaba3a@localhost:54329/mutaba3a_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run openapi:check
+      - name: Apply migrations to the test database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.MUTABA3A_TEST_DATABASE_URL }}
+      - name: Unit, route and Postgres contract tests
+        run: npm run test:db
+
+  docker:
+    name: Docker images build and the service answers /health
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the service image
+        run: docker build --target runtime -t mutaba3a-api:ci .
+      - name: Build the migration image
+        run: docker build --target migrate -t mutaba3a-api-migrate:ci .
+      - name: Boot the service image and probe /health
+        run: |
+          docker run -d --name api -p 8787:8787 \
+            -e DATABASE_URL=postgresql://nobody:nobody@127.0.0.1:1/none \
+            -e MUTABA3A_ADMIN_TOKEN=ci-only-token-ci-only-token-ci-only-token \
+            -e API_KEY_ENVIRONMENT=test \
+            -e SERVICE_VERSION=${{ github.sha }} \
+            mutaba3a-api:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8787/health; then echo; exit 0; fi
+            sleep 1
+          done
+          echo "service never answered /health"; docker logs api; exit 1
+      - name: The migration image carries the Prisma CLI
+        run: docker run --rm --entrypoint node_modules/.bin/prisma mutaba3a-api-migrate:ci --version
+
+  terraform:
+    name: Terraform format and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server/infrastructure/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate

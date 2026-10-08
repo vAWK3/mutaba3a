@@ -30,7 +30,12 @@ Then from Malafat, Settings › Money & Mutaba3a › Connect, paste the secret.
 npm run typecheck && npm run lint && npm test      # unit + route tests, no database
 npm run test:db                                   # adds the Postgres contract tests
 npm run openapi:check                             # committed openapi/openapi.yaml matches the code
+npm run smoke -- --url http://localhost:8787        # post-deploy checks, also runnable against a dev server
 ```
+
+CI (`.github/workflows/server-ci.yml`) runs all of the above, the Postgres
+contract suite, both Docker image builds and `terraform validate` on every
+change under `server/`.
 
 ## API shape
 
@@ -45,4 +50,16 @@ Errors are always `{"error":{"code","message","details?","requestId"}}`; codes a
 
 ## Deploy (operator runs these; nothing here deploys itself)
 
-Cloud Run service `mutaba3a-api` in the same region as the Cloud SQL instance; a `mutaba3a` database with a `mutaba3a_api` role; secrets `mutaba3a-api-database-url` and `mutaba3a-api-admin-token` in Secret Manager; a Cloud Run job `mutaba3a-api-migrate` running `npx prisma migrate deploy` before each deploy. Staging runs with `API_KEY_ENVIRONMENT=test`, production with `live`, so keys can never cross environments.
+Infrastructure is Terraform (`infrastructure/terraform/`: Cloud SQL 16, Cloud
+Run service + migration job, Secret Manager, service account, Artifact
+Registry, uptime check) and the rollout is one script:
+
+```bash
+GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh staging
+```
+
+It builds both images with Cloud Build, runs `prisma migrate deploy` as a Cloud
+Run job, rolls the service, and runs `npm run smoke`. Staging runs with
+`API_KEY_ENVIRONMENT=test`, production with `live`, so keys can never cross
+environments. The step-by-step runbook, including provisioning the first firm
+and wiring Malafat, is **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
