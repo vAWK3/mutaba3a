@@ -28,6 +28,32 @@ const res = await app.request('/openapi.json');
 const runtime = (await res.json()) as Record<string, unknown>;
 const yaml = stringify(runtime, { lineWidth: 0 });
 
+// --json: print the vendored-contract envelope Malafat keeps at
+// apps/web/src/features/money/contract/mutaba3a-openapi.json (its contract
+// test pins the client to this file). Source commit + sha of the YAML so a
+// stale copy is visible in review.
+if (process.argv.includes('--json')) {
+  const { createHash } = await import('node:crypto');
+  const { execSync } = await import('node:child_process');
+  let commit = 'unknown';
+  try {
+    commit = execSync('git rev-parse --short HEAD', { cwd: here, encoding: 'utf8' }).trim();
+  } catch {
+    /* not a git checkout */
+  }
+  const envelope = {
+    _vendored: {
+      source: 'vAWK3/mutaba3a server/openapi/openapi.yaml',
+      commit,
+      sha256: createHash('sha256').update(yaml).digest('hex'),
+      note: "Vendored copy of Mutaba3a's committed contract. Regenerate: in the Mutaba3a repo run `cd server && npm run openapi:json > /path/to/this/file` (prints this envelope), then run the Money contract test. The test fails when the client calls a path, method or field that is not in this file.",
+    },
+    ...runtime,
+  };
+  process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
+  process.exit(0);
+}
+
 if (process.argv.includes('--check')) {
   let committed = '';
   try {

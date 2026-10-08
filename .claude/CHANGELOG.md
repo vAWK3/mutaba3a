@@ -29,6 +29,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — `npm run openapi:json` for Malafat's vendored contract
+
+### Added
+- `server/src/scripts/export-openapi.ts --json` (`npm run openapi:json`):
+  prints the contract as JSON inside a `_vendored` envelope (source, git
+  commit, sha256 of the YAML). Malafat keeps that output at
+  `apps/web/src/features/money/contract/mutaba3a-openapi.json`, and its
+  contract test fails when the Malafat client calls anything not in it. Refresh
+  the copy whenever `openapi.yaml` changes.
+
+---
+
 ## [Unreleased] - 2026-10-08 — Money v1 Milestone 2: customers, projects, external references, import (`server/`)
 
 Approved by the product owner the same day (all six decisions in the brief).
