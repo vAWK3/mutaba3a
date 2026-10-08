@@ -61,7 +61,7 @@ External reference uniqueness as built: `(organization, provider, entityType, ex
 
 As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default chain installment → agreement → project → customer → STANDARD_RATED; installments split the contractual amount in its pricing basis and compute VAT each; `paymentTerms` (`IMMEDIATE | EOM | EOM_15 | EOM_30 | EOM_45 | EOM_60`, default `EOM`) per agreement with per-installment override and an optional `dueDate`; `POST /v1/agreements/{id}/cancel` while nothing is posted; receivables carry `origin INSTALLMENT | RETAINER_CHARGE | ADJUSTMENT` and `outstanding`; business-rule 422s carry `details.reason` from the published list.
 
-### M4 — Payments, allocations, reversals (plan §7)
+### M4 — Payments, allocations, reversals (plan §7) — **brief proposed 2026-10-08** (`money-v1-m4-payments-allocations.md`, awaiting approval). The brief adds `POST /v1/receivables/{id}/credits` (the explicit adjustment M3 reserved), `GET /v1/receivables/{id}/credits`, `{ paymentId }` previews for unallocated funds, and amends `GET /v1/operations/{key}` to `PENDING | COMPLETED | 404` (a released key is retryable; no `FAILED` state is stored)
 
 | Method & path | Scope | Notes |
 |---|---|---|

@@ -29,6 +29,19 @@
 
 ---
 
+## [Docs] - 2026-10-08 — Money v1 Milestone 4 design brief and test plan (proposed)
+
+### Added
+- `.claude/designs/money-v1-m4-payments-allocations.md` and `…-tests.md`:
+  payments with allocations previewed before posting (OLDEST_FIRST /
+  SETTLE_MATTERS suggestions, balance-covering preview token), unallocated
+  funds allocated later, whole-payment reversal with `replacesPaymentId`,
+  append-only credits against posted receivables (the adjustment M3
+  reserved), `PAY-YYYY-NNNN` numbering, `GET /v1/operations/{key}`. Eight
+  decisions await the product owner before Phase 2. No `server/` change.
+
+---
+
 ## [Docs] - 2026-10-08 — Money v1 Milestone 3, Malafat side: design brief and test plan
 
 ### Added
