@@ -29,6 +29,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — M3 design brief + test plan (agreements, installments, VAT)
+
+### Added
+- `.claude/designs/money-v1-m3-agreements-installments-vat.md` — fixed-fee
+  agreements, installments, effective-dated VAT, lazy posting of dated
+  installments, supplements within unposted capacity, cancel while nothing is
+  posted, receivables with server-computed statuses. Seven decisions for
+  product-owner approval; no code until approved.
+- `.claude/designs/money-v1-m3-agreements-installments-vat-tests.md`.
+
+---
+
 ## [Unreleased] - 2026-10-08 — `npm run openapi:json` for Malafat's vendored contract
 
 ### Added
