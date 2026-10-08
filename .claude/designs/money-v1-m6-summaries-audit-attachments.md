@@ -1,6 +1,6 @@
 # Money v1 — Milestone 6: summaries, audit listing, attachments (design brief)
 
-- **Date:** 2026-10-08 · **Status:** decided by the engineering owner under the "complete the epic" instruction; implemented the same day (Mutaba3a `server/`, API `1.5.0-m6`; Malafat side in §6)
+- **Date:** 2026-10-08 · **Status:** decided by the engineering owner under the "complete the epic" instruction; implemented the same day (Mutaba3a `server/`, API `1.5.0-m6`; Malafat side in §6, implemented the same day — Malafat `crm-platform/.claude/CHANGELOG.md` "Money v1 Milestone 6")
 - **Tickets:** MAL-939 (epic), MAL-150 (UX brief, wireframes §2, §3, §3c, §7) · **Plan:** `money-v1-api-contract.md` §M6 · **Builds on:** M3–M5 receivables, payments, credits, versions
 - **Repo side:** Mutaba3a `server/` (summaries module, audit list, attachments table + storage port + GCS adapter, Terraform bucket + IAM) and Malafat `crm-platform/apps/web` (overview banner + client list, client Money card, tiles, Documents and History sections). Malafat schema unchanged (ADR-150).
 

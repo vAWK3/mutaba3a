@@ -1,6 +1,6 @@
 # Money v1 — Milestone 5: retainer changes, proration, cancel preview, scheduled reconcile (design brief)
 
-- **Date:** 2026-10-08 · **Status:** decided by the engineering owner under the "complete the epic" instruction; implemented the same day (Mutaba3a `server/`, API `1.4.0-m5`; Malafat side in §6)
+- **Date:** 2026-10-08 · **Status:** decided by the engineering owner under the "complete the epic" instruction; implemented the same day (Mutaba3a `server/`, API `1.4.0-m5`; Malafat side in §6, implemented the same day — Malafat `crm-platform/.claude/CHANGELOG.md` "Money v1 Milestone 5")
 - **Tickets:** MAL-939 (epic), MAL-150 (UX brief, wireframe §8) · **Plan:** `money-v1-api-contract.md` §M5 · **Builds on:** M3 rev. 2 §C (basic retainers), M4 (credits, operations)
 - **Repo side:** Mutaba3a `server/` (schema, store, routes, tests, OpenAPI) and Malafat `crm-platform/apps/web` (change-retainer dialog, cancel preview, Malafat routes). Malafat schema unchanged (ADR-150).
 
