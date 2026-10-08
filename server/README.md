@@ -33,6 +33,15 @@ npm run openapi:check                             # committed openapi/openapi.ya
 npm run smoke -- --url http://localhost:8787        # post-deploy checks, also runnable against a dev server
 ```
 
+End-to-end, against a dev or staging database (both scripts create throwaway
+organizations, which are never deleted):
+
+```bash
+MUTABA3A_ADMIN_TOKEN=… E2E_BASE_URL=http://localhost:8787 MALAFAT_WEB_DIR=../../malafat/crm-platform/apps/web \
+  npx tsx e2e/money-v1.e2e.mts                      # Malafat's client driving every Money v1 flow (84 checks)
+E2E_DATABASE_URL=postgresql://… npx tsx e2e/attachments.e2e.mts   # attachments on Postgres with in-memory storage (34 checks)
+```
+
 CI (`.github/workflows/server-ci.yml`) runs all of the above, the Postgres
 contract suite, the Docker image build and `terraform validate` on every
 change under `server/`. It never pushes or deploys.

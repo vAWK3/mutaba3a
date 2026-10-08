@@ -30,7 +30,7 @@ Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
 Postgres contract suite against the docker container in `server/README.md`).
 CI: `.github/workflows/server-ci.yml` runs the whole set, plus the Docker
 build and `terraform validate`, on every change under `server/`.
-268 tests (28 files) at M4:
+316 tests (38 files) at M6:
 
 | Area | File | What is pinned |
 |------|------|----------------|
@@ -53,17 +53,28 @@ build and `terraform validate`, on every change under `server/`.
 | Status (M4) | `status.test.ts` "credits" | credited-but-unpaid is DUE/OVERDUE, credited to zero is PAID, partial payment with credits is PARTIALLY_PAID |
 | Storage contract (M4) | `store-contract-m4.ts` via memory + Postgres runners | atomic payment + allocations + sums + number; rollback on insufficient capacity (no number consumed); gap-free numbers per organization/year under 12 concurrent creates; allocate later within the remainder, refused when reversed; reverse restores/reopens, idempotent, history kept, replacedBy; credits append-only with capacity and status; sums equal rows after create/allocate/reverse/credit; eligibility + payment filters/paging/isolation; BigInt > 2^53; idempotency.get PENDING/COMPLETED/absent |
 | Routes (M4) | `src/__tests__/routes-m4.test.ts` | preview scope, eligible list, strategies, explicit wins, writes nothing; SETTLE_MATTERS and NO_ELIGIBLE_RECEIVABLES; every allocation reason incl. cross-customer/currency/archived/settled; create 201 with number, receivable + installment statuses, SETTLED filter, same-key-different-body 422, true replay, audit incl. `receivable.settled`; PREVIEW_STALE on changed set / credit in between / payment in between; body validation (date, method, replacesPaymentId rules, scope, key required); allocate later from `{ paymentId }` preview, EXCEEDS_PAYMENT, NO_UNALLOCATED_FUNDS, PAYMENT_NOT_POSTED, 404; reversal reopens receivable + installment, replay vs ALREADY_REVERSED, cross-organization 404, unallocated reversal; credits VAT split, settle at zero, CREDIT_EXCEEDS_OUTSTANDING with outstanding, RECEIVABLE_NOT_OPEN, list newest first, archive after credits, reversal after credit; operations COMPLETED (201 and stored 422) / PENDING / 404 / isolation / scope; PARTIALLY_PAID vs OVERDUE vs PAID by clock; payment list filters + pages; OpenAPI paths, reasons, version, `credited` |
+| Retainer terms (M5) | `src/retainers/__tests__/terms.test.ts`, `proration.test.ts`, `schedule.test.ts` | v1 synthesized from the agreement; timeline / termsFor / latest; validateChange every reason in order; diffTerms; applyChange; chargesKept; calendar-day inclusive proration half-up; cancelOutcome FULL / PRORATE / WAIVE with posted charge, credit capped at outstanding, earlier credits not double-credited |
+| Storage contract (M5) | `store-contract-m5.ts` via memory + Postgres runners | versions append-only per agreement, unique per effective month; charges stamped with version; cancelEffectiveDate; organizations.list ordering |
+| Routes (M5) | `src/__tests__/routes-m5.test.ts` | change preview / apply (token, kept months, VAT at effective month, billing day per version), CHANGE_EFFECTIVE_INVALID / CHANGE_NOTHING_CHANGED / BILLING_DAY_INVALID / END_*; cancel preview FULL / PRORATE / WAIVE incl. posted month with payments (`limitedByPayments`); cancel requires the token only when a credit is created (PREVIEW_TOKEN_REQUIRED, PREVIEW_STALE); OpenAPI paths + reasons + version |
+| Summaries (M6) | `src/summaries/__tests__/compute.test.ts` | bucketize by due date vs today; unallocated; last payment; customer and project statuses for every cell; project figures |
+| Attachment rules (M6) | `src/attachments/__tests__/rules.test.ts` | MIME allow-list, size bounds, filename rules (path separators, control chars, length), exactly one target, storage key, Content-Disposition |
+| Storage contract (M6) | `store-contract-m6.ts` via memory + Postgres runners | attachments create / complete / list (READY only, by target) / soft delete / isolation; audit.list keyset filters and paging |
+| Routes (M6) | `src/__tests__/routes-m6.test.ts` | summaries invariants and statuses; audit list scope / filters / cursor; attachments create (503 without storage, reasons, 404 target, cross-org), complete (UPLOAD_INCOMPLETE / UPLOAD_MISMATCH / idempotent), list, download (ATTACHMENT_NOT_READY, TTL), delete (204, 404 after); scopes |
+| **End-to-end (HTTP)** | `server/e2e/money-v1.e2e.mts` | Malafat's client against a running server on Postgres: every milestone's flows and states plus the security edges; 84 checks (run 2026-10-08, all passing). Needs `MUTABA3A_ADMIN_TOKEN`, `E2E_BASE_URL`, `MALAFAT_WEB_DIR`; creates throwaway organizations, so dev/staging only |
+| **End-to-end (attachments)** | `server/e2e/attachments.e2e.mts` | the real app on Postgres with `MemoryAttachmentStorage`; 34 checks (run 2026-10-08, all passing). Needs `E2E_DATABASE_URL` |
 | Pagination | `src/__tests__/pagination.test.ts` | cursor round trip with ms precision, tampered/foreign cursors → VALIDATION_FAILED, limit default/cap |
 | Import planner | `src/import/__tests__/plan.test.ts`, `preview-token.test.ts` | every row of the brief's preview/commit table, batch customer resolution, first-occurrence-wins on duplicates, 500-row cap, input order; token stable/changes on rows, order, organization; constant-time verify |
 | Storage contract (M2) | `src/repositories/__tests__/store-contract-m2.ts` run by `store-memory-m2.test.ts` and `store-prisma-m2.test.ts` | organization scoping of get/list, external-reference uniqueness (by entity type, by entity), atomic create+reference (no orphan on failure), optimistic update updated/stale/not_found, idempotent archive, active-project count, filters, keyset pagination over 23 rows with equal timestamps |
 | Routes (M2) | `src/__tests__/routes-m2.test.ts` | scope matrix incl. import's two write scopes, Idempotency-Key required/replay, external-reference idempotency (200, no audit, no duplicate), INTEGRATION_NOT_CONNECTED, body validation, 404 cross-organization, list filters + cursor pages + limit cap + bad cursor, PATCH If-Match / VERSION_MISMATCH / audit fields, archive HAS_ACTIVE_PROJECTS then idempotent, project customer checks (not found / archived / foreign), CUSTOMER_MISMATCH, CURRENCY_LOCKED via `markProjectPosted`, immutable customerId, import preview (no writes, totals, token), 501 rows, commit order + idempotent re-run + replay + partial failure + audit, isolation with identical external ids, OpenAPI paths + reason vocabulary + version |
 | Routes | `src/__tests__/routes.test.ts` | health/ready, request ids, OpenAPI document, admin auth, provisioning + audit trail, every 401 code (UNAUTHENTICATED, INVALID_API_KEY, API_KEY_ENVIRONMENT_MISMATCH, API_KEY_REVOKED, API_KEY_EXPIRED), forged suffix with a real prefix, INSUFFICIENT_SCOPE details, missingScopes, 429 headers, Idempotency-Key required/replay/reuse, ORGANIZATION_MISMATCH both directions, disconnect revokes + reconnect keeps id, cross-organization isolation |
 
-Required before M2: a contract test that Malafat's client fixtures match
-`openapi/openapi.yaml` (CI itself landed 2026-10-08, TD-019 resolved). Not
-covered by automation: the Terraform plan against a real project, the local
-image push and the proxy-run migration — all exercised by the operator runbook
-(`server/DEPLOYMENT.md` §2–3), whose smoke step is the M1 exit criterion.
+Malafat's contract test (`features/money/contract/__tests__/mutaba3a-contract.test.ts`)
+pins its client to the vendored `openapi.yaml` (TD-019 resolved). Not covered
+by automation: the Terraform plan against a real project, the local image
+push, the proxy-run migration and the GCS signed-URL path with a real bucket —
+exercised by the operator runbook (`server/DEPLOYMENT.md` §2–3) and the
+handover checklist (`.claude/designs/money-v1-handover.md`); the smoke step is
+the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
 
