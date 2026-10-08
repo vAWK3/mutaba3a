@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.3.0-m4
+  version: 1.4.0-m5
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–4).
 
@@ -15,7 +15,7 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -1129,11 +1129,17 @@ components:
               nullable: true
               pattern: ^\d{4}-\d{2}$
               description: Calendar month, YYYY-MM
+            cancelEffectiveDate:
+              type: string
+              nullable: true
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
             finalMonth:
               type: string
               nullable: true
               enum:
                 - FULL
+                - PRORATE
                 - WAIVE
                 - null
           required:
@@ -1141,6 +1147,7 @@ components:
             - billingDay
             - endMonth
             - cancelEffectiveMonth
+            - cancelEffectiveDate
             - finalMonth
         cancelledAt:
           type: string
@@ -1620,19 +1627,83 @@ components:
       properties:
         agreement:
           $ref: "#/components/schemas/Agreement"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetainerTerms"
         charges:
           type: array
           items:
             $ref: "#/components/schemas/RetainerCharge"
       required:
         - agreement
+        - versions
         - charges
+    RetainerTerms:
+      type: object
+      properties:
+        version:
+          type: integer
+        effectiveMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        monthlyAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        rateBasisPoints:
+          type: integer
+        billingDay:
+          type: integer
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        endMonth:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        reason:
+          type: string
+          nullable: true
+      required:
+        - version
+        - effectiveMonth
+        - monthlyAmount
+        - net
+        - vat
+        - gross
+        - pricingBasis
+        - vatTreatment
+        - rateBasisPoints
+        - billingDay
+        - paymentTerms
+        - endMonth
+        - reason
     RetainerCharge:
       type: object
       properties:
         id:
           type: string
           format: uuid
+        version:
+          type: integer
         serviceMonth:
           type: string
           pattern: ^\d{4}-\d{2}$
@@ -1675,6 +1746,7 @@ components:
           format: date-time
       required:
         - id
+        - version
         - serviceMonth
         - chargeDate
         - amount
@@ -1698,6 +1770,220 @@ components:
               maxLength: 64
           required:
             - previewToken
+    RetainerChangePreviewResponse:
+      type: object
+      properties:
+        previous:
+          $ref: "#/components/schemas/RetainerTerms"
+        next:
+          $ref: "#/components/schemas/RetainerTerms"
+        effectiveMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        changed:
+          type: array
+          items:
+            type: string
+        firstChargedMonth:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        chargesKept:
+          type: array
+          items:
+            type: string
+            pattern: ^\d{4}-\d{2}$
+            description: Calendar month, YYYY-MM
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - previous
+        - next
+        - effectiveMonth
+        - changed
+        - firstChargedMonth
+        - chargesKept
+        - previewToken
+    RetainerChangeRequest:
+      type: object
+      properties:
+        effectiveMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        monthlyAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        billingDay:
+          type: integer
+          minimum: 1
+          maximum: 28
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        endMonth:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - effectiveMonth
+        - reason
+    RetainerChangeApplyRequest:
+      allOf:
+        - $ref: "#/components/schemas/RetainerChangeRequest"
+        - type: object
+          properties:
+            previewToken:
+              type: string
+              minLength: 64
+              maxLength: 64
+          required:
+            - previewToken
+    RetainerCancelPreviewResponse:
+      type: object
+      properties:
+        effectiveMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        finalMonth:
+          $ref: "#/components/schemas/FinalMonth"
+        finalCharge:
+          type: object
+          nullable: true
+          properties:
+            serviceMonth:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+              description: Calendar month, YYYY-MM
+            days:
+              type: integer
+            daysInMonth:
+              type: integer
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            posted:
+              type: boolean
+          required:
+            - serviceMonth
+            - days
+            - daysInMonth
+            - amount
+            - net
+            - vat
+            - gross
+            - posted
+        postedCharge:
+          type: object
+          nullable: true
+          properties:
+            chargeId:
+              type: string
+              format: uuid
+            receivableId:
+              type: string
+              format: uuid
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            paid:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            credited:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            outstanding:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - chargeId
+            - receivableId
+            - gross
+            - paid
+            - credited
+            - outstanding
+        adjustment:
+          type: object
+          nullable: true
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            limitedByPayments:
+              type: boolean
+          required:
+            - amount
+            - net
+            - vat
+            - limitedByPayments
+        stoppedFrom:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        outstandingAfter:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - effectiveMonth
+        - finalMonth
+        - finalCharge
+        - postedCharge
+        - adjustment
+        - stoppedFrom
+        - outstandingAfter
+        - previewToken
+    FinalMonth:
+      type: string
+      enum:
+        - FULL
+        - PRORATE
+        - WAIVE
     RetainerCancelRequest:
       type: object
       properties:
@@ -1706,13 +1992,19 @@ components:
           pattern: ^\d{4}-\d{2}-\d{2}$
           description: Calendar date in the organization timezone, YYYY-MM-DD
         finalMonth:
-          type: string
-          enum:
-            - FULL
-            - WAIVE
+          $ref: "#/components/schemas/FinalMonth"
       required:
         - effectiveDate
         - finalMonth
+    RetainerCancelApplyRequest:
+      allOf:
+        - $ref: "#/components/schemas/RetainerCancelRequest"
+        - type: object
+          properties:
+            previewToken:
+              type: string
+              minLength: 64
+              maxLength: 64
     ReconcileResponse:
       type: object
       properties:
@@ -4090,12 +4382,76 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/retainers/{agreementId}/cancel:
+  /v1/retainers/{agreementId}/changes/preview:
     post:
       tags:
         - Retainers
-      summary: Stop a retainer from an effective date (idempotent)
-      description: No charges after the effective month. FULL keeps the effective month’s charge; WAIVE skips it if it has not posted yet. Posted charges are never changed (credits arrive in M4).
+      summary: Preview an effective-dated change of a retainer’s terms
+      description: The new terms are priced at the VAT rate in force on the first day of the effective month. Charges already generated keep their terms; the first uncharged month from the effective month picks up the new ones. The change must be after the latest version’s effective month and must change something (422 CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED).
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetainerChangeRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainerChangePreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/{agreementId}/changes:
+    post:
+      tags:
+        - Retainers
+      summary: Apply a change of terms from its preview (idempotent)
+      description: Appends a new version; the agreement row and every generated charge are untouched. 409 PREVIEW_STALE when the retainer, its versions or the VAT rate changed since the preview.
       security:
         - apiKey: []
       parameters:
@@ -4119,7 +4475,144 @@ paths:
         content:
           application/json:
             schema:
+              $ref: "#/components/schemas/RetainerChangeApplyRequest"
+      responses:
+        "201":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainerChargesResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/{agreementId}/cancel/preview:
+    post:
+      tags:
+        - Retainers
+      summary: "Preview a cancellation: the final month under FULL / PRORATE / WAIVE, the credit a posted month needs, what stops"
+      description: PRORATE charges the final month for the days up to and including the cancellation date (calendar days, half-up). When the final month is already posted, PRORATE and WAIVE create a credit on its receivable, capped at the outstanding — what was paid is not refunded (adjustment.limitedByPayments). FULL never credits.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
               $ref: "#/components/schemas/RetainerCancelRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainerCancelPreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/retainers/{agreementId}/cancel:
+    post:
+      tags:
+        - Retainers
+      summary: Stop a retainer from an effective date (idempotent)
+      description: No charges after the effective month. FULL keeps the effective month’s charge; PRORATE charges or credits it down to the days used; WAIVE skips it, or credits it when already posted. A previewToken from /cancel/preview is required whenever a credit would be created (422 PREVIEW_TOKEN_REQUIRED). Already cancelled → the existing cancellation, unchanged.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetainerCancelApplyRequest"
       responses:
         "200":
           description: Cancelled (or already was)
@@ -4141,6 +4634,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:

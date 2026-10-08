@@ -127,6 +127,8 @@ export interface OrganizationRepository {
   create(input: CreateOrganizationInput): Promise<Organization>;
   getById(id: string): Promise<Organization | null>;
   getBySlug(slug: string): Promise<Organization | null>;
+  /** Every organization, oldest first (M5 reconcile script). */
+  list(): Promise<Organization[]>;
 }
 
 export interface ApiKeyRepository {
@@ -327,7 +329,7 @@ export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
 export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
-export type FinalMonth = 'FULL' | 'WAIVE';
+export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
 export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT';
 
 export interface AgreementRecord {
@@ -355,6 +357,8 @@ export interface AgreementRecord {
   billingDay: number | null;
   endMonth: IsoMonth | null;
   cancelEffectiveMonth: IsoMonth | null;
+  /** The day the retainer stopped (M5); the month above is derived from it. */
+  cancelEffectiveDate: IsoDate | null;
   finalMonth: FinalMonth | null;
   cancelledAt: Date | null;
   version: number;
@@ -414,6 +418,8 @@ export interface RetainerChargeRecord {
   id: string;
   organizationId: string;
   agreementId: string;
+  /** The retainer terms version the charge carries (M5); 1 for the original terms. */
+  version: number;
   serviceMonth: IsoMonth;
   chargeDate: IsoDate;
   amountMinor: bigint;
@@ -514,6 +520,36 @@ export interface CreateChargeInput {
   vatTreatment: VatTreatment;
   rateBasisPoints: number;
   dueDate: IsoDate;
+  /** Terms version (M5); defaults to 1. */
+  version?: number;
+}
+
+// ---- Milestone 5: retainer versions -------------------------------------------
+
+export interface AppendVersionInput {
+  organizationId: string;
+  agreementId: string;
+  version: number;
+  effectiveMonth: IsoMonth;
+  monthlyAmountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  pricingBasis: PricingBasis;
+  vatTreatment: VatTreatment;
+  rateBasisPoints: number;
+  billingDay: number;
+  paymentTerms: PaymentTerms;
+  endMonth: IsoMonth | null;
+  reason: string;
+  requestId: string | null;
+  /** Optimistic check on the agreement row, which gets its version bumped. */
+  expectedAgreementVersion: number;
+}
+
+export interface RetainerVersionRecord extends Omit<AppendVersionInput, 'expectedAgreementVersion'> {
+  id: string;
+  createdAt: Date;
 }
 
 export interface AgreementRepository {
@@ -530,7 +566,11 @@ export interface AgreementRepository {
   applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
   listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
   /** FIXED: status CANCELLED, unposted installments voided. RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
-  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
+  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
+  /** M5: appends a terms version (unique per agreement + version) and bumps the agreement version atomically; `conflict` when the agreement moved. */
+  appendVersion(input: AppendVersionInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; version: RetainerVersionRecord }>>;
+  /** Stored versions (≥ 2) in version order; version 1 is synthesized from the agreement by the domain. */
+  listVersions(organizationId: string, agreementId: string): Promise<RetainerVersionRecord[]>;
   /** RECURRING agreements that may still generate charges (ACTIVE, or CANCELLED with a cancel month). */
   listRetainers(organizationId: string): Promise<AgreementRecord[]>;
   listCharges(organizationId: string, agreementId: string): Promise<RetainerChargeRecord[]>;

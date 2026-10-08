@@ -121,6 +121,7 @@ enum PaymentStatus {
 
 enum FinalMonth {
   FULL
+  PRORATE
   WAIVE
 }
 
@@ -361,6 +362,8 @@ model Agreement {
   billingDay           Int?
   endMonth             String?         @db.VarChar(7)
   cancelEffectiveMonth String?         @db.VarChar(7)
+  /// The day the retainer stopped (M5); cancelEffectiveMonth is its month.
+  cancelEffectiveDate  String?         @db.VarChar(10)
   finalMonth           FinalMonth?
   cancelledAt          DateTime?
   version              Int             @default(1)
@@ -370,6 +373,7 @@ model Agreement {
   installments Installment[]
   charges      RetainerCharge[]
   supplements  AgreementSupplement[]
+  versions     RetainerVersion[]
 
   @@index([organizationId, projectId])
   @@index([organizationId, customerId])
@@ -410,6 +414,8 @@ model RetainerCharge {
   organizationId  String       @db.Uuid
   agreementId     String       @db.Uuid
   agreement       Agreement    @relation(fields: [agreementId], references: [id])
+  /// The retainer terms version this charge carries (M5).
+  version         Int          @default(1)
   serviceMonth    String       @db.VarChar(7)
   chargeDate      String       @db.VarChar(10)
   amountMinor     BigInt
@@ -424,6 +430,33 @@ model RetainerCharge {
 
   @@unique([agreementId, serviceMonth])
   @@map("retainer_charges")
+}
+
+/// An effective-dated version of a retainer's terms (M5). Version 1 is the agreement row itself and is not stored.
+model RetainerVersion {
+  id                 String       @id @default(uuid()) @db.Uuid
+  organizationId     String       @db.Uuid
+  agreementId        String       @db.Uuid
+  agreement          Agreement    @relation(fields: [agreementId], references: [id])
+  version            Int
+  effectiveMonth     String       @db.VarChar(7)
+  monthlyAmountMinor BigInt
+  netMinor           BigInt
+  vatMinor           BigInt
+  grossMinor         BigInt
+  pricingBasis       PricingBasis
+  vatTreatment       VatTreatment
+  rateBasisPoints    Int
+  billingDay         Int
+  paymentTerms       PaymentTerms
+  endMonth           String?      @db.VarChar(7)
+  reason             String
+  requestId          String?
+  createdAt          DateTime     @default(now())
+
+  @@unique([agreementId, version])
+  @@index([organizationId, agreementId])
+  @@map("retainer_versions")
 }
 
 /// What is owed. Created only when an installment or charge posts.

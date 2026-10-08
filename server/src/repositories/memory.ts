@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
+  AppendVersionInput,
+  RetainerVersionRecord,
   AgreementFilter,
   AgreementRecord,
   AgreementRepository,
@@ -79,6 +81,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly charges = new Map<string, RetainerChargeRecord>();
   private readonly recs = new Map<string, ReceivableRecord>();
   private readonly supps = new Map<string, SupplementRecord>();
+  private readonly versions = new Map<string, RetainerVersionRecord>();
   private readonly pays = new Map<string, PaymentRecord>();
   private readonly allocs = new Map<string, AllocationRecord>();
   private readonly credits = new Map<string, CreditRecord>();
@@ -95,6 +98,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     getById: async (id) => clone(this.orgs.get(id)),
     getBySlug: async (slug) => clone([...this.orgs.values()].find((o) => o.slug === slug)),
+    list: async () => [...this.orgs.values()].map((o) => ({ ...o })), // insertion order = creation order
   };
 
   readonly apiKeys: ApiKeyRepository = {
@@ -390,7 +394,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('agreements.projectId');
       const { installments: specs, ...rest } = input;
       if (new Set(specs.map((x) => x.position)).size !== specs.length) throw new UniqueViolation('installments.agreementId_position');
-      const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
+      const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
       this.agrs.set(agreement.id, agreement);
       const installments = specs.map((spec) => {
         const record: InstallmentRecord = { id: randomUUID(), organizationId: input.organizationId, agreementId: agreement.id, ...spec, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
@@ -469,6 +473,7 @@ export class MemoryLedgerStore implements LedgerStore {
         a.status = 'CANCELLED';
         a.cancelledAt = at;
         a.cancelEffectiveMonth = input.cancelEffectiveMonth;
+        a.cancelEffectiveDate = input.cancelEffectiveDate ?? null;
         a.finalMonth = input.finalMonth;
         a.version += 1;
         a.updatedAt = at;
@@ -489,10 +494,25 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       const chargeId = randomUUID();
       const receivable = this.newReceivable({ organizationId: input.organizationId, customerId: input.customerId, projectId: input.projectId, agreementId: input.agreementId, origin: 'RETAINER_CHARGE', originId: chargeId, currency: input.currency, netMinor: input.netMinor, vatMinor: input.vatMinor, grossMinor: input.grossMinor, vatTreatment: input.vatTreatment, vatRateBasisPoints: input.rateBasisPoints, dueDate: input.dueDate, postingDate: input.chargeDate, postedAt: at });
-      const charge: RetainerChargeRecord = { id: chargeId, organizationId: input.organizationId, agreementId: input.agreementId, serviceMonth: input.serviceMonth, chargeDate: input.chargeDate, amountMinor: input.amountMinor, netMinor: input.netMinor, vatMinor: input.vatMinor, grossMinor: input.grossMinor, vatTreatment: input.vatTreatment, rateBasisPoints: input.rateBasisPoints, postedAt: at, receivableId: receivable.id, createdAt: at };
+      const charge: RetainerChargeRecord = { id: chargeId, organizationId: input.organizationId, agreementId: input.agreementId, version: input.version ?? 1, serviceMonth: input.serviceMonth, chargeDate: input.chargeDate, amountMinor: input.amountMinor, netMinor: input.netMinor, vatMinor: input.vatMinor, grossMinor: input.grossMinor, vatTreatment: input.vatTreatment, rateBasisPoints: input.rateBasisPoints, postedAt: at, receivableId: receivable.id, createdAt: at };
       this.charges.set(charge.id, charge);
       return { charge: { ...charge }, receivable: { ...receivable }, created: true };
     },
+    appendVersion: async (input: AppendVersionInput, at) => {
+      const a = this.agrs.get(input.agreementId);
+      if (!a || a.organizationId !== input.organizationId) return { kind: 'not_found' };
+      if (a.version !== input.expectedAgreementVersion) return { kind: 'stale', record: { agreement: { ...a }, version: null as unknown as RetainerVersionRecord } };
+      if ([...this.versions.values()].some((v) => v.agreementId === input.agreementId && v.version === input.version)) throw new UniqueViolation('retainer_versions.agreementId_version');
+      const { expectedAgreementVersion, ...rest } = input;
+      void expectedAgreementVersion;
+      const version: RetainerVersionRecord = { id: randomUUID(), ...rest, createdAt: at };
+      this.versions.set(version.id, version);
+      a.version += 1;
+      a.updatedAt = at;
+      return { kind: 'updated', record: { agreement: { ...a }, version: { ...version } } };
+    },
+    listVersions: async (organizationId, agreementId) =>
+      [...this.versions.values()].filter((v) => v.organizationId === organizationId && v.agreementId === agreementId).sort((x, y) => x.version - y.version).map((v) => ({ ...v })),
   };
 
   readonly receivables: ReceivableRepository = {

@@ -431,11 +431,17 @@ export const VALIDATION_REASONS = [
   'REPLACES_CUSTOMER_MISMATCH',
   'NO_ELIGIBLE_RECEIVABLES',
   'CUSTOMER_NOT_FOUND',
+  // M5
+  'CHANGE_EFFECTIVE_INVALID',
+  'CHANGE_NOTHING_CHANGED',
+  'FINAL_MONTH_INVALID',
+  'PREVIEW_TOKEN_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
 
 export const ItemStatusSchema = z.enum(ITEM_STATUSES).openapi('ItemStatus');
+export const FinalMonthSchema = z.enum(['FULL', 'PRORATE', 'WAIVE']).openapi('FinalMonth');
 export const TriggerTypeSchema = z.enum(['IMMEDIATE', 'DATE', 'MANUAL']).openapi('TriggerType');
 
 export const VatRateSchema = z
@@ -535,7 +541,7 @@ export const AgreementSchema = z
     description: z.string().nullable(),
     paymentTerms: PaymentTermsSchema,
     retainer: z
-      .object({ startMonth: IsoMonthSchema, billingDay: z.number().int(), endMonth: IsoMonthSchema.nullable(), cancelEffectiveMonth: IsoMonthSchema.nullable(), finalMonth: z.enum(['FULL', 'WAIVE']).nullable() })
+      .object({ startMonth: IsoMonthSchema, billingDay: z.number().int(), endMonth: IsoMonthSchema.nullable(), cancelEffectiveMonth: IsoMonthSchema.nullable(), cancelEffectiveDate: IsoDateSchema.nullable(), finalMonth: z.enum(['FULL', 'PRORATE', 'WAIVE']).nullable() })
       .nullable(),
     cancelledAt: z.string().datetime().nullable(),
     version: z.number().int(),
@@ -673,6 +679,8 @@ export const RetainerPreviewResponseSchema = z
 export const RetainerChargeSchema = z
   .object({
     id: uuid,
+    /** The terms version the charge carries (M5); 1 = the original terms. */
+    version: z.number().int(),
     serviceMonth: IsoMonthSchema,
     chargeDate: IsoDateSchema,
     amount: AmountSchema,
@@ -688,11 +696,89 @@ export const RetainerChargeSchema = z
   })
   .openapi('RetainerCharge');
 
-export const RetainerChargesResponseSchema = z.object({ agreement: AgreementSchema, charges: z.array(RetainerChargeSchema) }).openapi('RetainerChargesResponse');
+export const RetainerTermsSchema = z
+  .object({
+    version: z.number().int(),
+    effectiveMonth: IsoMonthSchema,
+    monthlyAmount: AmountSchema,
+    net: AmountSchema,
+    vat: AmountSchema,
+    gross: AmountSchema,
+    pricingBasis: PricingBasisSchema,
+    vatTreatment: VatTreatmentSchema,
+    rateBasisPoints: z.number().int(),
+    billingDay: z.number().int(),
+    paymentTerms: PaymentTermsSchema,
+    endMonth: IsoMonthSchema.nullable(),
+    reason: z.string().nullable(),
+  })
+  .openapi('RetainerTerms');
+
+export const RetainerChargesResponseSchema = z
+  .object({
+    agreement: AgreementSchema,
+    /** Every version of the terms in order; version 1 is the agreement's own terms (M5). */
+    versions: z.array(RetainerTermsSchema),
+    charges: z.array(RetainerChargeSchema),
+  })
+  .openapi('RetainerChargesResponse');
+
+export const RetainerChangeRequestSchema = z
+  .object({
+    effectiveMonth: IsoMonthSchema,
+    monthlyAmount: AmountSchema.optional(),
+    pricingBasis: PricingBasisSchema.optional(),
+    vatTreatment: VatTreatmentSchema.optional(),
+    billingDay: z.number().int().min(1).max(MAX_BILLING_DAY).optional(),
+    paymentTerms: PaymentTermsSchema.optional(),
+    /** null clears the end month. */
+    endMonth: IsoMonthSchema.nullable().optional(),
+    reason: z.string().min(1).max(500),
+  })
+  .openapi('RetainerChangeRequest');
+
+export const RetainerChangeApplyRequestSchema = RetainerChangeRequestSchema.extend({ previewToken: z.string().length(64) }).openapi('RetainerChangeApplyRequest');
+
+export const RetainerChangePreviewResponseSchema = z
+  .object({
+    previous: RetainerTermsSchema,
+    next: RetainerTermsSchema,
+    effectiveMonth: IsoMonthSchema,
+    changed: z.array(z.string()),
+    /** The first service month that will be charged at the new terms, or null when every month from the effective month is already charged or the retainer ends before. */
+    firstChargedMonth: IsoMonthSchema.nullable(),
+    /** Generated months on or after the effective month: they keep their terms. */
+    chargesKept: z.array(IsoMonthSchema),
+    previewToken: z.string().length(64),
+  })
+  .openapi('RetainerChangePreviewResponse');
 
 export const RetainerCancelRequestSchema = z
-  .object({ effectiveDate: IsoDateSchema, finalMonth: z.enum(['FULL', 'WAIVE']) })
+  .object({ effectiveDate: IsoDateSchema, finalMonth: FinalMonthSchema })
   .openapi('RetainerCancelRequest');
+
+export const RetainerCancelApplyRequestSchema = RetainerCancelRequestSchema.extend({
+  /** Required when the cancellation creates a credit (PRORATE, or WAIVE on an already-posted final month). */
+  previewToken: z.string().length(64).optional(),
+}).openapi('RetainerCancelApplyRequest');
+
+export const RetainerCancelPreviewResponseSchema = z
+  .object({
+    effectiveMonth: IsoMonthSchema,
+    finalMonth: FinalMonthSchema,
+    finalCharge: z
+      .object({ serviceMonth: IsoMonthSchema, days: z.number().int(), daysInMonth: z.number().int(), amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema, posted: z.boolean() })
+      .nullable(),
+    postedCharge: z.object({ chargeId: uuid, receivableId: uuid, gross: AmountSchema, paid: AmountSchema, credited: AmountSchema, outstanding: AmountSchema }).nullable(),
+    /** The credit the cancellation creates on the posted final month, or null. */
+    adjustment: z.object({ amount: AmountSchema, net: AmountSchema, vat: AmountSchema, limitedByPayments: z.boolean() }).nullable(),
+    /** The first month no longer charged, or null when nothing was still to come. */
+    stoppedFrom: IsoMonthSchema.nullable(),
+    /** The retainer's receivables still outstanding after the adjustment (sum within the retainer). */
+    outstandingAfter: AmountSchema,
+    previewToken: z.string().length(64),
+  })
+  .openapi('RetainerCancelPreviewResponse');
 
 export const ReconcileResponseSchema = z
   .object({ installmentsPosted: z.number().int(), chargesCreated: z.number().int(), today: IsoDateSchema })

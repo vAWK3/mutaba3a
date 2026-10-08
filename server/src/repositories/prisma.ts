@@ -3,6 +3,8 @@ import type { Scope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { ForeignKeyViolation, InsufficientCapacity, UniqueViolation } from './memory.js';
 import type {
+  AppendVersionInput,
+  RetainerVersionRecord,
   AgreementFilter,
   AgreementRecord,
   AgreementRepository,
@@ -69,6 +71,7 @@ export class PrismaLedgerStore implements LedgerStore {
     create: (input) => translate(() => this.prisma.organization.create({ data: input })),
     getById: (id) => this.prisma.organization.findUnique({ where: { id } }),
     getBySlug: (slug) => this.prisma.organization.findUnique({ where: { slug } }),
+    list: () => this.prisma.organization.findMany({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
   };
 
   readonly apiKeys: ApiKeyRepository = {
@@ -440,11 +443,26 @@ export class PrismaLedgerStore implements LedgerStore {
         return { kind: 'updated' as const, record: { agreement, supplement, installments } };
       }),
     listSupplements: (organizationId, agreementId) => this.prisma.agreementSupplement.findMany({ where: { organizationId, agreementId }, orderBy: { createdAt: 'asc' } }),
+    appendVersion: async (input: AppendVersionInput, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const current = await tx.agreement.findFirst({ where: { id: input.agreementId, organizationId: input.organizationId } });
+          if (!current) return { kind: 'not_found' as const };
+          const { count } = await tx.agreement.updateMany({ where: { id: input.agreementId, version: input.expectedAgreementVersion }, data: { version: { increment: 1 }, updatedAt: at } });
+          if (count !== 1) return { kind: 'stale' as const, record: { agreement: current, version: null as unknown as RetainerVersionRecord } };
+          const { expectedAgreementVersion, ...rest } = input;
+          void expectedAgreementVersion;
+          const version = await tx.retainerVersion.create({ data: { ...rest, createdAt: at } });
+          const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: input.agreementId } });
+          return { kind: 'updated' as const, record: { agreement, version } };
+        }),
+      ),
+    listVersions: (organizationId, agreementId) => this.prisma.retainerVersion.findMany({ where: { organizationId, agreementId }, orderBy: { version: 'asc' } }),
     cancel: async (organizationId, agreementId, input, at) => {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.agreement.updateMany({
           where: { id: agreementId, organizationId, status: 'ACTIVE' },
-          data: { status: 'CANCELLED', cancelledAt: at, cancelEffectiveMonth: input.cancelEffectiveMonth, finalMonth: input.finalMonth, version: { increment: 1 }, updatedAt: at },
+          data: { status: 'CANCELLED', cancelledAt: at, cancelEffectiveMonth: input.cancelEffectiveMonth, cancelEffectiveDate: input.cancelEffectiveDate ?? null, finalMonth: input.finalMonth, version: { increment: 1 }, updatedAt: at },
         });
         if (count === 1) await tx.installment.updateMany({ where: { agreementId, receivableId: null, voidedAt: null }, data: { voidedAt: at } });
       });
@@ -481,6 +499,7 @@ export class PrismaLedgerStore implements LedgerStore {
             data: {
               organizationId: input.organizationId,
               agreementId: input.agreementId,
+              version: input.version ?? 1,
               serviceMonth: input.serviceMonth,
               chargeDate: input.chargeDate,
               amountMinor: input.amountMinor,

@@ -23,6 +23,7 @@
     "openapi:check": "tsx src/scripts/export-openapi.ts --check",
     "provision": "tsx src/scripts/provision.ts",
     "smoke": "tsx src/scripts/smoke.ts",
+    "reconcile": "tsx src/scripts/reconcile.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
   },

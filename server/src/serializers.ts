@@ -2,6 +2,7 @@ import { maskApiKey } from './auth/api-key.js';
 import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
+import type { RetainerTerms } from './retainers/terms.js';
 import type {
   AgreementRecord,
   AllocationRecord,
@@ -140,7 +141,7 @@ export function serializeAgreement(a: AgreementRecord) {
     paymentTerms: a.paymentTerms,
     retainer:
       a.type === 'RECURRING' && a.startMonth && a.billingDay
-        ? { startMonth: a.startMonth, billingDay: a.billingDay, endMonth: a.endMonth, cancelEffectiveMonth: a.cancelEffectiveMonth, finalMonth: a.finalMonth }
+        ? { startMonth: a.startMonth, billingDay: a.billingDay, endMonth: a.endMonth, cancelEffectiveMonth: a.cancelEffectiveMonth, cancelEffectiveDate: a.cancelEffectiveDate, finalMonth: a.finalMonth }
         : null,
     cancelledAt: iso(a.cancelledAt),
     version: a.version,
@@ -223,6 +224,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
 export function serializeCharge(c: RetainerChargeRecord, receivable: ReceivableRecord | null, currency: string, today: IsoDate) {
   return {
     id: c.id,
+    version: c.version,
     serviceMonth: c.serviceMonth,
     chargeDate: c.chargeDate,
     amount: amt(c.amountMinor, currency),
@@ -296,5 +298,26 @@ export function serializeOperation(r: IdempotencyRecord) {
     response: r.responseBody ?? null,
     createdAt: r.createdAt.toISOString(),
     completedAt: iso(r.completedAt),
+  };
+}
+
+// ---- Milestone 5 ------------------------------------------------------------
+
+/** A retainer's terms as in force from a month (version 1 = the agreement's own terms). */
+export function serializeRetainerTerms(t: RetainerTerms, currency: string) {
+  return {
+    version: t.version,
+    effectiveMonth: t.effectiveMonth,
+    monthlyAmount: amt(t.monthlyAmountMinor, currency),
+    net: amt(t.netMinor, currency),
+    vat: amt(t.vatMinor, currency),
+    gross: amt(t.grossMinor, currency),
+    pricingBasis: t.pricingBasis,
+    vatTreatment: t.vatTreatment,
+    rateBasisPoints: t.rateBasisPoints,
+    billingDay: t.billingDay,
+    paymentTerms: t.paymentTerms,
+    endMonth: t.endMonth,
+    reason: t.reason,
   };
 }
