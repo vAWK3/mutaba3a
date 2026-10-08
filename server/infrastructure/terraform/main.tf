@@ -234,6 +234,9 @@ resource "google_cloud_run_v2_service" "api" {
     containers {
       image = local.api_image
 
+      # Cloud Run injects PORT=<container_port> itself and rejects a PORT env
+      # entry ("reserved env names were provided: PORT"), so it is not set
+      # below; config.PORT reads the injected value (default 8787 locally).
       ports {
         container_port = 8787
       }
@@ -249,10 +252,6 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "NODE_ENV"
         value = "production"
-      }
-      env {
-        name  = "PORT"
-        value = "8787"
       }
       env {
         name  = "LOG_LEVEL"

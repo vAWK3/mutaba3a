@@ -29,6 +29,47 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — First production deploy: Cloud Run rejected the `PORT` env; smoke CLI hardened (`server/`)
+
+The first `scripts/deploy.sh` run against `malafat-production` created Cloud
+SQL, the secrets, the service account and migrated the database, then failed
+at `google_cloud_run_v2_service.api` with `Error 400 … reserved env names were
+provided: PORT`. Downstream, `terraform output -raw service_url` had nothing
+to print and `npm run smoke -- --url ""` crashed with
+`Failed to parse URL from /health`.
+
+### Fixed
+- `server/infrastructure/terraform/main.tf`: removed the `PORT=8787` env
+  entry. Cloud Run injects `PORT` from `container_port` and refuses templates
+  that set it; `config.PORT` reads the injected value (default 8787 locally).
+  Comment on the `ports` block records why.
+- `server/src/smoke.ts` + `server/src/scripts/smoke.ts`: new exported
+  `parseBaseUrl` validates `--url` before any request (empty → names the
+  `terraform output` cause and the recovery; relative or non-http → "must be
+  an absolute http(s) URL"); the CLI exits 2 with that one line instead of an
+  undici stack trace. `runSmoke` uses the same validation.
+- `server/scripts/deploy.sh`: fails with a red `[deploy]` line naming the
+  recovery (re-run) when the full apply leaves no `service_url`, instead of
+  calling the smoke script with an empty URL.
+
+### Changed
+- `server/DEPLOYMENT.md`: new §2.1 "If a step fails" (what each step leaves
+  behind, re-run is the recovery, the `-target` warnings are expected, the
+  PORT error verbatim); §3 echoes the URL and stops on a missing output; §1.1
+  records that production is in `malafat-production`.
+- `.claude/INFRA.md`: project choice recorded; Deployed table notes the
+  2026-10-08 partial apply (database and secrets exist, service pending the
+  re-run).
+
+### Technical
+- Tests: `src/__tests__/smoke.test.ts` +3 (`parseBaseUrl` accept/strip,
+  empty, relative/non-http). Lint, typecheck, 180 unit tests, build green;
+  `terraform fmt -check` green. `terraform validate` could not run in the
+  session (provider registry unreachable); CI's `terraform` job covers it.
+- Operator action: pull and re-run `./scripts/deploy.sh`; then §3–§5.
+
+---
+
 ## [Docs] - 2026-10-08 — Money v1 Milestone 3, Malafat side: design brief and test plan
 
 ### Added

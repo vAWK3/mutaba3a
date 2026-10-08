@@ -14,6 +14,7 @@ creation is 10–15 minutes of waiting.
 - [0. What you are deploying](#0-what-you-are-deploying)
 - [1. One-time prerequisites](#1-one-time-prerequisites)
 - [2. Deploy](#2-deploy)
+  - [2.1 If a step fails](#21-if-a-step-fails)
 - [3. Prove it works](#3-prove-it-works)
 - [4. Provision the first firm](#4-provision-the-first-firm)
 - [5. Wire Malafat to it](#5-wire-malafat-to-it)
@@ -48,7 +49,9 @@ Terraform) until TD-017 lands a shared rate-limit store. That is deliberate.
 
 ### 1.1 Decide the GCP project
 
-Two valid choices. Pick one and record it in `.claude/INFRA.md`:
+Two valid choices. Pick one and record it in `.claude/INFRA.md` (the first
+production run on 2026-10-08 chose **`malafat-production`**; the resources
+below exist there now):
 
 - **Dedicated project** (recommended, e.g. `mutaba3a-prod`): clean ownership
   and billing for a product that will serve customers other than Malafat
@@ -123,7 +126,11 @@ What you will see, and what to answer:
 1. `terraform init` against `gs://…/mutaba3a-api/production`.
 2. A targeted plan that creates the Artifact Registry repository, the Cloud SQL
    instance, database and user, and the database-URL secret → **yes**.
-   Cloud SQL takes 10–15 minutes.
+   Cloud SQL takes 10–15 minutes (about 5 on a quiet day). The two warnings
+   `Resource targeting is in effect` / `Applied changes may be incomplete` are
+   expected here: this first apply is deliberately partial because the image
+   has to be pushed and the database migrated before the service can start.
+   Step 5 is the complete apply.
 3. `docker build --platform linux/amd64` on your machine, then `docker push`
    of `mutaba3a-api:<sha>` (first build 2–4 min; later builds are cached).
 4. `cloud-sql-proxy` starts on `127.0.0.1:5440`, `prisma migrate deploy` runs
@@ -136,6 +143,43 @@ What you will see, and what to answer:
 
 Repeat runs are the same command; plan 2 shows no changes and the service
 rolls to the new tag. Pass `AUTO_APPROVE=1` once you trust it.
+
+### 2.1 If a step fails
+
+The script stops at the first error (`set -e`) and prints `[deploy] …` in red.
+Nothing it has already created is lost, and **re-running `./scripts/deploy.sh`
+is always the recovery**: Terraform reconciles only what is missing, Docker
+reuses the cached layers, the registry already holds the tag, and
+`prisma migrate deploy` finds `No pending migrations`. Do not run `terraform
+destroy` or delete resources by hand to "start clean"; the Cloud SQL instance
+has deletion protection and a fresh one costs another 10 minutes.
+
+| Where it stopped | What exists | What to do |
+|---|---|---|
+| Step 2 (Cloud SQL) | possibly a half-created instance | wait a minute, re-run; Terraform picks the instance up from state |
+| Step 3 (docker) | nothing new | fix Docker (daemon, auth: `gcloud auth configure-docker me-west1-docker.pkg.dev`), re-run |
+| Step 4 (migration) | image pushed, database untouched or partially migrated | read the Prisma error; the service was **not** rolled. Fix the migration, commit, re-run |
+| Step 5 (full apply) errors on `google_cloud_run_v2_service.api` | database migrated, secrets and service account created, **no service** | fix the Terraform error (below), re-run. `terraform output service_url` does not exist until this step succeeds, so §3 cannot run yet |
+| Step 6 (smoke) | everything, service URL printed | the service is up but a check failed; read the `FAIL` line, see §6 for logs |
+
+The failure the first production run hit on 2026-10-08 was step 5:
+
+```
+Error 400: template.containers[0].env: The following reserved env names were
+provided: PORT. These values are automatically set by the system.
+```
+
+Cloud Run sets `PORT` to the declared `container_port` (8787) itself and
+refuses a template that also lists it. The `PORT` env entry was removed from
+`main.tf` in the fix that accompanies this note; the service reads the
+injected value through `config.PORT`. If you see this error you are on an
+older commit: pull `main` and re-run.
+
+After a step-5 failure the symptoms downstream are: `terraform output -raw
+service_url` says `Output "service_url" not found`, and if you then run
+`npm run smoke -- --url "$URL"` with that empty `URL`, the smoke script exits
+with code 2 and `--url is empty …` (older builds crashed with
+`Failed to parse URL from /health`, which meant the same thing).
 
 ## 3. Prove it works
 
@@ -152,7 +196,8 @@ and proves the revoked key is rejected — the Milestone 1 exit criterion
 against the real deployment:
 
 ```bash
-URL=$(cd infrastructure/terraform && terraform output -raw service_url)
+URL=$(cd infrastructure/terraform && terraform output -raw service_url) || exit 1
+echo "$URL"        # https://mutaba3a-api-….a.run.app — if this is empty, §2 did not finish; see §2.1
 npm run smoke -- --url "$URL"
 ```
 

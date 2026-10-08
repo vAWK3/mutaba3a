@@ -108,8 +108,9 @@ popd >/dev/null
 pushd "${TF_DIR}" >/dev/null
 info "applying the full stack at ${SHORT_SHA}"
 terraform apply "${TF_ARGS[@]}" "${APPROVE[@]}"
-SERVICE_URL="$(terraform output -raw service_url)"
+SERVICE_URL="$(terraform output -raw service_url 2>/dev/null || true)"
 popd >/dev/null
+[[ -n "${SERVICE_URL}" ]] || die "terraform did not create the Cloud Run service (no service_url output); fix the error above and re-run this script — everything already created is kept"
 
 # ---------------------------------------------------------------------------
 # 4. Smoke

@@ -3,7 +3,7 @@ import pino from 'pino';
 import { createApp } from '../app.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
-import { runSmoke, type Fetch } from '../smoke.js';
+import { parseBaseUrl, runSmoke, type Fetch } from '../smoke.js';
 
 const ADMIN_TOKEN = 'test-admin-token-with-at-least-32-characters';
 const BASE = 'https://mutaba3a-api.example';
@@ -62,5 +62,25 @@ describe('post-deploy smoke checks', () => {
     const adminSteps = wrongToken.filter((r) => r.name.startsWith('admin:'));
     expect(adminSteps).toHaveLength(1);
     expect(adminSteps[0]?.ok).toBe(false);
+  });
+});
+
+describe('parseBaseUrl (the --url argument of `npm run smoke`)', () => {
+  it('accepts an absolute http(s) URL and strips trailing slashes', () => {
+    expect(parseBaseUrl('https://mutaba3a-api-abc.a.run.app/')).toBe('https://mutaba3a-api-abc.a.run.app');
+    expect(parseBaseUrl('http://localhost:8787')).toBe('http://localhost:8787');
+  });
+
+  it('rejects an empty value, which is what an unset shell variable expands to', () => {
+    // deploy.sh and DEPLOYMENT.md §3 pass "$URL"; if `terraform output -raw service_url`
+    // failed, that is "" and fetch would otherwise crash on "Failed to parse URL from /health".
+    expect(() => parseBaseUrl('')).toThrow(/--url/);
+    expect(() => parseBaseUrl('   ')).toThrow(/--url/);
+  });
+
+  it('rejects a relative path and a non-http scheme', () => {
+    expect(() => parseBaseUrl('/health')).toThrow(/absolute http/);
+    expect(() => parseBaseUrl('mutaba3a-api.a.run.app')).toThrow(/absolute http/);
+    expect(() => parseBaseUrl('ftp://mutaba3a-api.a.run.app')).toThrow(/absolute http/);
   });
 });

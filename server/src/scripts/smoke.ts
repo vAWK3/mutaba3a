@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { runSmoke } from '../smoke.js';
+import { parseBaseUrl, runSmoke } from '../smoke.js';
 
 /**
  * Post-deploy smoke test against a running service. Exit code 0 only when every
@@ -19,11 +19,19 @@ const { values } = parseArgs({
   },
 });
 
-console.log(`smoke → ${values.url}`);
+let baseUrl: string;
+try {
+  baseUrl = parseBaseUrl(values.url);
+} catch (error) {
+  console.error(`smoke: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(2);
+}
+
+console.log(`smoke → ${baseUrl}`);
 if (!process.env.MUTABA3A_ADMIN_TOKEN) console.log('skip  provisioning round trip (set MUTABA3A_ADMIN_TOKEN to run it)');
 
 const results = await runSmoke({
-  baseUrl: values.url,
+  baseUrl,
   fetch: (input, init) => fetch(input, init),
   adminToken: process.env.MUTABA3A_ADMIN_TOKEN,
   expectVersion: values['expect-version'],

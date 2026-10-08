@@ -33,6 +33,31 @@ const TIMEOUT_MS = 15_000;
 /** A syntactically valid key whose prefix no deployment has issued. */
 export const FORGED_KEY = 'mut_test_00000000_notarealkeynotarealkeynotarealkeynotareal';
 
+/**
+ * Validates the service base URL before any request is made and returns it
+ * without trailing slashes. Throws a one-line, operator-readable error instead
+ * of letting fetch fail with "Failed to parse URL from /health": the usual
+ * cause is `--url "$URL"` with URL empty because `terraform output -raw
+ * service_url` failed (the Cloud Run service does not exist yet).
+ */
+export function parseBaseUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    throw new Error('--url is empty; pass the service URL (e.g. --url https://mutaba3a-api-xxxx.a.run.app). ' +
+      'If it came from `terraform output -raw service_url`, the Cloud Run service has not been created yet: re-run scripts/deploy.sh.');
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error(`--url must be an absolute http(s) URL, got "${trimmed}"`);
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`--url must be an absolute http(s) URL, got "${trimmed}"`);
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
 export async function runSmoke(options: SmokeOptions): Promise<SmokeResult[]> {
   const ctx = new SmokeContext(options);
   await ctx.unauthenticatedChecks();
@@ -45,7 +70,7 @@ class SmokeContext {
   private readonly base: string;
 
   constructor(private readonly options: SmokeOptions) {
-    this.base = options.baseUrl.replace(/\/+$/, '');
+    this.base = parseBaseUrl(options.baseUrl);
   }
 
   private record(ok: boolean, name: string, detail: string): void {
