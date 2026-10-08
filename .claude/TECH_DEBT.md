@@ -18,6 +18,18 @@
 
 ## Open Debt
 
+### TD-020: Import State Loads Linked Entities One By One
+**Status**: Open
+**Added**: 2026-10-08
+**Priority**: Low
+**Impact**: `POST /v1/import/{preview,commit}` issue one `getById` per already-linked
+customer/project (≤ 500 per call by the batch cap); fine for M2 volumes,
+wasteful once M3 adds agreements to the same path
+
+`src/routes/import.ts` `loadState` resolves references first (batched) and
+then the entities individually. Add `customers.getByIds` / `projects.getByIds`
+to the store port and use them here. Introduced by Money v1 M2.
+
 ### TD-017: Hosted API Rate Limiter Is Per Instance
 **Status**: Open
 **Added**: 2026-10-08

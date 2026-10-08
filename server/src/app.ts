@@ -8,8 +8,12 @@ import type { Logger } from './logger.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
+import { customerRoutes } from './routes/customers.js';
 import { healthRoutes } from './routes/health.js';
+import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
+import { projectRoutes } from './routes/projects.js';
+import { CONFLICT_REASONS } from './schemas.js';
 
 export interface AppDependencies {
   store: LedgerStore;
@@ -23,7 +27,7 @@ export interface AppDependencies {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.0.0-m1';
+export const API_VERSION = '1.1.0-m2';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -78,6 +82,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
 
   app.route('/', healthRoutes(deps.store, deps.version));
   app.route('/', integrationRoutes(deps.store, deps.version));
+  app.route('/', customerRoutes(deps.store));
+  app.route('/', projectRoutes(deps.store));
+  app.route('/', importRoutes(deps.store));
   app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
@@ -98,18 +105,27 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       title: API_TITLE,
       version: API_VERSION,
       description: [
-        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestone 1).',
+        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–2).',
         '',
         `Scopes: ${SCOPES.join(', ')}.`,
         '',
         `Error codes: ${Object.keys(ERROR_CODES).join(', ')}. Every error is {"error":{"code","message","details?","requestId"}}.`,
         '',
         'Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.',
+        '',
+        'PATCH routes require `If-Match: <version>` (optimistic concurrency).',
+        '',
+        `409 CONFLICT responses carry details.reason, one of: ${CONFLICT_REASONS.join(', ')}.`,
+        '',
+        'Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page\'s nextCursor.',
       ].join('\n'),
     },
     tags: [
       { name: 'Operations', description: 'Liveness and readiness' },
       { name: 'Integration', description: 'Credential validation and tenant binding' },
+      { name: 'Customers', description: 'The parties money is owed by' },
+      { name: 'Projects', description: 'Single-currency containers for agreements, receivables and payments' },
+      { name: 'Import', description: 'Batch linking of an external system\'s customers and projects' },
       { name: 'Admin', description: 'Operator provisioning' },
     ],
   });

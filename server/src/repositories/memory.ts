@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
   ApiKeyRecord,
   ApiKeyRepository,
@@ -7,15 +8,32 @@ import type {
   AuditRepository,
   ConnectIntegrationInput,
   CreateApiKeyInput,
+  CreateCustomerInput,
   CreateOrganizationInput,
+  CreateProjectInput,
+  CustomerFilter,
+  CustomerRecord,
+  CustomerRepository,
+  ExternalEntityType,
+  ExternalReferenceInput,
+  ExternalReferenceRecord,
+  ExternalReferenceRepository,
   IdempotencyClaim,
   IdempotencyRecord,
   IdempotencyRepository,
+  IntegrationProvider,
   IntegrationRecord,
   IntegrationRepository,
   LedgerStore,
   Organization,
   OrganizationRepository,
+  Page,
+  PageRequest,
+  ProjectFilter,
+  ProjectRecord,
+  ProjectRepository,
+  UpdateCustomerPatch,
+  UpdateProjectPatch,
 } from './ports.js';
 
 /**
@@ -29,6 +47,10 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly ints = new Map<string, IntegrationRecord>();
   private readonly events: AuditEventRecord[] = [];
   private readonly idem = new Map<string, IdempotencyRecord>();
+  private readonly custs = new Map<string, CustomerRecord>();
+  private readonly projs = new Map<string, ProjectRecord>();
+  private readonly refs = new Map<string, ExternalReferenceRecord>();
+  private readonly postedProjects = new Set<string>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -177,6 +199,151 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
+  readonly externalReferences: ExternalReferenceRepository = {
+    link: async (input, at) => {
+      for (const r of this.refs.values()) {
+        if (r.organizationId === input.organizationId && r.provider === input.provider && r.entityType === input.entityType && r.externalId === input.externalId) {
+          throw new UniqueViolation('external_references.organizationId_provider_entityType_externalId');
+        }
+        if (r.provider === input.provider && r.entityType === input.entityType && r.entityId === input.entityId) {
+          throw new UniqueViolation('external_references.provider_entityType_entityId');
+        }
+      }
+      const record: ExternalReferenceRecord = { id: randomUUID(), ...input, createdAt: at };
+      this.refs.set(record.id, record);
+      return { ...record };
+    },
+    findByExternalId: async (organizationId, provider, entityType, externalId) =>
+      clone([...this.refs.values()].find((r) => r.organizationId === organizationId && r.provider === provider && r.entityType === entityType && r.externalId === externalId)),
+    findByExternalIds: async (organizationId, provider, entityType, externalIds) => {
+      const wanted = new Set(externalIds);
+      return [...this.refs.values()]
+        .filter((r) => r.organizationId === organizationId && r.provider === provider && r.entityType === entityType && wanted.has(r.externalId))
+        .map((r) => ({ ...r }));
+    },
+    findByEntities: async (organizationId, entityType, entityIds) => {
+      const wanted = new Set(entityIds);
+      return [...this.refs.values()]
+        .filter((r) => r.organizationId === organizationId && r.entityType === entityType && wanted.has(r.entityId))
+        .map((r) => ({ ...r }));
+    },
+  };
+
+  readonly customers: CustomerRepository = {
+    create: async (input: CreateCustomerInput, at, reference?: ExternalReferenceInput) => {
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('customers.organizationId');
+      const record: CustomerRecord = { id: randomUUID(), ...input, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
+      if (reference) {
+        // "atomic": the reference is checked before the customer is stored
+        await this.externalReferences.link({ organizationId: input.organizationId, entityType: 'CUSTOMER', entityId: record.id, ...reference }, at);
+      }
+      this.custs.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const c = this.custs.get(id);
+      return c && c.organizationId === organizationId ? { ...c } : null;
+    },
+    list: async (organizationId, filter: CustomerFilter, page) => {
+      const ids = await this.entityIdsForExternal(organizationId, 'CUSTOMER', filter);
+      const rows = [...this.custs.values()].filter(
+        (c) => c.organizationId === organizationId && (!filter.status || c.status === filter.status) && (ids === null || ids.has(c.id)),
+      );
+      return paginate(rows, page);
+    },
+    update: async (organizationId, id, expectedVersion, patch: UpdateCustomerPatch, at) => {
+      const c = this.custs.get(id);
+      if (!c || c.organizationId !== organizationId) return { kind: 'not_found' };
+      if (c.version !== expectedVersion) return { kind: 'stale', record: { ...c } };
+      if (patch.name !== undefined) c.name = patch.name;
+      if (patch.email !== undefined) c.email = patch.email;
+      if (patch.phone !== undefined) c.phone = patch.phone;
+      if (patch.notes !== undefined) c.notes = patch.notes;
+      c.version += 1;
+      c.updatedAt = at;
+      return { kind: 'updated', record: { ...c } };
+    },
+    archive: async (organizationId, id, at) => {
+      const c = this.custs.get(id);
+      if (!c || c.organizationId !== organizationId) return null;
+      if (c.status === 'ACTIVE') {
+        c.status = 'ARCHIVED';
+        c.archivedAt = at;
+        c.version += 1;
+        c.updatedAt = at;
+      }
+      return { ...c };
+    },
+  };
+
+  readonly projects: ProjectRepository = {
+    create: async (input: CreateProjectInput, at, reference?: ExternalReferenceInput) => {
+      const customer = this.custs.get(input.customerId);
+      if (!customer || customer.organizationId !== input.organizationId) throw new ForeignKeyViolation('projects.customerId');
+      const record: ProjectRecord = { id: randomUUID(), ...input, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
+      if (reference) {
+        await this.externalReferences.link({ organizationId: input.organizationId, entityType: 'PROJECT', entityId: record.id, ...reference }, at);
+      }
+      this.projs.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const p = this.projs.get(id);
+      return p && p.organizationId === organizationId ? { ...p } : null;
+    },
+    list: async (organizationId, filter: ProjectFilter, page) => {
+      const ids = await this.entityIdsForExternal(organizationId, 'PROJECT', filter);
+      const rows = [...this.projs.values()].filter(
+        (p) =>
+          p.organizationId === organizationId &&
+          (!filter.status || p.status === filter.status) &&
+          (!filter.customerId || p.customerId === filter.customerId) &&
+          (!filter.currency || p.currency === filter.currency) &&
+          (ids === null || ids.has(p.id)),
+      );
+      return paginate(rows, page);
+    },
+    update: async (organizationId, id, expectedVersion, patch: UpdateProjectPatch, at) => {
+      const p = this.projs.get(id);
+      if (!p || p.organizationId !== organizationId) return { kind: 'not_found' };
+      if (p.version !== expectedVersion) return { kind: 'stale', record: { ...p } };
+      if (patch.name !== undefined) p.name = patch.name;
+      if (patch.currency !== undefined) p.currency = patch.currency;
+      p.version += 1;
+      p.updatedAt = at;
+      return { kind: 'updated', record: { ...p } };
+    },
+    archive: async (organizationId, id, at) => {
+      const p = this.projs.get(id);
+      if (!p || p.organizationId !== organizationId) return null;
+      if (p.status === 'ACTIVE') {
+        p.status = 'ARCHIVED';
+        p.archivedAt = at;
+        p.version += 1;
+        p.updatedAt = at;
+      }
+      return { ...p };
+    },
+    countActiveByCustomer: async (organizationId, customerId) =>
+      [...this.projs.values()].filter((p) => p.organizationId === organizationId && p.customerId === customerId && p.status === 'ACTIVE').length,
+    hasPostedActivity: async (organizationId, id) => {
+      const p = this.projs.get(id);
+      return !!p && p.organizationId === organizationId && this.postedProjects.has(id);
+    },
+  };
+
+  /** Test helper: simulate M3+ posted activity so the currency lock can be exercised. */
+  markProjectPosted(projectId: string): void {
+    this.postedProjects.add(projectId);
+  }
+
+  private async entityIdsForExternal(organizationId: string, entityType: ExternalEntityType, filter: CustomerFilter): Promise<Set<string> | null> {
+    if (filter.externalId === undefined) return null;
+    const provider: IntegrationProvider = filter.provider ?? 'MALAFAT';
+    const refs = await this.externalReferences.findByExternalIds(organizationId, provider, entityType, [filter.externalId]);
+    return new Set(refs.map((r) => r.entityId));
+  }
+
   async ping(): Promise<void> {
     /* always up */
   }
@@ -203,4 +370,15 @@ export class ForeignKeyViolation extends Error {
 
 function clone<T extends object>(value: T | undefined): T | null {
   return value ? { ...value } : null;
+}
+
+function paginate<T extends { id: string; createdAt: Date }>(rows: T[], page: PageRequest): Page<T> {
+  const ordered = rows
+    .filter((r) => (page.cursor ? isAfterCursor(r, page.cursor) : true))
+    .sort(compareByCreatedAtThenId)
+    .slice(0, page.limit + 1);
+  const items = ordered.slice(0, page.limit).map((r) => ({ ...r }));
+  const last = items[items.length - 1];
+  const nextCursor = ordered.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null;
+  return { items, nextCursor };
 }

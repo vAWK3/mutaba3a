@@ -6,12 +6,23 @@ import type {
   ApiKeyRecord,
   ApiKeyRepository,
   AuditRepository,
+  CustomerFilter,
+  CustomerRecord,
+  CustomerRepository,
+  ExternalEntityType,
+  ExternalReferenceRepository,
   IdempotencyClaim,
   IdempotencyRepository,
   IntegrationRecord,
   IntegrationRepository,
   LedgerStore,
   OrganizationRepository,
+  Page,
+  PageRequest,
+  ProjectFilter,
+  ProjectRecord,
+  ProjectRepository,
+  UpdateResult,
 } from './ports.js';
 
 /**
@@ -168,9 +179,145 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.idempotencyKey.deleteMany({ where: { organizationId, key } });
     },
   };
+
+  readonly externalReferences: ExternalReferenceRepository = {
+    link: (input, at) => translate(() => this.prisma.externalReference.create({ data: { ...input, createdAt: at } })),
+    findByExternalId: (organizationId, provider, entityType, externalId) =>
+      this.prisma.externalReference.findUnique({
+        where: { organizationId_provider_entityType_externalId: { organizationId, provider, entityType, externalId } },
+      }),
+    findByExternalIds: (organizationId, provider, entityType, externalIds) =>
+      this.prisma.externalReference.findMany({ where: { organizationId, provider, entityType, externalId: { in: externalIds } } }),
+    findByEntities: (organizationId, entityType, entityIds) =>
+      this.prisma.externalReference.findMany({ where: { organizationId, entityType, entityId: { in: entityIds } } }),
+  };
+
+  readonly customers: CustomerRepository = {
+    create: (input, at, reference) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const row = await tx.customer.create({ data: { ...input, createdAt: at, updatedAt: at } });
+          if (reference) {
+            await tx.externalReference.create({
+              data: { organizationId: input.organizationId, entityType: 'CUSTOMER', entityId: row.id, ...reference, createdAt: at },
+            });
+          }
+          return row;
+        }),
+      ),
+    getById: (organizationId, id) => this.prisma.customer.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter, page) => {
+      const ids = await this.entityIdsForExternal(organizationId, 'CUSTOMER', filter);
+      if (ids !== null && ids.length === 0) return { items: [], nextCursor: null };
+      const rows = await this.prisma.customer.findMany({
+        where: {
+          organizationId,
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(ids ? { id: { in: ids } } : {}),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    update: async (organizationId, id, expectedVersion, patch, at): Promise<UpdateResult<CustomerRecord>> => {
+      const data: Prisma.CustomerUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
+      if (patch.name !== undefined) data.name = patch.name;
+      if (patch.email !== undefined) data.email = patch.email;
+      if (patch.phone !== undefined) data.phone = patch.phone;
+      if (patch.notes !== undefined) data.notes = patch.notes;
+      const { count } = await this.prisma.customer.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
+      const record = await this.prisma.customer.findFirst({ where: { id, organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    archive: async (organizationId, id, at) => {
+      await this.prisma.customer.updateMany({
+        where: { id, organizationId, status: 'ACTIVE' },
+        data: { status: 'ARCHIVED', archivedAt: at, version: { increment: 1 }, updatedAt: at },
+      });
+      return this.prisma.customer.findFirst({ where: { id, organizationId } });
+    },
+  };
+
+  readonly projects: ProjectRepository = {
+    create: (input, at, reference) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const customer = await tx.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
+          if (!customer) throw new ForeignKeyViolation('projects.customerId');
+          const row = await tx.project.create({ data: { ...input, createdAt: at, updatedAt: at } });
+          if (reference) {
+            await tx.externalReference.create({
+              data: { organizationId: input.organizationId, entityType: 'PROJECT', entityId: row.id, ...reference, createdAt: at },
+            });
+          }
+          return row;
+        }),
+      ),
+    getById: (organizationId, id) => this.prisma.project.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter, page) => {
+      const ids = await this.entityIdsForExternal(organizationId, 'PROJECT', filter);
+      if (ids !== null && ids.length === 0) return { items: [], nextCursor: null };
+      const rows = await this.prisma.project.findMany({
+        where: {
+          organizationId,
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.currency ? { currency: filter.currency } : {}),
+          ...(ids ? { id: { in: ids } } : {}),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    update: async (organizationId, id, expectedVersion, patch, at): Promise<UpdateResult<ProjectRecord>> => {
+      const data: Prisma.ProjectUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
+      if (patch.name !== undefined) data.name = patch.name;
+      if (patch.currency !== undefined) data.currency = patch.currency;
+      const { count } = await this.prisma.project.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
+      const record = await this.prisma.project.findFirst({ where: { id, organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    archive: async (organizationId, id, at) => {
+      await this.prisma.project.updateMany({
+        where: { id, organizationId, status: 'ACTIVE' },
+        data: { status: 'ARCHIVED', archivedAt: at, version: { increment: 1 }, updatedAt: at },
+      });
+      return this.prisma.project.findFirst({ where: { id, organizationId } });
+    },
+    countActiveByCustomer: (organizationId, customerId) => this.prisma.project.count({ where: { organizationId, customerId, status: 'ACTIVE' } }),
+    // M3 wires this to agreements/receivables; nothing can be posted in M2.
+    hasPostedActivity: async () => false,
+  };
+
+  private async entityIdsForExternal(organizationId: string, entityType: ExternalEntityType, filter: CustomerFilter | ProjectFilter): Promise<string[] | null> {
+    if (filter.externalId === undefined) return null;
+    const refs = await this.externalReferences.findByExternalIds(organizationId, filter.provider ?? 'MALAFAT', entityType, [filter.externalId]);
+    return refs.map((r) => r.entityId);
+  }
 }
 
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
+
+/** Keyset condition for (createdAt, id) ascending. */
+function cursorWhere(page: PageRequest): { OR?: Array<Record<string, unknown>> } {
+  if (!page.cursor) return {};
+  return {
+    OR: [{ createdAt: { gt: page.cursor.createdAt } }, { createdAt: page.cursor.createdAt, id: { gt: page.cursor.id } }],
+  };
+}
+
+function toPage<T extends { id: string; createdAt: Date }>(rows: T[], page: PageRequest): Page<T> {
+  const items = rows.slice(0, page.limit);
+  const last = items[items.length - 1];
+  const nextCursor = rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null;
+  return { items, nextCursor };
+}
 
 function toApiKey(row: PrismaApiKey): ApiKeyRecord {
   const parsed = parseScopes(row.scopes);

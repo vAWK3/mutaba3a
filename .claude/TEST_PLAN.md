@@ -30,7 +30,7 @@ Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
 Postgres contract suite against the docker container in `server/README.md`).
 CI: `.github/workflows/server-ci.yml` runs the whole set, plus the Docker
 build and `terraform validate`, on every change under `server/`.
-65 tests (7 files) at M1 + deploy wiring:
+117 tests (13 files) at M2:
 
 | Area | File | What is pinned |
 |------|------|----------------|
@@ -39,6 +39,10 @@ build and `terraform validate`, on every change under `server/`.
 | Rate limit | `src/__tests__/rate-limit.test.ts` | sliding window, Retry-After, per-key isolation, prune |
 | Storage contract | `src/repositories/__tests__/store-contract.ts` run by `store-memory.test.ts` always and `store-prisma.test.ts` when `MUTABA3A_TEST_DATABASE_URL` is set | unique slug/prefix/hash, revoke-once, one tenant ↔ one organization, reconnect keeps id, audit ordering, idempotency new/in_progress/replay/mismatch/fail |
 | Smoke | `src/__tests__/smoke.test.ts` | `runSmoke` against the in-memory app: every unauthenticated check passes on a healthy deployment, version mismatch is the only failure when the tag differs, the admin round trip (provision → key → validate → revoke → `API_KEY_REVOKED`) passes and never logs a secret, a non-JSON 502 is reported not thrown, a wrong admin token stops the round trip after one step |
+| Pagination | `src/__tests__/pagination.test.ts` | cursor round trip with ms precision, tampered/foreign cursors → VALIDATION_FAILED, limit default/cap |
+| Import planner | `src/import/__tests__/plan.test.ts`, `preview-token.test.ts` | every row of the brief's preview/commit table, batch customer resolution, first-occurrence-wins on duplicates, 500-row cap, input order; token stable/changes on rows, order, organization; constant-time verify |
+| Storage contract (M2) | `src/repositories/__tests__/store-contract-m2.ts` run by `store-memory-m2.test.ts` and `store-prisma-m2.test.ts` | organization scoping of get/list, external-reference uniqueness (by entity type, by entity), atomic create+reference (no orphan on failure), optimistic update updated/stale/not_found, idempotent archive, active-project count, filters, keyset pagination over 23 rows with equal timestamps |
+| Routes (M2) | `src/__tests__/routes-m2.test.ts` | scope matrix incl. import's two write scopes, Idempotency-Key required/replay, external-reference idempotency (200, no audit, no duplicate), INTEGRATION_NOT_CONNECTED, body validation, 404 cross-organization, list filters + cursor pages + limit cap + bad cursor, PATCH If-Match / VERSION_MISMATCH / audit fields, archive HAS_ACTIVE_PROJECTS then idempotent, project customer checks (not found / archived / foreign), CUSTOMER_MISMATCH, CURRENCY_LOCKED via `markProjectPosted`, immutable customerId, import preview (no writes, totals, token), 501 rows, commit order + idempotent re-run + replay + partial failure + audit, isolation with identical external ids, OpenAPI paths + reason vocabulary + version |
 | Routes | `src/__tests__/routes.test.ts` | health/ready, request ids, OpenAPI document, admin auth, provisioning + audit trail, every 401 code (UNAUTHENTICATED, INVALID_API_KEY, API_KEY_ENVIRONMENT_MISMATCH, API_KEY_REVOKED, API_KEY_EXPIRED), forged suffix with a real prefix, INSUFFICIENT_SCOPE details, missingScopes, 429 headers, Idempotency-Key required/replay/reuse, ORGANIZATION_MISMATCH both directions, disconnect revokes + reconnect keeps id, cross-organization isolation |
 
 Required before M2: a contract test that Malafat's client fixtures match

@@ -29,6 +29,64 @@
 
 ---
 
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 2: customers, projects, external references, import (`server/`)
+
+Approved by the product owner the same day (all six decisions in the brief).
+API version `1.1.0-m2`; everything additive, M1 untouched.
+
+### Added
+- **Schema + migration `20261008152452_m2_customers_projects`:** `customers`,
+  `projects` (one currency each, `version` for optimistic concurrency,
+  ACTIVE/ARCHIVED, never deleted) and `external_references` (unique per
+  organization + provider + entity type + external id; one per entity per
+  provider). Keyset indexes on `(organizationId, createdAt, id)`.
+- **Routes:** `POST/GET /v1/customers`, `GET/PATCH /v1/customers/{id}`,
+  `POST /v1/customers/{id}/archive`; the same for `/v1/projects`;
+  `POST /v1/import/preview` and `POST /v1/import/commit`. Scopes
+  `customers:*` / `projects:*` (import needs both write scopes). Creation
+  with an `externalReference` is idempotent (200 existing, never a
+  duplicate) and requires a CONNECTED integration; `PATCH` needs
+  `If-Match: <version>`; a project's currency is locked once anything is
+  posted (`hasPostedActivity`, always false until M3); archiving a customer
+  with active projects is refused.
+- **`src/pagination.ts`:** opaque `(createdAt, id)` cursors, `limit` 1–200
+  default 50, shared by every list.
+- **`src/import/plan.ts`:** the pure planner preview and commit share
+  (`create | link | conflict` per row, reasons `UNKNOWN_CUSTOMER`,
+  `CUSTOMER_MISMATCH`, `CURRENCY_DIFFERS`, `VALIDATION:<detail>`, warnings
+  `NAME_DIFFERS`, `ARCHIVED`; 500-row cap). `src/import/preview-token.ts`:
+  sha256 proof that commit carries the previewed rows, verified in constant
+  time, never stored.
+- **`src/if-match.ts`** middleware; `src/routes/shared.ts` (error response
+  sets, connected-integration guard, page helpers, reference batch lookup).
+- **Published `details.reason` vocabulary** for 409 CONFLICT
+  (`VERSION_MISMATCH CURRENCY_LOCKED CUSTOMER_MISMATCH HAS_ACTIVE_PROJECTS
+  PREVIEW_STALE INTEGRATION_NOT_CONNECTED`) in the OpenAPI description.
+- **Tests (52 new, 117 total, 13 files):** `pagination.test.ts`,
+  `import/__tests__/plan.test.ts`, `preview-token.test.ts`, the M2 storage
+  contract (`store-contract-m2.ts`, run by memory and Postgres), and
+  `routes-m2.test.ts` (scope matrix, idempotency, external-reference
+  idempotency, pagination, If-Match, archive rules, currency lock, import
+  preview/commit/re-run/partial failure/isolation, contract check).
+
+### Changed
+- `LedgerStore` gains `customers`, `projects`, `externalReferences`; both
+  implementations updated. `MemoryLedgerStore.markProjectPosted()` is a test
+  hook for the M3 currency lock.
+- `openapi/openapi.yaml` regenerated (2036 lines); `openapi:check` green.
+- `money-v1-api-contract.md` §3 M2 marked implemented (with the entity-type
+  refinement of external-id uniqueness); the M2 brief status → implemented.
+
+### Technical
+- Verification: typecheck, lint, `npm run test:db` (117, Postgres 16),
+  `openapi:check`. Migration generated with `prisma migrate dev` and applied
+  with `migrate deploy`; production picks it up through `deploy.sh`'s proxy
+  step, no runbook change.
+- Debt: TD-020 (import `loadState` reads linked entities one by one; bounded
+  by the 500-row cap, batch it when M3 adds more lookups).
+
+---
+
 ## [Unreleased] - 2026-10-08 — M2 design brief + test plan; TD-018 accepted
 
 ### Added

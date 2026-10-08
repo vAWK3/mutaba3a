@@ -51,6 +51,16 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum EntityStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ExternalEntityType {
+  CUSTOMER
+  PROJECT
+}
+
 model Organization {
   id              String   @id @default(uuid()) @db.Uuid
   name            String
@@ -62,10 +72,13 @@ model Organization {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  apiKeys         ApiKey[]
-  integrations    Integration[]
-  auditEvents     AuditEvent[]
-  idempotencyKeys IdempotencyKey[]
+  apiKeys            ApiKey[]
+  integrations       Integration[]
+  auditEvents        AuditEvent[]
+  idempotencyKeys    IdempotencyKey[]
+  customers          Customer[]
+  projects           Project[]
+  externalReferences ExternalReference[]
 
   @@map("organizations")
 }
@@ -155,4 +168,68 @@ model IdempotencyKey {
   @@id([organizationId, key])
   @@index([createdAt])
   @@map("idempotency_keys")
+}
+
+// ---- Milestone 2: customers, projects, external references ----------------
+
+/// The party money is owed by. Thin on purpose: Malafat holds the rich client
+/// record and names ours through an ExternalReference (M2 brief §2.1).
+model Customer {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  notes          String?
+  status         EntityStatus @default(ACTIVE)
+  archivedAt     DateTime?
+  /// Optimistic concurrency: PATCH sends If-Match: <version>.
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now())
+
+  projects Project[]
+
+  @@index([organizationId, createdAt, id])
+  @@map("customers")
+}
+
+/// The container every agreement, receivable and payment hangs off. One
+/// currency per project (ADR-004); locked once anything is posted (M3).
+model Project {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerId     String       @db.Uuid
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  name           String
+  currency       String       @db.VarChar(3)
+  status         EntityStatus @default(ACTIVE)
+  archivedAt     DateTime?
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now())
+
+  @@index([organizationId, customerId])
+  @@index([organizationId, createdAt, id])
+  @@map("projects")
+}
+
+/// How an external system names one of our entities. Unique per
+/// (organization, provider, entity type, external id) — a Malafat client and
+/// matter may share an id — and one reference per entity per provider.
+model ExternalReference {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  provider       IntegrationProvider
+  entityType     ExternalEntityType
+  entityId       String              @db.Uuid
+  externalId     String
+  createdAt      DateTime            @default(now())
+
+  @@unique([organizationId, provider, entityType, externalId])
+  @@unique([provider, entityType, entityId])
+  @@map("external_references")
 }

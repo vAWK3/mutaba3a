@@ -16,6 +16,8 @@ export type AppEnv = {
     requestId: string;
     auth: AuthContext;
     now: () => Date;
+    /** Set by the If-Match middleware on PATCH routes. */
+    expectedVersion: number;
   };
 };
 

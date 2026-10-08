@@ -1,6 +1,6 @@
 # Money v1 — Milestone 2: Customers and projects (design brief)
 
-- **Date:** 2026-10-08 · **Status:** awaiting product-owner approval (CLAUDE.md lifecycle, Phase 1)
+- **Date:** 2026-10-08 · **Status:** approved (all six decisions) and **implemented** the same day — see CHANGELOG "Money v1 Milestone 2"; 117 tests green
 - **Tickets:** MUT-25 (epic), MAL-939 (Malafat epic) · **Contract:** `money-v1-api-contract.md` §3 M2 · **Plan:** §3.2–3.3, §10.2–10.3
 - **Repo side:** Mutaba3a `server/` only. The Malafat side of M2 (client/matter → customer/project mapping, sync UI) is a separate brief in Confluence under Design Documents, linked from MAL-939.
 - **Decisions already taken that bound this brief:** ADR-024/025/026; Money is included for every Malafat tenant (MAL-870, $0 add-on); keys are operator-issued (TD-018 accepted).
@@ -142,4 +142,4 @@ Nothing from the desktop app is imported (ADR-024: `server/` imports nothing fro
 5. Malafat mapping: Client → Customer, Matter → Project; currency asked per matter at link time.
 6. Scope for M2 excludes any "delete" or "merge customers" operation; a merge is an M3+ question once money hangs off projects.
 
-Approve all six (or amend) and Phase 2 starts: `money-v1-m2-customers-projects-tests.md` is already written; tests land first (Red), then the store, routes and OpenAPI.
+All six approved by the product owner on 2026-10-08. Implemented as specified; the only refinements during build: import `name` is validated per row (not by the request schema) so one bad row never fails the batch, and the `reason` for a VALIDATION conflict is reported as `VALIDATION:<detail>` on commit.

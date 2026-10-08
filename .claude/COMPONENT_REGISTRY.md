@@ -973,3 +973,16 @@ Before creating a new component:
    - Purpose
    - Props
    - Usage example
+
+---
+
+## Hosted API modules (`server/src`) — reusable across milestones
+
+| Module | Purpose | Reuse |
+|---|---|---|
+| `pagination.ts` | keyset cursor encode/decode, limit parsing, in-memory comparators | every list route and store |
+| `if-match.ts` | `ifMatch()` middleware → `c.get('expectedVersion')` | every PATCH on a versioned record |
+| `routes/shared.ts` | `errorResponses`, `conflictResponse`, `validationResponse`, `notFoundResponse`, `IdempotencyHeaderSchema`, `requireConnectedIntegration`, `toPageRequest`, `encodeNextCursor`, `referencesByEntity`, `versionMismatch` | all `/v1` routes |
+| `import/plan.ts`, `import/preview-token.ts` | pure batch planner + preview proof | M2 import; template for M3 previews |
+| `idempotency.ts`, `auth/middleware.ts` (`requireScope`) | M1 | every write / every route |
+| `smoke.ts` | post-deploy checks over injected fetch | `deploy.sh`, CI |

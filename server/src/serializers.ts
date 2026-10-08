@@ -1,5 +1,13 @@
 import { maskApiKey } from './auth/api-key.js';
-import type { ApiKeyRecord, AuditEventRecord, IntegrationRecord, Organization } from './repositories/ports.js';
+import type {
+  ApiKeyRecord,
+  AuditEventRecord,
+  CustomerRecord,
+  ExternalReferenceRecord,
+  IntegrationRecord,
+  Organization,
+  ProjectRecord,
+} from './repositories/ports.js';
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
@@ -51,5 +59,40 @@ export function serializeAuditEvent(e: AuditEventRecord) {
     ...(e.metadata ? { metadata: e.metadata } : {}),
     requestId: e.requestId,
     createdAt: e.createdAt.toISOString(),
+  };
+}
+
+function serializeReference(r: ExternalReferenceRecord | null | undefined) {
+  return r ? { provider: r.provider, externalId: r.externalId } : null;
+}
+
+export function serializeCustomer(c: CustomerRecord, reference?: ExternalReferenceRecord | null) {
+  return {
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone,
+    notes: c.notes,
+    status: c.status,
+    archivedAt: iso(c.archivedAt),
+    externalReference: serializeReference(reference),
+    version: c.version,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+  };
+}
+
+export function serializeProject(p: ProjectRecord, reference?: ExternalReferenceRecord | null) {
+  return {
+    id: p.id,
+    customerId: p.customerId,
+    name: p.name,
+    currency: p.currency as 'ILS' | 'USD' | 'EUR',
+    status: p.status,
+    archivedAt: iso(p.archivedAt),
+    externalReference: serializeReference(reference),
+    version: p.version,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
   };
 }

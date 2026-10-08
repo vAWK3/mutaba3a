@@ -35,7 +35,7 @@
 
 ## 3. Proposed resources, M2–M6 (names and shapes to be generated into the YAML as each milestone lands)
 
-### M2 — Customers and projects (plan §3.2–3.3, §10.2–10.3)
+### M2 — Customers and projects (plan §3.2–3.3, §10.2–10.3) — **implemented 2026-10-08** (`money-v1-m2-customers-projects.md`)
 
 | Method & path | Scope | Notes |
 |---|---|---|
@@ -45,7 +45,7 @@
 | `GET /v1/projects`, `GET /v1/projects/{id}` | `projects:read` | filters `?customerId=&externalId=` |
 | `POST /v1/import/preview`, `POST /v1/import/commit` | `customers:write`+`projects:write` | batch upsert by external reference; preview reports `create / link / conflict` per row; commit is idempotent and reports partial failures per row |
 
-External reference uniqueness: `(organization, integration, provider, externalId)`.
+External reference uniqueness as built: `(organization, provider, entityType, externalId)` — entity type added because a Malafat client and matter may share an id; plus one reference per entity per provider. Also shipped: `PATCH` with `If-Match`, `POST …/archive` (never delete), `GET` filters `status`, `customerId`, `currency`, `externalId`; conflicts carry `details.reason`. Import rows: `{ entityType: CUSTOMER|PROJECT, externalId, name, email?, phone? | currency, customerExternalId }`, ≤ 500 per call; commit is per-row and needs the preview's `previewToken`.
 
 ### M3 — Fixed-fee agreements, installments, VAT (plan §3.4, §4, §6)
 

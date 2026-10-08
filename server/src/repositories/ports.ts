@@ -157,12 +157,158 @@ export interface IdempotencyRepository {
   fail(input: { organizationId: string; key: string; at: Date }): Promise<void>;
 }
 
+// ---- Milestone 2: customers, projects, external references ----------------
+
+export type EntityStatus = 'ACTIVE' | 'ARCHIVED';
+export type ExternalEntityType = 'CUSTOMER' | 'PROJECT';
+
+/** How an external system (Malafat) names one of our entities. */
+export interface ExternalReferenceInput {
+  provider: IntegrationProvider;
+  externalId: string;
+}
+
+export interface ExternalReferenceRecord extends ExternalReferenceInput {
+  id: string;
+  organizationId: string;
+  entityType: ExternalEntityType;
+  entityId: string;
+  createdAt: Date;
+}
+
+export interface LinkExternalReferenceInput extends ExternalReferenceInput {
+  organizationId: string;
+  entityType: ExternalEntityType;
+  entityId: string;
+}
+
+export interface CustomerRecord {
+  id: string;
+  organizationId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  status: EntityStatus;
+  archivedAt: Date | null;
+  /** Optimistic-concurrency version; starts at 1, +1 per write. */
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateCustomerInput {
+  organizationId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+}
+
+/** Absent key = unchanged; null = cleared. */
+export interface UpdateCustomerPatch {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+}
+
+export interface ProjectRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  name: string;
+  /** ISO 4217; one currency per project (plan §3.3, ADR-004). */
+  currency: string;
+  status: EntityStatus;
+  archivedAt: Date | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateProjectInput {
+  organizationId: string;
+  customerId: string;
+  name: string;
+  currency: string;
+}
+
+export interface UpdateProjectPatch {
+  name?: string;
+  currency?: string;
+}
+
+/** Keyset cursor: rows are ordered by (createdAt, id) ascending. */
+export interface PageCursor {
+  createdAt: Date;
+  id: string;
+}
+
+export interface PageRequest {
+  limit: number;
+  cursor: PageCursor | null;
+}
+
+export interface Page<T> {
+  items: T[];
+  nextCursor: PageCursor | null;
+}
+
+export interface CustomerFilter {
+  status?: EntityStatus;
+  provider?: IntegrationProvider;
+  externalId?: string;
+}
+
+export interface ProjectFilter extends CustomerFilter {
+  customerId?: string;
+  currency?: string;
+}
+
+export type UpdateResult<T> = { kind: 'updated'; record: T } | { kind: 'stale'; record: T } | { kind: 'not_found' };
+
+export interface CustomerRepository {
+  /** With `reference`, the customer and its external reference are written atomically. */
+  create(input: CreateCustomerInput, at: Date, reference?: ExternalReferenceInput): Promise<CustomerRecord>;
+  getById(organizationId: string, id: string): Promise<CustomerRecord | null>;
+  list(organizationId: string, filter: CustomerFilter, page: PageRequest): Promise<Page<CustomerRecord>>;
+  update(organizationId: string, id: string, expectedVersion: number, patch: UpdateCustomerPatch, at: Date): Promise<UpdateResult<CustomerRecord>>;
+  /** Idempotent: an archived customer is returned unchanged. */
+  archive(organizationId: string, id: string, at: Date): Promise<CustomerRecord | null>;
+}
+
+export interface ProjectRepository {
+  create(input: CreateProjectInput, at: Date, reference?: ExternalReferenceInput): Promise<ProjectRecord>;
+  getById(organizationId: string, id: string): Promise<ProjectRecord | null>;
+  list(organizationId: string, filter: ProjectFilter, page: PageRequest): Promise<Page<ProjectRecord>>;
+  update(organizationId: string, id: string, expectedVersion: number, patch: UpdateProjectPatch, at: Date): Promise<UpdateResult<ProjectRecord>>;
+  archive(organizationId: string, id: string, at: Date): Promise<ProjectRecord | null>;
+  countActiveByCustomer(organizationId: string, customerId: string): Promise<number>;
+  /**
+   * True once anything financial has been posted against the project; the
+   * currency is then locked (brief §2.2). Always false in M2 — M3 wires it to
+   * agreements and receivables without touching the route.
+   */
+  hasPostedActivity(organizationId: string, id: string): Promise<boolean>;
+}
+
+export interface ExternalReferenceRepository {
+  link(input: LinkExternalReferenceInput, at: Date): Promise<ExternalReferenceRecord>;
+  findByExternalId(organizationId: string, provider: IntegrationProvider, entityType: ExternalEntityType, externalId: string): Promise<ExternalReferenceRecord | null>;
+  findByExternalIds(organizationId: string, provider: IntegrationProvider, entityType: ExternalEntityType, externalIds: string[]): Promise<ExternalReferenceRecord[]>;
+  findByEntities(organizationId: string, entityType: ExternalEntityType, entityIds: string[]): Promise<ExternalReferenceRecord[]>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
   integrations: IntegrationRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;
+  customers: CustomerRepository;
+  projects: ProjectRepository;
+  externalReferences: ExternalReferenceRepository;
   /** Liveness of the backing store, for /ready. */
   ping(): Promise<void>;
 }

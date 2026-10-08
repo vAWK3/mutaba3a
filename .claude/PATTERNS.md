@@ -1042,3 +1042,38 @@ Before adding a new pattern:
    - Purpose
    - Code example
    - When to use
+
+---
+
+## Hosted API (`server/`) patterns — added 2026-10-08 (Money v1 M2)
+
+### Plan-then-execute for batch writes
+`src/import/plan.ts` is a pure function `(rows, currentState) → PlanRow[]`;
+`POST /v1/import/preview` returns the plan, `POST /v1/import/commit` recomputes
+it and executes it row by row. One decision table, two callers, so preview and
+commit can never disagree. Use it for any future "show me what will happen,
+then do it" surface (M3 agreement previews follow the same shape with a
+`previewToken`).
+
+### Preview token = proof of "same rows", not "same world"
+`sha256(organization | provider | canonical rows)`, verified by recomputation
+in constant time, never stored. It stops a client committing rows it did not
+preview; it does not freeze state — commit re-plans. A token that must freeze
+state (M3 `PREVIEW_STALE` on prices) needs a stored token with an expiry.
+
+### Keyset pagination
+Every list orders by `(createdAt, id)` and returns an opaque cursor
+(`src/pagination.ts`). Stores take a decoded `PageCursor` and return one;
+routes encode. Never offset pagination.
+
+### Optimistic concurrency via If-Match
+Mutable records carry `version`; `PATCH` requires `If-Match: <version>`
+(`src/if-match.ts`), the store applies `updateMany … where version = expected`
+and reports `updated | stale | not_found`; stale → 409 `VERSION_MISMATCH`
+with `currentVersion`.
+
+### Idempotent create by external reference
+`POST` with `externalReference` looks the reference up first (200 existing),
+creates entity + reference atomically otherwise, and treats a `UniqueViolation`
+on create as "someone else won the race" (re-lookup, 200). The reference lives
+in its own table keyed by `(organization, provider, entityType, externalId)`.
