@@ -173,8 +173,8 @@ export const syncedTransactionRepo = {
     await captureUpdateOps('transaction', id, data, existing);
   },
 
-  async markPaid(id: string): Promise<void> {
-    await transactionRepo.markPaid(id);
+  async markPaid(id: string, opts?: { paidAt?: string }): Promise<void> {
+    await transactionRepo.markPaid(id, opts);
     const tx = await transactionRepo.get(id);
     if (tx?.paidAt) {
       await captureOp({
@@ -186,8 +186,8 @@ export const syncedTransactionRepo = {
     }
   },
 
-  async recordPartialPayment(id: string, paymentAmountMinor: number): Promise<void> {
-    await transactionRepo.recordPartialPayment(id, paymentAmountMinor);
+  async recordPartialPayment(id: string, paymentAmountMinor: number, opts?: { paidAt?: string }): Promise<void> {
+    await transactionRepo.recordPartialPayment(id, paymentAmountMinor, opts);
     // The payment record creation is captured by syncedPaymentRecordRepo internally
     // We capture the transaction update as well
     const tx = await transactionRepo.get(id);
@@ -389,6 +389,7 @@ export const syncedPaymentRecordRepo = {
   // Read operations - pass through unchanged
   get: paymentRecordRepo.get.bind(paymentRecordRepo),
   listByTransaction: paymentRecordRepo.listByTransaction.bind(paymentRecordRepo),
+  listByClient: paymentRecordRepo.listByClient.bind(paymentRecordRepo),
 
   // Write operations - capture ops
   async create(data: {

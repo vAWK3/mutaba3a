@@ -38,9 +38,11 @@ export function ClientTypeahead({
     if (value) {
       const client = activeClients.find((c) => c.id === value);
       if (client) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync displayed input with the value prop, same pattern as VendorTypeahead
         setInputValue(client.name);
       }
     } else if (prevValue.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync displayed input with the value prop, same pattern as VendorTypeahead
       setInputValue('');
     }
     prevValue.current = value;

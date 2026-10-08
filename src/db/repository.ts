@@ -20,6 +20,8 @@ import type {
   DocumentType,
   PaymentStatus,
   PaymentRecord,
+  PaymentByClientRow,
+  PaymentByClientFilters,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
 import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
@@ -363,7 +365,7 @@ export const transactionRepo = {
     await db.transactions.update(id, { ...data, updatedAt: nowISO() });
   },
 
-  async markPaid(id: string): Promise<void> {
+  async markPaid(id: string, opts?: { paidAt?: string }): Promise<void> {
     const tx = await db.transactions.get(id);
     if (!tx) return;
 
@@ -375,14 +377,14 @@ export const transactionRepo = {
       await paymentRecordRepo.create({
         transactionId: id,
         amountMinor: remaining,
-        paidAt: nowISO(),
+        paidAt: opts?.paidAt ?? nowISO(),
       });
     } else {
       // Already fully covered by payment records, just update status
       const now = nowISO();
       await db.transactions.update(id, {
         status: 'paid',
-        paidAt: now,
+        paidAt: opts?.paidAt ?? now,
         receivedAmountMinor: tx.amountMinor,
         updatedAt: now,
       });
@@ -394,7 +396,7 @@ export const transactionRepo = {
    * Creates a PaymentRecord and recalculates the transaction total.
    * Automatically marks as paid when full amount is received.
    */
-  async recordPartialPayment(id: string, paymentAmountMinor: number): Promise<void> {
+  async recordPartialPayment(id: string, paymentAmountMinor: number, opts?: { paidAt?: string }): Promise<void> {
     if (paymentAmountMinor <= 0) {
       throw new PartialPaymentError('Payment amount must be positive', id);
     }
@@ -415,7 +417,7 @@ export const transactionRepo = {
     await paymentRecordRepo.create({
       transactionId: id,
       amountMinor: paymentAmountMinor,
-      paidAt: nowISO(),
+      paidAt: opts?.paidAt ?? nowISO(),
     });
   },
 
@@ -1428,5 +1430,52 @@ export const paymentRecordRepo = {
       .toArray();
 
     return records.sort((a, b) => a.paidAt.localeCompare(b.paidAt));
+  },
+
+  /**
+   * List a client's payment history, joined to parent income transactions.
+   * Sorted by paidAt descending; filters applied before sort and limit.
+   */
+  async listByClient(
+    clientId: string,
+    filters: PaymentByClientFilters = {}
+  ): Promise<PaymentByClientRow[]> {
+    const txs = await db.transactions
+      .where('clientId')
+      .equals(clientId)
+      .filter((tx) => !tx.deletedAt)
+      .toArray();
+
+    if (txs.length === 0) return [];
+
+    const txById = new Map(txs.map((tx) => [tx.id, tx]));
+    const records = await db.paymentRecords
+      .where('transactionId')
+      .anyOf([...txById.keys()])
+      .toArray();
+
+    const rows: PaymentByClientRow[] = [];
+    for (const record of records) {
+      if (record.deletedAt) continue;
+      const tx = txById.get(record.transactionId);
+      if (!tx || tx.kind !== 'income') continue;
+
+      if (filters.dateFrom && record.paidAt < filters.dateFrom) continue;
+      if (filters.dateTo && record.paidAt > filters.dateTo) continue;
+      if (filters.currency && tx.currency !== filters.currency) continue;
+
+      rows.push({
+        id: record.id,
+        transactionId: record.transactionId,
+        transactionTitle: tx.title,
+        amountMinor: record.amountMinor,
+        currency: tx.currency,
+        paidAt: record.paidAt,
+        notes: record.notes,
+      });
+    }
+
+    rows.sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+    return filters.limit !== undefined ? rows.slice(0, filters.limit) : rows;
   },
 };

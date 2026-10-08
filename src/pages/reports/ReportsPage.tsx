@@ -15,7 +15,8 @@ import {
   useClientSummaries,
 } from '../../hooks/useQueries';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import { formatAmount, getDateRangePreset, cn, getDaysUntil } from '../../lib/utils';
+import { formatAmount, getDateRangePreset, cn } from '../../lib/utils';
+import { isReceivable, daysOverdue, todayLocalISO } from '../../lib/dates';
 import type { ReportType, CurrencyMode, Currency, TransactionDisplay } from '../../types';
 
 // Report type options
@@ -44,7 +45,11 @@ interface AgingBucket {
   totalMinorILS: number;
 }
 
-function calculateAgingBuckets(transactions: TransactionDisplay[], t: (key: string) => string): AgingBucket[] {
+function calculateAgingBuckets(
+  transactions: TransactionDisplay[],
+  t: (key: string) => string,
+  today: string
+): AgingBucket[] {
   const buckets: AgingBucket[] = [
     { label: t('reports.aging.current'), minDays: -Infinity, maxDays: 0, transactions: [], totalMinorUSD: 0, totalMinorILS: 0 },
     { label: t('reports.aging.days1to30'), minDays: 1, maxDays: 30, transactions: [], totalMinorUSD: 0, totalMinorILS: 0 },
@@ -53,13 +58,13 @@ function calculateAgingBuckets(transactions: TransactionDisplay[], t: (key: stri
   ];
 
   for (const tx of transactions) {
-    if (tx.kind !== 'income' || tx.status !== 'unpaid') continue;
+    if (!isReceivable(tx)) continue;
 
-    const daysOverdue = tx.dueDate ? -getDaysUntil(tx.dueDate) : 0;
+    const daysLate = daysOverdue(tx, today) ?? 0;
 
     for (const bucket of buckets) {
-      const inRange = daysOverdue >= bucket.minDays &&
-        (bucket.maxDays === null || daysOverdue <= bucket.maxDays);
+      const inRange = daysLate >= bucket.minDays &&
+        (bucket.maxDays === null || daysLate <= bucket.maxDays);
 
       if (inRange) {
         bucket.transactions.push(tx);
@@ -160,7 +165,7 @@ export function ReportsPage() {
   // Aging buckets for unpaid aging report
   const agingBuckets = useMemo(() => {
     if (reportType !== 'unpaid-aging') return [];
-    return calculateAgingBuckets(transactions, t);
+    return calculateAgingBuckets(transactions, t, todayLocalISO());
   }, [transactions, reportType, t]);
 
   // Filter project summaries for expenses report
@@ -246,7 +251,7 @@ export function ReportsPage() {
             Amount: tx.amountMinor / 100,
             Currency: tx.currency,
             'Due Date': tx.dueDate || '',
-            'Days Overdue': tx.dueDate ? -getDaysUntil(tx.dueDate) : 0,
+            'Days Overdue': tx.dueDate ? (daysOverdue(tx, todayLocalISO()) ?? 0) : 0,
           }))
         );
         exportToCsv(data, `unpaid-aging-${dateRange.dateFrom}-${dateRange.dateTo}`);

@@ -10,7 +10,7 @@ import type { TransactionDisplay } from '../../../types';
 
 // Mock i18n
 vi.mock('../../../lib/i18n', () => ({
-  useT: () => (key: string, params?: Record<string, any>) => {
+  useT: () => (key: string, params?: Record<string, unknown>) => {
     const translations: Record<string, string> = {
       'nav.income': 'Income',
       'income.summary.received': 'Received',
@@ -248,7 +248,7 @@ describe('IncomePage', () => {
       const useIncomeSpy = vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -272,7 +272,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -286,7 +286,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -304,7 +304,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -321,7 +321,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -393,7 +393,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -409,7 +409,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -427,7 +427,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -445,7 +445,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: true,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -459,7 +459,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -477,7 +477,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -602,7 +602,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [],
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -651,7 +651,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -668,7 +668,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -686,7 +686,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -708,7 +708,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[1]], // Beta Inc - unpaid transaction
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -726,7 +726,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[1]], // Beta Inc - unpaid
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -743,7 +743,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[0]], // Acme Corp - paid
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -760,7 +760,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[3]], // Gamma LLC - partial payment
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -779,7 +779,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 
@@ -801,7 +801,7 @@ describe('IncomePage', () => {
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: mockIncomeTransactions,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
 
       renderWithProviders(<IncomePage />);
 

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, act } from '@testing-library/react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useClientProjectCascade } from '../useClientProjectCascade';
 import type { Project } from '../../types';
@@ -14,8 +15,11 @@ function createTestHarness(projectsData: Project[]) {
       defaultValues: { clientId: '', projectId: '' },
     });
     const cascade = useClientProjectCascade({ form, projectsData });
-    formRef.current = form;
-    cascadeRef.current = cascade;
+    // Capture after render (effects flush before render() returns in tests)
+    useEffect(() => {
+      formRef.current = form;
+      cascadeRef.current = cascade;
+    });
     return null;
   }
 

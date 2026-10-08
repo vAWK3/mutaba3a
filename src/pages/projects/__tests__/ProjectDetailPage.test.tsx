@@ -209,13 +209,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: undefined,
         isLoading: true,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: undefined,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -229,13 +229,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: undefined,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: undefined,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -253,13 +253,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -274,13 +274,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -294,13 +294,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -314,13 +314,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -337,13 +337,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -360,13 +360,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -382,13 +382,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -402,13 +402,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -426,13 +426,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: mockTransactions,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -455,13 +455,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: mockTransactions,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -479,13 +479,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -504,13 +504,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: mockTransactions,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -534,13 +534,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -563,13 +563,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: [],
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -594,13 +594,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: mockTransactions,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 
@@ -632,13 +632,13 @@ describe('ProjectDetailPage', () => {
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
         data: mockProject,
         isLoading: false,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProject>);
       vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
         data: mockSummary,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: mockTransactions,
-      } as any);
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
 
       renderWithProviders(<ProjectDetailPage />);
 

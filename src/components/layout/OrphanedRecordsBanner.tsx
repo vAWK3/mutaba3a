@@ -24,6 +24,7 @@ export function OrphanedRecordsBanner() {
       const storedCount = localStorage.getItem('banner-orphan-count');
       if (storedCount && Number(storedCount) < result.orphanedRecords.length) {
         // New orphaned records found, re-show banner
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Query result is external state; re-showing the dismissed banner on change is intentional
         setDismissed(false);
         localStorage.removeItem(DISMISSED_KEY);
       }

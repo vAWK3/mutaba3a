@@ -191,6 +191,25 @@ export interface ClientSummary {
   unpaidIncomeMinorEUR?: number;
 }
 
+// Filters for client-level payment history (MUT-4)
+export interface PaymentByClientFilters {
+  dateFrom?: string; // inclusive, compared against paidAt (YYYY-MM-DD or ISO)
+  dateTo?: string;   // inclusive
+  currency?: Currency;
+  limit?: number;
+}
+
+// A payment record joined to its parent income transaction, for display
+export interface PaymentByClientRow {
+  id: string;
+  transactionId: string;
+  transactionTitle?: string;
+  amountMinor: number;
+  currency: Currency;
+  paidAt: string;
+  notes?: string;
+}
+
 // Transaction with resolved names for display
 export interface TransactionDisplay extends Transaction {
   clientName?: string;

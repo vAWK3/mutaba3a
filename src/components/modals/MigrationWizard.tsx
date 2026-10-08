@@ -85,6 +85,7 @@ export function MigrationWizard() {
       needsReviewRecords.forEach(r => {
         initial[r.id] = r.profileId;
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Form initialization from async records, same pattern as RecurringConfirmModal
       setAssignments(initial);
     }
   }, [needsReviewRecords, assignments]);

@@ -294,6 +294,7 @@ describe('IncomeDrawer', () => {
   });
 
   it('should show clients in dropdown when available', async () => {
+    const user = userEvent.setup();
     // Create a client
     await clientRepo.create({ name: 'Test Client Inc' });
 
@@ -303,15 +304,29 @@ describe('IncomeDrawer', () => {
       </TestWrapper>
     );
 
+    // The typeahead only renders its options while open (EntityTypeahead:143)
+    const clientInput = await screen.findByPlaceholderText('Search or create client...');
+    await user.click(clientInput);
+
     await waitFor(() => {
-      expect(screen.getByText('Test Client Inc')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Test Client Inc' })).toBeInTheDocument();
     });
   });
 
   it('should show projects filtered by selected client', async () => {
-    const client = await clientRepo.create({ name: 'Client A' });
-    await projectRepo.create({ name: 'Project for A', clientId: client.id });
-    await projectRepo.create({ name: 'Unrelated Project' });
+    const user = userEvent.setup();
+    const clientA = await clientRepo.create({ name: 'Client A' });
+    const clientB = await clientRepo.create({ name: 'Client B' });
+    await projectRepo.create({
+      name: 'Project for A',
+      clientId: clientA.id,
+      profileId: testProfileId,
+    });
+    await projectRepo.create({
+      name: 'Project for B',
+      clientId: clientB.id,
+      profileId: testProfileId,
+    });
 
     render(
       <TestWrapper>
@@ -319,9 +334,19 @@ describe('IncomeDrawer', () => {
       </TestWrapper>
     );
 
-    // Projects should be available after client is in the system
+    // Select Client A in the client typeahead
+    const clientInput = await screen.findByPlaceholderText('Search or create client...');
+    await user.click(clientInput);
+    const optionA = await screen.findByRole('option', { name: 'Client A' });
+    await user.click(optionA);
+
+    // Open the project typeahead: only Client A's project should be listed
+    const projectInput = screen.getByPlaceholderText('Select project...');
+    await user.click(projectInput);
+
     await waitFor(() => {
-      expect(screen.getByText('Client A')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Project for A' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Project for B' })).not.toBeInTheDocument();
     });
   });
 
@@ -416,12 +441,14 @@ describe('IncomeDrawer', () => {
     const saveButton = screen.getByRole('button', { name: /save/i });
     await user.click(saveButton);
 
-    // Wait for update to complete and verify paidAt and receivedAmountMinor are cleared
+    // Wait for update to complete and verify paidAt and receivedAmountMinor are cleared.
+    // The drawer writes `undefined`, and Dexie deletes keys whose value is undefined,
+    // so the fields are absent - not null - after the update.
     await waitFor(async () => {
       const updatedTx = await transactionRepo.get(tx.id);
       expect(updatedTx?.status).toBe('unpaid');
-      expect(updatedTx?.paidAt).toBeNull();
-      expect(updatedTx?.receivedAmountMinor).toBeNull();
+      expect(updatedTx?.paidAt).toBeUndefined();
+      expect(updatedTx?.receivedAmountMinor).toBeUndefined();
     });
   });
 });

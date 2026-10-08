@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { transactionRepo, paymentRecordRepo, PaymentRecordError } from '../repository';
+import { transactionRepo, paymentRecordRepo, clientRepo } from '../repository';
 
 describe('paymentRecordRepo', () => {
   let incomeId: string;
@@ -278,7 +278,7 @@ describe('paymentRecordRepo', () => {
 
   describe('listByTransaction', () => {
     it('should return records sorted by paidAt, excluding deleted', async () => {
-      const r1 = await paymentRecordRepo.create({
+      await paymentRecordRepo.create({
         transactionId: incomeId,
         amountMinor: 2000,
         paidAt: '2024-02-01',
@@ -361,6 +361,132 @@ describe('paymentRecordRepo', () => {
       const tx = await transactionRepo.get(incomeId);
       expect(tx?.receivedAmountMinor).toBe(10000);
       expect(tx?.status).toBe('paid');
+    });
+  });
+
+  describe('listByClient', () => {
+    const createClientTx = async (
+      clientId: string,
+      overrides: Partial<Parameters<typeof transactionRepo.create>[0]> = {}
+    ) =>
+      transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 100000,
+        currency: 'USD',
+        occurredAt: '2024-01-01',
+        clientId,
+        ...overrides,
+      });
+
+    it('returns payments joined with parent title and currency, newest first', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const txA = await createClientTx(client.id, { title: 'Logo work' });
+      const txB = await createClientTx(client.id, {
+        title: 'Site build',
+        occurredAt: '2024-02-01',
+      });
+      await paymentRecordRepo.create({
+        transactionId: txA.id,
+        amountMinor: 50000,
+        paidAt: '2024-01-10',
+      });
+      await paymentRecordRepo.create({
+        transactionId: txB.id,
+        amountMinor: 100000,
+        paidAt: '2024-03-05',
+        notes: 'wire',
+      });
+
+      const rows = await paymentRecordRepo.listByClient(client.id);
+
+      expect(rows).toHaveLength(2);
+      // Newest payment first
+      expect(rows[0]).toMatchObject({
+        transactionId: txB.id,
+        transactionTitle: 'Site build',
+        amountMinor: 100000,
+        currency: 'USD',
+        paidAt: '2024-03-05',
+        notes: 'wire',
+      });
+      expect(rows[1].transactionTitle).toBe('Logo work');
+    });
+
+    it('returns an empty array when the client has transactions but no payments', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await createClientTx(client.id);
+
+      expect(await paymentRecordRepo.listByClient(client.id)).toEqual([]);
+    });
+
+    it('returns an empty array for an unknown client id', async () => {
+      expect(await paymentRecordRepo.listByClient('missing-client')).toEqual([]);
+    });
+
+    it('excludes soft-deleted payment records', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await createClientTx(client.id);
+      const record = await paymentRecordRepo.create({
+        transactionId: tx.id,
+        amountMinor: 1000,
+        paidAt: '2024-01-10',
+      });
+      await paymentRecordRepo.delete(record.id);
+
+      expect(await paymentRecordRepo.listByClient(client.id)).toEqual([]);
+    });
+
+    it('takes currency from the parent transaction and filters per currency', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const txUsd = await createClientTx(client.id, { title: 'USD work' });
+      const txIls = await createClientTx(client.id, {
+        title: 'ILS work',
+        currency: 'ILS',
+        amountMinor: 50000,
+      });
+      await paymentRecordRepo.create({
+        transactionId: txUsd.id,
+        amountMinor: 1000,
+        paidAt: '2024-01-05',
+      });
+      await paymentRecordRepo.create({
+        transactionId: txIls.id,
+        amountMinor: 2000,
+        paidAt: '2024-01-06',
+      });
+
+      const rows = await paymentRecordRepo.listByClient(client.id, { currency: 'ILS' });
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ currency: 'ILS', amountMinor: 2000, transactionTitle: 'ILS work' });
+    });
+
+    it('filters by date range with inclusive boundaries', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await createClientTx(client.id);
+      for (const paidAt of ['2024-01-10', '2024-01-20', '2024-02-01']) {
+        await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 1000, paidAt });
+      }
+
+      const rows = await paymentRecordRepo.listByClient(client.id, {
+        dateFrom: '2024-01-20',
+        dateTo: '2024-02-01',
+      });
+
+      expect(rows.map((r) => r.paidAt)).toEqual(['2024-02-01', '2024-01-20']);
+    });
+
+    it('applies limit after sorting by paidAt descending', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await createClientTx(client.id);
+      for (const paidAt of ['2024-01-01', '2024-01-15', '2024-02-01']) {
+        await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 1000, paidAt });
+      }
+
+      const rows = await paymentRecordRepo.listByClient(client.id, { limit: 2 });
+
+      expect(rows.map((r) => r.paidAt)).toEqual(['2024-02-01', '2024-01-15']);
     });
   });
 });

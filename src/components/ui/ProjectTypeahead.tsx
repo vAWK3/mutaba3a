@@ -48,11 +48,13 @@ export function ProjectTypeahead({
     if (value) {
       const project = filteredProjects.find((p) => p.id === value);
       if (project) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync displayed input with the value prop, same pattern as VendorTypeahead
         setInputValue(project.name);
       }
     } else if (prevValue.current) {
       // Only clear input when value transitions from set to empty (parent cleared it)
       // Don't clear when value stays empty while filteredProjects changes
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync displayed input with the value prop, same pattern as VendorTypeahead
       setInputValue('');
     }
     prevValue.current = value;

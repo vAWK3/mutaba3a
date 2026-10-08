@@ -21,7 +21,11 @@ export function useAutosave(
 ) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+
+  // Keep the ref current outside of render so saveToLocalStorage stays stable
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   // Debounced save to localStorage
   const saveToLocalStorage = useCallback(() => {

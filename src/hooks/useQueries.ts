@@ -24,6 +24,7 @@ import type {
   DocumentType,
   DocumentSequence,
   BusinessProfile,
+  PaymentByClientFilters,
 } from '../types';
 
 /**
@@ -77,6 +78,8 @@ export const queryKeys = {
   defaultBusinessProfile: () => ['defaultBusinessProfile'] as const,
   // Payment Record keys
   paymentRecords: (transactionId: string) => ['paymentRecords', transactionId] as const,
+  paymentRecordsByClient: (clientId: string, filters: PaymentByClientFilters) =>
+    ['paymentRecords', 'client', clientId, filters] as const,
 };
 
 // Transaction hooks
@@ -185,6 +188,7 @@ function invalidatePaymentRecordQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   transactionId: string
 ) {
+  queryClient.invalidateQueries({ queryKey: ['paymentRecords'] });
   queryClient.invalidateQueries({ queryKey: queryKeys.paymentRecords(transactionId) });
   invalidateTransactionQueries(queryClient);
 }
@@ -194,6 +198,17 @@ export function usePaymentRecords(transactionId: string | undefined) {
     queryKey: queryKeys.paymentRecords(transactionId!),
     queryFn: () => paymentRecordRepo.listByTransaction(transactionId!),
     enabled: !!transactionId,
+  });
+}
+
+export function usePaymentsByClient(
+  clientId: string | undefined,
+  filters: PaymentByClientFilters = {}
+) {
+  return useQuery({
+    queryKey: queryKeys.paymentRecordsByClient(clientId!, filters),
+    queryFn: () => paymentRecordRepo.listByClient(clientId!, filters),
+    enabled: !!clientId,
   });
 }
 
