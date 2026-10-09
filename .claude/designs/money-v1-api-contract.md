@@ -61,7 +61,7 @@ External reference uniqueness as built: `(organization, provider, entityType, ex
 
 As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default chain installment → agreement → project → customer → STANDARD_RATED; installments split the contractual amount in its pricing basis and compute VAT each; `paymentTerms` (`IMMEDIATE | EOM | EOM_15 | EOM_30 | EOM_45 | EOM_60`, default `EOM`) per agreement with per-installment override and an optional `dueDate`; `POST /v1/agreements/{id}/cancel` while nothing is posted; receivables carry `origin INSTALLMENT | RETAINER_CHARGE | ADJUSTMENT` and `outstanding`; business-rule 422s carry `details.reason` from the published list.
 
-### M4 — Payments, allocations, reversals (plan §7)
+### M4 — Payments, allocations, reversals (plan §7) — **implemented 2026-10-08** (`money-v1-m4-payments-allocations.md`, all eight decisions approved as proposed); Malafat side `money-v1-m4-malafat-ui.md`, same day (payment wizard, detail with reversal and allocate-later, credits). The brief adds `POST /v1/receivables/{id}/credits` (the explicit adjustment M3 reserved), `GET /v1/receivables/{id}/credits`, `{ paymentId }` previews for unallocated funds, and amends `GET /v1/operations/{key}` to `PENDING | COMPLETED | 404` (a released key is retryable; no `FAILED` state is stored)
 
 | Method & path | Scope | Notes |
 |---|---|---|
@@ -72,7 +72,7 @@ As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default 
 | `POST /v1/payments/{id}/reverse` | `payments:write` + Idempotency-Key | `{ reason }`; undoes allocations atomically; second reversal → `409 CONFLICT` code `ALREADY_REVERSED` |
 | `GET /v1/operations/{idempotencyKey}` | `payments:read` | reconcile an unknown outcome: `PENDING / COMPLETED / FAILED` with the stored response (plan §12.7, §14.2) |
 
-### M5 — Recurring retainers (plan §5) — **basic form implemented in M3** (preview, create, charges, cancel FULL/WAIVE, reconcile); `/changes` with effective-dated versions, proration and credits remain M5
+### M5 — Recurring retainers (plan §5) — **basic form implemented in M3**; **changes, proration, cancel preview and the reconcile script implemented 2026-10-08** (`money-v1-m5-retainer-changes.md`, API `1.4.0-m5`): `POST /v1/retainers/{id}/changes/preview` + `/changes` (effective-dated versions, charges keep their terms), `POST /v1/retainers/{id}/cancel/preview`, cancel with `PRORATE` and a credit on an already-posted final month, `npm run reconcile` for a scheduler
 
 | Method & path | Scope | Notes |
 |---|---|---|
@@ -83,7 +83,7 @@ As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default 
 | `GET /v1/retainers/{id}/charges` | `payments:read` | generated charges; unique per (agreement version, service period) |
 | `POST /v1/retainers/reconcile` | `agreements:write` | operator/scheduler: generate any missing charges up to today, idempotent, organization-scoped; the scheduler calls this per organization in its timezone |
 
-### M6 — Attachments, summaries, audit (plan §9, §11)
+### M6 — Attachments, summaries, audit (plan §9, §11) — **implemented 2026-10-08** (`money-v1-m6-summaries-audit-attachments.md`, API `1.5.0-m6`). As built: `GET /v1/summaries/organization[?currency=]` returns per-currency blocks with per-customer rows; `POST /v1/attachments/uploads` takes `customerId | projectId | paymentId`; `DELETE /v1/attachments/{id}` added; no malware scan (`complete` verifies size and type); `GET /v1/audit` filters by `entityType`, `entityId`, `action`
 
 | Method & path | Scope | Notes |
 |---|---|---|

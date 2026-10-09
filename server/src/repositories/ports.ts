@@ -127,6 +127,8 @@ export interface OrganizationRepository {
   create(input: CreateOrganizationInput): Promise<Organization>;
   getById(id: string): Promise<Organization | null>;
   getBySlug(slug: string): Promise<Organization | null>;
+  /** Every organization, oldest first (M5 reconcile script). */
+  list(): Promise<Organization[]>;
 }
 
 export interface ApiKeyRepository {
@@ -147,13 +149,70 @@ export interface IntegrationRepository {
   disconnect(id: string, at: Date): Promise<IntegrationRecord | null>;
 }
 
+export interface AuditFilter {
+  entityType?: string;
+  entityId?: string;
+  action?: string;
+}
+
 export interface AuditRepository {
   append(event: AuditEventInput): Promise<AuditEventRecord>;
   listByOrganization(organizationId: string, limit: number): Promise<AuditEventRecord[]>;
+  /** M6: the organization's history filtered by entity / action, oldest first, keyset-paginated. */
+  list(organizationId: string, filter: AuditFilter, page: PageRequest): Promise<Page<AuditEventRecord>>;
+}
+
+// ---- Milestone 6: attachments ----------------------------------------------------
+
+export type AttachmentKind = 'INVOICE' | 'RECEIPT' | 'OTHER';
+export type AttachmentStatus = 'PENDING_UPLOAD' | 'READY';
+
+export interface CreateAttachmentInput {
+  organizationId: string;
+  kind: AttachmentKind;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  customerId: string | null;
+  projectId: string | null;
+  paymentId: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: IsoDate | null;
+  uploadedByKeyId: string | null;
+  requestId: string | null;
+}
+
+export interface AttachmentRecord extends CreateAttachmentInput {
+  id: string;
+  status: AttachmentStatus;
+  createdAt: Date;
+  completedAt: Date | null;
+  deletedAt: Date | null;
+}
+
+export interface AttachmentFilter {
+  customerId?: string;
+  projectId?: string;
+  paymentId?: string;
+  kind?: AttachmentKind;
+}
+
+export interface AttachmentRepository {
+  /** The row is created with a placeholder key; the caller derives the real key from the id and `setKey`s it (one round trip, no id guessing). */
+  create(input: Omit<CreateAttachmentInput, 'storageKey'>, at: Date): Promise<AttachmentRecord>;
+  setKey(organizationId: string, id: string, storageKey: string): Promise<AttachmentRecord | null>;
+  getById(organizationId: string, id: string): Promise<AttachmentRecord | null>;
+  /** READY attachments that are not deleted, oldest first. */
+  list(organizationId: string, filter: AttachmentFilter, page: PageRequest): Promise<Page<AttachmentRecord>>;
+  complete(organizationId: string, id: string, at: Date): Promise<AttachmentRecord | null>;
+  softDelete(organizationId: string, id: string, at: Date): Promise<AttachmentRecord | null>;
 }
 
 export interface IdempotencyRepository {
   claim(input: { organizationId: string; key: string; operation: string; fingerprint: string; at: Date }): Promise<IdempotencyClaim>;
+  /** The stored claim for GET /v1/operations/{key}; null when never claimed or released after a 5xx (M4). */
+  get(organizationId: string, key: string): Promise<IdempotencyRecord | null>;
   complete(input: { organizationId: string; key: string; responseStatus: number; responseBody: unknown; at: Date }): Promise<void>;
   /** Releases the key so a retry can run the operation again (used after a 5xx). */
   fail(input: { organizationId: string; key: string; at: Date }): Promise<void>;
@@ -325,7 +384,7 @@ export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
 export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
-export type FinalMonth = 'FULL' | 'WAIVE';
+export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
 export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT';
 
 export interface AgreementRecord {
@@ -353,6 +412,8 @@ export interface AgreementRecord {
   billingDay: number | null;
   endMonth: IsoMonth | null;
   cancelEffectiveMonth: IsoMonth | null;
+  /** The day the retainer stopped (M5); the month above is derived from it. */
+  cancelEffectiveDate: IsoDate | null;
   finalMonth: FinalMonth | null;
   cancelledAt: Date | null;
   version: number;
@@ -412,6 +473,8 @@ export interface RetainerChargeRecord {
   id: string;
   organizationId: string;
   agreementId: string;
+  /** The retainer terms version the charge carries (M5); 1 for the original terms. */
+  version: number;
   serviceMonth: IsoMonth;
   chargeDate: IsoDate;
   amountMinor: bigint;
@@ -440,8 +503,10 @@ export interface ReceivableRecord {
   grossMinor: bigint;
   vatTreatment: VatTreatment;
   vatRateBasisPoints: number;
-  /** Written by M4 payments; 0 until then. */
+  /** Sum of allocations from POSTED payments (M4). */
   paidMinor: bigint;
+  /** Sum of credits (M4). Outstanding = gross − paid − credited. */
+  creditedMinor: bigint;
   dueDate: IsoDate;
   postingDate: IsoDate;
   postedAt: Date;
@@ -510,6 +575,36 @@ export interface CreateChargeInput {
   vatTreatment: VatTreatment;
   rateBasisPoints: number;
   dueDate: IsoDate;
+  /** Terms version (M5); defaults to 1. */
+  version?: number;
+}
+
+// ---- Milestone 5: retainer versions -------------------------------------------
+
+export interface AppendVersionInput {
+  organizationId: string;
+  agreementId: string;
+  version: number;
+  effectiveMonth: IsoMonth;
+  monthlyAmountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  pricingBasis: PricingBasis;
+  vatTreatment: VatTreatment;
+  rateBasisPoints: number;
+  billingDay: number;
+  paymentTerms: PaymentTerms;
+  endMonth: IsoMonth | null;
+  reason: string;
+  requestId: string | null;
+  /** Optimistic check on the agreement row, which gets its version bumped. */
+  expectedAgreementVersion: number;
+}
+
+export interface RetainerVersionRecord extends Omit<AppendVersionInput, 'expectedAgreementVersion'> {
+  id: string;
+  createdAt: Date;
 }
 
 export interface AgreementRepository {
@@ -526,7 +621,11 @@ export interface AgreementRepository {
   applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
   listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
   /** FIXED: status CANCELLED, unposted installments voided. RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
-  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
+  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
+  /** M5: appends a terms version (unique per agreement + version) and bumps the agreement version atomically; `conflict` when the agreement moved. */
+  appendVersion(input: AppendVersionInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; version: RetainerVersionRecord }>>;
+  /** Stored versions (≥ 2) in version order; version 1 is synthesized from the agreement by the domain. */
+  listVersions(organizationId: string, agreementId: string): Promise<RetainerVersionRecord[]>;
   /** RECURRING agreements that may still generate charges (ACTIVE, or CANCELLED with a cancel month). */
   listRetainers(organizationId: string): Promise<AgreementRecord[]>;
   listCharges(organizationId: string, agreementId: string): Promise<RetainerChargeRecord[]>;
@@ -545,9 +644,115 @@ export interface ReceivableFilter {
 
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
+  /** In the order of `ids`; unknown or foreign ids are skipped. */
+  getByIds(organizationId: string, ids: readonly string[]): Promise<ReceivableRecord[]>;
   list(organizationId: string, filter: ReceivableFilter, page: PageRequest): Promise<Page<ReceivableRecord>>;
+  /** OPEN receivables of the customer in the currency with outstanding > 0 — what a payment may be allocated to (M4). */
+  listEligible(organizationId: string, customerId: string, currency: string): Promise<ReceivableRecord[]>;
   /** OPEN receivables with outstanding > 0 on the project (archive guard). */
   countOutstandingByProject(organizationId: string, projectId: string): Promise<number>;
+  /** Appends a credit and moves credited_minor / status atomically; throws InsufficientCapacity if it exceeds the outstanding (M4). */
+  credit(organizationId: string, receivableId: string, input: CreditInput, at: Date): Promise<{ receivable: ReceivableRecord; credit: CreditRecord } | null>;
+  listCredits(organizationId: string, receivableId: string): Promise<CreditRecord[]>;
+}
+
+// ---- Milestone 4: payments, allocations, credits ----------------------------
+
+export type PaymentMethod = 'CASH' | 'BANK';
+export type PaymentStatus = 'POSTED' | 'REVERSED';
+
+export interface PaymentRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  /** PAY-YYYY-NNNN, gap-free per organization and year. */
+  number: string;
+  currency: string;
+  amountMinor: bigint;
+  /** Σ allocations; unallocated = amount − allocated. 0 once reversed. */
+  allocatedMinor: bigint;
+  receivedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  notes: string | null;
+  status: PaymentStatus;
+  reversedAt: Date | null;
+  reversalReason: string | null;
+  replacesPaymentId: string | null;
+  requestId: string | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AllocationRecord {
+  id: string;
+  organizationId: string;
+  paymentId: string;
+  receivableId: string;
+  amountMinor: bigint;
+  createdAt: Date;
+}
+
+export interface AllocationInput {
+  receivableId: string;
+  amountMinor: bigint;
+}
+
+export interface CreatePaymentInput {
+  organizationId: string;
+  customerId: string;
+  currency: string;
+  amountMinor: bigint;
+  receivedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  notes: string | null;
+  replacesPaymentId: string | null;
+  requestId: string | null;
+  allocations: AllocationInput[];
+}
+
+export interface CreditInput {
+  amountMinor: bigint;
+  netMinor: bigint;
+  vatMinor: bigint;
+  reason: string;
+  effectiveDate: IsoDate;
+  requestId: string | null;
+}
+
+export interface CreditRecord extends CreditInput {
+  id: string;
+  organizationId: string;
+  receivableId: string;
+  createdAt: Date;
+}
+
+export interface PaymentFilter {
+  customerId?: string;
+  /** Payments with at least one allocation on the project. */
+  projectId?: string;
+  status?: PaymentStatus;
+  receivedBefore?: IsoDate;
+  receivedAfter?: IsoDate;
+}
+
+export interface PaymentRepository {
+  /**
+   * Payment + allocations + receivable sums/status + number, one transaction.
+   * Throws InsufficientCapacity when a receivable can no longer absorb its allocation (a race the preview token did not catch).
+   */
+  create(input: CreatePaymentInput, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }>;
+  getById(organizationId: string, id: string): Promise<PaymentRecord | null>;
+  list(organizationId: string, filter: PaymentFilter, page: PageRequest): Promise<Page<PaymentRecord>>;
+  listAllocations(organizationId: string, paymentId: string): Promise<AllocationRecord[]>;
+  /** Appends allocations to a POSTED payment within its unallocated funds; same guarantees as create. Null when no such payment. */
+  allocate(organizationId: string, paymentId: string, allocations: AllocationInput[], at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
+  /** Undoes every allocation, zeroes allocated_minor, marks REVERSED. `changed` is false when it already was. */
+  reverse(organizationId: string, paymentId: string, reason: string, at: Date): Promise<{ payment: PaymentRecord; changed: boolean } | null>;
+  /** The POSTED payment that names this one as replacesPaymentId, if any. */
+  findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
 }
 
 export interface ExternalReferenceRepository {
@@ -569,6 +774,8 @@ export interface LedgerStore {
   vatRates: VatRateRepository;
   agreements: AgreementRepository;
   receivables: ReceivableRepository;
+  payments: PaymentRepository;
   /** Liveness of the backing store, for /ready. */
   ping(): Promise<void>;
+  attachments: AttachmentRepository;
 }

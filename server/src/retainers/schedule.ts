@@ -8,7 +8,7 @@ import { addMonths, clampDay, compareIsoDates, isIsoMonth, monthOf, type IsoDate
 export const MAX_RETAINER_MONTHS = 120;
 export const MAX_BILLING_DAY = 28;
 
-export type FinalMonth = 'FULL' | 'WAIVE';
+export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
 
 export interface RetainerSpec {
   startMonth: IsoMonth;
@@ -34,7 +34,7 @@ export function chargeDate(month: IsoMonth, billingDay: number): IsoDate {
   return clampDay(month, billingDay);
 }
 
-/** Months whose charge date is on or before `today`, honouring end month and cancellation. */
+/** Months whose charge date is on or before `today`, honouring end month and cancellation. PRORATE charges the final month like FULL (at a prorated amount, decided by the caller). */
 export function chargeMonths(spec: RetainerSpec, today: IsoDate): IsoMonth[] {
   const months: IsoMonth[] = [];
   const lastMonth = monthOf(today);

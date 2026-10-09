@@ -13,13 +13,15 @@ export interface ItemStatusInput {
   dueDate: IsoDate;
   grossMinor: bigint;
   paidMinor: bigint;
+  /** Credits (M4) count towards settlement but are not payments: a credited, unpaid item is DUE, not PARTIALLY_PAID. */
+  creditedMinor?: bigint;
   today: IsoDate;
 }
 
 export function itemStatus(i: ItemStatusInput): ItemStatus {
   if (i.voided) return 'VOID';
   if (!i.posted) return 'PENDING';
-  if (i.paidMinor >= i.grossMinor) return 'PAID';
+  if (i.paidMinor + (i.creditedMinor ?? 0n) >= i.grossMinor) return 'PAID';
   if (compareIsoDates(i.dueDate, i.today) < 0) return 'OVERDUE';
   if (i.paidMinor > 0n) return 'PARTIALLY_PAID';
   return 'DUE';

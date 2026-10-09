@@ -97,3 +97,9 @@ variable "alert_notification_channels" {
   type        = list(string)
   default     = []
 }
+
+variable "attachments_url_ttl_seconds" {
+  description = "Lifetime of signed upload/download URLs for attachments (M6)."
+  type        = number
+  default     = 900
+}

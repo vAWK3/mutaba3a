@@ -1,6 +1,8 @@
-import { dueDateFor, type IsoDate } from '../dates.js';
+import { dueDateFor, type IsoDate, type IsoMonth } from '../dates.js';
 import type { AgreementRecord, LedgerStore, Organization } from '../repositories/ports.js';
 import { chargeDate, chargeMonths } from '../retainers/schedule.js';
+import { prorate } from '../retainers/proration.js';
+import { effectiveEndMonth, termsFor, termsTimeline } from '../retainers/terms.js';
 import { computeVat } from '../vat.js';
 import { installmentDueDate, postingDateFor } from './compose.js';
 
@@ -48,16 +50,17 @@ export async function postDueItems(store: LedgerStore, organization: Organizatio
 
 export async function generateCharges(store: LedgerStore, organization: Organization, retainer: AgreementRecord, today: IsoDate, now: Date, actor: PostingActor): Promise<number> {
   if (!retainer.startMonth || !retainer.billingDay) return 0;
-  const months = chargeMonths(
-    { startMonth: retainer.startMonth, billingDay: retainer.billingDay, endMonth: retainer.endMonth ?? undefined, cancelEffectiveMonth: retainer.cancelEffectiveMonth ?? undefined, finalMonth: retainer.finalMonth ?? undefined },
-    today,
-  );
+  const timeline = termsTimeline(retainer, await store.agreements.listVersions(organization.id, retainer.id));
+  const months = chargeMonthsAcrossVersions(retainer, timeline, today);
   const existing = new Set((await store.agreements.listCharges(organization.id, retainer.id)).map((c) => c.serviceMonth));
   let created = 0;
   for (const month of months) {
     if (existing.has(month)) continue;
-    const date = chargeDate(month, retainer.billingDay);
-    const vat = computeVat({ amountMinor: retainer.amountMinor, pricingBasis: retainer.pricingBasis, treatment: retainer.vatTreatment, rateBasisPoints: retainer.vatRateBasisPoints });
+    const terms = termsFor(timeline, month);
+    const date = chargeDate(month, terms.billingDay);
+    // The cancellation month under PRORATE charges the days up to and including the cancellation date (M5 decision 4).
+    const amountMinor = retainer.finalMonth === 'PRORATE' && retainer.cancelEffectiveDate && month === retainer.cancelEffectiveMonth ? prorate({ amountMinor: terms.monthlyAmountMinor, effectiveDate: retainer.cancelEffectiveDate }).amountMinor : terms.monthlyAmountMinor;
+    const vat = computeVat({ amountMinor, pricingBasis: terms.pricingBasis, treatment: terms.vatTreatment, rateBasisPoints: terms.rateBasisPoints });
     const result = await store.agreements.createPostedCharge(
       {
         organizationId: organization.id,
@@ -67,22 +70,39 @@ export async function generateCharges(store: LedgerStore, organization: Organiza
         currency: retainer.currency,
         serviceMonth: month,
         chargeDate: date,
-        amountMinor: retainer.amountMinor,
+        amountMinor,
         netMinor: vat.netMinor,
         vatMinor: vat.vatMinor,
         grossMinor: vat.grossMinor,
-        vatTreatment: retainer.vatTreatment,
+        vatTreatment: terms.vatTreatment,
         rateBasisPoints: vat.rateBasisPoints,
-        dueDate: dueDateFor(date, retainer.paymentTerms),
+        dueDate: dueDateFor(date, terms.paymentTerms),
+        version: terms.version,
       },
       now,
     );
     if (result.created) {
       created += 1;
-      await audit(store, organization.id, actor, 'retainer.charged', 'retainer_charge', result.charge.id, { agreementId: retainer.id, serviceMonth: month, receivableId: result.receivable.id });
+      await audit(store, organization.id, actor, 'retainer.charged', 'retainer_charge', result.charge.id, { agreementId: retainer.id, serviceMonth: month, receivableId: result.receivable.id, version: terms.version, ...(amountMinor !== terms.monthlyAmountMinor ? { prorated: true } : {}) });
     }
   }
   return created;
+}
+
+/**
+ * Service months chargeable today when the billing day may differ per version:
+ * each month is tested against the billing day of the terms in force for it,
+ * and the end month is the latest version's.
+ */
+export function chargeMonthsAcrossVersions(retainer: AgreementRecord, timeline: ReturnType<typeof termsTimeline>, today: IsoDate): IsoMonth[] {
+  if (!retainer.startMonth) return [];
+  const endMonth = effectiveEndMonth(timeline) ?? undefined;
+  const months: IsoMonth[] = [];
+  for (const month of chargeMonths({ startMonth: retainer.startMonth, billingDay: 1, endMonth, cancelEffectiveMonth: retainer.cancelEffectiveMonth ?? undefined, finalMonth: retainer.finalMonth ?? undefined }, today)) {
+    const terms = termsFor(timeline, month);
+    if (chargeDate(month, terms.billingDay) <= today) months.push(month);
+  }
+  return months;
 }
 
 async function audit(store: LedgerStore, organizationId: string, actor: PostingActor, action: string, entityType: string, entityId: string, metadata: Record<string, unknown>): Promise<void> {

@@ -142,11 +142,11 @@ export function todayFor(organization: Organization, now: Date): IsoDate {
 }
 
 /** View fields for an installment: the due date it has or would get, and its status. */
-export function installmentView(installment: InstallmentRecord, agreement: AgreementRecord, today: IsoDate, paidMinor = 0n): { dueDate: IsoDate; status: ItemStatus } {
+export function installmentView(installment: InstallmentRecord, agreement: AgreementRecord, today: IsoDate, settlement: { paidMinor: bigint; creditedMinor: bigint } = { paidMinor: 0n, creditedMinor: 0n }): { dueDate: IsoDate; status: ItemStatus } {
   const posted = installment.receivableId !== null;
   const postingDate = installment.postingDate ?? postingDateFor(installment, agreement.agreementDate, today);
   const dueDate = installmentDueDate(installment, agreement, postingDate);
-  return { dueDate, status: itemStatus({ voided: installment.voidedAt !== null, posted, dueDate, grossMinor: installment.grossMinor, paidMinor, today }) };
+  return { dueDate, status: itemStatus({ voided: installment.voidedAt !== null, posted, dueDate, grossMinor: installment.grossMinor, paidMinor: settlement.paidMinor, creditedMinor: settlement.creditedMinor, today }) };
 }
 
 export const DAYS_IN_FUTURE_LIMIT = 3660;

@@ -44,6 +44,8 @@ resource "google_project_service" "apis" {
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
     "monitoring.googleapis.com",
+    "storage.googleapis.com",
+    "iamcredentials.googleapis.com",
   ])
   project            = var.project_id
   service            = each.key
@@ -270,6 +272,14 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.image_tag
       }
       env {
+        name  = "ATTACHMENTS_BUCKET"
+        value = google_storage_bucket.attachments.name
+      }
+      env {
+        name  = "ATTACHMENTS_URL_TTL_SECONDS"
+        value = tostring(var.attachments_url_ttl_seconds)
+      }
+      env {
         name = "DATABASE_URL"
         value_source {
           secret_key_ref {
@@ -402,4 +412,47 @@ resource "google_monitoring_alert_policy" "health" {
   }
 
   notification_channels = var.alert_notification_channels
+}
+
+# ============================================================================
+# Attachments bucket (M6): private, uniform access, reached only through
+# short-lived V4 signed URLs the API mints with its own service account.
+# ============================================================================
+
+resource "google_storage_bucket" "attachments" {
+  project                     = var.project_id
+  name                        = "${var.project_id}-mutaba3a-attachments${local.suffix}"
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = false
+  labels                      = local.labels
+
+  versioning {
+    enabled = false
+  }
+
+  lifecycle_rule {
+    action {
+      type = "AbortIncompleteMultipartUpload"
+    }
+    condition {
+      age = 1
+    }
+  }
+}
+
+# Read/write/delete objects in the bucket, nothing else in the project.
+resource "google_storage_bucket_iam_member" "api_objects" {
+  bucket = google_storage_bucket.attachments.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.api.email}"
+}
+
+# V4 signed URLs without a key file: the service account signs through IAM signBlob on itself.
+resource "google_service_account_iam_member" "api_signs_as_itself" {
+  service_account_id = google_service_account.api.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.api.email}"
 }

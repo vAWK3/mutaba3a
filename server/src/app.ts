@@ -7,10 +7,16 @@ import { ApiError, ERROR_CODES } from './errors.js';
 import type { Logger } from './logger.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
+import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
+import { attachmentRoutes } from './routes/attachments.js';
+import { auditRoutes } from './routes/audit.js';
+import { summaryRoutes } from './routes/summaries.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { customerRoutes } from './routes/customers.js';
 import { installmentRoutes } from './routes/installments.js';
+import { operationRoutes } from './routes/operations.js';
+import { paymentRoutes } from './routes/payments.js';
 import { receivableRoutes } from './routes/receivables.js';
 import { retainerRoutes } from './routes/retainers.js';
 import { vatRoutes } from './routes/vat.js';
@@ -29,10 +35,13 @@ export interface AppDependencies {
   version: string;
   /** Injectable clock so tests can control expiry and rate windows. */
   now?: () => Date;
+  /** Attachment bytes store (M6); null or absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
+  attachments?: AttachmentStorage | null;
+  attachmentUrlTtlSeconds?: number;
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.2.0-m3';
+export const API_VERSION = '1.5.1-m6';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -95,6 +104,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', installmentRoutes(deps.store));
   app.route('/', retainerRoutes(deps.store));
   app.route('/', receivableRoutes(deps.store));
+  app.route('/', paymentRoutes(deps.store));
+  app.route('/', operationRoutes(deps.store));
+  app.route('/', summaryRoutes(deps.store));
+  app.route('/', auditRoutes(deps.store));
+  app.route('/', attachmentRoutes(deps.store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
@@ -115,7 +129,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       title: API_TITLE,
       version: API_VERSION,
       description: [
-        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–3).',
+        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–6).',
         '',
         `Scopes: ${SCOPES.join(', ')}.`,
         '',
@@ -131,7 +145,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).',
         '',
+        'Payments (M4): a receivable\'s outstanding = gross − paid − credited. Allocations never cross a customer or a currency. GET /v1/operations/{key} reconciles a lost response: COMPLETED with the stored body, PENDING, or 404 (never completed; retry with the same key is safe).',
+        '',
         'Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page\'s nextCursor.',
+        '',
+        'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),
     },
     tags: [
@@ -144,7 +162,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Agreements', description: 'Fixed-fee agreements, installments, supplements' },
       { name: 'Installments', description: 'Manual triggers' },
       { name: 'Retainers', description: 'Recurring agreements and their monthly charges' },
-      { name: 'Receivables', description: 'What is owed' },
+      { name: 'Receivables', description: 'What is owed, and credits against it' },
+      { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
       { name: 'Admin', description: 'Operator provisioning' },
     ],
   });

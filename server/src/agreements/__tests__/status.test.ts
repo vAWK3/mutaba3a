@@ -20,3 +20,14 @@ describe('itemStatus', () => {
     expect(itemStatus(input)).toBe(expected);
   });
 });
+
+describe('credits (M4)', () => {
+  const base = { voided: false, posted: true, dueDate: '2026-10-31', grossMinor: 1000n, today: '2026-10-08' };
+  it('count towards settlement but never read as a partial payment', () => {
+    expect(itemStatus({ ...base, paidMinor: 0n, creditedMinor: 400n })).toBe('DUE');
+    expect(itemStatus({ ...base, paidMinor: 0n, creditedMinor: 1000n })).toBe('PAID');
+    expect(itemStatus({ ...base, paidMinor: 600n, creditedMinor: 400n })).toBe('PAID');
+    expect(itemStatus({ ...base, paidMinor: 100n, creditedMinor: 400n })).toBe('PARTIALLY_PAID');
+    expect(itemStatus({ ...base, paidMinor: 0n, creditedMinor: 400n, today: '2026-11-01' })).toBe('OVERDUE');
+  });
+});

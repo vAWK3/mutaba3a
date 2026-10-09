@@ -109,8 +109,19 @@ enum ReceivableStatus {
   SETTLED
 }
 
+enum PaymentMethod {
+  CASH
+  BANK
+}
+
+enum PaymentStatus {
+  POSTED
+  REVERSED
+}
+
 enum FinalMonth {
   FULL
+  PRORATE
   WAIVE
 }
 
@@ -141,7 +152,9 @@ model Organization {
   vatRates           VatRate[]
   agreements         Agreement[]
   receivables        Receivable[]
+  payments           Payment[]
 
+  attachments  Attachment[]
   @@map("organizations")
 }
 
@@ -209,6 +222,7 @@ model AuditEvent {
 
   @@index([organizationId, createdAt])
   @@index([entityType, entityId])
+  @@index([organizationId, entityType, entityId, createdAt])
   @@map("audit_events")
 }
 
@@ -255,6 +269,7 @@ model Customer {
 
   projects   Project[]
   agreements Agreement[]
+  payments   Payment[]
 
   @@index([organizationId, createdAt, id])
   @@map("customers")
@@ -349,6 +364,8 @@ model Agreement {
   billingDay           Int?
   endMonth             String?         @db.VarChar(7)
   cancelEffectiveMonth String?         @db.VarChar(7)
+  /// The day the retainer stopped (M5); cancelEffectiveMonth is its month.
+  cancelEffectiveDate  String?         @db.VarChar(10)
   finalMonth           FinalMonth?
   cancelledAt          DateTime?
   version              Int             @default(1)
@@ -358,6 +375,7 @@ model Agreement {
   installments Installment[]
   charges      RetainerCharge[]
   supplements  AgreementSupplement[]
+  versions     RetainerVersion[]
 
   @@index([organizationId, projectId])
   @@index([organizationId, customerId])
@@ -398,6 +416,8 @@ model RetainerCharge {
   organizationId  String       @db.Uuid
   agreementId     String       @db.Uuid
   agreement       Agreement    @relation(fields: [agreementId], references: [id])
+  /// The retainer terms version this charge carries (M5).
+  version         Int          @default(1)
   serviceMonth    String       @db.VarChar(7)
   chargeDate      String       @db.VarChar(10)
   amountMinor     BigInt
@@ -414,30 +434,61 @@ model RetainerCharge {
   @@map("retainer_charges")
 }
 
+/// An effective-dated version of a retainer's terms (M5). Version 1 is the agreement row itself and is not stored.
+model RetainerVersion {
+  id                 String       @id @default(uuid()) @db.Uuid
+  organizationId     String       @db.Uuid
+  agreementId        String       @db.Uuid
+  agreement          Agreement    @relation(fields: [agreementId], references: [id])
+  version            Int
+  effectiveMonth     String       @db.VarChar(7)
+  monthlyAmountMinor BigInt
+  netMinor           BigInt
+  vatMinor           BigInt
+  grossMinor         BigInt
+  pricingBasis       PricingBasis
+  vatTreatment       VatTreatment
+  rateBasisPoints    Int
+  billingDay         Int
+  paymentTerms       PaymentTerms
+  endMonth           String?      @db.VarChar(7)
+  reason             String
+  requestId          String?
+  createdAt          DateTime     @default(now())
+
+  @@unique([agreementId, version])
+  @@index([organizationId, agreementId])
+  @@map("retainer_versions")
+}
+
 /// What is owed. Created only when an installment or charge posts.
 model Receivable {
-  id                 String           @id @default(uuid()) @db.Uuid
-  organizationId     String           @db.Uuid
-  organization       Organization     @relation(fields: [organizationId], references: [id])
-  customerId         String           @db.Uuid
-  projectId          String           @db.Uuid
-  agreementId        String?          @db.Uuid
+  id                 String              @id @default(uuid()) @db.Uuid
+  organizationId     String              @db.Uuid
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  customerId         String              @db.Uuid
+  projectId          String              @db.Uuid
+  agreementId        String?             @db.Uuid
   origin             ReceivableOrigin
-  originId           String?          @db.Uuid
-  currency           String           @db.VarChar(3)
+  originId           String?             @db.Uuid
+  currency           String              @db.VarChar(3)
   netMinor           BigInt
   vatMinor           BigInt
   grossMinor         BigInt
   vatTreatment       VatTreatment
   vatRateBasisPoints Int
-  /// Written by M4 payments.
-  paidMinor          BigInt           @default(0)
-  dueDate            String           @db.VarChar(10)
-  postingDate        String           @db.VarChar(10)
+  /// Σ allocations from POSTED payments (M4).
+  paidMinor          BigInt              @default(0)
+  /// Σ credits (M4). Outstanding = gross − paid − credited.
+  creditedMinor      BigInt              @default(0)
+  dueDate            String              @db.VarChar(10)
+  postingDate        String              @db.VarChar(10)
   postedAt           DateTime
-  status             ReceivableStatus @default(OPEN)
-  version            Int              @default(1)
-  createdAt          DateTime         @default(now())
+  status             ReceivableStatus    @default(OPEN)
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now())
+  allocations        PaymentAllocation[]
+  credits            ReceivableCredit[]
 
   @@index([organizationId, customerId])
   @@index([organizationId, projectId])
@@ -461,4 +512,122 @@ model AgreementSupplement {
 
   @@index([agreementId, createdAt])
   @@map("agreement_supplements")
+}
+
+/// Money received from a customer (M4). Immutable once posted except through
+/// `reverse` (status, reversedAt, reason) and `allocations` (new rows).
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  organizationId    String        @db.Uuid
+  organization      Organization  @relation(fields: [organizationId], references: [id])
+  customerId        String        @db.Uuid
+  customer          Customer      @relation(fields: [customerId], references: [id])
+  /// PAY-YYYY-NNNN, gap-free per organization and year (payment_counters).
+  number            String
+  currency          String        @db.VarChar(3)
+  amountMinor       BigInt
+  /// Σ allocations; unallocated = amount − allocated. 0 once reversed.
+  allocatedMinor    BigInt        @default(0)
+  receivedOn        String        @db.VarChar(10)
+  method            PaymentMethod
+  reference         String?
+  notes             String?
+  status            PaymentStatus @default(POSTED)
+  reversedAt        DateTime?
+  reversalReason    String?
+  replacesPaymentId String?       @db.Uuid
+  requestId         String?
+  version           Int           @default(1)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @default(now())
+
+  allocations PaymentAllocation[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, customerId])
+  @@index([organizationId, createdAt, id])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  paymentId      String     @db.Uuid
+  payment        Payment    @relation(fields: [paymentId], references: [id])
+  receivableId   String     @db.Uuid
+  receivable     Receivable @relation(fields: [receivableId], references: [id])
+  amountMinor    BigInt
+  createdAt      DateTime   @default(now())
+
+  @@index([organizationId, paymentId])
+  @@index([organizationId, receivableId])
+  @@map("payment_allocations")
+}
+
+/// Append-only credits against a posted receivable (M4 brief decision 5).
+model ReceivableCredit {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  receivableId   String     @db.Uuid
+  receivable     Receivable @relation(fields: [receivableId], references: [id])
+  /// Positive magnitudes; net + vat = amount, VAT at the receivable's frozen rate.
+  amountMinor    BigInt
+  netMinor       BigInt
+  vatMinor       BigInt
+  reason         String
+  effectiveDate  String     @db.VarChar(10)
+  requestId      String?
+  createdAt      DateTime   @default(now())
+
+  @@index([organizationId, receivableId])
+  @@map("receivable_credits")
+}
+
+/// Next payment sequence per organization and year; the row lock serialises numbering.
+model PaymentCounter {
+  organizationId String @db.Uuid
+  year           Int
+  next           Int
+
+  @@id([organizationId, year])
+  @@map("payment_counters")
+}
+
+enum AttachmentKind {
+  INVOICE
+  RECEIPT
+  OTHER
+}
+
+enum AttachmentStatus {
+  PENDING_UPLOAD
+  READY
+}
+
+/// A file in the private attachments bucket (M6). Bytes never pass through the API; the key is org/{organizationId}/{id}.
+model Attachment {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  kind            AttachmentKind
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+  status          AttachmentStatus @default(PENDING_UPLOAD)
+  storageKey      String
+  customerId      String?          @db.Uuid
+  projectId       String?          @db.Uuid
+  paymentId       String?          @db.Uuid
+  invoiceNumber   String?
+  invoiceDate     String?          @db.VarChar(10)
+  uploadedByKeyId String?
+  requestId       String?
+  createdAt       DateTime         @default(now())
+  completedAt     DateTime?
+  deletedAt       DateTime?
+
+  @@index([organizationId, customerId, createdAt])
+  @@index([organizationId, projectId, createdAt])
+  @@index([organizationId, paymentId, createdAt])
+  @@map("attachments")
 }

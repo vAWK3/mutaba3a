@@ -67,6 +67,181 @@ to print and `npm run smoke -- --url ""` crashed with
   `terraform fmt -check` green. `terraform validate` could not run in the
   session (provider registry unreachable); CI's `terraform` job covers it.
 - Operator action: pull and re-run `./scripts/deploy.sh`; then §3–§5.
+## [Unreleased] - 2026-10-08 — Money v1 end-to-end run; two fixes it found (`server/`, API `1.5.1-m6`)
+
+### Fixed
+- **Supplement with a new IMMEDIATE installment never posted.** `POST /v1/agreements/{id}/supplements` with `distribution: NEW_INSTALLMENT` and `trigger.type: IMMEDIATE` created the installment but left it PENDING with no receivable: creation posts IMMEDIATE installments inline and lazy posting only handles DATE triggers. The route now posts it as creation does, audits `installment.posted` (with the supplement id) and answers with the posted state. `routes-m3.test.ts` covers it.
+- **`POST /v1/retainers/{id}/cancel` answered with the fixed-fee detail shape** (`agreement` + empty `installments`/`supplements`). It now returns the retainer charges view (`agreement`, `versions`, `charges`), the same shape as `GET …/charges` and `POST …/changes` and the shape Malafat's published contract already declared. The cancelled final month (prorated or credited) is visible in the response.
+
+### Added
+- `server/e2e/money-v1.e2e.mts` — the end-to-end run over HTTP: Malafat's own Mutaba3a client (`features/money/application/mutaba3a-client.ts`, loaded from a Malafat checkout) driving a running server through provisioning, M1 bind, M2 customers / projects / import / PATCH, M3 VAT / fixed fee / installments / supplement / retainer, M5 change preview and apply, cancel preview and PRORATE cancel with credit, M4 allocation preview, payment, replay, operations lookup, allocate later, reversal, credit, corrected payment, M6 summaries (invariants `outstanding = overdue + dueToday + notYetDue`, equality with open receivables and with the customers' rows, unallocated vs POSTED payments), audit, attachments-not-configured, reconcile, disconnect — plus the security edges: forged key, narrow scopes, cross-organization 404s, same-tenant second binding, idempotency reuse, stale `If-Match`, forged preview tokens, token required for a crediting cancel. **84 checks, all passing** against Postgres 16.
+- `server/e2e/attachments.e2e.mts` — attachments in process on the real Postgres store with `MemoryAttachmentStorage`: create → PUT → complete (incomplete / size and type mismatch / idempotent complete) → list (pending hidden) → download (TTL, filename) → delete (object removed, 404 after), scope and cross-organization refusals, every rule reason, audit trail. **34 checks, all passing.**
+- `npm run smoke` (with the admin token) and `npm run reconcile` / `-- --dry` were run against the same database.
+
+### Technical
+- API version `1.5.1-m6`; `openapi/openapi.yaml` regenerated; Malafat's vendored contract refreshed to it.
+- The e2e scripts are `.mts` outside `src/`, so lint and typecheck do not cover them; `tsx` runs them.
+
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 6: summaries, audit listing, attachments (`server/`)
+
+Brief `money-v1-m6-summaries-audit-attachments.md`, decided by the engineering
+owner under the "complete the epic" instruction. API version `1.5.0-m6`;
+additive. Closes the Money v1 server epic (M1–M6).
+
+### Added
+- **Summaries** (`src/summaries/compute.ts`, `src/routes/summaries.ts`):
+  `GET /v1/summaries/organization[?currency=]`, `/customers/{id}`,
+  `/projects/{id}`. Computed on read from OPEN receivables and POSTED payments:
+  exact day buckets (`outstanding = overdue + dueToday + notYetDue`),
+  unallocated funds, last payment date, and statuses — customer `SETTLED /
+  OVERDUE / OUTSTANDING / UP_TO_DATE`, fixed project `PENDING / OUTSTANDING /
+  PARTIALLY_PAID / OVERDUE / PAID_IN_FULL` (never `PAID_IN_FULL` while an
+  installment is pending), retainer `UP_TO_DATE / OUTSTANDING / OVERDUE /
+  CANCELLED / SETTLED`, `NONE` without agreements. Retainer `monthly` is the
+  gross of the terms in force (M5 versions). Scope `summaries:read`.
+- **Audit listing** `GET /v1/audit?entityType=&entityId=&action=&cursor=&limit=`
+  (scope `audit:read`), keyset-paginated like every list;
+  `AuditRepository.list`; index `(organizationId, entityType, entityId,
+  createdAt)`.
+- **Attachments** (`src/attachments/{rules,storage}.ts`,
+  `src/routes/attachments.ts`): `POST /v1/attachments/uploads` (PDF / JPEG /
+  PNG ≤ 10 MB, exactly one of customerId / projectId / paymentId, 201 with a
+  V4 signed PUT URL), `POST /v1/attachments/{id}/complete` (verifies the
+  object's size and type: `UPLOAD_INCOMPLETE` / `UPLOAD_MISMATCH`),
+  `GET /v1/attachments?…`, `GET /v1/attachments/{id}/download` (signed URL
+  with a safe `Content-Disposition`), `DELETE /v1/attachments/{id}` (soft
+  delete + object removal). Object key `org/{organizationId}/{attachmentId}`,
+  never the filename. `AttachmentStorage` port with `GcsAttachmentStorage`
+  (`@google-cloud/storage`, signBlob through the service account) and
+  `MemoryAttachmentStorage` (tests). Config `ATTACHMENTS_BUCKET` (optional →
+  503 `ATTACHMENTS_NOT_CONFIGURED`), `ATTACHMENTS_URL_TTL_SECONDS` (900).
+  Audit `attachment.uploaded`, `attachment.deleted`.
+- **Terraform:** private bucket (uniform access, public access prevention),
+  `roles/storage.objectAdmin` on it and `roles/iam.serviceAccountTokenCreator`
+  on the service account for itself, `storage` + `iamcredentials` APIs, the two
+  env vars on Cloud Run, output `attachments_bucket`.
+- **Schema + migration `20261008230000_m6_attachments_audit_index`.**
+- **Published reasons:** 422 `UPLOAD_INCOMPLETE`, `UPLOAD_MISMATCH`,
+  `ATTACHMENT_TARGET_REQUIRED`, `ATTACHMENT_TARGET_AMBIGUOUS`,
+  `MIME_TYPE_UNSUPPORTED`, `FILE_TOO_LARGE`, `FILENAME_INVALID`,
+  `ATTACHMENT_NOT_READY`; error code `ATTACHMENTS_NOT_CONFIGURED` (503).
+- **Tests:** 315 (M6: compute 7, rules 3, store contract 2 × memory +
+  Postgres, routes-m6 5).
+
+### Not done (brief §5.4, §7)
+- No malware scan before `READY`; `complete` checks size and type only. A
+  scanner on bucket events is the follow-up; the UI downloads, never renders
+  inline.
+
+---
+
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 5: retainer changes, proration, cancel preview, reconcile script (`server/`)
+
+Brief `money-v1-m5-retainer-changes.md`, decided by the engineering owner under
+the "complete the epic" instruction. API version `1.4.0-m5`; additive
+(`RetainerChargesResponse.versions`, `RetainerCharge.version`,
+`Agreement.retainer.cancelEffectiveDate`, `FinalMonth` gains `PRORATE`).
+
+### Added
+- **Versions, not edits:** `retainer_versions` appends a version per change;
+  version 1 is synthesized from the agreement row (no backfill).
+  `generateCharges` prices each service month from the version in force for it
+  (`src/retainers/terms.ts`), honours a per-version billing day and end month,
+  and stamps `retainer_charges.version`. Charges already generated keep their
+  terms.
+- **Routes:** `POST /v1/retainers/{id}/changes/preview` (previous vs next terms
+  at the VAT rate in force on the effective month, `changed`,
+  `firstChargedMonth`, `chargesKept`, token), `POST /v1/retainers/{id}/changes`
+  (201, idempotent; token covers body + agreement version + latest version +
+  rate), `POST /v1/retainers/{id}/cancel/preview` (final month under FULL /
+  PRORATE / WAIVE, posted charge, credit with `limitedByPayments`,
+  `stoppedFrom`, `outstandingAfter`); `POST /v1/retainers/{id}/cancel` accepts
+  `PRORATE` and an optional `previewToken`, required whenever a credit is
+  created (422 `PREVIEW_TOKEN_REQUIRED`). Audit `retainer.changed`;
+  `receivable.credited` with `source: RETAINER_CANCEL`.
+- **Proration** (`src/retainers/proration.ts`): `amount × days ÷ daysInMonth`,
+  half-up, days = the cancellation day inclusive; VAT computed on the prorated
+  amount at the version's rate. A posted final month is adjusted by a credit
+  (WAIVE: the outstanding; PRORATE: the difference), never above the
+  outstanding — what was paid is not refunded; earlier credits are not credited
+  twice.
+- **Reconcile script:** `npm run reconcile [-- --dry]` walks every organization
+  (`organizations.list()`), posts due installments and charges in its timezone,
+  prints a per-organization summary; for cron / Cloud Scheduler (README).
+- **Published reasons:** 422 `CHANGE_EFFECTIVE_INVALID`,
+  `CHANGE_NOTHING_CHANGED`, `FINAL_MONTH_INVALID`, `PREVIEW_TOKEN_REQUIRED`;
+  409 `AGREEMENT_CANCELLED` on changing or previewing a cancelled retainer.
+- **Schema + migration `20261008220000_m5_retainer_versions_proration`.**
+- **Tests:** 295 (M5: terms 7, proration 6, schedule +1, store contract 3 ×
+  memory + Postgres, routes-m5 8 incl. the reconcile script).
+
+---
+
+## [Unreleased] - 2026-10-08 — Money v1 Milestone 4: payments, allocations, reversals, credits, operations lookup (`server/`)
+
+All eight decisions of `money-v1-m4-payments-allocations.md` approved as
+proposed. API version `1.3.0-m4`; additive (receivables gain `credited`).
+
+### Added
+- **Pure money math:** `src/payments/allocate.ts` (outstanding = gross − paid −
+  credited; explicit-set validation that never adjusts; `OLDEST_FIRST` and
+  `SETTLE_MATTERS` suggestions; resulting balances per receivable, project and
+  customer), `src/payments/credit.ts` (credit VAT split at the receivable's
+  frozen rate, `net + vat = credit`; capacity check), `src/payments/numbering.ts`
+  (`PAY-YYYY-NNNN`), `src/payments/preview-token.ts` (token over the allocation
+  set **and** the `(id, version)` of every eligible receivable — decision 2).
+- **Schema + migration `20261008205727_m4_payments_allocations_credits`:**
+  `payments` (number unique per organization, `allocatedMinor`, status
+  POSTED/REVERSED, reversal fields, `replacesPaymentId`), `payment_allocations`,
+  `receivable_credits` (append-only), `payment_counters` (per organization and
+  year, row-locked in the posting transaction); `receivables.creditedMinor`.
+- **Store:** `PaymentRepository` (create / allocate / reverse / list / replacedBy)
+  and `ReceivableRepository.{getByIds, listEligible, credit, listCredits}`,
+  `IdempotencyRepository.get`. Postgres locks each receivable (`FOR UPDATE`),
+  checks capacity under the lock and recomputes `status` from the sums; a race
+  the token did not catch surfaces as `InsufficientCapacity` → 409
+  `PREVIEW_STALE`. The memory store's `seedPaid` test hook is gone.
+- **Routes:** `POST /v1/allocations/preview` (new payment or `{ paymentId }`),
+  `POST /v1/payments`, `GET /v1/payments`, `GET /v1/payments/{id}`,
+  `POST /v1/payments/{id}/allocations`, `POST /v1/payments/{id}/reverse`,
+  `POST /v1/receivables/{id}/credits`, `GET /v1/receivables/{id}/credits`,
+  `GET /v1/operations/{idempotencyKey}`. Audit actions `payment.recorded`,
+  `payment.allocated`, `payment.reversed`, `receivable.settled`,
+  `receivable.credited`.
+- **Published reasons:** 422 `ALLOCATION_EXCEEDS_PAYMENT`,
+  `ALLOCATION_EXCEEDS_OUTSTANDING`, `ALLOCATION_DUPLICATE`,
+  `RECEIVABLE_NOT_FOUND`, `RECEIVABLE_NOT_OPEN`, `RECEIVABLE_CUSTOMER_MISMATCH`,
+  `PAYMENT_NOT_POSTED`, `NO_UNALLOCATED_FUNDS`, `CREDIT_EXCEEDS_OUTSTANDING`,
+  `REPLACES_NOT_REVERSED`, `REPLACES_CUSTOMER_MISMATCH`, `CUSTOMER_NOT_FOUND`;
+  409 `ALREADY_REVERSED`; preview warning `NO_ELIGIBLE_RECEIVABLES`.
+
+### Changed
+- `itemStatus` takes `creditedMinor`: credits count towards `PAID` but never
+  read as `PARTIALLY_PAID` (a credited, unpaid item stays `DUE` / `OVERDUE`).
+  Installment and charge statuses, `countOutstandingByProject` (archive guard)
+  and receivable `outstanding` all subtract credits.
+- `GET /v1/operations/{key}` is `PENDING | COMPLETED | 404`, not `FAILED`
+  (decision 7): a key released by a 5xx is reusable.
+
+### Technical
+- Tests: 268 (28 files), +88: `payments/__tests__/{allocate,credit,numbering}`,
+  `store-contract-m4.ts` (memory + Postgres, incl. 12 concurrent numbered
+  creates and a sums-equal-rows sequence), `routes-m4.test.ts`; the M3
+  receivable-status test now records a real payment. Postgres 16 ran locally
+  for the contract suite. `openapi:check` green; ESLint and `tsc` clean.
+
+---
+
+## [Docs] - 2026-10-08 — Money v1 Milestone 4 design brief and test plan (proposed)
+
+### Added
+- `.claude/designs/money-v1-m4-payments-allocations.md` and `…-tests.md`:
+  payments with allocations previewed before posting (OLDEST_FIRST /
+  SETTLE_MATTERS suggestions, balance-covering preview token), unallocated
+  funds allocated later, whole-payment reversal with `replacesPaymentId`,
+  append-only credits against posted receivables (the adjustment M3
+  reserved), `PAY-YYYY-NNNN` numbering, `GET /v1/operations/{key}`. Eight
+  decisions await the product owner before Phase 2. No `server/` change.
 
 ---
 

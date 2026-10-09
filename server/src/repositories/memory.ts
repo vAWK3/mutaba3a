@@ -1,9 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
+  AttachmentFilter,
+  AttachmentRecord,
+  AttachmentRepository,
+  AuditFilter,
+  CreateAttachmentInput,
+  AppendVersionInput,
+  RetainerVersionRecord,
   AgreementFilter,
   AgreementRecord,
   AgreementRepository,
+  AllocationInput,
+  AllocationRecord,
+  CreatePaymentInput,
+  CreditInput,
+  CreditRecord,
+  PaymentFilter,
+  PaymentRecord,
+  PaymentRepository,
   ApiKeyRecord,
   ApiKeyRepository,
   ApplySupplementInput,
@@ -71,6 +86,12 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly charges = new Map<string, RetainerChargeRecord>();
   private readonly recs = new Map<string, ReceivableRecord>();
   private readonly supps = new Map<string, SupplementRecord>();
+  private readonly versions = new Map<string, RetainerVersionRecord>();
+  private readonly files = new Map<string, AttachmentRecord>();
+  private readonly pays = new Map<string, PaymentRecord>();
+  private readonly allocs = new Map<string, AllocationRecord>();
+  private readonly credits = new Map<string, CreditRecord>();
+  private readonly counters = new Map<string, number>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -83,6 +104,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     getById: async (id) => clone(this.orgs.get(id)),
     getBySlug: async (slug) => clone([...this.orgs.values()].find((o) => o.slug === slug)),
+    list: async () => [...this.orgs.values()].map((o) => ({ ...o })), // insertion order = creation order
   };
 
   readonly apiKeys: ApiKeyRepository = {
@@ -182,6 +204,58 @@ export class MemoryLedgerStore implements LedgerStore {
         .slice(-limit)
         .reverse()
         .map((e) => ({ ...e })),
+    list: async (organizationId, filter: AuditFilter, page) =>
+      paginate(
+        this.events.filter((e) => e.organizationId === organizationId && (!filter.entityType || e.entityType === filter.entityType) && (!filter.entityId || e.entityId === filter.entityId) && (!filter.action || e.action === filter.action)),
+        page,
+      ),
+  };
+
+  readonly attachments: AttachmentRepository = {
+    create: async (input: Omit<CreateAttachmentInput, 'storageKey'>, at) => {
+      const record: AttachmentRecord = { id: randomUUID(), ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at, completedAt: null, deletedAt: null };
+      this.files.set(record.id, record);
+      return { ...record };
+    },
+    setKey: async (organizationId, id, storageKey) => {
+      const f = this.files.get(id);
+      if (!f || f.organizationId !== organizationId) return null;
+      f.storageKey = storageKey;
+      return { ...f };
+    },
+    getById: async (organizationId, id) => {
+      const f = this.files.get(id);
+      return f && f.organizationId === organizationId && !f.deletedAt ? { ...f } : null;
+    },
+    list: async (organizationId, filter: AttachmentFilter, page) =>
+      paginate(
+        [...this.files.values()].filter(
+          (f) =>
+            f.organizationId === organizationId &&
+            f.status === 'READY' &&
+            !f.deletedAt &&
+            (!filter.customerId || f.customerId === filter.customerId) &&
+            (!filter.projectId || f.projectId === filter.projectId) &&
+            (!filter.paymentId || f.paymentId === filter.paymentId) &&
+            (!filter.kind || f.kind === filter.kind),
+        ),
+        page,
+      ),
+    complete: async (organizationId, id, at) => {
+      const f = this.files.get(id);
+      if (!f || f.organizationId !== organizationId || f.deletedAt) return null;
+      if (f.status !== 'READY') {
+        f.status = 'READY';
+        f.completedAt = at;
+      }
+      return { ...f };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const f = this.files.get(id);
+      if (!f || f.organizationId !== organizationId) return null;
+      if (!f.deletedAt) f.deletedAt = at;
+      return { ...f };
+    },
   };
 
   readonly idempotency: IdempotencyRepository = {
@@ -217,6 +291,7 @@ export class MemoryLedgerStore implements LedgerStore {
     fail: async ({ organizationId, key }) => {
       this.idem.delete(`${organizationId}:${key}`);
     },
+    get: async (organizationId, key) => clone(this.idem.get(`${organizationId}:${key}`)),
   };
 
   readonly externalReferences: ExternalReferenceRepository = {
@@ -377,7 +452,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('agreements.projectId');
       const { installments: specs, ...rest } = input;
       if (new Set(specs.map((x) => x.position)).size !== specs.length) throw new UniqueViolation('installments.agreementId_position');
-      const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
+      const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
       this.agrs.set(agreement.id, agreement);
       const installments = specs.map((spec) => {
         const record: InstallmentRecord = { id: randomUUID(), organizationId: input.organizationId, agreementId: agreement.id, ...spec, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
@@ -456,6 +531,7 @@ export class MemoryLedgerStore implements LedgerStore {
         a.status = 'CANCELLED';
         a.cancelledAt = at;
         a.cancelEffectiveMonth = input.cancelEffectiveMonth;
+        a.cancelEffectiveDate = input.cancelEffectiveDate ?? null;
         a.finalMonth = input.finalMonth;
         a.version += 1;
         a.updatedAt = at;
@@ -476,10 +552,25 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       const chargeId = randomUUID();
       const receivable = this.newReceivable({ organizationId: input.organizationId, customerId: input.customerId, projectId: input.projectId, agreementId: input.agreementId, origin: 'RETAINER_CHARGE', originId: chargeId, currency: input.currency, netMinor: input.netMinor, vatMinor: input.vatMinor, grossMinor: input.grossMinor, vatTreatment: input.vatTreatment, vatRateBasisPoints: input.rateBasisPoints, dueDate: input.dueDate, postingDate: input.chargeDate, postedAt: at });
-      const charge: RetainerChargeRecord = { id: chargeId, organizationId: input.organizationId, agreementId: input.agreementId, serviceMonth: input.serviceMonth, chargeDate: input.chargeDate, amountMinor: input.amountMinor, netMinor: input.netMinor, vatMinor: input.vatMinor, grossMinor: input.grossMinor, vatTreatment: input.vatTreatment, rateBasisPoints: input.rateBasisPoints, postedAt: at, receivableId: receivable.id, createdAt: at };
+      const charge: RetainerChargeRecord = { id: chargeId, organizationId: input.organizationId, agreementId: input.agreementId, version: input.version ?? 1, serviceMonth: input.serviceMonth, chargeDate: input.chargeDate, amountMinor: input.amountMinor, netMinor: input.netMinor, vatMinor: input.vatMinor, grossMinor: input.grossMinor, vatTreatment: input.vatTreatment, rateBasisPoints: input.rateBasisPoints, postedAt: at, receivableId: receivable.id, createdAt: at };
       this.charges.set(charge.id, charge);
       return { charge: { ...charge }, receivable: { ...receivable }, created: true };
     },
+    appendVersion: async (input: AppendVersionInput, at) => {
+      const a = this.agrs.get(input.agreementId);
+      if (!a || a.organizationId !== input.organizationId) return { kind: 'not_found' };
+      if (a.version !== input.expectedAgreementVersion) return { kind: 'stale', record: { agreement: { ...a }, version: null as unknown as RetainerVersionRecord } };
+      if ([...this.versions.values()].some((v) => v.agreementId === input.agreementId && v.version === input.version)) throw new UniqueViolation('retainer_versions.agreementId_version');
+      const { expectedAgreementVersion, ...rest } = input;
+      void expectedAgreementVersion;
+      const version: RetainerVersionRecord = { id: randomUUID(), ...rest, createdAt: at };
+      this.versions.set(version.id, version);
+      a.version += 1;
+      a.updatedAt = at;
+      return { kind: 'updated', record: { agreement: { ...a }, version: { ...version } } };
+    },
+    listVersions: async (organizationId, agreementId) =>
+      [...this.versions.values()].filter((v) => v.organizationId === organizationId && v.agreementId === agreementId).sort((x, y) => x.version - y.version).map((v) => ({ ...v })),
   };
 
   readonly receivables: ReceivableRepository = {
@@ -487,6 +578,24 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.recs.get(id);
       return r && r.organizationId === organizationId ? { ...r } : null;
     },
+    getByIds: async (organizationId, ids) => ids.map((id) => this.recs.get(id)).filter((r): r is ReceivableRecord => !!r && r.organizationId === organizationId).map((r) => ({ ...r })),
+    listEligible: async (organizationId, customerId, currency) =>
+      [...this.recs.values()]
+        .filter((r) => r.organizationId === organizationId && r.customerId === customerId && r.currency === currency && r.status === 'OPEN' && outstanding(r) > 0n)
+        .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : a.postingDate < b.postingDate ? -1 : a.postingDate > b.postingDate ? 1 : a.id < b.id ? -1 : 1))
+        .map((r) => ({ ...r })),
+    credit: async (organizationId, receivableId, input: CreditInput, at) => {
+      const r = this.recs.get(receivableId);
+      if (!r || r.organizationId !== organizationId) return null;
+      if (r.status !== 'OPEN' || input.amountMinor > outstanding(r)) throw new InsufficientCapacity(receivableId);
+      const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId, ...input, createdAt: at };
+      this.credits.set(credit.id, credit);
+      r.creditedMinor += input.amountMinor;
+      settle(r);
+      return { receivable: { ...r }, credit: { ...credit } };
+    },
+    listCredits: async (organizationId, receivableId) =>
+      [...this.credits.values()].filter((c) => c.organizationId === organizationId && c.receivableId === receivableId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1)).map((c) => ({ ...c })),
     list: async (organizationId, filter: ReceivableFilter, page) =>
       paginate(
         [...this.recs.values()].filter(
@@ -502,20 +611,106 @@ export class MemoryLedgerStore implements LedgerStore {
         page,
       ),
     countOutstandingByProject: async (organizationId, projectId) =>
-      [...this.recs.values()].filter((r) => r.organizationId === organizationId && r.projectId === projectId && r.status === 'OPEN' && r.grossMinor - r.paidMinor > 0n).length,
+      [...this.recs.values()].filter((r) => r.organizationId === organizationId && r.projectId === projectId && r.status === 'OPEN' && outstanding(r) > 0n).length,
   };
 
-  /** Test helper (M4 writes paidMinor for real): seed a payment against a receivable. */
-  seedPaid(receivableId: string, paidMinor: bigint): void {
-    const r = this.recs.get(receivableId);
-    if (r) {
-      r.paidMinor = paidMinor;
-      if (paidMinor >= r.grossMinor) r.status = 'SETTLED';
+  readonly payments: PaymentRepository = {
+    create: async (input: CreatePaymentInput, at) => {
+      const customer = this.custs.get(input.customerId);
+      if (!customer || customer.organizationId !== input.organizationId) throw new ForeignKeyViolation('payments.customerId');
+      // All-or-nothing: check every receivable before touching any.
+      this.assertCapacity(input.organizationId, input.allocations);
+      const year = Number(input.receivedOn.slice(0, 4));
+      const counterKey = `${input.organizationId}:${year}`;
+      const seq = (this.counters.get(counterKey) ?? 0) + 1;
+      this.counters.set(counterKey, seq);
+      const { allocations: requested, ...rest } = input;
+      const payment: PaymentRecord = { id: randomUUID(), ...rest, number: `PAY-${year}-${String(seq).padStart(4, '0')}`, allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, version: 1, createdAt: at, updatedAt: at };
+      this.pays.set(payment.id, payment);
+      const allocations = this.applyAllocations(payment, requested, at);
+      return { payment: { ...payment }, allocations };
+    },
+    getById: async (organizationId, id) => {
+      const p = this.pays.get(id);
+      return p && p.organizationId === organizationId ? { ...p } : null;
+    },
+    list: async (organizationId, filter: PaymentFilter, page) => {
+      const onProject = filter.projectId ? new Set([...this.allocs.values()].filter((a) => this.recs.get(a.receivableId)?.projectId === filter.projectId).map((a) => a.paymentId)) : null;
+      return paginate(
+        [...this.pays.values()].filter(
+          (p) =>
+            p.organizationId === organizationId &&
+            (!filter.customerId || p.customerId === filter.customerId) &&
+            (!filter.status || p.status === filter.status) &&
+            (!filter.receivedBefore || p.receivedOn <= filter.receivedBefore) &&
+            (!filter.receivedAfter || p.receivedOn >= filter.receivedAfter) &&
+            (!onProject || onProject.has(p.id)),
+        ),
+        page,
+      );
+    },
+    listAllocations: async (organizationId, paymentId) =>
+      [...this.allocs.values()].filter((a) => a.organizationId === organizationId && a.paymentId === paymentId).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map((a) => ({ ...a })),
+    allocate: async (organizationId, paymentId, requested: AllocationInput[], at) => {
+      const payment = this.pays.get(paymentId);
+      if (!payment || payment.organizationId !== organizationId) return null;
+      if (payment.status !== 'POSTED') throw new InsufficientCapacity(paymentId);
+      const total = requested.reduce((s, a) => s + a.amountMinor, 0n);
+      if (total > payment.amountMinor - payment.allocatedMinor) throw new InsufficientCapacity(paymentId);
+      this.assertCapacity(organizationId, requested);
+      const allocations = this.applyAllocations(payment, requested, at);
+      return { payment: { ...payment }, allocations };
+    },
+    reverse: async (organizationId, paymentId, reason, at) => {
+      const payment = this.pays.get(paymentId);
+      if (!payment || payment.organizationId !== organizationId) return null;
+      if (payment.status === 'REVERSED') return { payment: { ...payment }, changed: false };
+      for (const a of this.allocs.values()) {
+        if (a.paymentId !== paymentId) continue;
+        const r = this.recs.get(a.receivableId);
+        if (!r) continue;
+        r.paidMinor -= a.amountMinor;
+        settle(r);
+      }
+      payment.allocatedMinor = 0n;
+      payment.status = 'REVERSED';
+      payment.reversedAt = at;
+      payment.reversalReason = reason;
+      payment.version += 1;
+      payment.updatedAt = at;
+      return { payment: { ...payment }, changed: true };
+    },
+    findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
+  };
+
+  private assertCapacity(organizationId: string, requested: readonly AllocationInput[]): void {
+    for (const a of requested) {
+      const r = this.recs.get(a.receivableId);
+      if (!r || r.organizationId !== organizationId) throw new ForeignKeyViolation('payment_allocations.receivableId');
+      if (r.status !== 'OPEN' || a.amountMinor <= 0n || a.amountMinor > outstanding(r)) throw new InsufficientCapacity(a.receivableId);
     }
   }
 
-  private newReceivable(input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'status' | 'version' | 'createdAt'>): ReceivableRecord {
-    const receivable: ReceivableRecord = { id: randomUUID(), ...input, paidMinor: 0n, status: 'OPEN', version: 1, createdAt: input.postedAt };
+  private applyAllocations(payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): AllocationRecord[] {
+    const created: AllocationRecord[] = [];
+    for (const a of requested) {
+      const r = this.recs.get(a.receivableId)!;
+      const record: AllocationRecord = { id: randomUUID(), organizationId: payment.organizationId, paymentId: payment.id, receivableId: a.receivableId, amountMinor: a.amountMinor, createdAt: at };
+      this.allocs.set(record.id, record);
+      r.paidMinor += a.amountMinor;
+      settle(r);
+      payment.allocatedMinor += a.amountMinor;
+      created.push({ ...record });
+    }
+    if (created.length > 0) {
+      payment.version += 1;
+      payment.updatedAt = at;
+    }
+    return created;
+  }
+
+  private newReceivable(input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt'>): ReceivableRecord {
+    const receivable: ReceivableRecord = { id: randomUUID(), ...input, paidMinor: 0n, creditedMinor: 0n, status: 'OPEN', version: 1, createdAt: input.postedAt };
     this.recs.set(receivable.id, receivable);
     return receivable;
   }
@@ -549,6 +744,24 @@ export class ForeignKeyViolation extends Error {
     super(`foreign key violated: ${constraint}`);
     this.name = 'ForeignKeyViolation';
   }
+}
+
+/** A receivable (or payment) can no longer absorb an allocation or credit — a race the preview token did not see (M4). */
+export class InsufficientCapacity extends Error {
+  constructor(readonly entityId: string) {
+    super(`insufficient capacity on ${entityId}`);
+    this.name = 'InsufficientCapacity';
+  }
+}
+
+function outstanding(r: ReceivableRecord): bigint {
+  return r.grossMinor - r.paidMinor - r.creditedMinor;
+}
+
+/** Status and version follow the sums: SETTLED iff nothing is outstanding. */
+function settle(r: ReceivableRecord): void {
+  r.status = outstanding(r) <= 0n ? 'SETTLED' : 'OPEN';
+  r.version += 1;
 }
 
 function clone<T extends object>(value: T | undefined): T | null {

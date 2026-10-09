@@ -51,7 +51,7 @@ export function installmentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (result.created) {
         await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'installment.posted', entityType: 'installment', entityId: installment.id, metadata: { agreementId: agreement.id, receivableId: result.receivable.id, trigger: 'MANUAL', dueDate }, requestId: c.get('requestId') });
       }
-      const view = installmentView(result.installment, agreement, today, result.receivable.paidMinor);
+      const view = installmentView(result.installment, agreement, today, { paidMinor: result.receivable.paidMinor, creditedMinor: result.receivable.creditedMinor });
       return c.json({ installment: serializeInstallment({ installment: result.installment, currency: agreement.currency, ...view }), receivable: serializeReceivable(result.receivable, today), created: result.created }, result.created ? 201 : 200);
     },
   );

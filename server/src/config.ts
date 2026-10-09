@@ -16,6 +16,9 @@ const envSchema = z.object({
   API_KEY_ENVIRONMENT: z.enum(['live', 'test']),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(300),
   SERVICE_VERSION: z.string().min(1).default('0.0.0-dev'),
+  /** Private GCS bucket for attachments (M6). Absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
+  ATTACHMENTS_BUCKET: z.string().min(3).optional(),
+  ATTACHMENTS_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
 });
 
 export type Config = z.infer<typeof envSchema>;

@@ -44,3 +44,8 @@ output "key_environment" {
   description = "live or test — which API keys this deployment issues and accepts."
   value       = local.key_environment
 }
+
+output "attachments_bucket" {
+  description = "Private bucket for Money attachments (M6); the API reaches it as its service account."
+  value       = google_storage_bucket.attachments.name
+}

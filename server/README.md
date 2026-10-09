@@ -1,6 +1,6 @@
 # Mutaba3a API (`server/`)
 
-The hosted, organization-scoped financial API that Malafat's Money section calls (MUT/MAL Money v1, Option B — see ADR-024/025 in `../.claude/DECISIONS.md`). Milestone 1 ships the control plane: organizations, API keys with scopes, the Malafat tenant binding, audit, idempotency, rate limiting, and the OpenAPI contract. Milestone 2 adds customers, projects, external references and batch import. Milestone 3 adds VAT rates, fixed-fee agreements with installments, basic retainers and receivables. Payments arrive in M4.
+The hosted, organization-scoped financial API that Malafat's Money section calls (MUT/MAL Money v1, Option B — see ADR-024/025 in `../.claude/DECISIONS.md`). Milestone 1 ships the control plane: organizations, API keys with scopes, the Malafat tenant binding, audit, idempotency, rate limiting, and the OpenAPI contract. Milestone 2 adds customers, projects, external references and batch import. Milestone 3 adds VAT rates, fixed-fee agreements with installments, basic retainers and receivables. Milestone 4 adds payments with previewed allocations, reversals, credits against posted receivables and the operations lookup.
 
 The desktop/PWA app in `../src` is unchanged and still works fully offline. This directory is a separate npm package with its own lockfile; nothing from `../src` is imported yet.
 
@@ -33,6 +33,15 @@ npm run openapi:check                             # committed openapi/openapi.ya
 npm run smoke -- --url http://localhost:8787        # post-deploy checks, also runnable against a dev server
 ```
 
+End-to-end, against a dev or staging database (both scripts create throwaway
+organizations, which are never deleted):
+
+```bash
+MUTABA3A_ADMIN_TOKEN=… E2E_BASE_URL=http://localhost:8787 MALAFAT_WEB_DIR=../../malafat/crm-platform/apps/web \
+  npx tsx e2e/money-v1.e2e.mts                      # Malafat's client driving every Money v1 flow (84 checks)
+E2E_DATABASE_URL=postgresql://… npx tsx e2e/attachments.e2e.mts   # attachments on Postgres with in-memory storage (34 checks)
+```
+
 CI (`.github/workflows/server-ci.yml`) runs all of the above, the Postgres
 contract suite, the Docker image build and `terraform validate` on every
 change under `server/`. It never pushes or deploys.
@@ -48,12 +57,39 @@ change under `server/`. It never pushes or deploys.
 - `POST /v1/import/preview`, `POST /v1/import/commit` — batch link of an external system's customers and projects (≤ 500 rows; commit needs the preview's `previewToken`)
 - `GET /v1/vat-rates`, `PUT /v1/settings/vat` — the firm's effective-dated standard rate (basis points)
 - `POST /v1/agreements/preview`, `POST /v1/agreements`, `GET /v1/agreements[/{id}]`, `POST /v1/agreements/{id}/supplements`, `POST /v1/agreements/{id}/cancel`, `POST /v1/installments/{id}/trigger` — fixed-fee agreements; VAT treatment per item; installments post immediately, on a date, or manually; due dates from payment terms (default end of month)
-- `POST /v1/retainers/preview`, `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`, `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile` — recurring retainers, one charge per service month
+- `POST /v1/retainers/preview`, `POST /v1/retainers`, `GET /v1/retainers/{id}/charges`, `POST /v1/retainers/{id}/changes/preview`, `POST /v1/retainers/{id}/changes`, `POST /v1/retainers/{id}/cancel/preview`, `POST /v1/retainers/{id}/cancel`, `POST /v1/retainers/reconcile` — recurring retainers, one charge per service month; effective-dated changes of terms (versions); cancel with FULL / PRORATE / WAIVE and a credit on an already-posted final month
+- `POST /v1/allocations/preview`, `POST /v1/payments`, `GET /v1/payments[/{id}]`, `POST /v1/payments/{id}/allocations`, `POST /v1/payments/{id}/reverse`, `POST|GET /v1/receivables/{id}/credits`, `GET /v1/operations/{idempotencyKey}` — payments, allocations, reversals, credits, lost-response lookup
 - `GET /v1/receivables[/{id}]` — what is owed, statuses computed in the organization timezone
+- `GET /v1/summaries/organization[?currency=]`, `GET /v1/summaries/customers/{id}`, `GET /v1/summaries/projects/{id}` — outstanding split into overdue / due today / not yet due, unallocated, last payment, statuses; computed on read
+- `GET /v1/audit?entityType=&entityId=&action=` — the organization's financial history (API keys with `audit:read`)
+- `POST /v1/attachments/uploads`, `POST /v1/attachments/{id}/complete`, `GET /v1/attachments?customerId=|projectId=|paymentId=`, `GET /v1/attachments/{id}/download`, `DELETE /v1/attachments/{id}` — invoices and receipts behind short-lived signed URLs (needs `ATTACHMENTS_BUCKET`; otherwise 503 `ATTACHMENTS_NOT_CONFIGURED`)
 - `POST /admin/v1/organizations`, `GET /admin/v1/organizations/{id}`, `POST …/{id}/api-keys`, `POST /admin/v1/api-keys/{id}/revoke`, `GET …/{id}/audit` — operator only, `X-Admin-Token`
 - `GET /openapi.json` — the live contract; `openapi/openapi.yaml` is the committed copy
 
 Errors are always `{"error":{"code","message","details?","requestId"}}`; codes are listed in `src/errors.ts` and in the OpenAPI description.
+
+## Attachments bucket (operator)
+
+Terraform creates a private bucket (`<project>-mutaba3a-attachments`) and gives
+the API's service account object access plus `iam.serviceAccountTokenCreator`
+on itself, which is how V4 signed URLs are minted without a key file. The
+bucket name reaches the service as `ATTACHMENTS_BUCKET`; without it the
+attachments routes answer 503 and everything else works. Locally, set
+`ATTACHMENTS_BUCKET` to any bucket your `gcloud auth application-default
+login` identity can write to, or leave it unset.
+
+## Scheduled reconcile (operator)
+
+Charges and dated installments post lazily on reads. For organizations nobody
+reads for a while, run the reconcile on a schedule (Cloud Scheduler → Cloud Run
+job, or cron on any host with `DATABASE_URL`):
+
+```bash
+npm run reconcile            # every organization, in its own timezone; idempotent
+npm run reconcile -- --dry   # list organizations and "today" per timezone, post nothing
+```
+
+Daily at 00:30 in the firms' timezone is enough; running it hourly is harmless.
 
 ## Deploy (operator runs these; nothing here deploys itself)
 

@@ -27,4 +27,10 @@ describe('retainer schedule', () => {
   it('is bounded to 120 months so a forgotten retainer cannot generate forever', () => {
     expect(chargeMonths({ startMonth: '2000-01', billingDay: 1 }, '2026-10-08')).toHaveLength(120);
   });
+
+  it('PRORATE charges the cancellation month like FULL; the amount is the caller’s business', () => {
+    const spec = { startMonth: '2026-10', billingDay: 1, cancelEffectiveMonth: '2026-11', finalMonth: 'PRORATE' as const };
+    expect(chargeMonths(spec, '2027-03-01')).toEqual(['2026-10', '2026-11']);
+    expect(chargeMonths({ ...spec, finalMonth: 'WAIVE' }, '2027-03-01')).toEqual(['2026-10']);
+  });
 });
