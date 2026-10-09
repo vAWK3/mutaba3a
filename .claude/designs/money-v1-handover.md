@@ -6,7 +6,7 @@
 ## 1. Review and merge (both repositories)
 
 1. Mutaba3a: `server/` M4–M6, the two e2e scripts, Terraform (bucket + IAM), briefs under `.claude/designs/money-v1-m{4,5,6}-*.md`. CI (`server-ci.yml`) runs unit + Postgres contract tests, OpenAPI check, Docker build, `terraform validate`.
-2. Malafat: `crm-platform/apps/web/src/features/money/**`, `api/admin/money/**`, `admin/money/**`, the client page Money card, `packages/core/src/i18n/messages/{en,ar,he}/money.json`, `openapi/openapi.yaml`, `.claude/` knowledge files. No Prisma schema change (ADR-150): no tenant migration.
+2. Malafat: `crm-platform/apps/web/src/features/money/**`, `api/admin/money/**`, `admin/money/**`, the client page Money card, `packages/core/src/i18n/messages/{en,ar,he}/money.json`, `openapi/openapi.yaml`, `.claude/` knowledge files. No Prisma schema change since M1 (ADR-150); the M1 tenant migration is in §3.
 3. Malafat's vendored contract is pinned to Mutaba3a API `1.5.1-m6` (commit `a923a92`). Deploy Mutaba3a first or together; an older Mutaba3a answers the cancel route with the old shape (Malafat's UI ignores that body, so the order is not critical).
 
 ## 2. Mutaba3a deployment (operator runs these; `server/DEPLOYMENT.md` has the full runbook)
@@ -19,7 +19,7 @@
 
 ## 3. Malafat deployment
 
-1. Deploy `apps/web` as usual (`pnpm release`); no `pnpm migrate:all` is needed for Money.
+1. Deploy `apps/web` as usual (`pnpm release`), then run the post-deploy step it prints: `pnpm db:update_tenants` (proxy included) applies the M1 migration `20261008_money_integration`, which creates `money_integrations` in every tenant schema. Until it runs, the Money settings page fails with Prisma P2021 (`tenant_<slug>.money_integrations does not exist`). M2–M6 added no tables; this one step covers Money v1.
 2. `MUTABA3A_API_URL` must point at the deployed Mutaba3a; the per-tenant API key is entered by the Partner in Settings › Money & Mutaba3a (encrypted with the tenant DEK, ADR-150).
 3. Pilot firm: provision its organization and key (`npm run provision` in Mutaba3a), connect in Malafat, link clients and matters from the Money overview, then walk `.claude/TEST_PLAN.md` "Still manual (runbook)" items for M3–M6 (record / reverse / corrected payment, RTL check of the Allocate table, forced connection drop, documents upload / download / delete, Money card visibility, overview tiles vs rows).
 
