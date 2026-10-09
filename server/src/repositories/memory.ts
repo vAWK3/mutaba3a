@@ -41,6 +41,11 @@ import type {
   CreateCustomerInput,
   CreateOrganizationInput,
   CreateProjectInput,
+  CreateFeeProposalInput,
+  FeeProposalFilter,
+  FeeProposalRecord,
+  FeeProposalRepository,
+  FeeProposalTransitionPatch,
   CustomerFilter,
   CustomerRecord,
   CustomerRepository,
@@ -65,6 +70,7 @@ import type {
   UpdateCustomerPatch,
   UpdateProjectPatch,
 } from './ports.js';
+import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
 /**
  * In-memory LedgerStore for tests. Mirrors every uniqueness constraint the
@@ -92,6 +98,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly allocs = new Map<string, AllocationRecord>();
   private readonly credits = new Map<string, CreditRecord>();
   private readonly counters = new Map<string, number>();
+  private readonly props = new Map<string, FeeProposalRecord>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -427,6 +434,68 @@ export class MemoryLedgerStore implements LedgerStore {
       [...this.agrs.values()].some((a) => a.organizationId === organizationId && a.projectId === id),
   };
 
+  readonly feeProposals: FeeProposalRepository = {
+    create: async (input: CreateFeeProposalInput, at) => {
+      const project = this.projs.get(input.projectId);
+      if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('fee_proposals.projectId');
+      if (await this.feeProposals.findOpenByProject(input.organizationId, input.projectId)) throw new UniqueViolation('fee_proposals.open_per_project');
+      const record: FeeProposalRecord = {
+        id: randomUUID(),
+        ...input,
+        status: 'PROPOSED',
+        clientApprovedOn: null,
+        clientApprovalNote: null,
+        agreedAmountMinor: null,
+        agreedOn: null,
+        agreedNote: null,
+        withdrawnAt: null,
+        withdrawnReason: null,
+        agreementId: null,
+        version: 1,
+        createdAt: at,
+        updatedAt: at,
+      };
+      this.props.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const p = this.props.get(id);
+      return p && p.organizationId === organizationId ? { ...p } : null;
+    },
+    list: async (organizationId, filter: FeeProposalFilter, page) =>
+      paginate(
+        [...this.props.values()].filter(
+          (p) =>
+            p.organizationId === organizationId &&
+            (!filter.projectId || p.projectId === filter.projectId) &&
+            (!filter.customerId || p.customerId === filter.customerId) &&
+            (!filter.status || p.status === filter.status) &&
+            (filter.open === undefined || OPEN_PROPOSAL_STATUSES.includes(p.status) === filter.open),
+        ),
+        page,
+      ),
+    findOpenByProject: async (organizationId, projectId) =>
+      clone([...this.props.values()].find((p) => p.organizationId === organizationId && p.projectId === projectId && OPEN_PROPOSAL_STATUSES.includes(p.status))),
+    transition: async (organizationId, id, from, patch: FeeProposalTransitionPatch, at) => {
+      const p = this.props.get(id);
+      if (!p || p.organizationId !== organizationId) return { kind: 'not_found' };
+      if (!from.includes(p.status)) return { kind: 'wrong_status', record: { ...p } };
+      const { status, ...rest } = patch;
+      p.status = status;
+      if (rest.clientApprovedOn !== undefined) p.clientApprovedOn = rest.clientApprovedOn;
+      if (rest.clientApprovalNote !== undefined) p.clientApprovalNote = rest.clientApprovalNote;
+      if (rest.agreedAmountMinor !== undefined) p.agreedAmountMinor = rest.agreedAmountMinor;
+      if (rest.agreedOn !== undefined) p.agreedOn = rest.agreedOn;
+      if (rest.agreedNote !== undefined) p.agreedNote = rest.agreedNote;
+      if (rest.withdrawnAt !== undefined) p.withdrawnAt = rest.withdrawnAt;
+      if (rest.withdrawnReason !== undefined) p.withdrawnReason = rest.withdrawnReason;
+      if (rest.agreementId !== undefined) p.agreementId = rest.agreementId;
+      p.version += 1;
+      p.updatedAt = at;
+      return { kind: 'updated', record: { ...p } };
+    },
+  };
+
   readonly vatRates: VatRateRepository = {
     upsert: async (organizationId, rateBasisPoints, effectiveFrom, at) => {
       const existing = [...this.rates.values()].find((r) => r.organizationId === organizationId && r.effectiveFrom === effectiveFrom);
@@ -450,9 +519,20 @@ export class MemoryLedgerStore implements LedgerStore {
     create: async (input: CreateAgreementInput, at) => {
       const project = this.projs.get(input.projectId);
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('agreements.projectId');
-      const { installments: specs, ...rest } = input;
+      const { installments: specs, feeProposalId, ...rest } = input;
       if (new Set(specs.map((x) => x.position)).size !== specs.length) throw new UniqueViolation('installments.agreementId_position');
       const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
+      if (feeProposalId) {
+        // M7: the conversion rides the creation; a proposal that moved since the route checked it refuses the whole create.
+        const proposal = this.props.get(feeProposalId);
+        if (!proposal || proposal.organizationId !== input.organizationId || proposal.projectId !== input.projectId || (proposal.status !== 'CLIENT_APPROVED' && proposal.status !== 'AGREED')) {
+          throw new StateConflict('fee_proposal', 'PROPOSAL_NOT_OPEN');
+        }
+        proposal.status = 'CONVERTED';
+        proposal.agreementId = agreement.id;
+        proposal.version += 1;
+        proposal.updatedAt = at;
+      }
       this.agrs.set(agreement.id, agreement);
       const installments = specs.map((spec) => {
         const record: InstallmentRecord = { id: randomUUID(), organizationId: input.organizationId, agreementId: agreement.id, ...spec, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
@@ -743,6 +823,14 @@ export class ForeignKeyViolation extends Error {
   constructor(readonly constraint: string) {
     super(`foreign key violated: ${constraint}`);
     this.name = 'ForeignKeyViolation';
+  }
+}
+
+/** An entity is no longer in the state a transaction needs (M7: converting a proposal that moved). `reason` is the published 409 reason. */
+export class StateConflict extends Error {
+  constructor(readonly entity: string, readonly reason: string) {
+    super(`${entity} is not in the expected state: ${reason}`);
+    this.name = 'StateConflict';
   }
 }
 

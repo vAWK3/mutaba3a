@@ -95,6 +95,20 @@ As built (rev. 2 of the M3 brief): VAT **treatment** is per item with a default 
 
 Financial status enums returned by summaries: fixed-fee project `OUTSTANDING / PARTIALLY_PAID / OVERDUE / PAID_IN_FULL` (never `PAID_IN_FULL` with a pending installment); retainer `UP_TO_DATE / OUTSTANDING / OVERDUE / CANCELLED / SETTLED`; installment `PENDING / DUE / PARTIALLY_PAID / PAID / OVERDUE`; payment `POSTED / REVERSED`.
 
+### M7 — Fee proposals (negotiations before an agreement) — **implemented 2026-10-09** (`money-v1-m7-fee-proposals.md`, API `1.6.0-m7`). The pre-agreement state the plan never had: a proposed amount, the client's approval, a final agreed figure, converted by the agreement the wizard creates. Fixed fee only; one open proposal per project; scopes reused.
+
+| Method & path | Scope | Notes |
+|---|---|---|
+| `POST /v1/fee-proposals` | `agreements:write` + Idempotency-Key | `{ projectId, amount, pricingBasis, proposedOn?, note? }` → 201 `FeeProposal` (project currency); 409 `PROPOSAL_OPEN { openProposalId, status }`; 422 `PROJECT_NOT_FOUND` / `PROJECT_ARCHIVED` / `AMOUNT_INVALID` / `DATE_INVALID` |
+| `GET /v1/fee-proposals?projectId=&customerId=&status=&open=true|false&cursor=&limit=`, `GET /v1/fee-proposals/{id}` | `agreements:read` | keyset pages; `open=true` = `PROPOSED | CLIENT_APPROVED | AGREED` |
+| `POST /v1/fee-proposals/{id}/approve` | `agreements:write` + Idempotency-Key | `{ approvedOn?, note? }`: `PROPOSED → CLIENT_APPROVED`, `agreedAmount` = `proposedAmount`; else 409 `PROPOSAL_NOT_OPEN { status, allowedFrom }` |
+| `POST /v1/fee-proposals/{id}/agree` | `agreements:write` + Idempotency-Key | `{ amount, agreedOn?, note? }`: `PROPOSED | CLIENT_APPROVED → AGREED`; else 409 `PROPOSAL_NOT_OPEN` |
+| `POST /v1/fee-proposals/{id}/withdraw` | `agreements:write` + Idempotency-Key | `{ reason? }`: any open state → `WITHDRAWN`; idempotent; 409 `PROPOSAL_NOT_OPEN` once converted |
+| `POST /v1/agreements` (M3) | — | optional `feeProposalId` (not in the preview token): 422 `PROPOSAL_NOT_FOUND` / `PROPOSAL_PROJECT_MISMATCH` / `PROPOSAL_NOT_AGREED`; on success the proposal is `CONVERTED` with `agreementId`, in the same transaction (409 `PROPOSAL_NOT_OPEN` on a race) |
+| `GET /v1/summaries/projects/{id}` and customer summary rows (M6) | — | `ProjectSummary.proposal: FeeProposalSummary | null` = `{ id, status, pricingBasis, proposedAmount, agreedAmount, proposedOn, agreementId }`, the open one else the latest converted one |
+
+`FeeProposalStatus`: `PROPOSED / CLIENT_APPROVED / AGREED / CONVERTED / WITHDRAWN`. Audit: `fee_proposal.created / client_approved / agreed / withdrawn / converted` (entity type `fee_proposal`). `PATCH /v1/projects/{id}` refuses a currency change with `CURRENCY_LOCKED` while a proposal is open.
+
 ## 4. Malafat-side client obligations
 
 - Call only from the server; never from the browser or Flutter (MAL-4).

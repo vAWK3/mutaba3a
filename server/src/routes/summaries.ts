@@ -4,9 +4,11 @@ import { todayFor } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
-import type { AgreementRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
+import { currentProposal } from '../proposals/transitions.js';
+import type { AgreementRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
 import { CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
+import { serializeFeeProposalSummary } from '../serializers.js';
 import { addBuckets, bucketize, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
@@ -82,13 +84,13 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const projects = await listAll((cursor) => store.projects.list(organization.id, { customerId }, { limit: 200, cursor }));
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { customerId }, { limit: 200, cursor }));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { customerId, status: 'POSTED' }, { limit: 200, cursor }));
-      const figures = new Map<string, ProjectFigures>();
+      const figures = new Map<string, ProjectView>();
       for (const p of projects) figures.set(p.id, await projectSummary(organization, p, receivables.filter((r) => r.projectId === p.id), today));
       const currencies = [...new Set([...projects.map((p) => p.currency), ...payments.map((p) => p.currency)])].sort();
       const blocks = currencies.map((currency) => {
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const own = projects.filter((p) => p.currency === currency);
-        const b = own.reduce((acc, p) => addBuckets(acc, figures.get(p.id)!.buckets), emptyBuckets());
+        const b = own.reduce((acc, p) => addBuckets(acc, figures.get(p.id)!.figures.buckets), emptyBuckets());
         const u = unallocatedOf(payments.filter((p) => p.currency === currency));
         return { currency: currency as Currency, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), status: customerStatus(b), projects: own.map((p) => projectWire(p, figures.get(p.id)!)) };
       });
@@ -120,7 +122,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
-  async function projectSummary(organization: Organization, project: ProjectRecord, receivables: ReceivableRecord[], today: string): Promise<ProjectFigures> {
+  async function projectSummary(organization: Organization, project: ProjectRecord, receivables: ReceivableRecord[], today: string): Promise<ProjectView> {
+    const proposals: FeeProposalRecord[] = await listAll((cursor) => store.feeProposals.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
     const agreements: AgreementRecord[] = await listAll((cursor) => store.agreements.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
     const installments: InstallmentRecord[] = [];
     let monthlyMinor: bigint | null = null;
@@ -128,7 +131,7 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (a.type === 'FIXED' && a.status === 'ACTIVE') installments.push(...(await store.agreements.listInstallments(organization.id, a.id)));
       if (a.type === 'RECURRING' && a.status === 'ACTIVE') monthlyMinor = latestTerms(termsTimeline(a, await store.agreements.listVersions(organization.id, a.id))).grossMinor;
     }
-    return projectFigures({ agreements, installments, receivables, monthlyMinor, today });
+    return { figures: projectFigures({ agreements, installments, receivables, monthlyMinor, today }), proposal: currentProposal(proposals) };
   }
 
   return app;
@@ -138,7 +141,14 @@ function bucketsWire(b: Buckets, fmt: (m: bigint) => string) {
   return { outstanding: fmt(b.outstanding), overdue: fmt(b.overdue), dueToday: fmt(b.dueToday), notYetDue: fmt(b.notYetDue) };
 }
 
-function projectWire(project: ProjectRecord, f: ProjectFigures) {
+/** A project's figures plus its current fee proposal (M7). */
+interface ProjectView {
+  figures: ProjectFigures;
+  proposal: FeeProposalRecord | null;
+}
+
+function projectWire(project: ProjectRecord, view: ProjectView) {
+  const f = view.figures;
   const fmt = (m: bigint) => formatMoney({ minor: m, currency: project.currency as Currency });
   return {
     projectId: project.id,
@@ -152,6 +162,7 @@ function projectWire(project: ProjectRecord, f: ProjectFigures) {
     ...bucketsWire(f.buckets, fmt),
     pending: { count: f.pending.count, amount: fmt(f.pending.amountMinor) },
     status: f.status,
+    proposal: serializeFeeProposalSummary(view.proposal),
   };
 }
 

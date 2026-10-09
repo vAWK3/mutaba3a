@@ -29,6 +29,54 @@
 
 ---
 
+## [Unreleased] - 2026-10-09 — Money v1 Milestone 7: fee proposals (negotiations) (`server/`, API `1.6.0-m7`)
+
+Brief `money-v1-m7-fee-proposals.md` (+ `-tests.md`), approved by the owner on
+2026-10-09 (single round · agreed amount prefills the wizard · fixed fee only ·
+overview lists every connected client). Additive; closes the gap before a fee
+agreement exists.
+
+### Added
+- **Fee proposals** (`src/proposals/transitions.ts`, `src/routes/fee-proposals.ts`):
+  `POST /v1/fee-proposals` (project currency, `proposedOn` defaults to today,
+  409 `PROPOSAL_OPEN` while one is open on the project), `GET /v1/fee-proposals`
+  (`projectId`, `customerId`, `status`, `open=true|false`, keyset pages),
+  `GET /v1/fee-proposals/{id}`, `POST …/approve` (PROPOSED → CLIENT_APPROVED,
+  agreed amount = proposed), `POST …/agree` (PROPOSED | CLIENT_APPROVED →
+  AGREED with an explicit amount), `POST …/withdraw` (any open state →
+  WITHDRAWN, idempotent). Scopes reused: `agreements:read` / `agreements:write`.
+  Audit `fee_proposal.{created,client_approved,agreed,withdrawn,converted}`.
+- **Conversion**: `POST /v1/agreements` accepts `feeProposalId` (outside the
+  preview token); the store marks the proposal CONVERTED with `agreementId` in
+  the agreement's transaction (`StateConflict` → 409 `PROPOSAL_NOT_OPEN` on a
+  race); 422 `PROPOSAL_NOT_FOUND` / `PROPOSAL_PROJECT_MISMATCH` /
+  `PROPOSAL_NOT_AGREED` before it.
+- **Project summary** gains `proposal` (`FeeProposalSummary | null`: the open
+  one, else the latest converted one), on `GET /v1/summaries/projects/{id}` and
+  the customer summary's project rows.
+- Table `fee_proposals` (migration `20261009120000_m7_fee_proposals`); one open
+  proposal per project is serialised by the project row lock in
+  `PrismaLedgerStore.feeProposals.create`, mirrored by the memory store.
+- `PATCH /v1/projects/{id}` refuses a currency change (409 `CURRENCY_LOCKED`)
+  while a proposal is open.
+
+### Changed
+- API version `1.6.0-m7`; `openapi/openapi.yaml` regenerated (new tag "Fee
+  proposals", reasons `PROPOSAL_OPEN`, `PROPOSAL_NOT_OPEN`, `PROJECT_NOT_FOUND`
+  (already raised by the preview, now published), `PROPOSAL_NOT_FOUND`,
+  `PROPOSAL_NOT_AGREED`, `PROPOSAL_PROJECT_MISMATCH`).
+
+### Technical
+- Tests: `src/proposals/__tests__/transitions.test.ts` (state table, agreed
+  amount, current proposal), `store-contract-m7.ts` (memory always, Postgres
+  with `MUTABA3A_TEST_DATABASE_URL`), `src/__tests__/routes-m7.test.ts` (7
+  cases: create / open conflict / approve + agree / withdraw / conversion /
+  lists + summaries / contract). Earlier milestones' version pins bumped.
+  Lint, typecheck, 299 unit tests, build, `openapi:check` green. The Postgres
+  contract suite could not run in the authoring session (no database); CI's
+  `server-ci.yml` runs it.
+- Operator action on release: `deploy.sh` applies the migration (handover §2).
+
 ## [Unreleased] - 2026-10-08 — First production deploy: Cloud Run rejected the `PORT` env; smoke CLI hardened (`server/`)
 
 The first `scripts/deploy.sh` run against `malafat-production` created Cloud

@@ -864,3 +864,42 @@ workflow with Workload Identity (deferred: deploys stay operator-run and the
 GitHub repo holds no GCP credentials); a tfvars admin token (rejected: a secret
 in a tfvars file on a laptop is worse than one in a private, versioned state
 bucket).
+
+
+---
+
+## ADR-027: Fee Proposals Live in the Hosted Ledger as a Single-Round Pre-Agreement State
+
+**Date**: 2026-10-09
+**Status**: Accepted (owner's answers to the M7 brief, 2026-10-09)
+
+**Context**: Before a fee agreement exists a matter has no financial state in
+Money v1: the firm's proposed amount, the client's approval and the figure
+finally agreed were recorded nowhere. The owner wants Mutaba3a to hold that
+negotiation so a matter reads "proposed → client approved → agreed", and the
+agreed amount to flow into the agreement wizard.
+
+**Decision**: A `FeeProposal` row per project in the hosted ledger (`server/`),
+with five states — `PROPOSED`, `CLIENT_APPROVED` (agreed at the proposed
+amount), `AGREED` (explicit final amount), `CONVERTED` (an agreement was
+created from it, `POST /v1/agreements` with `feeProposalId`), `WITHDRAWN`
+(firm withdrew or client declined). Single round: no offers table; the audit
+trail is the history. One open proposal per project, serialised by the project
+row lock. Agreeing posts nothing; converting is the wizard's job, and the
+server marks `CONVERTED` only inside the agreement's transaction. Fixed fee
+only; the existing `agreements:*` scopes are reused so no key is reissued.
+Malafat renders the states and stores nothing (ADR-150 on its side).
+
+**Consequences**: Four new verbs and one optional field on an existing route
+(additive, `1.6.0-m7`). A counter-offer is recorded by `agree`; an amended
+typo is withdraw + re-propose. Retainer proposals, an amend route and
+proposals that convert into supplements are listed follow-ups, each additive.
+
+**Alternatives Considered**: Multi-round offers with counter rows (rejected by
+the owner: roughly double the UI for a record the audit trail already keeps);
+auto-creating a one-installment agreement on agree (rejected: posts a
+receivable the moment the figure is agreed, before VAT and installments are
+chosen); storing the proposal on the Malafat matter (rejected: ADR-150 keeps
+every financial record in Mutaba3a, and the owner asked for Mutaba3a to hold
+it); a partial unique index for "one open per project" (rejected: Prisma
+cannot declare it, so the schema and the migration would drift).

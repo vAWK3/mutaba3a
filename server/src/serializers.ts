@@ -4,6 +4,7 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type {
+  FeeProposalRecord,
   AttachmentRecord,
   AgreementRecord,
   AllocationRecord,
@@ -342,4 +343,35 @@ export function serializeAttachment(a: AttachmentRecord) {
     createdAt: a.createdAt.toISOString(),
     completedAt: iso(a.completedAt),
   };
+}
+
+/** M7: minor units → canonical decimals in the proposal's currency. */
+export function serializeFeeProposal(p: FeeProposalRecord) {
+  return {
+    id: p.id,
+    projectId: p.projectId,
+    customerId: p.customerId,
+    currency: p.currency as Currency,
+    status: p.status,
+    pricingBasis: p.pricingBasis,
+    proposedAmount: amt(p.proposedAmountMinor, p.currency),
+    proposedOn: p.proposedOn,
+    note: p.note,
+    clientApprovedOn: p.clientApprovedOn,
+    clientApprovalNote: p.clientApprovalNote,
+    agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency),
+    agreedOn: p.agreedOn,
+    agreedNote: p.agreedNote,
+    withdrawnAt: iso(p.withdrawnAt),
+    withdrawnReason: p.withdrawnReason,
+    agreementId: p.agreementId,
+    version: p.version,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+  };
+}
+
+export function serializeFeeProposalSummary(p: FeeProposalRecord | null) {
+  if (!p) return null;
+  return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId };
 }

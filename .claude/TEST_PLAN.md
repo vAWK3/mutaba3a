@@ -30,7 +30,7 @@ Separate vitest project (`cd server && npm test`; `npm run test:db` adds the
 Postgres contract suite against the docker container in `server/README.md`).
 CI: `.github/workflows/server-ci.yml` runs the whole set, plus the Docker
 build and `terraform validate`, on every change under `server/`.
-316 tests (38 files) at M6:
+299 unit tests + 7 skipped Postgres runners (42 files) at M7 (counted by `vitest run` without a database):
 
 | Area | File | What is pinned |
 |------|------|----------------|
@@ -60,6 +60,9 @@ build and `terraform validate`, on every change under `server/`.
 | Attachment rules (M6) | `src/attachments/__tests__/rules.test.ts` | MIME allow-list, size bounds, filename rules (path separators, control chars, length), exactly one target, storage key, Content-Disposition |
 | Storage contract (M6) | `store-contract-m6.ts` via memory + Postgres runners | attachments create / complete / list (READY only, by target) / soft delete / isolation; audit.list keyset filters and paging |
 | Routes (M6) | `src/__tests__/routes-m6.test.ts` | summaries invariants and statuses; audit list scope / filters / cursor; attachments create (503 without storage, reasons, 404 target, cross-org), complete (UPLOAD_INCOMPLETE / UPLOAD_MISMATCH / idempotent), list, download (ATTACHMENT_NOT_READY, TTL), delete (204, 404 after); scopes |
+| Transitions (M7) | `src/proposals/__tests__/transitions.test.ts` | the fee-proposal state table (approve / agree / withdraw / convert per status), agreed amount after approve vs agree, `currentProposal` (open wins, else latest converted, never withdrawn) |
+| Storage contract (M7) | `store-contract-m7.ts` via memory + Postgres runners | create PROPOSED, second open proposal refused (`UniqueViolation`), filters incl. `open`, keyset paging, isolation; conditional `transition` + version bump; agreement create with `feeProposalId` converts atomically and refuses PROPOSED / converted / other-project proposals |
+| Routes (M7) | `src/__tests__/routes-m7.test.ts` | create (currency, defaults, audit, idempotent replay, validation reasons, scope), 409 `PROPOSAL_OPEN` + currency lock, approve / agree transitions and refusals, withdraw idempotency, conversion through `POST /v1/agreements` (422 reasons, audit, link), lists / pagination / isolation, project + customer summaries carry `proposal`, contract paths and version |
 | **End-to-end (HTTP)** | `server/e2e/money-v1.e2e.mts` | Malafat's client against a running server on Postgres: every milestone's flows and states plus the security edges; 84 checks (run 2026-10-08, all passing). Needs `MUTABA3A_ADMIN_TOKEN`, `E2E_BASE_URL`, `MALAFAT_WEB_DIR`; creates throwaway organizations, so dev/staging only |
 | **End-to-end (attachments)** | `server/e2e/attachments.e2e.mts` | the real app on Postgres with `MemoryAttachmentStorage`; 34 checks (run 2026-10-08, all passing). Needs `E2E_DATABASE_URL` |
 | Pagination | `src/__tests__/pagination.test.ts` | cursor round trip with ms precision, tampered/foreign cursors → VALIDATION_FAILED, limit default/cap |

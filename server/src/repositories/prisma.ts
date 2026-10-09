@@ -1,7 +1,8 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Scope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
-import { ForeignKeyViolation, InsufficientCapacity, UniqueViolation } from './memory.js';
+import { ForeignKeyViolation, InsufficientCapacity, StateConflict, UniqueViolation } from './memory.js';
+import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import type {
   AttachmentFilter,
   AttachmentRepository,
@@ -47,6 +48,9 @@ import type {
   ProjectRecord,
   ProjectRepository,
   UpdateResult,
+  FeeProposalRecord,
+  FeeProposalRepository,
+  TransitionResult,
 } from './ports.js';
 
 /**
@@ -368,6 +372,45 @@ export class PrismaLedgerStore implements LedgerStore {
     hasPostedActivity: async (organizationId, id) => (await this.prisma.agreement.count({ where: { organizationId, projectId: id } })) > 0,
   };
 
+  readonly feeProposals: FeeProposalRepository = {
+    create: (input, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // The project row lock serialises "one open proposal per project" (M7 brief §4).
+          const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "projects" WHERE "id" = ${input.projectId}::uuid AND "organizationId" = ${input.organizationId}::uuid FOR UPDATE`;
+          if (locked.length === 0) throw new ForeignKeyViolation('fee_proposals.projectId');
+          const open = await tx.feeProposal.findFirst({ where: { organizationId: input.organizationId, projectId: input.projectId, status: { in: [...OPEN_PROPOSAL_STATUSES] } }, select: { id: true } });
+          if (open) throw new UniqueViolation('fee_proposals.open_per_project');
+          return tx.feeProposal.create({ data: { ...input, createdAt: at, updatedAt: at } });
+        }),
+      ),
+    getById: (organizationId, id) => this.prisma.feeProposal.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter, page) => {
+      const rows = await this.prisma.feeProposal.findMany({
+        where: {
+          organizationId,
+          ...(filter.projectId ? { projectId: filter.projectId } : {}),
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.open === undefined ? {} : filter.open ? { status: { in: [...OPEN_PROPOSAL_STATUSES] } } : { status: { notIn: [...OPEN_PROPOSAL_STATUSES] } }),
+          ...cursorWhere(page),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      return toPage(rows, page);
+    },
+    findOpenByProject: (organizationId, projectId) => this.prisma.feeProposal.findFirst({ where: { organizationId, projectId, status: { in: [...OPEN_PROPOSAL_STATUSES] } } }),
+    transition: async (organizationId, id, from, patch, at): Promise<TransitionResult<FeeProposalRecord>> => {
+      const { status, ...rest } = patch;
+      const defined = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Prisma.FeeProposalUpdateManyMutationInput;
+      const { count } = await this.prisma.feeProposal.updateMany({ where: { id, organizationId, status: { in: [...from] } }, data: { ...defined, status, version: { increment: 1 }, updatedAt: at } });
+      const record = await this.prisma.feeProposal.findFirst({ where: { id, organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'wrong_status', record };
+    },
+  };
+
   readonly vatRates: VatRateRepository = {
     upsert: async (organizationId, rateBasisPoints, effectiveFrom, at) => {
       try {
@@ -391,8 +434,16 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$transaction(async (tx) => {
           const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: input.organizationId }, select: { id: true } });
           if (!project) throw new ForeignKeyViolation('agreements.projectId');
-          const { installments, ...rest } = input;
+          const { installments, feeProposalId, ...rest } = input;
           const agreement = await tx.agreement.create({ data: { ...rest, createdAt: at, updatedAt: at } });
+          if (feeProposalId) {
+            // M7: convert in the same transaction; a proposal that moved since the route checked it refuses the create.
+            const { count } = await tx.feeProposal.updateMany({
+              where: { id: feeProposalId, organizationId: input.organizationId, projectId: input.projectId, status: { in: ['CLIENT_APPROVED', 'AGREED'] } },
+              data: { status: 'CONVERTED', agreementId: agreement.id, version: { increment: 1 }, updatedAt: at },
+            });
+            if (count !== 1) throw new StateConflict('fee_proposal', 'PROPOSAL_NOT_OPEN');
+          }
           const created: InstallmentRecord[] = [];
           for (const spec of installments) {
             created.push(await tx.installment.create({ data: { ...spec, organizationId: input.organizationId, agreementId: agreement.id } }));

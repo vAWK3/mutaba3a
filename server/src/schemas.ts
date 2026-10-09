@@ -389,6 +389,9 @@ export const CONFLICT_REASONS = [
   'PROJECT_HAS_OUTSTANDING',
   // M4
   'ALREADY_REVERSED',
+  // M7
+  'PROPOSAL_OPEN',
+  'PROPOSAL_NOT_OPEN',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -445,6 +448,11 @@ export const VALIDATION_REASONS = [
   'FILE_TOO_LARGE',
   'FILENAME_INVALID',
   'ATTACHMENT_NOT_READY',
+  // M7
+  'PROJECT_NOT_FOUND',
+  'PROPOSAL_NOT_FOUND',
+  'PROPOSAL_NOT_AGREED',
+  'PROPOSAL_PROJECT_MISMATCH',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -494,7 +502,11 @@ export const AgreementPreviewRequestSchema = z
   })
   .openapi('AgreementPreviewRequest');
 
-export const AgreementCreateRequestSchema = AgreementPreviewRequestSchema.extend({ previewToken: z.string().length(64) }).openapi('AgreementCreateRequest');
+export const AgreementCreateRequestSchema = AgreementPreviewRequestSchema.extend({
+  previewToken: z.string().length(64),
+  /** M7: the CLIENT_APPROVED / AGREED fee proposal this agreement converts; not part of the preview token. */
+  feeProposalId: uuid.optional(),
+}).openapi('AgreementCreateRequest');
 
 export const InstallmentSchema = z
   .object({
@@ -965,6 +977,72 @@ export const CurrencySummarySchema = z
 
 export const OrganizationSummarySchema = z.object({ asOf: IsoDateSchema, currencies: z.array(CurrencySummarySchema) }).openapi('OrganizationSummary');
 
+// ---- Milestone 7: fee proposals ---------------------------------------------
+
+export const FEE_PROPOSAL_STATUSES = ['PROPOSED', 'CLIENT_APPROVED', 'AGREED', 'CONVERTED', 'WITHDRAWN'] as const;
+export const FeeProposalStatusSchema = z.enum(FEE_PROPOSAL_STATUSES).openapi('FeeProposalStatus');
+
+const proposalNote = z.string().max(2000);
+
+export const FeeProposalSchema = z
+  .object({
+    id: uuid,
+    projectId: uuid,
+    customerId: uuid,
+    currency: CurrencySchema,
+    status: FeeProposalStatusSchema,
+    pricingBasis: PricingBasisSchema,
+    /** The amount proposed to the client, in the pricing basis. */
+    proposedAmount: AmountSchema,
+    proposedOn: IsoDateSchema,
+    note: z.string().nullable(),
+    clientApprovedOn: IsoDateSchema.nullable(),
+    clientApprovalNote: z.string().nullable(),
+    /** Null while PROPOSED or WITHDRAWN; the proposed amount after approve; the explicit figure after agree. */
+    agreedAmount: AmountSchema.nullable(),
+    agreedOn: IsoDateSchema.nullable(),
+    agreedNote: z.string().nullable(),
+    withdrawnAt: z.string().datetime().nullable(),
+    withdrawnReason: z.string().nullable(),
+    /** The agreement created from it (CONVERTED). */
+    agreementId: uuid.nullable(),
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('FeeProposal');
+
+/** The proposal block on a project summary: the open one, else the latest converted one. */
+export const FeeProposalSummarySchema = z
+  .object({ id: uuid, status: FeeProposalStatusSchema, pricingBasis: PricingBasisSchema, proposedAmount: AmountSchema, agreedAmount: AmountSchema.nullable(), proposedOn: IsoDateSchema, agreementId: uuid.nullable() })
+  .openapi('FeeProposalSummary');
+
+export const CreateFeeProposalRequestSchema = z
+  .object({
+    projectId: uuid,
+    /** In the pricing basis, project currency. */
+    amount: AmountSchema,
+    pricingBasis: PricingBasisSchema,
+    /** Defaults to today in the organization timezone. */
+    proposedOn: IsoDateSchema.optional(),
+    note: proposalNote.optional(),
+  })
+  .openapi('CreateFeeProposalRequest');
+
+export const ApproveFeeProposalRequestSchema = z.object({ approvedOn: IsoDateSchema.optional(), note: proposalNote.optional() }).openapi('ApproveFeeProposalRequest');
+export const AgreeFeeProposalRequestSchema = z.object({ amount: AmountSchema, agreedOn: IsoDateSchema.optional(), note: proposalNote.optional() }).openapi('AgreeFeeProposalRequest');
+export const WithdrawFeeProposalRequestSchema = z.object({ reason: proposalNote.optional() }).openapi('WithdrawFeeProposalRequest');
+
+export const ListFeeProposalsQuerySchema = z.object({
+  ...pageQuery,
+  projectId: uuid.optional(),
+  customerId: uuid.optional(),
+  status: FeeProposalStatusSchema.optional(),
+  open: z.enum(['true', 'false']).optional().openapi({ description: '`true` narrows to PROPOSED | CLIENT_APPROVED | AGREED; `false` to CONVERTED | WITHDRAWN.' }),
+});
+export const FeeProposalPageSchema = z.object({ items: z.array(FeeProposalSchema), nextCursor: z.string().nullable() }).openapi('FeeProposalPage');
+export const FeeProposalIdParamSchema = z.object({ proposalId: uuid });
+
 export const ProjectSummarySchema = z
   .object({
     projectId: uuid,
@@ -980,6 +1058,8 @@ export const ProjectSummarySchema = z
     ...bucketFields,
     pending: z.object({ count: z.number().int(), amount: AmountSchema }),
     status: ProjectSummaryStatusSchema,
+    /** M7: the open fee proposal, else the latest converted one, else null. */
+    proposal: FeeProposalSummarySchema.nullable(),
   })
   .openapi('ProjectSummary');
 

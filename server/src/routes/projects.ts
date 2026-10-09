@@ -168,6 +168,9 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         if (await store.projects.hasPostedActivity(organization.id, id)) {
           throw new ApiError('CONFLICT', 'Currency is locked: financial activity has been posted against this project', { reason: 'CURRENCY_LOCKED', currency: current.currency });
         }
+        if (await store.feeProposals.findOpenByProject(organization.id, id)) {
+          throw new ApiError('CONFLICT', 'Currency is locked: a fee proposal is open on this project; withdraw it first', { reason: 'CURRENCY_LOCKED', currency: current.currency });
+        }
         patch.currency = body.currency;
       }
 

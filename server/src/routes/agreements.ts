@@ -21,6 +21,7 @@ import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { formatMoney } from '../money.js';
 import { verifyPreviewToken } from '../preview-token.js';
+import { StateConflict } from '../repositories/memory.js';
 import type { AgreementRecord, CreateInstallmentInput, InstallmentRecord, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   AgreementCreateRequestSchema,
@@ -36,6 +37,7 @@ import {
 } from '../schemas.js';
 import { serializeAgreement, serializeInstallment, serializeSupplement } from '../serializers.js';
 import { computeVat } from '../vat.js';
+import { assertConvertible } from './fee-proposals.js';
 import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -100,10 +102,11 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     }),
     async (c) => {
       const { organization, apiKey } = c.get('auth');
-      const { previewToken: token, ...body } = c.req.valid('json');
+      const { previewToken: token, feeProposalId, ...body } = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const preview = await composePreview(store, organization, body, today);
+      if (feeProposalId) await assertConvertible(store, organization.id, feeProposalId, body.projectId);
       if (!verifyPreviewToken(token, [organization.id, 'agreement', body, preview.vatRateBasisPoints])) {
         throw new ApiError('CONFLICT', 'previewToken does not match this body and the VAT rate in force; preview again', { reason: 'PREVIEW_STALE' });
       }
@@ -142,10 +145,15 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           billingDay: null,
           endMonth: null,
           installments,
+          feeProposalId: feeProposalId ?? null,
         },
         now,
-      );
-      await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'agreement.created', entityType: 'agreement', entityId: created.agreement.id, metadata: { projectId: created.agreement.projectId, gross: formatMoney({ minor: created.agreement.grossMinor, currency: preview.context.currency }), installments: installments.length }, requestId: c.get('requestId') });
+      ).catch((err: unknown) => {
+        if (err instanceof StateConflict && err.entity === 'fee_proposal') throw new ApiError('CONFLICT', 'The fee proposal is no longer convertible; re-read it', { reason: 'PROPOSAL_NOT_OPEN', feeProposalId });
+        throw err;
+      });
+      await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'agreement.created', entityType: 'agreement', entityId: created.agreement.id, metadata: { projectId: created.agreement.projectId, gross: formatMoney({ minor: created.agreement.grossMinor, currency: preview.context.currency }), installments: installments.length, ...(feeProposalId ? { feeProposalId } : {}) }, requestId: c.get('requestId') });
+      if (feeProposalId) await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'fee_proposal.converted', entityType: 'fee_proposal', entityId: feeProposalId, metadata: { projectId: created.agreement.projectId, agreementId: created.agreement.id, gross: formatMoney({ minor: created.agreement.grossMinor, currency: preview.context.currency }) }, requestId: c.get('requestId') });
 
       // IMMEDIATE installments post now; DATE ones whose date has arrived post through the same lazy path.
       for (const i of created.installments) {

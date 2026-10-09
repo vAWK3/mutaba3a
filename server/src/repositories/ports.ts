@@ -456,6 +456,8 @@ export interface CreateAgreementInput {
   billingDay: number | null;
   endMonth: IsoMonth | null;
   installments: CreateInstallmentInput[];
+  /** M7: the CLIENT_APPROVED / AGREED proposal this agreement converts; marked CONVERTED in the same transaction. */
+  feeProposalId?: string | null;
 }
 
 export interface InstallmentRecord extends CreateInstallmentInput {
@@ -778,4 +780,86 @@ export interface LedgerStore {
   /** Liveness of the backing store, for /ready. */
   ping(): Promise<void>;
   attachments: AttachmentRepository;
+  feeProposals: FeeProposalRepository;
+}
+
+// ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
+
+export type FeeProposalStatus = 'PROPOSED' | 'CLIENT_APPROVED' | 'AGREED' | 'CONVERTED' | 'WITHDRAWN';
+
+/**
+ * One proposed fee on a project, taken by hand through the client's approval
+ * or an explicitly agreed figure, and converted into a fixed-fee agreement by
+ * the wizard (M7 brief §3). Amounts are minor units in the project currency.
+ */
+export interface FeeProposalRecord {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  customerId: string;
+  currency: string;
+  status: FeeProposalStatus;
+  pricingBasis: PricingBasis;
+  proposedAmountMinor: bigint;
+  proposedOn: IsoDate;
+  note: string | null;
+  clientApprovedOn: IsoDate | null;
+  clientApprovalNote: string | null;
+  /** Null while PROPOSED or WITHDRAWN; the proposed amount after approve; the explicit figure after agree. */
+  agreedAmountMinor: bigint | null;
+  agreedOn: IsoDate | null;
+  agreedNote: string | null;
+  withdrawnAt: Date | null;
+  withdrawnReason: string | null;
+  /** The agreement created from it (CONVERTED). */
+  agreementId: string | null;
+  requestId: string | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateFeeProposalInput {
+  organizationId: string;
+  projectId: string;
+  customerId: string;
+  currency: string;
+  pricingBasis: PricingBasis;
+  proposedAmountMinor: bigint;
+  proposedOn: IsoDate;
+  note: string | null;
+  requestId: string | null;
+}
+
+export interface FeeProposalFilter {
+  projectId?: string;
+  customerId?: string;
+  status?: FeeProposalStatus;
+  /** PROPOSED | CLIENT_APPROVED | AGREED. */
+  open?: boolean;
+}
+
+/** What a transition writes; `status` is the target state. */
+export interface FeeProposalTransitionPatch {
+  status: FeeProposalStatus;
+  clientApprovedOn?: IsoDate | null;
+  clientApprovalNote?: string | null;
+  agreedAmountMinor?: bigint | null;
+  agreedOn?: IsoDate | null;
+  agreedNote?: string | null;
+  withdrawnAt?: Date | null;
+  withdrawnReason?: string | null;
+  agreementId?: string | null;
+}
+
+export type TransitionResult<T> = { kind: 'updated'; record: T } | { kind: 'wrong_status'; record: T } | { kind: 'not_found' };
+
+export interface FeeProposalRepository {
+  /** Refuses a second open proposal on the project with UniqueViolation('fee_proposals.open_per_project'). */
+  create(input: CreateFeeProposalInput, at: Date): Promise<FeeProposalRecord>;
+  getById(organizationId: string, id: string): Promise<FeeProposalRecord | null>;
+  list(organizationId: string, filter: FeeProposalFilter, page: PageRequest): Promise<Page<FeeProposalRecord>>;
+  findOpenByProject(organizationId: string, projectId: string): Promise<FeeProposalRecord | null>;
+  /** Conditional on the current status being one of `from`; bumps the version. */
+  transition(organizationId: string, id: string, from: readonly FeeProposalStatus[], patch: FeeProposalTransitionPatch, at: Date): Promise<TransitionResult<FeeProposalRecord>>;
 }

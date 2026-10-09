@@ -155,6 +155,8 @@ model Organization {
   payments           Payment[]
 
   attachments  Attachment[]
+  feeProposals FeeProposal[]
+
   @@map("organizations")
 }
 
@@ -630,4 +632,52 @@ model Attachment {
   @@index([organizationId, projectId, createdAt])
   @@index([organizationId, paymentId, createdAt])
   @@map("attachments")
+}
+
+// ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
+
+enum FeeProposalStatus {
+  PROPOSED
+  CLIENT_APPROVED
+  AGREED
+  CONVERTED
+  WITHDRAWN
+}
+
+/// A fee proposed on a project before any agreement exists (M7 brief §3–§4):
+/// proposed → client approved | agreed (explicit final amount) → converted by
+/// the agreement the wizard creates, or withdrawn. One open proposal per
+/// project, serialised by the project row lock in the repository. Amounts are
+/// minor units in the project currency; dates are organization calendar dates.
+model FeeProposal {
+  id                  String            @id @default(uuid()) @db.Uuid
+  organizationId      String            @db.Uuid
+  organization        Organization      @relation(fields: [organizationId], references: [id])
+  projectId           String            @db.Uuid
+  customerId          String            @db.Uuid
+  currency            String            @db.VarChar(3)
+  status              FeeProposalStatus @default(PROPOSED)
+  pricingBasis        PricingBasis
+  proposedAmountMinor BigInt
+  proposedOn          String            @db.VarChar(10)
+  note                String?
+  clientApprovedOn    String?           @db.VarChar(10)
+  clientApprovalNote  String?
+  /// Null while PROPOSED / WITHDRAWN; the proposed amount after approve; the explicit figure after agree.
+  agreedAmountMinor   BigInt?
+  agreedOn            String?           @db.VarChar(10)
+  agreedNote          String?
+  withdrawnAt         DateTime?
+  withdrawnReason     String?
+  /// The agreement created from it (CONVERTED).
+  agreementId         String?           @unique @db.Uuid
+  requestId           String?
+  version             Int               @default(1)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @default(now())
+
+  @@index([organizationId, projectId])
+  @@index([organizationId, customerId])
+  @@index([organizationId, createdAt, id])
+  @@map("fee_proposals")
 }
