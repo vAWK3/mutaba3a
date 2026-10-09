@@ -31,6 +31,7 @@ npm run typecheck && npm run lint && npm test      # unit + route tests, no data
 npm run test:db                                   # adds the Postgres contract tests
 npm run openapi:check                             # committed openapi/openapi.yaml matches the code
 npm run smoke -- --url http://localhost:8787        # post-deploy checks, also runnable against a dev server
+npm run db:migrate:status                         # pending migrations: local with DATABASE_URL, production through the Cloud SQL proxy with TF_STATE_BUCKET
 ```
 
 End-to-end, against a dev or staging database (both scripts create throwaway
@@ -90,6 +91,25 @@ npm run reconcile -- --dry   # list organizations and "today" per timezone, post
 ```
 
 Daily at 00:30 in the firms' timezone is enough; running it hourly is harmless.
+
+## Database through the Cloud SQL proxy (operator)
+
+`scripts/db.sh` opens the Cloud SQL Auth Proxy on 127.0.0.1:5440 for one
+command and closes it afterwards; the connection name and URL come from
+`terraform output`, so only `TF_STATE_BUCKET` is needed (and a gcloud
+application-default login with `roles/cloudsql.client`):
+
+```bash
+TF_STATE_BUCKET=<project>-terraform-state npm run db:migrate:status   # what is pending (read-only)
+TF_STATE_BUCKET=<project>-terraform-state npm run db:migrate          # prisma migrate deploy, forward-only
+TF_STATE_BUCKET=<project>-terraform-state npm run db:psql             # interactive psql
+TF_STATE_BUCKET=<project>-terraform-state npm run db:proxy            # proxy up until Ctrl-C, for other tools
+```
+
+`scripts/deploy.sh` runs the same migration as its own step, so a normal
+release needs none of these; they are for checking before a release, for
+migrating ahead of a roll, and for day-2 work. With `DATABASE_URL` set the
+same commands run against a local database with no proxy.
 
 ## Deploy (operator runs these; nothing here deploys itself)
 

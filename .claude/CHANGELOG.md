@@ -67,6 +67,14 @@ to print and `npm run smoke -- --url ""` crashed with
   `terraform fmt -check` green. `terraform validate` could not run in the
   session (provider registry unreachable); CI's `terraform` job covers it.
 - Operator action: pull and re-run `./scripts/deploy.sh`; then §3–§5.
+## [Unreleased] - 2026-10-09 — Database access through the Cloud SQL proxy (`server/scripts/db.sh`)
+
+### Added
+- `scripts/db.sh <migrate|status|psql|proxy>` with npm shortcuts `db:migrate`, `db:migrate:status`, `db:psql`, `db:proxy`: reads the instance connection name and local URL from `terraform output` (so only `TF_STATE_BUCKET` is needed), opens `cloud-sql-proxy` on 127.0.0.1:5440 for the one command and stops it on exit. `migrate` is `prisma migrate deploy` (forward-only); `status` is read-only and does not fail on pending migrations; `proxy` waits for Ctrl-C and prints the local URL for other tools. With `DATABASE_URL` set no proxy is started, so the same commands serve local development. Same mechanics as `deploy.sh`'s own migration step, which is unchanged: a normal release still needs none of this.
+
+### Changed
+- `DEPLOYMENT.md` §6 day-2 rows and `README.md` point at the shortcuts; the handover's deployment section now says that `deploy.sh` migrates by itself and when the by-hand path applies.
+
 ## [Unreleased] - 2026-10-08 — Money v1 end-to-end run; two fixes it found (`server/`, API `1.5.1-m6`)
 
 ### Fixed

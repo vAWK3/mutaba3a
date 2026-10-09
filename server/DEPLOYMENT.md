@@ -260,8 +260,10 @@ service.
 | Rotate the DB password | same with `-replace=random_password.db` (Cloud SQL user and the URL secret update together), then redeploy |
 | Revoke a firm's key | `curl -X POST "$URL/admin/v1/api-keys/<id>/revoke" -H "x-admin-token: $MUTABA3A_ADMIN_TOKEN" -H 'content-type: application/json' -d '{"reason":"…"}'`; key ids are on `GET /admin/v1/organizations/<id>` |
 | Audit trail of a firm | `GET /admin/v1/organizations/<id>/audit` with the admin token |
-| psql against production | `cloud-sql-proxy $(cd infrastructure/terraform && terraform output -raw cloud_sql_connection_name) --port 5440` in one shell, `psql "$(cd infrastructure/terraform && terraform output -raw local_database_url)"` in another |
-| Run a migration by hand | same proxy, then `DATABASE_URL=$(cd infrastructure/terraform && terraform output -raw local_database_url) npx prisma migrate deploy` |
+| psql against production | `TF_STATE_BUCKET=<bucket> npm run db:psql` (`scripts/db.sh`: proxy up on 127.0.0.1:5440 for the session, down on exit) |
+| Check pending migrations | `TF_STATE_BUCKET=<bucket> npm run db:migrate:status` — read-only; run it before a release to see what `deploy.sh` will apply |
+| Run a migration by hand | `TF_STATE_BUCKET=<bucket> npm run db:migrate` — `prisma migrate deploy` through the proxy, forward-only. `deploy.sh` does the same as its step 2, so this is only for migrating ahead of a roll or after a failed step 4 |
+| Keep the proxy up for another tool | `TF_STATE_BUCKET=<bucket> npm run db:proxy` prints the local URL and waits for Ctrl-C. `PROXY_PORT=` changes the port; `DATABASE_URL=` makes every `db:*` command skip the proxy (local docker Postgres) |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
