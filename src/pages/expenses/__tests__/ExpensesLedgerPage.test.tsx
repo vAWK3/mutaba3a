@@ -45,6 +45,23 @@ vi.mock('../../../hooks/useMediaQuery', () => ({
   useIsCompactTable: () => false,
 }));
 
+// Active profile (MUT-20): the ledger renders its "no profile selected" state
+// without one, which is what made 18 of these tests fail. Tests may clear it.
+const testProfile = { id: 'profile-1', name: 'Test Profile', isDefault: true, createdAt: '2026-01-01T00:00:00.000Z' };
+const activeProfileState: { profile: typeof testProfile | undefined } = { profile: testProfile };
+vi.mock('../../../hooks/useActiveProfile', () => ({
+  useActiveProfile: () => ({
+    isAllProfiles: false,
+    activeProfileId: activeProfileState.profile?.id ?? '',
+    activeProfile: activeProfileState.profile,
+    profiles: activeProfileState.profile ? [activeProfileState.profile] : [],
+    showAllProfilesOption: false,
+    setActiveProfile: vi.fn(),
+    isLoading: false,
+  }),
+  useProfileFilter: () => activeProfileState.profile?.id ?? '',
+}));
+
 // Mock drawer store
 const mockOpenExpenseDrawer = vi.fn();
 vi.mock('../../../lib/stores', () => ({
@@ -178,6 +195,7 @@ function renderWithProviders() {
 describe('ExpensesLedgerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    activeProfileState.profile = testProfile;
     vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
       data: mockExpenses,
       isLoading: false,
@@ -185,6 +203,15 @@ describe('ExpensesLedgerPage', () => {
   });
 
   describe('Page rendering', () => {
+    it('shows the no-profile state when there is no active profile (MUT-20 root cause)', async () => {
+      activeProfileState.profile = undefined;
+      renderWithProviders();
+      await waitFor(() => {
+        expect(screen.getByText('expenses.noProfileSelected')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Total Expenses')).toBeNull();
+    });
+
     it('renders page title in top bar', async () => {
       renderWithProviders();
       await waitFor(() => {
