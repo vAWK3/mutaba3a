@@ -3,7 +3,7 @@ import { pdf } from '@react-pdf/renderer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIssueDocument } from '../../../hooks/useQueries';
 import { useToast } from '../../../lib/toastStore';
-import { documentRepo } from '../../../db';
+import { getRepositories } from '../../../db';
 import { savePdfToDisk, isPdfArchivalAvailable } from '../../../services/pdfArchival';
 import { DocumentPdf } from '../pdf';
 import type { Document, BusinessProfile, Client } from '../../../types';
@@ -117,7 +117,7 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
 
         // Step 5: Lock the document after successful export
         try {
-          await documentRepo.lockAfterExport(doc.id, pdfSavedPath);
+          await getRepositories().base.documents.lockAfterExport(doc.id, pdfSavedPath);
           // Invalidate document queries to reflect locked state
           queryClient.invalidateQueries({ queryKey: ['document', doc.id] });
           queryClient.invalidateQueries({ queryKey: ['documents'] });
@@ -189,7 +189,7 @@ export function useIssueAndDownload(options: UseIssueAndDownloadOptions = {}) {
 
         // Lock the document after successful export (tracks export count even if already locked)
         try {
-          await documentRepo.lockAfterExport(doc.id, pdfSavedPath);
+          await getRepositories().base.documents.lockAfterExport(doc.id, pdfSavedPath);
           // Invalidate document queries to reflect updated state
           queryClient.invalidateQueries({ queryKey: ['document', doc.id] });
           queryClient.invalidateQueries({ queryKey: ['documents'] });

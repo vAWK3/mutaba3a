@@ -29,6 +29,63 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-35: the repository seam becomes real (`src/db/`)
+
+Epic MUT-34 (hosted Mutaba3a). Eng-reviewed 2026-10-10 (`/plan-eng-review`,
+11 findings, 0 critical gaps). Scope reduced during review: the React context
+layer was cut as an abstraction with no consumer (D1), so CLAUDE.md's AppShell
+`RepoProvider(repo)` gap stays open. No behaviour change — the suite's
+pass/fail counts are unchanged apart from the 9 new provider tests.
+
+### Added
+- **`src/db/provider.ts`** — the data-access seam. A frozen, module-scoped
+  registry exposing `{ base, synced }`, with `getRepositories()`,
+  `setRepositories()` (refused in production builds) and `resetRepositories()`.
+  Module-scoped rather than a React context because Dexie migrations run inside
+  `db.open()` before React mounts.
+- `satisfies` conformance on 21 base repositories and 8 synced decorators.
+  Renaming or deleting a repository method now fails `npm run typecheck`.
+- `npm run typecheck` (`tsc --noEmit -p tsconfig.app.json`). The repo had no
+  such script despite CLAUDE.md Phase 4 mandating it; typechecking only
+  happened inside `npm run build`.
+- `ISyncedRepositories` and `IPaymentRecordRepository` in `interfaces.ts`.
+- `src/db/__tests__/provider.test.ts` — 9 tests covering default resolution,
+  reference stability, injection, reset isolation and the production guard.
+
+### Fixed
+- **7 drifted repository interfaces corrected to describe reality.** Every case
+  was an interface declaring something the implementation never had:
+  `transactionRepo.delete` (it soft-deletes), `receiptRepo.getByExpense`,
+  `vendorRepo.findByName` (it matches by alias), `monthCloseRepo.set`,
+  `retainerRepo.delete`, `projectedIncomeRepo.{getBySource,getByPeriod,create,delete}`,
+  and `IExpenseRepository` missing `getYearlyTotals` / `getAllProfilesTotals` /
+  `getReceiptCount` while typing `list` as `Expense[]` instead of
+  `ExpenseDisplay[]`. Three `create` parameter types were also wrong. No runtime
+  behaviour was added to satisfy an aspirational signature.
+
+### Changed
+- Eight consumers now resolve through the provider: the four query hooks,
+  `paymentRequestService`, `recurringExpenseService`, `lib/zipExport.ts` and
+  `useIssueAndDownload.tsx`. Each call site keeps the family it used before
+  (`base` → `base`, `synced` → `synced`), so which mutations capture a sync op
+  is unchanged.
+- Mock wiring updated in `useIncomeQueries.test.tsx` and
+  `useRecurringExpenseQueries.test.tsx` — assertions untouched. `vi.mock`
+  intercepts imports, so the barrel had to become the interception point.
+
+### Technical
+- `TECH_DEBT.md` TD-013 corrected: it claimed the Dexie implementation
+  satisfied the interfaces, which nothing checked. Applying the check found the
+  7 drifts above.
+- `TODOS.md`: recorded that most transaction mutations bypass the sync op-log
+  and never sync between devices, and that expenses never sync at all. Both
+  pre-existing, both preserved here.
+- Known gap `gstack-shortcut(dec-5f2c2123)`: `synced.*` is bound to the Dexie
+  singletons at module load and does not follow `setRepositories`. Upgrade when
+  MUT-43 injects a hosted source.
+
+---
+
 ## [Unreleased] - 2026-10-09 — Money v1 Milestone 7: fee proposals (negotiations) (`server/`, API `1.6.0-m7`)
 
 Brief `money-v1-m7-fee-proposals.md` (+ `-tests.md`), approved by the owner on

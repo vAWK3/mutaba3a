@@ -32,7 +32,10 @@ vi.mock('../../services/recurringExpenseService', () => ({
   getRuleHistory: vi.fn(),
 }));
 
-vi.mock('../../db/expenseRepository', () => ({
+// One set of fakes, handed to both module mocks. The hook now resolves these
+// through getRepositories(); the assertions below still reach the same objects
+// via `expenseRepository.recurringRuleRepo`, so they are unchanged.
+const { recurringRuleRepo, recurringOccurrenceRepo } = vi.hoisted(() => ({
   recurringRuleRepo: {
     list: vi.fn(),
     get: vi.fn(),
@@ -46,6 +49,21 @@ vi.mock('../../db/expenseRepository', () => ({
     list: vi.fn(),
     get: vi.fn(),
   },
+}));
+
+vi.mock('../../db/expenseRepository', () => ({
+  recurringRuleRepo,
+  recurringOccurrenceRepo,
+}));
+
+vi.mock('../../db', () => ({
+  getRepositories: () => ({
+    base: {
+      recurringRules: recurringRuleRepo,
+      recurringOccurrences: recurringOccurrenceRepo,
+    },
+    synced: {},
+  }),
 }));
 
 function createWrapper() {

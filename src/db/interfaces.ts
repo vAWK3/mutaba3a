@@ -33,15 +33,27 @@ import type {
   DocumentDisplay,
   DocumentType,
   Expense,
+  ExpenseDisplay,
+  ExpenseFilters,
+  MonthlyExpenseTotal,
+  ProfileExpenseSummary,
   ExpenseCategory,
   Receipt,
   Vendor,
   MonthCloseStatus,
+  MonthCloseChecklist,
+  MonthCloseComputedStatus,
   RecurringRule,
   RecurringOccurrence,
   RecurringOccurrenceStatus,
   RetainerAgreement,
+  RetainerAgreementDisplay,
   ProjectedIncome,
+  ProjectedIncomeDisplay,
+  ProjectedIncomeFilters,
+  PaymentRecord,
+  PaymentByClientFilters,
+  PaymentByClientRow,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
 
@@ -86,10 +98,16 @@ export interface ICategoryRepository extends BaseRepository<Category, Omit<Categ
 // Transaction Repository Interface
 // ============================================================================
 
-export interface ITransactionRepository extends BaseRepository<Transaction, Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>> {
+/**
+ * Transactions are soft-deleted, never hard-deleted, so `delete` is omitted
+ * from the base contract. Use `softDelete`.
+ */
+export interface ITransactionRepository
+  extends Omit<BaseRepository<Transaction, Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>>, 'delete'> {
   list(filters?: QueryFilters): Promise<TransactionDisplay[]>;
   getDisplay(id: string): Promise<TransactionDisplay | undefined>;
-  markPaid(id: string): Promise<void>;
+  markPaid(id: string, opts?: { paidAt?: string }): Promise<void>;
+  recordPartialPayment(id: string, paymentAmountMinor: number, opts?: { paidAt?: string }): Promise<void>;
   softDelete(id: string): Promise<void>;
   archive(id: string): Promise<void>;
   unarchive(id: string): Promise<void>;
@@ -190,8 +208,15 @@ export interface IDocumentRepository {
 // ============================================================================
 
 export interface IExpenseRepository extends BaseRepository<Expense, Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>> {
-  list(filters?: { profileId?: string; categoryId?: string; vendorId?: string; dateFrom?: string; dateTo?: string }): Promise<Expense[]>;
+  /** Returns display rows (receipt count, recurring flag), not bare entities. */
+  list(filters?: ExpenseFilters): Promise<ExpenseDisplay[]>;
   softDelete(id: string): Promise<void>;
+  getYearlyTotals(
+    profileId: string,
+    year: number
+  ): Promise<{ totalMinorUSD: number; totalMinorILS: number; byMonth: MonthlyExpenseTotal[] }>;
+  getAllProfilesTotals(year: number): Promise<ProfileExpenseSummary[]>;
+  getReceiptCount(expenseId: string): Promise<number>;
 }
 
 // ============================================================================
@@ -206,18 +231,26 @@ export interface IExpenseCategoryRepository extends BaseRepository<ExpenseCatego
 // Receipt Repository Interface
 // ============================================================================
 
-export interface IReceiptRepository extends BaseRepository<Receipt, Omit<Receipt, 'id' | 'createdAt'>> {
+export interface IReceiptRepository extends BaseRepository<Receipt, Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>> {
   list(filters?: { profileId?: string; expenseId?: string; monthKey?: string }): Promise<Receipt[]>;
-  getByExpense(expenseId: string): Promise<Receipt[]>;
+  linkToExpense(receiptId: string, expenseId: string): Promise<void>;
+  unlinkFromExpense(receiptId: string): Promise<void>;
+  getUnlinkedByProfile(profileId: string): Promise<Receipt[]>;
+  getByProfileAndMonth(profileId: string, monthKey: string): Promise<Receipt[]>;
+  getLinkedByProfileAndMonth(profileId: string, monthKey: string): Promise<Receipt[]>;
 }
 
 // ============================================================================
 // Vendor Repository Interface
 // ============================================================================
 
-export interface IVendorRepository extends BaseRepository<Vendor, Omit<Vendor, 'id' | 'createdAt'>> {
+export interface IVendorRepository extends BaseRepository<Vendor, Omit<Vendor, 'id' | 'createdAt' | 'updatedAt'>> {
   list(profileId?: string): Promise<Vendor[]>;
-  findByName(profileId: string, name: string): Promise<Vendor | undefined>;
+  /** Vendors are matched by alias, not by exact name. */
+  findByAlias(profileId: string, rawVendor: string): Promise<Vendor | undefined>;
+  findOrCreate(profileId: string, rawVendor: string): Promise<Vendor>;
+  mergeVendors(targetId: string, sourceId: string): Promise<void>;
+  addAlias(vendorId: string, alias: string): Promise<void>;
 }
 
 // ============================================================================
@@ -225,8 +258,15 @@ export interface IVendorRepository extends BaseRepository<Vendor, Omit<Vendor, '
 // ============================================================================
 
 export interface IMonthCloseStatusRepository {
-  get(profileId: string, monthKey: string): Promise<MonthCloseStatus | undefined>;
-  set(profileId: string, monthKey: string, isClosed: boolean): Promise<void>;
+  /** Looks up by the status row's own id, not by profile + month. */
+  get(id: string): Promise<MonthCloseStatus | undefined>;
+  getByProfileAndMonth(profileId: string, monthKey: string): Promise<MonthCloseStatus | undefined>;
+  getOrCreate(profileId: string, monthKey: string): Promise<MonthCloseStatus>;
+  updateChecklist(profileId: string, monthKey: string, updates: Partial<MonthCloseChecklist>): Promise<void>;
+  closeMonth(profileId: string, monthKey: string, notes?: string): Promise<void>;
+  reopenMonth(profileId: string, monthKey: string): Promise<void>;
+  isMonthClosed(profileId: string, monthKey: string): Promise<boolean>;
+  getComputedStatus(profileId: string, monthKey: string): Promise<MonthCloseComputedStatus>;
   list(profileId: string): Promise<MonthCloseStatus[]>;
 }
 
@@ -270,19 +310,100 @@ export interface IRecurringOccurrenceRepository extends BaseRepository<Recurring
 // Retainer Agreement Repository Interface
 // ============================================================================
 
-export interface IRetainerAgreementRepository extends BaseRepository<RetainerAgreement, Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>> {
-  list(filters?: { profileId?: string; clientId?: string; projectId?: string; status?: string }): Promise<RetainerAgreement[]>;
+/** Retainers are archived or ended, never hard-deleted, so `delete` is omitted. */
+export interface IRetainerAgreementRepository
+  extends Omit<BaseRepository<RetainerAgreement, Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>>, 'delete'> {
+  list(filters?: { profileId?: string; clientId?: string; projectId?: string; status?: string }): Promise<RetainerAgreementDisplay[]>;
+  getDisplay(id: string): Promise<RetainerAgreementDisplay | undefined>;
   archive(id: string): Promise<void>;
+  activate(id: string): Promise<void>;
+  pause(id: string): Promise<void>;
+  resume(id: string): Promise<void>;
+  end(id: string): Promise<void>;
 }
 
 // ============================================================================
 // Projected Income Repository Interface
 // ============================================================================
 
-export interface IProjectedIncomeRepository extends BaseRepository<ProjectedIncome, Omit<ProjectedIncome, 'id' | 'createdAt' | 'updatedAt'>> {
-  list(filters?: { profileId?: string; sourceId?: string; clientId?: string; state?: string }): Promise<ProjectedIncome[]>;
-  getBySource(sourceId: string): Promise<ProjectedIncome[]>;
-  getByPeriod(sourceId: string, periodStart: string, periodEnd: string): Promise<ProjectedIncome | undefined>;
+/**
+ * Projected income rows are generated from a retainer's schedule, so this
+ * repository has no `create` and no `delete` — it extends nothing.
+ */
+export interface IProjectedIncomeRepository {
+  get(id: string): Promise<ProjectedIncome | undefined>;
+  update(id: string, data: Partial<ProjectedIncome>): Promise<void>;
+  list(filters?: ProjectedIncomeFilters): Promise<ProjectedIncomeDisplay[]>;
+  getByRetainer(retainerId: string): Promise<ProjectedIncome[]>;
+  getDueItems(currency?: Currency): Promise<ProjectedIncomeDisplay[]>;
+  getForForecast(dateFrom: string, dateTo: string, currency?: Currency): Promise<ProjectedIncome[]>;
+}
+
+// ============================================================================
+// Payment Record Repository Interface
+// ============================================================================
+
+export interface IPaymentRecordRepository {
+  get(id: string): Promise<PaymentRecord | undefined>;
+  listByTransaction(transactionId: string): Promise<PaymentRecord[]>;
+  listByClient(clientId: string, filters?: PaymentByClientFilters): Promise<PaymentByClientRow[]>;
+  create(data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }): Promise<PaymentRecord>;
+  update(id: string, data: { amountMinor?: number; paidAt?: string; notes?: string }): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
+// ============================================================================
+// Synced Repository Interfaces
+// ============================================================================
+
+/**
+ * The op-capturing decorators in `sync/core/synced-repository.ts` expose a
+ * NARROWER surface than the base repositories they wrap — they only forward
+ * the reads and writes that sync cares about. These `Pick`s describe what each
+ * decorator actually has, so the contract stays tied to the base interfaces
+ * instead of duplicating their signatures.
+ *
+ * Note the asymmetry: `transactions` has no `delete` and no `getDisplay`,
+ * `businessProfiles` has no `getDefault` passthrough beyond what is listed,
+ * and there is no synced expense repository at all — expenses never enter the
+ * op-log. See `provider.ts` and TODOS.md item 1.
+ */
+export interface ISyncedRepositories {
+  clients: Pick<IClientRepository, 'list' | 'get' | 'create' | 'update' | 'archive' | 'delete'>;
+  projects: Pick<IProjectRepository, 'list' | 'get' | 'create' | 'update' | 'archive' | 'delete'>;
+  transactions: Pick<
+    ITransactionRepository,
+    | 'list'
+    | 'get'
+    | 'getOverviewTotals'
+    | 'getOverviewTotalsByCurrency'
+    | 'getAttentionReceivables'
+    | 'create'
+    | 'update'
+    | 'markPaid'
+    | 'recordPartialPayment'
+    | 'softDelete'
+  >;
+  categories: Pick<ICategoryRepository, 'list' | 'get' | 'create' | 'update' | 'delete'>;
+  fxRates: Pick<IFxRateRepository, 'list' | 'getLatest' | 'create' | 'delete'>;
+  businessProfiles: Pick<
+    IBusinessProfileRepository,
+    'list' | 'get' | 'getDefault' | 'create' | 'update' | 'setDefault' | 'archive' | 'delete'
+  >;
+  documents: Pick<
+    IDocumentRepository,
+    | 'list'
+    | 'get'
+    | 'getByNumber'
+    | 'create'
+    | 'update'
+    | 'markPaid'
+    | 'markVoided'
+    | 'softDelete'
+    | 'linkTransactions'
+    | 'unlinkTransaction'
+  >;
+  paymentRecords: IPaymentRecordRepository;
 }
 
 // ============================================================================
@@ -305,6 +426,7 @@ export interface IRepositoryProvider {
   businessProfiles: IBusinessProfileRepository;
   documentSequences: IDocumentSequenceRepository;
   documents: IDocumentRepository;
+  paymentRecords: IPaymentRecordRepository;
   expenses: IExpenseRepository;
   expenseCategories: IExpenseCategoryRepository;
   receipts: IReceiptRepository;

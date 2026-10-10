@@ -1,18 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  transactionRepo,
-  clientRepo,
-  projectRepo,
-  categoryRepo,
-  projectSummaryRepo,
-  clientSummaryRepo,
-  settingsRepo,
-  documentRepo,
-  documentSequenceRepo,
-  businessProfileRepo,
-  paymentRecordRepo,
-} from '../db';
-import { syncedBusinessProfileRepo, syncedPaymentRecordRepo, syncedTransactionRepo } from '../sync/core/synced-repository';
+import { getRepositories } from '../db';
 import type {
   QueryFilters,
   Transaction,
@@ -98,14 +85,14 @@ export const queryKeys = {
 export function useTransactions(filters: QueryFilters) {
   return useQuery({
     queryKey: queryKeys.transactions(filters),
-    queryFn: () => transactionRepo.list(filters),
+    queryFn: () => getRepositories().base.transactions.list(filters),
   });
 }
 
 export function useTransaction(id: string) {
   return useQuery({
     queryKey: queryKeys.transaction(id),
-    queryFn: () => transactionRepo.get(id),
+    queryFn: () => getRepositories().base.transactions.get(id),
     enabled: !!id,
   });
 }
@@ -113,7 +100,7 @@ export function useTransaction(id: string) {
 export function useTransactionDisplay(id: string | undefined) {
   return useQuery({
     queryKey: ['transactionDisplay', id],
-    queryFn: () => transactionRepo.getDisplay(id!),
+    queryFn: () => getRepositories().base.transactions.getDisplay(id!),
     enabled: !!id,
   });
 }
@@ -121,21 +108,21 @@ export function useTransactionDisplay(id: string | undefined) {
 export function useOverviewTotals(dateFrom: string, dateTo: string, currency?: Currency, profileId?: string) {
   return useQuery({
     queryKey: queryKeys.overviewTotals(dateFrom, dateTo, currency, profileId),
-    queryFn: () => transactionRepo.getOverviewTotals({ dateFrom, dateTo, currency, profileId }),
+    queryFn: () => getRepositories().base.transactions.getOverviewTotals({ dateFrom, dateTo, currency, profileId }),
   });
 }
 
 export function useOverviewTotalsByCurrency(dateFrom: string, dateTo: string, profileId?: string) {
   return useQuery({
     queryKey: queryKeys.overviewTotalsByCurrency(dateFrom, dateTo, profileId),
-    queryFn: () => transactionRepo.getOverviewTotalsByCurrency({ dateFrom, dateTo, profileId }),
+    queryFn: () => getRepositories().base.transactions.getOverviewTotalsByCurrency({ dateFrom, dateTo, profileId }),
   });
 }
 
 export function useAttentionReceivables(currency?: Currency, profileId?: string) {
   return useQuery({
     queryKey: queryKeys.attentionReceivables(currency, profileId),
-    queryFn: () => transactionRepo.getAttentionReceivables({ currency, profileId }),
+    queryFn: () => getRepositories().base.transactions.getAttentionReceivables({ currency, profileId }),
   });
 }
 
@@ -144,7 +131,7 @@ export function useCreateTransaction() {
 
   return useMutation({
     mutationFn: (data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) =>
-      transactionRepo.create(data),
+      getRepositories().base.transactions.create(data),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -154,7 +141,7 @@ export function useUpdateTransaction() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Transaction> }) =>
-      transactionRepo.update(id, data),
+      getRepositories().base.transactions.update(id, data),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -167,7 +154,7 @@ export function useMarkTransactionPaid() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => syncedTransactionRepo.markPaid(id),
+    mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -177,7 +164,7 @@ export function useRecordPartialPayment() {
 
   return useMutation({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      syncedTransactionRepo.recordPartialPayment(id, paymentAmountMinor),
+      getRepositories().synced.transactions.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -196,7 +183,7 @@ function invalidatePaymentRecordQueries(
 export function usePaymentRecords(transactionId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.paymentRecords(transactionId!),
-    queryFn: () => paymentRecordRepo.listByTransaction(transactionId!),
+    queryFn: () => getRepositories().base.paymentRecords.listByTransaction(transactionId!),
     enabled: !!transactionId,
   });
 }
@@ -207,7 +194,7 @@ export function usePaymentsByClient(
 ) {
   return useQuery({
     queryKey: queryKeys.paymentRecordsByClient(clientId!, filters),
-    queryFn: () => paymentRecordRepo.listByClient(clientId!, filters),
+    queryFn: () => getRepositories().base.paymentRecords.listByClient(clientId!, filters),
     enabled: !!clientId,
   });
 }
@@ -217,7 +204,7 @@ export function useCreatePaymentRecord() {
 
   return useMutation({
     mutationFn: (data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }) =>
-      syncedPaymentRecordRepo.create(data),
+      getRepositories().synced.paymentRecords.create(data),
     onSuccess: (_result, variables) =>
       invalidatePaymentRecordQueries(queryClient, variables.transactionId),
   });
@@ -231,7 +218,7 @@ export function useUpdatePaymentRecord() {
       id: string;
       transactionId: string;
       data: { amountMinor?: number; paidAt?: string; notes?: string };
-    }) => syncedPaymentRecordRepo.update(vars.id, vars.data),
+    }) => getRepositories().synced.paymentRecords.update(vars.id, vars.data),
     onSuccess: (_result, variables) =>
       invalidatePaymentRecordQueries(queryClient, variables.transactionId),
   });
@@ -242,7 +229,7 @@ export function useDeletePaymentRecord() {
 
   return useMutation({
     mutationFn: (vars: { id: string; transactionId: string }) =>
-      syncedPaymentRecordRepo.delete(vars.id),
+      getRepositories().synced.paymentRecords.delete(vars.id),
     onSuccess: (_result, variables) =>
       invalidatePaymentRecordQueries(queryClient, variables.transactionId),
   });
@@ -252,7 +239,7 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => transactionRepo.softDelete(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.softDelete(id),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -261,7 +248,7 @@ export function useArchiveTransaction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => transactionRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.archive(id),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -270,7 +257,7 @@ export function useUnarchiveTransaction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => transactionRepo.unarchive(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.unarchive(id),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -279,14 +266,14 @@ export function useUnarchiveTransaction() {
 export function useClients(profileId?: string) {
   return useQuery({
     queryKey: queryKeys.clients(profileId),
-    queryFn: () => clientRepo.list({ profileId }),
+    queryFn: () => getRepositories().base.clients.list({ profileId }),
   });
 }
 
 export function useClient(id: string) {
   return useQuery({
     queryKey: queryKeys.client(id),
-    queryFn: () => clientRepo.get(id),
+    queryFn: () => getRepositories().base.clients.get(id),
     enabled: !!id,
   });
 }
@@ -294,14 +281,14 @@ export function useClient(id: string) {
 export function useClientSummaries(profileId?: string, currency?: Currency, search?: string) {
   return useQuery({
     queryKey: queryKeys.clientSummaries(profileId, currency, search),
-    queryFn: () => clientSummaryRepo.list({ profileId, currency, search }),
+    queryFn: () => getRepositories().base.clientSummaries.list({ profileId, currency, search }),
   });
 }
 
 export function useClientSummary(id: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }) {
   return useQuery({
     queryKey: queryKeys.clientSummary(id, filters?.dateFrom, filters?.dateTo, filters?.currency),
-    queryFn: () => clientSummaryRepo.get(id, filters),
+    queryFn: () => getRepositories().base.clientSummaries.get(id, filters),
     enabled: !!id,
   });
 }
@@ -311,7 +298,7 @@ export function useCreateClient() {
 
   return useMutation({
     mutationFn: (data: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) =>
-      clientRepo.create(data),
+      getRepositories().base.clients.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
@@ -324,7 +311,7 @@ export function useUpdateClient() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Client> }) =>
-      clientRepo.update(id, data),
+      getRepositories().base.clients.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.invalidateQueries({ queryKey: ['client'] });
@@ -338,7 +325,7 @@ export function useArchiveClient() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => clientRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.clients.archive(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
@@ -350,14 +337,14 @@ export function useArchiveClient() {
 export function useProjects(profileId?: string, clientId?: string) {
   return useQuery({
     queryKey: queryKeys.projects(profileId, clientId),
-    queryFn: () => projectRepo.list({ profileId, clientId }),
+    queryFn: () => getRepositories().base.projects.list({ profileId, clientId }),
   });
 }
 
 export function useProject(id: string) {
   return useQuery({
     queryKey: queryKeys.project(id),
-    queryFn: () => projectRepo.get(id),
+    queryFn: () => getRepositories().base.projects.get(id),
     enabled: !!id,
   });
 }
@@ -365,14 +352,14 @@ export function useProject(id: string) {
 export function useProjectSummaries(profileId?: string, currency?: Currency, search?: string, field?: string) {
   return useQuery({
     queryKey: queryKeys.projectSummaries(profileId, currency, search, field),
-    queryFn: () => projectSummaryRepo.list({ profileId, currency, search, field }),
+    queryFn: () => getRepositories().base.projectSummaries.list({ profileId, currency, search, field }),
   });
 }
 
 export function useProjectSummary(id: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }) {
   return useQuery({
     queryKey: queryKeys.projectSummary(id, filters?.dateFrom, filters?.dateTo, filters?.currency),
-    queryFn: () => projectSummaryRepo.get(id, filters),
+    queryFn: () => getRepositories().base.projectSummaries.get(id, filters),
     enabled: !!id,
   });
 }
@@ -382,7 +369,7 @@ export function useCreateProject() {
 
   return useMutation({
     mutationFn: (data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) =>
-      projectRepo.create(data),
+      getRepositories().base.projects.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
@@ -396,7 +383,7 @@ export function useUpdateProject() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Project> }) =>
-      projectRepo.update(id, data),
+      getRepositories().base.projects.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['project'] });
@@ -410,7 +397,7 @@ export function useArchiveProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => projectRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.projects.archive(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
@@ -423,7 +410,7 @@ export function useArchiveProject() {
 export function useCategories(kind?: 'income' | 'expense') {
   return useQuery({
     queryKey: queryKeys.categories(kind),
-    queryFn: () => categoryRepo.list(kind),
+    queryFn: () => getRepositories().base.categories.list(kind),
   });
 }
 
@@ -431,7 +418,7 @@ export function useCategories(kind?: 'income' | 'expense') {
 export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings(),
-    queryFn: () => settingsRepo.get(),
+    queryFn: () => getRepositories().base.settings.get(),
   });
 }
 
@@ -439,7 +426,7 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: settingsRepo.update,
+    mutationFn: getRepositories().base.settings.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
@@ -461,14 +448,14 @@ function invalidateDocumentQueries(queryClient: ReturnType<typeof useQueryClient
 export function useDocuments(filters: DocumentFilters) {
   return useQuery({
     queryKey: queryKeys.documents(filters),
-    queryFn: () => documentRepo.list(filters),
+    queryFn: () => getRepositories().base.documents.list(filters),
   });
 }
 
 export function useDocument(id: string) {
   return useQuery({
     queryKey: queryKeys.document(id),
-    queryFn: () => documentRepo.get(id),
+    queryFn: () => getRepositories().base.documents.get(id),
     enabled: !!id,
   });
 }
@@ -478,7 +465,7 @@ export function useCreateDocument() {
 
   return useMutation({
     mutationFn: (data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt'>) =>
-      documentRepo.create(data),
+      getRepositories().base.documents.create(data),
     onSuccess: () => {
       invalidateDocumentQueries(queryClient);
       // Also invalidate transactions if documents create transactions
@@ -492,7 +479,7 @@ export function useUpdateDocument() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Document> }) =>
-      documentRepo.update(id, data),
+      getRepositories().base.documents.update(id, data),
     onSuccess: () => invalidateDocumentQueries(queryClient),
   });
 }
@@ -501,7 +488,7 @@ export function useMarkDocumentPaid() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => documentRepo.markPaid(id),
+    mutationFn: (id: string) => getRepositories().base.documents.markPaid(id),
     onSuccess: () => {
       invalidateDocumentQueries(queryClient);
       invalidateTransactionQueries(queryClient);
@@ -513,7 +500,7 @@ export function useVoidDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => documentRepo.markVoided(id),
+    mutationFn: (id: string) => getRepositories().base.documents.markVoided(id),
     onSuccess: () => invalidateDocumentQueries(queryClient),
   });
 }
@@ -522,7 +509,7 @@ export function useIssueDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => documentRepo.markIssued(id),
+    mutationFn: (id: string) => getRepositories().base.documents.markIssued(id),
     onSuccess: () => invalidateDocumentQueries(queryClient),
   });
 }
@@ -531,7 +518,7 @@ export function useDeleteDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => documentRepo.softDelete(id),
+    mutationFn: (id: string) => getRepositories().base.documents.softDelete(id),
     onSuccess: () => invalidateDocumentQueries(queryClient),
   });
 }
@@ -540,7 +527,7 @@ export function useArchiveDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => documentRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.documents.archive(id),
     onSuccess: () => invalidateDocumentQueries(queryClient),
   });
 }
@@ -549,7 +536,7 @@ export function useUnarchiveDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => documentRepo.unarchive(id),
+    mutationFn: (id: string) => getRepositories().base.documents.unarchive(id),
     onSuccess: () => invalidateDocumentQueries(queryClient),
   });
 }
@@ -559,7 +546,7 @@ export function useLockDocumentAfterExport() {
 
   return useMutation({
     mutationFn: ({ id, pdfSavedPath }: { id: string; pdfSavedPath?: string }) =>
-      documentRepo.lockAfterExport(id, pdfSavedPath),
+      getRepositories().base.documents.lockAfterExport(id, pdfSavedPath),
     onSuccess: () => {
       invalidateDocumentQueries(queryClient);
       invalidateTransactionQueries(queryClient);
@@ -572,7 +559,7 @@ export function useLinkDocumentTransactions() {
 
   return useMutation({
     mutationFn: ({ documentId, transactionIds }: { documentId: string; transactionIds: string[] }) =>
-      documentRepo.linkTransactions(documentId, transactionIds),
+      getRepositories().base.documents.linkTransactions(documentId, transactionIds),
     onSuccess: () => {
       invalidateDocumentQueries(queryClient);
       invalidateTransactionQueries(queryClient);
@@ -596,14 +583,14 @@ function invalidateBusinessProfileQueries(queryClient: ReturnType<typeof useQuer
 export function useBusinessProfiles() {
   return useQuery({
     queryKey: queryKeys.businessProfiles(),
-    queryFn: () => businessProfileRepo.list(),
+    queryFn: () => getRepositories().base.businessProfiles.list(),
   });
 }
 
 export function useBusinessProfile(id: string) {
   return useQuery({
     queryKey: queryKeys.businessProfile(id),
-    queryFn: () => businessProfileRepo.get(id),
+    queryFn: () => getRepositories().base.businessProfiles.get(id),
     enabled: !!id,
   });
 }
@@ -611,7 +598,7 @@ export function useBusinessProfile(id: string) {
 export function useDefaultBusinessProfile() {
   return useQuery({
     queryKey: queryKeys.defaultBusinessProfile(),
-    queryFn: () => businessProfileRepo.getDefault(),
+    queryFn: () => getRepositories().base.businessProfiles.getDefault(),
   });
 }
 
@@ -620,7 +607,7 @@ export function useCreateBusinessProfile() {
 
   return useMutation({
     mutationFn: (data: Omit<BusinessProfile, 'id' | 'createdAt' | 'updatedAt'>) =>
-      businessProfileRepo.create(data),
+      getRepositories().base.businessProfiles.create(data),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
   });
 }
@@ -630,7 +617,7 @@ export function useUpdateBusinessProfile() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<BusinessProfile> }) =>
-      businessProfileRepo.update(id, data),
+      getRepositories().base.businessProfiles.update(id, data),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
   });
 }
@@ -639,7 +626,7 @@ export function useSetDefaultBusinessProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => businessProfileRepo.setDefault(id),
+    mutationFn: (id: string) => getRepositories().base.businessProfiles.setDefault(id),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
   });
 }
@@ -648,7 +635,7 @@ export function useArchiveBusinessProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => syncedBusinessProfileRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().synced.businessProfiles.archive(id),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
   });
 }
@@ -660,7 +647,7 @@ export function useArchiveBusinessProfile() {
 export function useDocumentSequences(businessProfileId: string) {
   return useQuery({
     queryKey: queryKeys.documentSequences(businessProfileId),
-    queryFn: () => documentSequenceRepo.listByBusinessProfile(businessProfileId),
+    queryFn: () => getRepositories().base.documentSequences.listByBusinessProfile(businessProfileId),
     enabled: !!businessProfileId,
   });
 }
@@ -668,7 +655,7 @@ export function useDocumentSequences(businessProfileId: string) {
 export function useDocumentSequence(businessProfileId: string, documentType: DocumentType) {
   return useQuery({
     queryKey: [...queryKeys.documentSequences(businessProfileId), documentType],
-    queryFn: () => documentSequenceRepo.getOrCreate(businessProfileId, documentType),
+    queryFn: () => getRepositories().base.documentSequences.getOrCreate(businessProfileId, documentType),
     enabled: !!businessProfileId && !!documentType,
   });
 }
@@ -685,7 +672,7 @@ export function useUpdateDocumentSequence() {
       businessProfileId: string;
       documentType: DocumentType;
       updates: Partial<DocumentSequence>;
-    }) => documentSequenceRepo.update(businessProfileId, documentType, updates),
+    }) => getRepositories().base.documentSequences.update(businessProfileId, documentType, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documentSequences'] });
     },
@@ -695,7 +682,7 @@ export function useUpdateDocumentSequence() {
 export function useIsDocumentNumberTaken() {
   return useMutation({
     mutationFn: ({ number, excludeId }: { number: string; excludeId?: string }) =>
-      documentRepo.isNumberTaken(number, excludeId),
+      getRepositories().base.documents.isNumberTaken(number, excludeId),
   });
 }
 

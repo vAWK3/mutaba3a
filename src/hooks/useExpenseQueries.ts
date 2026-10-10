@@ -1,12 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { withErrorToast } from './useMutationWithFeedback';
+// Standalone helpers, not repositories — they stay direct imports.
 import {
-  expenseRepo,
-  recurringRuleRepo,
-  receiptRepo,
-  expenseCategoryRepo,
-  vendorRepo,
-  monthCloseRepo,
   getReceiptMatchSuggestions,
   getUnlinkedReceiptsWithSuggestions,
   isReceiptDuplicate,
@@ -14,7 +9,7 @@ import {
   createReceiptsBulk,
 } from '../db/expenseRepository';
 import { calculateExpenseForecast } from '../db/forecastCalculations';
-import { businessProfileRepo } from '../db';
+import { getRepositories } from '../db';
 import type {
   Expense,
   RecurringRule,
@@ -138,14 +133,14 @@ function invalidateMatchSuggestionQueries(queryClient: ReturnType<typeof useQuer
 export function useExpenses(filters: ExpenseFilters) {
   return useQuery({
     queryKey: expenseQueryKeys.expenses(filters),
-    queryFn: () => expenseRepo.list(filters),
+    queryFn: () => getRepositories().base.expenses.list(filters),
   });
 }
 
 export function useExpense(id: string) {
   return useQuery({
     queryKey: expenseQueryKeys.expense(id),
-    queryFn: () => expenseRepo.get(id),
+    queryFn: () => getRepositories().base.expenses.get(id),
     enabled: !!id,
   });
 }
@@ -153,7 +148,7 @@ export function useExpense(id: string) {
 export function useExpenseYearlyTotals(profileId: string, year: number) {
   return useQuery({
     queryKey: expenseQueryKeys.expenseYearlyTotals(profileId, year),
-    queryFn: () => expenseRepo.getYearlyTotals(profileId, year),
+    queryFn: () => getRepositories().base.expenses.getYearlyTotals(profileId, year),
     enabled: !!profileId && !!year,
   });
 }
@@ -161,7 +156,7 @@ export function useExpenseYearlyTotals(profileId: string, year: number) {
 export function useAllProfilesExpenseTotals(year: number) {
   return useQuery({
     queryKey: expenseQueryKeys.allProfilesExpenseTotals(year),
-    queryFn: () => expenseRepo.getAllProfilesTotals(year),
+    queryFn: () => getRepositories().base.expenses.getAllProfilesTotals(year),
     enabled: !!year,
   });
 }
@@ -177,7 +172,7 @@ export function useCreateExpense() {
 
   return useExpenseMutationWithToast({
     mutationFn: (data: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) =>
-      expenseRepo.create(data),
+      getRepositories().base.expenses.create(data),
     onSuccess: () => invalidateExpenseQueries(queryClient),
   });
 }
@@ -187,7 +182,7 @@ export function useUpdateExpense() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<Expense> }) =>
-      expenseRepo.update(id, data),
+      getRepositories().base.expenses.update(id, data),
     onSuccess: () => invalidateExpenseQueries(queryClient),
   });
 }
@@ -196,7 +191,7 @@ export function useDeleteExpense() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => expenseRepo.softDelete(id),
+    mutationFn: (id: string) => getRepositories().base.expenses.softDelete(id),
     onSuccess: () => invalidateExpenseQueries(queryClient),
   });
 }
@@ -208,14 +203,14 @@ export function useDeleteExpense() {
 export function useRecurringRules(profileId?: string) {
   return useQuery({
     queryKey: expenseQueryKeys.recurringRules(profileId),
-    queryFn: () => recurringRuleRepo.list({ profileId }),
+    queryFn: () => getRepositories().base.recurringRules.list({ profileId }),
   });
 }
 
 export function useActiveRecurringRules(profileId?: string) {
   return useQuery({
     queryKey: expenseQueryKeys.activeRecurringRules(profileId),
-    queryFn: () => recurringRuleRepo.listActive(profileId!),
+    queryFn: () => getRepositories().base.recurringRules.listActive(profileId!),
     enabled: !!profileId,
   });
 }
@@ -223,7 +218,7 @@ export function useActiveRecurringRules(profileId?: string) {
 export function useRecurringRule(id: string) {
   return useQuery({
     queryKey: expenseQueryKeys.recurringRule(id),
-    queryFn: () => recurringRuleRepo.get(id),
+    queryFn: () => getRepositories().base.recurringRules.get(id),
     enabled: !!id,
   });
 }
@@ -233,7 +228,7 @@ export function useCreateRecurringRule() {
 
   return useExpenseMutationWithToast({
     mutationFn: (data: Omit<RecurringRule, 'id' | 'createdAt' | 'updatedAt'>) =>
-      recurringRuleRepo.create(data),
+      getRepositories().base.recurringRules.create(data),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
 }
@@ -243,7 +238,7 @@ export function useUpdateRecurringRule() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<RecurringRule> }) =>
-      recurringRuleRepo.update(id, data),
+      getRepositories().base.recurringRules.update(id, data),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
 }
@@ -252,7 +247,7 @@ export function usePauseRecurringRule() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => recurringRuleRepo.pause(id),
+    mutationFn: (id: string) => getRepositories().base.recurringRules.pause(id),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
 }
@@ -261,7 +256,7 @@ export function useResumeRecurringRule() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => recurringRuleRepo.resume(id),
+    mutationFn: (id: string) => getRepositories().base.recurringRules.resume(id),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
 }
@@ -270,7 +265,7 @@ export function useDeleteRecurringRule() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => recurringRuleRepo.delete(id),
+    mutationFn: (id: string) => getRepositories().base.recurringRules.delete(id),
     onSuccess: () => invalidateRecurringRuleQueries(queryClient),
   });
 }
@@ -282,14 +277,14 @@ export function useDeleteRecurringRule() {
 export function useReceipts(filters: ReceiptFilters) {
   return useQuery({
     queryKey: expenseQueryKeys.receipts(filters),
-    queryFn: () => receiptRepo.list(filters),
+    queryFn: () => getRepositories().base.receipts.list(filters),
   });
 }
 
 export function useReceipt(id: string) {
   return useQuery({
     queryKey: expenseQueryKeys.receipt(id),
-    queryFn: () => receiptRepo.get(id),
+    queryFn: () => getRepositories().base.receipts.get(id),
     enabled: !!id,
   });
 }
@@ -297,7 +292,7 @@ export function useReceipt(id: string) {
 export function useUnlinkedReceipts(profileId: string) {
   return useQuery({
     queryKey: expenseQueryKeys.unlinkedReceipts(profileId),
-    queryFn: () => receiptRepo.getUnlinkedByProfile(profileId),
+    queryFn: () => getRepositories().base.receipts.getUnlinkedByProfile(profileId),
     enabled: !!profileId,
   });
 }
@@ -305,7 +300,7 @@ export function useUnlinkedReceipts(profileId: string) {
 export function useReceiptsByMonth(profileId: string, monthKey: string) {
   return useQuery({
     queryKey: expenseQueryKeys.receiptsByMonth(profileId, monthKey),
-    queryFn: () => receiptRepo.getByProfileAndMonth(profileId, monthKey),
+    queryFn: () => getRepositories().base.receipts.getByProfileAndMonth(profileId, monthKey),
     enabled: !!profileId && !!monthKey,
   });
 }
@@ -315,7 +310,7 @@ export function useCreateReceipt() {
 
   return useExpenseMutationWithToast({
     mutationFn: (data: Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>) =>
-      receiptRepo.create(data),
+      getRepositories().base.receipts.create(data),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
 }
@@ -325,7 +320,7 @@ export function useUpdateReceipt() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<Receipt> }) =>
-      receiptRepo.update(id, data),
+      getRepositories().base.receipts.update(id, data),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
 }
@@ -334,7 +329,7 @@ export function useDeleteReceipt() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => receiptRepo.delete(id),
+    mutationFn: (id: string) => getRepositories().base.receipts.delete(id),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
 }
@@ -344,7 +339,7 @@ export function useLinkReceiptToExpense() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ receiptId, expenseId }: { receiptId: string; expenseId: string }) =>
-      receiptRepo.linkToExpense(receiptId, expenseId),
+      getRepositories().base.receipts.linkToExpense(receiptId, expenseId),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
 }
@@ -353,7 +348,7 @@ export function useUnlinkReceipt() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (receiptId: string) => receiptRepo.unlinkFromExpense(receiptId),
+    mutationFn: (receiptId: string) => getRepositories().base.receipts.unlinkFromExpense(receiptId),
     onSuccess: () => invalidateReceiptQueries(queryClient),
   });
 }
@@ -365,7 +360,7 @@ export function useUnlinkReceipt() {
 export function useExpenseCategories(profileId: string) {
   return useQuery({
     queryKey: expenseQueryKeys.expenseCategories(profileId),
-    queryFn: () => expenseCategoryRepo.list(profileId),
+    queryFn: () => getRepositories().base.expenseCategories.list(profileId),
     enabled: !!profileId,
   });
 }
@@ -373,7 +368,7 @@ export function useExpenseCategories(profileId: string) {
 export function useExpenseCategory(id: string) {
   return useQuery({
     queryKey: expenseQueryKeys.expenseCategory(id),
-    queryFn: () => expenseCategoryRepo.get(id),
+    queryFn: () => getRepositories().base.expenseCategories.get(id),
     enabled: !!id,
   });
 }
@@ -383,7 +378,7 @@ export function useCreateExpenseCategory() {
 
   return useExpenseMutationWithToast({
     mutationFn: (data: Omit<ExpenseCategory, 'id'>) =>
-      expenseCategoryRepo.create(data),
+      getRepositories().base.expenseCategories.create(data),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
   });
 }
@@ -393,7 +388,7 @@ export function useUpdateExpenseCategory() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<ExpenseCategory> }) =>
-      expenseCategoryRepo.update(id, data),
+      getRepositories().base.expenseCategories.update(id, data),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
   });
 }
@@ -402,7 +397,7 @@ export function useDeleteExpenseCategory() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => expenseCategoryRepo.delete(id),
+    mutationFn: (id: string) => getRepositories().base.expenseCategories.delete(id),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
   });
 }
@@ -419,9 +414,9 @@ export function useExpenseForecast(year: number, profileIds: string[], currency:
 
       for (const profileId of profileIds) {
         const [profile, rules, expenses] = await Promise.all([
-          businessProfileRepo.get(profileId),
-          recurringRuleRepo.listActive(profileId),
-          expenseRepo.list({ profileId, year }),
+          getRepositories().base.businessProfiles.get(profileId),
+          getRepositories().base.recurringRules.listActive(profileId),
+          getRepositories().base.expenses.list({ profileId, year }),
         ]);
 
         if (profile) {
@@ -473,7 +468,7 @@ export function useSeedExpenseCategories() {
 export function useVendors(profileId: string) {
   return useQuery({
     queryKey: expenseQueryKeys.vendors(profileId),
-    queryFn: () => vendorRepo.list(profileId),
+    queryFn: () => getRepositories().base.vendors.list(profileId),
     enabled: !!profileId,
   });
 }
@@ -481,7 +476,7 @@ export function useVendors(profileId: string) {
 export function useVendor(id: string) {
   return useQuery({
     queryKey: expenseQueryKeys.vendor(id),
-    queryFn: () => vendorRepo.get(id),
+    queryFn: () => getRepositories().base.vendors.get(id),
     enabled: !!id,
   });
 }
@@ -491,7 +486,7 @@ export function useCreateVendor() {
 
   return useExpenseMutationWithToast({
     mutationFn: (data: Omit<Vendor, 'id' | 'createdAt' | 'updatedAt'>) =>
-      vendorRepo.create(data),
+      getRepositories().base.vendors.create(data),
     onSuccess: () => invalidateVendorQueries(queryClient),
   });
 }
@@ -501,7 +496,7 @@ export function useUpdateVendor() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<Vendor> }) =>
-      vendorRepo.update(id, data),
+      getRepositories().base.vendors.update(id, data),
     onSuccess: () => invalidateVendorQueries(queryClient),
   });
 }
@@ -510,7 +505,7 @@ export function useDeleteVendor() {
   const queryClient = useQueryClient();
 
   return useExpenseMutationWithToast({
-    mutationFn: (id: string) => vendorRepo.delete(id),
+    mutationFn: (id: string) => getRepositories().base.vendors.delete(id),
     onSuccess: () => {
       invalidateVendorQueries(queryClient);
       invalidateExpenseQueries(queryClient);
@@ -524,7 +519,7 @@ export function useFindOrCreateVendor() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ profileId, rawVendor }: { profileId: string; rawVendor: string }) =>
-      vendorRepo.findOrCreate(profileId, rawVendor),
+      getRepositories().base.vendors.findOrCreate(profileId, rawVendor),
     onSuccess: () => invalidateVendorQueries(queryClient),
   });
 }
@@ -534,7 +529,7 @@ export function useMergeVendors() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ targetId, sourceId }: { targetId: string; sourceId: string }) =>
-      vendorRepo.mergeVendors(targetId, sourceId),
+      getRepositories().base.vendors.mergeVendors(targetId, sourceId),
     onSuccess: () => {
       invalidateVendorQueries(queryClient);
       invalidateExpenseQueries(queryClient);
@@ -548,7 +543,7 @@ export function useAddVendorAlias() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ vendorId, alias }: { vendorId: string; alias: string }) =>
-      vendorRepo.addAlias(vendorId, alias),
+      getRepositories().base.vendors.addAlias(vendorId, alias),
     onSuccess: () => invalidateVendorQueries(queryClient),
   });
 }
@@ -632,7 +627,7 @@ export function useBulkCreateReceipts() {
 export function useMonthCloseStatus(profileId: string, monthKey: string) {
   return useQuery({
     queryKey: expenseQueryKeys.monthCloseStatus(profileId, monthKey),
-    queryFn: () => monthCloseRepo.getOrCreate(profileId, monthKey),
+    queryFn: () => getRepositories().base.monthCloseStatuses.getOrCreate(profileId, monthKey),
     enabled: !!profileId && !!monthKey,
   });
 }
@@ -640,7 +635,7 @@ export function useMonthCloseStatus(profileId: string, monthKey: string) {
 export function useMonthCloseComputed(profileId: string, monthKey: string) {
   return useQuery({
     queryKey: expenseQueryKeys.monthCloseComputed(profileId, monthKey),
-    queryFn: () => monthCloseRepo.getComputedStatus(profileId, monthKey),
+    queryFn: () => getRepositories().base.monthCloseStatuses.getComputedStatus(profileId, monthKey),
     enabled: !!profileId && !!monthKey,
   });
 }
@@ -648,7 +643,7 @@ export function useMonthCloseComputed(profileId: string, monthKey: string) {
 export function useMonthCloseList(profileId: string) {
   return useQuery({
     queryKey: expenseQueryKeys.monthCloseList(profileId),
-    queryFn: () => monthCloseRepo.list(profileId),
+    queryFn: () => getRepositories().base.monthCloseStatuses.list(profileId),
     enabled: !!profileId,
   });
 }
@@ -665,7 +660,7 @@ export function useUpdateMonthCloseChecklist() {
       profileId: string;
       monthKey: string;
       updates: Partial<MonthCloseChecklist>;
-    }) => monthCloseRepo.updateChecklist(profileId, monthKey, updates),
+    }) => getRepositories().base.monthCloseStatuses.updateChecklist(profileId, monthKey, updates),
     onSuccess: () => invalidateMonthCloseQueries(queryClient),
   });
 }
@@ -682,7 +677,7 @@ export function useCloseMonth() {
       profileId: string;
       monthKey: string;
       notes?: string;
-    }) => monthCloseRepo.closeMonth(profileId, monthKey, notes),
+    }) => getRepositories().base.monthCloseStatuses.closeMonth(profileId, monthKey, notes),
     onSuccess: () => invalidateMonthCloseQueries(queryClient),
   });
 }
@@ -692,7 +687,7 @@ export function useReopenMonth() {
 
   return useExpenseMutationWithToast({
     mutationFn: ({ profileId, monthKey }: { profileId: string; monthKey: string }) =>
-      monthCloseRepo.reopenMonth(profileId, monthKey),
+      getRepositories().base.monthCloseStatuses.reopenMonth(profileId, monthKey),
     onSuccess: () => invalidateMonthCloseQueries(queryClient),
   });
 }
@@ -700,7 +695,7 @@ export function useReopenMonth() {
 export function useIsMonthClosed(profileId: string, monthKey: string) {
   return useQuery({
     queryKey: ['isMonthClosed', profileId, monthKey],
-    queryFn: () => monthCloseRepo.isMonthClosed(profileId, monthKey),
+    queryFn: () => getRepositories().base.monthCloseStatuses.isMonthClosed(profileId, monthKey),
     enabled: !!profileId && !!monthKey,
   });
 }

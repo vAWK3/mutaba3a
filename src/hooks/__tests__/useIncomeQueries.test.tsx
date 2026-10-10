@@ -12,28 +12,40 @@ import {
   useDeleteIncome,
   useMarkIncomePaid,
 } from '../useIncomeQueries';
-import { transactionRepo } from '../../db';
-import { syncedTransactionRepo } from '../../sync/core/synced-repository';
+import { getRepositories } from '../../db';
 
-// Mock the database
-vi.mock('../../db', () => ({
-  transactionRepo: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    softDelete: vi.fn(),
-    markPaid: vi.fn(),
-  },
-}));
+// Mock the database. The hook resolves repositories through getRepositories(),
+// so the fakes are handed back from there rather than exported individually.
+// Assertions below still target the same two repository objects.
+vi.mock('../../db', () => {
+  const base = {
+    transactions: {
+      list: vi.fn(),
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      softDelete: vi.fn(),
+      markPaid: vi.fn(),
+      archive: vi.fn(),
+      unarchive: vi.fn(),
+      getOverviewTotals: vi.fn(),
+      getAttentionReceivables: vi.fn(),
+    },
+  };
+  // Payment-related mutations go through the op-capturing decorator, not the
+  // base repository. Keeping them separate here preserves that distinction.
+  const synced = {
+    transactions: {
+      markPaid: vi.fn(),
+      recordPartialPayment: vi.fn(),
+    },
+  };
+  const repositories = { base, synced };
+  return { getRepositories: () => repositories };
+});
 
-// Mock the synced repository (used by payment-related mutations)
-vi.mock('../../sync/core/synced-repository', () => ({
-  syncedTransactionRepo: {
-    markPaid: vi.fn(),
-    recordPartialPayment: vi.fn(),
-  },
-}));
+const transactionRepo = getRepositories().base.transactions;
+const syncedTransactionRepo = getRepositories().synced.transactions;
 
 function createWrapper() {
   const queryClient = new QueryClient({

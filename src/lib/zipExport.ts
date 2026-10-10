@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { receiptRepo } from '../db/expenseRepository';
+import { getRepositories } from '../db';
 
 /**
  * Export all receipts for a profile and month as a ZIP file
@@ -10,7 +10,7 @@ export async function exportReceiptsAsZip(
   profileName: string,
   monthKey: string
 ): Promise<void> {
-  const receipts = await receiptRepo.getByProfileAndMonth(profileId, monthKey);
+  const receipts = await getRepositories().base.receipts.getByProfileAndMonth(profileId, monthKey);
 
   if (receipts.length === 0) {
     throw new Error('No receipts to export');
@@ -63,7 +63,7 @@ export async function exportAllReceiptsAsZip(
   profileId: string,
   profileName: string
 ): Promise<void> {
-  const receipts = await receiptRepo.list({ profileId });
+  const receipts = await getRepositories().base.receipts.list({ profileId });
 
   if (receipts.length === 0) {
     throw new Error('No receipts to export');

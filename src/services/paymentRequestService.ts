@@ -1,4 +1,4 @@
-import { documentRepo, transactionRepo } from '../db/repository';
+import { getRepositories } from '../db';
 import type { Document, Transaction, DocumentStatus } from '../types';
 
 interface CreatePaymentRequestParams {
@@ -15,7 +15,7 @@ export async function createPaymentRequestWithReceivable(
   const { documentData } = params;
 
   // 1. Create the document with type payment_request and status issued
-  const document = await documentRepo.create({
+  const document = await getRepositories().base.documents.create({
     ...documentData,
     type: 'payment_request',
     status: 'issued' as DocumentStatus,
@@ -23,7 +23,7 @@ export async function createPaymentRequestWithReceivable(
   });
 
   // 2. Create linked receivable transaction (income, unpaid)
-  const transaction = await transactionRepo.create({
+  const transaction = await getRepositories().base.transactions.create({
     kind: 'income',
     status: 'unpaid',
     title: document.subject || `Payment Request ${document.number}`,
@@ -36,7 +36,7 @@ export async function createPaymentRequestWithReceivable(
   });
 
   // 3. Link transaction to document
-  await documentRepo.linkTransactions(document.id, [transaction.id]);
+  await getRepositories().base.documents.linkTransactions(document.id, [transaction.id]);
 
   return { document, transaction };
 }
@@ -49,7 +49,7 @@ export async function recordPaymentForRequest(
   documentId: string,
   paidAt: string
 ): Promise<void> {
-  const document = await documentRepo.get(documentId);
+  const document = await getRepositories().base.documents.get(documentId);
   if (!document || document.type !== 'payment_request') {
     throw new Error('Invalid payment request document');
   }
@@ -64,9 +64,9 @@ export async function recordPaymentForRequest(
 
   // Mark all linked transactions as paid
   for (const txId of document.linkedTransactionIds) {
-    const tx = await transactionRepo.get(txId);
+    const tx = await getRepositories().base.transactions.get(txId);
     if (tx && tx.status === 'unpaid') {
-      await transactionRepo.update(txId, {
+      await getRepositories().base.transactions.update(txId, {
         status: 'paid',
         paidAt,
       });
@@ -74,7 +74,7 @@ export async function recordPaymentForRequest(
   }
 
   // Mark document as paid
-  await documentRepo.markPaid(documentId);
+  await getRepositories().base.documents.markPaid(documentId);
 }
 
 /**
@@ -82,7 +82,7 @@ export async function recordPaymentForRequest(
  * Soft-deletes linked transactions and marks document as voided.
  */
 export async function voidPaymentRequest(documentId: string): Promise<void> {
-  const document = await documentRepo.get(documentId);
+  const document = await getRepositories().base.documents.get(documentId);
   if (!document || document.type !== 'payment_request') {
     throw new Error('Invalid payment request document');
   }
@@ -93,11 +93,11 @@ export async function voidPaymentRequest(documentId: string): Promise<void> {
 
   // Soft-delete linked transactions
   for (const txId of document.linkedTransactionIds) {
-    await transactionRepo.softDelete(txId);
+    await getRepositories().base.transactions.softDelete(txId);
   }
 
   // Void the document
-  await documentRepo.markVoided(documentId);
+  await getRepositories().base.documents.markVoided(documentId);
 }
 
 /**
@@ -108,7 +108,7 @@ export async function updatePaymentRequestWithTransaction(
   documentId: string,
   documentData: Partial<Document>
 ): Promise<void> {
-  const document = await documentRepo.get(documentId);
+  const document = await getRepositories().base.documents.get(documentId);
   if (!document || document.type !== 'payment_request') {
     throw new Error('Invalid payment request document');
   }
@@ -118,7 +118,7 @@ export async function updatePaymentRequestWithTransaction(
   }
 
   // Update document
-  await documentRepo.update(documentId, documentData);
+  await getRepositories().base.documents.update(documentId, documentData);
 
   // If amount or dates changed, update linked transactions
   if (document.linkedTransactionIds.length > 0) {
@@ -146,10 +146,10 @@ export async function updatePaymentRequestWithTransaction(
     // Only update if there are changes
     if (Object.keys(txUpdates).length > 0) {
       for (const txId of document.linkedTransactionIds) {
-        const tx = await transactionRepo.get(txId);
+        const tx = await getRepositories().base.transactions.get(txId);
         // Only update unpaid transactions
         if (tx && tx.status === 'unpaid') {
-          await transactionRepo.update(txId, txUpdates);
+          await getRepositories().base.transactions.update(txId, txUpdates);
         }
       }
     }
