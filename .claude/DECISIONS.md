@@ -38,6 +38,7 @@
 | ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 | ADR-029 | Removing a Feature's UI Never Removes Its Tables | Active | 2026-10 |
+| ADR-030 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 
 ---
 
@@ -871,7 +872,15 @@ bucket).
 
 ---
 
-## ADR-027: Fee Proposals Live in the Hosted Ledger as a Single-Round Pre-Agreement State
+## ADR-027: Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3)
+
+**Status**: Active
+**Date**: 2026-10-10 (original record 2026-10-09)
+**Note (2026-10-10, MUT-49)**: this file briefly carried two `## ADR-027`
+headings. The 2026-10-09 record and its 2026-10-10 override are now one ADR
+with two dated sections; ADR-028 and ADR-029 keep their numbers.
+
+### Original record (2026-10-09): Fee Proposals Live in the Hosted Ledger as a Single-Round Pre-Agreement State
 
 **Date**: 2026-10-09
 **Status**: Accepted (owner's answers to the M7 brief, 2026-10-09)
@@ -907,12 +916,8 @@ every financial record in Mutaba3a, and the owner asked for Mutaba3a to hold
 it); a partial unique index for "one open per project" (rejected: Prisma
 cannot declare it, so the schema and the migration would drift).
 
----
+### Override (2026-10-10): Fee Approval Creates the Agreement
 
-## ADR-027: Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3)
-
-**Status**: Active
-**Date**: 2026-10-10
 **Context**: M7 recorded the negotiation (`PROPOSED → CLIENT_APPROVED | AGREED
 → CONVERTED`) but produced no debt until the Partner ran the agreement wizard,
 so "the client said yes, record their payment" was two screens away. The owner's
@@ -1039,3 +1044,55 @@ already); keeping the full 200-line engagement type to describe retained rows
 faithfully (rejected — no consumer left to keep it accurate, so it would rot
 into a lie); deleting `moneyEventRepository` with the page (rejected — three
 mounted Overview components import it).
+
+---
+
+## ADR-030: The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches
+
+**Status**: Active
+**Date**: 2026-10-10
+**Context**: MUT-49 (epic MUT-48). On 2026-10-05 commit `ae9fb1c` changed
+`plugins.updater.pubkey` in `src-tauri/tauri.conf.json` to minisign key
+`AB7B64537B1DE22C`, with a message saying the config was catching up to the
+key in use. The evidence says otherwise: the signatures in the published
+v0.0.63 `latest.json` (both `darwin-aarch64` and `windows-x86_64`), the only
+private key on the release machine (`~/.tauri/mutaba3a.key`, Jan 2026) and
+the GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY` (set 2026-04-17, before
+v0.0.63) all correspond to `BEDF931CA1D6C777`. No private half of `AB7B...`
+exists anywhere that was searched (repo, worktrees, `~/.tauri`, shell
+history). Had v0.0.64 shipped with the new key, no later release could ever
+have been verified by it.
+
+**Decision**:
+1. `BEDF931CA1D6C777` is the canonical updater signing key. The public key
+   compiled into the app, the release machine's private key and the CI secret
+   are the same pair. The config is restored to the pre-`ae9fb1c` value, which
+   is byte-identical to `~/.tauri/mutaba3a.key.pub`.
+2. `src/lib/__tests__/updater-config.test.ts` pins the configured public key
+   to that value and names both fingerprints on mismatch. It is friction
+   against an accidental edit, not proof that artifacts were signed with it;
+   the signer-vs-config check runs in shell at release time (MUT-51).
+3. A real rotation, if one is ever needed (a compromised private key), has a
+   fixed order: generate the new pair; store the private half in both
+   `release.env` and the CI secret; ship one transitional release that is
+   **signed with the old key** and **embeds the new public key**; only then
+   switch signing to the new key. Skipping the transitional release strands
+   every installed client.
+
+**Consequences**:
+- The revert is backward-compatible: `ae9fb1c` is not an ancestor of
+  `v0.0.63`, and the tag's `tauri.conf.json` decodes to `BEDF931CA1D6C777`,
+  so no shipped build embeds `AB7B...`.
+- The 2026-10-05 CHANGELOG entry is annotated as withdrawn; its claim that
+  installed clients must reinstall no longer applies.
+- `release.env` must export `TAURI_SIGNING_PRIVATE_KEY` and its password for
+  `deploy.sh` to emit a signed manifest at all; MUT-51 makes that a hard
+  requirement and adds the file fallback.
+
+**Alternatives Considered**:
+- Keep `AB7B...` and generate a matching private key: impossible; a public
+  key does not yield its private half, and a *new* pair would still need the
+  transitional release described in decision 3.
+- Treat the mismatch as a rotation and ask all users to reinstall: rejected;
+  it is what the 2026-10-05 note proposed, and it trades a one-line revert
+  for every user losing in-app updates once.

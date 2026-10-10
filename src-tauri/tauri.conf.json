@@ -5,7 +5,7 @@
   "identifier": "com.elmokhtbr.mutaba3a",
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCN0I2NDUzN0IxREUyMkMKUldRczRoMTdVMlI3cXd6Z202TlM3NEpZUjR3cm04NDdiZE9STGZxN2tSZDhqYk4yWFo1TExCajQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFREY5MzFDQTFENkM3NzcKUldSM3g5YWhISlBmdmcyb0dsWVRGZ0Q0bWNmTjJGZkFOQnRYZ3FIQTRNcy9XRnk3bFlPU1QxN3kK",
       "endpoints": [
         "https://github.com/vAWK3/mutaba3a/releases/latest/download/latest.json"
       ],

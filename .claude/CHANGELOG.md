@@ -29,6 +29,37 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-49: updater public key restored to BEDF931CA1D6C777
+
+**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-030, ADR-027 merge, index), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`. Epic MUT-48.
+
+### Fixed
+- `plugins.updater.pubkey` is back to the pre-`ae9fb1c` value, byte-identical to
+  `~/.tauri/mutaba3a.key.pub`. The 2026-10-05 rotation pointed the app at a key
+  (`AB7B64537B1DE22C`) whose private half exists nowhere; every real signer
+  (local key, CI secret, the v0.0.63 signatures) is `BEDF931CA1D6C777`. No
+  shipped build embeds the wrong key (`ae9fb1c` is not an ancestor of
+  `v0.0.63`), so the revert is backward-compatible.
+
+### Added
+- `src/lib/__tests__/updater-config.test.ts`: pins the configured public key
+  to the canonical base64 string and prints both fingerprints on mismatch.
+  Written red against the `AB7B...` config, green after the revert.
+- ADR-030: the key is canonical; a real rotation ships the new public key in a
+  release signed by the old key before signing switches.
+
+### Technical
+- `.claude/DECISIONS.md` carried two `## ADR-027` headings (the 2026-10-09
+  fee-proposal record and its 2026-10-10 override). They are now one ADR-027
+  with two dated sections; ADR-028 and ADR-029 keep their numbers because
+  CHANGELOG, TEST_PLAN, TECH_DEBT and the designs cite them. The `## ADR-XXX`
+  inside the Decision Template is the template, not a placeholder to fill.
+- Release-time checklist for the ticket's acceptance criteria 3 and 4 lives
+  on MUT-49; the shell signer-vs-config check and the dead
+  `UPDATER_PRIVATE_KEY_FILE` in `deploy.sh:26` are handed to MUT-51.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 pilot decisions: download-only attachments accepted, Office Admin excluded; epic bookkeeping (MUT-25 / MAL-939)
 
 **Scope:** `.claude/DECISIONS.md` (ADR-028 + index), `.claude/designs/money-v1-m6-summaries-audit-attachments.md` §5, `.claude/designs/money-v1-handover.md` §4. No code.
@@ -832,6 +863,10 @@ API version `1.1.0-m2`; everything additive, M1 untouched.
 - Consequence: builds already installed in the field carry the old public key,
   so they will reject updates signed with the new private key. Clients on an
   older build need a manual reinstall to rejoin the update channel.
+- **Withdrawn 2026-10-10 (MUT-49, ADR-030).** The premise above was false: the
+  v0.0.63 signatures, `~/.tauri/mutaba3a.key` and the CI secret are all
+  `BEDF931CA1D6C777`, and no private half of `AB7B64537B1DE22C` is known to
+  exist. The key was restored the same day; no reinstall is needed.
 
 ---
 

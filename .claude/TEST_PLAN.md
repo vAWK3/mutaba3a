@@ -108,6 +108,7 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 | `src/components/__tests__/ProjectDrawer.test.tsx` | Component | 13 | **Full** - Project drawer with profile selector |
 | `src/components/__tests__/UpdateBanner.test.tsx` | Component | 11 | **Full** - Update banner states |
 | `src/hooks/__tests__/useTauriUpdater.test.ts` | Unit | 8 | **Full** - Tauri updater hook |
+| `src/lib/__tests__/updater-config.test.ts` | Contract | 2 | **Full** - compiled-in updater pubkey equals the canonical BEDF931CA1D6C777 key (MUT-49, ADR-030) |
 
 #### Page Component Tests (Added 2026-03-14)
 | File | Type | Tests | Coverage |
