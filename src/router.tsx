@@ -211,14 +211,13 @@ const profileReceiptsRoute = createRoute({
   },
 });
 
+// Legacy route (MUT-14): the monthly expenses overview was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const expensesOverviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses/overview',
-  component: lazyPage(() => import('./pages/expenses/ExpensesOverviewPage'), 'ExpensesOverviewPage'),
-  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
-    return {
-      year: typeof search.year === 'number' ? search.year : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
   },
 });
 
