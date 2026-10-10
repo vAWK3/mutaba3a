@@ -26,11 +26,11 @@
 ## 4. Still open (decisions or work for the owner)
 
 - **Native review of Arabic and Hebrew strings** in `money.json` (M1–M6 were written without a native speaker; the parity test only proves every key exists).
-- **No malware scan on attachments** (M6 decision 4): `complete` verifies size and content type and the UI offers download, never inline rendering. A Cloud Storage → event → scanner → status pipeline is the listed follow-up. Decide whether it gates the pilot.
-- **Office Admin access to Money** stays a separate decision (MAL-870); v1 is Partner-only in every cell.
+- ~~**No malware scan on attachments** (M6 decision 4) — decide whether it gates the pilot.~~ **Decided 2026-10-10: it does not.** Download-only is accepted for the pilot (ADR-028); `complete` verifies size and content type and the UI offers download, never inline rendering. The Cloud Storage → event → scanner → status pipeline is a post-pilot follow-up to ticket before general availability.
+- ~~**Office Admin access to Money** stays a separate decision (MAL-870).~~ **Decided 2026-10-10: Office Admin does not get access to Money.** Partner-only in every cell is the rule, not a placeholder (ADR-150 addendum 2026-10-10 in Malafat). MAL-870 stays open only for the OAuth scope vocabulary and add-on lapse behaviour.
 - **Flutter / mobile:** the `/api/admin/money/*` routes are in `openapi.yaml` (ADR-033); no client work was done.
 - **Confluence:** Malafat forbids design briefs in its tree, so all Money briefs live in the Mutaba3a repo under `.claude/designs/`. Move or link them from the MAL-939 epic when convenient.
-- **Jira:** MAL-939 epic status, and tickets for the two follow-ups above (malware scan, native i18n review).
+- **Jira:** MAL-939 and MUT-25 are In Progress (pilot) as of 2026-10-10; MUT-40/41 and MAL-940…943 Done; spikes MUT-26/27/29/30/31/32, MAL-869/871 closed as answered by ADR-024/025/150. Still to ticket: the two follow-ups above (malware scan, native i18n review).
 
 ## 5. What the end-to-end run proved (2026-10-08, Postgres 16, API 1.5.1-m6)
 

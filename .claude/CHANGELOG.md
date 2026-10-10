@@ -29,6 +29,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — Money v1 pilot decisions: download-only attachments accepted, Office Admin excluded; epic bookkeeping (MUT-25 / MAL-939)
+
+**Scope:** `.claude/DECISIONS.md` (ADR-028 + index), `.claude/designs/money-v1-m6-summaries-audit-attachments.md` §5, `.claude/designs/money-v1-handover.md` §4. No code.
+
+### Summary
+- **ADR-028:** M6 decision 4 accepted for the pilot — attachments stay download-only, `READY` means verified size and type, the scanner pipeline is a post-pilot follow-up to ticket before GA.
+- **Office Admin does not get access to Money** (owner, 2026-10-10): recorded against MAL-870 and as an ADR-150 addendum in Malafat; Mutaba3a's handover §4 updated to match.
+- **Jira:** MUT-40, MUT-41, MAL-940…943 → Done; spikes MUT-26, 27, 29, 30, 31, 32 and MAL-869, 871 closed as answered by ADR-024/025 and ADR-150; MUT-28 and MAL-870 left open; MUT-25 and MAL-939 → In Progress (pilot).
+- **Worktrees:** `.claude/worktrees/money-v1-m8` and branch `feature/money-v1-m8` removed in both repositories (merged: Mutaba3a e7754f3, Malafat 1477e55f5).
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 Milestone 8: approval creates the agreement; the overview carries proposals (`server/`, API `1.7.0-m8`)
 
 Brief `money-v1-m8-overview-ia.md` (design-reviewed D1–D13, eng-reviewed

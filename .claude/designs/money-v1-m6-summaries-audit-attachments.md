@@ -56,6 +56,7 @@ New reasons / codes: 422 `UPLOAD_INCOMPLETE`, `UPLOAD_MISMATCH`, `ATTACHMENT_TAR
 2. **Day buckets are exact** (overdue / due today / not yet due) so `outstanding` always decomposes; the wireframe's "due now" is "due today".
 3. **Attachments are reached through signed URLs only**, uploaded by Malafat's server (which proxies the browser's file to the signed URL), so the bucket needs no CORS and never sees a browser origin.
 4. **No malware scan in v1.** The contract said "scanned before READY"; no scanner exists in this stack. `complete` verifies size and content type and the UI offers download, never inline rendering. A scanner (Cloud Storage → event → scan → status) is a listed follow-up, not a blocker for a Partner uploading their own invoices.
+   **Accepted for the pilot, 2026-10-10 (owner).** Download-only is the pilot's attachment behaviour; the scanner does not gate the pilot and becomes a post-pilot follow-up to ticket before general availability. Recorded as ADR-028.
 5. **Soft delete.** A mistaken upload is deleted (object removed, row kept with `deletedAt`) — audit `attachment.deleted`.
 6. **Audit list is oldest-first with the shared keyset cursor**, like every list; the client shows it newest-first.
 7. **Scopes:** `summaries:read`, `audit:read`, `attachments:read` / `attachments:write` — already in `MALAFAT_REQUIRED_SCOPES`, so the pilot key needs no reissue.

@@ -36,6 +36,7 @@
 | ADR-025 | Hosted Financial API (Money v1 Option B): Organization-Scoped Ledger Service, Malafat as API-Key Client | Active | 2026-10 |
 | ADR-026 | Hosted API Deployment: Terraform Owns the Stack Including the Image Tag, One Local Script Rolls It (Local Build, Local Migrations), One Instance Until TD-017 | Active | 2026-10 |
 | ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
+| ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 
 ---
 
@@ -946,3 +947,41 @@ figure and a partial-failure state to build); posting inside the create
 transaction instead of healing (deferred: larger change to tested M3 code for a
 window the catch-up closes within a day); auto-withdrawing proposals on archive
 (rejected: a side effect nobody asked for).
+
+---
+
+## ADR-028: Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It
+
+**Status**: Active
+**Date**: 2026-10-10
+**Context**: M6 decision 4 (`.claude/designs/money-v1-m6-summaries-audit-attachments.md`
+§5) shipped attachments without a malware scanner because none exists in this
+stack, and the handover (§4) left one question to the owner: does the missing
+scanner gate the pilot?
+
+**Decision**: No. The pilot runs with attachments as shipped:
+
+1. `POST /v1/attachments/{id}/complete` verifies the object's size and content
+   type against what the upload declared; `READY` means "verified size and
+   type", not "scanned". The contract's "scanned before READY" wording is
+   aspirational until a scanner exists.
+2. Malafat offers **download only** (302 to a short-lived signed URL), never
+   inline rendering, so a hostile file is never executed in the firm's browser
+   by the CRM. Signed URLs expire within `ATTACHMENTS_URL_TTL_SECONDS`.
+3. Uploads are Partner-only (ADR-150 decision 3 on the Malafat side, reaffirmed
+   2026-10-10): the uploader is the firm's own owner attaching their own
+   invoices and receipts, not an untrusted party.
+4. The scanner pipeline (Cloud Storage → object-finalize event → scan → status
+   on the attachment row, with a `QUARANTINED` outcome the UI must render) is a
+   **post-pilot follow-up**, to be ticketed before general availability. Until
+   then no code path may add inline rendering or a preview.
+
+**Alternatives Considered**: gate the pilot on a scanner (rejected: weeks of
+infrastructure for a pilot whose only uploaders are the firm's Partners); drop
+attachments from the pilot (rejected: documents on payments were a stated pilot
+runbook item); client-side scanning in the browser (rejected: no trustworthy
+option, and it protects the wrong party).
+
+**Consequences**: handover §4 item closed; TEST_PLAN "Still manual" documents
+items stay as written; a follow-up ticket for the scanner is owed on MUT-25 /
+MAL-939 before GA.
