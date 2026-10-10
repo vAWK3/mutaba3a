@@ -95,9 +95,9 @@ export function useRetainers(filters: RetainerFilters = {}) {
  * Get a single retainer by ID
  */
 export function useRetainer(id: string) {
-  return useQuery({
+  return useQuery<RetainerAgreement | null>({
     queryKey: retainerQueryKeys.retainer(id),
-    queryFn: () => getRepositories().base.retainerAgreements.get(id),
+    queryFn: async () => (await getRepositories().base.retainerAgreements.get(id)) ?? null,
     enabled: !!id,
   });
 }

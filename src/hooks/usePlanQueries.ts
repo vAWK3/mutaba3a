@@ -88,9 +88,9 @@ export function usePlans(filters: PlanFilters = {}) {
  * Get a single plan by ID
  */
 export function usePlan(id: string) {
-  return useQuery({
+  return useQuery<Plan | null>({
     queryKey: planQueryKeys.plan(id),
-    queryFn: () => planRepo.get(id),
+    queryFn: async () => (await planRepo.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -195,9 +195,9 @@ export function usePlanAssumptionsByCategory(
  * Get a single assumption by ID
  */
 export function usePlanAssumption(id: string) {
-  return useQuery({
+  return useQuery<PlanAssumption | null>({
     queryKey: planQueryKeys.planAssumption(id),
-    queryFn: () => planAssumptionRepo.get(id),
+    queryFn: async () => (await planAssumptionRepo.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -263,9 +263,9 @@ export function usePlanScenarios(planId: string) {
  * Get the default scenario for a plan
  */
 export function usePlanDefaultScenario(planId: string) {
-  return useQuery({
+  return useQuery<PlanScenario | null>({
     queryKey: planQueryKeys.planDefaultScenario(planId),
-    queryFn: () => planScenarioRepo.getDefault(planId),
+    queryFn: async () => (await planScenarioRepo.getDefault(planId)) ?? null,
     enabled: !!planId,
   });
 }
@@ -274,9 +274,9 @@ export function usePlanDefaultScenario(planId: string) {
  * Get a single scenario by ID
  */
 export function usePlanScenario(id: string) {
-  return useQuery({
+  return useQuery<PlanScenario | null>({
     queryKey: planQueryKeys.planScenario(id),
-    queryFn: () => planScenarioRepo.get(id),
+    queryFn: async () => (await planScenarioRepo.get(id)) ?? null,
     enabled: !!id,
   });
 }

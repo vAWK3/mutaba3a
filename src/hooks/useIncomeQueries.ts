@@ -112,9 +112,9 @@ export function useIncome(filters: IncomeFilters = {}) {
  * Fetch a single income transaction by ID.
  */
 export function useIncomeById(id: string) {
-  return useQuery({
+  return useQuery<Transaction | null>({
     queryKey: incomeQueryKeys.incomeById(id),
-    queryFn: () => getRepositories().base.transactions.get(id),
+    queryFn: async () => (await getRepositories().base.transactions.get(id)) ?? null,
     enabled: !!id,
   });
 }

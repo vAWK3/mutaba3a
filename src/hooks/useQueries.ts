@@ -13,6 +13,8 @@ import type {
   DocumentSequence,
   BusinessProfile,
   PaymentByClientFilters,
+  ClientSummary,
+  ProjectSummary,
 } from '../types';
 
 /**
@@ -94,9 +96,9 @@ export function useTransactions(filters: QueryFilters) {
 }
 
 export function useTransaction(id: string) {
-  return useQuery({
+  return useQuery<Transaction | null>({
     queryKey: queryKeys.transaction(id),
-    queryFn: () => getRepositories().base.transactions.get(id),
+    queryFn: async () => (await getRepositories().base.transactions.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -294,9 +296,9 @@ export function useClients(profileId?: string) {
 }
 
 export function useClient(id: string) {
-  return useQuery({
+  return useQuery<Client | null>({
     queryKey: queryKeys.client(id),
-    queryFn: () => getRepositories().base.clients.get(id),
+    queryFn: async () => (await getRepositories().base.clients.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -309,9 +311,9 @@ export function useClientSummaries(profileId?: string, currency?: Currency, sear
 }
 
 export function useClientSummary(id: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }) {
-  return useQuery({
+  return useQuery<ClientSummary | null>({
     queryKey: queryKeys.clientSummary(id, filters?.dateFrom, filters?.dateTo, filters?.currency),
-    queryFn: () => getRepositories().base.clientSummaries.get(id, filters),
+    queryFn: async () => (await getRepositories().base.clientSummaries.get(id, filters)) ?? null,
     enabled: !!id,
   });
 }
@@ -365,9 +367,9 @@ export function useProjects(profileId?: string, clientId?: string) {
 }
 
 export function useProject(id: string) {
-  return useQuery({
+  return useQuery<Project | null>({
     queryKey: queryKeys.project(id),
-    queryFn: () => getRepositories().base.projects.get(id),
+    queryFn: async () => (await getRepositories().base.projects.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -380,9 +382,9 @@ export function useProjectSummaries(profileId?: string, currency?: Currency, sea
 }
 
 export function useProjectSummary(id: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }) {
-  return useQuery({
+  return useQuery<ProjectSummary | null>({
     queryKey: queryKeys.projectSummary(id, filters?.dateFrom, filters?.dateTo, filters?.currency),
-    queryFn: () => getRepositories().base.projectSummaries.get(id, filters),
+    queryFn: async () => (await getRepositories().base.projectSummaries.get(id, filters)) ?? null,
     enabled: !!id,
   });
 }
@@ -481,9 +483,9 @@ export function useDocuments(filters: DocumentFilters) {
 }
 
 export function useDocument(id: string) {
-  return useQuery({
+  return useQuery<Document | null>({
     queryKey: queryKeys.document(id),
-    queryFn: () => getRepositories().base.documents.get(id),
+    queryFn: async () => (await getRepositories().base.documents.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -616,9 +618,9 @@ export function useBusinessProfiles() {
 }
 
 export function useBusinessProfile(id: string) {
-  return useQuery({
+  return useQuery<BusinessProfile | null>({
     queryKey: queryKeys.businessProfile(id),
-    queryFn: () => getRepositories().base.businessProfiles.get(id),
+    queryFn: async () => (await getRepositories().base.businessProfiles.get(id)) ?? null,
     enabled: !!id,
   });
 }

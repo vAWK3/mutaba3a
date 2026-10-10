@@ -162,7 +162,10 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 #### Hook & Component Tests
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
-| `src/hooks/__tests__/useQueries.test.tsx` | Integration | 22 | Partial - business profile + document + payment-record hooks; fresh-install `null` case for the default profile |
+| `src/hooks/__tests__/useQueries.test.tsx` | Integration | 29 | Partial - business profile + document + payment-record hooks; fresh-install `null` case for the default profile; missing-row `null` case for the seven by-id hooks |
+| `src/hooks/__tests__/useExpenseQueries.test.tsx` | Unit (mocked repos) | 6 | `useExpense`, `useRecurringRule`: found row, empty id, missing row → `null` |
+| `src/hooks/__tests__/useRetainerQueries.test.tsx` | Unit (mocked repos) | 3 | `useRetainer`: found row, empty id, missing row → `null` |
+| `src/hooks/__tests__/usePlanQueries.test.tsx` | Unit (mocked repos) | 12 | `usePlan`, `usePlanAssumption`, `usePlanScenario`, `usePlanDefaultScenario`: found row, empty id, missing row → `null` |
 | `src/components/__tests__/BusinessProfileDrawer.test.tsx` | Component | 8 | Basic - form rendering |
 | `src/components/__tests__/ClientDrawer.test.tsx` | Component | 10 | Full - Client drawer with profile selector |
 | `src/components/__tests__/ProjectDrawer.test.tsx` | Component | 13 | **Full** - Project drawer with profile selector |
@@ -768,3 +771,21 @@ the query was in `error` state and logging on every fresh install. Assert
 
 **Baseline after this fix (2026-10-10)**: 2,079 unit tests passing, 7 skipped.
 The same 18 `ExpensesLedgerPage` failures still pre-date it and are untouched.
+
+### TD-028 — every by-id hook resolves `null` for a missing row
+
+| Area | File | What is pinned |
+|---|---|---|
+| By-id query against real Dexie (PATTERNS: Query Hooks rule) | `src/hooks/__tests__/useQueries.test.tsx` | `useTransaction`, `useClient`, `useClientSummary`, `useProject`, `useProjectSummary`, `useDocument`, `useBusinessProfile` with an id that was never written reach `isSuccess`, `data` is `null`, `isError` is false, `console.error` never called (spied, restored in `finally`). One shared `expectResolvesNull` helper, no `vi.mock` |
+| By-id query with a mocked `get` resolving `undefined` | `useIncomeQueries.test.tsx` (`useIncomeById`), `useRecurringExpenseQueries.test.tsx` (`useRecurringRule`) | same four assertions; the mock is the repository's documented "not found" value |
+| New hook files | `useExpenseQueries.test.tsx`, `useRetainerQueries.test.tsx`, `usePlanQueries.test.tsx` | `describe.each` over the hook table: found row round-trips and calls `get(id)`, empty id never calls `get`, missing row → `null` with no `console.error`. `usePlanDefaultScenario` is driven through `planScenarioRepo.getDefault` |
+
+All 16 missing-row cases were red before the `?? null` change (the query sat in
+`error` state with the TanStack "Query data cannot be undefined" log) and
+green after it, with no other test touched. The consumer-side change
+(`!!existingDoc` in the two document forms' `isReadOnly`) is covered by the
+existing `DocumentDrawer` and document page tests, which still pass.
+
+**Baseline after TD-028 (2026-10-10)**: 2,149 unit tests passing, 5 skipped,
+0 failing. The 18 `ExpensesLedgerPage` failures noted above no longer exist on
+`main`; the page was removed by the MUT-2 strip.

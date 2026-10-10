@@ -111,9 +111,9 @@ export function useExpenses(filters: ExpenseFilters) {
 }
 
 export function useExpense(id: string) {
-  return useQuery({
+  return useQuery<Expense | null>({
     queryKey: expenseQueryKeys.expense(id),
-    queryFn: () => getRepositories().base.expenses.get(id),
+    queryFn: async () => (await getRepositories().base.expenses.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -173,9 +173,9 @@ export function useActiveRecurringRules(profileId?: string) {
 }
 
 export function useRecurringRule(id: string) {
-  return useQuery({
+  return useQuery<RecurringRule | null>({
     queryKey: expenseQueryKeys.recurringRule(id),
-    queryFn: () => getRepositories().base.recurringRules.get(id),
+    queryFn: async () => (await getRepositories().base.recurringRules.get(id)) ?? null,
     enabled: !!id,
   });
 }

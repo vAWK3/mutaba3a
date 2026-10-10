@@ -28,6 +28,61 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — TD-028: every by-id query hook resolves `null`, not `undefined`, for a missing row
+
+**Scope:** `src/hooks/{useQueries,useIncomeQueries,useExpenseQueries,useRecurringExpenseQueries,useRetainerQueries,usePlanQueries}.ts`,
+`src/components/drawers/DocumentDrawer.tsx`, `src/pages/documents/DocumentFormPage.tsx`,
+`src/hooks/__tests__/{useQueries,useIncomeQueries,useRecurringExpenseQueries}.test.tsx`,
+`src/hooks/__tests__/{useExpenseQueries,useRetainerQueries,usePlanQueries}.test.tsx` (new),
+`.claude/{CHANGELOG,PATTERNS,TECH_DEBT,TEST_PLAN}.md`.
+
+### Fixed
+- Opening a deep link whose row was deleted (`?tx=<id>`, `/clients/:id`,
+  `/projects/:id`, a document, profile, expense, recurring rule, retainer or
+  plan id) put that query in `error` state and logged *"Query data cannot be
+  undefined"*, because every by-id hook handed the repository's `undefined`
+  straight to TanStack Query v5. The 16 hooks below now normalise the absence
+  to `null` (`?? null`) and are typed `UseQueryResult<Entity | null>`, the
+  same shape `useDefaultBusinessProfile` got earlier today:
+  `useTransaction`, `useClient`, `useClientSummary`, `useProject`,
+  `useProjectSummary`, `useDocument`, `useBusinessProfile` (`useQueries`);
+  `useIncomeById`; `useExpense`, `useRecurringRule` (`useExpenseQueries`);
+  `useRecurringRule` (`useRecurringExpenseQueries`); `useRetainer`; `usePlan`,
+  `usePlanAssumption`, `usePlanScenario`, `usePlanDefaultScenario`.
+- The two summary hooks were not on the TD-028 list but have the same contract
+  (`Promise<Summary | undefined>` when the parent client/project is gone), so
+  they are included rather than left as a third round.
+
+### Changed
+- `DocumentDrawer` and `DocumentFormPage` derived `isReadOnly` as
+  `… && existingDoc && …`, which typed as `boolean | null | undefined` once the
+  hook could resolve `null` and failed 60 `disabled={isReadOnly}` props. Both
+  now use `!!existingDoc`; the rendered value is unchanged (falsy either way).
+  No other consumer needed a change: every one reads the value through `?.`,
+  `&&` inside JSX or a truthy guard, and none reads `isError`.
+- Repository contracts are untouched (`get(id): Promise<Entity | undefined>`,
+  `getDefault(planId): Promise<PlanScenario | undefined>`); the hook is the
+  only place the absence is normalised, per the PATTERNS Query Hooks rule.
+
+### Technical
+- Tests (TDD, all red before the hook change): a "missing row resolves to
+  `null`, `isSuccess`, `isError` false, no `console.error`" case per hook.
+  `useQueries.test.tsx` runs the seven `useQueries` hooks against real Dexie
+  with an id that was never written; the income and recurring files mock
+  `get` to resolve `undefined`; three new files cover the expense, retainer
+  and plan hooks through mocked repositories (`describe.each` over the hook
+  table, plus a found-row and an empty-id case each). The main-branch hooks
+  for receipts, categories, vendors and recurring occurrences named in the
+  original TD-028 note no longer exist after the MUT-2 strip, so they have no
+  test.
+- Verification: lint 0 errors (17 pre-existing warnings), typecheck clean,
+  `npm run build` clean, full suite green — the 18 `ExpensesLedgerPage`
+  failures recorded as pre-existing in TEST_PLAN are gone on current `main`
+  (the page was removed by the MUT-2 strip).
+- TD-028 resolved.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Fresh install: `useDefaultBusinessProfile` resolves to `null`, not `undefined`
 
 **Scope:** `src/hooks/useQueries.ts`, `src/hooks/__tests__/useQueries.test.tsx`,

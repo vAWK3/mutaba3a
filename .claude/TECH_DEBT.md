@@ -49,26 +49,6 @@ Found during the MUT-49 review (ADR-031); MUT-51 owns the hard-fail on both
 paths, the file fallback, the deploy.sh test gate and the post-publish
 verification.
 
-### TD-028: By-Id Query Hooks Still Resolve `undefined` for Missing Rows
-**Status**: Open
-**Added**: 2026-10-10
-**Priority**: Low
-**Impact**: Opening a deep link (`?tx=<id>`, `/clients/:id`, …) whose row was
-deleted puts that query in `error` state with a console log instead of a
-clean "not found" `null`; the UI already renders a not-found/empty state
-either way, so it is cosmetic until something reads `isError`
-
-`useDefaultBusinessProfile` was fixed on 2026-10-10 because it fired on every
-fresh install (PATTERNS.md, Query Hooks rule). The same shape remains in the
-by-id hooks that wrap `repo.get(id)` — `useTransaction`, `useClient`,
-`useProject`, `useDocument`, `useBusinessProfile` in `useQueries.ts`, plus the
-`get(id)` hooks in `useIncomeQueries`, `useExpenseQueries`,
-`useRecurringExpenseQueries`, `useRetainerQueries`, `usePlanQueries` — and in
-`usePlanScenario`'s `planScenarioRepo.getDefault(planId)`, which like the
-profile one has no `enabled` guard. Fix them the same way (`?? null`, typed
-`Entity | null`) the next time any of those files is touched, and check each
-consumer's `isError` branch while there.
-
 ### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
 **Status**: Open
 **Added**: 2026-10-10
@@ -585,6 +565,22 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ## Resolved Debt
+
+### TD-028: By-Id Query Hooks Resolved `undefined` for Missing Rows
+**Status**: Resolved
+**Resolved**: 2026-10-10
+**Original Priority**: Low
+
+Every by-id hook that wrapped a repository `get(id)` / `getDefault(planId)`
+(`useTransaction`, `useClient`, `useClientSummary`, `useProject`,
+`useProjectSummary`, `useDocument`, `useBusinessProfile`, `useIncomeById`,
+`useExpense`, both `useRecurringRule`s, `useRetainer`, `usePlan`,
+`usePlanAssumption`, `usePlanScenario`, `usePlanDefaultScenario`) now resolves
+`null` for a missing row and is typed `Entity | null`, as
+`useDefaultBusinessProfile` already was. Repository contracts are unchanged.
+The only consumer change was `!!existingDoc` in the two document forms'
+`isReadOnly`. Each hook has a "missing row → `null`, no `console.error`" test
+(PATTERNS.md, Query Hooks rule; CHANGELOG 2026-10-10).
 
 ### TD-018: Organizations and API Keys Are Operator-Provisioned Only
 **Status**: Accepted

@@ -130,6 +130,8 @@ export function useDefaultBusinessProfile() {
 
 By-id lookups behind `enabled: !!id` only hit this when the id points at a
 deleted row; the unguarded singleton lookups hit it on every fresh install.
+As of 2026-10-10 every by-id hook in `src/hooks/*Queries.ts` follows this
+(TD-028), so a new `get(id)` hook must too.
 Consumers read the value through `?.` or a truthy check, which handles `null`
 and `undefined` alike. Test the no-row case by asserting `isSuccess` and
 `toBeNull()` — waiting on `isFetching === false` is also satisfied by a
