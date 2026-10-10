@@ -42,7 +42,7 @@ export interface AppDependencies {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.6.0-m7';
+export const API_VERSION = '1.7.0-m8';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -131,7 +131,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       title: API_TITLE,
       version: API_VERSION,
       description: [
-        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–7).',
+        'Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).',
         '',
         `Scopes: ${SCOPES.join(', ')}.`,
         '',
@@ -151,7 +151,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page\'s nextCursor.',
         '',
-        'Fee proposals (M7) hold the negotiation before a fixed-fee agreement: PROPOSED → CLIENT_APPROVED | AGREED → CONVERTED (POST /v1/agreements with feeProposalId) or WITHDRAWN. One open proposal per project; nothing is posted until the agreement is created. Project summaries carry the current proposal.',
+        'Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer\'s open proposals and their per-currency total (proposed).',
         '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),
@@ -163,7 +163,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Projects', description: 'Single-currency containers for agreements, receivables and payments' },
       { name: 'Import', description: 'Batch linking of an external system\'s customers and projects' },
       { name: 'VAT', description: 'The firm\'s effective-dated standard rate' },
-      { name: 'Fee proposals', description: 'The negotiation before a fixed-fee agreement: proposed, client approved, agreed, converted or withdrawn' },
+      { name: 'Fee proposals', description: 'The negotiation before a fixed-fee agreement: proposed, then approved (which creates the agreement) or withdrawn' },
       { name: 'Agreements', description: 'Fixed-fee agreements, installments, supplements' },
       { name: 'Installments', description: 'Manual triggers' },
       { name: 'Retainers', description: 'Recurring agreements and their monthly charges' },

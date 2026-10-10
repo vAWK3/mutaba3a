@@ -434,13 +434,13 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$transaction(async (tx) => {
           const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: input.organizationId }, select: { id: true } });
           if (!project) throw new ForeignKeyViolation('agreements.projectId');
-          const { installments, feeProposalId, ...rest } = input;
+          const { installments, approveProposal, ...rest } = input;
           const agreement = await tx.agreement.create({ data: { ...rest, createdAt: at, updatedAt: at } });
-          if (feeProposalId) {
-            // M7: convert in the same transaction; a proposal that moved since the route checked it refuses the create.
+          if (approveProposal) {
+            // M8: approve in the same transaction; a proposal that moved since the route checked it refuses the create.
             const { count } = await tx.feeProposal.updateMany({
-              where: { id: feeProposalId, organizationId: input.organizationId, projectId: input.projectId, status: { in: ['CLIENT_APPROVED', 'AGREED'] } },
-              data: { status: 'CONVERTED', agreementId: agreement.id, version: { increment: 1 }, updatedAt: at },
+              where: { id: approveProposal.id, organizationId: input.organizationId, projectId: input.projectId, status: 'PROPOSED' },
+              data: { status: 'APPROVED', agreedAmountMinor: approveProposal.agreedAmountMinor, clientApprovedOn: approveProposal.approvedOn, clientApprovalNote: approveProposal.note, agreementId: agreement.id, version: { increment: 1 }, updatedAt: at },
             });
             if (count !== 1) throw new StateConflict('fee_proposal', 'PROPOSAL_NOT_OPEN');
           }
@@ -518,7 +518,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     listUnpostedDue: (organizationId, today) =>
       this.prisma.installment.findMany({
-        where: { organizationId, triggerType: 'DATE', receivableId: null, voidedAt: null, triggerDate: { lte: today }, agreement: { status: 'ACTIVE' } },
+        where: { organizationId, receivableId: null, voidedAt: null, agreement: { status: 'ACTIVE' }, OR: [{ triggerType: 'DATE', triggerDate: { lte: today } }, { triggerType: 'IMMEDIATE' }] },
       }),
     applySupplement: async (organizationId, agreementId, input: ApplySupplementInput, at) =>
       this.prisma.$transaction(async (tx) => {

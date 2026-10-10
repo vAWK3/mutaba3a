@@ -465,8 +465,8 @@ describe('contract', () => {
   it('publishes every M3 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.6.0-m7');
-    expect(API_VERSION).toBe('1.6.0-m7');
+    expect(doc.info.version).toBe('1.7.0-m8');
+    expect(API_VERSION).toBe('1.7.0-m8');
     for (const path of ['/v1/vat-rates', '/v1/settings/vat', '/v1/agreements/preview', '/v1/agreements', '/v1/agreements/{agreementId}', '/v1/agreements/{agreementId}/supplements', '/v1/agreements/{agreementId}/cancel', '/v1/installments/{installmentId}/trigger', '/v1/retainers/preview', '/v1/retainers', '/v1/retainers/{agreementId}/charges', '/v1/retainers/{agreementId}/cancel', '/v1/retainers/reconcile', '/v1/receivables', '/v1/receivables/{receivableId}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

@@ -29,6 +29,63 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — Money v1 Milestone 8: approval creates the agreement; the overview carries proposals (`server/`, API `1.7.0-m8`)
+
+Brief `money-v1-m8-overview-ia.md` (design-reviewed D1–D13, eng-reviewed
+D14–D20; HTML wireframe beside it). Jira MUT-40, MUT-41 under MUT-25. Replaces
+the M7 lifecycle: nothing from M1–M7 is deployed, so the M7 migration is edited
+in place rather than mapped (D20).
+
+### Changed
+- **Fee proposal lifecycle** is `PROPOSED → APPROVED | WITHDRAWN`
+  (`src/proposals/transitions.ts`). `CLIENT_APPROVED`, `AGREED`, `CONVERTED`,
+  `POST …/agree`, `agreedOn` / `agreedNote` and the `feeProposalId` field of
+  `POST /v1/agreements` are gone; `currentProposal` prefers the open one, else
+  the latest APPROVED. Reasons `PROPOSAL_NOT_FOUND`, `PROPOSAL_NOT_AGREED`,
+  `PROPOSAL_PROJECT_MISMATCH` retired.
+- **`POST /v1/fee-proposals/{id}/approve`** now creates the fixed-fee agreement
+  (D5): body `{ amount, approvedOn?, schedule: ONCE { dueOn } | INSTALLMENTS
+  { count 2–60, firstDueOn }, note? }`; the agreement is dated `approvedOn`
+  so the VAT rate in force on that date applies (D18, `422 VAT_RATE_MISSING`
+  names the date); ONCE posts one IMMEDIATE installment due on `dueOn`;
+  INSTALLMENTS splits the amount into equal minor-unit shares (remainder on
+  the first), posts the first now and DATE-triggers the rest one month apart
+  with the day clamped (D15 B). The store transaction writes the agreement and
+  moves the proposal to APPROVED (`agreedAmountMinor`, `clientApprovedOn`,
+  `clientApprovalNote`, `agreementId`) or refuses the whole create
+  (`StateConflict` → `409 PROPOSAL_NOT_OPEN`). Returns `{ proposal, agreement }`.
+  Audit `fee_proposal.approved` (with `agreementId`, `schedule`).
+- **Organization summary** (D17): `CustomerSummaryRow.proposals[]`
+  (`{ proposalId, projectId, amount, proposedOn }`), `CurrencySummary.proposed`
+  and `counts.openProposals`; the currency and customer sets include customers
+  that only have PROPOSED proposals, so a proposals-only firm gets a block.
+- **Archive** (`POST /v1/projects/{id}/archive`) is refused with
+  `409 PROPOSAL_OPEN { openProposalId }` while a proposal is open (D19).
+- **Lazy posting heals IMMEDIATE installments** (D16):
+  `AgreementRepository.listUnpostedDue` also returns unposted, non-voided
+  IMMEDIATE installments on ACTIVE agreements (MANUAL excluded), so a crash
+  between agreement create and the posting step is repaired on the next read
+  or by `npm run reconcile`; `installment.posted` audits `trigger` from the
+  installment.
+- API version `1.7.0-m8`; `openapi/openapi.yaml` regenerated.
+
+### Technical
+- `src/agreements/create.ts` (new, D14): `composePreview`, `PreviewBody`,
+  `createAgreementFromPreview`, `agreementDetail`, `paidMap` lifted out of
+  `routes/agreements.ts` and shared with the approve route. `POST /v1/agreements`
+  behaviour unchanged (`routes-m3.test.ts` untouched and green).
+- Tests: `src/__tests__/routes-m8.test.ts` (approve ONCE / INSTALLMENTS incl.
+  remainder, month clamp and lazy posting of #2; 409 / 422 / validation /
+  scope / cross-org; `VAT_RATE_MISSING` by date; summary proposals and
+  proposals-only currency; archive refusal; healed IMMEDIATE installment;
+  contract), `routes-m7.test.ts` trimmed to the surviving routes,
+  `transitions.test.ts` rewritten, `store-contract-m8.ts` (+ memory / Prisma
+  runners) replaces `store-contract-m7.ts`. 304 unit tests; 342 with Postgres.
+- Prisma: `FeeProposalStatus` enum and `fee_proposals` columns edited in the
+  M7 migration (`20261009120000_m7_fee_proposals`); local databases need
+  `prisma migrate reset` or a fresh database (the test suite ran against
+  `mutaba3a_test_m8`).
+
 ## [Unreleased] - 2026-10-09 — Money v1 Milestone 7: fee proposals (negotiations) (`server/`, API `1.6.0-m7`)
 
 Brief `money-v1-m7-fee-proposals.md` (+ `-tests.md`), approved by the owner on

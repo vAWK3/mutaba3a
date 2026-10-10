@@ -360,8 +360,6 @@ export function serializeFeeProposal(p: FeeProposalRecord) {
     clientApprovedOn: p.clientApprovedOn,
     clientApprovalNote: p.clientApprovalNote,
     agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency),
-    agreedOn: p.agreedOn,
-    agreedNote: p.agreedNote,
     withdrawnAt: iso(p.withdrawnAt),
     withdrawnReason: p.withdrawnReason,
     agreementId: p.agreementId,

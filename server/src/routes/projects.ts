@@ -199,7 +199,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/projects/{projectId}/archive',
       tags: ['Projects'],
       summary: 'Archive a project',
-      description: 'Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding. Nothing is ever deleted.',
+      description: 'Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('projects:write'), idempotent(store, 'projects.archive')] as const,
       request: { params: ProjectIdParamSchema, headers: IdempotencyHeaderSchema },
@@ -212,6 +212,8 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (project.status === 'ARCHIVED') return c.json(serializeProject(project, refs.get(project.id)), 200);
       const outstanding = await store.receivables.countOutstandingByProject(organization.id, project.id);
       if (outstanding > 0) throw new ApiError('CONFLICT', 'Receivables are outstanding on this project', { reason: 'PROJECT_HAS_OUTSTANDING', outstandingReceivables: outstanding });
+      const openProposal = await store.feeProposals.findOpenByProject(organization.id, project.id);
+      if (openProposal) throw new ApiError('CONFLICT', 'A fee proposal is open on this project; withdraw it first', { reason: 'PROPOSAL_OPEN', openProposalId: openProposal.id, status: openProposal.status });
       const archived = await store.projects.archive(organization.id, project.id, c.get('now')());
       if (!archived) throw new ApiError('NOT_FOUND', 'No such project');
       await store.audit.append({

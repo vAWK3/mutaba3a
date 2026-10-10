@@ -456,8 +456,15 @@ export interface CreateAgreementInput {
   billingDay: number | null;
   endMonth: IsoMonth | null;
   installments: CreateInstallmentInput[];
-  /** M7: the CLIENT_APPROVED / AGREED proposal this agreement converts; marked CONVERTED in the same transaction. */
-  feeProposalId?: string | null;
+  /** M8: the PROPOSED proposal this agreement approves; moved to APPROVED with these figures in the same transaction, or the whole create is refused (StateConflict). */
+  approveProposal?: ApproveProposalInput | null;
+}
+
+export interface ApproveProposalInput {
+  id: string;
+  agreedAmountMinor: bigint;
+  approvedOn: IsoDate;
+  note: string | null;
 }
 
 export interface InstallmentRecord extends CreateInstallmentInput {
@@ -618,7 +625,7 @@ export interface AgreementRepository {
   getInstallment(organizationId: string, id: string): Promise<InstallmentRecord | null>;
   /** Creates the receivable and marks the installment, atomically; a second call returns the first receivable with created=false. */
   postInstallment(organizationId: string, installmentId: string, input: PostingInput): Promise<{ installment: InstallmentRecord; receivable: ReceivableRecord; created: boolean } | null>;
-  /** DATE installments whose trigger date ≤ today, not posted, not voided, on ACTIVE agreements. */
+  /** Unposted, non-voided installments on ACTIVE agreements that should have a receivable by `today`: DATE ones whose trigger date has arrived, and IMMEDIATE ones left unposted by a crash between create and post (M8, D16). Never MANUAL. */
   listUnpostedDue(organizationId: string, today: IsoDate): Promise<InstallmentRecord[]>;
   applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
   listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
@@ -785,7 +792,7 @@ export interface LedgerStore {
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
 
-export type FeeProposalStatus = 'PROPOSED' | 'CLIENT_APPROVED' | 'AGREED' | 'CONVERTED' | 'WITHDRAWN';
+export type FeeProposalStatus = 'PROPOSED' | 'APPROVED' | 'WITHDRAWN';
 
 /**
  * One proposed fee on a project, taken by hand through the client's approval
@@ -803,15 +810,14 @@ export interface FeeProposalRecord {
   proposedAmountMinor: bigint;
   proposedOn: IsoDate;
   note: string | null;
+  /** The approval date; the agreement is dated the same (M8, D18). */
   clientApprovedOn: IsoDate | null;
   clientApprovalNote: string | null;
-  /** Null while PROPOSED or WITHDRAWN; the proposed amount after approve; the explicit figure after agree. */
+  /** Null while PROPOSED or WITHDRAWN; the final amount once APPROVED (the proposed one, or the figure typed at approval). */
   agreedAmountMinor: bigint | null;
-  agreedOn: IsoDate | null;
-  agreedNote: string | null;
   withdrawnAt: Date | null;
   withdrawnReason: string | null;
-  /** The agreement created from it (CONVERTED). */
+  /** The agreement the approval created (APPROVED). */
   agreementId: string | null;
   requestId: string | null;
   version: number;
@@ -835,7 +841,7 @@ export interface FeeProposalFilter {
   projectId?: string;
   customerId?: string;
   status?: FeeProposalStatus;
-  /** PROPOSED | CLIENT_APPROVED | AGREED. */
+  /** PROPOSED. */
   open?: boolean;
 }
 
@@ -845,8 +851,6 @@ export interface FeeProposalTransitionPatch {
   clientApprovedOn?: IsoDate | null;
   clientApprovalNote?: string | null;
   agreedAmountMinor?: bigint | null;
-  agreedOn?: IsoDate | null;
-  agreedNote?: string | null;
   withdrawnAt?: Date | null;
   withdrawnReason?: string | null;
   agreementId?: string | null;

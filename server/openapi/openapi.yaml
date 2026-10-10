@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.6.0-m7
+  version: 1.7.0-m8
   description: |-
-    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–7).
+    Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
@@ -15,7 +15,7 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROPOSAL_NOT_FOUND, PROPOSAL_NOT_AGREED, PROPOSAL_PROJECT_MISMATCH (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -23,7 +23,7 @@ info:
 
     Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page's nextCursor.
 
-    Fee proposals (M7) hold the negotiation before a fixed-fee agreement: PROPOSED → CLIENT_APPROVED | AGREED → CONVERTED (POST /v1/agreements with feeProposalId) or WITHDRAWN. One open proposal per project; nothing is posted until the agreement is created. Project summaries carry the current proposal.
+    Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
 
     Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
@@ -40,7 +40,7 @@ tags:
   - name: VAT
     description: The firm's effective-dated standard rate
   - name: Fee proposals
-    description: "The negotiation before a fixed-fee agreement: proposed, client approved, agreed, converted or withdrawn"
+    description: "The negotiation before a fixed-fee agreement: proposed, then approved (which creates the agreement) or withdrawn"
   - name: Agreements
     description: Fixed-fee agreements, installments, supplements
   - name: Installments
@@ -883,14 +883,6 @@ components:
           nullable: true
           pattern: ^-?\d+(\.\d+)?$
           description: Canonical decimal string; exactly the currency's fractional digits
-        agreedOn:
-          type: string
-          nullable: true
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        agreedNote:
-          type: string
-          nullable: true
         withdrawnAt:
           type: string
           nullable: true
@@ -923,8 +915,6 @@ components:
         - clientApprovedOn
         - clientApprovalNote
         - agreedAmount
-        - agreedOn
-        - agreedNote
         - withdrawnAt
         - withdrawnReason
         - agreementId
@@ -935,9 +925,7 @@ components:
       type: string
       enum:
         - PROPOSED
-        - CLIENT_APPROVED
-        - AGREED
-        - CONVERTED
+        - APPROVED
         - WITHDRAWN
     PricingBasis:
       type: string
@@ -980,236 +968,16 @@ components:
       required:
         - items
         - nextCursor
-    ApproveFeeProposalRequest:
+    ApproveFeeProposalResponse:
       type: object
       properties:
-        approvedOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        note:
-          type: string
-          maxLength: 2000
-    AgreeFeeProposalRequest:
-      type: object
-      properties:
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits
-        agreedOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        note:
-          type: string
-          maxLength: 2000
+        proposal:
+          $ref: "#/components/schemas/FeeProposal"
+        agreement:
+          $ref: "#/components/schemas/AgreementDetail"
       required:
-        - amount
-    WithdrawFeeProposalRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-          maxLength: 2000
-    AgreementPreviewResponse:
-      type: object
-      properties:
-        totals:
-          type: object
-          properties:
-            amount:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits
-            net:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits
-            vat:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits
-            gross:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits
-          required:
-            - amount
-            - net
-            - vat
-            - gross
-        vatRateBasisPoints:
-          type: integer
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        currency:
-          $ref: "#/components/schemas/Currency"
-        installments:
-          type: array
-          items:
-            type: object
-            properties:
-              position:
-                type: integer
-              label:
-                type: string
-              amount:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits
-              net:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits
-              vat:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits
-              gross:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits
-              vatTreatment:
-                $ref: "#/components/schemas/VatTreatment"
-              rateBasisPoints:
-                type: integer
-              trigger:
-                $ref: "#/components/schemas/InstallmentTrigger"
-              paymentTerms:
-                $ref: "#/components/schemas/PaymentTerms"
-              dueDate:
-                type: string
-                pattern: ^\d{4}-\d{2}-\d{2}$
-                description: Calendar date in the organization timezone, YYYY-MM-DD
-              status:
-                $ref: "#/components/schemas/ItemStatus"
-            required:
-              - position
-              - label
-              - amount
-              - net
-              - vat
-              - gross
-              - vatTreatment
-              - rateBasisPoints
-              - trigger
-              - paymentTerms
-              - dueDate
-              - status
-        previewToken:
-          type: string
-          minLength: 64
-          maxLength: 64
-      required:
-        - totals
-        - vatRateBasisPoints
-        - vatTreatment
-        - currency
-        - installments
-        - previewToken
-    InstallmentTrigger:
-      type: object
-      properties:
-        type:
-          $ref: "#/components/schemas/TriggerType"
-        date:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-      required:
-        - type
-    TriggerType:
-      type: string
-      enum:
-        - IMMEDIATE
-        - DATE
-        - MANUAL
-    PaymentTerms:
-      type: string
-      nullable: true
-      enum:
-        - IMMEDIATE
-        - EOM
-        - EOM_15
-        - EOM_30
-        - EOM_45
-        - EOM_60
-        - null
-    ItemStatus:
-      type: string
-      enum:
-        - PENDING
-        - DUE
-        - OVERDUE
-        - PARTIALLY_PAID
-        - PAID
-        - VOID
-    AgreementPreviewRequest:
-      type: object
-      properties:
-        projectId:
-          type: string
-          format: uuid
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits
-        currency:
-          $ref: "#/components/schemas/Currency"
-        pricingBasis:
-          $ref: "#/components/schemas/PricingBasis"
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        agreementDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        description:
-          type: string
-          maxLength: 500
-        paymentTerms:
-          $ref: "#/components/schemas/PaymentTerms"
-        installments:
-          type: array
-          items:
-            $ref: "#/components/schemas/InstallmentSpec"
-          minItems: 1
-          maxItems: 60
-      required:
-        - projectId
-        - amount
-        - pricingBasis
-        - agreementDate
-        - installments
-    InstallmentSpec:
-      type: object
-      properties:
-        label:
-          type: string
-          minLength: 1
-          maxLength: 80
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits
-        percentBasisPoints:
-          type: integer
-          minimum: 0
-          maximum: 10000
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        trigger:
-          $ref: "#/components/schemas/InstallmentTrigger"
-        paymentTerms:
-          $ref: "#/components/schemas/PaymentTerms"
-        dueDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-      required:
-        - label
-        - trigger
+        - proposal
+        - agreement
     AgreementDetail:
       type: object
       properties:
@@ -1356,6 +1124,15 @@ components:
         - version
         - createdAt
         - updatedAt
+    PaymentTerms:
+      type: string
+      enum:
+        - IMMEDIATE
+        - EOM
+        - EOM_15
+        - EOM_30
+        - EOM_45
+        - EOM_60
     Installment:
       type: object
       properties:
@@ -1389,7 +1166,9 @@ components:
         trigger:
           $ref: "#/components/schemas/InstallmentTrigger"
         paymentTerms:
-          $ref: "#/components/schemas/PaymentTerms"
+          allOf:
+            - $ref: "#/components/schemas/PaymentTerms"
+            - nullable: true
         dueDate:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -1423,6 +1202,32 @@ components:
         - postedAt
         - receivableId
         - version
+    InstallmentTrigger:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/TriggerType"
+        date:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - type
+    TriggerType:
+      type: string
+      enum:
+        - IMMEDIATE
+        - DATE
+        - MANUAL
+    ItemStatus:
+      type: string
+      enum:
+        - PENDING
+        - DUE
+        - OVERDUE
+        - PARTIALLY_PAID
+        - PAID
+        - VOID
     Supplement:
       type: object
       properties:
@@ -1461,6 +1266,227 @@ components:
         - distribution
         - resultingAmount
         - createdAt
+    ApproveFeeProposalRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        approvedOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        schedule:
+          $ref: "#/components/schemas/ApproveSchedule"
+        note:
+          type: string
+          maxLength: 2000
+      required:
+        - amount
+        - schedule
+    ApproveSchedule:
+      oneOf:
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - ONCE
+            dueOn:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+          required:
+            - kind
+            - dueOn
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - INSTALLMENTS
+            count:
+              type: integer
+              minimum: 2
+              maximum: 60
+            firstDueOn:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+          required:
+            - kind
+            - count
+            - firstDueOn
+    WithdrawFeeProposalRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+    AgreementPreviewResponse:
+      type: object
+      properties:
+        totals:
+          type: object
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - amount
+            - net
+            - vat
+            - gross
+        vatRateBasisPoints:
+          type: integer
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        installments:
+          type: array
+          items:
+            type: object
+            properties:
+              position:
+                type: integer
+              label:
+                type: string
+              amount:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              net:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              vat:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              gross:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              vatTreatment:
+                $ref: "#/components/schemas/VatTreatment"
+              rateBasisPoints:
+                type: integer
+              trigger:
+                $ref: "#/components/schemas/InstallmentTrigger"
+              paymentTerms:
+                allOf:
+                  - $ref: "#/components/schemas/PaymentTerms"
+                  - nullable: true
+              dueDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              status:
+                $ref: "#/components/schemas/ItemStatus"
+            required:
+              - position
+              - label
+              - amount
+              - net
+              - vat
+              - gross
+              - vatTreatment
+              - rateBasisPoints
+              - trigger
+              - paymentTerms
+              - dueDate
+              - status
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - totals
+        - vatRateBasisPoints
+        - vatTreatment
+        - currency
+        - installments
+        - previewToken
+    AgreementPreviewRequest:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        agreementDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        description:
+          type: string
+          maxLength: 500
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstallmentSpec"
+          minItems: 1
+          maxItems: 60
+      required:
+        - projectId
+        - amount
+        - pricingBasis
+        - agreementDate
+        - installments
+    InstallmentSpec:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        percentBasisPoints:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        trigger:
+          $ref: "#/components/schemas/InstallmentTrigger"
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - label
+        - trigger
     AgreementCreateRequest:
       allOf:
         - $ref: "#/components/schemas/AgreementPreviewRequest"
@@ -1470,9 +1496,6 @@ components:
               type: string
               minLength: 64
               maxLength: 64
-            feeProposalId:
-              type: string
-              format: uuid
           required:
             - previewToken
     AgreementPage:
@@ -2785,6 +2808,10 @@ components:
           type: string
           pattern: ^-?\d+(\.\d+)?$
           description: Canonical decimal string; exactly the currency's fractional digits
+        proposed:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
         counts:
           type: object
           properties:
@@ -2794,10 +2821,13 @@ components:
               type: integer
             unallocatedPayments:
               type: integer
+            openProposals:
+              type: integer
           required:
             - customers
             - overdueCustomers
             - unallocatedPayments
+            - openProposals
         customers:
           type: array
           items:
@@ -2809,6 +2839,7 @@ components:
         - dueToday
         - notYetDue
         - unallocated
+        - proposed
         - counts
         - customers
     CustomerSummaryRow:
@@ -2844,6 +2875,10 @@ components:
           description: Calendar date in the organization timezone, YYYY-MM-DD
         status:
           $ref: "#/components/schemas/CustomerSummaryStatus"
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerSummaryProposal"
       required:
         - customerId
         - outstanding
@@ -2853,6 +2888,7 @@ components:
         - unallocated
         - lastPaymentOn
         - status
+        - proposals
     CustomerSummaryStatus:
       type: string
       enum:
@@ -2860,6 +2896,28 @@ components:
         - OVERDUE
         - OUTSTANDING
         - UP_TO_DATE
+    CustomerSummaryProposal:
+      type: object
+      properties:
+        proposalId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        proposedOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - proposalId
+        - projectId
+        - amount
+        - proposedOn
     CustomerSummary:
       type: object
       properties:
@@ -4184,7 +4242,7 @@ paths:
       tags:
         - Projects
       summary: Archive a project
-      description: Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding. Nothing is ever deleted.
+      description: Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.
       security:
         - apiKey: []
       parameters:
@@ -4451,7 +4509,7 @@ paths:
       tags:
         - Fee proposals
       summary: Propose a fee on a project
-      description: "The currency is the project's. One proposal may be open (PROPOSED, CLIENT_APPROVED or AGREED) per project: a second one is refused with 409 PROPOSAL_OPEN naming the open proposal."
+      description: "The currency is the project's. One proposal may be open (PROPOSED) per project: a second one is refused with 409 PROPOSAL_OPEN naming the open proposal."
       security:
         - apiKey: []
       parameters:
@@ -4553,9 +4611,9 @@ paths:
             enum:
               - "true"
               - "false"
-            description: "`true` narrows to PROPOSED | CLIENT_APPROVED | AGREED; `false` to CONVERTED | WITHDRAWN."
+            description: "`true` narrows to PROPOSED; `false` to APPROVED | WITHDRAWN."
           required: false
-          description: "`true` narrows to PROPOSED | CLIENT_APPROVED | AGREED; `false` to CONVERTED | WITHDRAWN."
+          description: "`true` narrows to PROPOSED; `false` to APPROVED | WITHDRAWN."
           name: open
           in: query
       responses:
@@ -4644,8 +4702,8 @@ paths:
     post:
       tags:
         - Fee proposals
-      summary: Mark the client's approval of the proposed amount
-      description: PROPOSED → CLIENT_APPROVED; the agreed amount becomes the proposed amount. 409 PROPOSAL_NOT_OPEN from any other state.
+      summary: "Approve: the client accepted the fee; creates the agreement and posts its first installment"
+      description: PROPOSED → APPROVED. Creates a fixed-fee agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change. ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
       security:
         - apiKey: []
       parameters:
@@ -4672,84 +4730,11 @@ paths:
               $ref: "#/components/schemas/ApproveFeeProposalRequest"
       responses:
         "200":
-          description: Client approved
+          description: Approved; the agreement and its installments
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FeeProposal"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/fee-proposals/{proposalId}/agree:
-    post:
-      tags:
-        - Fee proposals
-      summary: Set the final agreed amount
-      description: PROPOSED | CLIENT_APPROVED → AGREED with an explicit amount (the same as or different from the proposed one). 409 PROPOSAL_NOT_OPEN from AGREED, CONVERTED or WITHDRAWN.
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: proposalId
-          in: path
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AgreeFeeProposalRequest"
-      responses:
-        "200":
-          description: Agreed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FeeProposal"
+                $ref: "#/components/schemas/ApproveFeeProposalResponse"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:
@@ -4791,7 +4776,7 @@ paths:
       tags:
         - Fee proposals
       summary: Withdraw a proposal (the firm withdrew it, or the client declined)
-      description: Any open state → WITHDRAWN. Idempotent on an already withdrawn proposal; 409 PROPOSAL_NOT_OPEN once converted.
+      description: PROPOSED → WITHDRAWN. Idempotent on an already withdrawn proposal; 409 PROPOSAL_NOT_OPEN once approved.
       security:
         - apiKey: []
       parameters:
@@ -6517,8 +6502,8 @@ paths:
     get:
       tags:
         - Summaries
-      summary: Outstanding, overdue, due today, not yet due and unallocated per currency, with a row and a status per customer
-      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments. Due items are posted before the figures are read. ?currency= narrows to one block.
+      summary: Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer
+      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block.
       security:
         - apiKey: []
       parameters:

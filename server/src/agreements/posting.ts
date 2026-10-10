@@ -8,8 +8,9 @@ import { installmentDueDate, postingDateFor } from './compose.js';
 
 /**
  * Lazy posting (brief §2.2): installments with a DATE trigger whose date has
- * arrived become receivables, and recurring retainers get one charge per
- * service month whose charge date has arrived. Runs at the start of every
+ * arrived become receivables (and, since M8 D16, IMMEDIATE installments a
+ * crash left unposted between create and post), and recurring retainers get
+ * one charge per service month whose charge date has arrived. Runs at the start of every
  * read that renders agreements or receivables and on `POST /v1/retainers/
  * reconcile`; the store makes both operations idempotent, so running it
  * twice (or concurrently) can never double-post.
@@ -37,7 +38,7 @@ export async function postDueItems(store: LedgerStore, organization: Organizatio
     const result = await store.agreements.postInstallment(organization.id, installment.id, { postingDate, dueDate: installmentDueDate(installment, agreement, postingDate), at: now });
     if (result?.created) {
       installmentsPosted += 1;
-      await audit(store, organization.id, actor, 'installment.posted', 'installment', installment.id, { agreementId: agreement.id, receivableId: result.receivable.id, trigger: 'DATE' });
+      await audit(store, organization.id, actor, 'installment.posted', 'installment', installment.id, { agreementId: agreement.id, receivableId: result.receivable.id, trigger: installment.triggerType });
     }
   }
 

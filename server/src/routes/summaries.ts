@@ -21,8 +21,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       method: 'get',
       path: '/v1/summaries/organization',
       tags: ['Summaries'],
-      summary: 'Outstanding, overdue, due today, not yet due and unallocated per currency, with a row and a status per customer',
-      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments. Due items are posted before the figures are read. ?currency= narrows to one block.',
+      summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
+      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
@@ -35,18 +35,22 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor }));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED' }, { limit: 200, cursor }));
+      // M8 (D17): open proposals ride the summary, so the overview's figure and its pills share one source; a currency with proposals only still gets a block.
+      const proposals = await listAll((cursor) => store.feeProposals.list(organization.id, { open: true }, { limit: 200, cursor }));
       const wanted = c.req.valid('query').currency;
-      const currencies = [...new Set([...receivables.map((r) => r.currency), ...payments.map((p) => p.currency)])].sort().filter((cur) => !wanted || cur === wanted);
+      const currencies = [...new Set([...receivables.map((r) => r.currency), ...payments.map((p) => p.currency), ...proposals.map((p) => p.currency)])].sort().filter((cur) => !wanted || cur === wanted);
       const blocks = currencies.map((currency) => {
         const recs = receivables.filter((r) => r.currency === currency);
         const pays = payments.filter((p) => p.currency === currency);
-        const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId)]);
+        const props = proposals.filter((p) => p.currency === currency);
+        const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId), ...props.map((p) => p.customerId)]);
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const rows = [...byCustomer].sort().map((customerId) => {
           const b = bucketize(recs.filter((r) => r.customerId === customerId), today);
           const own = pays.filter((p) => p.customerId === customerId);
           const u = unallocatedOf(own);
-          return { customerId, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), lastPaymentOn: lastPaymentOn(own), status: customerStatus(b) };
+          const ownProposals = props.filter((p) => p.customerId === customerId).map((p) => ({ proposalId: p.id, projectId: p.projectId, amount: fmt(p.proposedAmountMinor), proposedOn: p.proposedOn }));
+          return { customerId, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), lastPaymentOn: lastPaymentOn(own), status: customerStatus(b), proposals: ownProposals };
         });
         const total = bucketize(recs, today);
         const u = unallocatedOf(pays);
@@ -54,7 +58,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           currency: currency as Currency,
           ...bucketsWire(total, fmt),
           unallocated: fmt(u.amount),
-          counts: { customers: rows.length, overdueCustomers: rows.filter((r) => r.status === 'OVERDUE').length, unallocatedPayments: u.count },
+          proposed: fmt(props.reduce((sum, p) => sum + p.proposedAmountMinor, 0n)),
+          counts: { customers: rows.length, overdueCustomers: rows.filter((r) => r.status === 'OVERDUE').length, unallocatedPayments: u.count, openProposals: props.length },
           customers: rows,
         };
       });

@@ -446,8 +446,6 @@ export class MemoryLedgerStore implements LedgerStore {
         clientApprovedOn: null,
         clientApprovalNote: null,
         agreedAmountMinor: null,
-        agreedOn: null,
-        agreedNote: null,
         withdrawnAt: null,
         withdrawnReason: null,
         agreementId: null,
@@ -485,8 +483,6 @@ export class MemoryLedgerStore implements LedgerStore {
       if (rest.clientApprovedOn !== undefined) p.clientApprovedOn = rest.clientApprovedOn;
       if (rest.clientApprovalNote !== undefined) p.clientApprovalNote = rest.clientApprovalNote;
       if (rest.agreedAmountMinor !== undefined) p.agreedAmountMinor = rest.agreedAmountMinor;
-      if (rest.agreedOn !== undefined) p.agreedOn = rest.agreedOn;
-      if (rest.agreedNote !== undefined) p.agreedNote = rest.agreedNote;
       if (rest.withdrawnAt !== undefined) p.withdrawnAt = rest.withdrawnAt;
       if (rest.withdrawnReason !== undefined) p.withdrawnReason = rest.withdrawnReason;
       if (rest.agreementId !== undefined) p.agreementId = rest.agreementId;
@@ -519,16 +515,19 @@ export class MemoryLedgerStore implements LedgerStore {
     create: async (input: CreateAgreementInput, at) => {
       const project = this.projs.get(input.projectId);
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('agreements.projectId');
-      const { installments: specs, feeProposalId, ...rest } = input;
+      const { installments: specs, approveProposal, ...rest } = input;
       if (new Set(specs.map((x) => x.position)).size !== specs.length) throw new UniqueViolation('installments.agreementId_position');
       const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
-      if (feeProposalId) {
-        // M7: the conversion rides the creation; a proposal that moved since the route checked it refuses the whole create.
-        const proposal = this.props.get(feeProposalId);
-        if (!proposal || proposal.organizationId !== input.organizationId || proposal.projectId !== input.projectId || (proposal.status !== 'CLIENT_APPROVED' && proposal.status !== 'AGREED')) {
+      if (approveProposal) {
+        // M8: the approval rides the creation; a proposal that moved since the route checked it refuses the whole create.
+        const proposal = this.props.get(approveProposal.id);
+        if (!proposal || proposal.organizationId !== input.organizationId || proposal.projectId !== input.projectId || proposal.status !== 'PROPOSED') {
           throw new StateConflict('fee_proposal', 'PROPOSAL_NOT_OPEN');
         }
-        proposal.status = 'CONVERTED';
+        proposal.status = 'APPROVED';
+        proposal.agreedAmountMinor = approveProposal.agreedAmountMinor;
+        proposal.clientApprovedOn = approveProposal.approvedOn;
+        proposal.clientApprovalNote = approveProposal.note;
         proposal.agreementId = agreement.id;
         proposal.version += 1;
         proposal.updatedAt = at;
@@ -582,7 +581,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     listUnpostedDue: async (organizationId, today) =>
       [...this.insts.values()]
-        .filter((i) => i.organizationId === organizationId && i.triggerType === 'DATE' && !i.receivableId && !i.voidedAt && (i.triggerDate ?? '9999') <= today && this.agrs.get(i.agreementId)?.status === 'ACTIVE')
+        .filter((i) => i.organizationId === organizationId && !i.receivableId && !i.voidedAt && this.agrs.get(i.agreementId)?.status === 'ACTIVE' && (i.triggerType === 'IMMEDIATE' || (i.triggerType === 'DATE' && (i.triggerDate ?? '9999') <= today)))
         .map((i) => ({ ...i })),
     applySupplement: async (organizationId, agreementId, input: ApplySupplementInput, at) => {
       const a = this.agrs.get(agreementId);

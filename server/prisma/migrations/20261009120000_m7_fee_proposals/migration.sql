@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "FeeProposalStatus" AS ENUM ('PROPOSED', 'CLIENT_APPROVED', 'AGREED', 'CONVERTED', 'WITHDRAWN');
+CREATE TYPE "FeeProposalStatus" AS ENUM ('PROPOSED', 'APPROVED', 'WITHDRAWN');
 
 -- CreateTable
 CREATE TABLE "fee_proposals" (
@@ -16,8 +16,6 @@ CREATE TABLE "fee_proposals" (
     "clientApprovedOn" VARCHAR(10),
     "clientApprovalNote" TEXT,
     "agreedAmountMinor" BIGINT,
-    "agreedOn" VARCHAR(10),
-    "agreedNote" TEXT,
     "withdrawnAt" TIMESTAMP(3),
     "withdrawnReason" TEXT,
     "agreementId" UUID,

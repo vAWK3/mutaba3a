@@ -35,6 +35,7 @@
 | ADR-024 | Override of ADR-005: A Hosted Mutaba3a Service Exists Beside the Local-First App | Active | 2026-10 |
 | ADR-025 | Hosted Financial API (Money v1 Option B): Organization-Scoped Ledger Service, Malafat as API-Key Client | Active | 2026-10 |
 | ADR-026 | Hosted API Deployment: Terraform Owns the Stack Including the Image Tag, One Local Script Rolls It (Local Build, Local Migrations), One Instance Until TD-017 | Active | 2026-10 |
+| ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
 
 ---
 
@@ -903,3 +904,45 @@ chosen); storing the proposal on the Malafat matter (rejected: ADR-150 keeps
 every financial record in Mutaba3a, and the owner asked for Mutaba3a to hold
 it); a partial unique index for "one open per project" (rejected: Prisma
 cannot declare it, so the schema and the migration would drift).
+
+---
+
+## ADR-027: Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3)
+
+**Status**: Active
+**Date**: 2026-10-10
+**Context**: M7 recorded the negotiation (`PROPOSED → CLIENT_APPROVED | AGREED
+→ CONVERTED`) but produced no debt until the Partner ran the agreement wizard,
+so "the client said yes, record their payment" was two screens away. The owner's
+rule (design review 2026-10-10, D4/D5): *proposed means open; client approval is
+the client's liability to pay.* Malafat's Money overview needed a "Proposed"
+figure that could only mean money not yet approved.
+
+**Decision**:
+1. Three states: `PROPOSED → APPROVED | WITHDRAWN`. Approval creates the
+   fixed-fee agreement in the same store transaction, dated `approvedOn`
+   (D18); the dialog chooses one payment or monthly installments (D5).
+2. Posting follows the M3 convention (D15 B): the first installment posts at
+   approval, later ones on their dates through the lazy path. Owed grows as
+   installments fall due.
+3. The agreement-creation path is one helper, `agreements/create.ts`, shared
+   by `POST /v1/agreements` and the approve route (D14); the store's atomic
+   "create + transition proposal" from M7 is reused with the new statuses.
+4. `listUnpostedDue` also heals unposted IMMEDIATE installments (D16); archive
+   is refused while a proposal is open (D19); the organization summary carries
+   each customer's open proposals and their total so Malafat renders both from
+   one call (D17, ADR-150 on the Malafat side).
+5. Nothing from M1–M7 was deployed, so the M7 migration was edited in place
+   (D20) instead of adding a mapping migration.
+
+**Replaces**: M7 brief decisions 2 ("approval is a state, not a copy of agree")
+and 3 ("converting is the wizard's job"). The wizard remains for agreements
+without a proposal.
+
+**Alternatives Considered**: posting every installment at approval (rejected
+by the owner: Owed would jump by the whole fee on approval day); a second
+request for the overview's proposal pills (rejected: two sources for one
+figure and a partial-failure state to build); posting inside the create
+transaction instead of healing (deferred: larger change to tested M3 code for a
+window the catch-up closes within a day); auto-withdrawing proposals on archive
+(rejected: a side effect nobody asked for).

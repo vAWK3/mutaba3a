@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Overview Wireframe</title>
+<style>
+  :root {
+    --bg: #F6F5F2; --card: #FBFAF8; --ink: #1A1A17; --muted: #6B6A63; --line: #DCDAD3;
+    --soft: #EEEDE8; --danger: #A23B2A; --accent: #CCCDBF; --note: #8A6D1F;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, "IBM Plex Sans Arabic", "Heebo", sans-serif; }
+  .controls { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+    padding: 10px 16px; background: var(--ink); color: #F6F5F2; font-size: 12px; }
+  .controls b { font-weight: 600; margin-inline-end: 4px; }
+  .controls button { font: inherit; background: transparent; color: inherit; border: 1px solid #55554f; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+  .controls button[aria-pressed="true"] { background: #F6F5F2; color: var(--ink); }
+  .frame { max-width: 1280px; margin: 24px auto; padding: 0 16px; }
+  .screen-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 32px 0 8px; }
+  .shell { display: grid; grid-template-columns: 200px 1fr; border: 1px solid var(--line); border-radius: 8px; background: var(--card); min-height: 520px; overflow: hidden; }
+  .side { border-inline-end: 1px solid var(--line); padding: 16px 12px; color: var(--muted); }
+  .side div { padding: 6px 8px; border-radius: 4px; }
+  .side .on { background: var(--soft); color: var(--ink); font-weight: 600; }
+  main { padding: 24px 32px; min-width: 0; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); margin: 2px 0 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .strip { display: flex; flex-wrap: nowrap; align-items: center; gap: 0; margin: 20px 0 6px; padding: 10px 0; border-block: 1px solid var(--line); }
+  .stat { white-space: nowrap; }
+  .stat { padding: 0 20px; border-inline-end: 1px solid var(--line); }
+  .stat:first-child { padding-inline-start: 0; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .v.red { color: var(--danger); }
+  .seg { margin-inline-start: auto; display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg span { padding: 3px 10px; font-size: 12px; }
+  .seg .on { background: var(--ink); color: var(--card); }
+  .asof { font-size: 12px; color: var(--muted); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0 10px; }
+  .input { flex: 1; min-width: 220px; border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; color: var(--muted); background: #fff0; }
+  .select { border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 500; text-align: start; padding: 8px 10px; background: var(--soft); }
+  td { padding: 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  .num { text-align: end; font-variant-numeric: tabular-nums; }
+  .red { color: var(--danger); }
+  .pill { display: inline-block; border: 1px solid var(--line); border-radius: 9999px; padding: 1px 8px; font-size: 11px; margin: 4px 4px 0 0; }
+  .badge { display: inline-block; border-radius: 9999px; padding: 1px 8px; font-size: 11px; background: var(--soft); }
+  .badge.od { background: #F3DDD8; color: var(--danger); }
+  .badge.ok { background: #E3E8DA; }
+  .link { text-decoration: underline; text-underline-offset: 3px; }
+  .footline { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .btn { display: inline-block; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+  .btn.primary { background: var(--ink); color: var(--card); border-color: var(--ink); }
+  .empty { border: 1px dashed var(--line); border-radius: 8px; padding: 32px; text-align: center; margin-top: 20px; }
+  .err { border: 1px solid #E5C3BB; background: #FAEFEC; border-radius: 8px; padding: 12px 14px; margin-top: 20px; display: flex; gap: 12px; align-items: center; }
+  .skel { background: var(--soft); border-radius: 4px; height: 12px; display: inline-block; }
+  .note { border-inline-start: 3px solid var(--note); background: #F6F0DE; padding: 8px 12px; font-size: 12px; margin: 10px 0; border-radius: 4px; }
+  .dialog { max-width: 520px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 20px 24px; }
+  .field { margin-top: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field .box { border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; }
+  .radio { display: flex; gap: 16px; margin-top: 4px; }
+  .row { display: flex; gap: 12px; }
+  .row > * { flex: 1; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  [hidden] { display: none !important; }
+  .phone-frame { width: 375px; max-width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--card); }
+  .phone-frame .strip { flex-wrap: wrap; row-gap: 8px; }
+  .phone-frame .stat { padding: 0 12px; }
+  .phone-frame .stat:first-child { padding-inline-start: 0; }
+  .phone-frame .seg { margin-inline-start: 0; flex-basis: 100%; width: max-content; }
+  .mrow { border-top: 1px solid var(--line); padding: 12px 4px; min-height: 56px; }
+  .mrow .l1 { display: flex; justify-content: space-between; align-items: baseline; font-variant-numeric: tabular-nums; }
+  .mrow .l2 { font-size: 12px; margin-top: 2px; }
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { display: none; }
+    main { padding: 16px; }
+    .strip { flex-wrap: wrap; row-gap: 8px; }
+    .stat { padding: 0 12px; }
+    .seg { margin-inline-start: 0; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body data-view="populated">
+<div class="controls" role="toolbar" aria-label="Wireframe controls">
+  <span><b>State</b>
+    <button data-set="populated" aria-pressed="true">Populated</button>
+    <button data-set="nopro" aria-pressed="false">No open proposals</button>
+    <button data-set="empty" aria-pressed="false">Nothing linked</button>
+    <button data-set="loading" aria-pressed="false">Loading</button>
+    <button data-set="error" aria-pressed="false">Mutaba3a unreachable</button>
+  </span>
+  <span><b>Direction</b>
+    <button data-dir="ltr" aria-pressed="true">LTR (en)</button>
+    <button data-dir="rtl" aria-pressed="false">RTL (ar)</button>
+  </span>
+</div>
+
+<div class="frame">
+  <p class="screen-label">1 · /admin/money — overview (collections first)</p>
+  <div class="shell">
+    <nav class="side"><div>Home</div><div>Matters</div><div>Clients</div><div class="on" data-t="money">Money</div><div>Settings</div></nav>
+    <main>
+      <h1 data-t="money">Money</h1>
+      <p class="sub" data-t="connected">Connected to Al-Noor Law (Mutaba3a)</p>
+
+      <!-- Stat strip: D3 inline strip, D4/D8 Proposed = PROPOSED only -->
+      <div class="strip" data-state="populated nopro">
+        <div class="stat"><div class="k" data-t="owed">Owed</div><div class="v">₪48,200</div></div>
+        <div class="stat"><div class="k" data-t="overdue">Overdue</div><div class="v red">₪6,100</div></div>
+        <div class="stat"><div class="k" data-t="proposed">Proposed</div>
+          <div class="v" data-state="populated">₪12,000</div>
+          <div class="v muted" data-state="nopro">₪0</div>
+        </div>
+        <div class="seg" aria-label="Currency"><span class="on">ILS</span><span>USD</span></div>
+      </div>
+      <div class="strip" data-state="loading">
+        <div class="stat"><div class="k">Owed</div><span class="skel" style="width:80px"></span></div>
+        <div class="stat"><div class="k">Overdue</div><span class="skel" style="width:70px"></span></div>
+        <div class="stat"><div class="k">Proposed</div><span class="skel" style="width:70px"></span></div>
+      </div>
+      <p class="asof" data-state="populated nopro loading"><span data-t="asof">As of 10 Oct 2026, 09:42</span> · <span class="muted" data-t="segrule">Currency switch shown only when more than one currency has a non-zero figure (D13)</span></p>
+
+      <div class="err" data-state="error" role="alert">
+        <div style="flex:1"><b data-t="errh">Can't reach Mutaba3a right now.</b><div class="small muted" data-t="errb">Figures aren't stored in Malafat, so nothing is shown until the connection is back.</div></div>
+        <span class="btn" data-t="retry">Retry</span>
+      </div>
+
+      <div class="empty" data-state="empty">
+        <p style="margin:0;font-weight:600" data-t="emptyh">No clients linked to Mutaba3a yet</p>
+        <p class="muted small" style="margin:6px auto 14px;max-width:46ch" data-t="emptyb">Link a client and its matters to start tracking what they owe and what they've paid.</p>
+        <span class="btn primary" data-t="linkclients">Link clients</span>
+      </div>
+
+      <div data-state="populated nopro loading">
+        <div class="toolbar">
+          <div class="input" data-t="search">Search clients or matters</div>
+          <div class="select"><span data-t="status">Status</span>: <span data-t="all">All</span> ▾</div>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
+        <table>
+          <thead><tr>
+            <th data-t="client">Client</th><th class="num hide-sm" data-t="matters">Matters</th>
+            <th class="num" data-t="outstanding">Outstanding</th><th class="num" data-t="overdue">Overdue</th>
+            <th class="hide-sm" data-t="lastpaid">Last payment</th><th data-t="status">Status</th><th></th>
+          </tr></thead>
+          <tbody data-state="loading">
+            <tr><td><span class="skel" style="width:140px"></span></td><td class="hide-sm"></td><td class="num"><span class="skel" style="width:60px"></span></td><td class="num"><span class="skel" style="width:50px"></span></td><td class="hide-sm"><span class="skel" style="width:60px"></span></td><td><span class="skel" style="width:50px"></span></td><td></td></tr>
+            <tr><td><span class="skel" style="width:110px"></span></td><td class="hide-sm"></td><td class="num"><span class="skel" style="width:60px"></span></td><td class="num"><span class="skel" style="width:50px"></span></td><td class="hide-sm"><span class="skel" style="width:60px"></span></td><td><span class="skel" style="width:50px"></span></td><td></td></tr>
+          </tbody>
+          <tbody data-state="populated nopro">
+            <tr>
+              <td><b>Al-Amal Trading Co.</b>
+                <div data-state="populated"><span class="pill"><bdi dir="ltr">M-2026-014</bdi> · <span data-t="proposed">Proposed</span> ₪10,000</span></div>
+              </td>
+              <td class="num hide-sm">3 ▾</td><td class="num">₪12,000</td><td class="num red">₪4,000</td><td class="hide-sm">12 Sep 2026</td>
+              <td><span class="badge od" data-t="overdue">Overdue</span></td><td class="num"><span class="link" data-t="view">View</span></td>
+            </tr>
+            <tr>
+              <td><b>Haddad &amp; Sons</b></td>
+              <td class="num hide-sm">1 ▾</td><td class="num">₪8,500</td><td class="num red">₪2,100</td><td class="hide-sm">28 Sep 2026</td>
+              <td><span class="badge od" data-t="overdue">Overdue</span></td><td class="num"><span class="link" data-t="view">View</span></td>
+            </tr>
+            <tr>
+              <td><b>Rania Khoury</b>
+                <div data-state="populated"><span class="pill"><bdi dir="ltr">M-2026-031</bdi> · <span data-t="proposed">Proposed</span> ₪2,000</span></div>
+              </td>
+              <td class="num hide-sm">2 ▾</td><td class="num">₪27,700</td><td class="num muted">₪0</td><td class="hide-sm">4 Oct 2026</td>
+              <td><span class="badge ok" data-t="uptodate">Up to date</span></td><td class="num"><span class="link" data-t="view">View</span></td>
+            </tr>
+            <tr>
+              <td><b>Mansour Holdings</b></td>
+              <td class="num hide-sm">1 ▾</td><td class="num muted">—</td><td class="num muted">—</td><td class="hide-sm muted">—</td>
+              <td><span class="badge" data-t="noactivity">No activity yet</span></td><td class="num"><span class="link" data-t="view">View</span></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="footline"><span data-t="notlinked">6 clients not linked to Mutaba3a</span> · <span class="link" data-t="linkclients">Link clients</span></p>
+      </div>
+
+      <!-- D12: phone layout, two-line tappable rows -->
+      <div class="phone" data-state="populated nopro">
+        <p class="screen-label" style="margin-top:24px">1b · same page at 375px (D12: two-line rows, whole row tappable)</p>
+        <div class="phone-frame">
+          <div class="strip" style="margin-top:0">
+            <div class="stat"><div class="k" data-t="owed">Owed</div><div class="v">₪48,200</div></div>
+            <div class="stat"><div class="k" data-t="overdue">Overdue</div><div class="v red">₪6,100</div></div>
+            <div class="stat"><div class="k" data-t="proposed">Proposed</div><div class="v">₪12,000</div></div>
+            <div class="seg"><span class="on">ILS</span><span>USD</span></div>
+          </div>
+          <div class="input" style="margin:12px 0 8px" data-t="search">Search clients or matters</div>
+          <div class="select" style="margin-bottom:12px"><span data-t="status">Status</span>: <span data-t="all">All</span> ▾</div>
+          <div class="mrow"><div class="l1"><b>Al-Amal Trading Co.</b><span class="red">₪4,000</span></div><div class="l2 muted">₪12,000 <span data-t="outstanding">outstanding</span> · 12 Sep · <span class="badge od" data-t="overdue">Overdue</span></div><div><span class="pill"><bdi dir="ltr">M-2026-014</bdi> · <span data-t="proposed">Proposed</span> ₪10,000</span></div></div>
+          <div class="mrow"><div class="l1"><b>Haddad &amp; Sons</b><span class="red">₪2,100</span></div><div class="l2 muted">₪8,500 <span data-t="outstanding">outstanding</span> · 28 Sep · <span class="badge od" data-t="overdue">Overdue</span></div></div>
+          <div class="mrow"><div class="l1"><b>Rania Khoury</b><span class="muted">—</span></div><div class="l2 muted">₪27,700 <span data-t="outstanding">outstanding</span> · 4 Oct · <span class="badge ok" data-t="uptodate">Up to date</span></div></div>
+          <div class="mrow"><div class="l1"><b>Mansour Holdings</b><span class="muted">—</span></div><div class="l2 muted"><span class="badge" data-t="noactivity">No activity yet</span></div></div>
+          <p class="footline"><span data-t="notlinked">6 clients not linked to Mutaba3a</span> · <span class="link" data-t="linkclients">Link clients</span></p>
+        </div>
+      </div>
+
+      <div class="note" data-state="populated nopro">Removed from this page: the three tile cards and the "Receivables" card around them (D3), Unallocated as a tile and as a row line (D6, now client page only), and Link all / currency picker / "Not linked yet" rows (D7, moved to the link view). Only linked clients are listed.</div>
+    </main>
+  </div>
+
+  <p class="screen-label">2 · /admin/money/link — link clients (setup, moved out of the overview)</p>
+  <div class="shell" style="min-height:0">
+    <nav class="side"><div>Home</div><div>Matters</div><div>Clients</div><div class="on">Money</div><div>Settings</div></nav>
+    <main>
+      <p class="small muted" style="margin:0 0 4px"><span class="link">Money</span> › <span data-t="linkclients">Link clients</span></p>
+      <h1 data-t="linkclients">Link clients</h1>
+      <p class="sub">24 clients, 18 linked · 41 matters, 33 linked</p>
+      <div class="toolbar">
+        <div class="input" data-t="search">Search clients or matters</div>
+        <div class="select"><span data-t="currency">Currency for new links</span>: ILS ▾</div>
+        <span class="btn primary" data-t="linkall">Link all</span>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
+      <table>
+        <thead><tr><th data-t="client">Client</th><th data-t="legal">Legal status</th><th class="num hide-sm" data-t="matters">Matters</th><th data-t="link">Link</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><b>Nasser Group</b></td><td><span class="badge">Active</span></td><td class="num hide-sm">2</td><td><span class="badge" data-t="notlinkedb">Not linked</span></td><td class="num"><span class="btn" data-t="link">Link</span></td></tr>
+          <tr><td><b>Yasmin Odeh</b></td><td><span class="badge">Active</span></td><td class="num hide-sm">1</td><td><span class="badge" data-t="notlinkedb">Not linked</span></td><td class="num"><span class="btn" data-t="link">Link</span></td></tr>
+          <tr><td><b>Al-Amal Trading Co.</b></td><td><span class="badge">Active</span></td><td class="num hide-sm">3</td><td><span class="badge ok">Linked · ILS</span></td><td class="num muted">—</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="footline">Same component as today's sync table (sync-table.tsx + use-link-actions.ts), relocated. Link all keeps its preview → confirm dialog.</p>
+    </main>
+  </div>
+
+  <p class="screen-label">3 · Matter financial view — "Mark client approved" dialog (D5: approval creates the payable)</p>
+  <div class="dialog" role="dialog" aria-labelledby="dlg-h">
+    <h2 id="dlg-h" style="font-size:16px;margin:0" data-t="approveh">Client approved the fee</h2>
+    <p class="small muted" style="margin:4px 0 0"><bdi dir="ltr">M-2026-014</bdi> · Al-Amal Trading Co. · <span data-t="proposed">Proposed</span> ₪10,000 · VAT-exclusive</p>
+    <div class="row">
+      <div class="field"><label data-t="finalamt">Final amount</label><div class="box">₪10,000</div><div class="small muted" data-t="finalhint">Prefilled from the proposal. Change it if a different figure was agreed.</div></div>
+      <div class="field"><label data-t="approvedon">Approved on</label><div class="box">10 Oct 2026</div></div>
+    </div>
+    <div class="field"><label data-t="payment">How will they pay?</label>
+      <div class="radio"><span>◉ <span data-t="once">In one payment</span></span><span>○ <span data-t="inst">In installments</span></span></div>
+    </div>
+    <div class="row">
+      <div class="field"><label data-t="due">Due date</label><div class="box">10 Oct 2026</div></div>
+      <div class="field"><label class="muted" data-t="count">Installments (when "In installments")</label><div class="box muted">3 · monthly from 10 Nov 2026</div></div>
+    </div>
+    <p class="small muted" style="margin-top:14px" data-t="effect">Approving creates the agreement: the first installment is owed now and you can record a payment straight away; later installments fall due on their dates.</p>
+    <div class="actions"><span class="btn" data-t="cancel">Cancel</span><span class="btn primary" data-t="approve">Approve and create payable</span></div>
+  </div>
+  <div class="note" style="max-width:520px">Lifecycle becomes Proposed → Approved (payable created, proposal closed) | Withdrawn. "Agreed" folds into the Final amount field; the separate agreement wizard is no longer required to start billing. VAT treatment comes from the proposal's pricing basis.</div>
+  <div style="height:48px"></div>
+</div>
+
+<script>
+  const ar = {
+    money: "المالية", connected: "متصل بـ مكتب النور للمحاماة (متابعة)", owed: "المستحق", overdue: "متأخر", proposed: "معروض",
+    asof: "حتى 10 أكتوبر 2026، 09:42", search: "ابحث عن عميل أو ملف", status: "الحالة", all: "الكل", client: "العميل", matters: "الملفات",
+    outstanding: "المستحق", lastpaid: "آخر دفعة", view: "عرض", uptodate: "منتظم", noactivity: "لا نشاط بعد",
+    notlinked: "6 عملاء غير مرتبطين بمتابعة", linkclients: "ربط العملاء", errh: "تعذّر الوصول إلى متابعة الآن.",
+    errb: "الأرقام لا تُخزَّن في ملفات، لذلك لا يظهر شيء حتى يعود الاتصال.", retry: "إعادة المحاولة",
+    emptyh: "لا عملاء مرتبطون بمتابعة بعد", emptyb: "اربط عميلاً وملفاته لتتابع ما عليه وما دفعه.", currency: "عملة الروابط الجديدة",
+    linkall: "ربط الكل", legal: "الحالة القانونية", link: "ربط", notlinkedb: "غير مرتبط", approveh: "وافق العميل على الأتعاب",
+    finalamt: "المبلغ النهائي", finalhint: "معبأ من العرض. غيّره إذا اتُّفق على مبلغ آخر.", approvedon: "تاريخ الموافقة",
+    payment: "كيف سيدفع؟", once: "دفعة واحدة", inst: "على أقساط", due: "تاريخ الاستحقاق", count: "الأقساط (عند اختيار أقساط)",
+    effect: "الموافقة تُنشئ الاتفاقية: القسط الأول مستحق الآن ويمكنك تسجيل دفعة فوراً؛ الأقساط اللاحقة تستحق في مواعيدها.", cancel: "إلغاء", approve: "موافقة وإنشاء المستحق",
+    couldntload: "تعذّر التحميل", segrule: "يظهر مبدّل العملة فقط عندما تكون لأكثر من عملة أرقام غير صفرية (D13)"
+  };
+  const en = {};
+  document.querySelectorAll("[data-t]").forEach(el => { const k = el.dataset.t; if (!(k in en)) en[k] = el.textContent; });
+  function setLang(rtl) {
+    document.documentElement.dir = rtl ? "rtl" : "ltr";
+    document.documentElement.lang = rtl ? "ar" : "en";
+    const dict = rtl ? ar : en;
+    document.querySelectorAll("[data-t]").forEach(el => { const v = dict[el.dataset.t]; if (v) el.textContent = v; });
+  }
+  function setView(view) {
+    document.body.dataset.view = view;
+    document.querySelectorAll("[data-state]").forEach(el => { el.hidden = !el.dataset.state.split(" ").includes(view); });
+  }
+  setView("populated");
+  document.querySelectorAll("[data-set]").forEach(b => b.addEventListener("click", () => {
+    setView(b.dataset.set);
+    document.querySelectorAll("[data-set]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  }));
+  document.querySelectorAll("[data-dir]").forEach(b => b.addEventListener("click", () => {
+    setLang(b.dataset.dir === "rtl");
+    document.querySelectorAll("[data-dir]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  }));
+</script>
+</body>
+</html>

@@ -638,15 +638,13 @@ model Attachment {
 
 enum FeeProposalStatus {
   PROPOSED
-  CLIENT_APPROVED
-  AGREED
-  CONVERTED
+  APPROVED
   WITHDRAWN
 }
 
-/// A fee proposed on a project before any agreement exists (M7 brief §3–§4):
-/// proposed → client approved | agreed (explicit final amount) → converted by
-/// the agreement the wizard creates, or withdrawn. One open proposal per
+/// A fee proposed on a project before any agreement exists (M7 brief §3–§4,
+/// lifecycle revised by M8 §6): proposed → approved (the approval creates the
+/// agreement in the same transaction) or withdrawn. One open proposal per
 /// project, serialised by the project row lock in the repository. Amounts are
 /// minor units in the project currency; dates are organization calendar dates.
 model FeeProposal {
@@ -663,13 +661,11 @@ model FeeProposal {
   note                String?
   clientApprovedOn    String?           @db.VarChar(10)
   clientApprovalNote  String?
-  /// Null while PROPOSED / WITHDRAWN; the proposed amount after approve; the explicit figure after agree.
+  /// Null while PROPOSED / WITHDRAWN; the final amount once APPROVED.
   agreedAmountMinor   BigInt?
-  agreedOn            String?           @db.VarChar(10)
-  agreedNote          String?
   withdrawnAt         DateTime?
   withdrawnReason     String?
-  /// The agreement created from it (CONVERTED).
+  /// The agreement the approval created (APPROVED).
   agreementId         String?           @unique @db.Uuid
   requestId           String?
   version             Int               @default(1)
