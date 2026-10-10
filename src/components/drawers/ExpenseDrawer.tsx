@@ -20,6 +20,7 @@ import {
 import { VendorTypeahead } from '../ui/VendorTypeahead';
 import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT, useLanguage } from '../../lib/i18n';
@@ -95,6 +96,7 @@ export function ExpenseDrawer() {
   const { showToast } = useToast();
 
   const { data: profiles = [] } = useBusinessProfiles();
+  const projectsEnabled = useFeatureEnabled('projects');
   const { data: existingExpense, isLoading: expenseLoading } = useExpense(expenseId || '');
   const { data: existingRule, isLoading: ruleLoading } = useRecurringRule(recurringRuleId || '');
 
@@ -559,7 +561,8 @@ export function ExpenseDrawer() {
           />
         </div>
 
-        {/* Project (optional) */}
+        {/* Project (optional) — shown only while the Projects area is on (MUT-16) */}
+        {projectsEnabled && (
         <div className="form-group">
           <label className="form-label">{t('drawer.expense.project')}</label>
           <Controller
@@ -577,6 +580,7 @@ export function ExpenseDrawer() {
             )}
           />
         </div>
+        )}
 
         {/* Category */}
         <div className="form-group">

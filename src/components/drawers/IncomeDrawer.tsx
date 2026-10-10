@@ -72,6 +72,7 @@ export function IncomeDrawer() {
   // front instead of letting the save fail.
   const isLocked = mode === 'edit' && !!existingTx?.lockedAt;
   const invoicesEnabled = useFeatureEnabled('invoices');
+  const projectsEnabled = useFeatureEnabled('projects');
   const navigate = useNavigate();
   const { data: lockingDocument } = useDocument(existingTx?.lockedByDocumentId || '');
   const openLockingDocument = () => {
@@ -418,7 +419,8 @@ export function IncomeDrawer() {
           />
         </div>
 
-        {/* Project */}
+        {/* Project — optional grouping tag, shown only while the Projects area is on (MUT-16) */}
+        {projectsEnabled && (
         <div className="form-group">
           <label className="form-label">{t('drawer.transaction.project')}</label>
           <Controller
@@ -434,6 +436,7 @@ export function IncomeDrawer() {
             )}
           />
         </div>
+        )}
 
         {/* Title */}
         <div className="form-group">

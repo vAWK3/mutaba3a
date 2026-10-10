@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
-import { transactionRepo, clientRepo, projectRepo, businessProfileRepo } from '../../db/repository';
+import { transactionRepo, clientRepo, projectRepo, businessProfileRepo, settingsRepo } from '../../db/repository';
 import { useDrawerStore } from '../../lib/stores';
 import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
@@ -35,6 +35,7 @@ describe('IncomeDrawer', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.businessProfiles.clear();
+    await db.settings.clear();
 
     // Create a test profile since IncomeDrawer requires one
     const profile = await businessProfileRepo.create({
@@ -57,6 +58,7 @@ describe('IncomeDrawer', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.businessProfiles.clear();
+    await db.settings.clear();
     useDrawerStore.setState({
       incomeDrawer: { isOpen: false, mode: 'create' },
     });
@@ -315,6 +317,8 @@ describe('IncomeDrawer', () => {
 
   it('should show projects filtered by selected client', async () => {
     const user = userEvent.setup();
+    // The project field renders only while the Projects area is on (MUT-16)
+    await settingsRepo.update({ features: { projects: true } });
     const clientA = await clientRepo.create({ name: 'Client A' });
     const clientB = await clientRepo.create({ name: 'Client B' });
     await projectRepo.create({
@@ -449,6 +453,80 @@ describe('IncomeDrawer', () => {
       expect(updatedTx?.status).toBe('unpaid');
       expect(updatedTx?.paidAt).toBeUndefined();
       expect(updatedTx?.receivedAmountMinor).toBeUndefined();
+    });
+  });
+
+  describe('Projects area switch (MUT-16)', () => {
+    const PROJECT_PLACEHOLDER = 'Select project...';
+
+    it('renders no project field in create mode while projects is off', async () => {
+      render(
+        <TestWrapper>
+          <IncomeDrawer />
+        </TestWrapper>
+      );
+
+      await screen.findByText('New Income');
+      // Give the settings query a tick to resolve; the field must stay absent
+      await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument());
+      expect(screen.queryByPlaceholderText(PROJECT_PLACEHOLDER)).not.toBeInTheDocument();
+    });
+
+    it('renders the project field in create mode while projects is on', async () => {
+      await settingsRepo.update({ features: { projects: true } });
+
+      render(
+        <TestWrapper>
+          <IncomeDrawer />
+        </TestWrapper>
+      );
+
+      expect(await screen.findByPlaceholderText(PROJECT_PLACEHOLDER)).toBeInTheDocument();
+    });
+
+    it('keeps an existing projectId on save while projects is off (the field is hidden, not cleared)', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Client A' });
+      const project = await projectRepo.create({
+        name: 'Project for A',
+        clientId: client.id,
+        profileId: testProfileId,
+      });
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 12000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        clientId: client.id,
+        projectId: project.id,
+        title: 'Grouped entry',
+      });
+
+      useDrawerStore.setState({
+        incomeDrawer: { isOpen: true, mode: 'edit', transactionId: tx.id },
+      });
+
+      render(
+        <TestWrapper>
+          <IncomeDrawer />
+        </TestWrapper>
+      );
+
+      await screen.findByText('Edit Income');
+      await waitFor(() => {
+        expect((screen.getByPlaceholderText('0.00') as HTMLInputElement).value).toBe('120');
+      });
+      expect(screen.queryByPlaceholderText(PROJECT_PLACEHOLDER)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      await waitFor(async () => {
+        const updated = await transactionRepo.get(tx.id);
+        expect(updated?.projectId).toBe(project.id);
+      });
+      expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
     });
   });
 });
