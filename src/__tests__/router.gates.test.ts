@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
  * core routes do not (MUT-13; MUT-16 extends the list). The guard's behaviour
  * is proven in `src/lib/features/__tests__/routeGuard.test.ts`.
  */
-const GATED = ['/documents', '/documents/new', '/documents/$documentId', '/documents/$documentId/edit', '/retainers'];
+const GATED = ['/documents', '/documents/new', '/documents/$documentId', '/documents/$documentId/edit', '/retainers', '/expenses'];
 const UNGATED = ['/', '/income', '/clients', '/clients/$clientId', '/settings'];
 
 type RouteLike = { options: { beforeLoad?: unknown } };

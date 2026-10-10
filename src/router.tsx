@@ -177,6 +177,7 @@ interface ExpensesSearch {
 const expensesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses',
+  beforeLoad: requireFeature('expenses'),
   component: lazyPage(() => import('./pages/expenses/ExpensesLedgerPage'), 'ExpensesLedgerPage'),
 });
 

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getRepositories, setRepositories, resetRepositories, type Repositories } from '../../../db/provider';
@@ -77,6 +77,9 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     expect(optionalHeader()).toBeNull();
     expect(screen.queryByText('nav.documents')).toBeNull();
     expect(screen.queryByText('nav.retainers')).toBeNull();
+    // MUT-14: Expenses left the main section and Suppliers left workspace
+    expect(screen.queryByText('nav.expenses')).toBeNull();
+    expect(screen.queryByText('nav.suppliers')).toBeNull();
     // core nav untouched
     expect(screen.getByText('nav.home')).toBeInTheDocument();
     expect(screen.getByText('nav.clients')).toBeInTheDocument();
@@ -102,6 +105,29 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     expect(ret.closest('a')).toHaveAttribute('href', '/retainers');
     // order: Documents before Retainers
     expect(docs.compareDocumentPosition(ret) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows Expenses in the optional section, before Documents, and offers it in + Add only while on (MUT-14)', async () => {
+    installFakeSettings({ features: { expenses: true, invoices: true } });
+    renderNav();
+
+    const expenses = await screen.findByText('nav.expenses');
+    const docs = await screen.findByText('nav.documents');
+    expect(expenses.closest('a')).toHaveAttribute('href', '/expenses');
+    expect(expenses.compareDocumentPosition(docs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByText('nav.new'));
+    expect(await screen.findByText('nav.newMenu.expense')).toBeInTheDocument();
+  });
+
+  it('hides the + Add → Expense item while expenses is off', async () => {
+    const fake = installFakeSettings();
+    renderNav();
+    await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText('nav.new'));
+    expect(await screen.findByText('nav.newMenu.income')).toBeInTheDocument();
+    expect(screen.queryByText('nav.newMenu.expense')).toBeNull();
   });
 
   it('adds an entry without a remount when the area is switched on', async () => {
