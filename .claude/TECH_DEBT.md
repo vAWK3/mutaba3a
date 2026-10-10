@@ -37,10 +37,17 @@ the CLI reads the `TAURI_SIGNING_PRIVATE_KEY*` environment variables itself
 same). Nothing compares the key id in the produced signatures (line 2, bytes
 2..10) with the key id in `src-tauri/tauri.conf.json`, and the macOS and
 Windows halves sign from separately configured secrets with no check that
-they hold the same key. The workflow's "latest.json not found" message also
-points at `scripts/deploy.sh`, which does not exist (fixed to `./deploy.sh`
-in MUT-49). Found during the MUT-49 review (ADR-031); MUT-51 owns the
-hard-fail, the file fallback and the post-publish verification.
+they hold the same key. The Windows workflow has the matching soft-fail:
+its "Build and sign NSIS updater bundle" step exits 0 with a warning when the
+secret is unset and the release then carries a `latest.json` with no
+`windows-x86_64` entry, so Windows clients silently never update. The macOS
+path also runs no test before building; the Windows workflow now runs
+`updater-config.test.ts` before `tauri build` (MUT-49), `deploy.sh` does
+not. The workflow's "latest.json not found" message also pointed at
+`scripts/deploy.sh`, which does not exist (fixed to `./deploy.sh` in MUT-49).
+Found during the MUT-49 review (ADR-031); MUT-51 owns the hard-fail on both
+paths, the file fallback, the deploy.sh test gate and the post-publish
+verification.
 
 ### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
 **Status**: Open

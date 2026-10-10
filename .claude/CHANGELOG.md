@@ -106,7 +106,7 @@
 
 ## [Unreleased] - 2026-10-10 — MUT-49: updater public key restored to BEDF931CA1D6C777
 
-**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-031, ADR-027 merge, index), `.claude/TECH_DEBT.md` (TD-022), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`. Epic MUT-48.
+**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-031, ADR-027 merge, index), `.claude/TECH_DEBT.md` (TD-022), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`, `.claude/CI_CD.md`, `.github/workflows/build-windows.yml`. Epic MUT-48.
 
 ### Fixed
 - `plugins.updater.pubkey` is back to the pre-`ae9fb1c` value, byte-identical to
@@ -130,7 +130,10 @@
 - `.claude/CI_CD.md`: the Tauri troubleshooting row no longer says to
   regenerate the signing key on a bad signature (that is how `ae9fb1c`
   happened); the updater secret names now match the real workflow. The
-  Windows workflow's "latest.json not found" hint points at `./deploy.sh`.
+  Windows workflow's "latest.json not found" hint points at `./deploy.sh`, and
+  the workflow runs `updater-config.test.ts` against the release tag before
+  `tauri build`, so the guard executes on the path that compiles the key into
+  the Windows build. The macOS script's test gate is MUT-51 (TD-022).
 
 ### Technical
 - `.claude/DECISIONS.md` carried two `## ADR-027` headings (the 2026-10-09
@@ -140,7 +143,7 @@
   inside the Decision Template is the template, not a placeholder to fill.
 - Release-time checklist for the ticket's acceptance criteria 3 and 4 lives
   on MUT-49; the shell signer-vs-config check and the dead
-  `UPDATER_PRIVATE_KEY_FILE` in `deploy.sh:26` are handed to MUT-51.
+  `UPDATER_PRIVATE_KEY_FILE` declaration in `deploy.sh` are handed to MUT-51.
 
 ---
 

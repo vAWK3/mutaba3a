@@ -16,9 +16,10 @@ import { resolve } from 'node:path';
  *
  * The identity check is the key bytes themselves: a minisign public-key file
  * is an "untrusted comment" line followed by base64 of `Ed` + 8-byte key id
- * (little-endian) + 32-byte key. The comment line is only used for readable
- * failure messages. Proving that the published signatures were made by this
- * key is a release-time check in shell (MUT-51), not a unit test.
+ * (little-endian) + 32-byte key. The comment line is checked too, as a
+ * readability guard, and feeds the failure messages. Proving that the
+ * published signatures were made by this key is a release-time check in
+ * shell (MUT-51), not a unit test.
  */
 
 const CONFIG_PATH = resolve(process.cwd(), 'src-tauri/tauri.conf.json');
