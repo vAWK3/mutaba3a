@@ -1,1 +1,0 @@
-export { SuppliersPage } from './SuppliersPage';

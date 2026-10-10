@@ -231,11 +231,14 @@ const expensesForecastRoute = createRoute({
   },
 });
 
-// Suppliers route (top-level vendor/supplier view)
+// Legacy route (MUT-14): the suppliers view (a second view over vendors) was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const suppliersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/suppliers',
-  component: lazyPage(() => import('./pages/suppliers'), 'SuppliersPage'),
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
+  },
 });
 
 // Legacy route (MUT-14): the vendors management page (vendors stay editable from the expense drawer) was removed; old links land on the ledger,
