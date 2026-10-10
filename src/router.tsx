@@ -238,10 +238,14 @@ const suppliersRoute = createRoute({
   component: lazyPage(() => import('./pages/suppliers'), 'SuppliersPage'),
 });
 
+// Legacy route (MUT-14): the vendors management page (vendors stay editable from the expense drawer) was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const expensesVendorsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses/vendors',
-  component: lazyPage(() => import('./pages/expenses/VendorsPage'), 'VendorsPage'),
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
+  },
 });
 
 // ============================================================================
