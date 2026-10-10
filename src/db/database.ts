@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { reconcileFeaturesWithData } from '../lib/features/features';
 import type {
   Client,
   Project,
@@ -87,8 +88,8 @@ export class MiniCrmDatabase extends Dexie {
   conflictQueue!: Table<Conflict, string>;
   syncHistory!: Table<SyncHistoryEntry, string>;
 
-  constructor() {
-    super('mutaba3a');
+  constructor(name = 'mutaba3a') {
+    super(name);
 
     // Version 1: Original schema
     this.version(1).stores({
@@ -911,6 +912,21 @@ export class MiniCrmDatabase extends Dexie {
     // V19: Add clientId and projectId to expenses table for client/project association
     this.version(19).stores({
       expenses: 'id, profileId, clientId, projectId, categoryId, vendorId, currency, occurredAt, recurringRuleId, recurringOccurrenceId, createdAt, deletedAt',
+    });
+
+    // V20 (MUT-12): no schema change. Switch on every optional area that
+    // already has user data so an upgrade never hides existing invoices,
+    // retainers, expenses, plans, vendors or projects behind an off toggle,
+    // and leave a one-time notice for the UI. A fresh install is created at
+    // v20 and never runs this, so it starts with everything off.
+    this.version(20).upgrade(async (tx) => {
+      try {
+        await reconcileFeaturesWithData(tx);
+      } catch (error) {
+        // Convenience only: a failure here must never abort the version change
+        // and leave the app unable to open. The user can switch areas on by hand.
+        console.error('[db] v20: could not auto-enable optional areas:', error);
+      }
     });
   }
 }

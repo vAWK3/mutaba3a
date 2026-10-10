@@ -1,4 +1,5 @@
 import { db } from './database';
+import { DEFAULT_SETTINGS } from './defaultSettings';
 import { completeMigrationSafety, validateMigration, autoFixMigrationIssues } from './migration-safety';
 import type { MigrationValidationResult } from './migration-safety';
 
@@ -25,12 +26,7 @@ export async function initDatabase(): Promise<void> {
   // First, ensure default settings exist
   const existingSettings = await db.settings.get('default');
   if (!existingSettings) {
-    await db.settings.put({
-      id: 'default',
-      enabledCurrencies: ['USD', 'ILS'],
-      defaultCurrency: 'USD',
-      defaultBaseCurrency: 'ILS',
-    });
+    await db.settings.put({ ...DEFAULT_SETTINGS });
     console.log('Database initialized with default settings');
   }
 

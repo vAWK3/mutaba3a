@@ -1,0 +1,71 @@
+/* Switch — on/off control used by Settings › Advanced features (MUT-12). */
+
+.switch {
+  --switch-width: 40px;
+  --switch-height: 22px;
+  --switch-knob: 16px;
+  --switch-pad: 3px;
+
+  position: relative;
+  flex: 0 0 auto;
+  inline-size: var(--switch-width);
+  block-size: var(--switch-height);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.switch-knob {
+  position: absolute;
+  inset-block-start: var(--switch-pad);
+  inset-inline-start: var(--switch-pad);
+  inline-size: var(--switch-knob);
+  block-size: var(--switch-knob);
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.switch-on {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+}
+
+.switch-on .switch-knob {
+  background: var(--on-accent);
+  /* travel = width - knob - 2*pad - 2*border; mirrors in RTL via logical start */
+  transform: translateX(calc(var(--switch-width) - var(--switch-knob) - 2 * var(--switch-pad) - 2px));
+}
+
+[dir='rtl'] .switch-on .switch-knob {
+  transform: translateX(calc(-1 * (var(--switch-width) - var(--switch-knob) - 2 * var(--switch-pad) - 2px)));
+}
+
+.switch:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.switch-on:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+  border-color: var(--accent-solid-hover);
+}
+
+.switch:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.switch:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .switch-knob {
+    transition: none;
+  }
+}

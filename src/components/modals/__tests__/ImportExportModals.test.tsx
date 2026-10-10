@@ -651,6 +651,12 @@ describe('ImportDataModal', () => {
     const projects = await db.projects.toArray();
     expect(projects).toHaveLength(1);
     expect(projects[0].name).toBe('Imported Project');
+
+    // MUT-12: the imported projects switch the Projects area on and leave a notice
+    const settings = await db.settings.get('default');
+    expect(settings?.features?.projects).toBe(true);
+    expect(settings?.features?.expenses).toBe(false);
+    expect(settings?.featureNotice).toEqual(['projects']);
   });
 
   it('should show merge option when profile exists', async () => {

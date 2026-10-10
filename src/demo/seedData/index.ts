@@ -6,6 +6,7 @@
  */
 
 import { db } from '../../db/database';
+import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
 import type { DemoDataStats } from '../types';
 import { DEMO_ID_PREFIX } from '../constants';
 
@@ -130,6 +131,10 @@ export async function seedDemoData(): Promise<DemoDataStats> {
       await db.expenses.bulkPut(expenses);
     }
   );
+
+  // The demo exercises invoices, retainers, expenses and projects: switch
+  // those areas on so a fresh install does not show a mostly empty app (MUT-12).
+  await reconcileFeaturesAfterDataLoad('demo', db);
 
   console.log(`Demo data seeded successfully: ${profiles.length} profiles, ${clients.length} clients, ${projects.length} projects, ${transactions.length} transactions`);
 

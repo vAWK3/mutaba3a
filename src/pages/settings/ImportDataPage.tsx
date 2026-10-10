@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
+import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
 import { useT } from '../../lib/i18n';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
@@ -305,6 +306,9 @@ export function ImportDataPage() {
           await db.settings.bulkAdd(fileData.settings as Parameters<typeof db.settings.bulkAdd>[0]);
         }
       }
+
+      // Switch on the optional areas the imported data belongs to (MUT-12)
+      await reconcileFeaturesAfterDataLoad('import', db);
 
       setImportStats(stats);
       await queryClient.invalidateQueries();

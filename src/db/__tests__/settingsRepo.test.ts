@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { settingsRepo, fxRateRepo, categoryRepo } from '../repository';
+import { DEFAULT_SETTINGS } from '../defaultSettings';
+import { DEFAULT_FEATURES } from '../../lib/features/features';
+import { initDatabase } from '../seed';
 
 describe('settingsRepo', () => {
   beforeEach(async () => {
@@ -56,6 +59,59 @@ describe('settingsRepo', () => {
 
       expect(settings.enabledCurrencies).toEqual(['USD', 'ILS']); // Default preserved
       expect(settings.defaultCurrency).toBe('EUR'); // Updated
+    });
+  });
+
+  describe('features (MUT-12)', () => {
+    it('resolves every feature to off when no row exists', async () => {
+      const settings = await settingsRepo.get();
+      expect(settings.features).toEqual(DEFAULT_FEATURES);
+      expect(settings.featureNotice).toBeUndefined();
+      expect({ ...settings, features: undefined }).toEqual({ ...DEFAULT_SETTINGS, features: undefined });
+    });
+
+    it('resolves a pre-v20 row (no features field) to defaults and keeps its other fields', async () => {
+      await db.settings.put({
+        id: 'default',
+        enabledCurrencies: ['USD', 'EUR'],
+        defaultCurrency: 'EUR',
+        defaultBaseCurrency: 'USD',
+      });
+
+      const settings = await settingsRepo.get();
+      expect(settings.features).toEqual(DEFAULT_FEATURES);
+      expect(settings.defaultCurrency).toBe('EUR');
+    });
+
+    it('persists a feature map and preserves the currency fields', async () => {
+      await settingsRepo.update({ features: { ...DEFAULT_FEATURES, projects: true } });
+
+      const settings = await settingsRepo.get();
+      expect(settings.features?.projects).toBe(true);
+      expect(settings.features?.expenses).toBe(false);
+      expect(settings.enabledCurrencies).toEqual(DEFAULT_SETTINGS.enabledCurrencies);
+
+      const stored = await db.settings.get('default');
+      expect(stored?.features?.projects).toBe(true);
+    });
+
+    it('clears the notice without touching the features', async () => {
+      await settingsRepo.update({ features: { ...DEFAULT_FEATURES, invoices: true }, featureNotice: ['invoices'] });
+      await settingsRepo.update({ featureNotice: undefined });
+
+      const settings = await settingsRepo.get();
+      expect(settings.featureNotice).toBeUndefined();
+      expect(settings.features?.invoices).toBe(true);
+    });
+
+    it('seeds the same default row that get() falls back to: a fresh install has every area off and no notice', async () => {
+      await initDatabase();
+      const stored = await db.settings.get('default');
+      expect(stored).toEqual(DEFAULT_SETTINGS);
+
+      const resolved = await settingsRepo.get();
+      expect(resolved.features).toEqual(DEFAULT_FEATURES);
+      expect(resolved.featureNotice).toBeUndefined();
     });
   });
 });

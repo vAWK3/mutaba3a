@@ -106,13 +106,36 @@ export interface FxRate {
   createdAt: string;
 }
 
+// Optional product areas that can be switched on in Settings (MUT-12).
+// The list of keys lives in src/lib/features/features.ts (FEATURE_KEYS);
+// this union is the type-level mirror so the types module stays import-free.
+export type FeatureKey =
+  | 'invoices'
+  | 'retainers'
+  | 'expenses'
+  | 'insights'
+  | 'planning'
+  | 'projects';
+
 // Settings entity
 export interface Settings {
   id: string;
   enabledCurrencies: Currency[];
   defaultCurrency: Currency;
   defaultBaseCurrency: Currency;
+  /**
+   * Optional areas, off unless the user (or the v20 upgrade / an import
+   * reconcile) turned them on. Optional on the row so pre-v20 rows and
+   * imported backups resolve to defaults; `settingsRepo.get()` always
+   * returns a fully resolved map.
+   */
+  features?: Partial<Record<FeatureKey, boolean>>;
+  /** Areas that were auto-enabled and not yet shown to the user; cleared once told. */
+  featureNotice?: FeatureKey[];
 }
+
+/** What `settingsRepo.get()` returns: the row with `features` fully resolved. */
+export type ResolvedSettings = Settings & { features: Record<FeatureKey, boolean> };
 
 // Query filters for transactions
 export interface QueryFilters {

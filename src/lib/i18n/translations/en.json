@@ -484,6 +484,21 @@
       "default": "Default Currency",
       "defaultDesc": "Default selection in filters"
     },
+    "features": {
+      "title": "Advanced features",
+      "description": "Optional areas. Off by default; turning one off hides it but never deletes its data.",
+      "autoEnabled": "Switched on for your existing data: {features}.",
+      "openSettings": "Open settings",
+      "dismiss": "Dismiss",
+      "items": {
+        "invoices": { "label": "Invoices and receipts", "description": "Create numbered documents from income entries" },
+        "retainers": { "label": "Retainers", "description": "Recurring agreements with projected income" },
+        "expenses": { "label": "Expenses", "description": "Track money out in a single ledger, with the vendors you pay" },
+        "insights": { "label": "Insights", "description": "Reports and trends across clients and months" },
+        "planning": { "label": "Planning", "description": "Scenarios and assumptions for the months ahead" },
+        "projects": { "label": "Projects", "description": "Group income entries under a project" }
+      }
+    },
     "data": {
       "title": "Data Management",
       "export": "Export Data",

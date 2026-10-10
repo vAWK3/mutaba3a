@@ -16,6 +16,7 @@ import { exportBackup, restoreFromBackup } from '../../db/backup';
 import { useToast } from '../../lib/toastStore';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
+import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
 import { useDrawerStore } from '../../lib/stores';
 
 // Stable download URLs (redirected by Netlify to GitHub Releases latest)
@@ -355,6 +356,9 @@ export function SettingsPage() {
             </select>
           </div>
         </div>
+
+        {/* Advanced features (MUT-12) */}
+        <AdvancedFeaturesSection />
 
         {/* Data Management */}
         <div className="settings-section">

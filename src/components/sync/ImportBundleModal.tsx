@@ -5,6 +5,9 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { db } from '../../db/database';
+import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
 import { useSyncStore } from '../../sync/stores/syncStore';
 import {
   readBundleFile,
@@ -36,6 +39,7 @@ export function ImportBundleModal() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
@@ -131,6 +135,9 @@ export function ImportBundleModal() {
 
     try {
       const importResult = await importBundle(fileData, passphrase);
+      // Switch on the optional areas the imported records belong to (MUT-12)
+      await reconcileFeaturesAfterDataLoad('sync', db);
+      await queryClient.invalidateQueries({ queryKey: ['settings'] });
       setResult(importResult);
       setStep('success');
       refreshCounts();

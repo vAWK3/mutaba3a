@@ -20,6 +20,7 @@ import type {
   Transaction,
   FxRate,
   Settings,
+  ResolvedSettings,
   QueryFilters,
   OverviewTotals,
   ProjectSummary,
@@ -151,7 +152,8 @@ export interface IFxRateRepository {
 // ============================================================================
 
 export interface ISettingsRepository {
-  get(): Promise<Settings>;
+  /** The settings row with `features` fully resolved (every key present, boolean). */
+  get(): Promise<ResolvedSettings>;
   update(data: Partial<Settings>): Promise<void>;
 }
 

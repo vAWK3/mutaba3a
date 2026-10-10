@@ -1,5 +1,8 @@
 import { db } from './database';
+import { DEFAULT_SETTINGS } from './defaultSettings';
+import { resolveFeatures } from '../lib/features/features';
 import type {
+  ResolvedSettings,
   Client,
   Project,
   Category,
@@ -701,17 +704,14 @@ export const fxRateRepo = {
 
 // Settings Repository
 export const settingsRepo = {
-  async get(): Promise<Settings> {
-    const settings = await db.settings.get('default');
-    if (settings) return settings;
-
-    // Return defaults
-    return {
-      id: 'default',
-      enabledCurrencies: ['USD', 'ILS'],
-      defaultCurrency: 'USD',
-      defaultBaseCurrency: 'ILS',
-    };
+  /**
+   * The settings row with `features` always fully resolved (MUT-12): a row
+   * written before v20, or imported from an older backup, has no `features`
+   * field and must read as "everything off", never as `undefined`.
+   */
+  async get(): Promise<ResolvedSettings> {
+    const settings = (await db.settings.get('default')) ?? DEFAULT_SETTINGS;
+    return { ...settings, features: { ...resolveFeatures(settings.features) } };
   },
 
   async update(data: Partial<Settings>): Promise<void> {

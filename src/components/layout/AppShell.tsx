@@ -26,6 +26,7 @@ import {
 import { useDrawerStore } from "../../lib/stores";
 import { initializeSync } from "../../sync";
 import { useDemoStore, DEMO_QUERY_PARAM } from "../../demo";
+import { FeatureNoticeBanner } from "./FeatureNoticeBanner";
 
 interface AppShellProps {
   children: ReactNode;
@@ -47,6 +48,7 @@ export function AppShell({ children }: AppShellProps) {
   } = useDrawerStore();
 
   const { showConfirmModal, setShowConfirmModal, isActive } = useDemoStore();
+
 
   // Initialize sync system on app load
   useEffect(() => {
@@ -89,6 +91,7 @@ export function AppShell({ children }: AppShellProps) {
       <main className="main-content">
         <ConflictBanner />
         <OrphanedRecordsBanner />
+        <FeatureNoticeBanner />
         {children}
       </main>
 

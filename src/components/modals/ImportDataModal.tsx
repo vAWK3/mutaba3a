@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
+import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
 import { useT } from '../../lib/i18n';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
@@ -461,6 +462,9 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
           stats.transactions = transactions.length;
         }
       }
+
+      // Switch on the optional areas the imported data belongs to (MUT-12)
+      await reconcileFeaturesAfterDataLoad('import', db);
 
       // Invalidate all queries
       queryClient.invalidateQueries();

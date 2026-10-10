@@ -640,6 +640,57 @@ td {
 }
 
 /* Orphaned Records Banner */
+/* Feature notice banner (MUT-12): shown once after areas were auto-enabled */
+.feature-notice-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--info) 10%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.feature-notice-banner-icon {
+  color: var(--info);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.feature-notice-banner-text {
+  flex: 1;
+}
+
+.feature-notice-banner-action {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.feature-notice-banner-action:hover {
+  text-decoration: underline;
+}
+
+.feature-notice-banner-dismiss {
+  background: none;
+  border: none;
+  padding: var(--space-1);
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  border-radius: var(--radius-sm);
+}
+
+.feature-notice-banner-dismiss:hover {
+  background: var(--surface-hover);
+}
+
+.feature-notice-banner-dismiss:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
 .orphaned-banner {
   display: flex;
   align-items: center;

@@ -13,6 +13,7 @@
 
 import Dexie from 'dexie';
 import { db } from './database';
+import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 
 // ============================================================================
 // Types
@@ -307,6 +308,12 @@ export async function restoreFromBackup(backup: MigrationBackup): Promise<boolea
         }
       }
     });
+
+    // A backup written before v20 carries a settings row without `features`,
+    // and the v20 upgrade will not run again on this database: switch on the
+    // optional areas the restored data belongs to (MUT-12). The restore itself
+    // has already succeeded, so a failure here is logged, not surfaced.
+    await reconcileFeaturesAfterDataLoad('restore', db);
 
     logMigrationEvent({
       type: 'rollback_completed',
