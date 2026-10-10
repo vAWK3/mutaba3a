@@ -81,6 +81,9 @@ in place rather than mapped (D20).
   contract), `routes-m7.test.ts` trimmed to the surviving routes,
   `transitions.test.ts` rewritten, `store-contract-m8.ts` (+ memory / Prisma
   runners) replaces `store-contract-m7.ts`. 304 unit tests; 342 with Postgres.
+- `e2e/money-v1.e2e.mts` gains the M8 section (19 checks: proposal → approval →
+  receivable → summary, installments, security edges); 103 checks pass against
+  a local Postgres with Malafat's updated client.
 - Prisma: `FeeProposalStatus` enum and `fee_proposals` columns edited in the
   M7 migration (`20261009120000_m7_fee_proposals`); local databases need
   `prisma migrate reset` or a fresh database (the test suite ran against

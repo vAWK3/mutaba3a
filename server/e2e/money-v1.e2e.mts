@@ -4,7 +4,8 @@
  * the Partner's browser requests reach through /api/admin/money/*) driving a
  * running Mutaba3a server. Every milestone, every state transition, and the
  * security edges (auth, scopes, tenant isolation, idempotency, optimistic
- * concurrency, preview tokens). Creates its own throwaway organizations;
+ * concurrency, preview tokens), including M8's approval-creates-the-agreement
+ * flow and the summary's open proposals. Creates its own throwaway organizations;
  * organizations are never deleted (audit retention), so run it against a
  * dev/staging database, never production.
  *
@@ -280,6 +281,46 @@ await expectError('SEC narrow key cannot read audit', () => client.listAudit(NAR
 await expectError('SEC other organization cannot read this project summary', () => client.getProjectSummary(OTHER, proj.entity.id), { reason: 'not_found' });
 await expectError('M6 attachments without a bucket → attachments_not_configured (503)', () => client.createUpload(KEY, { kind: 'INVOICE', filename: 'inv.pdf', mimeType: 'application/pdf', sizeBytes: 1000, projectId: proj.entity.id }), { reason: 'attachments_not_configured' });
 await expectError('M6 attachments list without a bucket → attachments_not_configured too (Malafat renders "not configured")', () => client.listAttachments(KEY, { projectId: proj.entity.id }), { reason: 'attachments_not_configured' });
+
+// ---------- M8: fee proposals → approval creates the agreement; the overview carries proposals ----------
+const m8Proj = await client.createProject(KEY, { customerId: cust.entity.id, name: 'M8 fee proposal', currency: 'ILS', externalReference: { provider: 'MALAFAT', externalId: 'matter-m8' } }, key('project'));
+const m8Before = await client.getOrganizationSummary(KEY, 'ILS');
+const proposed = await client.createFeeProposal(KEY, { projectId: m8Proj.entity.id, amount: '10000.00', pricingBasis: 'VAT_EXCLUSIVE' }, key('proposal'));
+check('M8 propose → PROPOSED with null agreed amount and no agreement', proposed.status === 'PROPOSED' && proposed.agreedAmount === null && proposed.agreementId === null, proposed);
+await expectError('M8 second proposal on the same project → PROPOSAL_OPEN', () => client.createFeeProposal(KEY, { projectId: m8Proj.entity.id, amount: '1.00', pricingBasis: 'VAT_EXCLUSIVE' }, key('proposal')), { reason: 'conflict', conflictReason: 'PROPOSAL_OPEN' });
+const m8Open = await client.getOrganizationSummary(KEY, 'ILS');
+const m8OpenBlock = m8Open.currencies[0]!;
+const m8OpenRow = m8OpenBlock.customers.find((r) => r.customerId === cust.entity.id)!;
+check('M8 org summary: proposed grew by the proposal and the customer row lists it (D17)', minor(m8OpenBlock.proposed) - minor(m8Before.currencies[0]?.proposed ?? '0.00') === 1_000_000n && m8OpenRow.proposals.some((x) => x.proposalId === proposed.id && x.projectId === m8Proj.entity.id && x.amount === '10000.00'), { proposed: m8OpenBlock.proposed, row: m8OpenRow.proposals });
+check('M8 org summary: proposed equals the sum of the rows\' proposals', minor(m8OpenBlock.proposed) === sum(m8OpenBlock.customers.flatMap((r) => r.proposals.map((x) => x.amount))) && m8OpenBlock.counts.openProposals === m8OpenBlock.customers.reduce((a, r) => a + r.proposals.length, 0));
+const archiveRefused = await fetch(`${BASE}/v1/projects/${m8Proj.entity.id}/archive`, { method: 'POST', headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json', 'idempotency-key': key('archive') }, body: '{}' });
+check('M8 archive refused while a proposal is open (409 PROPOSAL_OPEN, D19)', archiveRefused.status === 409 && (await archiveRefused.json()).error?.details?.reason === 'PROPOSAL_OPEN');
+await expectError('M8 approve before any VAT rate is in force → VAT_RATE_MISSING (D18)', () => client.approveFeeProposal(KEY, proposed.id, { amount: '9000.00', approvedOn: '2025-12-01', schedule: { kind: 'ONCE', dueOn: '2025-12-31' } }, key('approve')), { reason: 'validation', validationReason: 'VAT_RATE_MISSING' });
+const approveKey = key('approve');
+const approved = await client.approveFeeProposal(KEY, proposed.id, { amount: '9000.00', approvedOn: '2026-10-10', schedule: { kind: 'ONCE', dueOn: '2026-11-10' }, note: 'By phone' }, approveKey);
+check('M8 approve ONCE → APPROVED at the final amount, linked to the created agreement', approved.proposal.status === 'APPROVED' && approved.proposal.agreedAmount === '9000.00' && approved.proposal.clientApprovedOn === '2026-10-10' && approved.proposal.agreementId === approved.agreement.agreement.id, approved.proposal);
+check('M8 approve ONCE → agreement dated approvedOn, 9000 + 18 % VAT, one IMMEDIATE installment posted and due on dueOn', approved.agreement.agreement.agreementDate === '2026-10-10' && approved.agreement.agreement.amount === '9000.00' && approved.agreement.agreement.gross === '10620.00' && approved.agreement.installments.length === 1 && approved.agreement.installments[0]!.receivableId !== null && approved.agreement.installments[0]!.dueDate === '2026-11-10' && approved.agreement.installments[0]!.status === 'DUE', approved.agreement);
+const approvedReplay = await client.approveFeeProposal(KEY, proposed.id, { amount: '9000.00', approvedOn: '2026-10-10', schedule: { kind: 'ONCE', dueOn: '2026-11-10' }, note: 'By phone' }, approveKey);
+check('M8 approve replay with the same key returns the same agreement', approvedReplay.agreement.agreement.id === approved.agreement.agreement.id);
+await expectError('M8 approve again → PROPOSAL_NOT_OPEN', () => client.approveFeeProposal(KEY, proposed.id, { amount: '1.00', schedule: { kind: 'ONCE', dueOn: '2026-11-10' } }, key('approve')), { reason: 'conflict', conflictReason: 'PROPOSAL_NOT_OPEN' });
+await expectError('M8 withdraw once approved → PROPOSAL_NOT_OPEN', () => client.withdrawFeeProposal(KEY, proposed.id, {}, key('withdraw')), { reason: 'conflict', conflictReason: 'PROPOSAL_NOT_OPEN' });
+const m8Recv = (await client.listReceivables(KEY, { projectId: m8Proj.entity.id })).items;
+check('M8 the receivable exists at once: one OPEN receivable of 10620 due on dueOn (record a payment straight away, D11)', m8Recv.length === 1 && m8Recv[0]!.gross === '10620.00' && m8Recv[0]!.dueDate === '2026-11-10' && m8Recv[0]!.outstanding === '10620.00', m8Recv);
+const m8After = await client.getOrganizationSummary(KEY, 'ILS');
+const m8AfterBlock = m8After.currencies[0]!;
+check('M8 org summary after approval: proposed back down by the proposal, outstanding up by the receivable, row has no pill', minor(m8OpenBlock.proposed) - minor(m8AfterBlock.proposed) === 1_000_000n && minor(m8AfterBlock.outstanding) - minor(m8OpenBlock.outstanding) === 1_062_000n && !m8AfterBlock.customers.find((r) => r.customerId === cust.entity.id)!.proposals.some((x) => x.proposalId === proposed.id), { before: m8OpenBlock.outstanding, after: m8AfterBlock.outstanding });
+const m8Summary = await client.getProjectSummary(KEY, m8Proj.entity.id);
+check('M8 project summary reads the approved proposal beside the FIXED agreement', m8Summary.kind === 'FIXED' && m8Summary.proposal?.status === 'APPROVED' && m8Summary.proposal.agreementId === approved.agreement.agreement.id, m8Summary.proposal);
+check('M8 the project is free for a later-phase proposal', (await client.createFeeProposal(KEY, { projectId: m8Proj.entity.id, amount: '2000.00', pricingBasis: 'VAT_EXCLUSIVE' }, key('proposal'))).status === 'PROPOSED');
+// installments: first now, the rest on their dates (D15 B)
+const m8Proj2 = await client.createProject(KEY, { customerId: cust.entity.id, name: 'M8 installments', currency: 'ILS', externalReference: { provider: 'MALAFAT', externalId: 'matter-m8b' } }, key('project'));
+const proposed2 = await client.createFeeProposal(KEY, { projectId: m8Proj2.entity.id, amount: '10000.00', pricingBasis: 'VAT_EXCLUSIVE' }, key('proposal'));
+const monthly = await client.approveFeeProposal(KEY, proposed2.id, { amount: '10000.00', schedule: { kind: 'INSTALLMENTS', count: 3, firstDueOn: '2026-10-31' } }, key('approve'));
+const inst = monthly.agreement.installments;
+check('M8 approve INSTALLMENTS → equal shares with the remainder on the first; #1 IMMEDIATE and posted, #2/#3 DATE on month-clamped dates, not posted', inst.map((i) => i.amount).join(',') === '3333.34,3333.33,3333.33' && inst[0]!.trigger.type === 'IMMEDIATE' && inst[0]!.receivableId !== null && inst[0]!.dueDate === '2026-10-31' && inst[1]!.trigger.type === 'DATE' && inst[1]!.trigger.date === '2026-11-30' && inst[1]!.receivableId === null && inst[2]!.trigger.date === '2026-12-31' && inst[2]!.receivableId === null, inst.map((i) => ({ amount: i.amount, trigger: i.trigger, due: i.dueDate, posted: i.receivableId !== null })));
+check('M8 only the first share is owed today', (await client.listReceivables(KEY, { projectId: m8Proj2.entity.id })).items.length === 1);
+await expectError('SEC other organization cannot approve this proposal (404)', () => client.approveFeeProposal(OTHER, proposed2.id, { amount: '1.00', schedule: { kind: 'ONCE', dueOn: '2026-11-10' } }, key('approve')), { reason: 'not_found' });
+await expectError('SEC narrow key cannot propose', () => client.createFeeProposal(NARROW, { projectId: m8Proj.entity.id, amount: '1.00', pricingBasis: 'VAT_EXCLUSIVE' }, key('proposal')), { reason: 'missing_scopes' });
 
 // ---------- Reconcile + disconnect ----------
 const recon = await fetch(`${BASE}/v1/retainers/reconcile`, { method: 'POST', headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' }, body: '{}' });
