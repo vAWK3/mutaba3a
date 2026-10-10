@@ -990,5 +990,10 @@ main() {
     echo -e "${GREEN}========================================${NC}"
 }
 
-# Run main
-main
+# Run main only when executed directly. scripts/release.ts sources this file
+# to reuse build_and_release_mac (signing/notarizing/tagging/publishing) under
+# its own version-bump UI, and sourcing must not also trigger the interactive
+# menu below.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main
+fi
