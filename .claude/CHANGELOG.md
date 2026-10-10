@@ -28,6 +28,45 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — Fresh install: `useDefaultBusinessProfile` resolves to `null`, not `undefined`
+
+**Scope:** `src/hooks/useQueries.ts`, `src/hooks/__tests__/useQueries.test.tsx`,
+`.claude/{PATTERNS,TECH_DEBT,TEST_PLAN}.md`.
+
+### Fixed
+- On every fresh install (empty IndexedDB) the `['defaultBusinessProfile']`
+  query's `queryFn` resolved to `undefined`, because
+  `businessProfileRepo.getDefault()` returns `undefined` for "no default".
+  TanStack Query v5 rejects `undefined` as query data: the query sat in
+  `error` state and logged *"Query data cannot be undefined … Affected query
+  key: ["defaultBusinessProfile"]"* in the console on `/app/`. The hook now
+  normalises the absence to `null` (`?? null`) and is typed
+  `UseQueryResult<BusinessProfile | null>`.
+
+### Changed
+- `useDefaultBusinessProfile` resolves `null` instead of `undefined` when no
+  default profile exists. The three consumers (`useActiveProfile`,
+  `DocumentDrawer`, `DocumentFormPage`) already read it through `?.`/truthy
+  checks, so none needed a code change; the repository contract
+  (`IBusinessProfileRepository.getDefault(): Promise<BusinessProfile | undefined>`)
+  is unchanged, so the hosted and synced repositories are unaffected.
+
+### Technical
+- Tests: the prior "returns undefined when no default exists" case passed only
+  because it waited on `isFetching === false`, which is also true in `error`
+  state — it never noticed the query had failed. Replaced by two cases: the
+  fresh-install case (no profiles at all) asserts `isSuccess`, `data === null`
+  and no `console.error`; the "profiles exist, none default" case asserts
+  `null`. The first one reproduced the exact console message before the fix.
+- Verification: lint 0 errors (18 pre-existing warnings), typecheck clean,
+  `npm run build` clean. Full suite: the same 18 `ExpensesLedgerPage` failures
+  recorded in TEST_PLAN as pre-dating MUT-6 are still the only failures and are
+  untouched here.
+- Pattern note added to PATTERNS.md (Query Hooks); the other possibly-`undefined`
+  `queryFn`s are logged as TD-028.
+
+---
+
 ## [Unreleased] - 2026-10-10 — MUT-6: "Record payment" becomes a primary row action
 
 **Scope:** `src/components/ui/RecordPaymentButton.{tsx,css}` (new) + `index.ts`,

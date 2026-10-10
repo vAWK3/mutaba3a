@@ -162,7 +162,7 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 #### Hook & Component Tests
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
-| `src/hooks/__tests__/useQueries.test.tsx` | Integration | 19 | Partial - business profile + document hooks |
+| `src/hooks/__tests__/useQueries.test.tsx` | Integration | 22 | Partial - business profile + document + payment-record hooks; fresh-install `null` case for the default profile |
 | `src/components/__tests__/BusinessProfileDrawer.test.tsx` | Component | 8 | Basic - form rendering |
 | `src/components/__tests__/ClientDrawer.test.tsx` | Component | 10 | Full - Client drawer with profile selector |
 | `src/components/__tests__/ProjectDrawer.test.tsx` | Component | 13 | **Full** - Project drawer with profile selector |
@@ -755,3 +755,16 @@ behaviour was covered elsewhere, and it was not. They assert the button now.
 The same 18 `ExpensesLedgerPage` failures still pre-date the ticket and are
 untouched by it.
 
+### Fresh install — `useDefaultBusinessProfile` resolves to `null`
+
+| Area | File | What is pinned |
+|---|---|---|
+| No-row singleton query (PATTERNS: Query Hooks rule) | `src/hooks/__tests__/useQueries.test.tsx` | With an empty `businessProfiles` table the hook reaches `isSuccess`, `data` is `null`, `isError` is false and `console.error` is never called (spied, restored in `finally`). With profiles present but none default, `data` is `null`. Both run against real Dexie through `getRepositories()`, no `vi.mock` |
+
+The case this replaced ("returns undefined when no default exists") waited on
+`isFetching === false`, which a failed query also satisfies; it was green while
+the query was in `error` state and logging on every fresh install. Assert
+`isSuccess` + `toBeNull()` for any no-row case, never `isFetching`.
+
+**Baseline after this fix (2026-10-10)**: 2,079 unit tests passing, 7 skipped.
+The same 18 `ExpensesLedgerPage` failures still pre-date it and are untouched.

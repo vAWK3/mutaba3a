@@ -129,15 +129,35 @@ describe('Business Profile Hooks', () => {
   });
 
   describe('useDefaultBusinessProfile', () => {
-    it('should return undefined when no default exists', async () => {
+    // TanStack Query v5 treats a queryFn that resolves to `undefined` as a
+    // failure: the query lands in `error` state and logs "Query data cannot be
+    // undefined". A fresh install has no profile at all, so the hook must
+    // normalise "no default" to `null` and succeed.
+    it('resolves to null with no console error on a fresh install (no profiles)', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { result } = renderHook(() => useDefaultBusinessProfile(), {
+          wrapper: createWrapper(),
+        });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data).toBeNull();
+        expect(result.current.isError).toBe(false);
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('resolves to null when profiles exist but none is the default', async () => {
       await businessProfileRepo.create(createTestProfile());
 
       const { result } = renderHook(() => useDefaultBusinessProfile(), {
         wrapper: createWrapper(),
       });
 
-      await waitFor(() => expect(result.current.isFetching).toBe(false));
-      expect(result.current.data).toBeUndefined();
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toBeNull();
     });
 
     it('should return the default profile', async () => {
