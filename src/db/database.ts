@@ -26,7 +26,7 @@ import type {
 import type {
   Engagement,
   EngagementVersion,
-} from '../features/engagements/types';
+} from './retained/engagementSchema';
 import type {
   LocalDevice,
   TrustedPeer,
