@@ -5,10 +5,11 @@
  * remaining balance so settling in full is one confirm, the user can overwrite
  * it with a smaller amount, and a backdated date is what gets stored.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PartialPaymentDrawer } from '../PartialPaymentDrawer';
+import { todayISO } from '../../../lib/utils';
 import type { TransactionDisplay } from '../../../types';
 
 const mockCreate = vi.fn().mockResolvedValue(undefined);
@@ -135,7 +136,7 @@ describe('PartialPaymentDrawer', () => {
     render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
 
     const dateField = screen.getByLabelText('Payment date') as HTMLInputElement;
-    expect(dateField.value).toBe(new Date().toISOString().split('T')[0]);
+    expect(dateField.value).toBe(todayISO());
 
     await user.clear(dateField);
     await user.type(dateField, '2026-01-15');
@@ -184,6 +185,33 @@ describe('PartialPaymentDrawer', () => {
     expect(
       await screen.findByText('Payment amount exceeds the remaining balance of 750 USD')
     ).toBeInTheDocument();
+  });
+
+  /**
+   * ADR-022: "today" is the user's local calendar date, never the UTC date,
+   * and the helpers in lib/dates are the only way to compute it. The two
+   * instants below straddle midnight in opposite directions, so whichever
+   * timezone the suite runs in (Asia/Jerusalem by default, America/New_York
+   * under `npm run test:tz`), at least one of them has a UTC date that differs
+   * from the local one -- which is exactly when a user in the evening would
+   * have been handed tomorrow's date, or the early morning yesterday's.
+   */
+  describe('the date defaults to the local calendar today (ADR-022)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each([
+      ['late evening west of UTC', '2026-03-16T02:30:00.000Z'],
+      ['early morning east of UTC', '2026-03-15T23:30:00.000Z'],
+    ])('%s', (_label, instant) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(instant));
+
+      render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+
+      expect((screen.getByLabelText('Payment date') as HTMLInputElement).value).toBe(todayISO());
+    });
   });
 
   it('leaves the amount empty when there is nothing left to pay', () => {

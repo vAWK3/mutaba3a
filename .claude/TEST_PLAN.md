@@ -682,13 +682,14 @@ pre-date these tickets and are untouched by them.
 | One guard, both doors | `src/db/__tests__/partialPayment.test.ts` | `recordPartialPayment` inherits the rejection through its delegation to `paymentRecordRepo.create` |
 | Refresh after save (AC #5) | `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` invalidates `income`, `receivables`, `incomeOverviewTotals`, `incomeAttentionReceivables` alongside the payment-record and transaction keys. Uses real Dexie, no `vi.mock`, so a stubbed barrel cannot fake a pass |
 | Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; empty prefill when settled; edit mode prefills the record's own amount |
+| Local-date default (ADR-022) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | the date field defaults to `todayISO()`, asserted at two faked instants straddling midnight in opposite directions so it holds in both `Asia/Jerusalem` and `npm run test:tz` |
 | Per-surface gate | `IncomePage.test.tsx`, `ClientDetailPage.test.tsx`, `ProjectDetailPage.test.tsx` | the button appears on exactly the rows each surface showed the kebab entry on, never on paid rows or expenses, opens the drawer with the row's id, and does not trigger the row's own click |
 
 The four IncomePage "Record Payment" tests that existed before this ticket
 asserted nothing about the action — three carried a comment saying the
 behaviour was covered elsewhere, and it was not. They assert the button now.
 
-**Baseline after MUT-6 (2026-10-10)**: 2,065 unit tests passing, 7 skipped.
+**Baseline after MUT-6 (2026-10-10)**: 2,067 unit tests passing, 7 skipped.
 The same 18 `ExpensesLedgerPage` failures still pre-date the ticket and are
 untouched by it.
 

@@ -9,7 +9,7 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { formatAmount, parseCurrencyInput, formatCurrencyInput, formatDate } from '../../lib/utils';
+import { formatAmount, parseCurrencyInput, formatCurrencyInput, formatDate, todayISO } from '../../lib/utils';
 import type { Currency, PaymentRecord } from '../../types';
 import { useDrawerStore } from '../../lib/stores';
 
@@ -237,8 +237,12 @@ function PaymentForm({
     if (editingRecord) return formatCurrencyInput(String(editingRecord.amountMinor / 100));
     return remainingAmountMinor > 0 ? formatCurrencyInput(String(remainingAmountMinor / 100)) : '';
   });
+  // todayISO() is the local calendar date (ADR-022). new Date().toISOString()
+  // is the UTC one, which hands a user west of UTC tomorrow's date in the
+  // evening and one east of UTC yesterday's after midnight -- silently wrong
+  // on a field the user is now one confirm away from accepting.
   const [dateInput, setDateInput] = useState(() =>
-    editingRecord ? editingRecord.paidAt.split('T')[0] : new Date().toISOString().split('T')[0]
+    editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO()
   );
   const [notesInput, setNotesInput] = useState(() =>
     editingRecord?.notes || ''
@@ -296,7 +300,7 @@ function PaymentForm({
           notes: notesInput || undefined,
         });
         setPaymentInput('');
-        setDateInput(new Date().toISOString().split('T')[0]);
+        setDateInput(todayISO());
         setNotesInput('');
       }
     } catch (err) {

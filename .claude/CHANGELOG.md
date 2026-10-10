@@ -71,6 +71,14 @@
   remaining amount for up to the 60s staleTime right after a payment was saved.
   Adds `['income']`, `['receivables']`, `['incomeOverviewTotals']` and
   `['incomeAttentionReceivables']` — the set `markPaid` already invalidated.
+- **The payment date defaulted to the UTC date, not the local one** (AC #4,
+  found in QA reconciliation). `PartialPaymentDrawer` computed "today" with
+  `new Date().toISOString().split('T')[0]`, which ADR-022 forbids: a user in
+  New York recording a payment at 20:30 on 15 March was handed **16 March**,
+  and one in Jerusalem after midnight was handed yesterday. It now uses
+  `todayISO()` like every other drawer. Pinned by two faked instants that
+  straddle midnight in opposite directions, so the test is honest in both
+  `Asia/Jerusalem` and `npm run test:tz`.
 
 ### Technical
 - **TD-021** recorded: `invalidateIncomeQueries` and
