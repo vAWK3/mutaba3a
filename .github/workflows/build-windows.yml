@@ -51,6 +51,12 @@ jobs:
           Write-Host "Cleaning Rust build cache to ensure fresh version embedding..."
           cargo clean --manifest-path src-tauri/Cargo.toml
 
+      - name: Verify the compiled-in updater key (MUT-49, ADR-031)
+        # The tag being built must carry the public key the release pipeline
+        # signs with; otherwise every client that installs this build loses
+        # in-app updates for good.
+        run: npm run test:run -- src/lib/__tests__/updater-config.test.ts
+
       - name: Build Tauri Windows app
         run: npm run tauri build
 
@@ -306,7 +312,7 @@ jobs:
           # publish a windows-only manifest that would break mac auto-update.
           gh release download $tag --pattern latest.json
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path "latest.json")) {
-            Write-Error "latest.json not found on release $tag. Run the mac release pipeline first (scripts/deploy.sh -> option 2)."
+            Write-Error "latest.json not found on release $tag. Run the mac release pipeline first (./deploy.sh, option 2)."
             exit 1
           }
 

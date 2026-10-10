@@ -104,6 +104,49 @@
 - Pre-existing and untouched: the 18 `ExpensesLedgerPage` test failures.
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-49: updater public key restored to BEDF931CA1D6C777
+
+**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-031, ADR-027 merge, index), `.claude/TECH_DEBT.md` (TD-022), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`, `.claude/CI_CD.md`, `.github/workflows/build-windows.yml`. Epic MUT-48.
+
+### Fixed
+- `plugins.updater.pubkey` is back to the pre-`ae9fb1c` value, byte-identical to
+  `~/.tauri/mutaba3a.key.pub`. The 2026-10-05 rotation pointed the app at a key
+  (`AB7B64537B1DE22C`) whose private half never signed a published release
+  and is not configured anywhere the pipeline signs from. Every real signer
+  (the macOS release signer, the CI secret, the v0.0.63 signatures) is
+  `BEDF931CA1D6C777`. No shipped build embeds the wrong key
+  (`ae9fb1c` is not an ancestor of `v0.0.63`), so the revert is
+  backward-compatible.
+
+### Added
+- `src/lib/__tests__/updater-config.test.ts`: pins the configured public key
+  to the canonical base64 string and asserts the key id from the key bytes
+  (line 2, bytes 2..10), printing both fingerprints on mismatch. Written red
+  against the `AB7B...` config, green after the revert.
+- ADR-031: the key is canonical; a real rotation ships the new public key in a
+  release signed by the old key before signing switches, and that transitional
+  release is necessary, not sufficient (late clients still reinstall).
+- TD-022: the release-time guards deferred to MUT-51.
+- `.claude/CI_CD.md`: the Tauri troubleshooting row no longer says to
+  regenerate the signing key on a bad signature (that is how `ae9fb1c`
+  happened); the updater secret names now match the real workflow. The
+  Windows workflow's "latest.json not found" hint points at `./deploy.sh`, and
+  the workflow runs `updater-config.test.ts` against the release tag before
+  `tauri build`, so the guard executes on the path that compiles the key into
+  the Windows build. The macOS script's test gate is MUT-51 (TD-022).
+
+### Technical
+- `.claude/DECISIONS.md` carried two `## ADR-027` headings (the 2026-10-09
+  fee-proposal record and its 2026-10-10 override). They are now one ADR-027
+  with two dated sections; ADR-028 and ADR-029 keep their numbers because
+  CHANGELOG, TEST_PLAN, TECH_DEBT and the designs cite them. The `## ADR-XXX`
+  inside the Decision Template is the template, not a placeholder to fill.
+- Release-time checklist for the ticket's acceptance criteria 3 and 4 lives
+  on MUT-49; the shell signer-vs-config check and the dead
+  `UPDATER_PRIVATE_KEY_FILE` declaration in `deploy.sh` are handed to MUT-51.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 pilot decisions: download-only attachments accepted, Office Admin excluded; epic bookkeeping (MUT-25 / MAL-939)
 
 **Scope:** `.claude/DECISIONS.md` (ADR-028 + index), `.claude/designs/money-v1-m6-summaries-audit-attachments.md` §5, `.claude/designs/money-v1-handover.md` §4. No code.
@@ -907,6 +950,11 @@ API version `1.1.0-m2`; everything additive, M1 untouched.
 - Consequence: builds already installed in the field carry the old public key,
   so they will reject updates signed with the new private key. Clients on an
   older build need a manual reinstall to rejoin the update channel.
+- **Withdrawn 2026-10-10 (MUT-49, ADR-031).** The premise above was false: the
+  v0.0.63 signatures, the macOS release signer and the CI secret are all
+  `BEDF931CA1D6C777`; the `AB7B64537B1DE22C` private half never signed a
+  release and is not configured in the pipeline. The key was restored on
+  2026-10-10; no reinstall is needed.
 
 ---
 
