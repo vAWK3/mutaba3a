@@ -49,7 +49,7 @@ const incomeRoute = createRoute({
   component: lazyPage(() => import('./pages/income'), 'IncomePage'),
 });
 
-// Insights route (consolidates reports and money-answers)
+// Insights route (consolidates reports and cash-flow analysis)
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
@@ -295,33 +295,6 @@ const planningRoute = createRoute({
   },
 });
 
-// ============================================================================
-// Money Answers Route (Cash Flow Timeline)
-// ============================================================================
-
-interface MoneyAnswersSearch {
-  mode?: 'month' | 'year';
-  year?: number;
-  month?: string;
-  includeReceivables?: boolean;
-  includeProjections?: boolean;
-}
-
-const moneyAnswersRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/money-answers',
-  component: lazyPage(() => import('./pages/money-answers'), 'MoneyAnswersPage'),
-  validateSearch: (search: Record<string, unknown>): MoneyAnswersSearch => {
-    return {
-      mode: search.mode === 'month' || search.mode === 'year' ? search.mode : undefined,
-      year: typeof search.year === 'number' ? search.year : undefined,
-      month: typeof search.month === 'string' ? search.month : undefined,
-      includeReceivables: typeof search.includeReceivables === 'boolean' ? search.includeReceivables : undefined,
-      includeProjections: typeof search.includeProjections === 'boolean' ? search.includeProjections : undefined,
-    };
-  },
-});
-
 // Monthly close search params
 interface MonthCloseSearch {
   month?: string;
@@ -366,8 +339,6 @@ const routeTree = rootRoute.addChildren([
   monthCloseRoute,
   // Retainer routes
   retainersRoute,
-  // Money Answers route
-  moneyAnswersRoute,
   // Financial Planning route
   planningRoute,
   // Reports route

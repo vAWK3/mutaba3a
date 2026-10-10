@@ -58,8 +58,6 @@ vi.mock('../../../lib/i18n', () => ({
       'projects.columns.net': 'Net',
       'expenses.title': 'Expenses',
       'reports.sections.unpaidAging': 'Unpaid Receivables Aging',
-      'insights.cashFlowTimeline.title': 'Cash Flow Timeline',
-      'insights.cashFlowTimeline.hint': 'View daily inflows and outflows with a dedicated date picker',
     };
     return translations[key] || key;
   },
@@ -358,20 +356,6 @@ describe('InsightsPage', () => {
       await waitFor(() => {
         expect(currencySelect).toHaveValue('USD');
       });
-    });
-  });
-
-  describe('Cash Flow Timeline link', () => {
-    it('renders Cash Flow Timeline link on Summary tab', () => {
-      renderWithProviders(<InsightsPage />);
-      expect(screen.getByTestId('cash-flow-timeline')).toBeInTheDocument();
-    });
-
-    it('has a link to the cash flow page', () => {
-      renderWithProviders(<InsightsPage />);
-      const link = screen.getByRole('link', { name: /cash flow timeline/i });
-      expect(link).toBeInTheDocument();
-      expect(link).toHaveAttribute('href', '/money-answers');
     });
   });
 });

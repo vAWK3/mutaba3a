@@ -16,7 +16,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useDrawerStore } from '../../lib/stores';
-import { useGuidance } from '../../hooks/useMoneyAnswersQueries';
+import { useGuidance } from '../../hooks/useMoneyEventQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getCurrentMonthKey } from '../../lib/monthDetection';
 import { formatAmount, cn } from '../../lib/utils';

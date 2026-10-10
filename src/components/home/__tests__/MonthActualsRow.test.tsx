@@ -77,7 +77,7 @@ const mockSummaryILS = {
   totalOutflowMinor: 540000, // ₪5,400 expenses
 };
 
-vi.mock('../../../hooks/useMoneyAnswersQueries', () => ({
+vi.mock('../../../hooks/useMoneyEventQueries', () => ({
   useMonthSummary: ({ currency }: { currency: string }) => ({
     data: currency === 'USD' ? mockSummaryUSD : mockSummaryILS,
     isLoading: false,

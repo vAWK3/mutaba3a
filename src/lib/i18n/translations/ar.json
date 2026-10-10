@@ -64,7 +64,6 @@
     "transactions": "المعاملات",
     "documents": "المستندات",
     "retainers": "العقود المتكررة",
-    "moneyAnswers": "إجابات",
     "expenses": "المصروفات",
     "suppliers": "الموردون",
     "reports": "التقارير",
@@ -359,10 +358,6 @@
     "toggles": {
       "includeUnpaid": "تضمين الدخل غير المحصّل",
       "includeProjected": "تضمين العقود المتوقعة"
-    },
-    "cashFlowTimeline": {
-      "title": "مخطط التدفق النقدي",
-      "hint": "عرض التدفقات اليومية الواردة والصادرة مع منتقي تاريخ مخصص"
     },
     "yearInsights": {
       "title": "تحليلات السنة"
@@ -1402,18 +1397,6 @@
         "step3": "اكتشف أيام الخطر قبل وصولها"
       }
     },
-    "moneyAnswers": {
-      "headline": "إجابات مالية",
-      "subheadline": "التوقع ليس تنبؤاً. إنه كشاف.",
-      "card1Title": "هل سأتدبر؟",
-      "card1Desc": "شاهد توقعات نهاية الشهر: النقد المتاح + الإيرادات المتوقعة - التكاليف المتوقعة.",
-      "card2Title": "ماذا أنتظر؟",
-      "card2Desc": "تتبّع المستحقات غير المدفوعة ودفعات العقود المستحقة. اعرف من يدين لك ومتى.",
-      "card3Title": "ماذا يمكنني تحمّله؟",
-      "card3Desc": "اكتشف الفائض أو العجز قبل اتخاذ القرارات. خطط للمصروفات الكبيرة بثقة.",
-      "forecastTitle": "لماذا التوقع مهم",
-      "forecastDesc": "معظم الأدوات تُظهر ما حدث. متابعة يُظهر ما سيحدث على الأرجح—حتى تتصرف قبل وصول المشاكل."
-    },
     "proof": {
       "headline": "شاهده أثناء العمل",
       "subheadline": "تجربة سطح مكتب أصلية مبنية للسرعة والموثوقية.",
@@ -1555,85 +1538,6 @@
       "privacy": "الخصوصية",
       "buyMeACoffee": "Buy Me a Coffee",
       "kofi": "Ko-fi"
-    }
-  },
-  "moneyAnswers": {
-    "title": "إجابات",
-    "includeReceivables": "تضمين المستحقات",
-    "includeProjections": "تضمين التوقعات",
-    "cashFlowTimeline": "جدول التدفق النقدي",
-    "guidanceTitle": "إجراءات مطلوبة",
-    "noData": "لا توجد بيانات لهذه الفترة",
-    "mode": {
-      "month": "شهر",
-      "year": "سنة"
-    },
-    "yearMode": {
-      "totalInflow": "إجمالي الوارد",
-      "totalOutflow": "إجمالي الصادر",
-      "netIncome": "صافي الدخل",
-      "avgAwaiting": "متوسط المنتظر",
-      "retainerStability": "استقرار الاشتراكات",
-      "monthlyTrend": "الاتجاه الشهري",
-      "insights": "رؤى السنة",
-      "bestMonth": "أفضل شهر",
-      "worstMonth": "أسوأ شهر",
-      "retainerHealth": "صحة الاشتراكات",
-      "paymentsReceived": "تم استلام {{received}} من {{total}} دفعة",
-      "noDataForYear": "لا توجد بيانات لهذه السنة",
-      "yearTrend": "اتجاه السنة",
-      "trendUp": "في تحسن",
-      "trendDown": "في تراجع",
-      "vsFirstHalf": "مقارنة بالنصف الأول",
-      "onTimePayments": "الدفعات في وقتها"
-    },
-    "kpi": {
-      "willMakeIt": "توقعات نهاية الشهر",
-      "endOfMonthForecast": "النقد + الدخل المتوقع - التكاليف المتوقعة",
-      "cashOnHand": "النقد المتاح",
-      "currentBalance": "الرصيد الفعلي حتى الآن",
-      "comingVsLeaking": "الوارد مقابل الخارج",
-      "netForecast": "صافي التوقعات"
-    },
-    "legend": {
-      "inflow": "وارد",
-      "outflow": "خارج",
-      "runningBalance": "الرصيد الجاري"
-    },
-    "unifiedNote": "جميع المبالغ بالشيكل (موحدة)",
-    "dayDetail": {
-      "inflow": "وارد",
-      "outflow": "خارج",
-      "net": "صافي",
-      "noEvents": "لا توجد أحداث في هذا اليوم",
-      "inflows": "الواردات",
-      "outflows": "المخرجات"
-    },
-    "source": {
-      "actualIncome": "دخل مدفوع",
-      "actualCost": "مصروف",
-      "receivable": "مستحق",
-      "profileExpense": "مصروف",
-      "projectedExpense": "مصروف متوقع",
-      "retainer": "عقد متكرر"
-    },
-    "state": {
-      "paid": "مدفوع",
-      "unpaid": "غير مدفوع",
-      "overdue": "متأخر",
-      "upcoming": "قادم",
-      "missed": "فائت",
-      "cancelled": "ملغى"
-    },
-    "guidance": {
-      "allGood": "كل شيء على ما يرام! لا توجد إجراءات مطلوبة حالياً.",
-      "impact": "التأثير",
-      "category": {
-        "collect": "تحصيل",
-        "reduce": "تخفيض",
-        "delay": "تأجيل",
-        "hygiene": "تنظيم"
-      }
     }
   },
   "demo": {

@@ -11,7 +11,7 @@ import type {
   MonthSummary,
   GuidanceItem,
   GuidanceSeverity,
-  MoneyAnswersFilters,
+  MoneyEventFilters,
   Transaction,
   Expense,
   ProjectedIncome,
@@ -218,7 +218,7 @@ export const moneyEventRepo = {
    * - "Unpaid income" = transaction with kind='income' and status='unpaid'
    * - "Projected retainer" = expected payment from ProjectedIncome table
    */
-  async getMoneyEvents(filters: MoneyAnswersFilters): Promise<MoneyEvent[]> {
+  async getMoneyEvents(filters: MoneyEventFilters): Promise<MoneyEvent[]> {
     const {
       month,
       currency,
@@ -340,7 +340,7 @@ export const moneyEventRepo = {
    * Get daily aggregates for a month with running balance
    */
   async getDailyAggregates(
-    filters: MoneyAnswersFilters,
+    filters: MoneyEventFilters,
     openingBalanceMinor: number = 0
   ): Promise<DailyAggregate[]> {
     if (!filters.month) {
@@ -406,7 +406,7 @@ export const moneyEventRepo = {
   /**
    * Get month summary totals
    */
-  async getMonthSummary(filters: MoneyAnswersFilters): Promise<MonthSummary> {
+  async getMonthSummary(filters: MoneyEventFilters): Promise<MonthSummary> {
     if (!filters.month) {
       throw new Error('Month is required for month summary');
     }
@@ -449,7 +449,7 @@ export const moneyEventRepo = {
   /**
    * Generate guidance items based on current data
    */
-  async generateGuidance(filters: MoneyAnswersFilters): Promise<GuidanceItem[]> {
+  async generateGuidance(filters: MoneyEventFilters): Promise<GuidanceItem[]> {
     const today = todayISO();
     const events = await this.getMoneyEvents(filters);
     const guidance: GuidanceItem[] = [];
@@ -601,7 +601,7 @@ export const moneyEventRepo = {
    * Calculate KPI values for the month
    */
   async getMonthKPIs(
-    filters: MoneyAnswersFilters,
+    filters: MoneyEventFilters,
     openingBalanceMinor: number = 0
   ): Promise<{
     willMakeItMinor: number;

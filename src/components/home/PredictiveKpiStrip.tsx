@@ -22,7 +22,7 @@ import { useLanguage, getLocale, useT } from '../../lib/i18n';
 import { useFxRate } from '../../hooks/useFxRate';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getUnifiedTotalWithEur } from '../../lib/fx';
-import { useMonthKPIsBothCurrencies } from '../../hooks/useMoneyAnswersQueries';
+import { useMonthKPIsBothCurrencies } from '../../hooks/useMoneyEventQueries';
 import { InfoIcon } from '../icons';
 
 type CurrencyView = 'ILS' | 'USD' | 'Both';

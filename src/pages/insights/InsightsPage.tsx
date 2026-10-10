@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { DateRangeControl } from '../../components/filters';
 import { EmptyState } from '../../components/ui';
@@ -441,20 +440,6 @@ export function InsightsPage() {
 
     return (
       <div className="insights-section">
-        {/* Cash Flow Timeline Link */}
-        <div data-testid="cash-flow-timeline" className="cash-flow-timeline-link" style={{ marginBottom: 24 }}>
-          <Link
-            to="/money-answers"
-            className="btn btn-secondary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-          >
-            {t('insights.cashFlowTimeline.title')}
-            <span style={{ fontSize: '1.2em' }}>→</span>
-          </Link>
-          <p className="text-muted text-sm" style={{ marginTop: 8 }}>
-            {t('insights.cashFlowTimeline.hint')}
-          </p>
-        </div>
         <div className="data-table">
           <table>
             <thead>
