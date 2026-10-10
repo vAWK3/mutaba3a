@@ -3,6 +3,7 @@ import { OnboardingStepIndicator } from './OnboardingStepIndicator';
 import { useOnboardingStore } from '../../lib/onboardingStore';
 import { useDrawerStore } from '../../lib/stores';
 import { useT } from '../../lib/i18n';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { UsersIcon, FolderIcon, PlusIcon, CheckIcon } from '../icons';
 import './OnboardingOverlay.css';
 
@@ -22,6 +23,17 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
   } = useOnboardingStore();
 
   const { openClientDrawer, openProjectDrawer, openTransactionDrawer } = useDrawerStore();
+
+  // While the Projects area is off (the default), onboarding is client → income:
+  // the project step completes itself so a new user is never asked to create
+  // something the app then hides (MUT-16).
+  const projectsEnabled = useFeatureEnabled('projects');
+  const { completeStep } = useOnboardingStore();
+  useEffect(() => {
+    if (!projectsEnabled && currentStep === 'project') {
+      completeStep('project');
+    }
+  }, [projectsEnabled, currentStep, completeStep]);
 
   // Handle completion
   useEffect(() => {
