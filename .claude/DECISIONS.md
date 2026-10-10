@@ -883,8 +883,8 @@ with two dated sections; ADR-028 and ADR-029 keep their numbers.
 
 ### Original record (2026-10-09): Fee Proposals Live in the Hosted Ledger as a Single-Round Pre-Agreement State
 
-**Date**: 2026-10-09
-**Status**: Accepted (owner's answers to the M7 brief, 2026-10-09)
+Accepted on 2026-10-09 from the owner's answers to the M7 brief; amended by
+the override below.
 
 **Context**: Before a fee agreement exists a matter has no financial state in
 Money v1: the firm's proposed amount, the client's approval and the figure
@@ -1126,24 +1126,18 @@ receivable unpayable, which is the opposite of the lock's purpose).
 `AB7B64537B1DE22C`, with a message saying the config was catching up to the
 key in use. The evidence says otherwise. Every signer that has ever produced
 a published artifact is `BEDF931CA1D6C777`: the signatures in the published
-v0.0.63 `latest.json` (both `darwin-aarch64` and `windows-x86_64`), the
-release machine's `~/.tauri/mutaba3a.key`, the GitHub Actions secret
-`TAURI_SIGNING_PRIVATE_KEY` (set 2026-04-17, before v0.0.63), and the active
-`TAURI_SIGNING_PRIVATE_KEY` entry in the gitignored `release.env` on the
-release machine (byte-identical to `~/.tauri/mutaba3a.key`). The private half
-of `AB7B...` does exist, but only as a commented-out second entry in that same
-`release.env` (confirmed 2026-10-10 by signing a scratch file with it and
-decoding the signature's key id). It has never signed a published release and
-is not in CI. Had v0.0.64 shipped with the `AB7B` public key, the mac
-pipeline would have kept signing with the active `BEDF` entry and CI with the
-`BEDF` secret, so no later release could have been verified by that build.
+v0.0.63 `latest.json` (both `darwin-aarch64` and `windows-x86_64`), the key
+the operator-run macOS release signs with, and the GitHub Actions secret
+`TAURI_SIGNING_PRIVATE_KEY` (set 2026-04-17, before v0.0.63). The `AB7B`
+private key never signed a published release and is not configured anywhere
+the pipeline signs from (full audit on MUT-49). Had v0.0.64 shipped with the
+`AB7B` public key while both signers kept using `BEDF`, no later release
+could have been verified by that build.
 
 **Decision**:
 1. `BEDF931CA1D6C777` is the canonical updater signing key. The public key
-   compiled into the app, the active `release.env` entry, the release
-   machine's key file and the CI secret are the same pair. The config is
-   restored to the pre-`ae9fb1c` value, byte-identical to
-   `~/.tauri/mutaba3a.key.pub`.
+   compiled into the app, the macOS release signer and the CI secret are the
+   same pair. The config is restored to the pre-`ae9fb1c` value.
 2. `src/lib/__tests__/updater-config.test.ts` pins the configured public key
    to that value and asserts the key id from the key bytes (line 2, bytes
    2..10), not from the "untrusted comment" line. It is friction against an
@@ -1158,8 +1152,10 @@ pipeline would have kept signing with the active `BEDF` entry and CI with the
    skips the transitional release (offline, or simply late) is stranded once
    signing switches. A rotation therefore also needs either a long window
    with no further releases, or an explicit decision that laggards reinstall.
-4. The commented-out `AB7B` entry in `release.env` is dead and should be
-   deleted by the owner so it cannot be re-activated by uncommenting.
+4. Exactly one private key is kept for signing, in the operator's release
+   configuration and in the CI secret; any stale key material is removed
+   (tracked on MUT-49) and the release-time check in MUT-51 proves the
+   signer matches the compiled-in key.
 
 **Consequences**:
 - The revert is backward-compatible: `ae9fb1c` is not an ancestor of
@@ -1167,16 +1163,14 @@ pipeline would have kept signing with the active `BEDF` entry and CI with the
   so no shipped build embeds `AB7B...`.
 - The 2026-10-05 CHANGELOG entry is annotated as withdrawn; its claim that
   installed clients must reinstall no longer applies.
-- `deploy.sh` still only warns when `TAURI_SIGNING_PRIVATE_KEY` is absent and
-  resolves `release.env` relative to the current directory; MUT-51 makes the
-  key a hard requirement, adds the file fallback and the signer-vs-config
-  check (TD-022).
+- `deploy.sh` still only warns when the signing key is not configured; MUT-51
+  makes it a hard requirement and adds the signer-vs-config check (TD-022).
 
 **Alternatives Considered**:
-- Keep `AB7B...` and activate its private key in `release.env`: rejected.
-  Every installed client (v0.0.63 and earlier) trusts `BEDF`, the CI secret
-  is `BEDF`, and nothing justified a rotation; it would have required the
-  transitional release in decision 3 for no benefit.
+- Keep `AB7B...` and switch the signers to it: rejected. Every installed
+  client (v0.0.63 and earlier) trusts `BEDF`, the CI secret is `BEDF`, and
+  nothing justified a rotation; it would have required the transitional
+  release in decision 3 for no benefit.
 - Treat the mismatch as a rotation and ask all users to reinstall: rejected;
   it is what the 2026-10-05 note proposed, and it trades a one-line revert
   for every user losing in-app updates once.

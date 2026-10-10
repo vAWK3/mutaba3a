@@ -22,23 +22,25 @@
 **Status**: Open (ticketed as MUT-51)
 **Added**: 2026-10-10
 **Priority**: High
-**Impact**: A release cut without `TAURI_SIGNING_PRIVATE_KEY`, from the wrong
+**Impact**: A release cut without the signing key configured, from the wrong
 checkout, or with a different key than `plugins.updater.pubkey` publishes a
 manifest every installed client either cannot find (404) or cannot verify
 
-`deploy.sh` only warns when the signing key is absent (`check_updater_signing`,
-`deploy.sh:64-73`), resolves `release.env` relative to the current directory
-(`deploy.sh:26-38`), declares `UPDATER_PRIVATE_KEY_FILE` and never reads it
-(`deploy.sh:26`), runs `git push origin main` and tags HEAD from whatever
-branch is checked out (`deploy.sh:206-241`), and passes the private key and
-password to `tauri signer sign` as CLI arguments (`deploy.sh:415`;
-`.github/workflows/build-windows.yml:142`) although the CLI reads the
-`TAURI_SIGNING_PRIVATE_KEY*` environment variables itself. Nothing compares the
-key id in the produced signatures (line 2, bytes 2..10) with the key id in
-`src-tauri/tauri.conf.json`, and macOS (`release.env`) and Windows (CI secret)
-sign from two independent stores with no check that they hold the same key.
-Found during the MUT-49 review (ADR-031); MUT-51 owns the hard-fail, the file
-fallback and the post-publish verification.
+In `deploy.sh`, `check_updater_signing` only warns when the signing key is
+missing and the release proceeds without an update archive or `latest.json`;
+`load_release_env` resolves its env file relative to the current directory;
+`UPDATER_PRIVATE_KEY_FILE` is declared and never read; `tag_and_push` pushes
+and tags from whatever branch is checked out; and `sign_update_artifact`
+passes the key and password to `tauri signer sign` as CLI arguments although
+the CLI reads the `TAURI_SIGNING_PRIVATE_KEY*` environment variables itself
+(the `signer sign` step in `.github/workflows/build-windows.yml` does the
+same). Nothing compares the key id in the produced signatures (line 2, bytes
+2..10) with the key id in `src-tauri/tauri.conf.json`, and the macOS and
+Windows halves sign from separately configured secrets with no check that
+they hold the same key. The workflow's "latest.json not found" message also
+points at `scripts/deploy.sh`, which does not exist (fixed to `./deploy.sh`
+in MUT-49). Found during the MUT-49 review (ADR-031); MUT-51 owns the
+hard-fail, the file fallback and the post-publish verification.
 
 ### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
 **Status**: Open

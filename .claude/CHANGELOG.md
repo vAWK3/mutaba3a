@@ -111,11 +111,10 @@
 ### Fixed
 - `plugins.updater.pubkey` is back to the pre-`ae9fb1c` value, byte-identical to
   `~/.tauri/mutaba3a.key.pub`. The 2026-10-05 rotation pointed the app at a key
-  (`AB7B64537B1DE22C`) whose private half exists only as a commented-out entry
-  in the release machine's gitignored `release.env`; it never signed a
-  published release and is not in CI. Every real signer (the active
-  `release.env` entry, `~/.tauri/mutaba3a.key`, the CI secret, the v0.0.63
-  signatures) is `BEDF931CA1D6C777`. No shipped build embeds the wrong key
+  (`AB7B64537B1DE22C`) whose private half never signed a published release
+  and is not configured anywhere the pipeline signs from. Every real signer
+  (the macOS release signer, the CI secret, the v0.0.63 signatures) is
+  `BEDF931CA1D6C777`. No shipped build embeds the wrong key
   (`ae9fb1c` is not an ancestor of `v0.0.63`), so the revert is
   backward-compatible.
 
@@ -128,6 +127,10 @@
   release signed by the old key before signing switches, and that transitional
   release is necessary, not sufficient (late clients still reinstall).
 - TD-022: the release-time guards deferred to MUT-51.
+- `.claude/CI_CD.md`: the Tauri troubleshooting row no longer says to
+  regenerate the signing key on a bad signature (that is how `ae9fb1c`
+  happened); the updater secret names now match the real workflow. The
+  Windows workflow's "latest.json not found" hint points at `./deploy.sh`.
 
 ### Technical
 - `.claude/DECISIONS.md` carried two `## ADR-027` headings (the 2026-10-09
@@ -945,10 +948,10 @@ API version `1.1.0-m2`; everything additive, M1 untouched.
   so they will reject updates signed with the new private key. Clients on an
   older build need a manual reinstall to rejoin the update channel.
 - **Withdrawn 2026-10-10 (MUT-49, ADR-031).** The premise above was false: the
-  v0.0.63 signatures, `~/.tauri/mutaba3a.key`, the active `release.env` entry
-  and the CI secret are all `BEDF931CA1D6C777`; the `AB7B64537B1DE22C` private
-  half exists only as a commented-out `release.env` entry that never signed a
-  release. The key was restored on 2026-10-10; no reinstall is needed.
+  v0.0.63 signatures, the macOS release signer and the CI secret are all
+  `BEDF931CA1D6C777`; the `AB7B64537B1DE22C` private half never signed a
+  release and is not configured in the pipeline. The key was restored on
+  2026-10-10; no reinstall is needed.
 
 ---
 

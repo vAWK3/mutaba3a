@@ -306,7 +306,7 @@ jobs:
           # publish a windows-only manifest that would break mac auto-update.
           gh release download $tag --pattern latest.json
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path "latest.json")) {
-            Write-Error "latest.json not found on release $tag. Run the mac release pipeline first (scripts/deploy.sh -> option 2)."
+            Write-Error "latest.json not found on release $tag. Run the mac release pipeline first (./deploy.sh, option 2)."
             exit 1
           }
 

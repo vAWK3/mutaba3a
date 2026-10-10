@@ -7,15 +7,9 @@ import { resolve } from 'node:path';
  *
  * `plugins.updater.pubkey` is the minisign public key the installed app uses to
  * verify `latest.json` signatures. It must be the public half of the key the
- * release pipeline signs with: the active `TAURI_SIGNING_PRIVATE_KEY` in
- * `release.env` (byte-identical to `~/.tauri/mutaba3a.key`) on the release
- * machine, and the GitHub Actions secret of the same name. Both are
- * BEDF931CA1D6C777, and so is every signature published up to v0.0.63.
- *
- * On 2026-10-05 the key was changed to AB7B64537B1DE22C. Its private half
- * exists only as a commented-out entry in `release.env`; it never signed a
- * published release and is not in CI (MUT-49, ADR-031). Had that shipped, no
- * later release could ever have been verified by that build. This test is
+ * release pipeline signs with (BEDF931CA1D6C777, the signer of every
+ * published release). A build that embeds any other key can never verify an
+ * update again, which is what MUT-49 caught before it shipped. This test is
  * friction against a repeat: editing the key means editing this constant too,
  * and ADR-031 explains what a real rotation requires (ship the new public key
  * in a release signed by the old key, then switch signing).
@@ -89,10 +83,11 @@ describe('src-tauri/tauri.conf.json updater key', () => {
   });
 
   it('carries key id BEDF931CA1D6C777 in the key bytes, not only in the comment line', () => {
-    const pubkey = loadConfig().plugins?.updater?.pubkey as string;
+    const pubkey = loadConfig().plugins?.updater?.pubkey;
 
-    expect(keyIdFromPubkey(pubkey)).toBe(CANONICAL_KEY_ID);
-    expect(atob(pubkey).split('\n')[0]).toBe(
+    expect(typeof pubkey, 'plugins.updater.pubkey must be a string').toBe('string');
+    expect(keyIdFromPubkey(pubkey as string)).toBe(CANONICAL_KEY_ID);
+    expect(atob(pubkey as string).split('\n')[0]).toBe(
       `untrusted comment: minisign public key: ${CANONICAL_KEY_ID}`
     );
   });
