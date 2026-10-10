@@ -620,7 +620,7 @@ export function DocumentFormPage() {
     );
   }
 
-  const isReadOnly = isEditMode && existingDoc && (existingDoc.status !== 'draft' || !!existingDoc.lockedAt);
+  const isReadOnly = isEditMode && !!existingDoc && (existingDoc.status !== 'draft' || !!existingDoc.lockedAt);
 
   return (
     <>

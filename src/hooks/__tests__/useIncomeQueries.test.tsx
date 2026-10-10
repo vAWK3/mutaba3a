@@ -210,6 +210,26 @@ describe('useIncomeById', () => {
     expect(transactionRepo.get).toHaveBeenCalledWith('tx-1');
   });
 
+  // TD-028: the repository resolves `undefined` for a deleted row, which
+  // TanStack Query v5 treats as a failed fetch. The hook must normalise it.
+  it('resolves to null with no console error when the row is missing', async () => {
+    (transactionRepo.get as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { result } = renderHook(
+        () => useIncomeById('tx-gone'),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toBeNull();
+      expect(result.current.isError).toBe(false);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('should not fetch when id is undefined', () => {
     renderHook(
       () => useIncomeById(undefined),

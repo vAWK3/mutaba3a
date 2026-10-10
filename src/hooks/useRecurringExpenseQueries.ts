@@ -135,9 +135,9 @@ export function useActiveRecurringRules(profileId: string | undefined) {
  * Fetch a single recurring rule by ID.
  */
 export function useRecurringRule(id: string | undefined) {
-  return useQuery({
+  return useQuery<RecurringRule | null>({
     queryKey: recurringExpenseQueryKeys.rule(id || ''),
-    queryFn: () => getRepositories().base.recurringRules.get(id!),
+    queryFn: async () => (await getRepositories().base.recurringRules.get(id!)) ?? null,
     enabled: !!id,
   });
 }

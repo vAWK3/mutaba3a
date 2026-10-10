@@ -482,7 +482,7 @@ export function DocumentDrawer() {
   }
 
   // Can only edit drafts
-  const isReadOnly = mode === 'edit' && existingDoc && existingDoc.status !== 'draft';
+  const isReadOnly = mode === 'edit' && !!existingDoc && existingDoc.status !== 'draft';
 
   return (
     <Drawer

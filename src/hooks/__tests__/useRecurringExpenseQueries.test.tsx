@@ -260,6 +260,27 @@ describe('Query Hooks', () => {
 
       expect(expenseRepository.recurringRuleRepo.get).not.toHaveBeenCalled();
     });
+
+    // TD-028: a deleted rule resolves `undefined` from the repository, which
+    // TanStack Query v5 treats as a failed fetch. The hook normalises it to
+    // `null` so the query succeeds.
+    it('resolves to null with no console error when the rule is missing', async () => {
+      (expenseRepository.recurringRuleRepo.get as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { result } = renderHook(
+          () => useRecurringRule('rule-gone'),
+          { wrapper: createWrapper() }
+        );
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data).toBeNull();
+        expect(result.current.isError).toBe(false);
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
   });
 });
 

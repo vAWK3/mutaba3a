@@ -7,6 +7,11 @@ import { businessProfileRepo, documentRepo, clientRepo, transactionRepo } from '
 import { getOrCreateLocalDevice } from '../../sync/core/ops-engine';
 import { initializeClock } from '../../sync/core/hlc';
 import {
+  useTransaction,
+  useClient,
+  useClientSummary,
+  useProject,
+  useProjectSummary,
   useDocuments,
   useDocument,
   useCreateDocument,
@@ -521,5 +526,57 @@ describe('Payment Record Hooks', () => {
       expect(updated?.receivedAmountMinor).toBe(10000);
       expect(updated?.status).toBe('paid');
     });
+  });
+});
+
+// TD-028: every by-id hook wraps a repository `get(id)` whose contract is
+// `Promise<Entity | undefined>`. TanStack Query v5 rejects `undefined` as
+// query data (the query lands in `error` state and logs "Query data cannot be
+// undefined"), so a deep link to a deleted row must resolve to `null` instead.
+// These run against real Dexie with an id that was never written.
+describe('By-id hooks resolve null for a missing row', () => {
+  const MISSING_ID = 'missing-row-id';
+
+  async function expectResolvesNull<T>(useHook: () => { isSuccess: boolean; isError: boolean; data: T }) {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { result } = renderHook(useHook, { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toBeNull();
+      expect(result.current.isError).toBe(false);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  }
+
+  it('useTransaction resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useTransaction(MISSING_ID));
+  });
+
+  it('useClient resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useClient(MISSING_ID));
+  });
+
+  it('useProject resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useProject(MISSING_ID));
+  });
+
+  it('useDocument resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useDocument(MISSING_ID));
+  });
+
+  it('useBusinessProfile resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useBusinessProfile(MISSING_ID));
+  });
+
+  // The summaries resolve `undefined` when their parent client/project is gone.
+  it('useClientSummary resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useClientSummary(MISSING_ID));
+  });
+
+  it('useProjectSummary resolves to null, no console error', async () => {
+    await expectResolvesNull(() => useProjectSummary(MISSING_ID));
   });
 });
