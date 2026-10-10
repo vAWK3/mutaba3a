@@ -991,3 +991,46 @@ Before creating a new component:
 | `retainers/schedule.ts` | chargeable months with end/cancel rules | retainers routes, reconcile |
 | `payments/allocate.ts`, `payments/credit.ts`, `payments/numbering.ts`, `payments/preview-token.ts` | allocation validation + strategies + resulting balances; credit VAT split; payment numbers; balance-covering preview token | payments, receivables (credits) routes; M6 summaries will reuse `outstandingOf` and the balance shapes |
 | `routes/operations.ts` | `GET /v1/operations/{key}` over `idempotency.get` | any client reconciling a lost response |
+
+---
+
+## Data access (`src/db`) — the seam every consumer goes through
+
+### getRepositories() — `src/db/provider.ts`
+
+**What**: The single entry point to the data layer. Returns a frozen
+`{ base, synced }` registry covering 21 repositories plus 8 op-capturing
+decorators. Re-exported from the `src/db` barrel.
+
+**Use it when**: you need to read or write any entity from a hook, service or
+component. Do not import a repository singleton — that bypasses the seam and
+cannot be swapped or mocked consistently.
+
+```ts
+import { getRepositories } from '../db';
+
+// Resolve inside the callback, not at module scope.
+queryFn: () => getRepositories().base.transactions.list(filters)
+mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id)
+```
+
+**base vs synced**: `base` is the plain Dexie repository. `synced` additionally
+captures an operation in the sync op-log. Keep whichever family a call site
+already used — moving a call between them changes what syncs between devices.
+
+**Swapping**: `setRepositories(next)` for tests and future hosted sources,
+`resetRepositories()` in teardown. `setRepositories` throws in production
+builds. Caveat: `synced.*` does not follow a swap — see TD-013
+(`gstack-shortcut(dec-5f2c2123)`).
+
+**Conformance**: `satisfies` in `provider.ts` ties every repository to its
+interface in `src/db/interfaces.ts`. Rename or delete a repository method and
+`npm run typecheck` fails there.
+
+**Tests**: `src/db/__tests__/provider.test.ts`. To fake the data layer, mock
+`'../../db'` and return `getRepositories` — the barrel is the single
+interception point.
+
+**Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
+`scheduleGenerator`, `retainerMatching`, and `engagementRepo` / `moneyEventRepo`
+(modules slated for deletion, MUT-10 / MUT-2). See TODOS.md item 2.

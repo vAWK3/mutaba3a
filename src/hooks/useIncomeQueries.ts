@@ -9,8 +9,7 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { transactionRepo } from '../db';
-import { syncedTransactionRepo } from '../sync/core/synced-repository';
+import { getRepositories } from '../db';
 import { useMutationWithFeedback } from './useMutationWithFeedback';
 import type { QueryFilters, Transaction, Currency, TxStatus } from '../types';
 
@@ -101,7 +100,7 @@ export function useIncome(filters: IncomeFilters = {}) {
 
   return useQuery({
     queryKey: incomeQueryKeys.income(filters),
-    queryFn: () => transactionRepo.list(queryFilters),
+    queryFn: () => getRepositories().base.transactions.list(queryFilters),
   });
 }
 
@@ -111,7 +110,7 @@ export function useIncome(filters: IncomeFilters = {}) {
 export function useIncomeById(id: string) {
   return useQuery({
     queryKey: incomeQueryKeys.incomeById(id),
-    queryFn: () => transactionRepo.get(id),
+    queryFn: () => getRepositories().base.transactions.get(id),
     enabled: !!id,
   });
 }
@@ -133,7 +132,7 @@ export function useReceivables(filters: ReceivablesFilters = {}) {
 
   return useQuery({
     queryKey: incomeQueryKeys.receivables(filters),
-    queryFn: () => transactionRepo.list(queryFilters),
+    queryFn: () => getRepositories().base.transactions.list(queryFilters),
   });
 }
 
@@ -143,7 +142,7 @@ export function useReceivables(filters: ReceivablesFilters = {}) {
 export function useIncomeTotals(dateFrom: string, dateTo: string, currency?: Currency, profileId?: string) {
   return useQuery({
     queryKey: incomeQueryKeys.overviewTotals(dateFrom, dateTo, currency, profileId),
-    queryFn: () => transactionRepo.getOverviewTotals({ dateFrom, dateTo, currency, profileId }),
+    queryFn: () => getRepositories().base.transactions.getOverviewTotals({ dateFrom, dateTo, currency, profileId }),
   });
 }
 
@@ -153,7 +152,7 @@ export function useIncomeTotals(dateFrom: string, dateTo: string, currency?: Cur
 export function useAttentionReceivables(currency?: Currency, profileId?: string) {
   return useQuery({
     queryKey: incomeQueryKeys.attentionReceivables(currency, profileId),
-    queryFn: () => transactionRepo.getAttentionReceivables({ currency, profileId }),
+    queryFn: () => getRepositories().base.transactions.getAttentionReceivables({ currency, profileId }),
   });
 }
 
@@ -169,7 +168,7 @@ export function useCreateIncome() {
 
   return useMutationWithFeedback({
     mutationFn: (data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) =>
-      transactionRepo.create({ ...data, kind: 'income' }),
+      getRepositories().base.transactions.create({ ...data, kind: 'income' }),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to create income. Please try again.',
   });
@@ -183,7 +182,7 @@ export function useUpdateIncome() {
 
   return useMutationWithFeedback({
     mutationFn: ({ id, data }: { id: string; data: Partial<Transaction> }) =>
-      transactionRepo.update(id, data),
+      getRepositories().base.transactions.update(id, data),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to update income. Please try again.',
   });
@@ -196,7 +195,7 @@ export function useMarkIncomePaid() {
   const queryClient = useQueryClient();
 
   return useMutationWithFeedback({
-    mutationFn: (id: string) => syncedTransactionRepo.markPaid(id),
+    mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to mark as paid. Please try again.',
   });
@@ -210,7 +209,7 @@ export function useRecordIncomePartialPayment() {
 
   return useMutationWithFeedback({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      syncedTransactionRepo.recordPartialPayment(id, paymentAmountMinor),
+      getRepositories().synced.transactions.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to record payment. Please try again.',
   });
@@ -223,7 +222,7 @@ export function useDeleteIncome() {
   const queryClient = useQueryClient();
 
   return useMutationWithFeedback({
-    mutationFn: (id: string) => transactionRepo.softDelete(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.softDelete(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to delete income. Please try again.',
   });
@@ -236,7 +235,7 @@ export function useArchiveIncome() {
   const queryClient = useQueryClient();
 
   return useMutationWithFeedback({
-    mutationFn: (id: string) => transactionRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.archive(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to archive income. Please try again.',
   });
@@ -249,7 +248,7 @@ export function useUnarchiveIncome() {
   const queryClient = useQueryClient();
 
   return useMutationWithFeedback({
-    mutationFn: (id: string) => transactionRepo.unarchive(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.unarchive(id),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to unarchive income. Please try again.',
   });

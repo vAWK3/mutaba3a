@@ -30,10 +30,7 @@ import {
   type SnoozeOccurrenceParams,
   type CreateRecurringRuleParams,
 } from '../services/recurringExpenseService';
-import {
-  recurringRuleRepo,
-  recurringOccurrenceRepo,
-} from '../db/expenseRepository';
+import { getRepositories, type Repositories } from '../db';
 import type { RecurringRule } from '../types';
 
 // ============================================================================
@@ -128,7 +125,10 @@ export function useRecurringOccurrences(
 ) {
   return useQuery({
     queryKey: recurringExpenseQueryKeys.occurrences(filters),
-    queryFn: () => recurringOccurrenceRepo.list(filters as Parameters<typeof recurringOccurrenceRepo.list>[0]),
+    queryFn: () =>
+      getRepositories().base.recurringOccurrences.list(
+        filters as Parameters<Repositories['base']['recurringOccurrences']['list']>[0]
+      ),
     enabled: !!filters.profileId && (options?.enabled !== false),
   });
 }
@@ -139,7 +139,7 @@ export function useRecurringOccurrences(
 export function useRecurringOccurrence(id: string | undefined) {
   return useQuery({
     queryKey: recurringExpenseQueryKeys.occurrence(id || ''),
-    queryFn: () => recurringOccurrenceRepo.get(id!),
+    queryFn: () => getRepositories().base.recurringOccurrences.get(id!),
     enabled: !!id,
   });
 }
@@ -161,7 +161,7 @@ export function useRuleHistory(ruleId: string | undefined) {
 export function useRecurringRules(profileId: string | undefined) {
   return useQuery({
     queryKey: recurringExpenseQueryKeys.rules(profileId),
-    queryFn: () => recurringRuleRepo.list({ profileId }),
+    queryFn: () => getRepositories().base.recurringRules.list({ profileId }),
     enabled: !!profileId,
   });
 }
@@ -172,7 +172,7 @@ export function useRecurringRules(profileId: string | undefined) {
 export function useActiveRecurringRules(profileId: string | undefined) {
   return useQuery({
     queryKey: recurringExpenseQueryKeys.activeRules(profileId || ''),
-    queryFn: () => recurringRuleRepo.listActive(profileId!),
+    queryFn: () => getRepositories().base.recurringRules.listActive(profileId!),
     enabled: !!profileId,
   });
 }
@@ -183,7 +183,7 @@ export function useActiveRecurringRules(profileId: string | undefined) {
 export function useRecurringRule(id: string | undefined) {
   return useQuery({
     queryKey: recurringExpenseQueryKeys.rule(id || ''),
-    queryFn: () => recurringRuleRepo.get(id!),
+    queryFn: () => getRepositories().base.recurringRules.get(id!),
     enabled: !!id,
   });
 }
@@ -306,8 +306,8 @@ export function useUpdateRecurringRule() {
 
   return useRecurringMutationWithToast({
     mutationFn: async ({ id, data }: { id: string; data: Partial<RecurringRule> }) => {
-      await recurringRuleRepo.update(id, data);
-      return recurringRuleRepo.get(id);
+      await getRepositories().base.recurringRules.update(id, data);
+      return getRepositories().base.recurringRules.get(id);
     },
     onSuccess: (_: unknown, { id }: { id: string; data: Partial<RecurringRule> }) => {
       queryClient.invalidateQueries({
@@ -336,7 +336,7 @@ export function usePauseRecurringRule() {
   const queryClient = useQueryClient();
 
   return useRecurringMutationWithToast({
-    mutationFn: (id: string) => recurringRuleRepo.pause(id),
+    mutationFn: (id: string) => getRepositories().base.recurringRules.pause(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['recurringRules'],
@@ -361,7 +361,7 @@ export function useResumeRecurringRule() {
   const queryClient = useQueryClient();
 
   return useRecurringMutationWithToast({
-    mutationFn: (id: string) => recurringRuleRepo.resume(id),
+    mutationFn: (id: string) => getRepositories().base.recurringRules.resume(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['recurringRules'],
@@ -386,7 +386,7 @@ export function useDeleteRecurringRule() {
   const queryClient = useQueryClient();
 
   return useRecurringMutationWithToast({
-    mutationFn: (id: string) => recurringRuleRepo.softDelete(id),
+    mutationFn: (id: string) => getRepositories().base.recurringRules.softDelete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['recurringRules'],

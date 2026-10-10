@@ -1120,3 +1120,37 @@ A posted receivable's `gross / net / vat` never change. What a firm forgives
 is a `receivable_credits` row with its own VAT split at the frozen rate;
 `outstanding = gross − paid − credited`. Credits count towards settlement
 (`PAID` at zero) but are not payments (`PARTIALLY_PAID` needs `paid > 0`).
+
+### Data access resolves through a registry, not imports (MUT-35)
+No hook, service or component imports a repository singleton. Every read and
+write goes through `getRepositories()` in `src/db/provider.ts`, re-exported from
+the `src/db` barrel. The registry is a frozen module-scoped object, not a React
+context: Dexie migrations run inside `db.open()` before React mounts, so
+resolution must not depend on a mounted tree (see TD-013 and the
+`dexie-migration-timing` learning).
+
+Resolve **inside** the callback, never at module scope:
+
+```ts
+// right — a later swap takes effect
+queryFn: () => getRepositories().base.transactions.list(filters)
+
+// wrong — captures whatever was active at import time, which is the exact bug
+// synced-repository.ts has today
+const repos = getRepositories();
+```
+
+Two families are exposed on purpose. `base` is the plain Dexie repository;
+`synced` is the decorator that also captures an op in the sync log. Call sites
+state which one they use, so the (pre-existing, uneven) split is visible rather
+than hidden — see TODOS.md item 1.
+
+`satisfies` on both registries is the conformance check: deleting or renaming a
+repository method fails `npm run typecheck` at `provider.ts`. Verified by
+temporarily renaming `fxRateRepo.getLatest`, which produced
+`Property 'getLatest' is missing in type … but required in type 'IFxRateRepository'`.
+
+**Testing.** The barrel is the single interception point. A test that fakes the
+data layer mocks `'../../db'` and returns `getRepositories`; it never mocks a
+repository module directly. Share one set of fakes across mocks with
+`vi.hoisted()` when a test asserts through both paths.

@@ -163,12 +163,51 @@ Test coverage has been significantly improved. Core pages and repositories now m
 **Description**:
 Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds for better performance and native file system integration. Currently, both web and desktop use IndexedDB via Dexie.
 
-**Current State (2026-03-13)**:
+**Current State (2026-10-10, MUT-35)**:
 - ✅ Repository interfaces created (`src/db/interfaces.ts`)
 - ✅ All repository operations documented with TypeScript interfaces
-- ✅ Current Dexie implementation satisfies the interfaces
+- ✅ **Conformance is now enforced by the compiler** — `src/db/provider.ts`
+  applies `satisfies` to all 21 base repositories and all 8 synced decorators.
+  Deleting or renaming a repository method fails `npm run typecheck`.
 - ✅ Migration Safety Layer implemented (`src/db/migration-safety.ts`)
 - Schema version at 14 with all tables defined
+
+> **Correction (MUT-35).** The entry previously claimed "Current Dexie
+> implementation satisfies the interfaces". That was an assertion no check
+> enforced: before MUT-35 the `satisfies` count in the codebase was 0. When
+> conformance was actually applied, **7 interfaces turned out to have drifted**
+> — every case an interface declaring a method the implementation never had:
+> `transactionRepo.delete`, `receiptRepo.getByExpense`, `vendorRepo.findByName`,
+> `monthCloseRepo.set`, `retainerRepo.delete`,
+> `projectedIncomeRepo.{getBySource,getByPeriod,create,delete}`, plus
+> `expenseRepo.{getYearlyTotals,getAllProfilesTotals,getReceiptCount}` missing
+> from the interface and three wrong parameter/return types. All were fixed by
+> correcting the interface to describe reality, never by adding runtime code.
+> Lesson: "documented" and "checked" are different states; only the second
+> survives contact with a refactor.
+
+**Known gap — the seam is only half swappable.**
+`gstack-shortcut(dec-5f2c2123)`: the decorators in
+`src/sync/core/synced-repository.ts` bind the Dexie singletons at module load
+(`clientRepo.list.bind(clientRepo)`), so `setRepositories()` redirects `base`
+but **not** `synced.*`. Harmless today — nothing calls `setRepositories` outside
+tests — but a hosted data source injected by MUT-43 would be silently bypassed
+on every synced write path. Upgrade when MUT-43 lands: resolve the decorators
+lazily through `getRepositories().base`, with a test asserting ops are captured
+against a swapped base.
+
+**Every declared slot has a real caller.** Verified by grepping
+`base.<slot>.<method>` across `src/`: nine consumers resolve through the
+provider, including `useRetainerQueries`. A slot that nothing reads would make
+a future `setRepositories` swap silently leave that domain on Dexie — the
+registry must never advertise coverage it does not have.
+
+**Outside the seam.** `IRepositoryProvider` covers 21 repositories. Not covered:
+`planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`planRepository.ts`),
+`scheduleGenerator`, `retainerMatching` (`retainerRepository.ts`) — the last two
+are not repositories. Also `engagementRepo` and `moneyEventRepo`, left alone
+deliberately because their modules are slated for deletion (MUT-10, MUT-2).
+See TODOS.md item 2.
 
 **Repository Interfaces Created**:
 - `IClientRepository`, `IProjectRepository`, `ICategoryRepository`

@@ -16,14 +16,7 @@ import type {
   Currency,
   Expense,
 } from '../types';
-import {
-  recurringRuleRepo,
-  recurringOccurrenceRepo,
-  expenseRepo,
-  expenseCategoryRepo,
-  vendorRepo,
-} from '../db/expenseRepository';
-import { projectRepo } from '../db';
+import { getRepositories } from '../db';
 
 // ============================================================================
 // Date Helpers
@@ -244,10 +237,10 @@ export async function getVirtualOccurrences(
   dateTo: string
 ): Promise<VirtualOccurrenceDisplay[]> {
   // Get active rules for the profile
-  const rules = await recurringRuleRepo.listActive(profileId);
+  const rules = await getRepositories().base.recurringRules.listActive(profileId);
 
   // Get persisted occurrences in the date range
-  const persistedOccurrences = await recurringOccurrenceRepo.list({
+  const persistedOccurrences = await getRepositories().base.recurringOccurrences.list({
     profileId,
     dateFrom,
     dateTo,
@@ -260,9 +253,9 @@ export async function getVirtualOccurrences(
   }
 
   // Load categories, vendors, projects for display names
-  const categories = await expenseCategoryRepo.list(profileId);
-  const vendors = await vendorRepo.list(profileId);
-  const projects = await projectRepo.list({ profileId });
+  const categories = await getRepositories().base.expenseCategories.list(profileId);
+  const vendors = await getRepositories().base.vendors.list(profileId);
+  const projects = await getRepositories().base.projects.list({ profileId });
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const vendorMap = new Map(vendors.map((v) => [v.id, v]));
@@ -380,7 +373,7 @@ export async function confirmPayment(params: ConfirmPaymentParams): Promise<Expe
   const { ruleId, profileId, expectedDate, amountMinor, actualPaidDate, notes } = params;
 
   // Get the rule
-  const rule = await recurringRuleRepo.get(ruleId);
+  const rule = await getRepositories().base.recurringRules.get(ruleId);
   if (!rule) {
     throw new Error(`Recurring rule not found: ${ruleId}`);
   }
@@ -391,7 +384,7 @@ export async function confirmPayment(params: ConfirmPaymentParams): Promise<Expe
   const effectiveNotes = notes ?? rule.notes;
 
   // Create the expense
-  const expense = await expenseRepo.create({
+  const expense = await getRepositories().base.expenses.create({
     profileId,
     title: rule.title,
     vendor: rule.vendor,
@@ -406,11 +399,11 @@ export async function confirmPayment(params: ConfirmPaymentParams): Promise<Expe
   });
 
   // Check if a persisted occurrence already exists
-  let occurrence = await recurringOccurrenceRepo.getByRuleAndDate(ruleId, expectedDate);
+  let occurrence = await getRepositories().base.recurringOccurrences.getByRuleAndDate(ruleId, expectedDate);
 
   if (occurrence) {
     // Update existing occurrence
-    await recurringOccurrenceRepo.update(occurrence.id, {
+    await getRepositories().base.recurringOccurrences.update(occurrence.id, {
       status: 'resolved_paid',
       fulfilledExpenseId: expense.id,
       resolvedAt: nowISO(),
@@ -420,7 +413,7 @@ export async function confirmPayment(params: ConfirmPaymentParams): Promise<Expe
     });
   } else {
     // Create new occurrence
-    occurrence = await recurringOccurrenceRepo.create({
+    occurrence = await getRepositories().base.recurringOccurrences.create({
       ruleId,
       profileId,
       expectedDate,
@@ -436,7 +429,7 @@ export async function confirmPayment(params: ConfirmPaymentParams): Promise<Expe
   }
 
   // Update expense with occurrence reference
-  await expenseRepo.update(expense.id, {
+  await getRepositories().base.expenses.update(expense.id, {
     recurringOccurrenceId: occurrence.id,
   });
 
@@ -458,26 +451,26 @@ export async function skipOccurrence(params: SkipOccurrenceParams): Promise<Recu
   const { ruleId, profileId, expectedDate, notes } = params;
 
   // Get the rule for snapshot values
-  const rule = await recurringRuleRepo.get(ruleId);
+  const rule = await getRepositories().base.recurringRules.get(ruleId);
   if (!rule) {
     throw new Error(`Recurring rule not found: ${ruleId}`);
   }
 
   // Check if a persisted occurrence already exists
-  let occurrence = await recurringOccurrenceRepo.getByRuleAndDate(ruleId, expectedDate);
+  let occurrence = await getRepositories().base.recurringOccurrences.getByRuleAndDate(ruleId, expectedDate);
 
   if (occurrence) {
     // Update existing occurrence
-    await recurringOccurrenceRepo.update(occurrence.id, {
+    await getRepositories().base.recurringOccurrences.update(occurrence.id, {
       status: 'resolved_skipped',
       resolvedAt: nowISO(),
       notes,
       snoozeUntil: undefined, // Clear snooze if any
     });
-    occurrence = await recurringOccurrenceRepo.get(occurrence.id);
+    occurrence = await getRepositories().base.recurringOccurrences.get(occurrence.id);
   } else {
     // Create new occurrence
-    occurrence = await recurringOccurrenceRepo.create({
+    occurrence = await getRepositories().base.recurringOccurrences.create({
       ruleId,
       profileId,
       expectedDate,
@@ -514,13 +507,13 @@ export async function snoozeOccurrence(params: SnoozeOccurrenceParams): Promise<
   }
 
   // Get the rule for snapshot values
-  const rule = await recurringRuleRepo.get(ruleId);
+  const rule = await getRepositories().base.recurringRules.get(ruleId);
   if (!rule) {
     throw new Error(`Recurring rule not found: ${ruleId}`);
   }
 
   // Check if a persisted occurrence already exists
-  let occurrence = await recurringOccurrenceRepo.getByRuleAndDate(ruleId, expectedDate);
+  let occurrence = await getRepositories().base.recurringOccurrences.getByRuleAndDate(ruleId, expectedDate);
 
   if (occurrence) {
     // Can only snooze non-resolved occurrences
@@ -529,15 +522,15 @@ export async function snoozeOccurrence(params: SnoozeOccurrenceParams): Promise<
     }
 
     // Update existing occurrence
-    await recurringOccurrenceRepo.update(occurrence.id, {
+    await getRepositories().base.recurringOccurrences.update(occurrence.id, {
       status: 'snoozed',
       snoozeUntil,
       notes,
     });
-    occurrence = await recurringOccurrenceRepo.get(occurrence.id);
+    occurrence = await getRepositories().base.recurringOccurrences.get(occurrence.id);
   } else {
     // Create new occurrence with snoozed status
-    occurrence = await recurringOccurrenceRepo.create({
+    occurrence = await getRepositories().base.recurringOccurrences.create({
       ruleId,
       profileId,
       expectedDate,
@@ -593,7 +586,7 @@ export async function createRecurringRule(params: CreateRecurringRuleParams): Pr
     throw new Error('Month of year must be between 1 and 12');
   }
 
-  return recurringRuleRepo.create({
+  return getRepositories().base.recurringRules.create({
     profileId: params.profileId,
     title: params.title,
     vendor: params.vendor,
@@ -621,5 +614,5 @@ export async function createRecurringRule(params: CreateRecurringRuleParams): Pr
 export async function getRuleHistory(
   ruleId: string
 ): Promise<RecurringOccurrence[]> {
-  return recurringOccurrenceRepo.getHistoryForRule(ruleId);
+  return getRepositories().base.recurringOccurrences.getHistoryForRule(ruleId);
 }
