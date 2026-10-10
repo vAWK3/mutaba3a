@@ -1,20 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { moneyEventRepo } from '../db/moneyEventRepository';
-import type { Currency, MoneyAnswersFilters } from '../types';
+import type { Currency, MoneyEventFilters } from '../types';
 
 // ============================================================================
 // Query Keys
 // ============================================================================
 
-export const moneyAnswersQueryKeys = {
+export const moneyEventQueryKeys = {
   // Money Events
-  events: (filters: MoneyAnswersFilters) => ['moneyEvents', filters] as const,
-  dailyAggregates: (filters: MoneyAnswersFilters, openingBalance: number) =>
+  events: (filters: MoneyEventFilters) => ['moneyEvents', filters] as const,
+  dailyAggregates: (filters: MoneyEventFilters, openingBalance: number) =>
     ['moneyDailyAggregates', filters, openingBalance] as const,
-  monthSummary: (filters: MoneyAnswersFilters) => ['moneyMonthSummary', filters] as const,
-  monthKPIs: (filters: MoneyAnswersFilters, openingBalance: number) =>
+  monthSummary: (filters: MoneyEventFilters) => ['moneyMonthSummary', filters] as const,
+  monthKPIs: (filters: MoneyEventFilters, openingBalance: number) =>
     ['moneyMonthKPIs', filters, openingBalance] as const,
-  guidance: (filters: MoneyAnswersFilters) => ['moneyGuidance', filters] as const,
+  guidance: (filters: MoneyEventFilters) => ['moneyGuidance', filters] as const,
   dayEvents: (date: string, currency: Currency, profileId?: string) =>
     ['moneyDayEvents', date, currency, profileId] as const,
   yearSummary: (year: number, currency: Currency, includeUnpaidIncome: boolean, includeProjectedRetainer: boolean, profileId?: string) =>
@@ -25,7 +25,7 @@ export const moneyAnswersQueryKeys = {
 // Invalidation Helpers
 // ============================================================================
 
-export function useInvalidateMoneyAnswers() {
+export function useInvalidateMoneyEvents() {
   const queryClient = useQueryClient();
 
   return {
@@ -45,7 +45,7 @@ export function useInvalidateMoneyAnswers() {
         predicate: (query) => {
           const key = query.queryKey;
           if (Array.isArray(key) && key.length > 1) {
-            const filters = key[1] as MoneyAnswersFilters | undefined;
+            const filters = key[1] as MoneyEventFilters | undefined;
             return filters?.month === month;
           }
           return false;
@@ -62,9 +62,9 @@ export function useInvalidateMoneyAnswers() {
 /**
  * Get all money events for a month
  */
-export function useMoneyEvents(filters: MoneyAnswersFilters) {
+export function useMoneyEvents(filters: MoneyEventFilters) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.events(filters),
+    queryKey: moneyEventQueryKeys.events(filters),
     queryFn: () => moneyEventRepo.getMoneyEvents(filters),
     enabled: !!filters.month,
   });
@@ -74,11 +74,11 @@ export function useMoneyEvents(filters: MoneyAnswersFilters) {
  * Get daily aggregates with running balance for a month
  */
 export function useDailyAggregates(
-  filters: MoneyAnswersFilters,
+  filters: MoneyEventFilters,
   openingBalanceMinor: number = 0
 ) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.dailyAggregates(filters, openingBalanceMinor),
+    queryKey: moneyEventQueryKeys.dailyAggregates(filters, openingBalanceMinor),
     queryFn: () => moneyEventRepo.getDailyAggregates(filters, openingBalanceMinor),
     enabled: !!filters.month,
   });
@@ -87,9 +87,9 @@ export function useDailyAggregates(
 /**
  * Get month summary totals
  */
-export function useMonthSummary(filters: MoneyAnswersFilters) {
+export function useMonthSummary(filters: MoneyEventFilters) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.monthSummary(filters),
+    queryKey: moneyEventQueryKeys.monthSummary(filters),
     queryFn: () => moneyEventRepo.getMonthSummary(filters),
     enabled: !!filters.month,
   });
@@ -99,11 +99,11 @@ export function useMonthSummary(filters: MoneyAnswersFilters) {
  * Get KPI values for the month
  */
 export function useMonthKPIs(
-  filters: MoneyAnswersFilters,
+  filters: MoneyEventFilters,
   openingBalanceMinor: number = 0
 ) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.monthKPIs(filters, openingBalanceMinor),
+    queryKey: moneyEventQueryKeys.monthKPIs(filters, openingBalanceMinor),
     queryFn: () => moneyEventRepo.getMonthKPIs(filters, openingBalanceMinor),
     enabled: !!filters.month,
   });
@@ -112,9 +112,9 @@ export function useMonthKPIs(
 /**
  * Get guidance items for the month
  */
-export function useGuidance(filters: MoneyAnswersFilters) {
+export function useGuidance(filters: MoneyEventFilters) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.guidance(filters),
+    queryKey: moneyEventQueryKeys.guidance(filters),
     queryFn: () => moneyEventRepo.generateGuidance(filters),
     enabled: !!filters.month,
   });
@@ -125,7 +125,7 @@ export function useGuidance(filters: MoneyAnswersFilters) {
  */
 export function useDayEvents(date: string, currency: Currency, profileId?: string) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.dayEvents(date, currency, profileId),
+    queryKey: moneyEventQueryKeys.dayEvents(date, currency, profileId),
     queryFn: () => moneyEventRepo.getDayEvents(date, currency, profileId),
     enabled: !!date && !!currency,
   });
@@ -145,7 +145,7 @@ export function useYearSummary(
   profileId?: string
 ) {
   return useQuery({
-    queryKey: moneyAnswersQueryKeys.yearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer, profileId),
+    queryKey: moneyEventQueryKeys.yearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer, profileId),
     queryFn: () => moneyEventRepo.getYearSummary(year, currency, includeUnpaidIncome, includeProjectedRetainer, profileId),
     enabled: !!year && !!currency,
   });

@@ -63,7 +63,7 @@ const mockKPIs = {
   },
 };
 
-vi.mock('../../../hooks/useMoneyAnswersQueries', () => ({
+vi.mock('../../../hooks/useMoneyEventQueries', () => ({
   useMonthKPIsBothCurrencies: () => ({
     data: mockKPIs,
     isLoading: false,
@@ -218,7 +218,7 @@ describe('PredictiveKpiStrip', () => {
   describe('Loading state', () => {
     it('shows loading state when data is loading', () => {
       // Override mock for loading state
-      vi.doMock('../../../hooks/useMoneyAnswersQueries', () => ({
+      vi.doMock('../../../hooks/useMoneyEventQueries', () => ({
         useMonthKPIsBothCurrencies: () => ({
           data: null,
           isLoading: true,

@@ -41,6 +41,63 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-10 / MUT-11: delete the two unreachable modules (`src/`)
+
+Epic MUT-2 (strip to the core). Branch `feature/mut-2-strip-core`; tag
+`pre-mut-10-11` marks the state before either removal. One commit per ticket so
+each reverts independently.
+
+### Removed
+- **Engagements (MUT-10)** — 11,192 lines: three routes (`/engagements`,
+  `/engagements/new`, `/engagements/$engagementId/edit`), `src/pages/engagements`,
+  `src/features/engagements` (wizard, PDF generator, autosave hook, presets,
+  repository), and the `engagements.*`, `nav.engagements` and orphaned
+  `nav.newMenu.engagement` i18n keys from both locales. No navigation entry had
+  pointed at any of it.
+- **Money answers (MUT-11)** — 3,180 lines: the `/money-answers` route,
+  `src/pages/money-answers`, `DayDetailDrawer` and its two drawer-store actions
+  (the page was the only caller), the Insights "Cash Flow Timeline" link into
+  the deleted route, the already-unreferenced landing `MoneyAnswersSection`, and
+  the `moneyAnswers`, `nav.moneyAnswers`, `landing.moneyAnswers` and
+  `insights.cashFlowTimeline` i18n keys.
+
+### Changed
+- `src/db/database.ts` takes the `Engagement` / `EngagementVersion` row types
+  from the new `src/db/retained/engagementSchema.ts` instead of the deleted
+  feature directory. The version snapshot is modelled as opaque JSON — nothing
+  interprets it any more.
+- Renamed the shared money-event surface off the deleted page's name:
+  `useMoneyAnswersQueries` → `useMoneyEventQueries`, `moneyAnswersQueryKeys` →
+  `moneyEventQueryKeys`, `useInvalidateMoneyAnswers` → `useInvalidateMoneyEvents`,
+  `MoneyAnswersFilters` → `MoneyEventFilters`.
+
+### Kept deliberately
+- The Dexie `engagements` and `engagementVersions` tables, at the same schema
+  version. Deleting UI must never delete user records (ADR-029). The generic
+  backup in `src/db/backup.ts` walks `db.tables`, so retaining the tables keeps
+  any rows a user holds exportable and restorable with no new export path.
+- `src/db/moneyEventRepository.ts` and the `MoneyEvent` type family: shared with
+  `PredictiveKpiStrip`, `MonthActualsRow` and `AttentionFeed` on the Overview
+  page, so MUT-11's "remove only if exclusively used here" condition failed.
+- The `moneyEventVersions` table — unrelated to the deleted page; it is the
+  transaction sync op-log.
+
+### Added
+- `src/db/__tests__/retainedSchema.test.ts` — four tests that fail if a later
+  change drops the retained tables or stops backing them up.
+
+### Technical
+- Dexie schema version unchanged; no table dropped, no migration added.
+- Typecheck clean. Lint went from 18 errors / 75 warnings to 0 errors / 18
+  warnings — the deleted modules owned every remaining lint error, which closes
+  most of MUT-22.
+- Unit suite: 2,029 passing before and after, plus the 4 new tests. The 18
+  failures in `ExpensesLedgerPage.test.tsx` are pre-existing and untouched.
+- Bundle: JS 3,396 KB → 3,152 KB (−244 KB, −7.2%) across 48 → 45 chunks;
+  precache 11,902 KiB → 11,647 KiB.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 Milestone 8: approval creates the agreement; the overview carries proposals (`server/`, API `1.7.0-m8`)
 
 Brief `money-v1-m8-overview-ia.md` (design-reviewed D1–D13, eng-reviewed

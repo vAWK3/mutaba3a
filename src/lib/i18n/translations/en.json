@@ -63,9 +63,7 @@
     "clients": "Clients",
     "transactions": "Transactions",
     "documents": "Documents",
-    "engagements": "Engagements",
     "retainers": "Retainers",
-    "moneyAnswers": "Answers",
     "expenses": "Expenses",
     "suppliers": "Suppliers",
     "reports": "Reports",
@@ -87,7 +85,6 @@
       "client": "Add Client",
       "project": "Add Project",
       "document": "New Document",
-      "engagement": "New Engagement",
       "transaction": "New Transaction"
     }
   },
@@ -361,10 +358,6 @@
     "toggles": {
       "includeUnpaid": "Include unpaid income",
       "includeProjected": "Include projected retainers"
-    },
-    "cashFlowTimeline": {
-      "title": "Cash Flow Timeline",
-      "hint": "View daily inflows and outflows with a dedicated date picker"
     },
     "yearInsights": {
       "title": "Year Insights"
@@ -1263,113 +1256,6 @@
       "undone": "Match undone"
     }
   },
-  "engagements": {
-    "title": "Engagements",
-    "new": "New Engagement",
-    "addEngagement": "Add Engagement",
-    "empty": "No engagements found",
-    "emptySearch": "Try adjusting your search or filters",
-    "emptyHint": "Create your first engagement to get started",
-    "searchPlaceholder": "Search engagements...",
-    "selectToInspect": "Select an engagement to view details",
-    "untitled": "Untitled Engagement",
-    "confirmArchive": "Are you sure you want to archive this engagement?",
-    "duplicate": "Duplicate",
-    "downloadPdf": "Download PDF",
-    "archive": "Archive",
-    "restore": "Restore",
-    "summary": "Summary",
-    "draftCount": "Drafts",
-    "finalCount": "Finalized",
-    "archivedCount": "Archived",
-    "filters": {
-      "view": "View",
-      "all": "All",
-      "draft": "Drafts",
-      "final": "Finalized",
-      "archived": "Archived",
-      "type": "Type",
-      "category": "Category",
-      "profile": "Profile",
-      "client": "Client"
-    },
-    "status": {
-      "draft": "Draft",
-      "final": "Final",
-      "archived": "Archived"
-    },
-    "type": {
-      "task": "Task-Based",
-      "retainer": "Retainer"
-    },
-    "category": {
-      "design": "Design",
-      "development": "Development",
-      "consulting": "Consulting",
-      "marketing": "Marketing",
-      "legal": "Legal",
-      "other": "Other"
-    },
-    "columns": {
-      "status": "Status",
-      "title": "Title",
-      "client": "Client",
-      "type": "Type",
-      "category": "Category",
-      "language": "Lang",
-      "versions": "Versions",
-      "updated": "Updated"
-    },
-    "inspector": {
-      "overview": "Overview",
-      "client": "Client",
-      "project": "Project",
-      "type": "Type",
-      "category": "Category",
-      "language": "Language",
-      "status": "Status",
-      "versions": "Versions",
-      "created": "Created",
-      "lastUpdated": "Last Updated",
-      "summary": "Summary",
-      "scope": "Scope",
-      "deliverables": "Deliverables",
-      "exclusions": "Exclusions",
-      "milestones": "Milestones"
-    },
-    "wizard": {
-      "newTitle": "New Engagement",
-      "editTitle": "Edit Engagement",
-      "saveDraft": "Save Draft",
-      "finalize": "Finalize",
-      "saving": "Saving...",
-      "lastSaved": "Last saved",
-      "unsavedChanges": "Unsaved changes",
-      "steps": {
-        "client": "Client & Type",
-        "summary": "Summary",
-        "scope": "Scope",
-        "timeline": "Timeline",
-        "reviews": "Reviews",
-        "payment": "Payment",
-        "relationship": "Relationship",
-        "terms": "Terms",
-        "review": "Review & Export"
-      }
-    },
-    "clarityCheck": {
-      "title": "Clarity Check",
-      "allClear": "All clear! No issues found.",
-      "highCount": "{count} high",
-      "mediumCount": "{count} medium",
-      "lowCount": "{count} low",
-      "severity": {
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
-      }
-    }
-  },
   "landing": {
     "langToggle": {
       "en": "EN",
@@ -1475,18 +1361,6 @@
         "step2": "See recurring expenses rolling forward",
         "step3": "Spot risk days before they arrive"
       }
-    },
-    "moneyAnswers": {
-      "headline": "Money Answers",
-      "subheadline": "Projection is not prediction. It's a flashlight.",
-      "card1Title": "Will I make it?",
-      "card1Desc": "See your end-of-month forecast: cash on hand plus expected income minus expected costs.",
-      "card2Title": "What am I waiting on?",
-      "card2Desc": "Track unpaid receivables and retainer payments due. Know who owes you and when.",
-      "card3Title": "What can I afford next?",
-      "card3Desc": "Spot surplus or shortfall before making decisions. Plan major expenses with confidence.",
-      "forecastTitle": "Why forecasting matters",
-      "forecastDesc": "Most tools show you what happened. Mutaba3a shows you what's likely to happen—so you can act before problems arrive."
     },
     "proof": {
       "headline": "See it in action",
@@ -1629,85 +1503,6 @@
       "privacy": "Privacy",
       "buyMeACoffee": "Buy Me a Coffee",
       "kofi": "Ko-fi"
-    }
-  },
-  "moneyAnswers": {
-    "title": "Answers",
-    "includeReceivables": "Include receivables",
-    "includeProjections": "Include projections",
-    "cashFlowTimeline": "Cash Flow Timeline",
-    "guidanceTitle": "Action Items",
-    "noData": "No data for this period",
-    "mode": {
-      "month": "Month",
-      "year": "Year"
-    },
-    "yearMode": {
-      "totalInflow": "Total Inflow",
-      "totalOutflow": "Total Outflow",
-      "netIncome": "Net Income",
-      "avgAwaiting": "Avg. Awaiting",
-      "retainerStability": "Retainer Stability",
-      "monthlyTrend": "Monthly Trend",
-      "insights": "Year Insights",
-      "bestMonth": "Best Month",
-      "worstMonth": "Worst Month",
-      "retainerHealth": "Retainer Health",
-      "paymentsReceived": "{{received}} of {{total}} payments received",
-      "noDataForYear": "No data for this year",
-      "yearTrend": "Year Trend",
-      "trendUp": "Improving",
-      "trendDown": "Declining",
-      "vsFirstHalf": "vs. first half",
-      "onTimePayments": "on-time payments"
-    },
-    "kpi": {
-      "willMakeIt": "End of Month Forecast",
-      "endOfMonthForecast": "Cash + expected income - expected costs",
-      "cashOnHand": "Cash on Hand",
-      "currentBalance": "Actual balance to date",
-      "comingVsLeaking": "Coming vs Leaking",
-      "netForecast": "Net forecast"
-    },
-    "legend": {
-      "inflow": "Inflow",
-      "outflow": "Outflow",
-      "runningBalance": "Running balance"
-    },
-    "unifiedNote": "All amounts shown in ILS (unified)",
-    "dayDetail": {
-      "inflow": "Inflow",
-      "outflow": "Outflow",
-      "net": "Net",
-      "noEvents": "No events on this day",
-      "inflows": "Inflows",
-      "outflows": "Outflows"
-    },
-    "source": {
-      "actualIncome": "Paid income",
-      "actualCost": "Expense",
-      "receivable": "Receivable",
-      "profileExpense": "Expense",
-      "projectedExpense": "Projected expense",
-      "retainer": "Retainer"
-    },
-    "state": {
-      "paid": "Paid",
-      "unpaid": "Unpaid",
-      "overdue": "Overdue",
-      "upcoming": "Upcoming",
-      "missed": "Missed",
-      "cancelled": "Cancelled"
-    },
-    "guidance": {
-      "allGood": "Looking good! No action items right now.",
-      "impact": "Impact",
-      "category": {
-        "collect": "Collect",
-        "reduce": "Reduce",
-        "delay": "Delay",
-        "hygiene": "Hygiene"
-      }
     }
   },
   "demo": {

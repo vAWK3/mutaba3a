@@ -16,7 +16,7 @@
 import { useState, useEffect } from 'react';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { useMonthSummary } from '../../hooks/useMoneyAnswersQueries';
+import { useMonthSummary } from '../../hooks/useMoneyEventQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getCurrentMonthKey } from '../../lib/monthDetection';
 import { formatAmount, cn } from '../../lib/utils';

@@ -94,7 +94,7 @@ const mockGuidanceItems: GuidanceItem[] = [
 ];
 
 // Mock useGuidance hook
-vi.mock('../../../hooks/useMoneyAnswersQueries', () => ({
+vi.mock('../../../hooks/useMoneyEventQueries', () => ({
   useGuidance: ({ currency }: { currency: string }) => ({
     data: currency === 'USD' ? mockGuidanceItems.slice(0, 2) : [mockGuidanceItems[2]],
     isLoading: false,
@@ -138,7 +138,7 @@ describe('AttentionFeed', () => {
 
     it('renders empty state when no items', () => {
       // Override mock for this test
-      vi.doMock('../../../hooks/useMoneyAnswersQueries', () => ({
+      vi.doMock('../../../hooks/useMoneyEventQueries', () => ({
         useGuidance: () => ({
           data: [],
           isLoading: false,

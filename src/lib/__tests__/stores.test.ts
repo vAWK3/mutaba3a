@@ -16,7 +16,6 @@ describe('useDrawerStore', () => {
         expenseDrawer: { isOpen: false, mode: 'create' },
         retainerDrawer: { isOpen: false, mode: 'create' },
         retainerMatchingDrawer: { isOpen: false, step: 'select-transaction' },
-        dayDetailDrawer: { isOpen: false },
         partialPaymentDrawer: { isOpen: false },
         selectedRetainerId: undefined,
       });
@@ -543,32 +542,6 @@ describe('useDrawerStore', () => {
       });
 
       expect(useDrawerStore.getState().selectedRetainerId).toBeUndefined();
-    });
-  });
-
-  describe('dayDetailDrawer', () => {
-    it('should open day detail drawer', () => {
-      act(() => {
-        useDrawerStore.getState().openDayDetailDrawer({ date: '2026-03-15' });
-      });
-
-      const state = useDrawerStore.getState().dayDetailDrawer;
-      expect(state.isOpen).toBe(true);
-      expect(state.date).toBe('2026-03-15');
-    });
-
-    it('should close day detail drawer', () => {
-      act(() => {
-        useDrawerStore.getState().openDayDetailDrawer({ date: '2026-03-15' });
-      });
-
-      act(() => {
-        useDrawerStore.getState().closeDayDetailDrawer();
-      });
-
-      const state = useDrawerStore.getState().dayDetailDrawer;
-      expect(state.isOpen).toBe(false);
-      expect(state.date).toBeUndefined();
     });
   });
 

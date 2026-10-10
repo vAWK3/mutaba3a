@@ -205,9 +205,10 @@ registry must never advertise coverage it does not have.
 **Outside the seam.** `IRepositoryProvider` covers 21 repositories. Not covered:
 `planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`planRepository.ts`),
 `scheduleGenerator`, `retainerMatching` (`retainerRepository.ts`) — the last two
-are not repositories. Also `engagementRepo` and `moneyEventRepo`, left alone
-deliberately because their modules are slated for deletion (MUT-10, MUT-2).
-See TODOS.md item 2.
+are not repositories. Also `moneyEventRepo`: it was left alone pending MUT-11,
+which then kept it because three mounted Overview components import it
+(ADR-029), so it is still outside the seam. `engagementRepo` was deleted with
+its module in MUT-10. See TODOS.md item 2.
 
 **Repository Interfaces Created**:
 - `IClientRepository`, `IProjectRepository`, `ICategoryRepository`

@@ -1043,7 +1043,7 @@ export interface GuidanceItem {
 }
 
 // Money Answers Filters
-export interface MoneyAnswersFilters {
+export interface MoneyEventFilters {
   month?: string; // YYYY-MM
   year?: number;
   profileId?: string;

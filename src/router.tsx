@@ -49,7 +49,7 @@ const incomeRoute = createRoute({
   component: lazyPage(() => import('./pages/income'), 'IncomePage'),
 });
 
-// Insights route (consolidates reports and money-answers)
+// Insights route (consolidates reports and cash-flow analysis)
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
@@ -275,56 +275,6 @@ const retainersRoute = createRoute({
 });
 
 // ============================================================================
-// Engagement Routes
-// ============================================================================
-
-// Engagement search params for new wizard
-interface EngagementNewSearch {
-  clientId?: string;
-  type?: 'task' | 'retainer';
-}
-
-// Engagement list search params
-interface EngagementsSearch {
-  status?: 'draft' | 'final' | 'archived';
-  type?: 'task' | 'retainer';
-  clientId?: string;
-}
-
-const engagementsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/engagements',
-  component: lazyPage(() => import('./pages/engagements'), 'EngagementsPage'),
-  validateSearch: (search: Record<string, unknown>): EngagementsSearch => {
-    return {
-      status: search.status === 'draft' || search.status === 'final' || search.status === 'archived'
-        ? search.status
-        : undefined,
-      type: search.type === 'task' || search.type === 'retainer' ? search.type : undefined,
-      clientId: typeof search.clientId === 'string' ? search.clientId : undefined,
-    };
-  },
-});
-
-const engagementNewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/engagements/new',
-  component: lazyPage(() => import('./pages/engagements'), 'EngagementWizardPage'),
-  validateSearch: (search: Record<string, unknown>): EngagementNewSearch => {
-    return {
-      clientId: typeof search.clientId === 'string' ? search.clientId : undefined,
-      type: search.type === 'task' || search.type === 'retainer' ? search.type : undefined,
-    };
-  },
-});
-
-const engagementEditRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/engagements/$engagementId/edit',
-  component: lazyPage(() => import('./pages/engagements'), 'EngagementWizardPage'),
-});
-
-// ============================================================================
 // Financial Planning Routes
 // ============================================================================
 
@@ -341,33 +291,6 @@ const planningRoute = createRoute({
     return {
       plan: typeof search.plan === 'string' ? search.plan : undefined,
       scenario: typeof search.scenario === 'string' ? search.scenario : undefined,
-    };
-  },
-});
-
-// ============================================================================
-// Money Answers Route (Cash Flow Timeline)
-// ============================================================================
-
-interface MoneyAnswersSearch {
-  mode?: 'month' | 'year';
-  year?: number;
-  month?: string;
-  includeReceivables?: boolean;
-  includeProjections?: boolean;
-}
-
-const moneyAnswersRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/money-answers',
-  component: lazyPage(() => import('./pages/money-answers'), 'MoneyAnswersPage'),
-  validateSearch: (search: Record<string, unknown>): MoneyAnswersSearch => {
-    return {
-      mode: search.mode === 'month' || search.mode === 'year' ? search.mode : undefined,
-      year: typeof search.year === 'number' ? search.year : undefined,
-      month: typeof search.month === 'string' ? search.month : undefined,
-      includeReceivables: typeof search.includeReceivables === 'boolean' ? search.includeReceivables : undefined,
-      includeProjections: typeof search.includeProjections === 'boolean' ? search.includeProjections : undefined,
     };
   },
 });
@@ -416,12 +339,6 @@ const routeTree = rootRoute.addChildren([
   monthCloseRoute,
   // Retainer routes
   retainersRoute,
-  // Engagement routes
-  engagementsRoute,
-  engagementNewRoute,
-  engagementEditRoute,
-  // Money Answers route
-  moneyAnswersRoute,
   // Financial Planning route
   planningRoute,
   // Reports route

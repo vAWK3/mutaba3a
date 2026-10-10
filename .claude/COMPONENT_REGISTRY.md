@@ -1032,5 +1032,6 @@ interface in `src/db/interfaces.ts`. Rename or delete a repository method and
 interception point.
 
 **Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
-`scheduleGenerator`, `retainerMatching`, and `engagementRepo` / `moneyEventRepo`
-(modules slated for deletion, MUT-10 / MUT-2). See TODOS.md item 2.
+`scheduleGenerator`, `retainerMatching`, and `moneyEventRepo`. `engagementRepo`
+is gone with the module (MUT-10); `moneyEventRepo` survived MUT-11 because the
+Overview page depends on it, and remains outside the seam. See TODOS.md item 2.

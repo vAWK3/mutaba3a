@@ -170,14 +170,6 @@ interface DrawerState {
   selectedRetainerId?: string;
   selectRetainer: (id?: string) => void;
 
-  // Day detail drawer (Money Answers page)
-  dayDetailDrawer: {
-    isOpen: boolean;
-    date?: string;
-  };
-  openDayDetailDrawer: (options: { date: string }) => void;
-  closeDayDetailDrawer: () => void;
-
   // Partial payment drawer
   partialPaymentDrawer: {
     isOpen: boolean;
@@ -474,25 +466,6 @@ export const useDrawerStore = create<DrawerState>((set) => ({
   // Selected retainer for inspector panel
   selectedRetainerId: undefined,
   selectRetainer: (id) => set({ selectedRetainerId: id }),
-
-  // Day detail drawer (Money Answers page)
-  dayDetailDrawer: {
-    isOpen: false,
-  },
-  openDayDetailDrawer: (options) =>
-    set({
-      dayDetailDrawer: {
-        isOpen: true,
-        date: options.date,
-      },
-    }),
-  closeDayDetailDrawer: () =>
-    set({
-      dayDetailDrawer: {
-        isOpen: false,
-        date: undefined,
-      },
-    }),
 
   // Partial payment drawer
   partialPaymentDrawer: {
