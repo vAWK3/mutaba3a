@@ -1,6 +1,13 @@
 import '@testing-library/jest-dom';
 import 'fake-indexeddb/auto';
 import { afterEach, vi } from 'vitest';
+import { configure } from '@testing-library/react';
+
+// Page tests that render against fake-indexeddb take ~1 s each under the full
+// suite's parallel load; the library's 1 s default for waitFor/findBy then
+// flakes (seen on ExpensesLedgerPage after MUT-14). 3 s costs nothing when a
+// test passes and only delays a genuine failure.
+configure({ asyncUtilTimeout: 3000 });
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
