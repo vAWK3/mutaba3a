@@ -495,6 +495,8 @@ describe('ClientDetailPage', () => {
       featureFlags.projects = true;
       renderWithProviders(<ClientDetailPage />);
       expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
+    });
+  });
 
   // MUT-6: "Record payment" is a primary row button on both money tabs, not a
   // kebab entry. The receivables tab previously offered it on *every* row,
