@@ -1,6 +1,6 @@
 # TODOS
 
-## 1. Transaction mutations bypass the sync op-log
+## 1. Transaction mutations bypass the sync op-log — ticketed as MUT-46
 
 **What:** Creating, editing, archiving, unarchiving and soft-deleting a transaction emits no sync operation, so those changes never reach another device. Expenses never sync at all.
 
@@ -14,7 +14,7 @@
 
 **Depends on / blocked by:** Nothing. Independent of the MUT-34 epic. Should become its own MUT ticket.
 
-## 2. Documented data layer does not match the real one
+## 2. Documented data layer does not match the real one — ticketed as MUT-47
 
 **What:** Two documented claims that nothing checks: CLAUDE.md's mandatory Phase 4 verification names `npm run test:integration`, which has never existed; and `IRepositoryProvider` covers 20 slots while the db layer exports roughly 26 repository objects.
 
