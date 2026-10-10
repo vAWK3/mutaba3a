@@ -14,6 +14,7 @@ import {
   markProjectedIncomeMissed,
   getRetainerSummary,
 } from '../db/retainerRepository';
+import { invalidateMoneyEventQueries } from './useMoneyEventQueries';
 import type {
   RetainerAgreement,
   RetainerFilters,
@@ -60,6 +61,9 @@ function invalidateProjectedIncomeQueries(queryClient: ReturnType<typeof useQuer
   queryClient.invalidateQueries({ queryKey: ['retainerSchedule'] });
   queryClient.invalidateQueries({ queryKey: ['dueItems'] });
   queryClient.invalidateQueries({ queryKey: ['forecastItems'] });
+  // Money events are derived from this data, so the Overview KPI strip and
+  // attention feed have to refetch with it.
+  invalidateMoneyEventQueries(queryClient);
 }
 
 function invalidateMatchingQueries(queryClient: ReturnType<typeof useQueryClient>) {

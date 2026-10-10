@@ -71,6 +71,19 @@
   remaining amount for up to the 60s staleTime right after a payment was saved.
   Adds `['income']`, `['receivables']`, `['incomeOverviewTotals']` and
   `['incomeAttentionReceivables']` — the set `markPaid` already invalidated.
+- **The Overview KPI strip and attention feed went stale after every write**
+  (found in QA reconciliation). Money-event views are *derived* —
+  `moneyEventRepository` recomputes them from transactions, expenses and
+  projected income on every read and never writes — so nothing invalidated
+  their keys as a side effect. The one helper that listed them,
+  `useInvalidateMoneyEvents`, had **zero callers anywhere in the app**, so the
+  home page served pre-write numbers after recording a payment, creating
+  income, marking paid, adding an expense or changing a retainer.
+  `invalidateMoneyEventQueries` is now exported from `useMoneyEventQueries.ts`
+  (beside the keys it owns, so the list still exists once) and called by all
+  four write paths: `useQueries`, `useIncomeQueries`, `useExpenseQueries`,
+  `useRetainerQueries`. Pre-existing and app-wide, not caused by MUT-6; fixed
+  here at the owner's request because the payment path is where it cost most.
 - **The payment date defaulted to the UTC date, not the local one** (AC #4,
   found in QA reconciliation). `PartialPaymentDrawer` computed "today" with
   `new Date().toISOString().split('T')[0]`, which ADR-022 forbids: a user in

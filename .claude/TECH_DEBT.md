@@ -35,6 +35,13 @@ arrangement deliberately over extracting a shared `invalidateMoneyQueries`,
 and recorded the duplication here instead. Extract it the next time a third
 caller needs the same list.
 
+**Note (2026-10-10, MUT-6 QA):** the money-event keys hit exactly that
+threshold and were extracted — `invalidateMoneyEventQueries` lives in
+`useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
+call it. The *income* key duplication described above is untouched and still
+open; the precedent for fixing it is to put the list in the module that owns
+the keys rather than in a new `src/hooks/invalidation.ts`.
+
 ### TD-020: Import State Loads Linked Entities One By One
 **Status**: Open
 **Added**: 2026-10-08
