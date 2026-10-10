@@ -65,6 +65,7 @@
 - Keyboard navigation
 - RTL support
 - Collapsible (future)
+- Optional areas (MUT-13/14/16): `optionalItems` renders the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `newMenuItems` entries with a `feature` key (expense, project) follow the same switches. Main is Home + Income, workspace is Clients; final grouping is MUT-15's.
 
 ---
 
@@ -86,6 +87,8 @@
 | `title` | string | Page title |
 | `breadcrumbs?` | BreadcrumbItem[] | Navigation trail |
 | `actions?` | ReactNode | Right-side action buttons |
+
+The `+ Add` menu's New expense and New project items render only while their areas are on (`useFeatureEnabled`, MUT-14/16).
 
 ---
 
@@ -136,6 +139,18 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 ```
 
 Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Advanced-feature entry points").
+
+---
+
+### OnboardingOverlay
+**Location**: `src/components/onboarding/OnboardingOverlay.tsx`
+**Purpose**: First-run guided flow over `onboardingStore` (client → project → income). While the Projects area is off (MUT-16) an effect completes the project step with no entity, so the flow is client → income; the store's order and completion rule are unchanged. The effect waits for `useFeaturesLoaded()` so a loading settings row is not read as "off". The drawers advance the step by calling `completeStep` on the store directly.
+
+```tsx
+<OnboardingOverlay onComplete={() => setShowOnboarding(false)} />
+```
+
+Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`.
 
 ---
 

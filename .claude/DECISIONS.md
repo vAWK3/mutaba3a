@@ -1131,6 +1131,29 @@ remove code with zero surviving references **and** no feature whose only entry
 point was on a deleted page — the category seeder was such a feature and was
 restored; the receipt-upload chain was the reverse case and was removed.
 
+**Addendum 2026-10-10 — MUT-16: insights, planning and projects gated; the
+three project collisions resolved.** The last three areas follow the MUT-13
+pattern unchanged (route guard, "More" entry, flag-aware entry points). Two
+decisions taken here apply to every optional *field* and *flow*, not just
+pages: (1) **the switch never clears a hidden field's data** — the income,
+expense and retainer drawers stop rendering the project group while projects
+is off but keep the form value, so an edit round-trips `projectId` untouched;
+form rules that apply when the field is visible (the client→project cascade)
+still apply when it is hidden, because they are about the data, not the
+area; (2) **onboarding
+adapts in the overlay, not the store** — `OnboardingOverlay` completes the
+project step with no entity while projects is off, leaving the store's
+`client → project → income` order and completion rule alone (no persisted
+state migration; a user who turns projects on later has a completed step).
+A component that *acts* on an area being off, rather than merely hiding an
+entry, waits for `useFeaturesLoaded()`: the flags read `false` while the
+settings row loads, and acting on that would misfire for exactly the users
+the v20 probe switches an area on for. The client profile's Projects tab is removed while off because its only
+actions are deep links into the gated area and project creation (the MUT-13
+rule); work-list project names are text and stay. `/reports` and
+`/transactions` stay unconditional redirects: a chain of redirects is still
+one render-free hop.
+
 **Consequences**: MUT-13/16 gate routes with `readFeatureFlags()` and sidebar
 entries with `useFeatureEnabled`; MUT-15 reads `useFeatureFlags()` for the
 secondary nav group and the `+ Add` menu. Projects off by default collides

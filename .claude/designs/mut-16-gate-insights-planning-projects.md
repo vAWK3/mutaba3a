@@ -55,7 +55,7 @@ Acceptance criteria (ticket, with the suppliers item already satisfied by MUT-12
 |---|---|---|
 | D1 | Three areas, three keys; no `suppliers` work | ADR-030 §5, MUT-14 |
 | D2 | The sidebar's "More" section receives the entries in the order expenses, documents, retainers, insights, planning, projects; main becomes Home + Income, workspace becomes Clients | Smallest change that makes AC 1 true; MUT-15 reshapes the whole nav (it may collapse main/workspace into the four-item core) |
-| D3 | Drawer project fields hide, never clear | Ticket: `Transaction.projectId` untouched; hiding is enough and reversible |
+| D3 | Drawer project fields hide; the *switch* never clears | Ticket: `Transaction.projectId` untouched; hiding is enough and reversible. The client→project cascade still clears a tag that no longer matches the chosen client, visible or not (review #4) |
 | D4 | Onboarding skips the project step while projects is off, by auto-completing it | The store's completion rule stays (`client`, `project`, `income`); no persisted-state migration; a user who turns projects on later simply has a completed step |
 | D5 | Projects tab on the client profile hides while off; work-list project names stay | AC 4 verbatim; the tab's only actions are links into the gated area and project creation |
 | D6 | Legacy redirects stay unconditional | AC 3; `/reports` → `/insights` → gate → home is one chain with no render |
@@ -68,7 +68,7 @@ Acceptance criteria (ticket, with the suppliers item already satisfied by MUT-12
 
 ## 6. Risks
 
-- **R1 — ProjectTypeahead inside drawers reads projects even while hidden?** No: the `Controller` is not rendered, so no query runs.
+- **R1 — ProjectTypeahead inside drawers reads projects even while hidden?** The typeahead is not rendered, but the drawer-level `useProjects()` still runs for the client→project cascade (review #4); accepted, see §9.
 - **R2 — Tests that mock `@tanstack/react-router` for pages now rendering flag-aware components** (`ClientDetailPage.test` already mocks `useFeatures`; `IncomeDrawer.test`, `OnboardingOverlay` tests may need the same mock). Handled per file.
 - **R3 — A user mid-onboarding on the project step when the switch flips off**: the effect completes the step on next render; nothing is lost.
 
@@ -95,6 +95,19 @@ Acceptance criteria (ticket, with the suppliers item already satisfied by MUT-12
 - **C1 [P3]** `IncomeDrawer` keeps `projectId` in form state while the field is hidden; a create with a prefilled `defaultProjectId` from a (gated) project page cannot happen while off. No change.
 - **Tests:** existing `ProjectsPage.test`, `ProjectDetailPage.test`, `InsightsPage.test` prove on-state behaviour; new tests cover off-state and the collisions.
 
-## 9. Outside voice
+## 9. Outside voice (native fallback review, 2026-10-10, on the five build commits)
 
-Recorded when the native fallback review completes (Codex not installed).
+No P1. Eight findings; every one dispositioned before the review-fix commit.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | P2 | `OnboardingOverlay` read "flags not loaded yet" as "projects off": `useFeatureEnabled` is `false` while the settings row loads, the store hydrates synchronously, so a projects-**on** user mid-onboarding could have the project step completed with no entity on mount — exactly the users the v20 probe switches projects on for. The on-state test could not see it (mocked hook is synchronously `true`). | **Fixed.** New `useFeaturesLoaded()` (settings query `isSuccess`); the effect waits for it. Test: "does nothing while the settings row is still loading". Pattern note added: hiding an entry may read the flag as-is; *acting* on an area being off must wait for the read. |
+| 2 | P2 | `RetainerDrawer` carries a third, ungated project picker (`<select>`), missed by the §2 audit. | **Fixed.** Wrapped in `useFeatureEnabled('projects')`, form state untouched; `RetainerDrawer.projectField.test` (2). |
+| 3 | P2 | Test plan §4 required an `ExpenseDrawer` project-field test when none exists; only the income drawer's "hidden keeps `projectId`" was proven. | **Fixed.** `ExpenseDrawer.projectField.test` (3): off, on, edit keeps `projectId` + `categoryId` through a real Dexie round-trip. |
+| 4 | P3 | Brief R1 was wrong: `useProjects()` runs at drawer level regardless, and `useClientProjectCascade` clears `projectId` when the client changes to one the project does not belong to — so "hides, never clears" is not literally true. | **Decided, documented.** The cascade stays: a project belongs to a client, and a tag pointing at another client's project is wrong data whether or not the field is visible. D3 now reads "the *switch* never clears"; the cascade applies as it does when the field is shown. The idle query is a nit. |
+| 5 | P3 | One path still injected a hidden `defaultProjectId`: a project created during onboarding while projects was on, then the area switched off before the income step. | **Fixed.** `defaultProjectId: projectsEnabled ? createdProjectId : undefined`; test asserts the drawer opens without it. |
+| 6 | P3 | `OnboardingStepIndicator` still shows three circles; step 2 is ticked the instant the client step completes. | **Kept, tracked** as TD-024 (decide with MUT-15's shape). |
+| 7 | P3 | Tests proved a gate exists, not which key it reads; a copy-paste `requireFeature('insights')` on `/planning` would pass. | **Fixed.** `router.gateKeys.test` (30 cases): each of the ten gated routes redirects with every area off, admits with only its own key on, and still redirects with every key *but* its own on. The misleading "give the query a tick" comment in the income test replaced by a real settle. |
+| 8 | P3 | Four tab comparisons still read `activeTab` while summary/projects read `visibleTab`. | **Fixed.** `visibleTab` throughout. |
+
+Also from the audit: `useOnboardingDrawerSuccess` had zero callers (the drawers call `completeStep` directly) — pre-existing dead code, removed under the MUT-14 pruning rule. Deep-link audit: no surviving non-flag-aware link into the three areas.

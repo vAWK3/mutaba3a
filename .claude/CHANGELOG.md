@@ -29,6 +29,64 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-16: insights, planning and projects are gated behind their switches
+
+Brief `.claude/designs/mut-16-gate-insights-planning-projects.md` (+ test
+plan), eng review §8, outside voice §9. ADR-030 addendum. Five commits, one
+per build-order step (router, nav, client profile, drawers, onboarding).
+
+### Added
+- `/insights`, `/planning`, `/projects` and `/projects/$projectId` carry
+  `beforeLoad: requireFeature(key)`: a deep link while the area is off
+  redirects home before the lazy chunk loads. `/reports` → `/insights` and
+  `/transactions` → `/income` stay unconditional (AC 3), proven by the new
+  `legacyRedirectsCore` test with every area off.
+- Sidebar: Insights, Planning and Projects leave the main/workspace sections
+  for "More" (after Expenses, Documents, Retainers). A fresh install shows
+  Home, Income, Clients, Settings. `+ Add → Project` (sidebar and top bar)
+  renders only while projects is on.
+- Client profile: the Projects tab, its body and both **+ Project** buttons
+  render only while projects is on; an active projects tab falls back to
+  Summary. Project names on the work list stay as text (AC 4).
+- Income and expense drawers: the optional project field hides while
+  projects is off; form state is untouched, so editing an entry that carries a
+  `projectId` saves it unchanged (D3).
+- Onboarding: while projects is off the overlay completes the project step
+  itself (no entity), so a new install runs client → income (D4).
+- `RetainerDrawer`'s project picker follows the switch too (review #2).
+- `useFeaturesLoaded()` in `lib/features/useFeatures.ts`: whether the
+  settings row has been read; the onboarding skip waits for it (review #1).
+- Tests: router gates (+4), gate keys (30: each gated route reads its own
+  key), legacy core redirects (2), sidebar (+3), client profile (+2), income
+  drawer (+3), expense drawer project field (3), retainer drawer project
+  field (2), onboarding overlay (6). Suite: 123 files, 2067 passed, 5 skipped.
+
+### Fixed (outside review, brief §9)
+- The onboarding project-step skip no longer fires while the settings row is
+  still loading, so a projects-on user mid-onboarding keeps their step.
+- A project created during onboarding before the area was switched off is no
+  longer attached to the income step through a hidden field.
+- `ClientDetailPage` reads `visibleTab` in every tab comparison.
+
+### Removed
+- `useOnboardingDrawerSuccess` (zero callers; the drawers call
+  `completeStep` directly).
+
+### Decided
+- Projects off hides; the switch never clears: `Transaction.projectId` is
+  kept through an edit while the field is hidden. The client→project cascade
+  still clears a tag that no longer matches the chosen client, visible or
+  not (D3, review #4).
+- The onboarding store's completion rule (`client`, `project`, `income`)
+  stays; the overlay auto-completes the step rather than the store learning
+  about flags (D4). The indicator still shows three steps (TD-024).
+
+### Not done here
+- The sidebar's final grouping and the `+ Add` menu's shape (MUT-15).
+- No `suppliers` work: folded into expenses by MUT-12, view deleted by MUT-14.
+
+---
+
 ## [Unreleased] - 2026-10-10 — MUT-14: expenses collapse to one gated ledger; MUT-20 fixed
 
 Brief `.claude/designs/mut-14-collapse-expenses.md` (+ test plan), eng

@@ -491,6 +491,18 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
+### TD-024: Onboarding shows a completed "Project" step while the Projects area is off
+**Status**: Open
+**Priority**: Low
+**Introduced**: MUT-16, 2026-10-10
+**Impact**: D4 auto-completes the project step in `OnboardingOverlay` while projects is off, so a fresh install's `OnboardingStepIndicator` still renders three steps with step 2 ticked before the user did anything. Harmless functionally (the flow is client → income) but reads as odd on the first launch.
+
+**Remediation**: make `OnboardingStepIndicator` take the step list from the overlay and omit `project` while the area is off; or let `onboardingStore` carry a step list set at `startOnboarding()` from the flags (needs a persisted-state migration). Decide alongside MUT-15's sidebar/add-menu shape.
+
+**Effort**: Small
+
+---
+
 ## In Progress
 
 *No items currently in progress.*

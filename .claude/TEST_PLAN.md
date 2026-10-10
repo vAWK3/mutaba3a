@@ -144,6 +144,21 @@ Still manual: RTL on the surviving ledger; the receipts ZIP opened in Finder; a 
 
 Still manual: RTL check of the "More" section and the locked notice; a real navigation to `/documents` while off (redirect with no flash) in the browser.
 
+#### Gated areas, part 2 (MUT-16, added 2026-10-10)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/__tests__/router.gates.test.ts` (extended) | Structural | +4 gated | `/insights`, `/planning`, `/projects`, `/projects/$projectId` carry `beforeLoad` |
+| `src/lib/features/__tests__/legacyRedirectsCore.test.ts` | Structural | 2 | `/reports` → `/insights` with every area off, then the insights gate bounces home; `/transactions` → `/income` forwards search |
+| `src/components/layout/__tests__/SidebarNav.features.test.tsx` (extended) | Component | +3 | none of the three while off and no `+ Add → Project`; Projects in "More" + `+ Add` while on; Insights then Planning after Retainers |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (extended) | Page | +2 | projects off: no Projects tab, no + Project, project name on the work list as text; on: tab present |
+| `src/components/__tests__/IncomeDrawer.test.tsx` (extended) | Component | +3 | no project field off; field on; edit keeps `projectId` while hidden (real Dexie round-trip) |
+| `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx` | Component | 6 | **Full** - step auto-completes without an entity while off (from the project step and from client → project), untouched while on, untouched while flags load, `onComplete` not called by the skip, income step opens without a stale `defaultProjectId` |
+| `src/__tests__/router.gateKeys.test.ts` | Structural | 30 | each of the ten gated routes reads its own key: redirects with all off, admits with only its key, redirects with every key but its own |
+| `src/components/__tests__/ExpenseDrawer.projectField.test.tsx` | Component | 3 | no field off; field on; edit keeps `projectId` and `categoryId` while hidden |
+| `src/components/__tests__/RetainerDrawer.projectField.test.tsx` | Component | 2 | picker off / on |
+
+Still manual: a real navigation to `/projects` while off in the browser (redirect with no flash); the onboarding card on a fresh install showing step 2 as done (TD-024); RTL check of the longer "More" section.
+
 #### Hook & Component Tests
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

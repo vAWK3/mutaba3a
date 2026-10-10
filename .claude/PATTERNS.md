@@ -1183,6 +1183,16 @@ document when invoices is on and points at Settings when it is off). Deep links
 into a gated area from other surfaces (home attention items, legacy menus) are
 either removed while the area is off or left to bounce via the guard; prefer
 removing when the item's only action is the deep link.
+Two extensions from MUT-16: an optional **field** inside a core form (the
+project tag on income/expense) is *not rendered* while the area is off but its
+form value is kept, so an edit never strips data the user cannot see; and a
+guided **flow** that has a step for the area (onboarding's project step)
+adapts in the component with an effect that completes the step, not in the
+store, so persisted state needs no migration and the flow is unchanged when
+the area is on. Hiding may read `useFeatureEnabled` as-is (`false` while
+loading just delays the entry); **acting** on "off" — completing a step,
+clearing a value, redirecting inside React — must also check
+`useFeaturesLoaded()`, or the first render treats "not read yet" as "off".
 
 ### Pruning after a UI deletion (MUT-14)
 Run the consumer audit (exports and repository methods with zero references
