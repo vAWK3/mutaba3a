@@ -26,27 +26,108 @@
 - Refactoring, dependencies, infrastructure
 ```
 
+---
 
+## [Unreleased] - 2026-10-10 — MUT-6: "Record payment" becomes a primary row action
+
+**Scope:** `src/components/ui/RecordPaymentButton.{tsx,css}` (new) + `index.ts`,
+`src/components/drawers/PartialPaymentDrawer.tsx`, `src/db/repository.ts`,
+`src/hooks/useQueries.ts`, `src/lib/i18n/translations/{en,ar}.json`,
+`src/pages/{clients/ClientDetailPage,income/IncomePage,projects/ProjectDetailPage}.tsx`,
+7 test files (2 new), `.claude/{DECISIONS,COMPONENT_REGISTRY,TECH_DEBT,TEST_PLAN}.md`,
+`TODOS.md`.
+
+### Added
+- **`RecordPaymentButton`** — the payment affordance is now a button on the row
+  with the remaining balance on it, at all four surfaces: ClientDetailPage
+  (receivables and transactions tabs), IncomePage, ProjectDetailPage. It owns
+  the single gate (`income && paymentStatus !== 'paid' && remaining > 0`) that
+  previously existed as three different inline conditions, one of which was
+  missing entirely — the client receivables tab offered "Record payment" on
+  settled rows. Props-in, no store import, matching the rest of `components/ui`.
+- Overpayment guard in `paymentRecordRepo.create`/`.update`, inside the
+  existing `rw` block so concurrent writes cannot both pass (**ADR-030**).
+- i18n keys `transactions.partialPayment.{amountMustBePositive,overpayment}` in
+  en and ar.
+
+### Changed
+- The payment drawer opens with the full remaining balance prefilled, so
+  settling in full is one confirm; the field is still editable down to a
+  partial amount, and empty when there is nothing left to pay.
+- Its two hardcoded English validation strings are now translated.
+- The row actions column was a fixed 40–48px sized for a kebab alone; it is now
+  shrink-to-fit, so the added button cannot squeeze the amount column.
+- **Behaviour reversal (ADR-030 override log):** overpayment was allowed and
+  clamped, documented by two passing tests. It is rejected now, and those tests
+  are rewritten to assert rejection.
+- Payments on a `lockedAt` transaction keep working — that was true only by
+  accident before (the recalc bypasses the lock guard); it is now named in a
+  comment and pinned by a test. The `['archivedAt']` allowlist is untouched.
+
+### Fixed
+- **Stale balances after a payment (MUT-6 AC #5, a live defect).**
+  `invalidatePaymentRecordQueries` never invalidated the income keys, so
+  `/income` and the client Receivables tab kept showing an old status and
+  remaining amount for up to the 60s staleTime right after a payment was saved.
+  Adds `['income']`, `['receivables']`, `['incomeOverviewTotals']` and
+  `['incomeAttentionReceivables']` — the set `markPaid` already invalidated.
+- **The Overview KPI strip and attention feed went stale after every write**
+  (found in QA reconciliation). Money-event views are *derived* —
+  `moneyEventRepository` recomputes them from transactions, expenses and
+  projected income on every read and never writes — so nothing invalidated
+  their keys as a side effect. The one helper that listed them,
+  `useInvalidateMoneyEvents`, had **zero callers anywhere in the app**, so the
+  home page served pre-write numbers after recording a payment, creating
+  income, marking paid, adding an expense or changing a retainer.
+  `invalidateMoneyEventQueries` is now exported from `useMoneyEventQueries.ts`
+  (beside the keys it owns, so the list still exists once) and called by all
+  four write paths: `useQueries`, `useIncomeQueries`, `useExpenseQueries`,
+  `useRetainerQueries`. Pre-existing and app-wide, not caused by MUT-6; fixed
+  here at the owner's request because the payment path is where it cost most.
+- **The payment date defaulted to the UTC date, not the local one** (AC #4,
+  found in QA reconciliation). `PartialPaymentDrawer` computed "today" with
+  `new Date().toISOString().split('T')[0]`, which ADR-022 forbids: a user in
+  New York recording a payment at 20:30 on 15 March was handed **16 March**,
+  and one in Jerusalem after midnight was handed yesterday. It now uses
+  `todayISO()` like every other drawer. Pinned by two faked instants that
+  straddle midnight in opposite directions, so the test is honest in both
+  `Asia/Jerusalem` and `npm run test:tz`.
+
+### Technical
+- **TD-021** recorded: `invalidateIncomeQueries` and
+  `invalidatePaymentRecordQueries` keep overlapping key lists. The eng review
+  deliberately chose the in-place fix over extracting a shared helper.
+- TODOS 3–5 from the eng review: payment-record sync ops are captured but
+  `ops-engine.ts` can never apply them (MUT-55); a failed refetch after a
+  successful write is silent app-wide; "Mark paid" and "Record payment" are now
+  two-click duplicates that disagree about the date (decide after MUT-18).
+- Pre-existing and untouched: the 18 `ExpensesLedgerPage` test failures.
 ---
 
 ## [Unreleased] - 2026-10-10 — MUT-49: updater public key restored to BEDF931CA1D6C777
 
-**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-030, ADR-027 merge, index), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`. Epic MUT-48.
+**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-031, ADR-027 merge, index), `.claude/TECH_DEBT.md` (TD-022), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`. Epic MUT-48.
 
 ### Fixed
 - `plugins.updater.pubkey` is back to the pre-`ae9fb1c` value, byte-identical to
   `~/.tauri/mutaba3a.key.pub`. The 2026-10-05 rotation pointed the app at a key
-  (`AB7B64537B1DE22C`) whose private half exists nowhere; every real signer
-  (local key, CI secret, the v0.0.63 signatures) is `BEDF931CA1D6C777`. No
-  shipped build embeds the wrong key (`ae9fb1c` is not an ancestor of
-  `v0.0.63`), so the revert is backward-compatible.
+  (`AB7B64537B1DE22C`) whose private half exists only as a commented-out entry
+  in the release machine's gitignored `release.env`; it never signed a
+  published release and is not in CI. Every real signer (the active
+  `release.env` entry, `~/.tauri/mutaba3a.key`, the CI secret, the v0.0.63
+  signatures) is `BEDF931CA1D6C777`. No shipped build embeds the wrong key
+  (`ae9fb1c` is not an ancestor of `v0.0.63`), so the revert is
+  backward-compatible.
 
 ### Added
 - `src/lib/__tests__/updater-config.test.ts`: pins the configured public key
-  to the canonical base64 string and prints both fingerprints on mismatch.
-  Written red against the `AB7B...` config, green after the revert.
-- ADR-030: the key is canonical; a real rotation ships the new public key in a
-  release signed by the old key before signing switches.
+  to the canonical base64 string and asserts the key id from the key bytes
+  (line 2, bytes 2..10), printing both fingerprints on mismatch. Written red
+  against the `AB7B...` config, green after the revert.
+- ADR-031: the key is canonical; a real rotation ships the new public key in a
+  release signed by the old key before signing switches, and that transitional
+  release is necessary, not sufficient (late clients still reinstall).
+- TD-022: the release-time guards deferred to MUT-51.
 
 ### Technical
 - `.claude/DECISIONS.md` carried two `## ADR-027` headings (the 2026-10-09
@@ -863,10 +944,11 @@ API version `1.1.0-m2`; everything additive, M1 untouched.
 - Consequence: builds already installed in the field carry the old public key,
   so they will reject updates signed with the new private key. Clients on an
   older build need a manual reinstall to rejoin the update channel.
-- **Withdrawn 2026-10-10 (MUT-49, ADR-030).** The premise above was false: the
-  v0.0.63 signatures, `~/.tauri/mutaba3a.key` and the CI secret are all
-  `BEDF931CA1D6C777`, and no private half of `AB7B64537B1DE22C` is known to
-  exist. The key was restored the same day; no reinstall is needed.
+- **Withdrawn 2026-10-10 (MUT-49, ADR-031).** The premise above was false: the
+  v0.0.63 signatures, `~/.tauri/mutaba3a.key`, the active `release.env` entry
+  and the CI secret are all `BEDF931CA1D6C777`; the `AB7B64537B1DE22C` private
+  half exists only as a commented-out `release.env` entry that never signed a
+  release. The key was restored on 2026-10-10; no reinstall is needed.
 
 ---
 

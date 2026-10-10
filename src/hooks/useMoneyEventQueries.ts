@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { moneyEventRepo } from '../db/moneyEventRepository';
 import type { Currency, MoneyEventFilters } from '../types';
 
@@ -25,20 +25,41 @@ export const moneyEventQueryKeys = {
 // Invalidation Helpers
 // ============================================================================
 
+/**
+ * Every money-event view, invalidated.
+ *
+ * Money events are *derived* -- `moneyEventRepository` recomputes them from
+ * transactions, expenses and projected income on every read and never writes.
+ * So nothing invalidates these keys as a side effect of its own data changing;
+ * the write paths have to say so explicitly, which is why the invalidation
+ * helpers in useQueries / useIncomeQueries / useExpenseQueries /
+ * useRetainerQueries all call this.
+ *
+ * It lives here, beside the keys it invalidates, so the list exists once. A
+ * new money-event query means adding its key here and nowhere else.
+ *
+ * Found during MUT-6 QA: this list previously had exactly one caller --
+ * `useInvalidateMoneyEvents`, which nothing in the app called -- so the
+ * Overview KPI strip and attention feed went stale after every write.
+ */
+export function invalidateMoneyEventQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['moneyEvents'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyDailyAggregates'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyMonthSummary'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyMonthKPIs'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyMonthKPIsBoth'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyGuidance'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyDayEvents'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyYearSummary'] });
+  queryClient.invalidateQueries({ queryKey: ['moneyYearSummaryBoth'] });
+}
+
 export function useInvalidateMoneyEvents() {
   const queryClient = useQueryClient();
 
   return {
     invalidateAll: () => {
-      queryClient.invalidateQueries({ queryKey: ['moneyEvents'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyDailyAggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyMonthSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyMonthKPIs'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyMonthKPIsBoth'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyGuidance'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyDayEvents'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyYearSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['moneyYearSummaryBoth'] });
+      invalidateMoneyEventQueries(queryClient);
     },
     invalidateForMonth: (month: string) => {
       queryClient.invalidateQueries({

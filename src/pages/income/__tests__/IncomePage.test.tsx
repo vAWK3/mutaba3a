@@ -38,6 +38,7 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.status.partial': 'Partial ({{percent}}%)',
       'transactions.partialPayment.received': 'Received',
       'transactions.partialPayment.recordPayment': 'Record Payment',
+      'transactions.partialPayment.remaining': 'Remaining',
     };
     let result = translations[key] || key;
     if (params) {
@@ -681,47 +682,8 @@ describe('IncomePage', () => {
       });
     });
 
-    it('should show "Record Payment" action for unpaid transactions', async () => {
-      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
-      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
-        data: mockIncomeTransactions,
-        isLoading: false,
-      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
-
-      renderWithProviders(<IncomePage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Beta Inc')).toBeInTheDocument();
-      });
-
-      // Find the row actions menu (3 dots button) for Beta Inc transaction
-      const betaRow = screen.getByText('Beta Inc').closest('tr');
-      expect(betaRow).toBeInTheDocument();
-
-      // The actions menu should exist and be clickable
-      const actionsButton = betaRow?.querySelector('button[aria-label], button');
-      expect(actionsButton).toBeInTheDocument();
-    });
-
-    it('should open partial payment drawer when "Record Payment" is clicked', async () => {
-      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
-      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
-        data: [mockIncomeTransactions[1]], // Beta Inc - unpaid transaction
-        isLoading: false,
-      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
-
-      renderWithProviders(<IncomePage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Beta Inc')).toBeInTheDocument();
-      });
-
-      // Note: Testing the actual menu click requires more complex DOM interaction
-      // This test verifies the drawer function is available
-      expect(mockOpenPartialPaymentDrawer).toBeDefined();
-    });
-
-    it('should show both "Record Payment" and "Mark Paid" actions for unpaid transactions', async () => {
+    // MUT-6: "Record payment" is a primary row button, not a kebab entry.
+    it('should show a "Record Payment" button on an unpaid row', async () => {
       const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[1]], // Beta Inc - unpaid
@@ -734,11 +696,52 @@ describe('IncomePage', () => {
         expect(screen.getByText('Beta Inc')).toBeInTheDocument();
       });
 
-      // Both actions should be available for unpaid transactions
-      // The actual rendering of actions is tested through integration
+      const betaRow = screen.getByText('Beta Inc').closest('tr');
+      const button = betaRow?.querySelector('button.btn-secondary');
+      expect(button).toBeInTheDocument();
+      // The remaining balance is visible at the point of action: $2,500.00
+      expect(button).toHaveTextContent('Record Payment');
+      expect(button).toHaveTextContent('2,500');
     });
 
-    it('should not show "Record Payment" action for fully paid transactions', async () => {
+    it('should open the partial payment drawer in one click from the row', async () => {
+      const user = userEvent.setup();
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: [mockIncomeTransactions[1]], // Beta Inc - unpaid
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Beta Inc')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /record payment/i }));
+
+      expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-2' });
+      // The row's own click handler must not also fire and open the edit drawer.
+      expect(mockOpenTransactionDrawer).not.toHaveBeenCalled();
+    });
+
+    it('should show the button on a partially paid row, with the remaining balance', async () => {
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: [mockIncomeTransactions[3]], // Gamma LLC - partial, $2000 remaining
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Gamma LLC')).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('button', { name: /record payment/i })).toHaveTextContent('2,000');
+    });
+
+    it('should not show the button for fully paid transactions', async () => {
       const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
         data: [mockIncomeTransactions[0]], // Acme Corp - paid
@@ -751,8 +754,26 @@ describe('IncomePage', () => {
         expect(screen.getByText('Website Redesign')).toBeInTheDocument();
       });
 
-      // Paid transactions should not have "Record Payment" action
-      // Only "Duplicate" should be available
+      expect(screen.queryByRole('button', { name: /record payment/i })).not.toBeInTheDocument();
+    });
+
+    it('should show the button on exactly the rows the kebab gate used to show it on', async () => {
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Beta Inc')).toBeInTheDocument();
+      });
+
+      // tx-2, tx-3 unpaid and tx-4 partial -- but not tx-1, which is paid.
+      expect(screen.getAllByRole('button', { name: /record payment/i })).toHaveLength(3);
+      const paidRow = screen.getByText('Website Redesign').closest('tr');
+      expect(paidRow?.querySelector('button.btn-secondary')).toBeNull();
     });
 
     it('should show correct payment status for partial payment', async () => {

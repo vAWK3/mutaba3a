@@ -1170,7 +1170,7 @@ fails before a release does.
 
 **Instances**: `src/sync/transport/__tests__/cimd-document.test.ts` (re-states
 Malafat's CIMD rules), `src/lib/__tests__/updater-config.test.ts` (pins the
-updater pubkey to ADR-030's canonical key).
+updater pubkey to ADR-031's canonical key).
 
 **Rules**:
 - Resolve the path from `process.cwd()` so the test runs from any worktree.

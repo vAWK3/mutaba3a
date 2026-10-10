@@ -18,6 +18,52 @@
 
 ## Open Debt
 
+### TD-022: Release Pipeline Does Not Verify the Signer Against the Compiled-In Updater Key
+**Status**: Open (ticketed as MUT-51)
+**Added**: 2026-10-10
+**Priority**: High
+**Impact**: A release cut without `TAURI_SIGNING_PRIVATE_KEY`, from the wrong
+checkout, or with a different key than `plugins.updater.pubkey` publishes a
+manifest every installed client either cannot find (404) or cannot verify
+
+`deploy.sh` only warns when the signing key is absent (`check_updater_signing`,
+`deploy.sh:64-73`), resolves `release.env` relative to the current directory
+(`deploy.sh:26-38`), declares `UPDATER_PRIVATE_KEY_FILE` and never reads it
+(`deploy.sh:26`), runs `git push origin main` and tags HEAD from whatever
+branch is checked out (`deploy.sh:206-241`), and passes the private key and
+password to `tauri signer sign` as CLI arguments (`deploy.sh:415`;
+`.github/workflows/build-windows.yml:142`) although the CLI reads the
+`TAURI_SIGNING_PRIVATE_KEY*` environment variables itself. Nothing compares the
+key id in the produced signatures (line 2, bytes 2..10) with the key id in
+`src-tauri/tauri.conf.json`, and macOS (`release.env`) and Windows (CI secret)
+sign from two independent stores with no check that they hold the same key.
+Found during the MUT-49 review (ADR-031); MUT-51 owns the hard-fail, the file
+fallback and the post-publish verification.
+
+### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
+**Status**: Open
+**Added**: 2026-10-10
+**Priority**: Low
+**Impact**: A new money query key has to be added in two places or one of the
+two write paths silently serves stale data -- which is exactly how MUT-6 AC #5
+broke
+
+`invalidateIncomeQueries` (`src/hooks/useIncomeQueries.ts:61`) and
+`invalidateTransactionQueries` + `invalidatePaymentRecordQueries`
+(`src/hooks/useQueries.ts:21,174`) list overlapping sets of the same keys.
+MUT-6 fixed the symptom by adding the four income keys to
+`invalidatePaymentRecordQueries` in place; the eng review chose the smaller
+arrangement deliberately over extracting a shared `invalidateMoneyQueries`,
+and recorded the duplication here instead. Extract it the next time a third
+caller needs the same list.
+
+**Note (2026-10-10, MUT-6 QA):** the money-event keys hit exactly that
+threshold and were extracted — `invalidateMoneyEventQueries` lives in
+`useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
+call it. The *income* key duplication described above is untouched and still
+open; the precedent for fixing it is to put the list in the module that owns
+the keys rather than in a new `src/hooks/invalidation.ts`.
+
 ### TD-020: Import State Loads Linked Entities One By One
 **Status**: Open
 **Added**: 2026-10-08
