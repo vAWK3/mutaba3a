@@ -76,7 +76,10 @@ describe('transactionRepo.partialPayment', () => {
       expect(updated?.paidAt).toBeDefined();
     });
 
-    it('should mark as paid when payment exceeds remaining amount', async () => {
+    // ADR-030: overpayment is rejected. recordPartialPayment delegates to
+    // paymentRecordRepo.create, so it inherits the single guard rather than
+    // carrying its own copy.
+    it('should reject a payment that exceeds the remaining amount', async () => {
       const tx = await transactionRepo.create({
         kind: 'income',
         status: 'unpaid',
@@ -86,12 +89,14 @@ describe('transactionRepo.partialPayment', () => {
       });
 
       await transactionRepo.recordPartialPayment(tx.id, 5000);
-      await transactionRepo.recordPartialPayment(tx.id, 6000); // More than remaining
+
+      await expect(
+        transactionRepo.recordPartialPayment(tx.id, 6000) // More than remaining
+      ).rejects.toThrow('Payment amount');
 
       const updated = await transactionRepo.get(tx.id);
-      // Overpayment is allowed -- stores actual sum, not capped
-      expect(updated?.receivedAmountMinor).toBe(11000);
-      expect(updated?.status).toBe('paid');
+      expect(updated?.receivedAmountMinor).toBe(5000);
+      expect(updated?.status).toBe('unpaid');
     });
 
     it('should throw error for negative payment amount', async () => {

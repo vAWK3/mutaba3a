@@ -26,7 +26,82 @@
 - Refactoring, dependencies, infrastructure
 ```
 
+---
 
+## [Unreleased] - 2026-10-10 — MUT-6: "Record payment" becomes a primary row action
+
+**Scope:** `src/components/ui/RecordPaymentButton.{tsx,css}` (new) + `index.ts`,
+`src/components/drawers/PartialPaymentDrawer.tsx`, `src/db/repository.ts`,
+`src/hooks/useQueries.ts`, `src/lib/i18n/translations/{en,ar}.json`,
+`src/pages/{clients/ClientDetailPage,income/IncomePage,projects/ProjectDetailPage}.tsx`,
+7 test files (2 new), `.claude/{DECISIONS,COMPONENT_REGISTRY,TECH_DEBT,TEST_PLAN}.md`,
+`TODOS.md`.
+
+### Added
+- **`RecordPaymentButton`** — the payment affordance is now a button on the row
+  with the remaining balance on it, at all four surfaces: ClientDetailPage
+  (receivables and transactions tabs), IncomePage, ProjectDetailPage. It owns
+  the single gate (`income && paymentStatus !== 'paid' && remaining > 0`) that
+  previously existed as three different inline conditions, one of which was
+  missing entirely — the client receivables tab offered "Record payment" on
+  settled rows. Props-in, no store import, matching the rest of `components/ui`.
+- Overpayment guard in `paymentRecordRepo.create`/`.update`, inside the
+  existing `rw` block so concurrent writes cannot both pass (**ADR-030**).
+- i18n keys `transactions.partialPayment.{amountMustBePositive,overpayment}` in
+  en and ar.
+
+### Changed
+- The payment drawer opens with the full remaining balance prefilled, so
+  settling in full is one confirm; the field is still editable down to a
+  partial amount, and empty when there is nothing left to pay.
+- Its two hardcoded English validation strings are now translated.
+- The row actions column was a fixed 40–48px sized for a kebab alone; it is now
+  shrink-to-fit, so the added button cannot squeeze the amount column.
+- **Behaviour reversal (ADR-030 override log):** overpayment was allowed and
+  clamped, documented by two passing tests. It is rejected now, and those tests
+  are rewritten to assert rejection.
+- Payments on a `lockedAt` transaction keep working — that was true only by
+  accident before (the recalc bypasses the lock guard); it is now named in a
+  comment and pinned by a test. The `['archivedAt']` allowlist is untouched.
+
+### Fixed
+- **Stale balances after a payment (MUT-6 AC #5, a live defect).**
+  `invalidatePaymentRecordQueries` never invalidated the income keys, so
+  `/income` and the client Receivables tab kept showing an old status and
+  remaining amount for up to the 60s staleTime right after a payment was saved.
+  Adds `['income']`, `['receivables']`, `['incomeOverviewTotals']` and
+  `['incomeAttentionReceivables']` — the set `markPaid` already invalidated.
+- **The Overview KPI strip and attention feed went stale after every write**
+  (found in QA reconciliation). Money-event views are *derived* —
+  `moneyEventRepository` recomputes them from transactions, expenses and
+  projected income on every read and never writes — so nothing invalidated
+  their keys as a side effect. The one helper that listed them,
+  `useInvalidateMoneyEvents`, had **zero callers anywhere in the app**, so the
+  home page served pre-write numbers after recording a payment, creating
+  income, marking paid, adding an expense or changing a retainer.
+  `invalidateMoneyEventQueries` is now exported from `useMoneyEventQueries.ts`
+  (beside the keys it owns, so the list still exists once) and called by all
+  four write paths: `useQueries`, `useIncomeQueries`, `useExpenseQueries`,
+  `useRetainerQueries`. Pre-existing and app-wide, not caused by MUT-6; fixed
+  here at the owner's request because the payment path is where it cost most.
+- **The payment date defaulted to the UTC date, not the local one** (AC #4,
+  found in QA reconciliation). `PartialPaymentDrawer` computed "today" with
+  `new Date().toISOString().split('T')[0]`, which ADR-022 forbids: a user in
+  New York recording a payment at 20:30 on 15 March was handed **16 March**,
+  and one in Jerusalem after midnight was handed yesterday. It now uses
+  `todayISO()` like every other drawer. Pinned by two faked instants that
+  straddle midnight in opposite directions, so the test is honest in both
+  `Asia/Jerusalem` and `npm run test:tz`.
+
+### Technical
+- **TD-021** recorded: `invalidateIncomeQueries` and
+  `invalidatePaymentRecordQueries` keep overlapping key lists. The eng review
+  deliberately chose the in-place fix over extracting a shared helper.
+- TODOS 3–5 from the eng review: payment-record sync ops are captured but
+  `ops-engine.ts` can never apply them (MUT-55); a failed refetch after a
+  successful write is silent app-wide; "Mark paid" and "Record payment" are now
+  two-click duplicates that disagree about the date (decide after MUT-18).
+- Pre-existing and untouched: the 18 `ExpensesLedgerPage` test failures.
 ---
 
 ## [Unreleased] - 2026-10-10 — Money v1 pilot decisions: download-only attachments accepted, Office Admin excluded; epic bookkeeping (MUT-25 / MAL-939)

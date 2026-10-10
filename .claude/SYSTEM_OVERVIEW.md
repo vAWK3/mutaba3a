@@ -131,6 +131,13 @@
 - **Receivable** = Transaction with `kind='income'` AND `status='unpaid'`
 - **Overdue** = Receivable AND `dueDate < today`
 - **Mark Paid**: Set `status='paid'`, `paidAt=now()`, keep `occurredAt` as earned date
+- **Record Payment**: a `PaymentRecord` per payment; `receivedAmountMinor`,
+  `status` and `paidAt` are recalculated from the records. Reachable from a
+  primary button on every unsettled income row (`RecordPaymentButton`), not a
+  kebab entry, with the drawer prefilled to the remaining balance
+- **Overpayment is rejected** — the sum of a transaction's payments can never
+  exceed its amount (ADR-030). Payments on a locked (invoiced) transaction are
+  allowed: the lock protects the invoice facts, not payment tracking
 
 ---
 

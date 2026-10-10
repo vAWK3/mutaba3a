@@ -335,5 +335,37 @@ describe('Mutation Hooks', () => {
 
       expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1');
     });
+
+    /**
+     * The Overview KPI strip and attention feed read money-event keys derived
+     * from this very transaction. Until MUT-6 QA nothing invalidated them, so
+     * the home page kept pre-payment numbers after every write.
+     */
+    it('should invalidate the derived money-event views', async () => {
+      (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'tx-1' });
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+
+      const { result } = renderHook(() => useMarkIncomePaid(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      });
+
+      await act(async () => {
+        await result.current.mutateAsync('tx-1');
+      });
+
+      const invalidated = invalidateQueries.mock.calls.map(
+        ([arg]) => (arg as { queryKey: unknown[] }).queryKey[0]
+      );
+
+      expect(invalidated).toEqual(
+        expect.arrayContaining(['moneyMonthKPIsBoth', 'moneyGuidance', 'moneyEvents'])
+      );
+    });
   });
 });

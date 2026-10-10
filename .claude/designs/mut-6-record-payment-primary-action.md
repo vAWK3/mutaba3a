@@ -416,6 +416,119 @@ Comparison grid:
 | Guard sites | none | one, in `paymentRecordRepo.create` | two, with a bypass flag |
 | R1, R2, R3 | approved | unchanged | unchanged |
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: "One guard, both doors" (R4/D7)
+Accepted scope: the overpayment guard lives once, in `paymentRecordRepo.create` (and `.update`), so `transactionRepo.recordPartialPayment` inherits it. No bypass flag. Rewrite `paymentRecords.test.ts:313-331` and `partialPayment.test.ts:79` to assert rejection. Add a DECISIONS.md override entry recording that overpayment moves from allowed-and-clamped to rejected, with the reason and the date — the prior behaviour was documented by those two tests, so flipping it silently is not acceptable.
+
+## Outside Voice
+
+`CODEX_MODE: not_installed` with `codex_reviews=enabled`. The native in-host fallback dispatches a subagent through the Agent tool, which this session is instructed not to use unprompted. No second reviewer ran.
+
+**Outside coverage: unavailable.** This review is one model's opinion. It is not a clean two-model review, and nothing here should be read as cross-model agreement. To close the gap, install Codex and re-run `/plan-eng-review .claude/designs/mut-6-record-payment-primary-action.md`, or say the word and I will dispatch the in-host subagent.
+
+## Approval readiness
+
+| ID | Decision | State | Actual answer |
+|---|---|---|---|
+| D1 | ProjectDetailPage surface | approved | "Include all four surfaces" |
+| D2 | Invalidation arrangement | approved | "Smaller arrangement" |
+| D3 | paymentRecord sync defect | approved | "New MUT ticket + TODOS" |
+| R1/D4 | Locked-transaction payments | approved | "Allow, document, test" |
+| R2/D5 | Overpayment policy | approved | "Reject with a message" |
+| R3/D6 | Button placement and coupling | approved | "Props-in, stays in ui/" |
+| R4/D7 | Overpayment regression contract | approved | "One guard, both doors" |
+
+**Approval readiness: PASS** — D1, D2, D3, R1, R2, R3, R4 each cite their own actual answer. No accepted remedy rests on a setup, mode or navigation choice.
+
+## NOT in scope
+
+- **paymentRecord sync (D3).** `ops-engine.ts` has no `paymentRecord` case, so captured payment ops are never applied. Own MUT ticket; it is a sync-engine defect with its own regression-test needs, not a rider on a row-action change.
+- **MUT-18, `markPaid`'s hardcoded `paidAt`.** Its own bug, named out of scope by the ticket. Note that MUT-6 makes it more visible: a prefilled "Record payment" and "Mark paid" now sit in the same row with different date semantics.
+- **The duplicated 13-line invalidation key list** between `useQueries.ts:21` and `useIncomeQueries.ts:61`. D2 chose the smaller arrangement; this stays as known debt and belongs in TECH_DEBT.md.
+- **A credit or refund concept.** R2 rejects overpayment instead; representing genuine overpayment needs a data model that does not exist.
+- **Removing `markPaid` from the kebab.** After prefill it is a near-duplicate of the new button, but removing it is a product call outside this ticket.
+
+## What already exists — reuse, not rebuild
+
+| Needed | Already there | Action |
+|---|---|---|
+| Payment capture UI | `PartialPaymentDrawer.tsx` (506 lines: history, edit, delete, backdating) | Reuse unchanged except prefill and the inline error |
+| Transactional write + recalc | `paymentRecordRepo.create` + `recalculateReceivedAmount` (`repository.ts:1324,1348`) | Reuse; add the overpayment guard inside the existing `rw` block |
+| Remaining amount per row | `TransactionDisplay.remainingAmountMinor`, computed at `repository.ts:265-269` | Reuse; no new query |
+| Paid/partial/unpaid state per row | `TransactionDisplay.paymentStatus`, `repository.ts:264-277` | Reuse for the gate |
+| Button styling | `Button.tsx` `variant="secondary" size="sm"` | Reuse; no new CSS |
+| Amount formatting | `formatAmount(minor, currency, locale)` | Reuse |
+| Error toasts | `withErrorToast` / `getErrorMessage` (`useMutationWithFeedback.ts:63`) | Reuse; keep repository messages English so routing still matches |
+| Drawer URL mirroring | `useDrawerStore.openPartialPaymentDrawer` (ADR-008) | Reuse |
+
+Genuinely new: `RecordPaymentButton.tsx`, the overpayment guard, four invalidation keys, three i18n key pairs.
+
+## Failure modes
+
+| Path | Realistic production failure | Handling today | User sees |
+|---|---|---|---|
+| Overpayment guard | User enters more than remaining | Throws `PaymentRecordError`; message starts `Payment amount` so `getErrorMessage:85` returns it verbatim | Clear inline message plus toast. Covered. |
+| Payment on a locked transaction | Invoiced receivable gets paid | Succeeds via `recalculateReceivedAmount`'s direct write | Normal success. Covered by the new test (R1). |
+| Write succeeds, refetch fails | IndexedDB read error after a successful write | **Nothing.** No surface renders query errors; `withErrorToast` only wraps mutations | **Silent.** Row keeps the old status while the drawer's own history shows the new payment. Two numbers disagree with no explanation. |
+| Two tabs, concurrent create | Both pass the guard, both insert | Guard inside the `rw` block (R2) serialises them | Second one is rejected. Covered. |
+| Double-click the button | Two drawers / two submits | Drawer's `isPending` disables the footer and inputs | No duplicate. Needs the test; currently untested. |
+
+**Critical gap:** the refetch-failure row — no test, no error handling, and the failure is silent. It predates MUT-6 and applies to every mutation in the app, so it is not this ticket's to fix, but it is the one failure on the new path a user cannot diagnose. Logged to TODOS below.
+
+## Worktree parallelization strategy
+
+Sequential implementation, no parallelization opportunity. One primary module: the payment path. `repository.ts`, `useQueries.ts`, the drawer and the four pages all sit on the same dependency chain — the component must exist before the pages can use it, and the repository guard must exist before its tests. Splitting this across worktrees would create conflicts, not throughput.
+
+Order: repository guards and their tests → `RecordPaymentButton` and its test → drawer prefill → the four call sites → invalidation keys → i18n → page-test updates.
+
+## Revised plan — what changed from the original above
+
+The original §4 table is superseded on three rows:
+1. **`src/hooks/invalidation.ts` is dropped** (D2). Fix the four keys in place in `useQueries.ts:174`.
+2. **The `repository.ts:349` allowlist edit is dropped** (R1). The guard keeps `['archivedAt']`. The locked-transaction behaviour is documented and tested where it actually happens, at `recalculateReceivedAmount`.
+3. **`RecordPaymentButton` is props-in** (R3), not store-aware: `{ transaction, onRecordPayment }`.
+
+Two rows are added:
+4. **The overpayment guard covers both entry points** (R4), and `partialPayment.test.ts:79` plus `paymentRecords.test.ts:314` are rewritten, with a DECISIONS.md override entry.
+5. **ProjectDetailPage joins the surfaces** (D1).
+
+## Implementation Tasks
+Synthesized from this review's findings. Each task derives from a specific finding above.
+
+- [ ] **T1 — Overpayment guard, one place, both doors.** `paymentRecordRepo.create` and `.update` (`repository.ts:1348`, `:1385`): sum the other non-deleted records **inside** the existing `db.transaction('rw', …)` block and throw when the new total would exceed `tx.amountMinor`. Message stays English, starting `Payment amount`, so `getErrorMessage` (`useMutationWithFeedback.ts:85`) routes it. `recordPartialPayment` inherits it via `repository.ts:417`. *(R2, R4)*
+- [ ] **T2 — Rewrite the two inverted tests.** `paymentRecords.test.ts:313-331` and `partialPayment.test.ts:79` flip from asserting allow to asserting reject. Add the `update` overpayment case. *(R4)*
+- [ ] **T3 — DECISIONS.md override entry.** Overpayment moves from allowed-and-clamped to rejected: what changed, why, date. The prior behaviour was documented by two tests, so this cannot be a silent flip. *(R4, CLAUDE.md conflict-prevention rule)*
+- [ ] **T4 — Locked transactions: document and pin.** Comment at `repository.ts:1338` naming `recalculateReceivedAmount` the sanctioned payment-side writer and why it deliberately does not pass through `transactionRepo.update`'s lock guard. Test in `paymentRecords.test.ts`: a payment against a `lockedAt` transaction succeeds and flips status to `paid`. Do **not** touch the `['archivedAt']` allowlist. *(R1)*
+- [ ] **T5 — `src/components/ui/RecordPaymentButton.tsx`.** Props `{ transaction: TransactionDisplay; onRecordPayment: () => void }`, no store import. Gate: `kind === 'income' && paymentStatus !== 'paid' && (remainingAmountMinor ?? 0) > 0`, else `null`. Renders `Button variant="secondary" size="sm"` with the label plus the remaining amount via `formatAmount`. Export from `components/ui/index.ts`. *(R3, Section 2)*
+- [ ] **T6 — `RecordPaymentButton.test.tsx`.** Gate assertions for unpaid, partial, paid, expense, zero-remaining; one click fires `onRecordPayment` once; the remaining amount renders in the row's currency. *(Section 3)*
+- [ ] **T7 — Wire the four surfaces.** `ClientDetailPage.tsx:468` and `:602`, `IncomePage.tsx:245`, `ProjectDetailPage.tsx:300`: actions cell becomes a flex row holding `<RecordPaymentButton … onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />` plus the kebab; drop the kebab's `recordPayment` entry at all four. Keep the button inside the existing actions cell — no new column — so the amount column cannot be pushed off-screen. *(D1, Section 2)*
+- [ ] **T8 — Prefill the drawer.** `PartialPaymentDrawer.tsx:234`: create-mode `paymentInput` initialises to `formatCurrencyInput(String(remainingAmountMinor / 100))`, still editable. Replace the hardcoded English errors at `:253` with i18n keys and render the repository's overpayment message inline. *(AC #3, Section 2)*
+- [ ] **T9 — Drawer tests.** Amount prefilled to remaining; a backdated date is what reaches `createMutation.mutateAsync`; the overpayment error renders inline. *(AC #3, #4, #6)*
+- [ ] **T10 — Fix the stale lists.** `invalidatePaymentRecordQueries` (`useQueries.ts:174`): add `['income']`, `['receivables']`, `['incomeOverviewTotals']`, `['incomeAttentionReceivables']`. No new module; `useIncomeQueries.ts` untouched. *(D2, AC #5 — this is the live bug)*
+- [ ] **T11 — Pin AC #5.** Extend `src/hooks/__tests__/useQueries.test.tsx` (it uses real Dexie, no `vi.mock`, so it is immune to the barrel-interception trap): after `useCreatePaymentRecord` resolves, `['income']` and `['receivables']` are invalidated. *(Section 3)*
+- [ ] **T12 — i18n.** `transactions.partialPayment.overpayment`, `.amountMustBePositive`, `.remainingLabel` in both `en.json` and `ar.json`. Verify RTL button placement and that the amount column survives at the narrowest supported desktop width. *(ticket non-functionals)*
+- [ ] **T13 — Update the three page tests.** `IncomePage.test.tsx`, `ClientDetailPage.test.tsx`, `ProjectDetailPage.test.tsx`: move the `recordPayment` expectation off the kebab, and add a per-surface assertion that the unified gate shows the same rows each surface showed before. *(Section 2 regression risk — three divergent gates become one)*
+- [ ] **T14 — Knowledge files.** `CHANGELOG.md`, `COMPONENT_REGISTRY.md` (register `RecordPaymentButton`), `TECH_DEBT.md` (the duplicated invalidation key list left standing by D2), `TEST_PLAN.md`. *(CLAUDE.md protocol)*
+- [ ] **T15 — Out of this ticket, already written to TODOS.md.** Items 3, 4 and 5: paymentRecord sync cannot be applied; silent refetch failure; `Mark paid` / `Record payment` overlap. Item 3 still needs its MUT ticket created. *(D3, D8, D9)*
+
+Verify: `npm run lint` · `npx tsc --noEmit -p tsconfig.app.json` · `npm run test:run` · `npm run build`
+(there is no `typecheck` script on `main` yet — MUT-35 added one, and no `test:integration` script has ever existed despite CLAUDE.md Phase 4 naming it; that gap is TODOS item 2.)
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|---|---|---|---|---|---|
+| Scope Challenge | 16 files, 2 new modules — gate tripped at 8/2 | Right-size the diff before architecture | 1 | complete | 4 findings; scope accepted as-is, 1 surface added, 1 module dropped |
+| 1. Architecture | standard | Boundaries, data flow, failure modes | 1 | complete | 3 findings (1×P1, 2×P2) |
+| 2. Code quality | standard | Reuse, error paths, shared-code rubric | 1 | complete | 3 findings (1×P2, 2×P3) |
+| 3. Tests | standard | Coverage of every changed behaviour | 1 | complete | 2×P1 — two existing tests assert the opposite of the approved policy |
+| 4. Performance | standard | Query patterns, invalidation cost | 1 | complete | 2×P3, both negligible; no new worst case |
+| Outside Voice | default-on | Independent second opinion | 0 | **unavailable** | Codex not installed; in-host subagent fallback not permitted in this session |
+
+**OUTSIDE COVERAGE: unavailable.** One model reviewed this plan. No cross-model agreement was established.
+
+**CROSS-MODEL: not applicable** — no second reviewer completed.
+
+**VERDICT: APPROVED WITH CONDITIONS.** The plan is sound and its central insight — that AC #5 is broken in shipped code — is verified at `useQueries.ts:178` against `main.tsx:59`. Three of its proposed implementations were wrong and are superseded: the lock-allowlist edit would have widened ADR-014's guarantee for every caller while missing the path it was written for; the shared invalidation module was a three-file refactor for a four-line omission; and the store-aware component would have been the first store import in `components/ui`. The review also found what the plan missed: the approved overpayment policy inverts two passing tests and silently changes a second repository entry point. Build T1–T14 in order. T15 leaves this ticket.
+
+NO UNRESOLVED DECISIONS

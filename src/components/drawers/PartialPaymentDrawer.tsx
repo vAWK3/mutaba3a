@@ -9,7 +9,7 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { formatAmount, parseCurrencyInput, formatCurrencyInput, formatDate } from '../../lib/utils';
+import { formatAmount, parseCurrencyInput, formatCurrencyInput, formatDate, todayISO } from '../../lib/utils';
 import type { Currency, PaymentRecord } from '../../types';
 import { useDrawerStore } from '../../lib/stores';
 
@@ -227,14 +227,22 @@ function PaymentForm({
   createMutation: ReturnType<typeof useCreatePaymentRecord>;
   updateMutation: ReturnType<typeof useUpdatePaymentRecord>;
   isPending: boolean;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [paymentInput, setPaymentInput] = useState(() =>
-    editingRecord ? formatCurrencyInput(String(editingRecord.amountMinor / 100)) : ''
-  );
+  // Settling in full is the common case, so create mode opens with the whole
+  // remaining balance already in the field -- one confirm, still editable down
+  // to a partial amount (MUT-6 AC #3). Nothing to prefill once it is settled.
+  const [paymentInput, setPaymentInput] = useState(() => {
+    if (editingRecord) return formatCurrencyInput(String(editingRecord.amountMinor / 100));
+    return remainingAmountMinor > 0 ? formatCurrencyInput(String(remainingAmountMinor / 100)) : '';
+  });
+  // todayISO() is the local calendar date (ADR-022). new Date().toISOString()
+  // is the UTC one, which hands a user west of UTC tomorrow's date in the
+  // evening and one east of UTC yesterday's after midnight -- silently wrong
+  // on a field the user is now one confirm away from accepting.
   const [dateInput, setDateInput] = useState(() =>
-    editingRecord ? editingRecord.paidAt.split('T')[0] : new Date().toISOString().split('T')[0]
+    editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO()
   );
   const [notesInput, setNotesInput] = useState(() =>
     editingRecord?.notes || ''
@@ -252,7 +260,23 @@ function PaymentForm({
     const paymentAmountMinor = parseCurrencyInput(paymentInput);
 
     if (paymentAmountMinor <= 0) {
-      setError('Payment amount must be greater than 0');
+      setError(t('transactions.partialPayment.amountMustBePositive'));
+      return;
+    }
+
+    // The repository rejects overpayment too (ADR-030) and stays the source of
+    // truth; checking here as well is what turns it into a translated inline
+    // message instead of an English throw the user has to decode. When editing
+    // an existing record, its own amount is part of the remaining balance.
+    const allowedMinor = editingRecord
+      ? remainingAmountMinor + editingRecord.amountMinor
+      : remainingAmountMinor;
+    if (paymentAmountMinor > allowedMinor) {
+      setError(
+        t('transactions.partialPayment.overpayment', {
+          amount: formatAmount(Math.max(0, allowedMinor), currency, locale),
+        })
+      );
       return;
     }
 
@@ -276,7 +300,7 @@ function PaymentForm({
           notes: notesInput || undefined,
         });
         setPaymentInput('');
-        setDateInput(new Date().toISOString().split('T')[0]);
+        setDateInput(todayISO());
         setNotesInput('');
       }
     } catch (err) {

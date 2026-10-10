@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
+**Status**: Open
+**Added**: 2026-10-10
+**Priority**: Low
+**Impact**: A new money query key has to be added in two places or one of the
+two write paths silently serves stale data -- which is exactly how MUT-6 AC #5
+broke
+
+`invalidateIncomeQueries` (`src/hooks/useIncomeQueries.ts:61`) and
+`invalidateTransactionQueries` + `invalidatePaymentRecordQueries`
+(`src/hooks/useQueries.ts:21,174`) list overlapping sets of the same keys.
+MUT-6 fixed the symptom by adding the four income keys to
+`invalidatePaymentRecordQueries` in place; the eng review chose the smaller
+arrangement deliberately over extracting a shared `invalidateMoneyQueries`,
+and recorded the duplication here instead. Extract it the next time a third
+caller needs the same list.
+
+**Note (2026-10-10, MUT-6 QA):** the money-event keys hit exactly that
+threshold and were extracted — `invalidateMoneyEventQueries` lives in
+`useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
+call it. The *income* key duplication described above is untouched and still
+open; the precedent for fixing it is to put the list in the module that owns
+the keys rather than in a new `src/hooks/invalidation.ts`.
+
 ### TD-020: Import State Loads Linked Entities One By One
 **Status**: Open
 **Added**: 2026-10-08

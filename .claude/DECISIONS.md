@@ -38,6 +38,7 @@
 | ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 | ADR-029 | Removing a Feature's UI Never Removes Its Tables | Active | 2026-10 |
+| ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
 
 ---
 
@@ -1039,3 +1040,72 @@ already); keeping the full 200-line engagement type to describe retained rows
 faithfully (rejected — no consumer left to keep it accurate, so it would rot
 into a lie); deleting `moneyEventRepository` with the page (rejected — three
 mounted Overview components import it).
+
+---
+
+## ADR-030: Overpayment Is Rejected; Locked Transactions Still Accept Payments
+
+**Date**: 2026-10-10
+**Status**: Accepted
+**Context**: MUT-6 (epic MUT-1)
+
+**Context**: MUT-6 promotes "Record payment" from a kebab entry to the most
+clicked button in the product, and its acceptance criteria require deciding and
+documenting two behaviours that the code had never decided on purpose.
+
+1. **Overpayment.** `paymentRecordRepo.create` validated a positive amount, an
+   existing transaction and `kind === 'income'` -- nothing else. A payment
+   larger than the balance was stored, and `recalculateReceivedAmount` clamps
+   `remainingAmountMinor` with `Math.max(0, ...)` and marks paid on
+   `sum >= amountMinor`, so the excess existed in the database with no surface
+   able to show it.
+2. **Locked transactions.** Payments on a `lockedAt` transaction succeeded, but
+   only by accident: `recalculateReceivedAmount` writes `db.transactions.update`
+   directly and never reaches `transactionRepo.update`'s lock guard
+   (`repository.ts:349`). No test covered it.
+
+**Decision**:
+
+1. **Overpayment is rejected.** `sum(other non-deleted records) + newAmount >
+   tx.amountMinor` throws `PaymentRecordError`. The data model has no credit or
+   refund concept, so storing an excess can only be wrong or invisible, and it
+   was both. The guard lives once, in `paymentRecordRepo.create` and `.update`,
+   so `transactionRepo.recordPartialPayment` inherits it through its delegation
+   (`repository.ts:417`) rather than carrying a second copy. The sum is read
+   **inside** the existing `db.transaction('rw', ...)` block, or two concurrent
+   creates would both read the same pre-state and both pass. The message starts
+   with `Payment amount` so `getErrorMessage`
+   (`useMutationWithFeedback.ts:85`) routes it to the user verbatim; the drawer
+   checks the same rule first to show a translated inline message.
+2. **Locked transactions accept payments.** `lockedAt` exists for ADR-014
+   document immutability and protects the *invoice facts* -- amount, currency,
+   client, date. `receivedAmountMinor` / `status` / `paidAt` are payment
+   tracking, and an invoiced receivable being paid is the normal flow.
+   `transactionRepo.update`'s allowlist stays `['archivedAt']`: widening it
+   would relax the lock for every caller, including the generic edit drawer,
+   which is exactly what ADR-014 exists to prevent. Instead
+   `recalculateReceivedAmount` is named in a comment as the sanctioned
+   payment-side writer, and a test asserts a payment on a locked transaction
+   succeeds and flips status to `paid`.
+
+**Override log**: this reverses previously documented behaviour. Overpayment
+was allowed and clamped, and two passing tests said so on purpose --
+`paymentRecords.test.ts` `describe('overpayment')` ("should allow overpayment
+and still mark as paid") and `partialPayment.test.ts` ("should mark as paid
+when payment exceeds remaining amount"). Both are rewritten to assert
+rejection, dated 2026-10-10, under MUT-6.
+
+**Consequences**: A user who types more than the balance is stopped rather than
+silently storing an unrepresentable number. Any future genuine overpayment or
+refund needs a data model that does not exist yet -- it is not a tweak to this
+guard. Legacy rows whose `receivedAmountMinor` already exceeds `amountMinor`
+(the `migratedNote` imports) are untouched: their remaining is 0, so the button
+is hidden and no new record can be added to them.
+
+**Alternatives Considered**: allowing overpayment and showing the excess
+(rejected -- it needs new UI on the row and in the drawer for a case that is
+almost always a typo, and still has nowhere honest to put the money); guarding
+only the drawer's path and leaving `recordPartialPayment` permissive (rejected
+-- one rule, one place; a bypass flag is how the two paths drift); blocking
+payments on locked transactions (rejected -- it would make every invoiced
+receivable unpayable, which is the opposite of the lock's purpose).

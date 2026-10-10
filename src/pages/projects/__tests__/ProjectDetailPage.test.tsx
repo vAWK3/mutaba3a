@@ -50,6 +50,8 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.status.overdue': `${params?.days || 0} days overdue`,
       'transactions.status.dueToday': 'Due today',
       'transactions.status.dueIn': `Due in ${params?.days || 0} days`,
+      'transactions.partialPayment.recordPayment': 'Record Payment',
+      'transactions.partialPayment.remaining': 'Remaining',
     };
     return translations[key] || key;
   },
@@ -62,11 +64,13 @@ vi.mock('../../../lib/i18n', () => ({
 const mockOpenIncomeDrawer = vi.fn();
 const mockOpenExpenseDrawer = vi.fn();
 const mockOpenProjectDrawer = vi.fn();
+const mockOpenPartialPaymentDrawer = vi.fn();
 vi.mock('../../../lib/stores', () => ({
   useDrawerStore: () => ({
     openIncomeDrawer: mockOpenIncomeDrawer,
     openExpenseDrawer: mockOpenExpenseDrawer,
     openProjectDrawer: mockOpenProjectDrawer,
+    openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
   }),
 }));
 
@@ -156,6 +160,9 @@ const mockTransactions: TransactionDisplay[] = [
     projectName: 'Website Redesign',
     notes: 'Payment received',
     paidAt: '2026-03-15',
+    receivedAmountMinor: 500000,
+    paymentStatus: 'paid',
+    remainingAmountMinor: 0,
   },
   {
     id: 'tx-2',
@@ -170,6 +177,9 @@ const mockTransactions: TransactionDisplay[] = [
     projectName: 'Website Redesign',
     notes: 'Pending payment',
     dueDate: '2026-03-20',
+    receivedAmountMinor: 50000,
+    paymentStatus: 'partial',
+    remainingAmountMinor: 200000,
   },
   {
     id: 'tx-3',
@@ -658,6 +668,56 @@ describe('ProjectDetailPage', () => {
         mode: 'edit',
         expenseId: 'tx-3',
       });
+    });
+  });
+  // MUT-6: "Record payment" is a primary row button here too, so the project
+  // transactions tab does not disagree with the client profile and /income.
+  describe('Record payment button', () => {
+    async function openTransactionsTab() {
+      const user = userEvent.setup();
+      const useQueries = await import('../../../hooks/useQueries');
+      vi.spyOn(useQueries, 'useProject').mockReturnValue({
+        data: mockProject,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useProject>);
+      vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
+        data: mockSummary,
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
+      vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
+        data: mockTransactions,
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
+
+      renderWithProviders(<ProjectDetailPage />);
+      await user.click(screen.getByText('Transactions'));
+      await waitFor(() => {
+        expect(screen.getByText('Hosting')).toBeInTheDocument();
+      });
+      return user;
+    }
+
+    it('shows the button only on the unsettled income row', async () => {
+      await openTransactionsTab();
+
+      // tx-2 is partial; tx-1 is paid and tx-3 is an expense.
+      expect(screen.getAllByRole('button', { name: /record payment/i })).toHaveLength(1);
+      const expenseRow = screen.getByText('Hosting').closest('tr');
+      expect(expenseRow?.querySelector('button.btn-secondary')).toBeNull();
+    });
+
+    it('opens the payment drawer with the row transaction and does not open the edit drawer', async () => {
+      const user = await openTransactionsTab();
+
+      await user.click(screen.getByRole('button', { name: /record payment/i }));
+
+      expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-2' });
+      expect(mockOpenIncomeDrawer).not.toHaveBeenCalled();
+    });
+
+    it('shows the remaining balance rather than the invoice total', async () => {
+      await openTransactionsTab();
+
+      // $2,000.00 remaining of a $2,500.00 receivable.
+      expect(screen.getByRole('button', { name: /record payment/i })).toHaveTextContent('2,000');
     });
   });
 });
