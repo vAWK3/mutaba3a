@@ -201,15 +201,13 @@ const profileExpensesRoute = createRoute({
   },
 });
 
+// Legacy route (MUT-14): the receipts page (files are exportable from Settings › Data tools) was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const profileReceiptsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses/profile/$profileId/receipts',
-  component: lazyPage(() => import('./pages/expenses/ReceiptsPage'), 'ReceiptsPage'),
-  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
-    return {
-      year: typeof search.year === 'number' ? search.year : undefined,
-      month: typeof search.month === 'number' ? search.month : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
   },
 });
 
