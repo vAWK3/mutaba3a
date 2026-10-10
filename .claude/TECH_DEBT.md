@@ -467,6 +467,18 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
+### TD-022: Legacy `/transactions` page keeps an ungated "Generate invoice" action
+**Status**: Open
+**Priority**: Low
+**Introduced**: when `/transactions` became a redirect to `/income` (surfaced by MUT-13, 2026-10-10)
+**Impact**: `src/pages/transactions/TransactionsPage.tsx` still renders a Generate/View invoice menu that ignores the Invoices switch. Unreachable today (the route redirects), so no user impact; it is dead code waiting for the MUT-2 deletion pass.
+
+**Remediation**: delete `TransactionsPage` with the rest of the unreachable surface, or gate its actions with `useFeatureEnabled('invoices')` if it is ever reinstated.
+
+**Effort**: Small
+
+---
+
 ## In Progress
 
 *No items currently in progress.*

@@ -138,7 +138,7 @@
 
 ### Implemented (v0.0.48)
 
-- **Optional areas (Advanced features, MUT-12 / ADR-030)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo, sync) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. Gating of the areas themselves lands in MUT-13/14/15/16.
+- **Optional areas (Advanced features, MUT-12 / ADR-030)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo, sync) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/documents*` and `/retainers` redirect home while off; the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. Expenses, insights, planning and projects follow in MUT-14/16; the sidebar's final shape in MUT-15.
 
 | Feature | Status | Notes |
 |---------|--------|-------|

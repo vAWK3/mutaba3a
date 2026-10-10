@@ -117,6 +117,20 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
 
+#### Gated areas (MUT-13, added 2026-10-10)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/lib/features/__tests__/routeGuard.test.ts` | Unit | 5 | **Full** - redirect when off, pass when on, custom target, pre-v20 row, re-read per navigation |
+| `src/__tests__/router.gates.test.ts` | Structural | 10 | gated routes carry `beforeLoad`, core routes do not |
+| `src/components/layout/__tests__/SidebarNav.features.test.tsx` | Component | 4 | **Full** - no section when off, Documents only, both in order, appears on toggle |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (extended) | Page | +5 | invoice actions off/on (generate, view), retainers card off/on |
+| `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx` | Component | 5 | **Full** - lock notice off/on, unlocked, forced submit writes nothing, repository refuses update and delete |
+| `src/db/__tests__/transactionRepo.test.ts` (extended) | Unit | +1 | `softDelete` refuses a locked transaction |
+| `src/components/home/__tests__/AttentionFeed.features.test.tsx` | Component | 2 | guidance asked without/with projected retainers |
+| `src/lib/features/__tests__/gatingDataSafety.test.ts` | Unit | 2 | toggling leaves documents/sequences/retainers intact; auto-enable → guard admits |
+
+Still manual: RTL check of the "More" section and the locked notice; a real navigation to `/documents` while off (redirect with no flash) in the browser.
+
 #### Hook & Component Tests
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

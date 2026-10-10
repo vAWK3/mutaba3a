@@ -1096,6 +1096,18 @@ turned off; the upgrade + explicit reconcile points are enabling-only *at the
 moment data arrives*); a separate `suppliers` key as the ticket listed
 (rejected, decision 5).
 
+**Addendum 2026-10-10 — MUT-13 gating pattern.** The first gated areas
+(invoices/documents, retainers) fixed the pattern every later gate follows:
+`requireFeature(key)` on the route (redirect home before the lazy chunk
+loads), an entry in `SidebarNav`'s `optionalItems` (the "More" section),
+and `useFeatureEnabled` at every entry point on other pages. Repository
+guards never read a flag: a document lock holds whether invoices is on or
+off (and, since MUT-13, for delete as well as update; payments stay allowed),
+and the drawer only changes how it *explains* the lock. Items whose only
+action deep-links into a gated area (home attention retainer items) are
+removed while the area is off rather than left to bounce. The sidebar's final
+grouping stays MUT-15's decision; MUT-16 appends to the same section.
+
 **Consequences**: MUT-13/16 gate routes with `readFeatureFlags()` and sidebar
 entries with `useFeatureEnabled`; MUT-15 reads `useFeatureFlags()` for the
 secondary nav group and the `+ Add` menu. Projects off by default collides

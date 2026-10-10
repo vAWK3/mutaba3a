@@ -116,6 +116,25 @@ IncomeDrawer (edit, tx.lockedAt)
 - **Tests:** the drawer and sidebar have no tests today; both get them. Repository lock tests exist (`transactionRepo.test.ts:402`) and are reused, not duplicated.
 - **Performance:** no finding.
 
-## 9. Outside voice
+## 9. Outside voice (native Plan subagent; Codex not installed, so not outside coverage in gstack's sense)
 
-Recorded below when the native fallback review completes (Codex not installed).
+The reviewer verified: `beforeLoad` runs before the loader phase and `loadRouteChunk` only preloads the lazy component, so a redirect never requests the chunk; every `useFeatureFlags` consumer sits under `QueryClientProvider`; no other surface deep-links to `/documents` or `/retainers`; `retainerRepository.list` honours `clientId`. Eleven findings:
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| F1 | High | `softDelete` had no lock check — the disabled Delete button was the only guard; `markPaid` / payments bypass the lock on purpose; the notice promised "archive" though no archive UI exists | **Accepted:** `transactionRepo.softDelete` now throws `TransactionLockedError` (test added beside the update-lock test); notice copy says details can't change *here* and payments can still be recorded from the client page; the lock contract is: details immutable, payments allowed, delete refused, archive allowed |
+| F2 | High | "Generate invoice" opened the drawer without linking the entry; "View invoice" would never appear afterwards | **Accepted:** `openDocumentDrawer({ linkTransactionId })`; `DocumentDrawer` prefills currency, client and one line from the entry and calls `documents.linkTransactions` after create, then invalidates the transaction queries — the row flips to View invoice |
+| F3 | Med | A forced form submit bypassed the disabled button | **Accepted:** `onSubmit` returns early while locked; test added |
+| F4 | Med | `router.gates.test` would fail on `__BUILD_MODE__` | **Already handled:** the test stubs the global before importing the router; passes |
+| F5 | Med | Sidebar test must mock `useLocation` and `useCheckForUpdates` (network) | **Already handled:** both mocked; passes |
+| F6 | Med | `PredictiveKpiStrip` still counted projected retainer income with retainers off | **Accepted:** the strip reads `useFeatureEnabled('retainers')` like the feed |
+| F7 | Med | A gated route starts pending → blank first paint on reload/deep link | **Accepted:** `defaultPendingComponent: PageLoader` on `createRouter` |
+| F8 | Low | Separate `optionalItems` list and a duplicated document icon | **Partly:** the sidebar reuses `components/icons` `DocumentIcon`; the explicit list stays (MUT-16 appends two lines; MUT-15 reshapes anyway) |
+| F9 | Low | Data-safety and pre-v20 tests are near-tautological | **Kept:** cheap, and they pin the contract the ticket names |
+| F10 | Low | Client page test mocks needed more than "extend" | **Done** as part of the build |
+| F11 | Low | The fallback toast said "Unlock the document first" regardless of the flag | **Accepted:** copy is now flag-neutral ("its details can't change") |
+
+## 10. Downstream notes
+- MUT-15: the "More" section and `optionalItems` are the seam to reshape; the `+ Add` menu is untouched here.
+- MUT-16: add `{ path, labelKey, icon, feature }` rows to `optionalItems` and `requireFeature('<key>')` to the routes; `PredictiveKpiStrip` / `AttentionFeed` show the pattern for home surfaces.
+- TD-022 (legacy `/transactions` page) — delete with the unreachable surface.

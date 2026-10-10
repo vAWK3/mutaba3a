@@ -29,6 +29,61 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-13: invoices/documents and retainers are gated behind their switches
+
+Brief `.claude/designs/mut-13-gate-invoices-retainers.md` (+ test plan), eng
+review §8, outside voice §9. First consumer of the MUT-12 switchboard;
+ADR-030 addendum records the gating pattern. Jira MUT-13 under MUT-2.
+
+### Added
+- **`requireFeature(key, to = '/')`** (`src/lib/features/routeGuard.ts`): a
+  router `beforeLoad` that reads the flag through the repository and throws a
+  redirect before the lazy page chunk is requested. Applied to `/documents`,
+  `/documents/new`, `/documents/$documentId`, `/documents/$documentId/edit`
+  and `/retainers` in `src/router.tsx`.
+- **Sidebar "More" section** (`nav.sections.optional`): Documents and
+  Retainers appear only while their areas are on; hidden when both are off.
+  Core sections untouched (MUT-15 owns the final grouping).
+- **Client profile entry points**: *Generate invoice* / *View invoice* row
+  actions on income rows (invoices on) in both the Receivables and
+  Transactions tabs, mirroring the legacy `/transactions` action;
+  **`ClientRetainersCard`** on the Summary tab (retainers on) with New
+  retainer and View all.
+- **Locked income entry** (`IncomeDrawer`): a notice naming the locking
+  document, Save and Delete disabled; *View document* while invoices is on,
+  "turn on Invoices in Settings" while it is off. The repository guard is
+  unchanged and still the source of truth.
+- **Home attention feed** leaves projected-retainer items out while retainers
+  is off (their only action deep-links to `/retainers`).
+- i18n en + ar: `nav.sections.optional`, `clients.detail.retainers.*`,
+  `drawer.income.locked.*`. `.drawer-notice` styles.
+- **Create invoice from an income entry really links it:** `openDocumentDrawer`
+  takes `linkTransactionId`; the drawer prefills currency, client and one line
+  from the entry and links it on create, so the row flips to *View invoice*.
+- `defaultPendingComponent: PageLoader` on the router, so a reload or deep link
+  into a gated route shows the loader while the flag is read instead of a
+  blank first paint.
+- Tests: route guard (5), router gates (10), sidebar (4), client profile entry
+  points (5), locked drawer (5), attention feed (2), data safety + auto-enable
+  end to end (2), repository delete-lock (1).
+
+### Fixed
+- **`transactionRepo.softDelete` now honours the document lock** (it only
+  guarded `update`); the drawer's disabled Delete is no longer the only guard.
+- The home KPI strip (`PredictiveKpiStrip`) no longer counts projected
+  retainer income while the Retainers area is off.
+- The lock error toast no longer says "unlock the document first".
+
+### Notes
+- Lock contract, now stated: details immutable, payments allowed (row menu),
+  delete refused, archive allowed. Toggling writes only the settings row;
+  documents, sequences and retainers are untouched (tested). Auto-enable on
+  upgrade is MUT-12's.
+- The legacy `/transactions` page keeps its own ungated *Generate invoice*
+  item; the route redirects to `/income`, so it is unreachable (TD-022).
+
+---
+
 ## [Unreleased] - 2026-10-10 — MUT-12: per-feature Advanced toggle in Settings, off by default (Dexie v20)
 
 Brief `.claude/designs/mut-12-advanced-features-toggle.md` (+ test plan),

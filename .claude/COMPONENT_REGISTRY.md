@@ -9,7 +9,7 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner |
+| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu |
@@ -124,6 +124,18 @@ Tests: `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx`.
 ```
 
 Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
+
+---
+
+### ClientRetainersCard
+**Location**: `src/components/clients/ClientRetainersCard.tsx`
+**Purpose**: Retainer status for one client on the client profile's Summary tab (MUT-13): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
+
+```tsx
+{retainersEnabled && <ClientRetainersCard clientId={client.id} />}
+```
+
+Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Advanced-feature entry points").
 
 ---
 

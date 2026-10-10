@@ -1170,3 +1170,17 @@ swallowing `reconcileFeaturesAfterDataLoad(source, db)` and then invalidates
 `FEATURE_KEYS`, its probe list, and `settings.features.items.<key>` in both
 locales — the snapshot and parity tests fail until all four agree.
 
+### Gating an optional area (MUT-13)
+Three places, always together: the **route** gets `beforeLoad: requireFeature('<key>')`
+(`src/lib/features/routeGuard.ts`; redirects home before the lazy chunk loads);
+the **sidebar entry** goes into `optionalItems` in `SidebarNav.tsx` with its
+`feature` key (the "More" section renders only enabled items); **entry points**
+on other pages read `useFeatureEnabled('<key>')` and render nothing while off.
+Data and repository guards never read a flag: a document lock, a sequence or a
+retainer behaves identically whether the area is on or off, and the UI only
+changes how it *explains* the data (the locked income notice links to the
+document when invoices is on and points at Settings when it is off). Deep links
+into a gated area from other surfaces (home attention items, legacy menus) are
+either removed while the area is off or left to bounce via the guard; prefer
+removing when the item's only action is the deep link.
+
