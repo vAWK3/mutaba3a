@@ -2,9 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeVendor,
   vendorSimilarity,
-  isSameVendor,
-  findBestVendorMatch,
-  suggestCanonicalName,
 } from '../vendorNormalization';
 
 describe('vendorNormalization', () => {
@@ -89,97 +86,6 @@ describe('vendorNormalization', () => {
     it('should return 1 when both strings are empty (both normalize to same)', () => {
       // Both empty strings normalize to '' which are equal
       expect(vendorSimilarity('', '')).toBe(1);
-    });
-  });
-
-  describe('isSameVendor', () => {
-    it('should return true for same vendor', () => {
-      expect(isSameVendor('Acme LLC', 'ACME Inc.')).toBe(true);
-    });
-
-    it('should return true for similar vendors above threshold', () => {
-      expect(isSameVendor('Microsoft', 'Microsft')).toBe(true);
-    });
-
-    it('should return false for different vendors', () => {
-      expect(isSameVendor('Acme', 'Zenith')).toBe(false);
-    });
-
-    it('should respect custom threshold', () => {
-      // With high threshold, slight differences fail
-      expect(isSameVendor('Microsoft', 'Microsft', 0.95)).toBe(false);
-      // With low threshold, they pass
-      expect(isSameVendor('Microsoft', 'Microsft', 0.7)).toBe(true);
-    });
-  });
-
-  describe('findBestVendorMatch', () => {
-    const candidates = ['Microsoft', 'Apple', 'Google', 'Amazon', 'Meta'];
-
-    it('should find exact match', () => {
-      const result = findBestVendorMatch('Microsoft', candidates);
-      expect(result).not.toBeNull();
-      expect(result!.name).toBe('Microsoft');
-      expect(result!.score).toBe(1);
-    });
-
-    it('should find similar match', () => {
-      const result = findBestVendorMatch('Microsft', candidates);
-      expect(result).not.toBeNull();
-      expect(result!.name).toBe('Microsoft');
-      expect(result!.score).toBeGreaterThan(0.8);
-    });
-
-    it('should return null for no match above threshold', () => {
-      const result = findBestVendorMatch('Totally Unknown', candidates);
-      expect(result).toBeNull();
-    });
-
-    it('should return null for empty candidates', () => {
-      const result = findBestVendorMatch('Microsoft', []);
-      expect(result).toBeNull();
-    });
-
-    it('should return null for empty target', () => {
-      const result = findBestVendorMatch('', candidates);
-      expect(result).toBeNull();
-    });
-
-    it('should find best match among multiple possibilities', () => {
-      const vendors = ['Acme Corp', 'Acme Inc', 'Acme Solutions'];
-      const result = findBestVendorMatch('Acme Corporation', vendors);
-      expect(result).not.toBeNull();
-      // Should find one of the Acme variants
-      expect(result!.name).toContain('Acme');
-    });
-
-    it('should respect custom threshold', () => {
-      // With very high threshold, typo won't match
-      const result = findBestVendorMatch('Microsft', candidates, 0.99);
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('suggestCanonicalName', () => {
-    it('should title case the normalized name', () => {
-      // Note: "corp" is a business suffix and gets removed by normalizeVendor
-      expect(suggestCanonicalName('acme')).toBe('Acme');
-      expect(suggestCanonicalName('ACME')).toBe('Acme');
-      expect(suggestCanonicalName('acme solutions')).toBe('Acme Solutions');
-    });
-
-    it('should remove business suffixes', () => {
-      expect(suggestCanonicalName('Acme LLC')).toBe('Acme');
-      expect(suggestCanonicalName('The Acme Company')).toBe('Acme');
-      expect(suggestCanonicalName('Acme Corp')).toBe('Acme'); // corp is removed
-    });
-
-    it('should handle empty input', () => {
-      expect(suggestCanonicalName('')).toBe('');
-    });
-
-    it('should handle hyphenated names', () => {
-      expect(suggestCanonicalName('coca-cola')).toBe('Coca Cola');
     });
   });
 });

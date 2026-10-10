@@ -5,6 +5,7 @@ import { SearchInput, StatusSegment, DateRangeControl } from '../../components/f
 import { RowActionsMenu, PaymentStatusBadge } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useProject, useProjectSummary, useTransactions } from '../../hooks/useQueries';
 import { useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import { useDrawerStore } from '../../lib/stores';
@@ -16,6 +17,7 @@ import type { TxKind, TxStatus, QueryFilters } from '../../types';
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
   const { openIncomeDrawer, openExpenseDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
+  const expensesEnabled = useFeatureEnabled('expenses');
   const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
@@ -309,7 +311,9 @@ export function ProjectDetailPage() {
                                       },
                                     ]
                                   : []),
-                                {
+                                ...(tx.kind === 'expense' && !expensesEnabled
+                                  ? []
+                                  : [{
                                   label: t('common.duplicate'),
                                   icon: <CopyIcon size={16} />,
                                   onClick: () => {
@@ -319,7 +323,7 @@ export function ProjectDetailPage() {
                                       openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id });
                                     }
                                   },
-                                },
+                                }]),
                               ]}
                             />
                           </td>

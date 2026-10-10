@@ -6,6 +6,7 @@ import { ProfileQuickPicker } from '../ui/ProfileQuickPicker';
 import { ProfileBadge } from '../ui/ProfileBadge';
 import { useDrawerStore } from '../../lib/stores';
 import { useT, useDirection } from '../../lib/i18n';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 
 interface Breadcrumb {
   label: string;
@@ -78,6 +79,8 @@ function AddMenu() {
       openExpenseDrawer({ mode: 'create', defaultProfileId: profileId });
     },
   });
+  // New expense is offered only while the Expenses area is on (MUT-14)
+  const expensesEnabled = useFeatureEnabled('expenses');
 
   const clientAction = useProfileAwareAction({
     onExecute: (profileId) => {
@@ -157,13 +160,15 @@ function AddMenu() {
               <DollarIcon className="nav-icon" />
               {t('addMenu.income')}
             </button>
-            <button
-              className="add-menu-item"
-              onClick={(e) => handleAction('expense', e)}
-            >
-              <MinusIcon className="nav-icon" />
-              {t('addMenu.expense')}
-            </button>
+            {expensesEnabled && (
+              <button
+                className="add-menu-item"
+                onClick={(e) => handleAction('expense', e)}
+              >
+                <MinusIcon className="nav-icon" />
+                {t('addMenu.expense')}
+              </button>
+            )}
             <button
               className="add-menu-item"
               onClick={(e) => handleAction('project', e)}

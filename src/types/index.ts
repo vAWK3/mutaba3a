@@ -729,37 +729,6 @@ export interface BulkUploadFile {
 // Monthly Close Types
 // ============================================================================
 
-// Monthly close checklist items
-export interface MonthCloseChecklist {
-  receiptsLinked: boolean;
-  recurringConfirmed: boolean;
-  categorized: boolean;
-  zipExported: boolean;
-}
-
-// Month close status entity
-export interface MonthCloseStatus {
-  id: string; // "{profileId}:{monthKey}"
-  profileId: string;
-  monthKey: string; // YYYY-MM format
-  isClosed: boolean;
-  closedAt?: string;
-  checklist: MonthCloseChecklist;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Computed status based on actual data
-export interface MonthCloseComputedStatus {
-  monthKey: string;
-  profileId: string;
-  unlinkedReceiptsCount: number;
-  uncategorizedExpensesCount: number;
-  isFullyLinked: boolean;
-  isFullyCategorized: boolean;
-}
-
 // ============================================================================
 // Retainer Types (for recurring income agreements)
 // ============================================================================

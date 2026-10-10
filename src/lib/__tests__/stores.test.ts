@@ -311,7 +311,6 @@ describe('useDrawerStore', () => {
           defaultProfileId: 'profile-1',
           isRecurring: true,
           prefillData: { vendor: 'Test Vendor', amountMinor: 5000 },
-          linkReceiptId: 'receipt-1',
         });
       });
 
@@ -323,7 +322,6 @@ describe('useDrawerStore', () => {
       expect(state.isRecurring).toBe(true);
       expect(state.prefillData?.vendor).toBe('Test Vendor');
       expect(state.prefillData?.amountMinor).toBe(5000);
-      expect(state.linkReceiptId).toBe('receipt-1');
     });
 
     it('should close expense drawer', () => {

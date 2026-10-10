@@ -4,6 +4,7 @@
  */
 
 import { db } from './database';
+import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 
 export interface BackupData {
   version: number;
@@ -90,6 +91,11 @@ export async function restoreFromBackup(backupJson: string): Promise<{ recordsRe
       }
     }
   });
+
+  // A backup from an older build carries a settings row without `features`;
+  // switch on the optional areas the restored rows belong to (MUT-12 / MUT-14).
+  // Logged, never thrown: the restore itself has already succeeded.
+  await reconcileFeaturesAfterDataLoad('restore', db);
 
   return { recordsRestored, backupVersion: data.version };
 }

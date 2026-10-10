@@ -570,7 +570,7 @@ function DataToolsSection() {
   // stay in the database and leave through this ZIP.
   const { data: receiptCount = 0 } = useQuery({
     queryKey: ['receipts', 'count'],
-    queryFn: async () => (await getRepositories().base.receipts.list({})).length,
+    queryFn: () => getRepositories().base.receipts.count(),
   });
   const [isExportingReceipts, setIsExportingReceipts] = useState(false);
   const handleExportReceipts = async () => {

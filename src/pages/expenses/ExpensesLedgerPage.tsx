@@ -8,7 +8,6 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl, type SearchInputRef } from '../../components/filters';
 import { EmptyState, RowActionsMenu, AmountWithConversion, RecurringOccurrenceList } from '../../components/ui';
@@ -178,6 +177,12 @@ export function ExpensesLedgerPage() {
     );
   }
 
+  const handleEditRule = (expense: ExpenseDisplay) => {
+    if (expense.recurringRuleId) {
+      openExpenseDrawer({ mode: 'edit', recurringRuleId: expense.recurringRuleId });
+    }
+  };
+
   const handleRowClick = (id: string) => {
     openExpenseDrawer({ mode: 'edit', expenseId: id });
   };
@@ -229,6 +234,11 @@ export function ExpensesLedgerPage() {
         expectedDate: occurrence.expectedDate,
       });
     }
+  };
+
+  // The rule behind a projected occurrence is edited in the expense drawer (MUT-14)
+  const handleEditOccurrenceRule = (occurrence: VirtualOccurrenceDisplay) => {
+    openExpenseDrawer({ mode: 'edit', recurringRuleId: occurrence.ruleId });
   };
 
   const handleSnooze = (occurrence: VirtualOccurrenceDisplay) => {
@@ -322,13 +332,6 @@ export function ExpensesLedgerPage() {
             onChange={setSearch}
             placeholder={t('transactions.searchPlaceholder')}
           />
-          <Link to="/expenses/vendors" className="btn btn-ghost btn-sm">
-            {t('expenses.vendors.title')}
-          </Link>
-          {/* Link to profile expenses for recurring management */}
-          <Link to="/expenses/profiles" className="btn btn-ghost btn-sm">
-            {t('expenses.manageRecurring')}
-          </Link>
         </div>
 
         {/* Due Occurrences Section */}
@@ -351,6 +354,7 @@ export function ExpensesLedgerPage() {
                 onMarkPaid={handleMarkPaid}
                 onSkip={handleSkip}
                 onSnooze={handleSnooze}
+                onEditRule={handleEditOccurrenceRule}
               />
             )}
           </div>
@@ -402,6 +406,7 @@ export function ExpensesLedgerPage() {
             onRowClick={handleRowClick}
             onDuplicate={handleDuplicate}
             onDelete={handleDelete}
+            onEditRule={handleEditRule}
             t={t}
           />
         ) : (
@@ -413,6 +418,7 @@ export function ExpensesLedgerPage() {
             onRowClick={handleRowClick}
             onDuplicate={handleDuplicate}
             onDelete={handleDelete}
+            onEditRule={handleEditRule}
             t={t}
           />
         )}
@@ -445,7 +451,8 @@ interface ExpenseListViewProps {
   onRowClick: (id: string) => void;
   onDuplicate: (expense: ExpenseDisplay) => void;
   onDelete: (expense: ExpenseDisplay) => void;
-  t: (key: string) => string;
+  onEditRule: (expense: ExpenseDisplay) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
 function ExpenseListView({
@@ -455,6 +462,7 @@ function ExpenseListView({
   onRowClick,
   onDuplicate,
   onDelete,
+  onEditRule,
   t,
 }: ExpenseListViewProps) {
   return (
@@ -489,6 +497,11 @@ function ExpenseListView({
                       {t('expenses.recurringBadge')}
                     </span>
                   )}
+                  {expense.receiptCount > 0 && (
+                    <span className="receipt-badge" title={t('expenses.receiptsAttached', { count: expense.receiptCount })}>
+                      📎 {expense.receiptCount}
+                    </span>
+                  )}
                 </span>
               </td>
               {!isCompact && <td className="text-secondary">{expense.categoryName || '-'}</td>}
@@ -503,6 +516,14 @@ function ExpenseListView({
               <td onClick={(e) => e.stopPropagation()}>
                 <RowActionsMenu
                   actions={[
+                    ...(expense.recurringRuleId
+                      ? [
+                          {
+                            label: t('expenses.recurring.editRule'),
+                            onClick: () => onEditRule(expense),
+                          },
+                        ]
+                      : []),
                     {
                       label: t('common.duplicate'),
                       icon: <CopyIcon size={16} />,
@@ -534,7 +555,8 @@ interface ExpenseGroupedViewProps {
   onRowClick: (id: string) => void;
   onDuplicate: (expense: ExpenseDisplay) => void;
   onDelete: (expense: ExpenseDisplay) => void;
-  t: (key: string) => string;
+  onEditRule: (expense: ExpenseDisplay) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
 function ExpenseGroupedView({
@@ -545,6 +567,7 @@ function ExpenseGroupedView({
   onRowClick,
   onDuplicate,
   onDelete,
+  onEditRule,
   t,
 }: ExpenseGroupedViewProps) {
   return (
@@ -602,6 +625,14 @@ function ExpenseGroupedView({
                     <td style={{ width: 48 }} onClick={(e) => e.stopPropagation()}>
                       <RowActionsMenu
                         actions={[
+                          ...(expense.recurringRuleId
+                            ? [
+                                {
+                                  label: t('expenses.recurring.editRule'),
+                                  onClick: () => onEditRule(expense),
+                                },
+                              ]
+                            : []),
                           {
                             label: t('common.duplicate'),
                             icon: <CopyIcon size={16} />,

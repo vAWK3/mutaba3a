@@ -65,7 +65,6 @@
     "documents": "المستندات",
     "retainers": "العقود المتكررة",
     "expenses": "المصروفات",
-    "suppliers": "الموردون",
     "reports": "التقارير",
     "settings": "الإعدادات",
     "download": "تحميل",
@@ -500,12 +499,30 @@
       "openSettings": "فتح الإعدادات",
       "dismiss": "إغلاق",
       "items": {
-        "invoices": { "label": "الفواتير والإيصالات", "description": "إنشاء مستندات مرقّمة من قيود الدخل" },
-        "retainers": { "label": "العقود الشهرية", "description": "اتفاقيات متكررة مع دخل متوقع" },
-        "expenses": { "label": "المصروفات", "description": "تتبّع المصروفات في سجل واحد، مع المورّدين الذين تدفع لهم" },
-        "insights": { "label": "التحليلات", "description": "تقارير واتجاهات عبر العملاء والأشهر" },
-        "planning": { "label": "التخطيط", "description": "سيناريوهات وافتراضات للأشهر القادمة" },
-        "projects": { "label": "المشاريع", "description": "تجميع قيود الدخل تحت مشروع" }
+        "invoices": {
+          "label": "الفواتير والإيصالات",
+          "description": "إنشاء مستندات مرقّمة من قيود الدخل"
+        },
+        "retainers": {
+          "label": "العقود الشهرية",
+          "description": "اتفاقيات متكررة مع دخل متوقع"
+        },
+        "expenses": {
+          "label": "المصروفات",
+          "description": "تتبّع المصروفات في سجل واحد، مع المورّدين الذين تدفع لهم"
+        },
+        "insights": {
+          "label": "التحليلات",
+          "description": "تقارير واتجاهات عبر العملاء والأشهر"
+        },
+        "planning": {
+          "label": "التخطيط",
+          "description": "سيناريوهات وافتراضات للأشهر القادمة"
+        },
+        "projects": {
+          "label": "المشاريع",
+          "description": "تجميع قيود الدخل تحت مشروع"
+        }
       }
     },
     "data": {
@@ -623,27 +640,16 @@
     "error": "فشل التحديث"
   },
   "expenses": {
-    "title": "المصروفات",
-    "profileExpenses": "مصروفات {name}",
     "addExpense": "إضافة مصروف",
-    "addRecurring": "إضافة متكرر",
     "empty": "لا توجد مصروفات",
     "emptyHint": "أضف أول مصروف للبدء",
     "summary": {
-      "total": "إجمالي المصروفات",
-      "thisMonth": "هذا الشهر"
+      "total": "إجمالي المصروفات"
     },
     "view": {
       "list": "قائمة",
-      "byCategory": "حسب الفئة",
-      "byProject": "حسب المشروع"
+      "byCategory": "حسب الفئة"
     },
-    "emptyProfiles": "لا توجد ملفات تعريف",
-    "emptyProfilesHint": "أنشئ ملف تعريف لتتبع المصروفات",
-    "emptyExpenses": "لا توجد مصروفات",
-    "emptyExpensesSearch": "حاول تعديل البحث أو الفلاتر",
-    "emptyExpensesHint": "أضف أول مصروف للبدء",
-    "searchPlaceholder": "بحث في المصروفات...",
     "confirmDelete": "هل أنت متأكد من حذف هذا المصروف؟",
     "deleteSuccess": "تم حذف المصروف بنجاح",
     "deleteError": "فشل حذف المصروف",
@@ -651,137 +657,16 @@
     "confirmDeleteFromRecurring": "هذا المصروف تم إنشاؤه من قاعدة متكررة. هل تريد حذفه؟",
     "fromRecurring": "تم إنشاؤه من قاعدة مصروف متكررة",
     "recurringBadge": "متكرر",
-    "confirmDeleteRule": "هل أنت متأكد من حذف هذه القاعدة المتكررة؟",
-    "year": "السنة",
-    "month": "الشهر",
-    "allMonths": "جميع الأشهر",
-    "allCategories": "جميع الفئات",
-    "totalExpenses": "إجمالي المصروفات",
-    "totalUSD": "الإجمالي (دولار)",
-    "totalILS": "الإجمالي (شيكل)",
-    "viewReceipts": "عرض الإيصالات",
-    "manageReceipts": "إدارة الإيصالات",
-    "manageRecurring": "إدارة المتكررة",
     "noProfileSelected": "يرجى اختيار ملف تجاري أولاً.",
-    "allProfilesOverview": "نظرة عامة على جميع الملفات",
-    "allProfiles": "جميع الملفات",
-    "currentProfile": "الحالي: {name}",
-    "profileMode": "وضع الملف الشخصي",
-    "profileSpecificTools": "أدوات خاصة بالملف",
-    "profileSpecificToolsHint": "الجداول المتكررة والمدفوعات المستحقة والتوقعات تتطلب اختيار ملف محدد.",
-    "openProfile": "افتح {name}",
-    "recurringRules": "القواعد المتكررة",
-    "monthly": "شهرياً",
-    "yearly": "سنوياً",
-    "pause": "إيقاف",
-    "resume": "استئناف",
-    "paused": "متوقف",
-    "profileNotFound": "الملف غير موجود",
-    "profileNotFoundHint": "قد يكون هذا الملف محذوفاً أو غير موجود",
-    "untitled": "بدون عنوان",
-    "unknownProfile": "ملف غير معروف",
-    "vendors": {
-      "title": "الموردون",
-      "hint": "يتم إنشاء الموردين تلقائياً عند إضافة مصروف. لا يمكن إنشاء مورد من هذه الشاشة.",
-      "backToExpenses": "العودة إلى المصروفات",
-      "definedVendors": "الموردون المعرّفون",
-      "activeInYear": "نشطون في {year}",
-      "expenseCount": "عدد المصروفات",
-      "showMonthlyVariation": "عرض شهري",
-      "hideMonthlyVariation": "إخفاء شهري",
-      "month": "الشهر",
-      "delta": "الفرق",
-      "empty": "لا يوجد موردون بعد",
-      "emptyHint": "أضف مصروفاً مع اسم مورد لإنشاء أول مورد."
-    },
-    "overview": {
-      "title": "نظرة عامة على المصروفات",
-      "allProfiles": "جميع الملفات",
-      "profileBreakdown": "المصروفات حسب الملف",
-      "totalExpenses": "إجمالي المصروفات",
-      "monthlyBreakdown": "التوزيع الشهري",
-      "byProfile": "حسب الملف",
-      "noProfiles": "لا توجد ملفات تعريف",
-      "profile": "الملف",
-      "total": "الإجمالي",
-      "percentage": "النسبة"
-    },
-    "forecast": {
-      "title": "توقعات المصروفات",
-      "minimumNeeded": "الحد الأدنى المطلوب",
-      "untilEndOfYear": "حتى نهاية {year}",
-      "monthsRemaining": "الأشهر المتبقية",
-      "yearTotal": "إجمالي السنة",
-      "activeRules": "القواعد النشطة",
-      "monthlyForecast": "التوقعات الشهرية",
-      "month": "الشهر",
-      "projected": "المتوقع",
-      "actual": "الفعلي",
-      "delta": "الفرق",
-      "current": "الحالي",
-      "total": "الإجمالي",
-      "byProfile": "حسب الملف",
-      "empty": "لا توجد بيانات توقعات",
-      "emptyHint": "أضف مصروفات متكررة لرؤية التوقعات",
-      "activeRecurringRules": "القواعد المتكررة النشطة"
-    },
-    "receipts": {
-      "title": "الإيصالات",
-      "upload": "رفع إيصال",
-      "uploading": "جارٍ الرفع...",
-      "total": "الإجمالي",
-      "linked": "مرتبط",
-      "unlinked": "غير مرتبط",
-      "allTab": "الكل",
-      "inboxTab": "الوارد",
-      "suggestionsTab": "المقترحات",
-      "linkToExpense": "ربط بمصروف",
-      "link": "ربط",
-      "unlink": "إلغاء الربط",
-      "unlinkFromExpense": "إلغاء الربط",
-      "exportZip": "تصدير ZIP",
-      "exporting": "جارٍ التصدير...",
-      "download": "تحميل",
-      "empty": "لا توجد إيصالات",
-      "emptyHint": "ارفع أول إيصال",
-      "noReceipts": "لا توجد إيصالات",
-      "noReceiptsHint": "ارفع أول إيصال",
-      "fileTooLarge": "الملف كبير جداً (الحد الأقصى {maxSize})",
-      "invalidFileType": "نوع ملف غير صالح. يرجى رفع صورة أو PDF",
-      "uploadFailed": "فشل رفع الإيصال",
-      "selectExpense": "اختر مصروف للربط",
-      "noExpensesToLink": "لا توجد مصروفات للربط. أنشئ مصروف أولاً.",
-      "confirmUnlink": "هل أنت متأكد من إلغاء ربط هذا الإيصال؟",
-      "confirmDelete": "هل أنت متأكد من حذف هذا الإيصال؟"
-    },
     "recurring": {
-      "title": "المصروفات المتكررة",
-      "addRule": "إضافة متكرر",
-      "frequency": "التكرار",
       "monthly": "شهرياً",
       "yearly": "سنوياً",
-      "startDate": "تاريخ البدء",
-      "endMode": "وضع الانتهاء",
       "endOfYear": "نهاية السنة",
       "untilDate": "حتى تاريخ",
       "noEnd": "بدون انتهاء",
-      "endDate": "تاريخ الانتهاء",
-      "pause": "إيقاف",
-      "resume": "استئناف",
-      "paused": "متوقف",
-      "active": "نشط",
-      "dayOfMonth": "يوم الشهر",
-      "monthOfYear": "الشهر",
-      "reminderDays": "أيام التذكير",
-      "reminderDaysHint": "أيام قبل الاستحقاق لعرض التذكير",
-      "scope": "النطاق",
-      "scopeGeneral": "عام",
-      "scopeProject": "مشروع",
       "occurrence": {
-        "title": "مصروف متكرر",
         "confirmPayment": "تأكيد الدفع",
         "skip": "تخطي",
-        "skipConfirm": "هل أنت متأكد من تخطي هذا المصروف؟",
         "snooze": "تأجيل",
         "snoozeUntil": "تأجيل حتى",
         "markPaid": "تم الدفع",
@@ -791,64 +676,20 @@
         "notes": "ملاحظات",
         "notesPlaceholder": "أي ملاحظات عن هذا الدفع...",
         "state": {
-          "projected": "متوقع",
-          "due": "مستحق",
-          "overdue": "متأخر",
-          "snoozed": "مؤجل",
-          "paid": "مدفوع",
-          "skipped": "متخطى"
+          "projected": "متوقع"
         },
         "dueIn": "مستحق خلال {days} أيام",
         "dueToday": "مستحق اليوم",
         "overdueDays": "متأخر {days} أيام",
         "snoozedUntil": "مؤجل حتى {date}",
         "empty": "لا توجد مصروفات متكررة قادمة",
-        "emptyHint": "أنشئ قاعدة متكررة لرؤية الدفعات القادمة",
         "needsAttention": "تحتاج انتباه",
         "confirmSkip": "هل أنت متأكد من تخطي هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء."
       },
-      "rule": {
-        "new": "قاعدة متكررة جديدة",
-        "edit": "تعديل القاعدة المتكررة",
-        "title": "العنوان",
-        "titlePlaceholder": "مثل: إيجار المكتب، الاشتراكات",
-        "amount": "المبلغ",
-        "history": "سجل الدفعات",
-        "noHistory": "لا يوجد سجل دفعات حتى الآن",
-        "deleteConfirm": "هل أنت متأكد من حذف هذه القاعدة المتكررة؟ لن تتأثر المصروفات السابقة."
-      },
-      "forecast": "المصروفات القادمة"
+      "forecast": "المصروفات القادمة",
+      "editRule": "تعديل القاعدة المتكررة"
     },
-    "columns": {
-      "date": "التاريخ",
-      "title": "العنوان",
-      "vendor": "المورد",
-      "category": "الفئة",
-      "amount": "المبلغ",
-      "receipts": "الإيصالات"
-    },
-    "categories": {
-      "title": "الفئات",
-      "addCategory": "إضافة فئة",
-      "name": "الاسم",
-      "color": "اللون",
-      "setup": "إعداد الفئات",
-      "setupTitle": "إعداد فئات المصروفات",
-      "selectPreset": "اختر مجموعة فئات تناسب نوع نشاطك التجاري:",
-      "seedCategories": "إنشاء الفئات",
-      "presets": {
-        "general": "نشاط تجاري عام",
-        "startup": "شركة تقنية ناشئة",
-        "lawFirm": "مكتب محاماة",
-        "freelancer": "عمل حر"
-      },
-      "presetDescriptions": {
-        "general": "إيجار المكتب، المرافق، البرمجيات، التسويق، السفر، والمزيد",
-        "startup": "البنية السحابية، اشتراكات SaaS، خدمات الذكاء الاصطناعي، أدوات التطوير، مساحات العمل المشتركة",
-        "lawFirm": "البحث القانوني، رسوم النقابة، رسوم المحكمة، الشهود الخبراء، إدارة القضايا",
-        "freelancer": "أدوات البرمجيات، التخزين السحابي، التسويق، التطوير المهني"
-      }
-    }
+    "receiptsAttached": "{count} إيصال مرفق"
   },
   "retainers": {
     "title": "العقود المتكررة",
@@ -1245,35 +1086,6 @@
   "project": {
     "createNew": "إنشاء مشروع جديد"
   },
-  "suppliers": {
-    "title": "الموردون",
-    "hint": "يتم جمع الموردين من المصروفات. أضف مصروفاً مع اسم مورد لرؤيته هنا.",
-    "noProfile": "يرجى اختيار ملف أولاً.",
-    "year": "السنة",
-    "totalSuppliers": "الموردون النشطون",
-    "name": "المورد",
-    "expenses": "المصروفات",
-    "totalSpent": "إجمالي الإنفاق",
-    "showMonthly": "شهري",
-    "hideMonthly": "إخفاء",
-    "month": "الشهر",
-    "delta": "التغيير",
-    "empty": "لا يوجد موردون بعد",
-    "emptyHint": "أضف مصروفاً مع اسم مورد لرؤية الموردين هنا."
-  },
-  "receipts": {
-    "suggestions": {
-      "title": "اقتراحات المطابقة",
-      "link": "ربط",
-      "noMatches": "لم يتم العثور على مصاريف مطابقة",
-      "createAndLink": "إنشاء مصروف وربط",
-      "highConfidence": "تطابق عالي الدقة",
-      "mediumConfidence": "تطابق محتمل",
-      "lowConfidence": "تطابق ممكن",
-      "allLinked": "جميع الإيصالات مربوطة",
-      "allLinkedHint": "أحسنت! تم ربط جميع إيصالاتك بالمصاريف."
-    }
-  },
   "bulkUpload": {
     "title": "رفع الإيصالات بالجملة",
     "button": "رفع بالجملة",
@@ -1291,42 +1103,6 @@
     "retryFailed": "إعادة المحاولة",
     "statusPending": "قيد الانتظار",
     "duplicate": "ملف مكرر"
-  },
-  "monthClose": {
-    "title": "إغلاق الشهر",
-    "checklist": "قائمة الإغلاق",
-    "monthClosed": "تم إغلاق الشهر",
-    "closedAt": "تم الإغلاق في {date}",
-    "readyToClose": "جاهز للإغلاق",
-    "notReady": "غير جاهز للإغلاق",
-    "allTasksComplete": "تم إكمال جميع المهام المطلوبة.",
-    "completeTasks": "أكمل عناصر القائمة أدناه قبل الإغلاق.",
-    "receiptsLinked": "جميع الإيصالات مربوطة بالمصاريف",
-    "allLinked": "جميع الإيصالات مربوطة",
-    "unlinkedCount": "{count} إيصالات غير مربوطة",
-    "viewReceipts": "عرض الإيصالات",
-    "allCategorized": "جميع المصاريف مصنفة",
-    "allCategorizedStatus": "جميع المصاريف لها تصنيفات",
-    "uncategorizedCount": "{count} مصاريف غير مصنفة",
-    "viewExpenses": "عرض المصاريف",
-    "recurringConfirmed": "تأكيد المصاريف المتكررة",
-    "recurringConfirmedHint": "تحقق من صحة جميع المصاريف المتكررة لهذا الشهر",
-    "zipExported": "تصدير الإيصالات (اختياري)",
-    "zipExportedHint": "تصدير نسخة احتياطية من جميع الإيصالات",
-    "exportZip": "تصدير ZIP",
-    "closeMonth": "إغلاق الشهر",
-    "notesLabel": "ملاحظات (اختياري)",
-    "notesPlaceholder": "أضف أي ملاحظات حول إغلاق هذا الشهر...",
-    "closeMonthButton": "إغلاق الشهر",
-    "completeChecklistFirst": "أكمل جميع عناصر القائمة المطلوبة قبل إغلاق الشهر.",
-    "confirmClose": "هل أنت متأكد من إغلاق هذا الشهر؟ سيتم تحديده كمنتهي.",
-    "confirmReopen": "هل أنت متأكد من إعادة فتح هذا الشهر؟ سيسمح بالتعديل مرة أخرى.",
-    "reopen": "إعادة فتح الشهر",
-    "warning": {
-      "title": "شهر مغلق",
-      "text": "تم إغلاق {month}. لا يُنصح بتعديل المصاريف في الأشهر المغلقة.",
-      "reopenButton": "إعادة الفتح للتعديل"
-    }
   },
   "landing": {
     "langToggle": {

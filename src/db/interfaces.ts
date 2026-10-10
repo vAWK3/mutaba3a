@@ -36,14 +36,9 @@ import type {
   Expense,
   ExpenseDisplay,
   ExpenseFilters,
-  MonthlyExpenseTotal,
-  ProfileExpenseSummary,
   ExpenseCategory,
   Receipt,
   Vendor,
-  MonthCloseStatus,
-  MonthCloseChecklist,
-  MonthCloseComputedStatus,
   RecurringRule,
   RecurringOccurrence,
   RecurringOccurrenceStatus,
@@ -213,12 +208,6 @@ export interface IExpenseRepository extends BaseRepository<Expense, Omit<Expense
   /** Returns display rows (receipt count, recurring flag), not bare entities. */
   list(filters?: ExpenseFilters): Promise<ExpenseDisplay[]>;
   softDelete(id: string): Promise<void>;
-  getYearlyTotals(
-    profileId: string,
-    year: number
-  ): Promise<{ totalMinorUSD: number; totalMinorILS: number; byMonth: MonthlyExpenseTotal[] }>;
-  getAllProfilesTotals(year: number): Promise<ProfileExpenseSummary[]>;
-  getReceiptCount(expenseId: string): Promise<number>;
 }
 
 // ============================================================================
@@ -235,11 +224,8 @@ export interface IExpenseCategoryRepository extends BaseRepository<ExpenseCatego
 
 export interface IReceiptRepository extends BaseRepository<Receipt, Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>> {
   list(filters?: { profileId?: string; expenseId?: string; monthKey?: string }): Promise<Receipt[]>;
-  linkToExpense(receiptId: string, expenseId: string): Promise<void>;
-  unlinkFromExpense(receiptId: string): Promise<void>;
-  getUnlinkedByProfile(profileId: string): Promise<Receipt[]>;
-  getByProfileAndMonth(profileId: string, monthKey: string): Promise<Receipt[]>;
-  getLinkedByProfileAndMonth(profileId: string, monthKey: string): Promise<Receipt[]>;
+  /** Row count without loading the base64 payloads (Settings › Export receipts). */
+  count(): Promise<number>;
 }
 
 // ============================================================================
@@ -249,27 +235,7 @@ export interface IReceiptRepository extends BaseRepository<Receipt, Omit<Receipt
 export interface IVendorRepository extends BaseRepository<Vendor, Omit<Vendor, 'id' | 'createdAt' | 'updatedAt'>> {
   list(profileId?: string): Promise<Vendor[]>;
   /** Vendors are matched by alias, not by exact name. */
-  findByAlias(profileId: string, rawVendor: string): Promise<Vendor | undefined>;
   findOrCreate(profileId: string, rawVendor: string): Promise<Vendor>;
-  mergeVendors(targetId: string, sourceId: string): Promise<void>;
-  addAlias(vendorId: string, alias: string): Promise<void>;
-}
-
-// ============================================================================
-// Month Close Status Repository Interface
-// ============================================================================
-
-export interface IMonthCloseStatusRepository {
-  /** Looks up by the status row's own id, not by profile + month. */
-  get(id: string): Promise<MonthCloseStatus | undefined>;
-  getByProfileAndMonth(profileId: string, monthKey: string): Promise<MonthCloseStatus | undefined>;
-  getOrCreate(profileId: string, monthKey: string): Promise<MonthCloseStatus>;
-  updateChecklist(profileId: string, monthKey: string, updates: Partial<MonthCloseChecklist>): Promise<void>;
-  closeMonth(profileId: string, monthKey: string, notes?: string): Promise<void>;
-  reopenMonth(profileId: string, monthKey: string): Promise<void>;
-  isMonthClosed(profileId: string, monthKey: string): Promise<boolean>;
-  getComputedStatus(profileId: string, monthKey: string): Promise<MonthCloseComputedStatus>;
-  list(profileId: string): Promise<MonthCloseStatus[]>;
 }
 
 // ============================================================================
@@ -433,7 +399,6 @@ export interface IRepositoryProvider {
   expenseCategories: IExpenseCategoryRepository;
   receipts: IReceiptRepository;
   vendors: IVendorRepository;
-  monthCloseStatuses: IMonthCloseStatusRepository;
   recurringRules: IRecurringRuleRepository;
   recurringOccurrences: IRecurringOccurrenceRepository;
   retainerAgreements: IRetainerAgreementRepository;

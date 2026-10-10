@@ -54,7 +54,6 @@ import {
   expenseCategoryRepo,
   receiptRepo,
   vendorRepo,
-  monthCloseRepo,
   recurringRuleRepo,
   recurringOccurrenceRepo,
 } from './expenseRepository';
@@ -98,7 +97,6 @@ const dexieBase = {
   expenseCategories: expenseCategoryRepo,
   receipts: receiptRepo,
   vendors: vendorRepo,
-  monthCloseStatuses: monthCloseRepo,
   recurringRules: recurringRuleRepo,
   recurringOccurrences: recurringOccurrenceRepo,
   retainerAgreements: retainerRepo,

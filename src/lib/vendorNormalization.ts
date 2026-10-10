@@ -146,45 +146,6 @@ export function vendorSimilarity(a: string, b: string): number {
 }
 
 /**
- * Checks if two vendor names are likely the same vendor.
- *
- * @param a - First vendor name
- * @param b - Second vendor name
- * @param threshold - Similarity threshold (default: 0.8)
- * @returns True if the vendors are likely the same
- */
-export function isSameVendor(a: string, b: string, threshold = 0.8): boolean {
-  return vendorSimilarity(a, b) >= threshold;
-}
-
-/**
- * Finds the best matching vendor from a list of candidates.
- *
- * @param target - The vendor name to match
- * @param candidates - List of candidate vendor names
- * @param threshold - Minimum similarity threshold (default: 0.8)
- * @returns The best match and its score, or null if no match above threshold
- */
-export function findBestVendorMatch(
-  target: string,
-  candidates: string[],
-  threshold = 0.8
-): { name: string; score: number } | null {
-  if (!target || candidates.length === 0) return null;
-
-  let bestMatch: { name: string; score: number } | null = null;
-
-  for (const candidate of candidates) {
-    const score = vendorSimilarity(target, candidate);
-    if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
-      bestMatch = { name: candidate, score };
-    }
-  }
-
-  return bestMatch;
-}
-
-/**
  * Escapes special regex characters in a string.
  */
 function escapeRegex(str: string): string {

@@ -8,15 +8,29 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../../db/provider';
-import { queryKeys, useSettings } from '../../hooks/useQueries';
 import type { FeatureKey } from '../../types';
 import { resolveFeatures, withFeature, type FeatureFlags } from './features';
 
+/**
+ * Same key as `queryKeys.settings()` in `hooks/useQueries.ts`, declared here
+ * so this module does not import that barrel: page tests mock it wholesale
+ * (`vi.mock('../../../hooks/useQueries')`), and anything the top bar or the
+ * sidebar reads through it would vanish inside those tests.
+ */
+const SETTINGS_QUERY_KEY = ['settings'] as const;
+
+function useSettingsRow() {
+  return useQuery({
+    queryKey: SETTINGS_QUERY_KEY,
+    queryFn: () => getRepositories().base.settings.get(),
+  });
+}
+
 /** The whole map, resolved; stable between renders while the row is unchanged. */
 export function useFeatureFlags(): FeatureFlags {
-  const { data } = useSettings();
+  const { data } = useSettingsRow();
   const stored = data?.features;
   return useMemo(() => resolveFeatures(stored), [stored]);
 }
@@ -49,7 +63,7 @@ export function useSetFeatureEnabled() {
       await settings.update({ features: { ...withFeature(current, key, enabled) } });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings() });
+      queryClient.invalidateQueries({ queryKey: SETTINGS_QUERY_KEY });
     },
   });
 }
@@ -59,12 +73,12 @@ export function useSetFeatureEnabled() {
  * import) and not yet shown to the user, plus the one-shot `dismiss`.
  */
 export function useFeatureNotice(): { notice: FeatureKey[]; isLoaded: boolean; dismiss: () => Promise<void> } {
-  const { data, isSuccess } = useSettings();
+  const { data, isSuccess } = useSettingsRow();
   const queryClient = useQueryClient();
 
   const dismiss = useCallback(async () => {
     await getRepositories().base.settings.update({ featureNotice: undefined });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.settings() });
+    await queryClient.invalidateQueries({ queryKey: SETTINGS_QUERY_KEY });
   }, [queryClient]);
 
   return {

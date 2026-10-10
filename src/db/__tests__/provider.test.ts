@@ -6,7 +6,7 @@ import {
   type Repositories,
 } from '../provider';
 import { transactionRepo, clientRepo, settingsRepo } from '../repository';
-import { expenseRepo, monthCloseRepo } from '../expenseRepository';
+import { expenseRepo } from '../expenseRepository';
 import { retainerRepo, projectedIncomeRepo } from '../retainerRepository';
 import { syncedTransactionRepo, syncedPaymentRecordRepo } from '../../sync/core/synced-repository';
 
@@ -24,7 +24,6 @@ describe('repository provider', () => {
       expect(repos.base.clients).toBe(clientRepo);
       expect(repos.base.settings).toBe(settingsRepo);
       expect(repos.base.expenses).toBe(expenseRepo);
-      expect(repos.base.monthCloseStatuses).toBe(monthCloseRepo);
       expect(repos.base.retainerAgreements).toBe(retainerRepo);
       expect(repos.base.projectedIncome).toBe(projectedIncomeRepo);
     });

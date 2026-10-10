@@ -166,13 +166,6 @@ const themeDemoRoute = createRoute({
 // ============================================================================
 
 // Expenses search params
-interface ExpensesSearch {
-  year?: number;
-  month?: number;
-  currency?: 'USD' | 'ILS';
-  categoryId?: string;
-}
-
 // Main expenses route - uses the new question-first ExpensesLedgerPage
 const expensesRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -300,10 +293,6 @@ const planningRoute = createRoute({
 });
 
 // Monthly close search params
-interface MonthCloseSearch {
-  month?: string;
-}
-
 // Legacy route (MUT-14): the month-close checklist was removed; old links land on the ledger,
 // which then applies the Expenses switch.
 const monthCloseRoute = createRoute({

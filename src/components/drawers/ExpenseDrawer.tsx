@@ -15,7 +15,7 @@ import {
   useUpdateRecurringRule,
   useDeleteRecurringRule,
   useExpenseCategories,
-  useLinkReceiptToExpense,
+  useSeedExpenseCategories,
 } from '../../hooks/useExpenseQueries';
 import { VendorTypeahead } from '../ui/VendorTypeahead';
 import { ClientTypeahead } from '../ui/ClientTypeahead';
@@ -89,7 +89,7 @@ type FormData = z.infer<typeof schema>;
 
 export function ExpenseDrawer() {
   const { expenseDrawer, closeExpenseDrawer } = useDrawerStore();
-  const { mode, expenseId, recurringRuleId, defaultProfileId, isRecurring, prefillData, linkReceiptId } = expenseDrawer;
+  const { mode, expenseId, recurringRuleId, defaultProfileId, isRecurring, prefillData } = expenseDrawer;
   const t = useT();
   const { language } = useLanguage();
   const { showToast } = useToast();
@@ -97,7 +97,6 @@ export function ExpenseDrawer() {
   const { data: profiles = [] } = useBusinessProfiles();
   const { data: existingExpense, isLoading: expenseLoading } = useExpense(expenseId || '');
   const { data: existingRule, isLoading: ruleLoading } = useRecurringRule(recurringRuleId || '');
-  const linkReceiptMutation = useLinkReceiptToExpense();
 
   // Get categories for selected profile
   const form = useForm<FormData>({
@@ -128,7 +127,17 @@ export function ExpenseDrawer() {
   const selectedEndMode = watch('endMode');
   const selectedClientId = watch('clientId');
 
-  const { data: profileCategories = [] } = useExpenseCategories(selectedProfileId);
+  const { data: profileCategories = [], isSuccess: categoriesLoaded } = useExpenseCategories(selectedProfileId);
+
+  // A profile with no categories gets the default set on first use (MUT-14):
+  // the seeding button lived on a deleted page; without rows here the ledger's
+  // "by category" view cannot resolve names.
+  const seedCategories = useSeedExpenseCategories();
+  useEffect(() => {
+    if (!selectedProfileId || !categoriesLoaded || profileCategories.length > 0 || seedCategories.isPending) return;
+    seedCategories.mutate({ profileId: selectedProfileId, preset: 'general', language });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per empty profile; the mutation object is stable enough and re-running on its identity would loop
+  }, [selectedProfileId, categoriesLoaded, profileCategories.length, language]);
   const { data: projectsData = [] } = useProjects();
 
   // Bi-directional cascade between client and project fields
@@ -256,14 +265,7 @@ export function ExpenseDrawer() {
         if (mode === 'edit' && expenseId) {
           await updateExpenseMutation.mutateAsync({ id: expenseId, data: expenseData });
         } else {
-          const createdExpense = (await createExpenseMutation.mutateAsync(expenseData)) as { id: string } | undefined;
-          // Link receipt if provided
-          if (linkReceiptId && createdExpense) {
-            await linkReceiptMutation.mutateAsync({
-              receiptId: linkReceiptId,
-              expenseId: createdExpense.id,
-            });
-          }
+          await createExpenseMutation.mutateAsync(expenseData);
         }
       }
       closeExpenseDrawer();

@@ -8,13 +8,7 @@ import type {
   ExpenseFilters,
   ReceiptFilters,
   ExpenseDisplay,
-  MonthlyExpenseTotal,
-  ProfileExpenseSummary,
   Vendor,
-  MonthCloseStatus,
-  MonthCloseChecklist,
-  MonthCloseComputedStatus,
-  ReceiptMatchSuggestion,
 } from '../types';
 import { normalizeVendor, vendorSimilarity, suggestCanonicalName } from '../lib/vendorNormalization';
 
@@ -169,83 +163,7 @@ export const expenseRepo = {
     await db.expenses.delete(id);
   },
 
-  async getYearlyTotals(
-    profileId: string,
-    year: number
-  ): Promise<{
-    totalMinorUSD: number;
-    totalMinorILS: number;
-    byMonth: MonthlyExpenseTotal[];
-  }> {
-    const expenses = await db.expenses
-      .where('profileId')
-      .equals(profileId)
-      .filter((e) => {
-        if (!excludeDeleted(e)) return false;
-        const expenseYear = new Date(e.occurredAt).getFullYear();
-        return expenseYear === year;
-      })
-      .toArray();
 
-    let totalMinorUSD = 0;
-    let totalMinorILS = 0;
-    const monthlyTotals: Map<number, { USD: number; ILS: number }> = new Map();
-
-    // Initialize all months
-    for (let m = 1; m <= 12; m++) {
-      monthlyTotals.set(m, { USD: 0, ILS: 0 });
-    }
-
-    expenses.forEach((e) => {
-      const month = new Date(e.occurredAt).getMonth() + 1;
-      const monthData = monthlyTotals.get(month)!;
-
-      if (e.currency === 'USD') {
-        totalMinorUSD += e.amountMinor;
-        monthData.USD += e.amountMinor;
-      } else {
-        totalMinorILS += e.amountMinor;
-        monthData.ILS += e.amountMinor;
-      }
-    });
-
-    const byMonth: MonthlyExpenseTotal[] = [];
-    for (let m = 1; m <= 12; m++) {
-      const data = monthlyTotals.get(m)!;
-      byMonth.push({
-        month: m,
-        totalMinorUSD: data.USD,
-        totalMinorILS: data.ILS,
-      });
-    }
-
-    return { totalMinorUSD, totalMinorILS, byMonth };
-  },
-
-  async getAllProfilesTotals(year: number): Promise<ProfileExpenseSummary[]> {
-    const profiles = await db.businessProfiles.filter((p) => !p.archivedAt).toArray();
-
-    const summaries: ProfileExpenseSummary[] = [];
-
-    for (const profile of profiles) {
-      const totals = await this.getYearlyTotals(profile.id, year);
-
-      summaries.push({
-        profileId: profile.id,
-        profileName: profile.name,
-        year,
-        totalMinorUSD: totals.totalMinorUSD,
-        totalMinorILS: totals.totalMinorILS,
-        monthlyBreakdown: totals.byMonth,
-      });
-    }
-
-    return summaries;
-  },
-
-  async getReceiptCount(expenseId: string): Promise<number> {
-    return db.receipts.where('expenseId').equals(expenseId).count();
-  },
 };
 
 // ============================================================================
@@ -420,6 +338,10 @@ export const receiptRepo = {
     return db.receipts.get(id);
   },
 
+  async count(): Promise<number> {
+    return db.receipts.count();
+  },
+
   async create(data: Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>): Promise<Receipt> {
     const now = nowISO();
     const receipt: Receipt = {
@@ -440,50 +362,7 @@ export const receiptRepo = {
     await db.receipts.delete(id);
   },
 
-  async linkToExpense(receiptId: string, expenseId: string): Promise<void> {
-    // Get the expense to derive monthKey
-    const expense = await expenseRepo.get(expenseId);
-    const monthKey = expense
-      ? expense.occurredAt.substring(0, 7) // YYYY-MM
-      : new Date().toISOString().substring(0, 7);
 
-    await db.receipts.update(receiptId, {
-      expenseId,
-      monthKey,
-      updatedAt: nowISO(),
-    });
-  },
-
-  async unlinkFromExpense(receiptId: string): Promise<void> {
-    await db.receipts.update(receiptId, {
-      expenseId: undefined,
-      updatedAt: nowISO(),
-    });
-  },
-
-  async getUnlinkedByProfile(profileId: string): Promise<Receipt[]> {
-    return db.receipts
-      .where('profileId')
-      .equals(profileId)
-      .filter((r) => !r.expenseId)
-      .toArray();
-  },
-
-  async getByProfileAndMonth(profileId: string, monthKey: string): Promise<Receipt[]> {
-    return db.receipts
-      .where('profileId')
-      .equals(profileId)
-      .filter((r) => r.monthKey === monthKey)
-      .toArray();
-  },
-
-  async getLinkedByProfileAndMonth(profileId: string, monthKey: string): Promise<Receipt[]> {
-    return db.receipts
-      .where('profileId')
-      .equals(profileId)
-      .filter((r) => r.monthKey === monthKey && !!r.expenseId)
-      .toArray();
-  },
 };
 
 // ============================================================================
@@ -560,7 +439,7 @@ export const vendorRepo = {
     await db.vendors.delete(id);
   },
 
-  /**
+      /**
    * Find vendor by alias (raw vendor name)
    */
   async findByAlias(profileId: string, rawVendor: string): Promise<Vendor | undefined> {
@@ -602,8 +481,7 @@ export const vendorRepo = {
 
     return undefined;
   },
-
-  /**
+/**
    * Find or create vendor from raw vendor name
    */
   async findOrCreate(profileId: string, rawVendor: string): Promise<Vendor> {
@@ -618,365 +496,6 @@ export const vendorRepo = {
     });
   },
 
-  /**
-   * Merge two vendors, moving all references to target
-   */
-  async mergeVendors(targetId: string, sourceId: string): Promise<void> {
-    const target = await this.get(targetId);
-    const source = await this.get(sourceId);
-    if (!target || !source) return;
-
-    // Merge aliases
-    const mergedAliases = [...new Set([...target.aliases, ...source.aliases, source.canonicalName])];
-    await this.update(targetId, { aliases: mergedAliases });
-
-    // Update expenses referencing source
-    const expenses = await db.expenses.where('vendorId').equals(sourceId).toArray();
-    for (const expense of expenses) {
-      await db.expenses.update(expense.id, { vendorId: targetId, updatedAt: nowISO() });
-    }
-
-    // Update receipts referencing source
-    const receipts = await db.receipts.where('vendorId').equals(sourceId).toArray();
-    for (const receipt of receipts) {
-      await db.receipts.update(receipt.id, { vendorId: targetId, updatedAt: nowISO() });
-    }
-
-    // Delete source vendor
-    await db.vendors.delete(sourceId);
-  },
-
-  /**
-   * Add an alias to a vendor
-   */
-  async addAlias(vendorId: string, alias: string): Promise<void> {
-    const vendor = await this.get(vendorId);
-    if (!vendor) return;
-
-    if (!vendor.aliases.includes(alias)) {
-      await this.update(vendorId, {
-        aliases: [...vendor.aliases, alias],
-      });
-    }
-  },
+    
 };
 
-// ============================================================================
-// Month Close Repository
-// ============================================================================
-
-export const monthCloseRepo = {
-  async get(id: string): Promise<MonthCloseStatus | undefined> {
-    return db.monthCloseStatuses.get(id);
-  },
-
-  async getByProfileAndMonth(profileId: string, monthKey: string): Promise<MonthCloseStatus | undefined> {
-    const id = `${profileId}:${monthKey}`;
-    return this.get(id);
-  },
-
-  async getOrCreate(profileId: string, monthKey: string): Promise<MonthCloseStatus> {
-    const id = `${profileId}:${monthKey}`;
-    const existing = await this.get(id);
-    if (existing) return existing;
-
-    const now = nowISO();
-    const status: MonthCloseStatus = {
-      id,
-      profileId,
-      monthKey,
-      isClosed: false,
-      checklist: {
-        receiptsLinked: false,
-        recurringConfirmed: false,
-        categorized: false,
-        zipExported: false,
-      },
-      createdAt: now,
-      updatedAt: now,
-    };
-    await db.monthCloseStatuses.add(status);
-    return status;
-  },
-
-  async updateChecklist(
-    profileId: string,
-    monthKey: string,
-    updates: Partial<MonthCloseChecklist>
-  ): Promise<void> {
-    const status = await this.getOrCreate(profileId, monthKey);
-    await db.monthCloseStatuses.update(status.id, {
-      checklist: { ...status.checklist, ...updates },
-      updatedAt: nowISO(),
-    });
-  },
-
-  async closeMonth(profileId: string, monthKey: string, notes?: string): Promise<void> {
-    const status = await this.getOrCreate(profileId, monthKey);
-    await db.monthCloseStatuses.update(status.id, {
-      isClosed: true,
-      closedAt: nowISO(),
-      notes,
-      updatedAt: nowISO(),
-    });
-  },
-
-  async reopenMonth(profileId: string, monthKey: string): Promise<void> {
-    const status = await this.getOrCreate(profileId, monthKey);
-    await db.monthCloseStatuses.update(status.id, {
-      isClosed: false,
-      closedAt: undefined,
-      updatedAt: nowISO(),
-    });
-  },
-
-  async isMonthClosed(profileId: string, monthKey: string): Promise<boolean> {
-    const status = await this.getByProfileAndMonth(profileId, monthKey);
-    return status?.isClosed ?? false;
-  },
-
-  /**
-   * Get computed status based on actual data
-   */
-  async getComputedStatus(profileId: string, monthKey: string): Promise<MonthCloseComputedStatus> {
-    // Get receipts for this month
-    const receipts = await receiptRepo.getByProfileAndMonth(profileId, monthKey);
-    const unlinkedReceiptsCount = receipts.filter((r) => !r.expenseId).length;
-
-    // Get expenses for this month
-    const [year, month] = monthKey.split('-').map(Number);
-    const expenses = await expenseRepo.list({
-      profileId,
-      year,
-      month,
-    });
-    const uncategorizedExpensesCount = expenses.filter((e) => !e.categoryId).length;
-
-    return {
-      monthKey,
-      profileId,
-      unlinkedReceiptsCount,
-      uncategorizedExpensesCount,
-      isFullyLinked: unlinkedReceiptsCount === 0,
-      isFullyCategorized: uncategorizedExpensesCount === 0,
-    };
-  },
-
-  async list(profileId: string): Promise<MonthCloseStatus[]> {
-    return db.monthCloseStatuses.where('profileId').equals(profileId).toArray();
-  },
-};
-
-// ============================================================================
-// Receipt Matching Functions
-// ============================================================================
-
-/**
- * Calculate match score between a receipt and an expense
- */
-function calculateMatchScore(
-  receipt: Receipt,
-  expense: ExpenseDisplay
-): { score: number; breakdown: { amountScore: number; dateScore: number; vendorScore: number } } {
-  let amountScore = 0;
-  let dateScore = 0;
-  let vendorScore = 0;
-
-  // Amount scoring (0-50)
-  if (receipt.amountMinor && expense.amountMinor) {
-    const diff = Math.abs(receipt.amountMinor - expense.amountMinor);
-    const percentDiff = diff / expense.amountMinor;
-
-    if (percentDiff <= 0.01) {
-      amountScore = 50; // Within 1%
-    } else if (percentDiff <= 0.05) {
-      amountScore = 40; // Within 5%
-    } else if (percentDiff <= 0.1) {
-      amountScore = 30; // Within 10%
-    } else if (percentDiff <= 0.2) {
-      amountScore = 20; // Within 20%
-    }
-  }
-
-  // Date scoring (0-25)
-  if (receipt.occurredAt && expense.occurredAt) {
-    const receiptDate = new Date(receipt.occurredAt);
-    const expenseDate = new Date(expense.occurredAt);
-    const daysDiff = Math.abs(
-      Math.floor((receiptDate.getTime() - expenseDate.getTime()) / (1000 * 60 * 60 * 24))
-    );
-
-    if (daysDiff === 0) {
-      dateScore = 25; // Same day
-    } else if (daysDiff <= 3) {
-      dateScore = 20; // Within 3 days
-    } else if (daysDiff <= 7) {
-      dateScore = 15; // Within 7 days
-    } else if (daysDiff <= 30) {
-      dateScore = 10; // Within same month
-    }
-  } else {
-    // If no date on receipt, use month matching
-    const expenseMonthKey = expense.occurredAt.substring(0, 7);
-    if (receipt.monthKey === expenseMonthKey) {
-      dateScore = 10;
-    }
-  }
-
-  // Vendor scoring (0-25)
-  if (receipt.vendorId && expense.vendorId && receipt.vendorId === expense.vendorId) {
-    vendorScore = 25; // Same vendor
-  } else if (receipt.vendorRaw && expense.vendor) {
-    const similarity = vendorSimilarity(receipt.vendorRaw, expense.vendor);
-    if (similarity >= 0.8) {
-      vendorScore = 20;
-    } else if (similarity >= 0.5) {
-      vendorScore = 10;
-    }
-  }
-
-  const score = amountScore + dateScore + vendorScore;
-  return { score, breakdown: { amountScore, dateScore, vendorScore } };
-}
-
-/**
- * Get match suggestions for a receipt
- */
-export async function getReceiptMatchSuggestions(
-  receiptId: string,
-  limit = 5
-): Promise<ReceiptMatchSuggestion[]> {
-  const receipt = await receiptRepo.get(receiptId);
-  if (!receipt || receipt.expenseId) return []; // Already linked
-
-  // Get expenses for the same profile and nearby months
-  const [year, month] = receipt.monthKey.split('-').map(Number);
-  const expenses: ExpenseDisplay[] = [];
-
-  // Get expenses from the receipt month and adjacent months
-  for (let m = month - 1; m <= month + 1; m++) {
-    let y = year;
-    let adjustedMonth = m;
-    if (m < 1) {
-      y = year - 1;
-      adjustedMonth = 12;
-    } else if (m > 12) {
-      y = year + 1;
-      adjustedMonth = 1;
-    }
-
-    const monthExpenses = await expenseRepo.list({
-      profileId: receipt.profileId,
-      year: y,
-      month: adjustedMonth,
-    });
-    expenses.push(...monthExpenses);
-  }
-
-  // Filter out already linked expenses
-  const linkedExpenseIds = new Set(
-    (await receiptRepo.list({ profileId: receipt.profileId }))
-      .filter((r) => r.expenseId)
-      .map((r) => r.expenseId!)
-  );
-
-  const unlinkedExpenses = expenses.filter((e) => !linkedExpenseIds.has(e.id));
-
-  // Calculate scores
-  const suggestions: ReceiptMatchSuggestion[] = [];
-
-  for (const expense of unlinkedExpenses) {
-    const { score, breakdown } = calculateMatchScore(receipt, expense);
-
-    if (score >= 40) {
-      // Minimum threshold
-      let confidence: 'high' | 'medium' | 'low';
-      if (score >= 80) {
-        confidence = 'high';
-      } else if (score >= 60) {
-        confidence = 'medium';
-      } else {
-        confidence = 'low';
-      }
-
-      suggestions.push({
-        receiptId,
-        expenseId: expense.id,
-        score,
-        confidence,
-        breakdown,
-        expense,
-      });
-    }
-  }
-
-  // Sort by score descending and limit
-  return suggestions.sort((a, b) => b.score - a.score).slice(0, limit);
-}
-
-/**
- * Get all unlinked receipts with their match suggestions
- */
-export async function getUnlinkedReceiptsWithSuggestions(
-  profileId: string
-): Promise<Array<{ receipt: Receipt; suggestions: ReceiptMatchSuggestion[] }>> {
-  const unlinkedReceipts = await receiptRepo.getUnlinkedByProfile(profileId);
-
-  const results = [];
-  for (const receipt of unlinkedReceipts) {
-    const suggestions = await getReceiptMatchSuggestions(receipt.id);
-    results.push({ receipt, suggestions });
-  }
-
-  return results;
-}
-
-/**
- * Check if a receipt is a duplicate
- */
-export async function isReceiptDuplicate(
-  profileId: string,
-  fileName: string,
-  sizeBytes: number,
-  monthKey: string
-): Promise<boolean> {
-  const existingReceipts = await receiptRepo.getByProfileAndMonth(profileId, monthKey);
-  return existingReceipts.some(
-    (r) => r.fileName === fileName && r.sizeBytes === sizeBytes
-  );
-}
-
-/**
- * Create an expense and link it to a receipt atomically
- */
-export async function createExpenseAndLinkReceipt(
-  expenseData: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>,
-  receiptId: string
-): Promise<Expense> {
-  const expense = await expenseRepo.create(expenseData);
-  await receiptRepo.linkToExpense(receiptId, expense.id);
-  return expense;
-}
-
-/**
- * Create multiple receipts in bulk
- */
-export async function createReceiptsBulk(
-  receipts: Array<Omit<Receipt, 'id' | 'createdAt' | 'updatedAt'>>
-): Promise<Receipt[]> {
-  const now = nowISO();
-  const created: Receipt[] = [];
-
-  for (const data of receipts) {
-    const receipt: Receipt = {
-      ...data,
-      id: generateId(),
-      createdAt: now,
-      updatedAt: now,
-    };
-    await db.receipts.add(receipt);
-    created.push(receipt);
-  }
-
-  return created;
-}

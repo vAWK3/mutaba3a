@@ -65,7 +65,6 @@
     "documents": "Documents",
     "retainers": "Retainers",
     "expenses": "Expenses",
-    "suppliers": "Suppliers",
     "reports": "Reports",
     "settings": "Settings",
     "download": "Download",
@@ -500,12 +499,30 @@
       "openSettings": "Open settings",
       "dismiss": "Dismiss",
       "items": {
-        "invoices": { "label": "Invoices and receipts", "description": "Create numbered documents from income entries" },
-        "retainers": { "label": "Retainers", "description": "Recurring agreements with projected income" },
-        "expenses": { "label": "Expenses", "description": "Track money out in a single ledger, with the vendors you pay" },
-        "insights": { "label": "Insights", "description": "Reports and trends across clients and months" },
-        "planning": { "label": "Planning", "description": "Scenarios and assumptions for the months ahead" },
-        "projects": { "label": "Projects", "description": "Group income entries under a project" }
+        "invoices": {
+          "label": "Invoices and receipts",
+          "description": "Create numbered documents from income entries"
+        },
+        "retainers": {
+          "label": "Retainers",
+          "description": "Recurring agreements with projected income"
+        },
+        "expenses": {
+          "label": "Expenses",
+          "description": "Track money out in a single ledger, with the vendors you pay"
+        },
+        "insights": {
+          "label": "Insights",
+          "description": "Reports and trends across clients and months"
+        },
+        "planning": {
+          "label": "Planning",
+          "description": "Scenarios and assumptions for the months ahead"
+        },
+        "projects": {
+          "label": "Projects",
+          "description": "Group income entries under a project"
+        }
       }
     },
     "data": {
@@ -623,27 +640,16 @@
     "error": "Update failed"
   },
   "expenses": {
-    "title": "Expenses",
-    "profileExpenses": "{name} Expenses",
     "addExpense": "Add Expense",
-    "addRecurring": "Add Recurring",
     "empty": "No expenses found",
     "emptyHint": "Add your first expense to get started",
     "summary": {
-      "total": "Total Expenses",
-      "thisMonth": "This Month"
+      "total": "Total Expenses"
     },
     "view": {
       "list": "List",
-      "byCategory": "By Category",
-      "byProject": "By Project"
+      "byCategory": "By Category"
     },
-    "emptyProfiles": "No business profiles",
-    "emptyProfilesHint": "Create a business profile to track expenses",
-    "emptyExpenses": "No expenses",
-    "emptyExpensesSearch": "Try adjusting your search or filters",
-    "emptyExpensesHint": "Add your first expense to get started",
-    "searchPlaceholder": "Search expenses...",
     "confirmDelete": "Are you sure you want to delete this expense?",
     "deleteSuccess": "Expense deleted successfully",
     "deleteError": "Failed to delete expense",
@@ -651,137 +657,16 @@
     "confirmDeleteFromRecurring": "This expense was created from a recurring rule. Delete it anyway?",
     "fromRecurring": "Created from a recurring expense rule",
     "recurringBadge": "Recurring",
-    "confirmDeleteRule": "Are you sure you want to delete this recurring rule?",
-    "year": "Year",
-    "month": "Month",
-    "allMonths": "All Months",
-    "allCategories": "All Categories",
-    "totalExpenses": "Total Expenses",
-    "totalUSD": "Total (USD)",
-    "totalILS": "Total (ILS)",
-    "viewReceipts": "View Receipts",
-    "manageReceipts": "Manage Receipts",
-    "manageRecurring": "Manage Recurring",
     "noProfileSelected": "Please select a business profile first.",
-    "allProfilesOverview": "All Profiles Overview",
-    "allProfiles": "All Profiles",
-    "currentProfile": "Current: {name}",
-    "profileMode": "Profile mode",
-    "profileSpecificTools": "Profile-Specific Tools",
-    "profileSpecificToolsHint": "Recurring schedules, due payments, and forecasts require a specific profile to be selected.",
-    "openProfile": "Open {name}",
-    "recurringRules": "Recurring Rules",
-    "monthly": "monthly",
-    "yearly": "yearly",
-    "pause": "Pause",
-    "resume": "Resume",
-    "paused": "Paused",
-    "profileNotFound": "Profile not found",
-    "profileNotFoundHint": "This profile may have been deleted or doesn't exist",
-    "untitled": "Untitled",
-    "unknownProfile": "Unknown Profile",
-    "vendors": {
-      "title": "Vendors",
-      "hint": "Vendors are created automatically when you add expenses. You can’t create vendors from this screen.",
-      "backToExpenses": "Back to Expenses",
-      "definedVendors": "Defined Vendors",
-      "activeInYear": "Active in {year}",
-      "expenseCount": "Expenses",
-      "showMonthlyVariation": "Show Monthly",
-      "hideMonthlyVariation": "Hide Monthly",
-      "month": "Month",
-      "delta": "Delta",
-      "empty": "No vendors yet",
-      "emptyHint": "Add an expense with a vendor name to create your first vendor."
-    },
-    "overview": {
-      "title": "Expenses Overview",
-      "allProfiles": "All Profiles",
-      "profileBreakdown": "Expense by Profile",
-      "totalExpenses": "Total Expenses",
-      "monthlyBreakdown": "Monthly Breakdown",
-      "byProfile": "By Profile",
-      "noProfiles": "No business profiles found",
-      "profile": "Profile",
-      "total": "Total",
-      "percentage": "Share"
-    },
-    "forecast": {
-      "title": "Expense Forecast",
-      "minimumNeeded": "Minimum Needed",
-      "untilEndOfYear": "Until end of {year}",
-      "monthsRemaining": "Months Remaining",
-      "yearTotal": "Year Total",
-      "activeRules": "Active Rules",
-      "monthlyForecast": "Monthly Forecast",
-      "month": "Month",
-      "projected": "Projected",
-      "actual": "Actual",
-      "delta": "Delta",
-      "current": "Current",
-      "total": "Total",
-      "byProfile": "By Profile",
-      "empty": "No forecast data",
-      "emptyHint": "Add recurring expenses to see forecast",
-      "activeRecurringRules": "Active Recurring Rules"
-    },
-    "receipts": {
-      "title": "Receipts",
-      "upload": "Upload Receipt",
-      "uploading": "Uploading...",
-      "total": "Total",
-      "linked": "Linked",
-      "unlinked": "Unlinked",
-      "allTab": "All",
-      "inboxTab": "Inbox",
-      "suggestionsTab": "Suggestions",
-      "linkToExpense": "Link to Expense",
-      "link": "Link",
-      "unlink": "Unlink",
-      "unlinkFromExpense": "Unlink",
-      "exportZip": "Export ZIP",
-      "exporting": "Exporting...",
-      "download": "Download",
-      "empty": "No receipts",
-      "emptyHint": "Upload your first receipt",
-      "noReceipts": "No receipts",
-      "noReceiptsHint": "Upload your first receipt",
-      "fileTooLarge": "File too large (max {maxSize})",
-      "invalidFileType": "Invalid file type. Please upload an image or PDF",
-      "uploadFailed": "Failed to upload receipt",
-      "selectExpense": "Select Expense to Link",
-      "noExpensesToLink": "No expenses to link. Create an expense first.",
-      "confirmUnlink": "Are you sure you want to unlink this receipt?",
-      "confirmDelete": "Are you sure you want to delete this receipt?"
-    },
     "recurring": {
-      "title": "Recurring Expenses",
-      "addRule": "Add Recurring",
-      "frequency": "Frequency",
       "monthly": "Monthly",
       "yearly": "Yearly",
-      "startDate": "Start Date",
-      "endMode": "End Mode",
       "endOfYear": "End of Year",
       "untilDate": "Until Date",
       "noEnd": "No End",
-      "endDate": "End Date",
-      "pause": "Pause",
-      "resume": "Resume",
-      "paused": "Paused",
-      "active": "Active",
-      "dayOfMonth": "Day of Month",
-      "monthOfYear": "Month",
-      "reminderDays": "Reminder Days",
-      "reminderDaysHint": "Days before due to show reminder",
-      "scope": "Scope",
-      "scopeGeneral": "General",
-      "scopeProject": "Project",
       "occurrence": {
-        "title": "Recurring Expense",
         "confirmPayment": "Confirm Payment",
         "skip": "Skip",
-        "skipConfirm": "Are you sure you want to skip this expense?",
         "snooze": "Snooze",
         "snoozeUntil": "Snooze until",
         "markPaid": "Mark Paid",
@@ -791,64 +676,20 @@
         "notes": "Notes",
         "notesPlaceholder": "Any notes about this payment...",
         "state": {
-          "projected": "Projected",
-          "due": "Due",
-          "overdue": "Overdue",
-          "snoozed": "Snoozed",
-          "paid": "Paid",
-          "skipped": "Skipped"
+          "projected": "Projected"
         },
         "dueIn": "Due in {days} days",
         "dueToday": "Due today",
         "overdueDays": "Overdue by {days} days",
         "snoozedUntil": "Snoozed until {date}",
         "empty": "No upcoming recurring expenses",
-        "emptyHint": "Create a recurring rule to see upcoming payments",
         "needsAttention": "Needs Attention",
         "confirmSkip": "Are you sure you want to skip this expense? This action cannot be undone."
       },
-      "rule": {
-        "new": "New Recurring Rule",
-        "edit": "Edit Recurring Rule",
-        "title": "Title",
-        "titlePlaceholder": "e.g., Office Rent, Subscriptions",
-        "amount": "Amount",
-        "history": "Payment History",
-        "noHistory": "No payment history yet",
-        "deleteConfirm": "Are you sure you want to delete this recurring rule? Past expenses will not be affected."
-      },
-      "forecast": "Upcoming Expenses"
+      "forecast": "Upcoming Expenses",
+      "editRule": "Edit recurring rule"
     },
-    "columns": {
-      "date": "Date",
-      "title": "Title",
-      "vendor": "Vendor",
-      "category": "Category",
-      "amount": "Amount",
-      "receipts": "Receipts"
-    },
-    "categories": {
-      "title": "Categories",
-      "addCategory": "Add Category",
-      "name": "Name",
-      "color": "Color",
-      "setup": "Set Up Categories",
-      "setupTitle": "Set Up Expense Categories",
-      "selectPreset": "Choose a category preset that best matches your business type:",
-      "seedCategories": "Create Categories",
-      "presets": {
-        "general": "General Business",
-        "startup": "Tech Startup",
-        "lawFirm": "Law Firm",
-        "freelancer": "Freelancer"
-      },
-      "presetDescriptions": {
-        "general": "Office rent, utilities, software, marketing, travel, and more",
-        "startup": "Cloud infrastructure, SaaS, AI services, development tools, coworking",
-        "lawFirm": "Legal research, bar fees, court filing, expert witnesses, case management",
-        "freelancer": "Software tools, cloud storage, marketing, professional development"
-      }
-    }
+    "receiptsAttached": "{count} receipt(s) attached"
   },
   "drawer": {
     "income": {
@@ -1084,35 +925,6 @@
   "project": {
     "createNew": "Create new project"
   },
-  "suppliers": {
-    "title": "Suppliers",
-    "hint": "Suppliers are collected from your expenses. Add an expense with a vendor to see them here.",
-    "noProfile": "Please select a profile first.",
-    "year": "Year",
-    "totalSuppliers": "Active Suppliers",
-    "name": "Supplier",
-    "expenses": "Expenses",
-    "totalSpent": "Total Spent",
-    "showMonthly": "Monthly",
-    "hideMonthly": "Hide",
-    "month": "Month",
-    "delta": "Change",
-    "empty": "No suppliers yet",
-    "emptyHint": "Add an expense with a vendor name to see your suppliers here."
-  },
-  "receipts": {
-    "suggestions": {
-      "title": "Match suggestions",
-      "link": "Link",
-      "noMatches": "No matching expenses found",
-      "createAndLink": "Create Expense & Link",
-      "highConfidence": "High confidence matches",
-      "mediumConfidence": "Likely matches",
-      "lowConfidence": "Possible matches",
-      "allLinked": "All receipts linked",
-      "allLinkedHint": "Great job! All your receipts have been linked to expenses."
-    }
-  },
   "bulkUpload": {
     "title": "Bulk Upload Receipts",
     "button": "Bulk Upload",
@@ -1130,42 +942,6 @@
     "retryFailed": "Retry failed",
     "statusPending": "Pending",
     "duplicate": "Duplicate file"
-  },
-  "monthClose": {
-    "title": "Monthly Close",
-    "checklist": "Close Checklist",
-    "monthClosed": "Month Closed",
-    "closedAt": "Closed on {date}",
-    "readyToClose": "Ready to Close",
-    "notReady": "Not Ready to Close",
-    "allTasksComplete": "All required tasks have been completed.",
-    "completeTasks": "Complete the checklist items below before closing.",
-    "receiptsLinked": "All receipts linked to expenses",
-    "allLinked": "All receipts linked",
-    "unlinkedCount": "{count} unlinked receipts",
-    "viewReceipts": "View Receipts",
-    "allCategorized": "All expenses categorized",
-    "allCategorizedStatus": "All expenses have categories",
-    "uncategorizedCount": "{count} uncategorized expenses",
-    "viewExpenses": "View Expenses",
-    "recurringConfirmed": "Recurring expenses confirmed",
-    "recurringConfirmedHint": "Verify all recurring expenses are correct for this month",
-    "zipExported": "Receipts exported (optional)",
-    "zipExportedHint": "Export a ZIP backup of all receipts",
-    "exportZip": "Export ZIP",
-    "closeMonth": "Close Month",
-    "notesLabel": "Notes (optional)",
-    "notesPlaceholder": "Add any notes about this month's close...",
-    "closeMonthButton": "Close Month",
-    "completeChecklistFirst": "Complete all required checklist items before closing the month.",
-    "confirmClose": "Are you sure you want to close this month? This will mark it as finalized.",
-    "confirmReopen": "Are you sure you want to reopen this month? This will allow editing again.",
-    "reopen": "Reopen Month",
-    "warning": {
-      "title": "Closed Month",
-      "text": "{month} has been closed. Editing expenses in closed months is not recommended.",
-      "reopenButton": "Reopen to Edit"
-    }
   },
   "retainers": {
     "title": "Retainers",

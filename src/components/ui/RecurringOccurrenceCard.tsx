@@ -19,6 +19,8 @@ interface RecurringOccurrenceCardProps {
   onSkip: (occurrence: VirtualOccurrenceDisplay) => void;
   onSnooze: (occurrence: VirtualOccurrenceDisplay) => void;
   onClick?: (occurrence: VirtualOccurrenceDisplay) => void;
+  /** Opens the rule behind this occurrence for editing (MUT-14) */
+  onEditRule?: (occurrence: VirtualOccurrenceDisplay) => void;
   compact?: boolean;
 }
 
@@ -28,6 +30,7 @@ export function RecurringOccurrenceCard({
   onSkip,
   onSnooze,
   onClick,
+  onEditRule,
   compact = false,
 }: RecurringOccurrenceCardProps) {
   const t = useT();
@@ -142,6 +145,15 @@ export function RecurringOccurrenceCard({
           >
             {t('expenses.recurring.occurrence.snooze')}
           </button>
+          {onEditRule && (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => onEditRule(occurrence)}
+            >
+              {t('expenses.recurring.editRule')}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -157,6 +169,7 @@ interface RecurringOccurrenceListProps {
   onSkip: (occurrence: VirtualOccurrenceDisplay) => void;
   onSnooze: (occurrence: VirtualOccurrenceDisplay) => void;
   onClick?: (occurrence: VirtualOccurrenceDisplay) => void;
+  onEditRule?: (occurrence: VirtualOccurrenceDisplay) => void;
   emptyMessage?: string;
   emptyHint?: string;
   compact?: boolean;
@@ -168,6 +181,7 @@ export function RecurringOccurrenceList({
   onSkip,
   onSnooze,
   onClick,
+  onEditRule,
   emptyMessage,
   emptyHint,
   compact = false,
@@ -196,6 +210,7 @@ export function RecurringOccurrenceList({
           onMarkPaid={onMarkPaid}
           onSkip={onSkip}
           onSnooze={onSnooze}
+          onEditRule={onEditRule}
           onClick={onClick}
           compact={compact}
         />

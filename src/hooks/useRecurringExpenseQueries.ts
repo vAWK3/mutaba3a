@@ -24,13 +24,12 @@ import {
   skipOccurrence,
   snoozeOccurrence,
   createRecurringRule,
-  getRuleHistory,
   type ConfirmPaymentParams,
   type SkipOccurrenceParams,
   type SnoozeOccurrenceParams,
   type CreateRecurringRuleParams,
 } from '../services/recurringExpenseService';
-import { getRepositories, type Repositories } from '../db';
+import { getRepositories } from '../db';
 import type { RecurringRule } from '../types';
 
 // ============================================================================
@@ -107,51 +106,6 @@ export function useDueOccurrences(
     queryFn: () => getDueOccurrences(profileId!),
     enabled: !!profileId && (options?.enabled !== false),
     staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-/**
- * Fetch persisted occurrences with filters.
- */
-export function useRecurringOccurrences(
-  filters: {
-    profileId: string;
-    ruleId?: string;
-    status?: string | string[];
-    dateFrom?: string;
-    dateTo?: string;
-  },
-  options?: { enabled?: boolean }
-) {
-  return useQuery({
-    queryKey: recurringExpenseQueryKeys.occurrences(filters),
-    queryFn: () =>
-      getRepositories().base.recurringOccurrences.list(
-        filters as Parameters<Repositories['base']['recurringOccurrences']['list']>[0]
-      ),
-    enabled: !!filters.profileId && (options?.enabled !== false),
-  });
-}
-
-/**
- * Fetch a single occurrence by ID.
- */
-export function useRecurringOccurrence(id: string | undefined) {
-  return useQuery({
-    queryKey: recurringExpenseQueryKeys.occurrence(id || ''),
-    queryFn: () => getRepositories().base.recurringOccurrences.get(id!),
-    enabled: !!id,
-  });
-}
-
-/**
- * Fetch occurrence history for a rule.
- */
-export function useRuleHistory(ruleId: string | undefined) {
-  return useQuery({
-    queryKey: recurringExpenseQueryKeys.ruleHistory(ruleId || ''),
-    queryFn: () => getRuleHistory(ruleId!),
-    enabled: !!ruleId,
   });
 }
 

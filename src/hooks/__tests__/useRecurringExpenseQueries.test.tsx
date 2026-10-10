@@ -9,7 +9,7 @@ import {
   useRecurringRules,
   useActiveRecurringRules,
   useRecurringRule,
-  useRuleHistory,
+
   useConfirmRecurringPayment,
   useSkipRecurringOccurrence,
   useSnoozeRecurringOccurrence,
@@ -259,24 +259,6 @@ describe('Query Hooks', () => {
       );
 
       expect(expenseRepository.recurringRuleRepo.get).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('useRuleHistory', () => {
-    it('should fetch rule history', async () => {
-      const mockHistory = [{ id: 'occ-1', status: 'resolved_paid' }];
-      (recurringService.getRuleHistory as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory);
-
-      const { result } = renderHook(
-        () => useRuleHistory('rule-1'),
-        { wrapper: createWrapper() }
-      );
-
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-      });
-
-      expect(result.current.data).toEqual(mockHistory);
     });
   });
 });

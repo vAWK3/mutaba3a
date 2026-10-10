@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { reconcileFeaturesWithData } from '../lib/features/features';
+import type { MonthCloseStatus } from './retained/monthCloseSchema';
 import type {
   Client,
   Project,
@@ -16,7 +17,6 @@ import type {
   Receipt,
   ExpenseCategory,
   Vendor,
-  MonthCloseStatus,
   RetainerAgreement,
   ProjectedIncome,
   Plan,

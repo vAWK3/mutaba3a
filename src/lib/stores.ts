@@ -115,7 +115,6 @@ interface DrawerState {
     defaultProfileId?: string;
     isRecurring?: boolean;
     prefillData?: ExpensePrefillData;
-    linkReceiptId?: string;
   };
   openExpenseDrawer: (options?: {
     mode?: 'create' | 'edit';
@@ -124,7 +123,6 @@ interface DrawerState {
     defaultProfileId?: string;
     isRecurring?: boolean;
     prefillData?: ExpensePrefillData;
-    linkReceiptId?: string;
   }) => void;
   closeExpenseDrawer: () => void;
 
@@ -362,7 +360,6 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         defaultProfileId: options?.defaultProfileId,
         isRecurring: options?.isRecurring,
         prefillData: options?.prefillData,
-        linkReceiptId: options?.linkReceiptId,
       },
     }),
   closeExpenseDrawer: () =>
