@@ -62,8 +62,6 @@ const navSections: NavSection[] = [
     items: [
       { path: "/", labelKey: "nav.home", icon: HomeIcon, exact: true },
       { path: "/income", labelKey: "nav.income", icon: IncomeIcon },
-      { path: "/insights", labelKey: "nav.insights", icon: InsightsIcon },
-      { path: "/planning", labelKey: "nav.planning", icon: PlanningIcon },
     ],
   },
   {
@@ -71,7 +69,6 @@ const navSections: NavSection[] = [
     labelKey: "nav.sections.workspace",
     items: [
       { path: "/clients", labelKey: "nav.clients", icon: UsersIcon },
-      { path: "/projects", labelKey: "nav.projects", icon: FolderIcon },
     ],
   },
 ];
@@ -82,6 +79,9 @@ const optionalItems: (NavItem & { feature: FeatureKey })[] = [
   { path: "/expenses", labelKey: "nav.expenses", icon: ExpensesIcon, feature: "expenses" },
   { path: "/documents", labelKey: "nav.documents", icon: DocumentIcon, feature: "invoices" },
   { path: "/retainers", labelKey: "nav.retainers", icon: RetainerIcon, feature: "retainers" },
+  { path: "/insights", labelKey: "nav.insights", icon: InsightsIcon, feature: "insights" },
+  { path: "/planning", labelKey: "nav.planning", icon: PlanningIcon, feature: "planning" },
+  { path: "/projects", labelKey: "nav.projects", icon: FolderIcon, feature: "projects" },
 ];
 
 // System section items (rendered in footer)
@@ -107,7 +107,7 @@ const newMenuItems: {
   { key: "income", labelKey: "nav.newMenu.income", icon: IncomeIcon },
   { key: "expense", labelKey: "nav.newMenu.expense", icon: ExpensesIcon, feature: "expenses" },
   { key: "client", labelKey: "nav.newMenu.client", icon: UsersIcon },
-  { key: "project", labelKey: "nav.newMenu.project", icon: FolderIcon },
+  { key: "project", labelKey: "nav.newMenu.project", icon: FolderIcon, feature: "projects" },
 ];
 
 export function SidebarNav() {

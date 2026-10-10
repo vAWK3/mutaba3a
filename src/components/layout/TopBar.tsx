@@ -79,8 +79,9 @@ function AddMenu() {
       openExpenseDrawer({ mode: 'create', defaultProfileId: profileId });
     },
   });
-  // New expense is offered only while the Expenses area is on (MUT-14)
+  // New expense / New project are offered only while their areas are on (MUT-14, MUT-16)
   const expensesEnabled = useFeatureEnabled('expenses');
+  const projectsEnabled = useFeatureEnabled('projects');
 
   const clientAction = useProfileAwareAction({
     onExecute: (profileId) => {
@@ -169,13 +170,15 @@ function AddMenu() {
                 {t('addMenu.expense')}
               </button>
             )}
-            <button
-              className="add-menu-item"
-              onClick={(e) => handleAction('project', e)}
-            >
-              <FolderPlusIcon className="nav-icon" />
-              {t('addMenu.project')}
-            </button>
+            {projectsEnabled && (
+              <button
+                className="add-menu-item"
+                onClick={(e) => handleAction('project', e)}
+              >
+                <FolderPlusIcon className="nav-icon" />
+                {t('addMenu.project')}
+              </button>
+            )}
             <button
               className="add-menu-item"
               onClick={(e) => handleAction('client', e)}

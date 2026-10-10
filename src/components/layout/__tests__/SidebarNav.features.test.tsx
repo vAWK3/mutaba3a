@@ -145,3 +145,55 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     expect(screen.queryByText('nav.documents')).toBeNull();
   });
 });
+
+describe('SidebarNav insights, planning and projects (MUT-16)', () => {
+  it('shows none of the three while all areas are off, and + Add has no Project', async () => {
+    const fake = installFakeSettings();
+    renderNav();
+    await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(optionalHeader()).toBeNull();
+    expect(screen.queryByText('nav.insights')).toBeNull();
+    expect(screen.queryByText('nav.planning')).toBeNull();
+    expect(screen.queryByText('nav.projects')).toBeNull();
+    // the core sections are Home + Income and Clients
+    expect(screen.getByText('nav.home')).toBeInTheDocument();
+    expect(screen.getByText('nav.income')).toBeInTheDocument();
+    expect(screen.getByText('nav.clients')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('nav.new'));
+    expect(await screen.findByText('nav.newMenu.income')).toBeInTheDocument();
+    expect(screen.queryByText('nav.newMenu.project')).toBeNull();
+  });
+
+  it('shows Projects in the optional section and offers it in + Add while projects is on', async () => {
+    installFakeSettings({ features: { projects: true } });
+    renderNav();
+
+    const projects = await screen.findByText('nav.projects');
+    expect(optionalHeader()).toBeInTheDocument();
+    expect(projects.closest('a')).toHaveAttribute('href', '/projects');
+    expect(screen.queryByText('nav.insights')).toBeNull();
+    expect(screen.queryByText('nav.planning')).toBeNull();
+
+    fireEvent.click(screen.getByText('nav.new'));
+    expect(await screen.findByText('nav.newMenu.project')).toBeInTheDocument();
+  });
+
+  it('lists Insights then Planning after any earlier optional entry', async () => {
+    installFakeSettings({ features: { retainers: true, insights: true, planning: true } });
+    renderNav();
+
+    const retainers = await screen.findByText('nav.retainers');
+    const insights = await screen.findByText('nav.insights');
+    const planning = await screen.findByText('nav.planning');
+    expect(insights.closest('a')).toHaveAttribute('href', '/insights');
+    expect(planning.closest('a')).toHaveAttribute('href', '/planning');
+    expect(retainers.compareDocumentPosition(insights) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(insights.compareDocumentPosition(planning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText('nav.projects')).toBeNull();
+  });
+});
