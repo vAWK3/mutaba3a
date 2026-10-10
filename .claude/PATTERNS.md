@@ -112,6 +112,29 @@ export function useClient(id: string | undefined) {
 }
 ```
 
+**Rule: a `queryFn` must never resolve to `undefined`.** TanStack Query v5
+treats `undefined` data as a failed fetch: the query enters `error` state and
+logs *"Query data cannot be undefined"*. Repository lookups keep their
+`Promise<Entity | undefined>` contract (see Repository pattern above); the
+*hook* is where the absence is normalised to `null`, and the hook's type says so:
+
+```typescript
+// Singleton lookups that legitimately have no row yet (fresh install)
+export function useDefaultBusinessProfile() {
+  return useQuery<BusinessProfile | null>({
+    queryKey: queryKeys.defaultBusinessProfile(),
+    queryFn: async () => (await repo.businessProfiles.getDefault()) ?? null,
+  });
+}
+```
+
+By-id lookups behind `enabled: !!id` only hit this when the id points at a
+deleted row; the unguarded singleton lookups hit it on every fresh install.
+Consumers read the value through `?.` or a truthy check, which handles `null`
+and `undefined` alike. Test the no-row case by asserting `isSuccess` and
+`toBeNull()` — waiting on `isFetching === false` is also satisfied by a
+failed query and proves nothing (see the 2026-10-10 CHANGELOG entry).
+
 **Mutation Hook**:
 ```typescript
 export function useCreateClient() {

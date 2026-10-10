@@ -623,10 +623,18 @@ export function useBusinessProfile(id: string) {
   });
 }
 
+/**
+ * The default business profile, or `null` when none exists yet.
+ *
+ * The repository contract returns `undefined` for "no default", but TanStack
+ * Query v5 rejects `undefined` as query data (the query enters `error` state
+ * and logs on every fresh install). The hook normalises the absence to `null`
+ * so consumers can rely on `isSuccess` and a plain `?.`/truthy check.
+ */
 export function useDefaultBusinessProfile() {
-  return useQuery({
+  return useQuery<BusinessProfile | null>({
     queryKey: queryKeys.defaultBusinessProfile(),
-    queryFn: () => getRepositories().base.businessProfiles.getDefault(),
+    queryFn: async () => (await getRepositories().base.businessProfiles.getDefault()) ?? null,
   });
 }
 
