@@ -171,12 +171,31 @@ export function useRecordPartialPayment() {
 
 // Payment Record hooks
 
+/**
+ * A payment changes what the user is owed, so every list that answers that
+ * question has to refetch -- not just the transaction keys.
+ *
+ * The income keys are listed explicitly rather than reused from
+ * useIncomeQueries' invalidateIncomeQueries: the two helpers overlap and that
+ * duplication is recorded in TECH_DEBT.md. Without these four, /income and the
+ * client Receivables tab kept a stale status and remaining balance for up to
+ * the 60s staleTime after a payment was saved (MUT-6 AC #5). markPaid already
+ * invalidates this same set, so this only brings the payment path in line with
+ * the path beside it.
+ *
+ * The bare ['paymentRecords'] key prefix-matches the by-client key too, so the
+ * client Payments section (MUT-4) inherits correct refresh when it ships.
+ */
 function invalidatePaymentRecordQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   transactionId: string
 ) {
   queryClient.invalidateQueries({ queryKey: ['paymentRecords'] });
   queryClient.invalidateQueries({ queryKey: queryKeys.paymentRecords(transactionId) });
+  queryClient.invalidateQueries({ queryKey: ['income'] });
+  queryClient.invalidateQueries({ queryKey: ['receivables'] });
+  queryClient.invalidateQueries({ queryKey: ['incomeOverviewTotals'] });
+  queryClient.invalidateQueries({ queryKey: ['incomeAttentionReceivables'] });
   invalidateTransactionQueries(queryClient);
 }
 

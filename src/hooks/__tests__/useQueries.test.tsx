@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
-import { businessProfileRepo, documentRepo, clientRepo } from '../../db/repository';
+import { businessProfileRepo, documentRepo, clientRepo, transactionRepo } from '../../db/repository';
 import { getOrCreateLocalDevice } from '../../sync/core/ops-engine';
 import { initializeClock } from '../../sync/core/hlc';
 import {
@@ -21,6 +21,7 @@ import {
   useUpdateBusinessProfile,
   useSetDefaultBusinessProfile,
   useArchiveBusinessProfile,
+  useCreatePaymentRecord,
 } from '../useQueries';
 import type { BusinessProfile, Document } from '../../types';
 
@@ -40,8 +41,7 @@ function createTestQueryClient() {
 }
 
 // Create wrapper with query client
-function createWrapper() {
-  const queryClient = createTestQueryClient();
+function createWrapper(queryClient: QueryClient = createTestQueryClient()) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -398,6 +398,101 @@ describe('Document Hooks', () => {
 
       const deleted = await documentRepo.get(created.id);
       expect(deleted?.deletedAt).toBeDefined();
+    });
+  });
+});
+
+/**
+ * MUT-6 AC #5: after a payment is saved, the row status, the remaining amount
+ * and Owed Now refresh with no manual refresh.
+ *
+ * This suite exists because invalidatePaymentRecordQueries used to invalidate
+ * only the payment-record and legacy transaction keys, leaving /income and the
+ * client Receivables tab showing a stale balance for up to the 60s staleTime
+ * -- right after the moment that matters most.
+ */
+describe('Payment Record Hooks', () => {
+  beforeAll(async () => {
+    const device = await getOrCreateLocalDevice();
+    initializeClock(device.id);
+  });
+
+  beforeEach(async () => {
+    await db.transactions.clear();
+    await db.paymentRecords.clear();
+  });
+
+  afterEach(async () => {
+    await db.transactions.clear();
+    await db.paymentRecords.clear();
+  });
+
+  describe('useCreatePaymentRecord', () => {
+    it('should invalidate the income and receivable lists, not just the transaction keys', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-03-01',
+      });
+
+      const queryClient = createTestQueryClient();
+      const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+
+      const { result } = renderHook(() => useCreatePaymentRecord(), {
+        wrapper: createWrapper(queryClient),
+      });
+
+      await result.current.mutateAsync({
+        transactionId: tx.id,
+        amountMinor: 4000,
+        paidAt: '2026-03-02',
+      });
+
+      await waitFor(() => {
+        expect(invalidateQueries).toHaveBeenCalled();
+      });
+
+      const invalidated = invalidateQueries.mock.calls.map(
+        ([arg]) => (arg as { queryKey: unknown[] }).queryKey[0]
+      );
+
+      expect(invalidated).toEqual(
+        expect.arrayContaining([
+          'income',
+          'receivables',
+          'incomeOverviewTotals',
+          'incomeAttentionReceivables',
+          'paymentRecords',
+          'transactions',
+          'clientSummary',
+        ])
+      );
+    });
+
+    it('should record the payment it invalidates for', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-03-01',
+      });
+
+      const { result } = renderHook(() => useCreatePaymentRecord(), {
+        wrapper: createWrapper(),
+      });
+
+      await result.current.mutateAsync({
+        transactionId: tx.id,
+        amountMinor: 10000,
+        paidAt: '2026-03-02',
+      });
+
+      const updated = await transactionRepo.get(tx.id);
+      expect(updated?.receivedAmountMinor).toBe(10000);
+      expect(updated?.status).toBe('paid');
     });
   });
 });
