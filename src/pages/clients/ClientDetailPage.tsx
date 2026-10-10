@@ -234,13 +234,13 @@ export function ClientDetailPage() {
               </button>
             )}
             <button
-              className={cn('tab', activeTab === 'receivables' && 'active')}
+              className={cn('tab', visibleTab === 'receivables' && 'active')}
               onClick={() => setActiveTab('receivables')}
             >
               {t('clients.tabs.receivables')}
             </button>
             <button
-              className={cn('tab', activeTab === 'transactions' && 'active')}
+              className={cn('tab', visibleTab === 'transactions' && 'active')}
               onClick={() => setActiveTab('transactions')}
             >
               {t('clients.tabs.transactions')}
@@ -440,7 +440,7 @@ export function ClientDetailPage() {
           </>
         )}
 
-        {activeTab === 'receivables' && (
+        {visibleTab === 'receivables' && (
           <>
             {receivables.length === 0 ? (
               <div className="empty-state">
@@ -541,7 +541,7 @@ export function ClientDetailPage() {
           </>
         )}
 
-        {activeTab === 'transactions' && (
+        {visibleTab === 'transactions' && (
           <>
             <div className="filters-row">
               <DateRangeControl

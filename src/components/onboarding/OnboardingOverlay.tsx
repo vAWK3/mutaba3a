@@ -3,7 +3,7 @@ import { OnboardingStepIndicator } from './OnboardingStepIndicator';
 import { useOnboardingStore } from '../../lib/onboardingStore';
 import { useDrawerStore } from '../../lib/stores';
 import { useT } from '../../lib/i18n';
-import { useFeatureEnabled } from '../../lib/features/useFeatures';
+import { useFeatureEnabled, useFeaturesLoaded } from '../../lib/features/useFeatures';
 import { UsersIcon, FolderIcon, PlusIcon, CheckIcon } from '../icons';
 import './OnboardingOverlay.css';
 
@@ -26,14 +26,17 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
 
   // While the Projects area is off (the default), onboarding is client → income:
   // the project step completes itself so a new user is never asked to create
-  // something the app then hides (MUT-16).
+  // something the app then hides (MUT-16). The flags read `false` while the
+  // settings row is still loading, so wait for the read before acting on it:
+  // a projects-on user mid-onboarding must not have the step skipped on mount.
   const projectsEnabled = useFeatureEnabled('projects');
+  const flagsLoaded = useFeaturesLoaded();
   const { completeStep } = useOnboardingStore();
   useEffect(() => {
-    if (!projectsEnabled && currentStep === 'project') {
+    if (flagsLoaded && !projectsEnabled && currentStep === 'project') {
       completeStep('project');
     }
-  }, [projectsEnabled, currentStep, completeStep]);
+  }, [flagsLoaded, projectsEnabled, currentStep, completeStep]);
 
   // Handle completion
   useEffect(() => {
@@ -61,7 +64,9 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
           mode: 'create',
           defaultKind: 'income',
           defaultClientId: createdClientId,
-          defaultProjectId: createdProjectId,
+          // A project created before the area was switched off must not be
+          // attached through a field the user can no longer see
+          defaultProjectId: projectsEnabled ? createdProjectId : undefined,
         });
         break;
       case 'complete':
@@ -144,30 +149,4 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
       </div>
     </div>
   );
-}
-
-// Export a hook to track drawer success for advancing onboarding
-// eslint-disable-next-line react-refresh/only-export-components -- Hook is tightly coupled with overlay component
-export function useOnboardingDrawerSuccess() {
-  const { currentStep, completeStep } = useOnboardingStore();
-
-  const onClientCreated = (clientId: string) => {
-    if (currentStep === 'client') {
-      completeStep('client', clientId);
-    }
-  };
-
-  const onProjectCreated = (projectId: string) => {
-    if (currentStep === 'project') {
-      completeStep('project', projectId);
-    }
-  };
-
-  const onIncomeCreated = () => {
-    if (currentStep === 'income') {
-      completeStep('income');
-    }
-  };
-
-  return { onClientCreated, onProjectCreated, onIncomeCreated };
 }

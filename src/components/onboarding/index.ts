@@ -1,2 +1,2 @@
-export { OnboardingOverlay, useOnboardingDrawerSuccess } from './OnboardingOverlay';
+export { OnboardingOverlay } from './OnboardingOverlay';
 export { OnboardingStepIndicator } from './OnboardingStepIndicator';

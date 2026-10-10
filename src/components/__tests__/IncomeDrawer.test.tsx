@@ -467,8 +467,11 @@ describe('IncomeDrawer', () => {
       );
 
       await screen.findByText('New Income');
-      // Give the settings query a tick to resolve; the field must stay absent
       await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument());
+      // An ungated field would already be in the form at this point (the client field is);
+      // settle the settings query too, so a field that appears only after the read is caught
+      await waitFor(() => expect(screen.getByPlaceholderText('Search or create client...')).toBeInTheDocument());
+      await new Promise((resolve) => setTimeout(resolve, 30));
       expect(screen.queryByPlaceholderText(PROJECT_PLACEHOLDER)).not.toBeInTheDocument();
     });
 

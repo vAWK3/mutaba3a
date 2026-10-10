@@ -43,6 +43,16 @@ export function useFeatureEnabled(key: FeatureKey): boolean {
   return useFeatureFlags()[key];
 }
 
+/**
+ * Whether the settings row has been read at least once. `useFeatureEnabled`
+ * answers `false` while loading, so a component that *acts* on an area being
+ * off (rather than merely hiding an entry) must wait for this to be true, or
+ * it will treat "not loaded yet" as "switched off" (MUT-16 review #1).
+ */
+export function useFeaturesLoaded(): boolean {
+  return useSettingsRow().isSuccess;
+}
+
 export interface SetFeatureInput {
   key: FeatureKey;
   enabled: boolean;

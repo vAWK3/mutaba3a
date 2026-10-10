@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { useDrawerStore } from '../../../lib/stores';
 import { useOnboardingStore } from '../../../lib/onboardingStore';
 import { OnboardingOverlay } from '../OnboardingOverlay';
 
@@ -12,8 +13,10 @@ import { OnboardingOverlay } from '../OnboardingOverlay';
  * entity, so a new user is never asked to create something the app then hides.
  */
 const featureFlags: Record<string, boolean> = { projects: false };
+let flagsLoaded = true;
 vi.mock('../../../lib/features/useFeatures', () => ({
   useFeatureEnabled: (key: string) => featureFlags[key] ?? false,
+  useFeaturesLoaded: () => flagsLoaded,
 }));
 
 vi.mock('../../../lib/i18n', () => ({
@@ -34,6 +37,7 @@ describe('OnboardingOverlay — Projects area switch (MUT-16)', () => {
   beforeEach(() => {
     resetStore();
     featureFlags.projects = false;
+    flagsLoaded = true;
   });
 
   afterEach(() => {
@@ -70,6 +74,31 @@ describe('OnboardingOverlay — Projects area switch (MUT-16)', () => {
     const state = useOnboardingStore.getState();
     expect(state.currentStep).toBe('project');
     expect(state.completedSteps).toEqual(['client']);
+  });
+
+  it('does nothing while the settings row is still loading (flags read off before they are known)', async () => {
+    flagsLoaded = false;
+    moveStoreToProjectStep();
+    render(<OnboardingOverlay onComplete={vi.fn()} />);
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(useOnboardingStore.getState().currentStep).toBe('project');
+    expect(useOnboardingStore.getState().completedSteps).toEqual(['client']);
+  });
+
+  it('does not attach a project created before the area was switched off to the income step', async () => {
+    useOnboardingStore.getState().completeStep('client', 'client-1');
+    useOnboardingStore.getState().completeStep('project', 'project-1');
+    expect(useOnboardingStore.getState().currentStep).toBe('income');
+    render(<OnboardingOverlay onComplete={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'overview.welcome.addIncome' }));
+
+    const drawer = useDrawerStore.getState().incomeDrawer;
+    expect(drawer.isOpen).toBe(true);
+    expect(drawer.defaultClientId).toBe('client-1');
+    expect(drawer.defaultProjectId).toBeUndefined();
+    useDrawerStore.getState().closeIncomeDrawer();
   });
 
   it('does not call onComplete just because the project step was skipped', async () => {

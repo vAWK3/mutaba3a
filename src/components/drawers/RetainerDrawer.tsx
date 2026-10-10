@@ -13,6 +13,7 @@ import {
 } from '../../hooks/useRetainerQueries';
 import { cn, parseAmountToMinor, todayISO, formatAmount } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import type { Currency, RetainerCadence, RetainerStatus } from '../../types';
 
 const schema = z.object({
@@ -42,6 +43,8 @@ export function RetainerDrawer() {
   const { data: profiles = [] } = useBusinessProfiles();
   const { data: clients = [] } = useClients();
   const { data: projects = [] } = useProjects();
+  // The optional project picker follows the Projects switch (MUT-16); form state is untouched
+  const projectsEnabled = useFeatureEnabled('projects');
   const { data: existingRetainer, isLoading: retainerLoading } = useRetainer(retainerId || '');
 
   // Get default profile (first one or default one)
@@ -411,7 +414,8 @@ export function RetainerDrawer() {
             </div>
           </div>
 
-          {/* Project (optional) */}
+          {/* Project (optional) — shown only while the Projects area is on (MUT-16) */}
+          {projectsEnabled && (
           <div className="form-group">
             <label className="form-label">{t('drawer.retainer.project')}</label>
             <Controller
@@ -429,6 +433,7 @@ export function RetainerDrawer() {
               )}
             />
           </div>
+          )}
 
           {/* Status (only in edit mode) */}
           {mode === 'edit' && (
