@@ -479,6 +479,18 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
+### TD-023: Receipts archive is built in one pass in memory
+**Status**: Open
+**Priority**: Low
+**Introduced**: MUT-14, 2026-10-10
+**Impact**: `buildAllReceiptsArchive` decodes every receipt's base64 payload across all profiles into memory before `generateAsync`; for a photo-heavy database this can be hundreds of MB in a tab. Fine for the pilot's volumes; a per-profile or per-month streaming build (JSZip `generateInternalStream`, or one ZIP per profile) is the fix.
+
+**Remediation**: build per profile (or per month) and offer one download each, or stream; keep `receipts.count()` as the only payload-free read.
+
+**Effort**: Small
+
+---
+
 ## In Progress
 
 *No items currently in progress.*

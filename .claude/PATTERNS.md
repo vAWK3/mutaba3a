@@ -1184,3 +1184,16 @@ into a gated area from other surfaces (home attention items, legacy menus) are
 either removed while the area is off or left to bounce via the guard; prefer
 removing when the item's only action is the deep link.
 
+### Pruning after a UI deletion (MUT-14)
+Run the consumer audit (exports and repository methods with zero references
+outside their own file and tests), then make a **reachability pass** before
+deleting: a candidate whose only *entry point* was on a deleted page may still
+be a live feature (the category seeder: its button was deleted, its rows are
+what the surviving ledger groups by) → re-home the entry point instead of
+deleting. Conversely a chain kept alive only by a surviving consumer with no
+remaining *producer* (the `linkReceiptId` drawer option, produced only by the
+deleted receipts page) is dead even though the script shows references. Tables
+never go (ADR-029); their row types move to `src/db/retained/` with a
+retention test, and user *files* get a plain export before their viewer goes
+(ADR-029 addendum).
+

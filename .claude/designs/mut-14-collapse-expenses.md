@@ -66,14 +66,17 @@ For each leaf key under `expenses`, `suppliers`, `monthClose`, `receipts` (en as
 
 | # | Decision | Rationale |
 |---|---|---|
-| D1 | The ledger is kept **as is**; no features are absorbed from the deleted pages | It already has the summary strip, list/grouped toggle, search, date range and the recurring due list the ticket names; absorbing anything else is scope creep |
-| D2 | Recurring rules and occurrences **stay** | The ledger and the drawer depend on them (§2); the ticket's prune list predates that |
+| D1 (revised) | The ledger keeps its features but **changes**: its two links to deleted routes (`/expenses/vendors`, `/expenses/profiles`) go; rows and projected occurrences gain **Edit recurring rule**; rows show a receipt-count badge | Outside voice F1/F2/F7: the "nothing links in" grep excluded the survivor's own directory; the only recurring-rule management entry lived on a deleted page; `receiptCount` was computed per row and shown nowhere |
+| D2 (extended) | Recurring rules and occurrences **stay, and stay manageable**: the drawer's edit-rule mode is reached from a ledger row's menu and from a projected occurrence's card | F2: without an entry point a user could never pause or delete a rule they created |
 | D3 | Receipts become export-only; export ships before the deletion | Ticket's hard constraint; rebuilding a viewer inside the ledger is a separate decision |
 | D4 | Legacy expense paths redirect to `/expenses`, which then gates | Ticket allows not-found or redirect; a redirect keeps old bookmarks useful and costs no chunk |
-| D5 | Pruning is decided by the consumer script, not the ticket's list | AC 5 says "verified by `git grep`"; the ticket's list is already wrong about recurring |
+| D5 (revised) | Pruning rule: **zero surviving references *and* not a feature whose only entry point was on a deleted page.** The script finds candidates; a manual reachability pass decides | F3: the script removed `useSeedExpenseCategories`, whose single button was on a deleted page while its effect (category rows) is what the surviving ledger groups by. Restored, and the drawer now seeds defaults for a profile with no categories. F8: the same rule in reverse kept the dead `linkReceiptId` chain alive via `ExpenseDrawer`; removed with `BulkUploadDrawer` (rendered by nothing) |
 | D6 | `+ Add → Expense` hides while expenses is off | One filter; creating an expense into a hidden area is the only confusing path left |
 | D7 | One commit per deleted page, after the export commit and the test fix | Ticket guardrail; each page independently revertible |
 | D8 | Tables and Dexie version untouched | ADR-029, AC 7 |
+| D9 | **Expenses already recorded stay visible on Home, client and project pages while the area is off**; only *create* entry points follow the switch (`+ Add`, the top bar menu, duplicate-as-expense on the project page) | F4: they are real money; hiding them would misstate totals. Edit paths from existing rows stay open. Recorded so MUT-15/16 do not re-decide it |
+| D10 | Receipts: export shipped first **as an ADR-029 amendment** (user *files*, not rows, need a usable export); rows stay; linked receipts show as a count badge on the ledger row | F5/F7 |
+| D11 | `monthCloseStatuses` row type moves to `src/db/retained/monthCloseSchema.ts` with a retention test; the data-safety test is a backup → clear → restore round-trip of receipts, vendors, recurring rules and month-close rows | F9: ADR-029 §1/§3 pattern; the toggle-only test was tautological |
 
 ## 8. Build order
 
@@ -90,7 +93,7 @@ For each leaf key under `expenses`, `suppliers`, `monthClose`, `receipts` (en as
 - Receipts and vendors are provably safe: exportable before the UI goes, tables untouched, backup unchanged.
 - Closes MUT-20 on the way.
 
-## 9. Engineering review (condensed) and outside voice
+## 9. Engineering review (condensed)
 
 - **Scope:** 9 page deletions, 1 export feature, route/sidebar gating, pruning. Arrangement accepted (commit-per-page keeps it reviewable).
 - **A1 [P1] (9/10)** `ExpensesLedgerPage.tsx:14-27` — the recurring machinery is a live dependency; pruning it would break the surviving page. Resolved: D2.
@@ -98,4 +101,22 @@ For each leaf key under `expenses`, `suppliers`, `monthClose`, `receipts` (en as
 - **A3 [P2] (8/10)** `src/components/layout/SidebarNav.tsx:107` `+ Add → Expense` opens the drawer regardless of the switch. Resolved: D6.
 - **C1 [P2] (8/10)** Interfaces and provider `satisfies` will fail typecheck for every pruned repository method — the prune touches `interfaces.ts` and `provider.ts` in the same commit.
 - **Tests:** the ledger test fix is the MUT-20 bug; existing tests for deleted pages go with them; new tests listed in §3.
-- Outside voice: recorded in §10 when the native fallback completes.
+
+## 10. Outside voice (native Plan subagent; Codex not installed, so not outside coverage in gstack's sense)
+
+Twelve findings; the review arrived with the prune uncommitted on disk, so every accepted fix landed before the prune commit.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| F1 | High | The ledger itself linked to `/expenses/vendors` and `/expenses/profiles` | **Accepted** → D1 revised: links removed |
+| F2 | High | Recurring rules lost their only management entry (`ProfileExpensesPage`) | **Accepted** → D2: Edit recurring rule on rows and occurrence cards |
+| F3 | High | Zero-reference prune removed the category seeder, degrading the ledger's By-category view | **Accepted** → D5 revised; `useSeedExpenseCategories` restored; `ExpenseDrawer` auto-seeds an empty profile |
+| F4 | Med | Create paths (`TopBar` add menu, project duplicate) ungated; Home still shows expense KPIs | **Accepted** (create paths gated) and **decided** (D9: recorded expenses stay visible) |
+| F5 | Med | D3 contradicts ADR-029 §2 silently | **Accepted** → ADR-029 addendum (files vs rows) |
+| F6 | Med | Receipt count loaded every payload; archive decodes everything at once | **Partly:** `receipts.count()` added (no payloads). Single-pass archive kept for the pilot; TD-023 |
+| F7 | Med | Linked receipts invisible though `receiptCount` is computed per row | **Accepted:** badge on the ledger row |
+| F8 | Med | `linkReceiptId` chain dead but kept alive by the drawer | **Accepted:** chain removed (stores, drawer, hook); `BulkUploadDrawer` deleted |
+| F9 | Med | Month-close table half-handled vs ADR-029; §7 test tautological | **Accepted** → D11 |
+| F10 | Low | The 18-failure fix is a mock, not a product proof | **Agreed**; worded that way in CHANGELOG |
+| F11 | Low | i18n script safe; the dynamic-prefix clause guards a pattern this codebase lacks | **Noted**; kept as a cheap guard |
+| F12 | Low | Plan named `exportAllReceiptsAsZip` as new (it existed, per profile); legacy redirects drop query strings | **Noted**; the all-profiles builder is `buildAllReceiptsArchive` + `exportAllProfilesReceiptsAsZip`; the old per-profile exporters went with their pages |

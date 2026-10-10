@@ -117,6 +117,19 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
 
+#### Expenses collapse (MUT-14, added 2026-10-10)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` (fixed, +1) | Page | 19 | MUT-20 green; no-profile branch pinned |
+| `src/lib/__tests__/zipExport.test.ts` | Unit | 3 | **Full** - folders per profile/month, duplicate names, empty refusal |
+| `src/lib/features/__tests__/legacyRedirects.test.ts` | Structural | 8 | every deleted path redirects to `/expenses` with no component |
+| `src/__tests__/noDeadExpenseModules.test.ts` | Guard | 15 | deleted pages/modules stay deleted; barrels trimmed |
+| `src/db/__tests__/retainedMonthCloseSchema.test.ts` | Retention | 3 | table kept, rows round-trip backup/restore |
+| `src/lib/features/__tests__/expensesGatingDataSafety.test.ts` | Data safety | 2 | switch inert; receipts/vendors/rules/month-close survive backup → clear → restore |
+| removed with their pages | — | — | `ExpensesPage`, `ProfileExpensesPage`, `ExpensesOverviewPage` tests; `forecastCalculations`, `matchingAlgorithm` tests; vendor-match and rule-history cases |
+
+Still manual: RTL on the surviving ledger; the receipts ZIP opened in Finder; a real `/expenses/overview` bookmark landing on the ledger.
+
 #### Gated areas (MUT-13, added 2026-10-10)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

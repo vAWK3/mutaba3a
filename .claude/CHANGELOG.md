@@ -29,6 +29,69 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-14: expenses collapse to one gated ledger; MUT-20 fixed
+
+Brief `.claude/designs/mut-14-collapse-expenses.md` (+ test plan), eng
+review §9, outside voice §10 (twelve findings, all dispositioned before the
+prune commit). ADR-029 and ADR-030 addenda. Safety tag before deletion:
+`mut-14-pre-expenses-collapse`.
+
+### Removed (one commit per page)
+- `ExpensesPage` (profiles), `ProfileExpensesPage`, `ReceiptsPage` (+ its
+  match components), `ExpensesOverviewPage`, `ExpensesForecastPage`,
+  `VendorsPage`, `MonthCloseChecklistPage` (+ `ClosedMonthWarning`),
+  `SuppliersPage` and the `/suppliers` route, the orphan
+  `RecurringRuleDrawer` and `BulkUploadDrawer`. Their eight paths redirect to
+  `/expenses`.
+- Pruned by the consumer rule: forecasting (`forecastCalculations.ts`,
+  `useExpenseForecast`, yearly / all-profile totals), receipt matching
+  (`matchingAlgorithm.ts`, suggestion and bulk-upload hooks and helpers,
+  `receiptRepo.linkToExpense`), month close (`monthCloseRepo` and hooks;
+  the **table stays**, typed in `src/db/retained/monthCloseSchema.ts`),
+  vendor management (`mergeVendors`, `addAlias`, `isSameVendor`,
+  `findBestVendorMatch`), the `linkReceiptId` drawer chain, and 216 orphaned
+  i18n leaves (`suppliers.*`, `monthClose.*`, `receipts.*`, most of
+  `expenses.*`) in en and ar.
+
+### Added
+- **Export receipts** in Settings › Data tools: one ZIP with
+  `<profile>/<YYYY-MM>/<file>` for every uploaded receipt, built by the
+  tested `buildAllReceiptsArchive`; `receipts.count()` for the row count.
+  Shipped before the receipts pages were deleted (ADR-029 addendum).
+- `/expenses` gated by `requireFeature('expenses')`; Expenses moved from the
+  main sidebar section to "More"; `+ Add → Expense`, the top bar's New
+  expense and duplicate-as-expense on the project page follow the switch.
+- Ledger: **Edit recurring rule** on recurring rows and on projected
+  occurrence cards (the only management entry point was on a deleted page);
+  receipt-count badge on rows; the two links to deleted routes are gone.
+- `ExpenseDrawer` seeds the default categories for a profile that has none
+  (the seeding button lived on a deleted page).
+- Tests: ledger (+1), zip export (3), router gates (+1), legacy redirects (8),
+  sidebar (+2), no-dead-modules guard, retained month-close schema (3),
+  backup round-trip data safety (2); i18n parity for `expenses` en/ar.
+
+### Fixed
+- **The Settings backup import now reconciles optional areas.** MUT-12 wired
+  the reconcile into `migration-safety.ts`'s restore only; the Settings page
+  uses `src/db/backup.ts`, which is now covered too (found by the new
+  round-trip test).
+- **`useFeatureEnabled` no longer imports the `hooks/useQueries` barrel**;
+  page tests that mock that barrel wholesale (IncomePage) broke the moment
+  the top bar read a flag. The settings query is declared inside the features
+  module with the same `['settings']` key.
+- **MUT-20:** the 18 failing `ExpensesLedgerPage` tests. Root cause: the
+  page renders its no-profile state without an active profile and the test
+  never provided one. Fixed by mocking `useActiveProfile` (a test fix, not a
+  product change; nothing renders the ledger against a real profile row).
+
+### Decided
+- Expenses already recorded stay visible on Home, client and project pages
+  while the area is off; only create entry points follow the switch (D9).
+- Receipts are exportable, not viewable, after this ticket; vendors stay
+  viewable and creatable through the ledger and the drawer.
+
+---
+
 ## [Unreleased] - 2026-10-10 — MUT-13: invoices/documents and retainers are gated behind their switches
 
 Brief `.claude/designs/mut-13-gate-invoices-retainers.md` (+ test plan), eng

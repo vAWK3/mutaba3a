@@ -1041,6 +1041,17 @@ faithfully (rejected — no consumer left to keep it accurate, so it would rot
 into a lie); deleting `moneyEventRepository` with the page (rejected — three
 mounted Overview components import it).
 
+
+**Addendum 2026-10-10 — MUT-14: user *files* get an export before their UI goes.**
+§2 rejected a bespoke export because the generic backup covers every table.
+That holds for rows. It does not hold for user-uploaded files stored as
+base64 in a row (`receipts.data`): a JSON backup is not a usable way to get
+one's receipts back. Rule: when a removed UI was the only way to *view or
+download* user files, ship a plain file export first (MUT-14: Settings › Data
+tools › Export receipts, one ZIP with `<profile>/<month>/<file>`), then delete.
+Rows still stay (ADR-029 §1): `monthCloseStatuses` keeps its retained schema in
+`src/db/retained/monthCloseSchema.ts` with a retention test, like engagements.
+
 ---
 
 ## ADR-030: Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data
@@ -1107,6 +1118,18 @@ and the drawer only changes how it *explains* the lock. Items whose only
 action deep-links into a gated area (home attention retainer items) are
 removed while the area is off rather than left to bounce. The sidebar's final
 grouping stays MUT-15's decision; MUT-16 appends to the same section.
+
+**Addendum 2026-10-10 — MUT-14: expenses gated; recorded money stays visible.**
+Expenses became the second gated area: `/expenses` behind `requireFeature`,
+eight legacy expense paths redirect to it, Expenses in the sidebar's "More"
+section. Decision taken here for every area: **expenses already recorded stay
+visible on Home, client and project pages while the switch is off** (they are
+real money; hiding them would misstate totals); only *create* entry points
+(`+ Add`, the top bar menu, duplicate-as-expense) follow the switch, and edit
+paths from existing rows stay open. Pruning rule after the first collapse:
+remove code with zero surviving references **and** no feature whose only entry
+point was on a deleted page — the category seeder was such a feature and was
+restored; the receipt-upload chain was the reverse case and was removed.
 
 **Consequences**: MUT-13/16 gate routes with `readFeatureFlags()` and sidebar
 entries with `useFeatureEnabled`; MUT-15 reads `useFeatureFlags()` for the
