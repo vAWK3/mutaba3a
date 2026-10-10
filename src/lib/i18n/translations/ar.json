@@ -593,6 +593,12 @@
     "importBackup": "استيراد نسخة احتياطية",
     "importBackupDesc": "استعادة من ملف نسخة احتياطية تم تصديره مسبقاً.",
     "importBackupBtn": "استيراد نسخة احتياطية",
+    "exportReceipts": "تصدير الإيصالات",
+    "exportReceiptsDesc": "{count} ملف إيصال مرفوع، كملف ZIP بمجلد لكل ملف تعريف وشهر",
+    "exportReceiptsNone": "لا توجد إيصالات مرفوعة في قاعدة البيانات",
+    "exportReceiptsBtn": "تنزيل ZIP",
+    "exportReceiptsDone": "تم تصدير {count} إيصالًا",
+    "exportReceiptsFailed": "فشل تصدير الإيصالات",
     "desktopApp": {
       "title": "تطبيق سطح المكتب",
       "download": "تحميل تطبيق سطح المكتب",

@@ -593,6 +593,12 @@
     "importBackup": "Import Backup",
     "importBackupDesc": "Restore from a previously exported backup file.",
     "importBackupBtn": "Import Backup",
+    "exportReceipts": "Export receipts",
+    "exportReceiptsDesc": "{count} uploaded receipt files, as a ZIP with one folder per profile and month",
+    "exportReceiptsNone": "No uploaded receipts in this database",
+    "exportReceiptsBtn": "Download ZIP",
+    "exportReceiptsDone": "{count} receipts exported",
+    "exportReceiptsFailed": "Receipts export failed",
     "desktopApp": {
       "title": "Desktop App",
       "download": "Download Desktop App",

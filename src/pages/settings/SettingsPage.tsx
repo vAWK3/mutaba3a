@@ -13,6 +13,9 @@ import { useTheme, type ThemeMode } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
 import { runIntegrityCheck } from '../../db/integrityCheck';
 import { exportBackup, restoreFromBackup } from '../../db/backup';
+import { useQuery } from '@tanstack/react-query';
+import { getRepositories } from '../../db/provider';
+import { exportAllProfilesReceiptsAsZip } from '../../lib/zipExport';
 import { useToast } from '../../lib/toastStore';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
@@ -563,6 +566,25 @@ function DataToolsSection() {
     }
   };
 
+  // Receipts export (MUT-14): the receipts pages are gone; uploaded files
+  // stay in the database and leave through this ZIP.
+  const { data: receiptCount = 0 } = useQuery({
+    queryKey: ['receipts', 'count'],
+    queryFn: async () => (await getRepositories().base.receipts.list({})).length,
+  });
+  const [isExportingReceipts, setIsExportingReceipts] = useState(false);
+  const handleExportReceipts = async () => {
+    setIsExportingReceipts(true);
+    try {
+      const count = await exportAllProfilesReceiptsAsZip();
+      showToast(t('settings.exportReceiptsDone', { count }), { type: 'success' });
+    } catch {
+      showToast(t('settings.exportReceiptsFailed'), { type: 'error' });
+    } finally {
+      setIsExportingReceipts(false);
+    }
+  };
+
   const handleImportBackup = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -615,6 +637,22 @@ function DataToolsSection() {
         </div>
         <button className="btn btn-ghost" onClick={handleImportBackup}>
           {t('settings.importBackupBtn')}
+        </button>
+      </div>
+
+      <div className="settings-row" data-testid="settings-export-receipts">
+        <div>
+          <div className="settings-label">{t('settings.exportReceipts')}</div>
+          <div className="settings-description">
+            {receiptCount === 0 ? t('settings.exportReceiptsNone') : t('settings.exportReceiptsDesc', { count: receiptCount })}
+          </div>
+        </div>
+        <button
+          className="btn btn-secondary"
+          onClick={handleExportReceipts}
+          disabled={receiptCount === 0 || isExportingReceipts}
+        >
+          {t('settings.exportReceiptsBtn')}
         </button>
       </div>
     </div>
