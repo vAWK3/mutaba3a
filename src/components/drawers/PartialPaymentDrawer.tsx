@@ -227,12 +227,16 @@ function PaymentForm({
   createMutation: ReturnType<typeof useCreatePaymentRecord>;
   updateMutation: ReturnType<typeof useUpdatePaymentRecord>;
   isPending: boolean;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [paymentInput, setPaymentInput] = useState(() =>
-    editingRecord ? formatCurrencyInput(String(editingRecord.amountMinor / 100)) : ''
-  );
+  // Settling in full is the common case, so create mode opens with the whole
+  // remaining balance already in the field -- one confirm, still editable down
+  // to a partial amount (MUT-6 AC #3). Nothing to prefill once it is settled.
+  const [paymentInput, setPaymentInput] = useState(() => {
+    if (editingRecord) return formatCurrencyInput(String(editingRecord.amountMinor / 100));
+    return remainingAmountMinor > 0 ? formatCurrencyInput(String(remainingAmountMinor / 100)) : '';
+  });
   const [dateInput, setDateInput] = useState(() =>
     editingRecord ? editingRecord.paidAt.split('T')[0] : new Date().toISOString().split('T')[0]
   );
@@ -252,7 +256,23 @@ function PaymentForm({
     const paymentAmountMinor = parseCurrencyInput(paymentInput);
 
     if (paymentAmountMinor <= 0) {
-      setError('Payment amount must be greater than 0');
+      setError(t('transactions.partialPayment.amountMustBePositive'));
+      return;
+    }
+
+    // The repository rejects overpayment too (ADR-030) and stays the source of
+    // truth; checking here as well is what turns it into a translated inline
+    // message instead of an English throw the user has to decode. When editing
+    // an existing record, its own amount is part of the remaining balance.
+    const allowedMinor = editingRecord
+      ? remainingAmountMinor + editingRecord.amountMinor
+      : remainingAmountMinor;
+    if (paymentAmountMinor > allowedMinor) {
+      setError(
+        t('transactions.partialPayment.overpayment', {
+          amount: formatAmount(Math.max(0, allowedMinor), currency, locale),
+        })
+      );
       return;
     }
 
