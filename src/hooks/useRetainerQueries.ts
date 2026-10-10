@@ -6,9 +6,9 @@ function useRetainerMutationWithToast<TData, TError extends Error, TVariables>(
 ) {
   return useMutation(withErrorToast(opts));
 }
+import { getRepositories } from '../db';
+// Not repositories — these stay direct imports and sit outside the seam.
 import {
-  retainerRepo,
-  projectedIncomeRepo,
   scheduleGenerator,
   retainerMatching,
   markProjectedIncomeMissed,
@@ -83,7 +83,7 @@ function invalidateAllRetainerQueries(queryClient: ReturnType<typeof useQueryCli
 export function useRetainers(filters: RetainerFilters = {}) {
   return useQuery({
     queryKey: retainerQueryKeys.retainers(filters),
-    queryFn: () => retainerRepo.list(filters),
+    queryFn: () => getRepositories().base.retainerAgreements.list(filters),
   });
 }
 
@@ -93,7 +93,7 @@ export function useRetainers(filters: RetainerFilters = {}) {
 export function useRetainer(id: string) {
   return useQuery({
     queryKey: retainerQueryKeys.retainer(id),
-    queryFn: () => retainerRepo.get(id),
+    queryFn: () => getRepositories().base.retainerAgreements.get(id),
     enabled: !!id,
   });
 }
@@ -104,7 +104,7 @@ export function useRetainer(id: string) {
 export function useRetainerDisplay(id: string) {
   return useQuery({
     queryKey: retainerQueryKeys.retainerDisplay(id),
-    queryFn: () => retainerRepo.getDisplay(id),
+    queryFn: () => getRepositories().base.retainerAgreements.getDisplay(id),
     enabled: !!id,
   });
 }
@@ -131,7 +131,7 @@ export function useCreateRetainer() {
 
   return useRetainerMutationWithToast({
     mutationFn: (data: Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>) =>
-      retainerRepo.create(data),
+      getRepositories().base.retainerAgreements.create(data),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
 }
@@ -144,7 +144,7 @@ export function useUpdateRetainer() {
 
   return useRetainerMutationWithToast({
     mutationFn: ({ id, data }: { id: string; data: Partial<RetainerAgreement> }) =>
-      retainerRepo.update(id, data),
+      getRepositories().base.retainerAgreements.update(id, data),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
 }
@@ -156,7 +156,7 @@ export function useArchiveRetainer() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: (id: string) => retainerRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.retainerAgreements.archive(id),
     onSuccess: () => invalidateRetainerQueries(queryClient),
   });
 }
@@ -168,7 +168,7 @@ export function useActivateRetainer() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: (id: string) => retainerRepo.activate(id),
+    mutationFn: (id: string) => getRepositories().base.retainerAgreements.activate(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
 }
@@ -180,7 +180,7 @@ export function usePauseRetainer() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: (id: string) => retainerRepo.pause(id),
+    mutationFn: (id: string) => getRepositories().base.retainerAgreements.pause(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
 }
@@ -192,7 +192,7 @@ export function useResumeRetainer() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: (id: string) => retainerRepo.resume(id),
+    mutationFn: (id: string) => getRepositories().base.retainerAgreements.resume(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
 }
@@ -204,7 +204,7 @@ export function useEndRetainer() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: (id: string) => retainerRepo.end(id),
+    mutationFn: (id: string) => getRepositories().base.retainerAgreements.end(id),
     onSuccess: () => invalidateAllRetainerQueries(queryClient),
   });
 }
@@ -219,7 +219,7 @@ export function useEndRetainer() {
 export function useProjectedIncome(filters: ProjectedIncomeFilters = {}) {
   return useQuery({
     queryKey: retainerQueryKeys.projectedIncome(filters),
-    queryFn: () => projectedIncomeRepo.list(filters),
+    queryFn: () => getRepositories().base.projectedIncome.list(filters),
   });
 }
 
@@ -229,7 +229,7 @@ export function useProjectedIncome(filters: ProjectedIncomeFilters = {}) {
 export function useRetainerSchedule(retainerId: string) {
   return useQuery({
     queryKey: retainerQueryKeys.retainerSchedule(retainerId),
-    queryFn: () => projectedIncomeRepo.getByRetainer(retainerId),
+    queryFn: () => getRepositories().base.projectedIncome.getByRetainer(retainerId),
     enabled: !!retainerId,
   });
 }
@@ -240,7 +240,7 @@ export function useRetainerSchedule(retainerId: string) {
 export function useDueItems(currency?: Currency) {
   return useQuery({
     queryKey: retainerQueryKeys.dueItems(currency),
-    queryFn: () => projectedIncomeRepo.getDueItems(currency),
+    queryFn: () => getRepositories().base.projectedIncome.getDueItems(currency),
   });
 }
 
@@ -250,7 +250,7 @@ export function useDueItems(currency?: Currency) {
 export function useForecastItems(dateFrom: string, dateTo: string, currency?: Currency) {
   return useQuery({
     queryKey: retainerQueryKeys.forecastItems(dateFrom, dateTo, currency),
-    queryFn: () => projectedIncomeRepo.getForForecast(dateFrom, dateTo, currency),
+    queryFn: () => getRepositories().base.projectedIncome.getForForecast(dateFrom, dateTo, currency),
     enabled: !!dateFrom && !!dateTo,
   });
 }

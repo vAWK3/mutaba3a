@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getRepositories } from '../db';
+import { getRepositories, type Repositories } from '../db';
 import type {
   QueryFilters,
   Transaction,
@@ -426,7 +426,12 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: getRepositories().base.settings.update,
+    // Must be a closure, not a bare method reference: settingsRepo.update
+    // calls `this.get()`, and TanStack invokes mutationFn with its own `this`.
+    // A detached reference throws `this.get is not a function`. The closure
+    // also keeps resolution lazy, like every other call site here.
+    mutationFn: (data: Parameters<Repositories['base']['settings']['update']>[0]) =>
+      getRepositories().base.settings.update(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },

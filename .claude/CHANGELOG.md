@@ -63,7 +63,24 @@ pass/fail counts are unchanged apart from the 9 new provider tests.
   `ExpenseDisplay[]`. Three `create` parameter types were also wrong. No runtime
   behaviour was added to satisfy an aspirational signature.
 
+### Fixed (QA reconciliation, 2026-10-10)
+- **Settings could not be saved.** `useUpdateSettings` passed
+  `settingsRepo.update` as a bare method reference; `update` calls `this.get()`,
+  and TanStack invokes `mutationFn` with its own `this`, so it threw
+  `this.get is not a function`. With no `onError` on the mutation it failed
+  silently — changing the default currency from Settings never persisted.
+  Pre-existing (`acb1144:useQueries.ts:442` had the same shape), surfaced
+  because the refactor touched the line. Now a closure, which binds `this` and
+  keeps resolution lazy. **This is the one deliberate behaviour change in
+  MUT-35**, accepted rather than preserving a silent data-loss bug.
+
 ### Changed
+- `useRetainerQueries` also routes through the provider (nine consumers total).
+  Without it the `retainerAgreements` and `projectedIncome` slots had zero
+  callers, so a future `setRepositories` swap would have left retainer screens
+  reading Dexie while everything else moved — a half-local view with no error.
+- Removed a provider test that asserted a tautology (it could not fail for the
+  reason its comment claimed), rather than leave it posing as coverage.
 - Eight consumers now resolve through the provider: the four query hooks,
   `paymentRequestService`, `recurringExpenseService`, `lib/zipExport.ts` and
   `useIssueAndDownload.tsx`. Each call site keeps the family it used before

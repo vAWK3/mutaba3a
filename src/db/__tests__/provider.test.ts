@@ -92,11 +92,6 @@ describe('repository provider', () => {
       expect(getRepositories().base.transactions).toBe(transactionRepo);
     });
 
-    it('leaves no override behind for the next test', () => {
-      // Guards the 101-file suite against cross-file bleed.
-      expect(getRepositories().base.transactions).toBe(transactionRepo);
-    });
-
     it('refuses injection in a production build', () => {
       vi.stubEnv('PROD', true);
       const current = getRepositories();

@@ -196,6 +196,12 @@ on every synced write path. Upgrade when MUT-43 lands: resolve the decorators
 lazily through `getRepositories().base`, with a test asserting ops are captured
 against a swapped base.
 
+**Every declared slot has a real caller.** Verified by grepping
+`base.<slot>.<method>` across `src/`: nine consumers resolve through the
+provider, including `useRetainerQueries`. A slot that nothing reads would make
+a future `setRepositories` swap silently leave that domain on Dexie — the
+registry must never advertise coverage it does not have.
+
 **Outside the seam.** `IRepositoryProvider` covers 21 repositories. Not covered:
 `planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`planRepository.ts`),
 `scheduleGenerator`, `retainerMatching` (`retainerRepository.ts`) — the last two
