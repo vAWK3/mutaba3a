@@ -20,3 +20,14 @@
   gap: var(--space-2);
   justify-content: flex-end;
 }
+
+/**
+ * The actions column was a fixed 40-48px, sized for a kebab alone. Now that it
+ * also holds a button, it must shrink-to-fit its own content instead of
+ * stealing width from the amount column: width 1% + nowrap is the table idiom
+ * for "as narrow as the content allows".
+ */
+.row-actions-header {
+  width: 1%;
+  white-space: nowrap;
+}
