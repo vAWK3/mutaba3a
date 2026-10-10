@@ -8,11 +8,19 @@ import { ClientDetailPage } from '../ClientDetailPage';
 import * as useQueries from '../../../hooks/useQueries';
 
 // Mock router
+const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useParams: () => ({ clientId: 'client-1' }),
+  useNavigate: () => mockNavigate,
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+}));
+
+// Advanced-feature switches (MUT-13): off unless a test turns one on
+const featureFlags: Record<string, boolean> = { invoices: false, retainers: false };
+vi.mock('../../../lib/features/useFeatures', () => ({
+  useFeatureEnabled: (key: string) => featureFlags[key] ?? false,
 }));
 
 // Mock i18n
@@ -58,12 +66,25 @@ vi.mock('../../../lib/i18n', () => ({
 const mockOpenTransactionDrawer = vi.fn();
 const mockOpenClientDrawer = vi.fn();
 const mockOpenProjectDrawer = vi.fn();
+const mockOpenIncomeDrawer = vi.fn();
+const mockOpenDocumentDrawer = vi.fn();
+const mockOpenRetainerDrawer = vi.fn();
+const mockOpenPartialPaymentDrawer = vi.fn();
 vi.mock('../../../lib/stores', () => ({
   useDrawerStore: () => ({
     openTransactionDrawer: mockOpenTransactionDrawer,
     openClientDrawer: mockOpenClientDrawer,
     openProjectDrawer: mockOpenProjectDrawer,
+    openIncomeDrawer: mockOpenIncomeDrawer,
+    openDocumentDrawer: mockOpenDocumentDrawer,
+    openRetainerDrawer: mockOpenRetainerDrawer,
+    openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
   }),
+}));
+
+// Retainers card data (MUT-13): the card itself renders for real
+vi.mock('../../../hooks/useRetainerQueries', () => ({
+  useRetainers: () => ({ data: [], isLoading: false }),
 }));
 
 // Mock client data
@@ -281,6 +302,95 @@ describe('ClientDetailPage', () => {
         const projectLink = screen.getByText('Website Redesign');
         expect(projectLink.tagName).toBe('A');
       });
+    });
+  });
+
+  describe('Advanced-feature entry points (MUT-13)', () => {
+    const incomeRows = [
+      {
+        id: 'tx-unpaid',
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 50000,
+        currency: 'USD',
+        occurredAt: '2026-10-01',
+        clientId: 'client-1',
+        title: 'Design sprint',
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+      {
+        id: 'tx-linked',
+        kind: 'income',
+        status: 'paid',
+        amountMinor: 20000,
+        currency: 'USD',
+        occurredAt: '2026-09-01',
+        paidAt: '2026-09-05',
+        clientId: 'client-1',
+        title: 'Logo',
+        linkedDocumentId: 'doc-9',
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+
+    beforeEach(() => {
+      featureFlags.invoices = false;
+      featureFlags.retainers = false;
+      vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
+        data: incomeRows,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
+    });
+
+    const openTransactionsTab = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
+      await waitFor(() => expect(screen.getAllByLabelText('Actions').length).toBeGreaterThan(0));
+    };
+
+    it('offers no invoice actions while invoices is off', async () => {
+      renderWithProviders(<ClientDetailPage />);
+      await openTransactionsTab();
+      fireEvent.click(screen.getAllByLabelText('Actions')[0]);
+      expect(screen.queryByText('transactions.generateInvoice')).toBeNull();
+      expect(screen.queryByText('transactions.viewInvoice')).toBeNull();
+    });
+
+    it('offers Generate invoice on an income row without a document when invoices is on', async () => {
+      featureFlags.invoices = true;
+      renderWithProviders(<ClientDetailPage />);
+      await openTransactionsTab();
+      fireEvent.click(screen.getAllByLabelText('Actions')[0]);
+      fireEvent.click(await screen.findByText('transactions.generateInvoice'));
+      expect(mockOpenDocumentDrawer).toHaveBeenCalledWith({
+        mode: 'create',
+        defaultType: 'invoice',
+        defaultClientId: 'client-1',
+      });
+    });
+
+    it('offers View invoice on a row linked to a document when invoices is on', async () => {
+      featureFlags.invoices = true;
+      renderWithProviders(<ClientDetailPage />);
+      await openTransactionsTab();
+      fireEvent.click(screen.getAllByLabelText('Actions')[1]);
+      fireEvent.click(await screen.findByText('transactions.viewInvoice'));
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/documents/$documentId', params: { documentId: 'doc-9' } });
+    });
+
+    it('shows no retainers card while retainers is off', () => {
+      renderWithProviders(<ClientDetailPage />);
+      expect(screen.queryByTestId('client-retainers-card')).toBeNull();
+    });
+
+    it('shows the retainers card with its entry points when retainers is on', async () => {
+      featureFlags.retainers = true;
+      renderWithProviders(<ClientDetailPage />);
+      const card = await screen.findByTestId('client-retainers-card');
+      expect(card).toHaveTextContent('clients.detail.retainers.empty');
+      fireEvent.click(screen.getByText('clients.detail.retainers.new'));
+      expect(mockOpenRetainerDrawer).toHaveBeenCalledWith({ mode: 'create', defaultClientId: 'client-1' });
     });
   });
 });

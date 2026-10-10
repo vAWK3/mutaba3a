@@ -11,7 +11,10 @@ import {
   useDeleteTransaction,
   useProjects,
   useBusinessProfiles,
+  useDocument,
 } from '../../hooks/useQueries';
+import { useNavigate } from '@tanstack/react-router';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
@@ -63,6 +66,20 @@ export function IncomeDrawer() {
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
+
+  // Document lock (MUT-13): an entry exported on a document is immutable in
+  // the repository regardless of the Invoices switch; the drawer says so up
+  // front instead of letting the save fail.
+  const isLocked = mode === 'edit' && !!existingTx?.lockedAt;
+  const invoicesEnabled = useFeatureEnabled('invoices');
+  const navigate = useNavigate();
+  const { data: lockingDocument } = useDocument(existingTx?.lockedByDocumentId || '');
+  const openLockingDocument = () => {
+    const documentId = existingTx?.lockedByDocumentId;
+    if (!documentId) return;
+    closeIncomeDrawer();
+    navigate({ to: '/documents/$documentId', params: { documentId } });
+  };
 
   // Determine initial profile
   const initialProfileId = useMemo(() => {
@@ -241,7 +258,7 @@ export function IncomeDrawer() {
                 type="button"
                 className="btn btn-danger"
                 onClick={handleDelete}
-                disabled={deleteMutation.isPending}
+                disabled={deleteMutation.isPending || isLocked}
               >
                 {t('common.delete')}
               </button>
@@ -255,7 +272,7 @@ export function IncomeDrawer() {
               type="submit"
               form="income-form"
               className="btn btn-primary"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLocked}
             >
               {isSubmitting ? t('common.saving') : t('common.save')}
             </button>
@@ -264,6 +281,23 @@ export function IncomeDrawer() {
       }
     >
       <form id="income-form" onSubmit={form.handleSubmit(onSubmit)}>
+        {isLocked && (
+          <div className="drawer-notice drawer-notice-locked" role="status" data-testid="income-locked-notice">
+            <div className="drawer-notice-title">
+              {lockingDocument?.number
+                ? t('drawer.income.locked.title', { number: lockingDocument.number })
+                : t('drawer.income.locked.titleNoNumber')}
+            </div>
+            <div className="drawer-notice-body">{t('drawer.income.locked.body')}</div>
+            {invoicesEnabled ? (
+              <button type="button" className="btn btn-sm btn-secondary" onClick={openLockingDocument}>
+                {t('drawer.income.locked.viewDocument')}
+              </button>
+            ) : (
+              <div className="drawer-notice-body text-muted">{t('drawer.income.locked.turnOnInvoices')}</div>
+            )}
+          </div>
+        )}
         {/* Profile Selector */}
         <div className="form-group">
           <label className="form-label">{t('drawer.transaction.profile')} *</label>

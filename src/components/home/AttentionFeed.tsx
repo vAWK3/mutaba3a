@@ -18,6 +18,7 @@ import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useDrawerStore } from '../../lib/stores';
 import { useGuidance } from '../../hooks/useMoneyEventQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { getCurrentMonthKey } from '../../lib/monthDetection';
 import { formatAmount, cn } from '../../lib/utils';
 import type { GuidanceItem, Currency } from '../../types';
@@ -37,6 +38,8 @@ export function AttentionFeed({ className }: AttentionFeedProps) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const profileId = useProfileFilter();
+  // Retainer guidance deep-links to /retainers, which bounces home while the area is off (MUT-13)
+  const retainersEnabled = useFeatureEnabled('retainers');
 
   const currentMonth = getCurrentMonthKey();
 
@@ -46,7 +49,7 @@ export function AttentionFeed({ className }: AttentionFeedProps) {
     profileId,
     currency: 'USD',
     includeUnpaidIncome: true,
-    includeProjectedRetainer: true,
+    includeProjectedRetainer: retainersEnabled,
   });
 
   const { data: guidanceILS = [], isLoading: loadingILS } = useGuidance({
@@ -54,7 +57,7 @@ export function AttentionFeed({ className }: AttentionFeedProps) {
     profileId,
     currency: 'ILS',
     includeUnpaidIncome: true,
-    includeProjectedRetainer: true,
+    includeProjectedRetainer: retainersEnabled,
   });
 
   const isLoading = loadingUSD || loadingILS;

@@ -77,7 +77,8 @@
       "workspace": "مساحة العمل",
       "work": "العمل",
       "money": "المالية",
-      "system": "النظام"
+      "system": "النظام",
+      "optional": "المزيد"
     },
     "newMenu": {
       "income": "إضافة إيراد",
@@ -334,7 +335,15 @@
       "noReceivables": "لا توجد مستحقات",
       "noReceivablesHint": "تم تحصيل جميع المستحقات.",
       "noTransactions": "لا توجد معاملات",
-      "noTransactionsHint": "أضف أول معاملة لهذا العميل."
+      "noTransactionsHint": "أضف أول معاملة لهذا العميل.",
+      "retainers": {
+        "title": "العقود الشهرية",
+        "empty": "لا توجد عقود شهرية لهذا العميل بعد.",
+        "new": "عقد جديد",
+        "viewAll": "عرض الكل",
+        "nextExpected": "الاستحقاق القادم",
+        "dueNow": "مستحق الآن"
+      }
     },
     "receivables": {
       "dueDate": "تاريخ الاستحقاق",
@@ -1006,7 +1015,14 @@
       "statusInvoicedHint": "فاتورة مُرسلة، بانتظار الدفع",
       "statusReceived": "مُستلم",
       "statusReceivedHint": "تم استلام الدفعة",
-      "dueDate": "تاريخ الاستحقاق"
+      "dueDate": "تاريخ الاستحقاق",
+      "locked": {
+        "title": "مقفل بالمستند {number}",
+        "titleNoNumber": "مقفل بمستند تم تصديره",
+        "body": "تم تصدير هذا القيد في مستند، لذا لا يمكن تغيير حقوله. ما زال بإمكانك أرشفته.",
+        "viewDocument": "عرض المستند",
+        "turnOnInvoices": "فعّل الفواتير من الإعدادات › الميزات المتقدمة لفتح المستند."
+      }
     },
     "transaction": {
       "new": "معاملة جديدة",

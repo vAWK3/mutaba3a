@@ -2,6 +2,7 @@
 import React, { Suspense } from 'react';
 import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AppShell } from './components/layout';
+import { requireFeature } from './lib/features/routeGuard';
 
 // Keep OverviewPage eager (it's the landing page)
 import { OverviewPage } from './pages/overview/OverviewPage';
@@ -107,24 +108,28 @@ const reportsRoute = createRoute({
 const documentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/documents',
+  beforeLoad: requireFeature('invoices'),
   component: lazyPage(() => import('./pages/documents'), 'DocumentsPage'),
 });
 
 const documentNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/documents/new',
+  beforeLoad: requireFeature('invoices'),
   component: lazyPage(() => import('./pages/documents'), 'DocumentFormPage'),
 });
 
 const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/documents/$documentId',
+  beforeLoad: requireFeature('invoices'),
   component: lazyPage(() => import('./pages/documents'), 'DocumentDetailPage'),
 });
 
 const documentEditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/documents/$documentId/edit',
+  beforeLoad: requireFeature('invoices'),
   component: lazyPage(() => import('./pages/documents'), 'DocumentFormPage'),
 });
 
@@ -262,6 +267,7 @@ interface RetainersSearch {
 const retainersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/retainers',
+  beforeLoad: requireFeature('retainers'),
   component: lazyPage(() => import('./pages/retainers/RetainersPage'), 'RetainersPage'),
   validateSearch: (search: Record<string, unknown>): RetainersSearch => {
     return {

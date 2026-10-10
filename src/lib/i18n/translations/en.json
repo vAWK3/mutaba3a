@@ -77,7 +77,8 @@
       "workspace": "Workspace",
       "work": "Work",
       "money": "Money",
-      "system": "System"
+      "system": "System",
+      "optional": "More"
     },
     "newMenu": {
       "income": "Add Income",
@@ -334,7 +335,15 @@
       "noReceivables": "No receivables",
       "noReceivablesHint": "All payments have been received.",
       "noTransactions": "No transactions",
-      "noTransactionsHint": "Add your first transaction for this client."
+      "noTransactionsHint": "Add your first transaction for this client.",
+      "retainers": {
+        "title": "Retainers",
+        "empty": "No retainers for this client yet.",
+        "new": "New retainer",
+        "viewAll": "View all",
+        "nextExpected": "Next expected",
+        "dueNow": "Due now"
+      }
     },
     "receivables": {
       "dueDate": "Due Date",
@@ -845,7 +854,14 @@
       "statusInvoicedHint": "Invoice sent, awaiting payment",
       "statusReceived": "Received",
       "statusReceivedHint": "Payment collected",
-      "dueDate": "Due Date"
+      "dueDate": "Due Date",
+      "locked": {
+        "title": "Locked by document {number}",
+        "titleNoNumber": "Locked by an exported document",
+        "body": "This entry was exported on a document, so its fields can't change. You can still archive it.",
+        "viewDocument": "View document",
+        "turnOnInvoices": "Turn on Invoices in Settings › Advanced features to open the document."
+      }
     },
     "transaction": {
       "new": "New Transaction",

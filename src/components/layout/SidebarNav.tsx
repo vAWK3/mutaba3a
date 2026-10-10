@@ -7,6 +7,8 @@ import { ProfileSwitcher } from "./ProfileSwitcher";
 import { useDrawerStore } from "../../lib/stores";
 import { useProfileAwareAction } from "../../hooks/useProfileAwareAction";
 import { ProfileQuickPicker } from "../ui/ProfileQuickPicker";
+import { useFeatureFlags } from "../../lib/features/useFeatures";
+import type { FeatureKey } from "../../types";
 
 // Storage key for collapsed state
 const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
@@ -75,6 +77,13 @@ const navSections: NavSection[] = [
   },
 ];
 
+// Optional areas (MUT-13; MUT-16 appends): each entry shows only while its
+// Advanced-features switch is on. MUT-15 decides the final grouping.
+const optionalItems: (NavItem & { feature: FeatureKey })[] = [
+  { path: "/documents", labelKey: "nav.documents", icon: DocumentIcon, feature: "invoices" },
+  { path: "/retainers", labelKey: "nav.retainers", icon: RetainerIcon, feature: "retainers" },
+];
+
 // System section items (rendered in footer)
 const systemItems: NavItem[] = [
   {
@@ -104,6 +113,8 @@ export function SidebarNav() {
   const navigate = useNavigate();
   const t = useT();
   const { hasUpdate } = useCheckForUpdates();
+  const features = useFeatureFlags();
+  const enabledOptionalItems = optionalItems.filter((item) => features[item.feature]);
   const [collapsed, toggleCollapsed] = useCollapsedState();
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
@@ -357,7 +368,11 @@ export function SidebarNav() {
       </div>
 
       {/* Main Navigation */}
-      <nav className="sidebar-nav">{navSections.map(renderSection)}</nav>
+      <nav className="sidebar-nav">
+        {navSections.map(renderSection)}
+        {enabledOptionalItems.length > 0 &&
+          renderSection({ key: "optional", labelKey: "nav.sections.optional", items: enabledOptionalItems })}
+      </nav>
 
       {/* Footer with system items */}
       <div className="sidebar-footer">
@@ -384,6 +399,25 @@ export function SidebarNav() {
 }
 
 // Icons
+
+function DocumentIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h6" />
+    </svg>
+  );
+}
+
+function RetainerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
 
 function HomeIcon({ className }: { className?: string }) {
   return (

@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useParams, Link } from '@tanstack/react-router';
+import { useParams, Link, useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
 import { RowActionsMenu, PaymentStatusBadge } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
-import { CheckIcon, CopyIcon } from '../../components/icons';
+import { CheckIcon, CopyIcon, DocumentIcon } from '../../components/icons';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
+import { ClientRetainersCard } from '../../components/clients/ClientRetainersCard';
 import {
   useClient,
   useClientSummary,
@@ -22,7 +24,38 @@ import type { TxKind, TxStatus, QueryFilters } from '../../types';
 
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' });
-  const { openIncomeDrawer, openExpenseDrawer, openClientDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
+  const { openIncomeDrawer, openExpenseDrawer, openClientDrawer, openProjectDrawer, openPartialPaymentDrawer, openDocumentDrawer } = useDrawerStore();
+  const navigate = useNavigate();
+  const invoicesEnabled = useFeatureEnabled('invoices');
+  const retainersEnabled = useFeatureEnabled('retainers');
+
+  // Invoice entry points on an income row (MUT-13): only while the Invoices
+  // area is on. Mirrors the legacy /transactions action.
+  const invoiceActions = (tx: { id: string; kind: TxKind; status: TxStatus; clientId?: string; linkedDocumentId?: string }) => {
+    if (!invoicesEnabled || tx.kind !== 'income') return [];
+    if (tx.linkedDocumentId) {
+      const documentId = tx.linkedDocumentId;
+      return [
+        {
+          label: t('transactions.viewInvoice'),
+          icon: <DocumentIcon size={16} />,
+          onClick: () => navigate({ to: '/documents/$documentId', params: { documentId } }),
+        },
+      ];
+    }
+    return [
+      {
+        label: t('transactions.generateInvoice'),
+        icon: <DocumentIcon size={16} />,
+        onClick: () =>
+          openDocumentDrawer({
+            mode: 'create',
+            defaultType: tx.status === 'paid' ? 'receipt' : 'invoice',
+            defaultClientId: tx.clientId,
+          }),
+      },
+    ];
+  };
   const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
@@ -228,6 +261,8 @@ export function ClientDetailPage() {
                 </div>
               )}
             </div>
+
+            {retainersEnabled && <ClientRetainersCard clientId={client.id} />}
 
             {/* Recent Activity Section */}
             <div className="card" style={{ marginBottom: 16 }}>
@@ -476,6 +511,7 @@ export function ClientDetailPage() {
                                   icon: <CheckIcon size={16} />,
                                   onClick: () => markPaidMutation.mutate(tx.id),
                                 },
+                                ...invoiceActions(tx),
                                 {
                                   label: t('common.duplicate'),
                                   icon: <CopyIcon size={16} />,
@@ -613,6 +649,7 @@ export function ClientDetailPage() {
                                       },
                                     ]
                                   : []),
+                                ...invoiceActions(tx),
                                 {
                                   label: t('common.duplicate'),
                                   icon: <CopyIcon size={16} />,

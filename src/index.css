@@ -640,6 +640,27 @@ td {
 }
 
 /* Orphaned Records Banner */
+/* Drawer notice (MUT-13): e.g. a locked income entry */
+.drawer-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.drawer-notice-title {
+  font-weight: var(--weight-medium);
+}
+
+.drawer-notice .btn {
+  align-self: flex-start;
+}
+
 /* Feature notice banner (MUT-12): shown once after areas were auto-enabled */
 .feature-notice-banner {
   display: flex;
