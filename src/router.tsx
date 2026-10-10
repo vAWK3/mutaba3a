@@ -301,14 +301,13 @@ interface MonthCloseSearch {
   month?: string;
 }
 
+// Legacy route (MUT-14): the month-close checklist was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const monthCloseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses/close/profile/$profileId',
-  component: lazyPage(() => import('./pages/expenses/MonthCloseChecklistPage'), 'MonthCloseChecklistPage'),
-  validateSearch: (search: Record<string, unknown>): MonthCloseSearch => {
-    return {
-      month: typeof search.month === 'string' ? search.month : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
   },
 });
 
