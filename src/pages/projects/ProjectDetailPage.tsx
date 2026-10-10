@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
-import { RowActionsMenu, PaymentStatusBadge } from '../../components/ui';
+import { RowActionsMenu, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
@@ -225,7 +225,7 @@ export function ProjectDetailPage() {
                       <th>{t('transactions.columns.category')}</th>
                       <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                       <th>{t('transactions.columns.status')}</th>
-                      <th style={{ width: 40 }}></th>
+                      <th className="row-actions-header"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -295,38 +295,38 @@ export function ProjectDetailPage() {
                             )}
                           </td>
                           <td>
-                            <RowActionsMenu
-                              actions={[
-                                ...(isReceivable && tx.paymentStatus !== 'paid'
-                                  ? [
-                                      {
-                                        label: t('transactions.partialPayment.recordPayment'),
-                                        icon: <CheckIcon size={16} />,
-                                        onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
-                                      },
-                                      {
-                                        label: t('common.markPaid'),
-                                        icon: <CheckIcon size={16} />,
-                                        onClick: () => markPaidMutation.mutate(tx.id),
-                                      },
-                                    ]
-                                  : []),
-                                ...(tx.kind === 'expense' && !expensesEnabled
-                                  ? []
-                                  : [{
-                                  label: t('common.duplicate'),
-                                  icon: <CopyIcon size={16} />,
-                                  onClick: () => {
-                                    if (tx.kind === 'expense') {
-                                      openExpenseDrawer({ mode: 'create' });
-                                    } else {
-                                      openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id });
-                                    }
-                                  },
-                                }]),
-                              ]}
-                            />
-                          </td>
+                            <div className="row-actions-cell">
+                              <RecordPaymentButton
+                                transaction={tx}
+                                onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })}
+                              />
+                              <RowActionsMenu
+                                actions={[
+                                  ...(isReceivable && tx.paymentStatus !== 'paid'
+                                    ? [
+                                        {
+                                          label: t('common.markPaid'),
+                                          icon: <CheckIcon size={16} />,
+                                          onClick: () => markPaidMutation.mutate(tx.id),
+                                        },
+                                      ]
+                                    : []),
+                                  ...(tx.kind === 'expense' && !expensesEnabled
+                                    ? []
+                                    : [{
+                                        label: t('common.duplicate'),
+                                        icon: <CopyIcon size={16} />,
+                                        onClick: () => {
+                                          if (tx.kind === 'expense') {
+                                            openExpenseDrawer({ mode: 'create' });
+                                          } else {
+                                            openIncomeDrawer({ mode: 'create', duplicateFromId: tx.id });
+                                          }
+                                        },
+                                      }]),
+                                ]}
+                              />
+                            </div>                          </td>
                         </tr>
                       );
                     })}

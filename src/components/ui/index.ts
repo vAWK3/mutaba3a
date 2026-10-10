@@ -12,3 +12,4 @@ export { ProfileContextChip } from './ProfileContextChip';
 export { AmountWithConversion, type AmountWithConversionProps } from './AmountWithConversion';
 export { RecurringOccurrenceCard, RecurringOccurrenceList } from './RecurringOccurrenceCard';
 export { PaymentStatusBadge } from './PaymentStatusBadge';
+export { RecordPaymentButton, type RecordPaymentButtonProps } from './RecordPaymentButton';

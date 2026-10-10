@@ -12,7 +12,7 @@
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu, AmountWithConversion, PaymentStatusBadge } from '../../components/ui';
+import { EmptyState, RowActionsMenu, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome, useMarkIncomePaid } from '../../hooks/useIncomeQueries';
@@ -189,7 +189,7 @@ export function IncomePage() {
                   {!isCompact && <th>{t('transactions.columns.project')}</th>}
                   <th>{t('transactions.columns.status')}</th>
                   <th className="text-end">{t('transactions.columns.amount')}</th>
-                  <th style={{ width: 48 }}></th>
+                  <th className="row-actions-header"></th>
                 </tr>
               </thead>
               <tbody>
@@ -239,29 +239,30 @@ export function IncomePage() {
                       </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <RowActionsMenu
-                        actions={[
-                          ...(tx.status === 'unpaid' && tx.paymentStatus !== 'paid'
-                            ? [
-                                {
-                                  label: t('transactions.partialPayment.recordPayment'),
-                                  icon: <CheckIcon size={16} />,
-                                  onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
-                                },
-                                {
-                                  label: t('common.markPaid'),
-                                  icon: <CheckIcon size={16} />,
-                                  onClick: () => handleMarkPaid(tx.id),
-                                },
-                              ]
-                            : []),
-                          {
-                            label: t('common.duplicate'),
-                            icon: <CopyIcon size={16} />,
-                            onClick: () => handleDuplicate(tx.id),
-                          },
-                        ]}
-                      />
+                      <div className="row-actions-cell">
+                        <RecordPaymentButton
+                          transaction={tx}
+                          onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })}
+                        />
+                        <RowActionsMenu
+                          actions={[
+                            ...(tx.status === 'unpaid' && tx.paymentStatus !== 'paid'
+                              ? [
+                                  {
+                                    label: t('common.markPaid'),
+                                    icon: <CheckIcon size={16} />,
+                                    onClick: () => handleMarkPaid(tx.id),
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: t('common.duplicate'),
+                              icon: <CopyIcon size={16} />,
+                              onClick: () => handleDuplicate(tx.id),
+                            },
+                          ]}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}

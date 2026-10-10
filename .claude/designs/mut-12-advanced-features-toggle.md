@@ -147,7 +147,7 @@ Section intro: "Optional areas. Off by default; turning one off hides it but nev
 | D9 | `reconcileFeaturesWithData()` runs after restore and every import mode; it only ever enables | §11 A2: a restored pre-v20 backup must not hide the user's invoices/projects |
 | D10 | Two-module arrangement (`features.ts` pure incl. probes; `useFeatures.ts` React + repo) | Keeps `database.ts`'s import graph acyclic; fewer files than first planned |
 | D11 (revised) | One `DEFAULT_SETTINGS` constant in `src/db/defaultSettings.ts` | §11 C1; the brief first said `repository.ts`, which would re-create the cycle A1 removed (outside voice F11) |
-| D12 | ADR number for this ticket is **ADR-030** | `main` holds ADR-028 (attachments) and ADR-029 (table retention, MUT-10/11) |
+| D12 | ADR number for this ticket is **ADR-032** (was ADR-030 on the branch; renumbered at merge because `main`'s MUT-6 took ADR-030 and MUT-49 ADR-031) | `main` holds ADR-028 (attachments) and ADR-029 (table retention, MUT-10/11) |
 | D13 | Archived rows count as data; soft-deleted do not; projects any row | Outside voice F4: `Project` has no `deletedAt`; hiding an area whose only rows are archived would still hide user data |
 | D14 | The v20 upgrade body is try/caught and never aborts the version change | Outside voice F7: there is no pre-migration backup, so a throwing upgrade would fail every launch with no recovery UI |
 | D15 | Reconcile also after demo seeding and sync-bundle import; every such path invalidates `['settings']` or reloads | Outside voice F3/F9 |
@@ -173,7 +173,7 @@ Section intro: "Optional areas. Off by default; turning one off hides it but nev
 3. `database.ts` v20 upgrade + `migration-v20.test.ts` (v19 → v20 on a named DB; fresh DB); reconcile wired into restore/import + tests.
 4. `useFeatures.ts` hooks + `readFeatureFlags` with seam-injected tests.
 5. `Switch` component + Settings section + i18n + page test; `AppShell` notice toast + test.
-6. Knowledge files: CHANGELOG, COMPONENT_REGISTRY (Switch), PATTERNS (feature flags read path), DECISIONS (ADR-030), TEST_PLAN, TECH_DEBT (suppliers conflict), SYSTEM_OVERVIEW (Settings capability).
+6. Knowledge files: CHANGELOG, COMPONENT_REGISTRY (Switch), PATTERNS (feature flags read path), DECISIONS (ADR-032), TEST_PLAN, TECH_DEBT (suppliers conflict), SYSTEM_OVERVIEW (Settings capability).
 7. `npm run lint && npm run typecheck && npm run test:run && npm run build`.
 
 ## Business / product impact
@@ -269,7 +269,7 @@ Codex is not installed on this machine, so gstack's outside coverage is **unavai
 |---|---|---|---|
 | F1 | High | `features.ts` imported `db/database` lazily — the cycle A1 claimed to remove | **Fixed** before the report arrived: `reader` is a required argument of `reconcileFeaturesAfterDataLoad`; no `db/` import in `features.ts` |
 | F2 | High | "Told once" was a 3 s toast cleared on show, on the busiest first launch | **Accepted** → D4 revised: `FeatureNoticeBanner`, cleared only on dismiss |
-| F3 | Med | Reconcile missed the demo seed and the sync-bundle import; `clearDatabase()` clears only five tables | **Accepted** for demo + sync (D15). `clearDatabase()` is pre-existing debt → TD-020, flagged for the owner |
+| F3 | Med | Reconcile missed the demo seed and the sync-bundle import; `clearDatabase()` clears only five tables | **Accepted** for demo + sync (D15). `clearDatabase()` is pre-existing debt → TD-023, flagged for the owner |
 | F4 | Med | `projects` probe filtered `deletedAt`, a field `Project` does not have; archived rows undecided | **Accepted** → D13: any row for projects; archived counts everywhere; tests added |
 | F5 | Med | `suppliers` is the wrong unit — vendors are the expenses table | **Accepted** → D7 revised: six keys, vendors switch expenses on; i18n and tests updated |
 | F6 | Med | Projects off by default collides with onboarding, `+ Add → Project`, the income drawer's project field | **Recorded** in §12 as MUT-15/16 scope (not MUT-12 work); comment posted on MUT-16 |
@@ -278,7 +278,7 @@ Codex is not installed on this machine, so gstack's outside coverage is **unavai
 | F9 | Low | Cache vs Dexie read paths can disagree for 60 s after an out-of-hook write | **Accepted**: invalidation contract stated in §4 and PATTERNS; `ImportBundleModal` invalidates `['settings']`; the other paths reload or invalidate all |
 | F10 | Low | `get()` promised a resolved map but the type said `Partial` | **Accepted**: `ResolvedSettings` return type; hooks still resolve defensively (seam fakes return raw rows) |
 | F11 | Low | Plan said `DEFAULT_SETTINGS` lives in `repository.ts`; code has `defaultSettings.ts` | **Accepted**: D11 revised |
-| F12 | Low | The reconcile was added to two near-identical legacy import copies | **Deferred** → TD-021 (extracting the import is MUT-12 scope creep; neither MUT-14 nor MUT-16 touches it) |
+| F12 | Low | The reconcile was added to two near-identical legacy import copies | **Deferred** → TD-024 (extracting the import is MUT-12 scope creep; neither MUT-14 nor MUT-16 touches it) |
 
 Cross-model note: both passes agreed on A2 (restore/import rewrite the row); the outside voice found the two call sites (demo, sync) and the probe/type mismatch the native pass missed.
 
@@ -306,4 +306,4 @@ With `projects` off by default, three core flows reference projects and must bec
 
 **UNRESOLVED DECISIONS:**
 - D7 (revised) folds `suppliers` into `expenses`, overriding the ticket's seven-toggle list — owner to confirm or revert (one line + two i18n strings).
-- TD-020: whether a legacy "replace all data" import should clear every user table (owner).
+- TD-023: whether a legacy "replace all data" import should clear every user table (owner).

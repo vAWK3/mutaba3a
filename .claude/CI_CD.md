@@ -124,6 +124,8 @@ jobs:
 
 ### 2. Desktop Release Workflow (`.github/workflows/release-desktop.yml`)
 
+> **Target, not current state (MUT-33).** This workflow does not exist. Today the macOS release is operator-run via `./deploy.sh` and Windows installers come from `.github/workflows/build-windows.yml`, which reads `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. See ADR-031 and TD-022.
+
 ```yaml
 name: Release Desktop
 
@@ -149,8 +151,8 @@ jobs:
           toolchain: stable
       - run: npm run tauri build
         env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -176,8 +178,8 @@ jobs:
           toolchain: stable
       - run: npm run tauri build
         env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: windows-bundle
@@ -272,8 +274,8 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 | Secret | Purpose |
 |--------|---------|
-| `TAURI_PRIVATE_KEY` | Tauri update signing key |
-| `TAURI_KEY_PASSWORD` | Tauri key password |
+| `TAURI_SIGNING_PRIVATE_KEY` | Tauri update signing key |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Tauri key password |
 | `APPLE_CERTIFICATE` | macOS code signing cert (base64) |
 | `APPLE_CERTIFICATE_PASSWORD` | Cert password |
 | `APPLE_SIGNING_IDENTITY` | Signing identity name |
@@ -443,4 +445,4 @@ npm run preview:web   # Serve dist-web/
 |-------|-------|-----|
 | Signing failed | Missing secrets | Check GitHub secrets |
 | Build failed | Rust version | Update Rust toolchain |
-| Update failed | Bad signature | Regenerate signing key |
+| Update failed | Bad signature | Never regenerate the key. Verify the signer key id (signature line 2, bytes 2..10) equals the compiled-in `plugins.updater.pubkey` (ADR-031, MUT-51) |

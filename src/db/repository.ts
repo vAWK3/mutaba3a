@@ -1328,8 +1328,16 @@ export const documentRepo = {
 
 /**
  * Recalculate a transaction's receivedAmountMinor from its payment records.
- * Uses db.transactions.update() directly to bypass lockedAt check --
- * payments are allowed on locked transactions.
+ *
+ * This is the sanctioned payment-side writer. It uses db.transactions.update()
+ * directly and therefore does not pass through transactionRepo.update()'s
+ * lockedAt guard, by design (ADR-030): lockedAt exists for ADR-014 document
+ * immutability and protects the *invoice facts* -- amount, currency, client,
+ * date. receivedAmountMinor / status / paidAt are payment tracking, and paying
+ * an invoiced receivable is the normal flow. Do not "fix" this by routing it
+ * through transactionRepo.update(); that would block payments on every
+ * invoiced receivable. The behaviour is pinned by a test in
+ * __tests__/paymentRecords.test.ts ("locked transactions").
  */
 async function recalculateReceivedAmount(transactionId: string): Promise<void> {
   const tx = await db.transactions.get(transactionId);
@@ -1354,6 +1362,43 @@ async function recalculateReceivedAmount(transactionId: string): Promise<void> {
 }
 
 export { recalculateReceivedAmount };
+
+/**
+ * Reject a payment that would push a transaction's recorded payments past its
+ * total (ADR-030). The data model has no credit or refund concept, and
+ * recalculateReceivedAmount clamps remaining at 0, so an excess would be stored
+ * with nothing in the UI able to show it.
+ *
+ * Call this *inside* the caller's db.transaction('rw', ...) block: the sum and
+ * the transaction total must be read in the same transaction as the write, or
+ * two concurrent creates both read the same pre-state and both pass.
+ *
+ * The message deliberately starts with "Payment amount" so getErrorMessage()
+ * in useMutationWithFeedback.ts surfaces it verbatim instead of the generic
+ * fallback.
+ */
+async function assertWithinTransactionTotal(
+  transactionId: string,
+  newAmountMinor: number,
+  excludePaymentRecordId?: string
+): Promise<void> {
+  const tx = await db.transactions.get(transactionId);
+  if (!tx) return; // Existence is the caller's check; nothing to compare against.
+
+  const others = await db.paymentRecords
+    .where('transactionId')
+    .equals(transactionId)
+    .filter((r) => !r.deletedAt && r.id !== excludePaymentRecordId)
+    .toArray();
+
+  const otherSum = others.reduce((acc, r) => acc + r.amountMinor, 0);
+  if (otherSum + newAmountMinor > tx.amountMinor) {
+    throw new PaymentRecordError(
+      `Payment amount exceeds the remaining balance of ${(tx.amountMinor - otherSum) / 100} ${tx.currency}`,
+      { transactionId, paymentRecordId: excludePaymentRecordId }
+    );
+  }
+}
 
 export const paymentRecordRepo = {
   async create(data: {
@@ -1386,6 +1431,7 @@ export const paymentRecordRepo = {
     };
 
     await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {
+      await assertWithinTransactionTotal(data.transactionId, data.amountMinor);
       await db.paymentRecords.add(record);
       await recalculateReceivedAmount(data.transactionId);
     });
@@ -1410,6 +1456,9 @@ export const paymentRecordRepo = {
     }
 
     await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {
+      if (data.amountMinor !== undefined) {
+        await assertWithinTransactionTotal(record.transactionId, data.amountMinor, id);
+      }
       await db.paymentRecords.update(id, { ...data, updatedAt: nowISO() });
       await recalculateReceivedAmount(record.transactionId);
     });

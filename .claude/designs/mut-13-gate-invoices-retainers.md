@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Epic:** MUT-2 "Strip to the core: delete dead surface, gate the optional"
-- **Blocked by:** MUT-12 — built on this branch (commit 8fab72a, ADR-030), not yet merged; this ticket consumes `useFeatureEnabled` / `useFeatureFlags` / `readFeatureFlags` from it.
+- **Blocked by:** MUT-12 — built on this branch (commit 8fab72a, ADR-032), not yet merged; this ticket consumes `useFeatureEnabled` / `useFeatureFlags` / `readFeatureFlags` from it.
 - **Related:** MUT-15 (sidebar simplification: owns the final shape of the secondary nav group and the `+ Add` menu), MUT-16 (gates insights/planning/projects with the same guard).
 - **Worktree:** `.claude/worktrees/mut-2-strip-core`, branch `feature/mut-2-strip-core`.
 - **Status:** planned 2026-10-10; outside-voice review folded in (§9); building under the owner's standing instruction (MUT-12 → 13 → 14 → 16).
@@ -74,7 +74,7 @@ IncomeDrawer (edit, tx.lockedAt)
 | D5 | `ClientRetainersCard` is a new small component, read-only plus two actions | The Summary tab has no retainer surface; a card beside "Recent activity" is the lightest entry point; no new repository method (`useRetainers({ clientId })` exists) |
 | D6 | Locked notice in the drawer, with Save and Delete disabled; the repository guard is unchanged | AC 3 "explains why rather than failing silently": today the explanation only appears after a failed save. Disabling prevents the failure; the notice explains it; the repository still refuses so nothing depends on the UI |
 | D7 | With retainers off, the home attention feed excludes projected-retainer items | Their only action navigates to `/retainers`, which would now bounce; data is untouched |
-| D8 | `AttentionFeed`, `SidebarNav`, `ClientDetailPage` read flags through hooks; no prop drilling | Pattern from ADR-030 §4 |
+| D8 | `AttentionFeed`, `SidebarNav`, `ClientDetailPage` read flags through hooks; no prop drilling | Pattern from ADR-032 §4 |
 
 ## 5. Reuse, impact, i18n, cost
 
@@ -99,7 +99,7 @@ IncomeDrawer (edit, tx.lockedAt)
 5. `IncomeDrawer` locked notice + test (locked tx, invoices off → notice text + disabled Save/Delete; invoices on → link; unlocked → nothing).
 6. `AttentionFeed` flag + test row.
 7. Data-safety test (toggle on/off/on leaves documents, sequences, retainers intact) and the auto-enable end-to-end assertion.
-8. Knowledge files: CHANGELOG, COMPONENT_REGISTRY (ClientRetainersCard; `requireFeature` in PATTERNS), TEST_PLAN, DECISIONS (ADR-030 addendum: gating pattern), SYSTEM_OVERVIEW feature map.
+8. Knowledge files: CHANGELOG, COMPONENT_REGISTRY (ClientRetainersCard; `requireFeature` in PATTERNS), TEST_PLAN, DECISIONS (ADR-032 addendum: gating pattern), SYSTEM_OVERVIEW feature map.
 9. `npm run lint && npx tsc --noEmit -p tsconfig.app.json && npx vitest run && npm run build`.
 
 ## Business / product impact
@@ -137,4 +137,4 @@ The reviewer verified: `beforeLoad` runs before the loader phase and `loadRouteC
 ## 10. Downstream notes
 - MUT-15: the "More" section and `optionalItems` are the seam to reshape; the `+ Add` menu is untouched here.
 - MUT-16: add `{ path, labelKey, icon, feature }` rows to `optionalItems` and `requireFeature('<key>')` to the routes; `PredictiveKpiStrip` / `AttentionFeed` show the pattern for home surfaces.
-- TD-022 (legacy `/transactions` page) — delete with the unreachable surface.
+- TD-025 (legacy `/transactions` page) — delete with the unreachable surface.

@@ -18,6 +18,61 @@
 
 ## Open Debt
 
+### TD-022: Release Pipeline Does Not Verify the Signer Against the Compiled-In Updater Key
+**Status**: Open (ticketed as MUT-51)
+**Added**: 2026-10-10
+**Priority**: High
+**Impact**: A release cut without the signing key configured, from the wrong
+checkout, or with a different key than `plugins.updater.pubkey` publishes a
+manifest every installed client either cannot find (404) or cannot verify
+
+In `deploy.sh`, `check_updater_signing` only warns when the signing key is
+missing and the release proceeds without an update archive or `latest.json`;
+`load_release_env` resolves its env file relative to the current directory;
+`UPDATER_PRIVATE_KEY_FILE` is declared and never read; `tag_and_push` pushes
+and tags from whatever branch is checked out; and `sign_update_artifact`
+passes the key and password to `tauri signer sign` as CLI arguments although
+the CLI reads the `TAURI_SIGNING_PRIVATE_KEY*` environment variables itself
+(the `signer sign` step in `.github/workflows/build-windows.yml` does the
+same). Nothing compares the key id in the produced signatures (line 2, bytes
+2..10) with the key id in `src-tauri/tauri.conf.json`, and the macOS and
+Windows halves sign from separately configured secrets with no check that
+they hold the same key. The Windows workflow has the matching soft-fail:
+its "Build and sign NSIS updater bundle" step exits 0 with a warning when the
+secret is unset and the release then carries a `latest.json` with no
+`windows-x86_64` entry, so Windows clients silently never update. The macOS
+path also runs no test before building; the Windows workflow now runs
+`updater-config.test.ts` before `tauri build` (MUT-49), `deploy.sh` does
+not. The workflow's "latest.json not found" message also pointed at
+`scripts/deploy.sh`, which does not exist (fixed to `./deploy.sh` in MUT-49).
+Found during the MUT-49 review (ADR-031); MUT-51 owns the hard-fail on both
+paths, the file fallback, the deploy.sh test gate and the post-publish
+verification.
+
+### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
+**Status**: Open
+**Added**: 2026-10-10
+**Priority**: Low
+**Impact**: A new money query key has to be added in two places or one of the
+two write paths silently serves stale data -- which is exactly how MUT-6 AC #5
+broke
+
+`invalidateIncomeQueries` (`src/hooks/useIncomeQueries.ts:61`) and
+`invalidateTransactionQueries` + `invalidatePaymentRecordQueries`
+(`src/hooks/useQueries.ts:21,174`) list overlapping sets of the same keys.
+MUT-6 fixed the symptom by adding the four income keys to
+`invalidatePaymentRecordQueries` in place; the eng review chose the smaller
+arrangement deliberately over extracting a shared `invalidateMoneyQueries`,
+and recorded the duplication here instead. Extract it the next time a third
+caller needs the same list.
+
+**Note (2026-10-10, MUT-6 QA):** the money-event keys hit exactly that
+threshold and were extracted — `invalidateMoneyEventQueries` lives in
+`useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
+call it. The *income* key duplication described above is untouched and still
+open; the precedent for fixing it is to put the list in the module that owns
+the keys rather than in a new `src/hooks/invalidation.ts`.
+
 ### TD-020: Import State Loads Linked Entities One By One
 **Status**: Open
 **Added**: 2026-10-08
@@ -438,7 +493,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-020: `clearDatabase()` clears five tables, so a legacy import keeps stale optional-area data
+### TD-023: `clearDatabase()` clears five tables, so a legacy import keeps stale optional-area data
 **Status**: Open
 **Priority**: Medium
 **Introduced**: pre-2026 (surfaced by MUT-12, 2026-10-10)
@@ -455,7 +510,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-021: The legacy import is duplicated in `ImportDataModal` and `ImportDataPage`
+### TD-024: The legacy import is duplicated in `ImportDataModal` and `ImportDataPage`
 **Status**: Open
 **Priority**: Low
 **Introduced**: when the import page was added beside the modal (surfaced by MUT-12, 2026-10-10)
@@ -467,7 +522,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-022: Legacy `/transactions` page keeps an ungated "Generate invoice" action
+### TD-025: Legacy `/transactions` page keeps an ungated "Generate invoice" action
 **Status**: Open
 **Priority**: Low
 **Introduced**: when `/transactions` became a redirect to `/income` (surfaced by MUT-13, 2026-10-10)
@@ -479,7 +534,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-023: Receipts archive is built in one pass in memory
+### TD-026: Receipts archive is built in one pass in memory
 **Status**: Open
 **Priority**: Low
 **Introduced**: MUT-14, 2026-10-10
@@ -491,7 +546,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-024: Onboarding shows a completed "Project" step while the Projects area is off
+### TD-027: Onboarding shows a completed "Project" step while the Projects area is off
 **Status**: Open
 **Priority**: Low
 **Introduced**: MUT-16, 2026-10-10

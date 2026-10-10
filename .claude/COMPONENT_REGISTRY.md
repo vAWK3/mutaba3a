@@ -12,7 +12,7 @@
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
-| **Buttons** | Button, IconButton, RowActionsMenu |
+| **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
 | **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
@@ -108,7 +108,7 @@ The `+ Add` menu's New expense and New project items render only while their are
 
 ### FeatureNoticeBanner
 **Location**: `src/components/layout/FeatureNoticeBanner.tsx`
-**Purpose**: One-time, dismissible notice naming the optional areas that were switched on for the user's existing data (v20 upgrade, restore, import, demo, sync). Mounted once in `AppShell` above the page content; renders nothing when `Settings.featureNotice` is empty; clears the notice on dismiss (MUT-12, ADR-030).
+**Purpose**: One-time, dismissible notice naming the optional areas that were switched on for the user's existing data (v20 upgrade, restore, import, demo, sync). Mounted once in `AppShell` above the page content; renders nothing when `Settings.featureNotice` is empty; clears the notice on dismiss (MUT-12, ADR-032).
 
 ```tsx
 <FeatureNoticeBanner />   // no props; reads useFeatureNotice()
@@ -458,6 +458,43 @@ Tests: `src/components/ui/__tests__/Switch.test.tsx`. First consumer: `AdvancedF
   ]}
 />
 ```
+
+---
+
+### RecordPaymentButton
+**Location**: `src/components/ui/RecordPaymentButton.tsx`
+**Purpose**: The primary row affordance for recording a payment against a
+receivable, with the remaining balance shown on the button. Owns the single
+gate deciding where that affordance appears, so the surfaces cannot drift
+(before MUT-6 the same concept had three different inline conditions across
+four call sites, and one surface had none).
+
+**Gate**: renders `null` unless `kind === 'income' && paymentStatus !== 'paid'
+&& (remainingAmountMinor ?? 0) > 0`. A `lockedAt` transaction is deliberately
+**not** excluded -- paying an invoice is the normal flow (ADR-030).
+
+**Props-in, no store import**, like the rest of `components/ui`: the caller
+passes `onRecordPayment` using the drawer hook it already holds. The click
+calls `stopPropagation`, so it is never mistaken for a row click.
+
+Place it inside the existing row actions cell (`.row-actions-cell`), never in a
+new column, so it cannot push the amount column off-screen.
+
+```tsx
+<td>
+  <div className="row-actions-cell">
+    <RecordPaymentButton
+      transaction={tx}
+      onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })}
+    />
+    <RowActionsMenu actions={[...]} />
+  </div>
+</td>
+```
+
+**Used by**: ClientDetailPage (receivables + transactions tabs), IncomePage,
+ProjectDetailPage.
+**Tests**: `src/components/ui/__tests__/RecordPaymentButton.test.tsx`
 
 ---
 

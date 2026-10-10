@@ -3,7 +3,7 @@
 - **Date:** 2026-10-10
 - **Epic:** MUT-2 "Strip to the core: delete dead surface, gate the optional"
 - **Blocked by:** MUT-12 (built on this branch, 8fab72a). **Fixes:** MUT-20 (18 failing `ExpensesLedgerPage` tests).
-- **Related:** MUT-13 (gating pattern, ADR-030 addendum), MUT-15 (sidebar / `+ Add` menu), MUT-16 (projects, insights, planning), ADR-029 (removing a feature's UI never removes its tables).
+- **Related:** MUT-13 (gating pattern, ADR-032 addendum), MUT-15 (sidebar / `+ Add` menu), MUT-16 (projects, insights, planning), ADR-029 (removing a feature's UI never removes its tables).
 - **Worktree:** `.claude/worktrees/mut-2-strip-core`, branch `feature/mut-2-strip-core`. **Safety tag before any deletion:** `mut-14-pre-expenses-collapse` (at 2855558).
 - **Status:** planned 2026-10-10; outside-voice review folded in (§9); building under the owner's standing instruction (MUT-12 → 13 → 14 → 16).
 
@@ -34,7 +34,7 @@ Acceptance criteria (ticket):
 | Receipts are base64 files in the `receipts` table, reachable only through `ReceiptsPage` and `MonthCloseChecklistPage` | `Receipt.data: string // base64`; `receiptRepo` / `useReceipts*` consumers outside the deleted pages: none except `ExpenseDrawer`'s `useLinkReceiptToExpense` (used when creating an expense *from* a receipt) | **Ship an export path before the deletion commits** (§4) |
 | Vendors stay in use | `VendorTypeahead` (`useVendors`, `useFindOrCreateVendor`, `vendorNormalization`) is used by `ExpenseDrawer`; vendor names show on ledger rows | Vendors remain viewable and creatable; only the management views (merge, alias, monthly table) go |
 | Forecasting, receipt matching and month close have no consumer outside the deleted pages | `forecastCalculations` → only `useExpenseForecast`; `matchingAlgorithm` → only receipt-suggestion hooks; `monthCloseRepo` / `useMonthClose*` / `ClosedMonthWarning` → only the checklist page | Prune by the consumer script (§5), tables untouched (ADR-029) |
-| `/suppliers` is a second view over `vendors` | `SuppliersPage.tsx` reads `useExpenses` + vendors | Deleted with the route; the Expenses switch covers it (ADR-030 §5) |
+| `/suppliers` is a second view over `vendors` | `SuppliersPage.tsx` reads `useExpenses` + vendors | Deleted with the route; the Expenses switch covers it (ADR-032 §5) |
 
 ## 3. Where it lives
 
@@ -113,7 +113,7 @@ Twelve findings; the review arrived with the prune uncommitted on disk, so every
 | F3 | High | Zero-reference prune removed the category seeder, degrading the ledger's By-category view | **Accepted** → D5 revised; `useSeedExpenseCategories` restored; `ExpenseDrawer` auto-seeds an empty profile |
 | F4 | Med | Create paths (`TopBar` add menu, project duplicate) ungated; Home still shows expense KPIs | **Accepted** (create paths gated) and **decided** (D9: recorded expenses stay visible) |
 | F5 | Med | D3 contradicts ADR-029 §2 silently | **Accepted** → ADR-029 addendum (files vs rows) |
-| F6 | Med | Receipt count loaded every payload; archive decodes everything at once | **Partly:** `receipts.count()` added (no payloads). Single-pass archive kept for the pilot; TD-023 |
+| F6 | Med | Receipt count loaded every payload; archive decodes everything at once | **Partly:** `receipts.count()` added (no payloads). Single-pass archive kept for the pilot; TD-026 |
 | F7 | Med | Linked receipts invisible though `receiptCount` is computed per row | **Accepted:** badge on the ledger row |
 | F8 | Med | `linkReceiptId` chain dead but kept alive by the drawer | **Accepted:** chain removed (stores, drawer, hook); `BulkUploadDrawer` deleted |
 | F9 | Med | Month-close table half-handled vs ADR-029; §7 test tautological | **Accepted** → D11 |

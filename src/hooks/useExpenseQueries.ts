@@ -3,6 +3,7 @@ import { withErrorToast } from './useMutationWithFeedback';
 // Standalone helpers, not repositories — they stay direct imports.
 import { seedExpenseCategories, type CategoryPreset } from '../db/defaultExpenseCategories';
 import { getRepositories } from '../db';
+import { invalidateMoneyEventQueries } from './useMoneyEventQueries';
 import type {
   Expense,
   RecurringRule,
@@ -76,6 +77,9 @@ function invalidateExpenseQueries(queryClient: ReturnType<typeof useQueryClient>
   queryClient.invalidateQueries({ queryKey: ['monthCloseStatus'] });
   queryClient.invalidateQueries({ queryKey: ['monthCloseComputed'] });
   queryClient.invalidateQueries({ queryKey: ['monthCloseList'] });
+  // Money events are derived from this data, so the Overview KPI strip and
+  // attention feed have to refetch with it.
+  invalidateMoneyEventQueries(queryClient);
 }
 
 function invalidateRecurringRuleQueries(queryClient: ReturnType<typeof useQueryClient>) {

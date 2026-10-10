@@ -38,7 +38,9 @@
 | ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 | ADR-029 | Removing a Feature's UI Never Removes Its Tables | Active | 2026-10 |
-| ADR-030 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
+| ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
+| ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
+| ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
 
 ---
 
@@ -872,10 +874,18 @@ bucket).
 
 ---
 
-## ADR-027: Fee Proposals Live in the Hosted Ledger as a Single-Round Pre-Agreement State
+## ADR-027: Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3)
 
-**Date**: 2026-10-09
-**Status**: Accepted (owner's answers to the M7 brief, 2026-10-09)
+**Status**: Active
+**Date**: 2026-10-10 (original record 2026-10-09)
+**Note (2026-10-10, MUT-49)**: this file briefly carried two `## ADR-027`
+headings. The 2026-10-09 record and its 2026-10-10 override are now one ADR
+with two dated sections; ADR-028 and ADR-029 keep their numbers.
+
+### Original record (2026-10-09): Fee Proposals Live in the Hosted Ledger as a Single-Round Pre-Agreement State
+
+Accepted on 2026-10-09 from the owner's answers to the M7 brief; amended by
+the override below.
 
 **Context**: Before a fee agreement exists a matter has no financial state in
 Money v1: the firm's proposed amount, the client's approval and the figure
@@ -908,12 +918,8 @@ every financial record in Mutaba3a, and the owner asked for Mutaba3a to hold
 it); a partial unique index for "one open per project" (rejected: Prisma
 cannot declare it, so the schema and the migration would drift).
 
----
+### Override (2026-10-10): Fee Approval Creates the Agreement
 
-## ADR-027: Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3)
-
-**Status**: Active
-**Date**: 2026-10-10
 **Context**: M7 recorded the negotiation (`PROPOSED → CLIENT_APPROVED | AGREED
 → CONVERTED`) but produced no debt until the Partner ran the agreement wizard,
 so "the client said yes, record their payment" was two screens away. The owner's
@@ -1054,7 +1060,136 @@ Rows still stay (ADR-029 §1): `monthCloseStatuses` keeps its retained schema in
 
 ---
 
-## ADR-030: Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data
+## ADR-030: Overpayment Is Rejected; Locked Transactions Still Accept Payments
+
+**Date**: 2026-10-10
+**Status**: Accepted
+**Context**: MUT-6 (epic MUT-1)
+
+**Context**: MUT-6 promotes "Record payment" from a kebab entry to the most
+clicked button in the product, and its acceptance criteria require deciding and
+documenting two behaviours that the code had never decided on purpose.
+
+1. **Overpayment.** `paymentRecordRepo.create` validated a positive amount, an
+   existing transaction and `kind === 'income'` -- nothing else. A payment
+   larger than the balance was stored, and `recalculateReceivedAmount` clamps
+   `remainingAmountMinor` with `Math.max(0, ...)` and marks paid on
+   `sum >= amountMinor`, so the excess existed in the database with no surface
+   able to show it.
+2. **Locked transactions.** Payments on a `lockedAt` transaction succeeded, but
+   only by accident: `recalculateReceivedAmount` writes `db.transactions.update`
+   directly and never reaches `transactionRepo.update`'s lock guard
+   (`repository.ts:349`). No test covered it.
+
+**Decision**:
+
+1. **Overpayment is rejected.** `sum(other non-deleted records) + newAmount >
+   tx.amountMinor` throws `PaymentRecordError`. The data model has no credit or
+   refund concept, so storing an excess can only be wrong or invisible, and it
+   was both. The guard lives once, in `paymentRecordRepo.create` and `.update`,
+   so `transactionRepo.recordPartialPayment` inherits it through its delegation
+   (`repository.ts:417`) rather than carrying a second copy. The sum is read
+   **inside** the existing `db.transaction('rw', ...)` block, or two concurrent
+   creates would both read the same pre-state and both pass. The message starts
+   with `Payment amount` so `getErrorMessage`
+   (`useMutationWithFeedback.ts:85`) routes it to the user verbatim; the drawer
+   checks the same rule first to show a translated inline message.
+2. **Locked transactions accept payments.** `lockedAt` exists for ADR-014
+   document immutability and protects the *invoice facts* -- amount, currency,
+   client, date. `receivedAmountMinor` / `status` / `paidAt` are payment
+   tracking, and an invoiced receivable being paid is the normal flow.
+   `transactionRepo.update`'s allowlist stays `['archivedAt']`: widening it
+   would relax the lock for every caller, including the generic edit drawer,
+   which is exactly what ADR-014 exists to prevent. Instead
+   `recalculateReceivedAmount` is named in a comment as the sanctioned
+   payment-side writer, and a test asserts a payment on a locked transaction
+   succeeds and flips status to `paid`.
+
+**Override log**: this reverses previously documented behaviour. Overpayment
+was allowed and clamped, and two passing tests said so on purpose --
+`paymentRecords.test.ts` `describe('overpayment')` ("should allow overpayment
+and still mark as paid") and `partialPayment.test.ts` ("should mark as paid
+when payment exceeds remaining amount"). Both are rewritten to assert
+rejection, dated 2026-10-10, under MUT-6.
+
+**Consequences**: A user who types more than the balance is stopped rather than
+silently storing an unrepresentable number. Any future genuine overpayment or
+refund needs a data model that does not exist yet -- it is not a tweak to this
+guard. Legacy rows whose `receivedAmountMinor` already exceeds `amountMinor`
+(the `migratedNote` imports) are untouched: their remaining is 0, so the button
+is hidden and no new record can be added to them.
+
+**Alternatives Considered**: allowing overpayment and showing the excess
+(rejected -- it needs new UI on the row and in the drawer for a case that is
+almost always a typo, and still has nowhere honest to put the money); guarding
+only the drawer's path and leaving `recordPartialPayment` permissive (rejected
+-- one rule, one place; a bypass flag is how the two paths drift); blocking
+payments on locked transactions (rejected -- it would make every invoiced
+receivable unpayable, which is the opposite of the lock's purpose).
+
+---
+
+## ADR-031: The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches
+
+**Status**: Active
+**Date**: 2026-10-10
+**Context**: MUT-49 (epic MUT-48). On 2026-10-05 commit `ae9fb1c` changed
+`plugins.updater.pubkey` in `src-tauri/tauri.conf.json` to minisign key
+`AB7B64537B1DE22C`, with a message saying the config was catching up to the
+key in use. The evidence says otherwise. Every signer that has ever produced
+a published artifact is `BEDF931CA1D6C777`: the signatures in the published
+v0.0.63 `latest.json` (both `darwin-aarch64` and `windows-x86_64`), the key
+the operator-run macOS release signs with, and the GitHub Actions secret
+`TAURI_SIGNING_PRIVATE_KEY` (set 2026-04-17, before v0.0.63). The `AB7B`
+private key never signed a published release and is not configured anywhere
+the pipeline signs from (full audit on MUT-49). Had v0.0.64 shipped with the
+`AB7B` public key while both signers kept using `BEDF`, no later release
+could have been verified by that build.
+
+**Decision**:
+1. `BEDF931CA1D6C777` is the canonical updater signing key. The public key
+   compiled into the app, the macOS release signer and the CI secret are the
+   same pair. The config is restored to the pre-`ae9fb1c` value.
+2. `src/lib/__tests__/updater-config.test.ts` pins the configured public key
+   to that value and asserts the key id from the key bytes (line 2, bytes
+   2..10), not from the "untrusted comment" line. It is friction against an
+   accidental edit, not proof that artifacts were signed with it; the
+   signer-vs-config check runs in shell at release time (MUT-51).
+3. A real rotation, if one is ever needed (a compromised private key), has a
+   fixed order: generate the new pair; store the private half in both
+   `release.env` and the CI secret; ship one transitional release that is
+   **signed with the old key** and **embeds the new public key**; only then
+   switch signing to the new key. The transitional release is necessary, not
+   sufficient: Tauri verifies against one compiled-in key, so any client that
+   skips the transitional release (offline, or simply late) is stranded once
+   signing switches. A rotation therefore also needs either a long window
+   with no further releases, or an explicit decision that laggards reinstall.
+4. Exactly one private key is kept for signing, in the operator's release
+   configuration and in the CI secret; any stale key material is removed
+   (tracked on MUT-49) and the release-time check in MUT-51 proves the
+   signer matches the compiled-in key.
+
+**Consequences**:
+- The revert is backward-compatible: `ae9fb1c` is not an ancestor of
+  `v0.0.63`, and the tag's `tauri.conf.json` decodes to `BEDF931CA1D6C777`,
+  so no shipped build embeds `AB7B...`.
+- The 2026-10-05 CHANGELOG entry is annotated as withdrawn; its claim that
+  installed clients must reinstall no longer applies.
+- `deploy.sh` still only warns when the signing key is not configured; MUT-51
+  makes it a hard requirement and adds the signer-vs-config check (TD-022).
+
+**Alternatives Considered**:
+- Keep `AB7B...` and switch the signers to it: rejected. Every installed
+  client (v0.0.63 and earlier) trusts `BEDF`, the CI secret is `BEDF`, and
+  nothing justified a rotation; it would have required the transitional
+  release in decision 3 for no benefit.
+- Treat the mismatch as a rotation and ask all users to reinstall: rejected;
+  it is what the 2026-10-05 note proposed, and it trades a one-line revert
+  for every user losing in-app updates once.
+
+---
+
+## ADR-032: Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data
 
 **Status**: Active
 **Date**: 2026-10-10
@@ -1160,5 +1295,4 @@ secondary nav group and the `+ Add` menu. Projects off by default collides
 with onboarding (client → project → income), the `+ Add → Project` entry and
 the income drawer's project field; those become flag-aware in MUT-15/16 (see
 brief §12). `clearDatabase()` clearing only five tables is pre-existing debt
-the reconcile now makes visible (TD-020).
-
+the reconcile now makes visible (TD-023).

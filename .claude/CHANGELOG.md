@@ -26,13 +26,131 @@
 - Refactoring, dependencies, infrastructure
 ```
 
+---
+
+## [Unreleased] - 2026-10-10 — MUT-6: "Record payment" becomes a primary row action
+
+**Scope:** `src/components/ui/RecordPaymentButton.{tsx,css}` (new) + `index.ts`,
+`src/components/drawers/PartialPaymentDrawer.tsx`, `src/db/repository.ts`,
+`src/hooks/useQueries.ts`, `src/lib/i18n/translations/{en,ar}.json`,
+`src/pages/{clients/ClientDetailPage,income/IncomePage,projects/ProjectDetailPage}.tsx`,
+7 test files (2 new), `.claude/{DECISIONS,COMPONENT_REGISTRY,TECH_DEBT,TEST_PLAN}.md`,
+`TODOS.md`.
+
+### Added
+- **`RecordPaymentButton`** — the payment affordance is now a button on the row
+  with the remaining balance on it, at all four surfaces: ClientDetailPage
+  (receivables and transactions tabs), IncomePage, ProjectDetailPage. It owns
+  the single gate (`income && paymentStatus !== 'paid' && remaining > 0`) that
+  previously existed as three different inline conditions, one of which was
+  missing entirely — the client receivables tab offered "Record payment" on
+  settled rows. Props-in, no store import, matching the rest of `components/ui`.
+- Overpayment guard in `paymentRecordRepo.create`/`.update`, inside the
+  existing `rw` block so concurrent writes cannot both pass (**ADR-030**).
+- i18n keys `transactions.partialPayment.{amountMustBePositive,overpayment}` in
+  en and ar.
+
+### Changed
+- The payment drawer opens with the full remaining balance prefilled, so
+  settling in full is one confirm; the field is still editable down to a
+  partial amount, and empty when there is nothing left to pay.
+- Its two hardcoded English validation strings are now translated.
+- The row actions column was a fixed 40–48px sized for a kebab alone; it is now
+  shrink-to-fit, so the added button cannot squeeze the amount column.
+- **Behaviour reversal (ADR-030 override log):** overpayment was allowed and
+  clamped, documented by two passing tests. It is rejected now, and those tests
+  are rewritten to assert rejection.
+- Payments on a `lockedAt` transaction keep working — that was true only by
+  accident before (the recalc bypasses the lock guard); it is now named in a
+  comment and pinned by a test. The `['archivedAt']` allowlist is untouched.
+
+### Fixed
+- **Stale balances after a payment (MUT-6 AC #5, a live defect).**
+  `invalidatePaymentRecordQueries` never invalidated the income keys, so
+  `/income` and the client Receivables tab kept showing an old status and
+  remaining amount for up to the 60s staleTime right after a payment was saved.
+  Adds `['income']`, `['receivables']`, `['incomeOverviewTotals']` and
+  `['incomeAttentionReceivables']` — the set `markPaid` already invalidated.
+- **The Overview KPI strip and attention feed went stale after every write**
+  (found in QA reconciliation). Money-event views are *derived* —
+  `moneyEventRepository` recomputes them from transactions, expenses and
+  projected income on every read and never writes — so nothing invalidated
+  their keys as a side effect. The one helper that listed them,
+  `useInvalidateMoneyEvents`, had **zero callers anywhere in the app**, so the
+  home page served pre-write numbers after recording a payment, creating
+  income, marking paid, adding an expense or changing a retainer.
+  `invalidateMoneyEventQueries` is now exported from `useMoneyEventQueries.ts`
+  (beside the keys it owns, so the list still exists once) and called by all
+  four write paths: `useQueries`, `useIncomeQueries`, `useExpenseQueries`,
+  `useRetainerQueries`. Pre-existing and app-wide, not caused by MUT-6; fixed
+  here at the owner's request because the payment path is where it cost most.
+- **The payment date defaulted to the UTC date, not the local one** (AC #4,
+  found in QA reconciliation). `PartialPaymentDrawer` computed "today" with
+  `new Date().toISOString().split('T')[0]`, which ADR-022 forbids: a user in
+  New York recording a payment at 20:30 on 15 March was handed **16 March**,
+  and one in Jerusalem after midnight was handed yesterday. It now uses
+  `todayISO()` like every other drawer. Pinned by two faked instants that
+  straddle midnight in opposite directions, so the test is honest in both
+  `Asia/Jerusalem` and `npm run test:tz`.
+
+### Technical
+- **TD-021** recorded: `invalidateIncomeQueries` and
+  `invalidatePaymentRecordQueries` keep overlapping key lists. The eng review
+  deliberately chose the in-place fix over extracting a shared helper.
+- TODOS 3–5 from the eng review: payment-record sync ops are captured but
+  `ops-engine.ts` can never apply them (MUT-55); a failed refetch after a
+  successful write is silent app-wide; "Mark paid" and "Record payment" are now
+  two-click duplicates that disagree about the date (decide after MUT-18).
+- Pre-existing and untouched: the 18 `ExpensesLedgerPage` test failures.
+---
+
+## [Unreleased] - 2026-10-10 — MUT-49: updater public key restored to BEDF931CA1D6C777
+
+**Scope:** `src-tauri/tauri.conf.json`, `src/lib/__tests__/updater-config.test.ts` (new), `.claude/DECISIONS.md` (ADR-031, ADR-027 merge, index), `.claude/TECH_DEBT.md` (TD-022), `.claude/TEST_PLAN.md`, `.claude/PATTERNS.md`, `.claude/CI_CD.md`, `.github/workflows/build-windows.yml`. Epic MUT-48.
+
+### Fixed
+- `plugins.updater.pubkey` is back to the pre-`ae9fb1c` value, byte-identical to
+  `~/.tauri/mutaba3a.key.pub`. The 2026-10-05 rotation pointed the app at a key
+  (`AB7B64537B1DE22C`) whose private half never signed a published release
+  and is not configured anywhere the pipeline signs from. Every real signer
+  (the macOS release signer, the CI secret, the v0.0.63 signatures) is
+  `BEDF931CA1D6C777`. No shipped build embeds the wrong key
+  (`ae9fb1c` is not an ancestor of `v0.0.63`), so the revert is
+  backward-compatible.
+
+### Added
+- `src/lib/__tests__/updater-config.test.ts`: pins the configured public key
+  to the canonical base64 string and asserts the key id from the key bytes
+  (line 2, bytes 2..10), printing both fingerprints on mismatch. Written red
+  against the `AB7B...` config, green after the revert.
+- ADR-031: the key is canonical; a real rotation ships the new public key in a
+  release signed by the old key before signing switches, and that transitional
+  release is necessary, not sufficient (late clients still reinstall).
+- TD-022: the release-time guards deferred to MUT-51.
+- `.claude/CI_CD.md`: the Tauri troubleshooting row no longer says to
+  regenerate the signing key on a bad signature (that is how `ae9fb1c`
+  happened); the updater secret names now match the real workflow. The
+  Windows workflow's "latest.json not found" hint points at `./deploy.sh`, and
+  the workflow runs `updater-config.test.ts` against the release tag before
+  `tauri build`, so the guard executes on the path that compiles the key into
+  the Windows build. The macOS script's test gate is MUT-51 (TD-022).
+
+### Technical
+- `.claude/DECISIONS.md` carried two `## ADR-027` headings (the 2026-10-09
+  fee-proposal record and its 2026-10-10 override). They are now one ADR-027
+  with two dated sections; ADR-028 and ADR-029 keep their numbers because
+  CHANGELOG, TEST_PLAN, TECH_DEBT and the designs cite them. The `## ADR-XXX`
+  inside the Decision Template is the template, not a placeholder to fill.
+- Release-time checklist for the ticket's acceptance criteria 3 and 4 lives
+  on MUT-49; the shell signer-vs-config check and the dead
+  `UPDATER_PRIVATE_KEY_FILE` declaration in `deploy.sh` are handed to MUT-51.
 
 ---
 
 ## [Unreleased] - 2026-10-10 — MUT-16: insights, planning and projects are gated behind their switches
 
 Brief `.claude/designs/mut-16-gate-insights-planning-projects.md` (+ test
-plan), eng review §8, outside voice §9. ADR-030 addendum. Five commits, one
+plan), eng review §8, outside voice §9. ADR-032 addendum. Five commits, one
 per build-order step (router, nav, client profile, drawers, onboarding).
 
 ### Added
@@ -79,7 +197,7 @@ per build-order step (router, nav, client profile, drawers, onboarding).
   not (D3, review #4).
 - The onboarding store's completion rule (`client`, `project`, `income`)
   stays; the overlay auto-completes the step rather than the store learning
-  about flags (D4). The indicator still shows three steps (TD-024).
+  about flags (D4). The indicator still shows three steps (TD-027).
 
 ### Not done here
 - The sidebar's final grouping and the `+ Add` menu's shape (MUT-15).
@@ -91,7 +209,7 @@ per build-order step (router, nav, client profile, drawers, onboarding).
 
 Brief `.claude/designs/mut-14-collapse-expenses.md` (+ test plan), eng
 review §9, outside voice §10 (twelve findings, all dispositioned before the
-prune commit). ADR-029 and ADR-030 addenda. Safety tag before deletion:
+prune commit). ADR-029 and ADR-032 addenda. Safety tag before deletion:
 `mut-14-pre-expenses-collapse`.
 
 ### Removed (one commit per page)
@@ -154,7 +272,7 @@ prune commit). ADR-029 and ADR-030 addenda. Safety tag before deletion:
 
 Brief `.claude/designs/mut-13-gate-invoices-retainers.md` (+ test plan), eng
 review §8, outside voice §9. First consumer of the MUT-12 switchboard;
-ADR-030 addendum records the gating pattern. Jira MUT-13 under MUT-2.
+ADR-032 addendum records the gating pattern. Jira MUT-13 under MUT-2.
 
 ### Added
 - **`requireFeature(key, to = '/')`** (`src/lib/features/routeGuard.ts`): a
@@ -201,14 +319,14 @@ ADR-030 addendum records the gating pattern. Jira MUT-13 under MUT-2.
   documents, sequences and retainers are untouched (tested). Auto-enable on
   upgrade is MUT-12's.
 - The legacy `/transactions` page keeps its own ungated *Generate invoice*
-  item; the route redirects to `/income`, so it is unreachable (TD-022).
+  item; the route redirects to `/income`, so it is unreachable (TD-025).
 
 ---
 
 ## [Unreleased] - 2026-10-10 — MUT-12: per-feature Advanced toggle in Settings, off by default (Dexie v20)
 
 Brief `.claude/designs/mut-12-advanced-features-toggle.md` (+ test plan),
-eng-reviewed with an outside-voice pass; ADR-030. Jira MUT-12 under MUT-2.
+eng-reviewed with an outside-voice pass; ADR-032 (numbered ADR-030 on the branch; renumbered at merge because main's MUT-6 took ADR-030). Jira MUT-12 under MUT-2.
 Nothing is gated yet — MUT-13/14/16 consume the switches.
 
 ### Added
@@ -239,7 +357,7 @@ Nothing is gated yet — MUT-13/14/16 consume the switches.
 
 ### Decided
 - `suppliers` is folded into `expenses` (vendors are the expenses module's
-  table); the ticket's seventh toggle is not shipped (ADR-030 §5).
+  table); the ticket's seventh toggle is not shipped (ADR-032 §5).
 - Archived rows count as data for auto-enable; soft-deleted rows do not;
   projects have no soft delete so any row counts.
 
@@ -1054,6 +1172,11 @@ API version `1.1.0-m2`; everything additive, M1 untouched.
 - Consequence: builds already installed in the field carry the old public key,
   so they will reject updates signed with the new private key. Clients on an
   older build need a manual reinstall to rejoin the update channel.
+- **Withdrawn 2026-10-10 (MUT-49, ADR-031).** The premise above was false: the
+  v0.0.63 signatures, the macOS release signer and the CI secret are all
+  `BEDF931CA1D6C777`; the `AB7B64537B1DE22C` private half never signed a
+  release and is not configured in the pipeline. The key was restored on
+  2026-10-10; no reinstall is needed.
 
 ---
 

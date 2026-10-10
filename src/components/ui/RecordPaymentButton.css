@@ -1,0 +1,33 @@
+/**
+ * RecordPaymentButton -- the remaining balance rendered inside the button, so
+ * the number owed is visible at the point of action.
+ *
+ * The button lives inside the existing row actions cell (never its own column)
+ * so it cannot push the amount column off-screen on a narrow desktop window.
+ * Direction mirrors for free: .btn is inline-flex and the document carries dir.
+ */
+.record-payment-remaining {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* Keeps the kebab and the button on one line within the actions cell. */
+.row-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/**
+ * The actions column was a fixed 40-48px, sized for a kebab alone. Now that it
+ * also holds a button, it must shrink-to-fit its own content instead of
+ * stealing width from the amount column: width 1% + nowrap is the table idiom
+ * for "as narrow as the content allows".
+ */
+.row-actions-header {
+  width: 1%;
+  white-space: nowrap;
+}

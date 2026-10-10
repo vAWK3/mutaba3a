@@ -157,7 +157,7 @@ Still manual: RTL check of the "More" section and the locked notice; a real navi
 | `src/components/__tests__/ExpenseDrawer.projectField.test.tsx` | Component | 3 | no field off; field on; edit keeps `projectId` and `categoryId` while hidden |
 | `src/components/__tests__/RetainerDrawer.projectField.test.tsx` | Component | 2 | picker off / on |
 
-Still manual: a real navigation to `/projects` while off in the browser (redirect with no flash); the onboarding card on a fresh install showing step 2 as done (TD-024); RTL check of the longer "More" section.
+Still manual: a real navigation to `/projects` while off in the browser (redirect with no flash); the onboarding card on a fresh install showing step 2 as done (TD-027); RTL check of the longer "More" section.
 
 #### Hook & Component Tests
 | File | Type | Tests | Coverage |
@@ -168,6 +168,7 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 | `src/components/__tests__/ProjectDrawer.test.tsx` | Component | 13 | **Full** - Project drawer with profile selector |
 | `src/components/__tests__/UpdateBanner.test.tsx` | Component | 11 | **Full** - Update banner states |
 | `src/hooks/__tests__/useTauriUpdater.test.ts` | Unit | 8 | **Full** - Tauri updater hook |
+| `src/lib/__tests__/updater-config.test.ts` | Contract | 2 | **Full** - compiled-in updater pubkey equals the canonical BEDF931CA1D6C777 key, asserted from the key bytes (MUT-49, ADR-031) |
 
 #### Page Component Tests (Added 2026-03-14)
 | File | Type | Tests | Coverage |
@@ -731,3 +732,26 @@ table as dead weight.
 **Baseline when written (2026-10-10)**: 2,033 unit tests passing, 7 skipped.
 The 18 failures in `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx`
 pre-date these tickets and are untouched by them.
+
+### MUT-6 — "Record payment" as a primary row action
+
+| Area | File | What is pinned |
+|---|---|---|
+| Affordance gate | `src/components/ui/__tests__/RecordPaymentButton.test.tsx` (10) | renders for unpaid and partial income; nothing for paid, expense, zero or unknown remaining; renders on a locked row; remaining amount in the row currency; one click fires once; the click does not reach a row-level handler |
+| Overpayment policy (ADR-030) | `src/db/__tests__/paymentRecords.test.ts` | reject over the total on `create` with nothing written; reject when the accumulated sum would pass it; accept the exact remaining balance; reject on `update`; allow an update that stays within; deleted records free the balance again |
+| Lock exemption (ADR-030) | `src/db/__tests__/paymentRecords.test.ts` | a payment on a `lockedAt` transaction succeeds, flips status to `paid` and leaves `lockedAt` intact; overpayment is still rejected there |
+| One guard, both doors | `src/db/__tests__/partialPayment.test.ts` | `recordPartialPayment` inherits the rejection through its delegation to `paymentRecordRepo.create` |
+| Refresh after save (AC #5) | `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` invalidates `income`, `receivables`, `incomeOverviewTotals`, `incomeAttentionReceivables` alongside the payment-record and transaction keys. Uses real Dexie, no `vi.mock`, so a stubbed barrel cannot fake a pass |
+| Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; empty prefill when settled; edit mode prefills the record's own amount |
+| Local-date default (ADR-022) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | the date field defaults to `todayISO()`, asserted at two faked instants straddling midnight in opposite directions so it holds in both `Asia/Jerusalem` and `npm run test:tz` |
+| Derived money views refresh | `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10), `useQueries.test.tsx`, `useIncomeQueries.test.tsx` | all nine money-event keys are invalidated and no others; the payment path and `markPaid` both trigger them. The expense and retainer paths are wired but uncovered — those modules have no mutation-test harness |
+| Per-surface gate | `IncomePage.test.tsx`, `ClientDetailPage.test.tsx`, `ProjectDetailPage.test.tsx` | the button appears on exactly the rows each surface showed the kebab entry on, never on paid rows or expenses, opens the drawer with the row's id, and does not trigger the row's own click |
+
+The four IncomePage "Record Payment" tests that existed before this ticket
+asserted nothing about the action — three carried a comment saying the
+behaviour was covered elsewhere, and it was not. They assert the button now.
+
+**Baseline after MUT-6 (2026-10-10)**: 2,078 unit tests passing, 7 skipped.
+The same 18 `ExpensesLedgerPage` failures still pre-date the ticket and are
+untouched by it.
+

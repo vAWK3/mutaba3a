@@ -310,8 +310,46 @@ describe('paymentRecordRepo', () => {
     });
   });
 
+  // ADR-030: overpayment is rejected. These assertions replace the previous
+  // "overpayment is allowed and clamped" contract, which stored an excess that
+  // no surface in the app could show.
   describe('overpayment', () => {
-    it('should allow overpayment and still mark as paid', async () => {
+    it('should reject a payment larger than the transaction total', async () => {
+      await expect(
+        paymentRecordRepo.create({
+          transactionId: incomeId,
+          amountMinor: 12000, // transaction is 10000
+          paidAt: '2024-01-20',
+        })
+      ).rejects.toThrow('Payment amount');
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.receivedAmountMinor ?? 0).toBe(0);
+      expect(tx?.status).toBe('unpaid');
+      expect(await paymentRecordRepo.listByTransaction(incomeId)).toHaveLength(0);
+    });
+
+    it('should reject a payment that pushes the accumulated sum past the total', async () => {
+      await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 6000,
+        paidAt: '2024-01-20',
+      });
+
+      await expect(
+        paymentRecordRepo.create({
+          transactionId: incomeId,
+          amountMinor: 6000, // 6000 + 6000 > 10000
+          paidAt: '2024-01-25',
+        })
+      ).rejects.toThrow('Payment amount');
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.receivedAmountMinor).toBe(6000);
+      expect(tx?.status).toBe('unpaid');
+    });
+
+    it('should accept a payment that settles the exact remaining balance', async () => {
       await paymentRecordRepo.create({
         transactionId: incomeId,
         amountMinor: 6000,
@@ -319,14 +357,112 @@ describe('paymentRecordRepo', () => {
       });
       await paymentRecordRepo.create({
         transactionId: incomeId,
-        amountMinor: 6000,
+        amountMinor: 4000,
         paidAt: '2024-01-25',
       });
 
       const tx = await transactionRepo.get(incomeId);
-      // Sum is 12000 > 10000, stored as actual sum (not capped)
-      expect(tx?.receivedAmountMinor).toBe(12000);
+      expect(tx?.receivedAmountMinor).toBe(10000);
       expect(tx?.status).toBe('paid');
+    });
+
+    it('should reject an update that pushes the sum past the total', async () => {
+      const first = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 4000,
+        paidAt: '2024-01-20',
+      });
+      await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 4000,
+        paidAt: '2024-01-25',
+      });
+
+      await expect(
+        paymentRecordRepo.update(first.id, { amountMinor: 7000 }) // 7000 + 4000 > 10000
+      ).rejects.toThrow('Payment amount');
+
+      const unchanged = await paymentRecordRepo.get(first.id);
+      expect(unchanged?.amountMinor).toBe(4000);
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.receivedAmountMinor).toBe(8000);
+    });
+
+    it('should allow an update that stays within the total', async () => {
+      const first = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 4000,
+        paidAt: '2024-01-20',
+      });
+      await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 4000,
+        paidAt: '2024-01-25',
+      });
+
+      await paymentRecordRepo.update(first.id, { amountMinor: 6000 }); // 6000 + 4000 === 10000
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.receivedAmountMinor).toBe(10000);
+      expect(tx?.status).toBe('paid');
+    });
+
+    it('should not count deleted records towards the total', async () => {
+      const first = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 8000,
+        paidAt: '2024-01-20',
+      });
+      await paymentRecordRepo.delete(first.id);
+
+      // Without the delete this would overpay; with it the balance is free again.
+      await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 9000,
+        paidAt: '2024-01-25',
+      });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.receivedAmountMinor).toBe(9000);
+    });
+  });
+
+  // ADR-030: lockedAt protects the invoice facts (amount, currency, client,
+  // date), not payment tracking. Paying an invoiced receivable is the normal
+  // flow, so it must keep working -- see recalculateReceivedAmount.
+  describe('locked transactions', () => {
+    it('should accept a payment against a locked transaction and mark it paid', async () => {
+      await db.transactions.update(incomeId, {
+        lockedAt: '2024-01-16T00:00:00.000Z',
+        lockedByDocumentId: 'doc-1',
+      });
+
+      await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 10000,
+        paidAt: '2024-01-20',
+      });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.receivedAmountMinor).toBe(10000);
+      expect(tx?.status).toBe('paid');
+      expect(tx?.paidAt).toBeDefined();
+      expect(tx?.lockedAt).toBe('2024-01-16T00:00:00.000Z');
+    });
+
+    it('should still reject an overpayment on a locked transaction', async () => {
+      await db.transactions.update(incomeId, {
+        lockedAt: '2024-01-16T00:00:00.000Z',
+        lockedByDocumentId: 'doc-1',
+      });
+
+      await expect(
+        paymentRecordRepo.create({
+          transactionId: incomeId,
+          amountMinor: 10001,
+          paidAt: '2024-01-20',
+        })
+      ).rejects.toThrow('Payment amount');
     });
   });
 

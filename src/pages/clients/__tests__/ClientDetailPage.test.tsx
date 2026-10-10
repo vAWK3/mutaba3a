@@ -6,6 +6,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientDetailPage } from '../ClientDetailPage';
 import * as useQueries from '../../../hooks/useQueries';
+import * as useIncomeQueries from '../../../hooks/useIncomeQueries';
+import type { TransactionDisplay } from '../../../types';
 
 // Mock router
 const mockNavigate = vi.fn();
@@ -55,6 +57,8 @@ vi.mock('../../../lib/i18n', () => ({
       'projects.columns.net': 'Net',
       'transactions.addTransaction': 'Add Transaction',
       'drawer.client.notes': 'Notes',
+      'transactions.partialPayment.recordPayment': 'Record Payment',
+      'transactions.partialPayment.remaining': 'Remaining',
     };
     return translations[key] || key;
   },
@@ -70,6 +74,7 @@ const mockOpenProjectDrawer = vi.fn();
 const mockOpenIncomeDrawer = vi.fn();
 const mockOpenDocumentDrawer = vi.fn();
 const mockOpenRetainerDrawer = vi.fn();
+const mockOpenExpenseDrawer = vi.fn();
 const mockOpenPartialPaymentDrawer = vi.fn();
 vi.mock('../../../lib/stores', () => ({
   useDrawerStore: () => ({
@@ -79,7 +84,7 @@ vi.mock('../../../lib/stores', () => ({
     openIncomeDrawer: mockOpenIncomeDrawer,
     openDocumentDrawer: mockOpenDocumentDrawer,
     openRetainerDrawer: mockOpenRetainerDrawer,
-    openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
+    openExpenseDrawer: mockOpenExpenseDrawer,    openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
   }),
 }));
 
@@ -175,6 +180,55 @@ const mockProjectSummaries = [
     expensesMinorEUR: 0,
   },
 ];
+
+// Receivable rows for the MUT-6 "Record payment" gate: unpaid, partial, paid.
+const mockReceivables: TransactionDisplay[] = [
+  {
+    id: 'tx-unpaid',
+    kind: 'income',
+    status: 'unpaid',
+    amountMinor: 100000,
+    currency: 'USD',
+    occurredAt: '2026-03-01',
+    dueDate: '2026-04-01',
+    receivedAmountMinor: 0,
+    paymentStatus: 'unpaid',
+    remainingAmountMinor: 100000,
+    projectName: 'Website Redesign',
+    createdAt: '2026-03-01T00:00:00Z',
+    updatedAt: '2026-03-01T00:00:00Z',
+  },
+  {
+    id: 'tx-partial',
+    kind: 'income',
+    status: 'unpaid',
+    amountMinor: 50000,
+    currency: 'USD',
+    occurredAt: '2026-03-02',
+    dueDate: '2026-04-02',
+    receivedAmountMinor: 20000,
+    paymentStatus: 'partial',
+    remainingAmountMinor: 30000,
+    projectName: 'Mobile App',
+    createdAt: '2026-03-02T00:00:00Z',
+    updatedAt: '2026-03-02T00:00:00Z',
+  },
+  {
+    id: 'tx-paid',
+    kind: 'income',
+    status: 'paid',
+    amountMinor: 70000,
+    currency: 'USD',
+    occurredAt: '2026-03-03',
+    paidAt: '2026-03-04',
+    receivedAmountMinor: 70000,
+    paymentStatus: 'paid',
+    remainingAmountMinor: 0,
+    projectName: 'Brand Kit',
+    createdAt: '2026-03-03T00:00:00Z',
+    updatedAt: '2026-03-04T00:00:00Z',
+  },
+] as TransactionDisplay[];
 
 function renderWithProviders(component: React.ReactNode) {
   const queryClient = new QueryClient({
@@ -441,6 +495,87 @@ describe('ClientDetailPage', () => {
       featureFlags.projects = true;
       renderWithProviders(<ClientDetailPage />);
       expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
+
+  // MUT-6: "Record payment" is a primary row button on both money tabs, not a
+  // kebab entry. The receivables tab previously offered it on *every* row,
+  // including settled ones; the shared gate is what fixes that.
+  describe('Record payment button', () => {
+    beforeEach(() => {
+      vi.spyOn(useIncomeQueries, 'useReceivables').mockReturnValue({
+        data: mockReceivables,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useReceivables>);
+    });
+
+    it('shows the button on unpaid and partial receivables, but not settled ones', async () => {
+      renderWithProviders(<ClientDetailPage />);
+      fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Brand Kit')).toBeInTheDocument();
+      });
+
+      expect(screen.getAllByRole('button', { name: /record payment/i })).toHaveLength(2);
+      const paidRow = screen.getByText('Brand Kit').closest('tr');
+      expect(paidRow?.querySelector('button.btn-secondary')).toBeNull();
+    });
+
+    it('opens the payment drawer for the clicked row', async () => {
+      renderWithProviders(<ClientDetailPage />);
+      fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+      });
+
+      const unpaidRow = screen.getByText('Website Redesign').closest('tr');
+      fireEvent.click(unpaidRow!.querySelector('button.btn-secondary')!);
+
+      expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-unpaid' });
+    });
+
+    it('shows the remaining balance, not the full amount, on a partial row', async () => {
+      renderWithProviders(<ClientDetailPage />);
+      fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Mobile App')).toBeInTheDocument();
+      });
+
+      const partialRow = screen.getByText('Mobile App').closest('tr');
+      // $300.00 remaining of a $500.00 receivable.
+      expect(partialRow?.querySelector('button.btn-secondary')).toHaveTextContent('300');
+    });
+
+    it('applies the same gate on the transactions tab, skipping expenses', async () => {
+      vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
+        data: [
+          ...mockReceivables,
+          {
+            id: 'tx-expense',
+            kind: 'expense',
+            status: 'paid',
+            amountMinor: 25000,
+            currency: 'USD',
+            occurredAt: '2026-03-05',
+            projectName: 'Hosting',
+            createdAt: '2026-03-05T00:00:00Z',
+            updatedAt: '2026-03-05T00:00:00Z',
+          },
+        ],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
+
+      renderWithProviders(<ClientDetailPage />);
+      fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Hosting')).toBeInTheDocument();
+      });
+
+      expect(screen.getAllByRole('button', { name: /record payment/i })).toHaveLength(2);
+      const expenseRow = screen.getByText('Hosting').closest('tr');
+      expect(expenseRow?.querySelector('button.btn-secondary')).toBeNull();
     });
   });
 });

@@ -1207,3 +1207,31 @@ never go (ADR-029); their row types move to `src/db/retained/` with a
 retention test, and user *files* get a plain export before their viewer goes
 (ADR-029 addendum).
 
+---
+
+## Verification patterns — added 2026-10-10 (MUT-49)
+
+### Contract test over a shipped config artifact
+
+**Purpose**: Some files are not code but still ship and still break users when
+they drift: `public/.well-known/oauth-client.json` (Malafat validates it
+byte-for-byte) and `src-tauri/tauri.conf.json` (the updater public key is
+compiled into every build). A vitest file reads the artifact from disk with
+`node:fs` and asserts the invariant another system enforces, so `npm test`
+fails before a release does.
+
+**Instances**: `src/sync/transport/__tests__/cimd-document.test.ts` (re-states
+Malafat's CIMD rules), `src/lib/__tests__/updater-config.test.ts` (pins the
+updater pubkey to ADR-031's canonical key).
+
+**Rules**:
+- Resolve the path from `process.cwd()` so the test runs from any worktree.
+- Assert the exact bytes or string when the artifact's identity is the string
+  itself (a key, a client id); decode only to produce a readable message.
+- State in the test header which external system or release step depends on
+  the invariant, and which ADR or ticket owns a deliberate change.
+- Do not reach for a parsing library when string equality has the same
+  regression power.
+
+**When to use**: any committed file whose contents a build, a signer, a remote
+validator or an installed client depends on verbatim.

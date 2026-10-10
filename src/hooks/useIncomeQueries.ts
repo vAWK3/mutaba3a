@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../db';
 import { useMutationWithFeedback } from './useMutationWithFeedback';
 import type { QueryFilters, Transaction, Currency, TxStatus } from '../types';
+import { invalidateMoneyEventQueries } from './useMoneyEventQueries';
 
 // ============================================================================
 // Query Keys
@@ -73,6 +74,9 @@ function invalidateIncomeQueries(queryClient: ReturnType<typeof useQueryClient>)
   queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
   queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
   queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
+  // Money events are derived from this data, so the Overview KPI strip and
+  // attention feed have to refetch with it.
+  invalidateMoneyEventQueries(queryClient);
 }
 
 // ============================================================================
