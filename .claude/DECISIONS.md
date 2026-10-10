@@ -946,3 +946,56 @@ figure and a partial-failure state to build); posting inside the create
 transaction instead of healing (deferred: larger change to tested M3 code for a
 window the catch-up closes within a day); auto-withdrawing proposals on archive
 (rejected: a side effect nobody asked for).
+
+---
+
+## ADR-028: Removing a Feature's UI Never Removes Its Tables
+
+**Date**: 2026-10-10
+**Status**: Accepted
+**Context**: MUT-10, MUT-11 (epic MUT-2)
+
+**Context**: Epic MUT-2 deletes product surface that no navigation entry
+reaches. Two of those modules had touched storage very differently. Engagements
+owned real Dexie tables (`engagements`, `engagementVersions`) that a user could
+in principle hold rows in — the routes existed, only the nav entry was missing.
+Money answers owned none: its `MoneyEvent` records are derived from
+transactions, expenses and projected income on every read, and the repository
+never writes.
+
+**Decision**: Deleting a feature's UI is a source-code change only. It never
+drops a Dexie table, never regresses or bumps the schema version, and never
+rewrites a row.
+
+1. Tables whose UI is gone are **retained**, with their row types relocated to
+   `src/db/retained/`. The module carries a comment saying why it exists and
+   that nothing interprets the rows any more; shapes that no longer have a
+   consumer to keep them honest (the engagement version snapshot) are modelled
+   as opaque JSON rather than a stale copy of the old form.
+2. The export obligation is already met by `src/db/backup.ts`, which serializes
+   every table in `db.tables` generically and is reachable from Settings → Data
+   tools. Retaining the table is therefore sufficient; a per-feature export path
+   is not needed. Dropping the table is what would break the backup.
+3. A test guards the retention. `src/db/__tests__/retainedSchema.test.ts` fails
+   if the tables leave the schema or stop round-tripping through backup and
+   restore, so the guarantee survives the next person who reads `engagements`
+   as dead weight.
+4. Shared code is identified before deletion, not after. `moneyEventRepository`
+   stayed because the Overview page's KPI strip, actuals row and attention feed
+   depend on it; what was removed instead was the deleted page's *name* from the
+   shared surface, so nothing is called after a screen that no longer exists.
+
+**Consequences**: A removal leaves a small, inert, tested residue in `src/db/`
+rather than a clean grep. That residue is the point: the acceptance criterion
+"no hits outside deliberately retained schema definitions" is satisfied by the
+carve-out, not in spite of it. The cost of a stale table is a few hundred bytes
+per install; the cost of a dropped one is unrecoverable user data.
+
+**Alternatives Considered**: dropping the tables with a schema bump (rejected —
+irreversible for anyone holding rows, and the removal's whole value is
+maintenance cost, not storage); shipping a bespoke engagement export before
+deleting (rejected once the generic backup was found to cover every table
+already); keeping the full 200-line engagement type to describe retained rows
+faithfully (rejected — no consumer left to keep it accurate, so it would rot
+into a lie); deleting `moneyEventRepository` with the page (rejected — three
+mounted Overview components import it).

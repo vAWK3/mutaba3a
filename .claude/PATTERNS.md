@@ -843,7 +843,7 @@ Code-split routes and heavy components.
 ```typescript
 // src/router.tsx
 const DocumentsPage = lazy(() => import('./pages/documents/DocumentsPage'));
-const EngagementsPage = lazy(() => import('./pages/engagements/EngagementsPage'));
+const InsightsPage = lazy(() => import('./pages/insights/InsightsPage'));
 
 // Route definition
 {

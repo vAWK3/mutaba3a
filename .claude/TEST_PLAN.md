@@ -465,6 +465,7 @@ test.describe('Transaction Management', () => {
 | Aggregation functions | Unit | P1 | ✅ Done |
 | Settings CRUD | Unit | P2 | ✅ Done |
 | Category CRUD | Unit | P2 | ✅ Done |
+| Retained tables survive a UI removal (ADR-028) | Unit | P0 | ✅ Done |
 
 ### Edge Cases
 
@@ -654,3 +655,19 @@ export function createTransactions(count: number): Transaction[] {
 Not covered by automated tests (requires a provisioned staging tenant, see the
 findings doc): live CIMD fetch, consent screen, grant appearing and revoking in
 Malafat Settings, and the firm-level MCP gate.
+
+### MUT-10 / MUT-11 — removals keep their data
+
+`src/db/__tests__/retainedSchema.test.ts` (4 tests) is the standing guard for
+ADR-028. It asserts that the `engagements` and `engagementVersions` tables stay
+in the Dexie schema after the engagements UI was deleted, that rows written to
+them read back unchanged, that `serializeAllTables()` includes them, and that a
+backup/restore round-trip returns the opaque version snapshot intact.
+
+Add a case here whenever another feature's UI is deleted while its tables are
+retained — the test is what stops the next reader from treating the leftover
+table as dead weight.
+
+**Baseline when written (2026-10-10)**: 2,033 unit tests passing, 7 skipped.
+The 18 failures in `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx`
+pre-date these tickets and are untouched by them.

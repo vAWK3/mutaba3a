@@ -147,8 +147,6 @@
 | Multi-Currency | ✅ Complete | USD, ILS, EUR; per-currency reports |
 | Expense Tracking | ✅ Complete | Profile-scoped, receipts, categories |
 | Retainer Agreements | ✅ Complete | Monthly/quarterly, matching workflow |
-| Engagement Letters | ✅ Complete | Task/retainer types, PDF generation |
-| Money Answers | ✅ Complete | Unified financial cockpit |
 | Business Profiles | ✅ Complete | Multi-identity, branding |
 | Data Export/Import | ✅ Complete | ZIP backup/restore |
 | Demo Mode | ✅ Complete | Sample data, time-frozen |
@@ -397,16 +395,14 @@ mini-crm/
 │   │   ├── documents/        # Invoice/receipt management
 │   │   ├── expenses/         # Expense tracking
 │   │   ├── retainers/        # Retainer agreements
-│   │   ├── engagements/      # Engagement letters
-│   │   ├── money-answers/    # Financial reports
 │   │   └── settings/         # App configuration
 │   │
 │   ├── features/              # Domain feature modules
-│   │   ├── documents/        # Invoice PDF generation
-│   │   └── engagements/      # Engagement letter system
+│   │   └── documents/        # Invoice PDF generation
 │   │
 │   ├── db/                    # Data layer
 │   │   ├── database.ts       # Dexie schema
+│   │   ├── retained/         # Row types for tables whose UI was removed (ADR-028)
 │   │   ├── repository.ts     # Main repo exports
 │   │   └── aggregations.ts   # Query helpers
 │   │
