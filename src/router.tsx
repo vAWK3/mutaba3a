@@ -191,17 +191,13 @@ const expenseProfilesRoute = createRoute({
   },
 });
 
+// Legacy route (MUT-14): the profile expenses page was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const profileExpensesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses/profile/$profileId',
-  component: lazyPage(() => import('./pages/expenses/ProfileExpensesPage'), 'ProfileExpensesPage'),
-  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
-    return {
-      year: typeof search.year === 'number' ? search.year : undefined,
-      month: typeof search.month === 'number' ? search.month : undefined,
-      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
-      categoryId: typeof search.categoryId === 'string' ? search.categoryId : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
   },
 });
 
