@@ -54,6 +54,7 @@ const incomeRoute = createRoute({
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
+  beforeLoad: requireFeature('insights'),
   component: lazyPage(() => import('./pages/insights'), 'InsightsPage'),
 });
 
@@ -73,12 +74,14 @@ const transactionsRoute = createRoute({
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projects',
+  beforeLoad: requireFeature('projects'),
   component: lazyPage(() => import('./pages/projects/ProjectsPage'), 'ProjectsPage'),
 });
 
 const projectDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projects/$projectId',
+  beforeLoad: requireFeature('projects'),
   component: lazyPage(() => import('./pages/projects/ProjectDetailPage'), 'ProjectDetailPage'),
 });
 
@@ -283,6 +286,7 @@ interface PlanningSearch {
 const planningRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/planning',
+  beforeLoad: requireFeature('planning'),
   component: lazyPage(() => import('./pages/planning'), 'PlanningPage'),
   validateSearch: (search: Record<string, unknown>): PlanningSearch => {
     return {
