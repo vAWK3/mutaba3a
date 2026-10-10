@@ -413,6 +413,17 @@ describe('transactionRepo', () => {
       ).rejects.toThrow(TransactionLockedError);
     });
 
+    it('should refuse to soft-delete a locked transaction (MUT-13)', async () => {
+      const transaction = await transactionRepo.create(createTestTransaction());
+      await db.transactions.update(transaction.id, {
+        lockedAt: new Date().toISOString(),
+        lockedByDocumentId: 'doc-123',
+      });
+
+      await expect(transactionRepo.softDelete(transaction.id)).rejects.toThrow(TransactionLockedError);
+      expect((await db.transactions.get(transaction.id))?.deletedAt).toBeUndefined();
+    });
+
     it('should allow archiving locked transaction', async () => {
       const transaction = await transactionRepo.create(createTestTransaction());
 

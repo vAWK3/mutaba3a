@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getRepositories } from '../../db/provider';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,6 +16,7 @@ import {
   useBusinessProfiles,
   useDefaultBusinessProfile,
   useDocuments,
+  useTransaction,
 } from '../../hooks/useQueries';
 import { cn, todayISO } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
@@ -121,9 +124,15 @@ function formatMinorAmount(minor: number, currency: Currency): string {
 
 export function DocumentDrawer() {
   const { documentDrawer, closeDocumentDrawer } = useDrawerStore();
-  const { mode, documentId, defaultType, defaultClientId, defaultBusinessProfileId, refDocumentId } =
+  const { mode, documentId, defaultType, defaultClientId, defaultBusinessProfileId, refDocumentId, linkTransactionId } =
     documentDrawer;
   const t = useT();
+  const queryClient = useQueryClient();
+
+  // "Create invoice from this income entry" (MUT-13): prefill one line from the
+  // entry and link it to the document once created, so the entry shows
+  // "View invoice" and the document lists the entry.
+  const { data: linkedTx } = useTransaction(linkTransactionId || '');
 
   // Query hooks
   const { data: existingDoc, isLoading: docLoading } = useDocument(documentId || '');
@@ -173,6 +182,16 @@ export function DocumentDrawer() {
   });
 
   const { watch, setValue, reset, control } = form;
+
+  useEffect(() => {
+    if (mode !== 'create' || !linkedTx) return;
+    setValue('currency', linkedTx.currency);
+    if (linkedTx.clientId) setValue('clientId', linkedTx.clientId);
+    setValue('items', [
+      { name: linkedTx.title || '', quantity: 1, rateMinor: linkedTx.amountMinor, discountMinor: 0, taxExempt: false },
+    ]);
+  }, [mode, linkedTx, setValue]);
+
   const selectedType = watch('type');
   const selectedCurrency = watch('currency');
   const taxRate = watch('taxRate');
@@ -364,7 +383,12 @@ export function DocumentDrawer() {
           : docData;
         await updateMutation.mutateAsync({ id: documentId, data: updateData });
       } else {
-        await createMutation.mutateAsync(docData);
+        const created = await createMutation.mutateAsync(docData);
+        if (linkTransactionId) {
+          await getRepositories().base.documents.linkTransactions(created.id, [linkTransactionId]);
+          await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+          await queryClient.invalidateQueries({ queryKey: ['transaction', linkTransactionId] });
+        }
       }
       closeDocumentDrawer();
     } catch (error) {

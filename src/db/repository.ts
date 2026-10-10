@@ -425,6 +425,16 @@ export const transactionRepo = {
   },
 
   async softDelete(id: string): Promise<void> {
+    // A transaction locked by an exported document cannot be deleted either
+    // (MUT-13): the lock would otherwise hold for edits but not for removal.
+    const existing = await db.transactions.get(id);
+    if (existing?.lockedAt) {
+      throw new TransactionLockedError(
+        `Transaction is locked by document ${existing.lockedByDocumentId}. Only archive/unarchive is allowed.`,
+        id,
+        existing.lockedByDocumentId
+      );
+    }
     await db.transactions.update(id, { deletedAt: nowISO(), updatedAt: nowISO() });
   },
 

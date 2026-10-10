@@ -52,6 +52,7 @@ export function ClientDetailPage() {
             mode: 'create',
             defaultType: tx.status === 'paid' ? 'receipt' : 'invoice',
             defaultClientId: tx.clientId,
+            linkTransactionId: tx.id,
           }),
       },
     ];

@@ -23,6 +23,7 @@ import { useFxRate } from '../../hooks/useFxRate';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { getUnifiedTotalWithEur } from '../../lib/fx';
 import { useMonthKPIsBothCurrencies } from '../../hooks/useMoneyEventQueries';
+import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { InfoIcon } from '../icons';
 
 type CurrencyView = 'ILS' | 'USD' | 'Both';
@@ -297,15 +298,17 @@ export function PredictiveKpiStrip({ className }: PredictiveKpiStripProps) {
   const t = useT();
   const currentMonth = getCurrentMonthKey();
   const profileId = useProfileFilter();
+  // Projected retainer income counts only while the Retainers area is on (MUT-13)
+  const retainersEnabled = useFeatureEnabled('retainers');
 
   // Fetch forecast KPIs for current month (both currencies)
-  // Home always includes unpaid income and projected retainer
+  // Home always includes unpaid income; projected retainer follows the switch
   const { data: kpis, isLoading } = useMonthKPIsBothCurrencies(
     currentMonth,
     0, // opening balance USD
     0, // opening balance ILS
     true, // includeUnpaidIncome
-    true, // includeProjectedRetainer
+    retainersEnabled, // includeProjectedRetainer
     profileId
   );
 

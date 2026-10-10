@@ -367,6 +367,7 @@ describe('ClientDetailPage', () => {
         mode: 'create',
         defaultType: 'invoice',
         defaultClientId: 'client-1',
+        linkTransactionId: 'tx-unpaid',
       });
     });
 

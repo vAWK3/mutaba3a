@@ -858,7 +858,7 @@
       "locked": {
         "title": "Locked by document {number}",
         "titleNoNumber": "Locked by an exported document",
-        "body": "This entry was exported on a document, so its fields can't change. You can still archive it.",
+        "body": "This entry was exported on a document, so its details can't change here. Payments can still be recorded from the client page.",
         "viewDocument": "View document",
         "turnOnInvoices": "Turn on Invoices in Settings › Advanced features to open the document."
       }

@@ -359,6 +359,9 @@ const routeTree = rootRoute.addChildren([
 export const router = createRouter({
   routeTree,
   basepath: __BUILD_MODE__ === 'web' ? '/app' : undefined,
+  // Routes with an async beforeLoad (feature gates, MUT-13) start pending;
+  // show the same loader the lazy pages use instead of a blank first paint.
+  defaultPendingComponent: PageLoader,
 });
 
 // Type declaration for router

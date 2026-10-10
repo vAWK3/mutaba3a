@@ -176,6 +176,7 @@ export function IncomeDrawer() {
   useClientProjectCascade({ form, projectsData });
 
   const onSubmit = async (data: FormData) => {
+    if (isLocked) return; // the notice explains; the repository would refuse anyway
     // Map income status to database status
     // Note: For phase 1, we don't store earned/invoiced distinction - just paid/unpaid
     // The UI shows Earned/Invoiced/Received, but storage is simplified

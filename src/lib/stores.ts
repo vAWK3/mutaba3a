@@ -83,6 +83,8 @@ interface DrawerState {
     defaultClientId?: string;
     defaultBusinessProfileId?: string;
     refDocumentId?: string; // For credit notes
+    /** Income entry to prefill from and link to the created document (MUT-13) */
+    linkTransactionId?: string;
   };
   openDocumentDrawer: (options?: {
     mode?: 'create' | 'edit';
@@ -91,6 +93,7 @@ interface DrawerState {
     defaultClientId?: string;
     defaultBusinessProfileId?: string;
     refDocumentId?: string;
+    linkTransactionId?: string;
   }) => void;
   closeDocumentDrawer: () => void;
 
@@ -314,6 +317,7 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         defaultClientId: options?.defaultClientId,
         defaultBusinessProfileId: options?.defaultBusinessProfileId,
         refDocumentId: options?.refDocumentId,
+        linkTransactionId: options?.linkTransactionId,
       },
     }),
   closeDocumentDrawer: () =>

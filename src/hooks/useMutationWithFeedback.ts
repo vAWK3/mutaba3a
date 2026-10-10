@@ -82,8 +82,8 @@ function getErrorMessage(error: unknown, fallback?: string): string {
     if (msg.includes('locked by document')) {
       const docMatch = msg.match(/document\s+(\S+)/);
       return docMatch
-        ? `Transaction is locked by document ${docMatch[1]}. Unlock the document first.`
-        : 'Transaction is locked. Unlock the linked document first.';
+        ? `This entry is locked by document ${docMatch[1]}; its details can't change.`
+        : "This entry is locked by an exported document; its details can't change.";
     }
     // PartialPaymentError: already has good messages
     if (msg.includes('Payment amount') || msg.includes('Partial payments') || msg.includes('already fully paid')) {

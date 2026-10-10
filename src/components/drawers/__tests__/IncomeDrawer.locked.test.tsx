@@ -142,9 +142,27 @@ describe('IncomeDrawer on a document-locked entry (MUT-13)', () => {
     expect(screen.queryByTestId('income-locked-notice')).toBeNull();
   });
 
-  it('the repository still refuses an edit on a locked entry regardless of the flag', async () => {
+  it('a forced form submit on a locked entry writes nothing and raises no error toast', async () => {
+    installFakeSettings();
+    openEdit('tx-locked');
+    const { useToastStore } = await import('../../../lib/toastStore');
+    useToastStore.setState({ toasts: [] });
+    render(<IncomeDrawer />, { wrapper: Wrapper });
+    await screen.findByTestId('income-locked-notice');
+
+    const form = document.getElementById('income-form') as HTMLFormElement;
+    fireEvent.submit(form);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect((await db.transactions.get('tx-locked'))?.title).toBe('Design sprint');
+    expect(useToastStore.getState().toasts.filter((toast) => toast.type === 'error')).toHaveLength(0);
+  });
+
+  it('the repository still refuses an edit or a delete on a locked entry regardless of the flag', async () => {
     const { transactionRepo } = await import('../../../db/repository');
     await expect(transactionRepo.update('tx-locked', { title: 'Changed' })).rejects.toThrow(/locked/i);
+    await expect(transactionRepo.softDelete('tx-locked')).rejects.toThrow(/locked/i);
     await expect(transactionRepo.update('tx-locked', { archivedAt: now })).resolves.toBeUndefined();
+    expect((await db.transactions.get('tx-locked'))?.deletedAt).toBeUndefined();
   });
 });
