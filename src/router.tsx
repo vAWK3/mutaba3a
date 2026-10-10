@@ -221,14 +221,13 @@ const expensesOverviewRoute = createRoute({
   },
 });
 
+// Legacy route (MUT-14): the expenses forecast was removed; old links land on the ledger,
+// which then applies the Expenses switch.
 const expensesForecastRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/expenses/forecast',
-  component: lazyPage(() => import('./pages/expenses/ExpensesForecastPage'), 'ExpensesForecastPage'),
-  validateSearch: (search: Record<string, unknown>): ExpensesSearch => {
-    return {
-      year: typeof search.year === 'number' ? search.year : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/expenses' });
   },
 });
 
