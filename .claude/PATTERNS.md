@@ -1154,3 +1154,19 @@ temporarily renaming `fxRateRepo.getLatest`, which produced
 data layer mocks `'../../db'` and returns `getRepositories`; it never mocks a
 repository module directly. Share one set of fakes across mocks with
 `vi.hoisted()` when a test asserts through both paths.
+
+### Optional areas are read through one hook and written through one map (MUT-12)
+`src/lib/features/features.ts` owns the vocabulary (`FEATURE_KEYS`), the
+tolerant resolver and the data probes; `src/lib/features/useFeatures.ts` owns
+the read/write paths. **Components call `useFeatureEnabled(key)` or
+`useFeatureFlags()`; router `beforeLoad` guards call `readFeatureFlags()`.
+Nothing else reads `settings.features`.** Writers always store the *full*
+resolved map (`withFeature(current, key, enabled)`) because `settingsRepo.update`
+replaces top-level fields, it does not merge nested objects. Data presence only
+ever switches an area on (`reconcileFeaturesWithData`); every code path that
+bulk-writes rows after the v20 upgrade (restore, import, demo, sync) calls the
+swallowing `reconcileFeaturesAfterDataLoad(source, db)` and then invalidates
+`['settings']` or reloads. Adding an area: one key in `FeatureKey` +
+`FEATURE_KEYS`, its probe list, and `settings.features.items.<key>` in both
+locales — the snapshot and parity tests fail until all four agree.
+

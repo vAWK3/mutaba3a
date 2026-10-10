@@ -138,6 +138,8 @@
 
 ### Implemented (v0.0.48)
 
+- **Optional areas (Advanced features, MUT-12 / ADR-030)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo, sync) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. Gating of the areas themselves lands in MUT-13/14/15/16.
+
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Transaction Ledger | ✅ Complete | Full CRUD, filters, search |

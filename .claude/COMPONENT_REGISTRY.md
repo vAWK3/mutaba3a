@@ -9,9 +9,9 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, TopBar, PageHeader |
+| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
-| **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea |
+| **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu |
 | **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
 | **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
@@ -100,6 +100,30 @@
   action={<Button>+ Add</Button>}
 />
 ```
+
+---
+
+### FeatureNoticeBanner
+**Location**: `src/components/layout/FeatureNoticeBanner.tsx`
+**Purpose**: One-time, dismissible notice naming the optional areas that were switched on for the user's existing data (v20 upgrade, restore, import, demo, sync). Mounted once in `AppShell` above the page content; renders nothing when `Settings.featureNotice` is empty; clears the notice on dismiss (MUT-12, ADR-030).
+
+```tsx
+<FeatureNoticeBanner />   // no props; reads useFeatureNotice()
+```
+
+Tests: `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx`.
+
+---
+
+### AdvancedFeaturesSection
+**Location**: `src/pages/settings/AdvancedFeaturesSection.tsx`
+**Purpose**: Settings › Advanced features — one `Switch` per `FEATURE_KEYS` entry, labels and descriptions from `settings.features.items.*`. Reads `useFeatureFlags()`, writes `useSetFeatureEnabled()`; never touches the settings row.
+
+```tsx
+<AdvancedFeaturesSection />   // rendered by SettingsPage between Currency and Data
+```
+
+Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ---
 
@@ -332,6 +356,21 @@ navigate({ search: { newProject: true, clientId } }); // Create
   {...register('notes')}
 />
 ```
+
+---
+
+### Switch
+**Location**: `src/components/ui/Switch.tsx` (+ `Switch.css`)
+**Purpose**: On/off control. `<button role="switch" aria-checked>`; toggles on click, Space and Enter; `disabled` sets `aria-disabled`; the knob travels in the reading direction (logical properties, mirrored in RTL); focus ring via `--focus-ring`.
+
+```tsx
+<span id="lbl">Expenses</span>
+<Switch checked={on} onChange={setOn} labelledBy="lbl" />
+<Switch checked={on} onChange={setOn} ariaLabel="Dark mode" disabled />
+```
+
+Props: `checked`, `onChange(next)`, `labelledBy?`, `ariaLabel?`, `disabled?`, `id?`, `className?`.
+Tests: `src/components/ui/__tests__/Switch.test.tsx`. First consumer: `AdvancedFeaturesSection` (MUT-12).
 
 ---
 

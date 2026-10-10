@@ -438,6 +438,35 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
+### TD-020: `clearDatabase()` clears five tables, so a legacy import keeps stale optional-area data
+**Status**: Open
+**Priority**: Medium
+**Introduced**: pre-2026 (surfaced by MUT-12, 2026-10-10)
+**Impact**: A legacy ("replace all data") import wipes transactions, projects, clients, categories, fxRates and settings but leaves documents, expenses, vendors, retainers and plans. Since MUT-12, the post-import reconcile switches those areas on and the banner announces "your existing data" for rows that are leftovers from before the import.
+
+**Description**:
+`src/db/seed.ts` `clearDatabase()` predates the optional-area tables. The legacy import in `ImportDataModal` and `ImportDataPage` relies on it to mean "replace everything".
+
+**Remediation**:
+1. Decide whether legacy import means *all* user tables (then `clearDatabase()` clears every data table, or reuses `deleteAllData()`), or only the legacy export's tables (then say so in the import copy).
+2. Add a test that a legacy import leaves no rows in the probed tables.
+
+**Effort**: Small
+
+---
+
+### TD-021: The legacy import is duplicated in `ImportDataModal` and `ImportDataPage`
+**Status**: Open
+**Priority**: Low
+**Introduced**: when the import page was added beside the modal (surfaced by MUT-12, 2026-10-10)
+**Impact**: Every change to the legacy import (MUT-12 added the feature reconcile) is made twice; the two copies already differ slightly.
+
+**Remediation**: extract `runLegacyImport(fileData)` into `src/db/` (or `src/lib/import/`) and call it from both; one test.
+
+**Effort**: Small
+
+---
+
 ## In Progress
 
 *No items currently in progress.*

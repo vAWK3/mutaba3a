@@ -99,6 +99,24 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 | `src/features/documents/__tests__/totals.test.ts` | Unit | 20 | Full - calculations |
 | `src/features/documents/__tests__/pdf.test.ts` | Unit | 24 | Full - PDF text utilities |
 
+#### Optional areas / Advanced features (MUT-12, added 2026-10-10)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/lib/features/__tests__/features.test.ts` | Unit | 9 | **Full** - vocabulary snapshot, defaults, tolerant resolver, `withFeature`, probe map |
+| `src/lib/features/__tests__/featureDataProbes.test.ts` | Unit | 8 | **Full** - per-table probes, soft-deleted vs archived rows, vendors → expenses, insights never, db vs transaction |
+| `src/lib/features/__tests__/reconcile.test.ts` | Unit | 9 | **Full** - enabling-only, no-op when nothing new, notice merge, row creation, swallowing wrapper |
+| `src/lib/features/__tests__/useFeatures.test.tsx` | Hook | 8 | **Full** - loading → off, stored flags, full-map write + immediate effect, notice dismiss, `readFeatureFlags` |
+| `src/lib/features/__tests__/i18nParity.test.ts` | Unit | 2 | en + ar carry every `settings.features.*` key |
+| `src/db/__tests__/migration-v20.test.ts` | Migration | 5 | **Full** - real v19 → v20 open on a named DB: data → flags + notice, no row → created, nothing → untouched, fresh → all off |
+| `src/db/__tests__/settingsRepo.test.ts` (extended) | Unit | +5 | resolved defaults, pre-v20 row, persistence, notice clear, seed = defaults |
+| `src/db/__tests__/migration-safety.test.ts` (extended) | Unit | +1 | restore of a pre-v20 backup switches the area on |
+| `src/components/modals/__tests__/ImportExportModals.test.tsx` (extended) | Component | +0 (assertions) | legacy import enables projects + notice |
+| `src/components/ui/__tests__/Switch.test.tsx` | Component | 5 | **Full** - role/aria, click/Space/Enter, other keys, disabled |
+| `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx` | Component | 4 | **Full** - six switches in order, stored flags, on, off |
+| `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx` | Component | 2 | **Full** - names areas, link, clears only on dismiss (StrictMode), nothing without notice |
+
+Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
+
 #### Hook & Component Tests
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

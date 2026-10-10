@@ -38,6 +38,7 @@
 | ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 | ADR-029 | Removing a Feature's UI Never Removes Its Tables | Active | 2026-10 |
+| ADR-030 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
 
 ---
 
@@ -1039,3 +1040,67 @@ already); keeping the full 200-line engagement type to describe retained rows
 faithfully (rejected — no consumer left to keep it accurate, so it would rot
 into a lie); deleting `moneyEventRepository` with the page (rejected — three
 mounted Overview components import it).
+
+---
+
+## ADR-030: Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data
+
+**Status**: Active
+**Date**: 2026-10-10
+**Context**: MUT-12 (epic MUT-2). The 2026-10-05 intake kept invoices,
+retainers, expenses, insights, planning and projects as *optional*; the
+gating stories (MUT-13/14/15/16) need one switchboard. Brief:
+`.claude/designs/mut-12-advanced-features-toggle.md` (eng-reviewed, outside
+voice folded in).
+
+**Decision**:
+1. **One typed map on the settings row.** `Settings.features?: Partial<Record<FeatureKey, boolean>>`,
+   keys `invoices | retainers | expenses | insights | planning | projects`
+   (`src/lib/features/features.ts` `FEATURE_KEYS`). Optional on the row so
+   pre-v20 rows and imported backups resolve; `settingsRepo.get()` returns a
+   `ResolvedSettings` with every key present. Adding or removing an area is
+   one key plus its probe and i18n strings.
+2. **Off by default. Data, and only data, switches an area on by itself.**
+   The Dexie v20 upgrade and `reconcileFeaturesWithData()` turn on every area
+   that has user rows (archived rows count; soft-deleted do not; insights owns
+   no data and is never auto-enabled). Nothing ever turns an area *off*
+   automatically. The reconcile runs on upgrade, after backup restore, data
+   import, demo seeding and sync-bundle import, because each of those rewrites
+   or adds rows after the upgrade has already run.
+3. **The user is told once, by a dismissible banner, not a toast.** The
+   auto-enabled keys are stored in `Settings.featureNotice`; `FeatureNoticeBanner`
+   in `AppShell` shows them with a link to Settings and clears the notice only
+   on explicit dismiss. (The brief's first cut was a toast; the outside review
+   pointed out a 3-second toast on the first launch after an upgrade, beside
+   the welcome and migration modals, is "told" only technically.)
+4. **Two read paths, one resolver.** Components read `useFeatureEnabled(key)` /
+   `useFeatureFlags()` (TanStack cache); router `beforeLoad` guards read
+   `readFeatureFlags()` straight from the repository. Nobody reads
+   `settings.features` directly. Every path that writes features outside the
+   hook must invalidate `['settings']` or reload.
+5. **Suppliers is not a separate area.** Vendors are the expenses module's
+   table (`Expense.vendorId`), so `vendors` rows switch *expenses* on and the
+   ticket's seventh toggle is folded into expenses. MUT-14 deletes the
+   `/suppliers` view; MUT-16's "gate suppliers" item is satisfied by the
+   expenses toggle.
+6. **An auto-enable can never brick the app.** The v20 upgrade body is
+   try/caught (log and continue): there is no pre-migration backup
+   (`checkAndPrepareForMigration` backs up after Dexie opens), so a throwing
+   upgrade would fail every launch with no recovery UI.
+
+**Alternatives Considered**: seven loose booleans (rejected by the ticket);
+a `localStorage` "told" flag (rejected: the notice is a consequence of a data
+event and must survive devices and restarts with the data); auto-enabling in
+`initDatabase()` on every start (rejected: would re-enable an area the user
+turned off; the upgrade + explicit reconcile points are enabling-only *at the
+moment data arrives*); a separate `suppliers` key as the ticket listed
+(rejected, decision 5).
+
+**Consequences**: MUT-13/16 gate routes with `readFeatureFlags()` and sidebar
+entries with `useFeatureEnabled`; MUT-15 reads `useFeatureFlags()` for the
+secondary nav group and the `+ Add` menu. Projects off by default collides
+with onboarding (client → project → income), the `+ Add → Project` entry and
+the income drawer's project field; those become flag-aware in MUT-15/16 (see
+brief §12). `clearDatabase()` clearing only five tables is pre-existing debt
+the reconcile now makes visible (TD-020).
+

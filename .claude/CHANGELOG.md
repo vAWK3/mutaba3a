@@ -29,6 +29,52 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — MUT-12: per-feature Advanced toggle in Settings, off by default (Dexie v20)
+
+Brief `.claude/designs/mut-12-advanced-features-toggle.md` (+ test plan),
+eng-reviewed with an outside-voice pass; ADR-030. Jira MUT-12 under MUT-2.
+Nothing is gated yet — MUT-13/14/16 consume the switches.
+
+### Added
+- **Settings › Advanced features**: one `Switch` per optional area —
+  invoices, retainers, expenses, insights, planning, projects — all off on a
+  fresh install (`pages/settings/AdvancedFeaturesSection.tsx`).
+- **`Settings.features`** (typed partial map) and **`Settings.featureNotice`**
+  on the settings row; `settingsRepo.get()` now returns `ResolvedSettings`
+  with every key present. `src/db/defaultSettings.ts` holds the one default
+  row used by the repository and `initDatabase()`.
+- **`src/lib/features/features.ts`** (pure): `FEATURE_KEYS`, `DEFAULT_FEATURES`,
+  `resolveFeatures`, `withFeature`, data probes, `reconcileFeaturesWithData`
+  and the swallowing `reconcileFeaturesAfterDataLoad`.
+- **`src/lib/features/useFeatures.ts`**: `useFeatureEnabled`, `useFeatureFlags`,
+  `useSetFeatureEnabled`, `useFeatureNotice` (React) and `readFeatureFlags()`
+  for router `beforeLoad` guards.
+- **Dexie v20** (no schema change): the upgrade switches on every area that
+  already has data and records a notice; try/caught so it can never block
+  open. Same reconcile after backup restore, data import (both legacy import
+  flows and the profile import modes), demo seeding and sync-bundle import.
+- **`FeatureNoticeBanner`** in `AppShell`: tells the user once which areas were
+  switched on for their data, links to Settings, clears on dismiss.
+- **`Switch`** UI component (`role="switch"`, keyboard, RTL via logical
+  properties). i18n `settings.features.*` in en + ar.
+- Tests: 8 new files (features, probes, reconcile, hooks, migration v20,
+  Switch, section, banner) + extended settingsRepo, migration-safety and
+  ImportExportModals tests; i18n parity test for the new keys.
+
+### Decided
+- `suppliers` is folded into `expenses` (vendors are the expenses module's
+  table); the ticket's seventh toggle is not shipped (ADR-030 §5).
+- Archived rows count as data for auto-enable; soft-deleted rows do not;
+  projects have no soft delete so any row counts.
+
+### Technical
+- `MiniCrmDatabase` takes an optional database name so the v20 upgrade is
+  tested on a real v19 → v20 open.
+- `ISettingsRepository.get()` returns `ResolvedSettings` (a subtype; no caller
+  changes).
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 pilot decisions: download-only attachments accepted, Office Admin excluded; epic bookkeeping (MUT-25 / MAL-939)
 
 **Scope:** `.claude/DECISIONS.md` (ADR-028 + index), `.claude/designs/money-v1-m6-summaries-audit-attachments.md` §5, `.claude/designs/money-v1-handover.md` §4. No code.
