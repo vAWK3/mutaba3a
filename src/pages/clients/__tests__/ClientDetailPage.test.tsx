@@ -18,7 +18,8 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 // Advanced-feature switches (MUT-13): off unless a test turns one on
-const featureFlags: Record<string, boolean> = { invoices: false, retainers: false };
+// projects defaults to on here because the older cases below exercise the Projects tab
+const featureFlags: Record<string, boolean> = { invoices: false, retainers: false, projects: true };
 vi.mock('../../../lib/features/useFeatures', () => ({
   useFeatureEnabled: (key: string) => featureFlags[key] ?? false,
 }));
@@ -338,6 +339,7 @@ describe('ClientDetailPage', () => {
     beforeEach(() => {
       featureFlags.invoices = false;
       featureFlags.retainers = false;
+      featureFlags.projects = true;
       vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
         data: incomeRows,
         isLoading: false,
@@ -392,6 +394,53 @@ describe('ClientDetailPage', () => {
       expect(card).toHaveTextContent('clients.detail.retainers.empty');
       fireEvent.click(screen.getByText('clients.detail.retainers.new'));
       expect(mockOpenRetainerDrawer).toHaveBeenCalledWith({ mode: 'create', defaultClientId: 'client-1' });
+    });
+  });
+
+  describe('Projects area switch (MUT-16)', () => {
+    const rowsWithProject = [
+      {
+        id: 'tx-p',
+        kind: 'income',
+        status: 'paid',
+        amountMinor: 30000,
+        currency: 'USD',
+        occurredAt: '2026-10-01',
+        paidAt: '2026-10-02',
+        clientId: 'client-1',
+        projectId: 'project-1',
+        projectName: 'Website Redesign',
+        title: 'Homepage',
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ];
+
+    beforeEach(() => {
+      featureFlags.invoices = false;
+      featureFlags.retainers = false;
+      vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
+        data: rowsWithProject,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
+    });
+
+    it('hides the Projects tab and the + Project button while projects is off, but keeps project names on the work list', async () => {
+      featureFlags.projects = false;
+      renderWithProviders(<ClientDetailPage />);
+
+      expect(screen.queryByRole('button', { name: 'Projects' })).toBeNull();
+      expect(screen.queryByText('Add Project')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
+      await waitFor(() => expect(screen.getByText('Website Redesign')).toBeInTheDocument());
+      expect(screen.getByText('Website Redesign').tagName).not.toBe('A');
+    });
+
+    it('shows the Projects tab while projects is on', () => {
+      featureFlags.projects = true;
+      renderWithProviders(<ClientDetailPage />);
+      expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
     });
   });
 });

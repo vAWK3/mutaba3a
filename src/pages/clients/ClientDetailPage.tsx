@@ -28,6 +28,9 @@ export function ClientDetailPage() {
   const navigate = useNavigate();
   const invoicesEnabled = useFeatureEnabled('invoices');
   const retainersEnabled = useFeatureEnabled('retainers');
+  // Projects area (MUT-16): the tab and the "+ Project" buttons follow the
+  // switch; project names on the work list stay as text either way.
+  const projectsEnabled = useFeatureEnabled('projects');
 
   // Invoice entry points on an income row (MUT-13): only while the Invoices
   // area is on. Mirrors the legacy /transactions action.
@@ -66,6 +69,8 @@ export function ClientDetailPage() {
   const today = todayLocalISO();
 
   const [activeTab, setActiveTab] = useState<'summary' | 'projects' | 'receivables' | 'transactions'>('summary');
+  // While Projects is off the projects tab cannot be shown; fall back to Summary
+  const visibleTab = activeTab === 'projects' && !projectsEnabled ? 'summary' : activeTab;
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('all'));
   const [statusFilter, setStatusFilter] = useState<TxStatus | 'overdue' | undefined>(undefined);
   const [search, setSearch] = useState('');
@@ -215,17 +220,19 @@ export function ClientDetailPage() {
         <div className="tabs">
           <div className="tabs-list">
             <button
-              className={cn('tab', activeTab === 'summary' && 'active')}
+              className={cn('tab', visibleTab === 'summary' && 'active')}
               onClick={() => setActiveTab('summary')}
             >
               {t('clients.tabs.summary')}
             </button>
-            <button
-              className={cn('tab', activeTab === 'projects' && 'active')}
-              onClick={() => setActiveTab('projects')}
-            >
-              {t('clients.tabs.projects')}
-            </button>
+            {projectsEnabled && (
+              <button
+                className={cn('tab', visibleTab === 'projects' && 'active')}
+                onClick={() => setActiveTab('projects')}
+              >
+                {t('clients.tabs.projects')}
+              </button>
+            )}
             <button
               className={cn('tab', activeTab === 'receivables' && 'active')}
               onClick={() => setActiveTab('receivables')}
@@ -241,7 +248,7 @@ export function ClientDetailPage() {
           </div>
         </div>
 
-        {activeTab === 'summary' && (
+        {visibleTab === 'summary' && (
           <div>
             <div className="card" style={{ marginBottom: 16 }}>
               <h4 style={{ marginBottom: 12 }}>{t('clients.detail.clientDetails')}</h4>
@@ -334,17 +341,19 @@ export function ClientDetailPage() {
               <button className="btn btn-primary" onClick={handleAddIncome}>
                 {t('transactions.addTransaction')}
               </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => openProjectDrawer({ mode: 'create', defaultClientId: clientId })}
-              >
-                {t('projects.addProject')}
-              </button>
+              {projectsEnabled && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => openProjectDrawer({ mode: 'create', defaultClientId: clientId })}
+                >
+                  {t('projects.addProject')}
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {activeTab === 'projects' && (
+        {visibleTab === 'projects' && (
           <>
             {projectSummaries.length === 0 ? (
               <div className="empty-state">
