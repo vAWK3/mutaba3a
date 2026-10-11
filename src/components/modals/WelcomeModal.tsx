@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useBusinessProfiles, useCreateBusinessProfile } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { useT, useLanguage } from '../../lib/i18n';
+import { useSampleSessionStore } from '../../demo/sampleSessionStore';
 import './WelcomeModal.css';
 
 export function WelcomeModal() {
@@ -22,8 +23,12 @@ export function WelcomeModal() {
   // Don't show if BusinessProfileDrawer is open (user clicked "Set Up Now")
   const isDrawerOpen = businessProfileDrawer.isOpen;
 
+  // Don't show while the landing page's sample is being set up: the empty
+  // database is about to get sample businesses (MUT-78)
+  const isPreparingSample = useSampleSessionStore((s) => s.status === 'preparing');
+
   // Final condition - only show if truly no profiles and drawer not open
-  const shouldShow = hasNoProfiles && !isDrawerOpen;
+  const shouldShow = hasNoProfiles && !isDrawerOpen && !isPreparingSample;
 
   // Focus modal when shown
   useEffect(() => {

@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { HeroSection } from '../components/HeroSection';
+import { WEB_APP_URL } from '../../../content/download-config';
 
 const release = vi.hoisted(() => ({
   current: {
@@ -106,7 +107,7 @@ describe('HeroSection call to action', () => {
     expect(cta).toHaveAttribute('href', '/download/mac');
     expect(cta).toHaveTextContent('Download for Mac');
     expect(cta).toHaveTextContent('Apple Silicon');
-    expect(within(hero).getByRole('link', { name: /browser/i })).toHaveAttribute('href', '/app');
+    expect(within(hero).getByRole('link', { name: /browser/i })).toHaveAttribute('href', WEB_APP_URL);
   });
 
   it('offers Windows the Windows download', () => {
@@ -123,7 +124,7 @@ describe('HeroSection call to action', () => {
       release: { ...release.current.release!, hasWindowsBuild: false },
     };
     const [cta] = primaryCtas(renderHero());
-    expect(cta).toHaveAttribute('href', '/app');
+    expect(cta).toHaveAttribute('href', WEB_APP_URL);
   });
 
   it.each(['iphone', 'android', 'unknown'] as const)(
@@ -133,7 +134,7 @@ describe('HeroSection call to action', () => {
       const hero = renderHero();
       const [cta, ...rest] = primaryCtas(hero);
       expect(rest).toHaveLength(0);
-      expect(cta).toHaveAttribute('href', '/app');
+      expect(cta).toHaveAttribute('href', WEB_APP_URL);
       expect(within(hero).getByRole('link', { name: /desktop apps/i })).toHaveAttribute(
         'href',
         '#get-it'

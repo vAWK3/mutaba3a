@@ -1,3 +1,4 @@
+import type { FeatureKey } from '../types';
 /**
  * Demo/Seed Mode Types
  *
@@ -27,6 +28,8 @@ export interface DemoDataStats {
   expenseCategories: number;
   recurringRules: number;
   businessProfiles: number;
+  /** Optional areas this seed switched on (MUT-12 auto-enable). */
+  featuresEnabled: FeatureKey[];
 }
 
 // Entity prefixes for demo data identification

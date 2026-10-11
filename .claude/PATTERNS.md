@@ -1632,3 +1632,11 @@ Animate the digits on top of the final value, which is laid out with `visibility
 
 Read `prefers-reduced-motion` with `useSyncExternalStore` (`usePrefersReducedMotion`), not `useState` + `useEffect` + `setState` — the React lint rules reject synchronous `setState` in an effect, and the external-store form stays in step with the OS setting for free. Likewise, an animation hook that must "restart" on a new target derives its value (`frame.target === target ? frame.value : 0`) instead of resetting state inside the effect (`useCountUp`).
 
+### A one-shot effect keyed on a URL parameter doesn't cancel on cleanup (MUT-78)
+
+When an effect consumes a URL parameter (reads it, strips it with `replaceState`, then does async work), StrictMode's dev double-mount runs it, cleans it up, and runs it again — and the second run no longer sees the parameter. A `cancelled` flag set in the cleanup then strands the work (the sample stayed "preparing" for good). If the async work only writes to global stores, let it finish; don't cancel. Pin it with a `renderHook` test wrapped in `<StrictMode>` (`useVisitorSample.test.tsx`).
+
+### "Added during the session" is `createdAt >= startedAt` on a database that started empty (MUT-78)
+
+To undo a session without tracking every write, record when it started, and only start it on a database with none of the person's data. Leaving then removes the session's seeded rows by prefix and everything else by `createdAt >= startedAt`; imported or restored rows keep their older `createdAt` and survive (ADR-042).
+

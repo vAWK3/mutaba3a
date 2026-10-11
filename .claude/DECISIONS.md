@@ -50,6 +50,7 @@
 | ADR-039 | Payment Records Own an Entry's Payment State; an Edit Never Rewrites It | Active | 2026-10 |
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
+| ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
 
 ---
 
@@ -1888,4 +1889,23 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 **Consequences**: Adding a currency without naming it on the landing page fails to compile. A release without a platform's installer changes the page by itself. Adding pricing later is a new decision, not a copy edit.
 
 **Alternatives Considered**: keep $49 and build checkout (rejected for now: a separate ticket, and the page would stay false meanwhile); no price talk at all (rejected: "free during early access" sets the expectation honestly).
+
+---
+
+## ADR-042: A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-78 (epic MUT-74), brief L8, approved by Basel 2026-10-11. The landing page sent visitors to the internal demo tool (`/app?demo=1`): a Welcome dialog over an Activate Demo Mode dialog, then an empty Clients list. The demo tool also switches optional areas on and announces them as "your existing data", and leaves its data in place until someone resets it.
+
+**Decision**:
+1. **Entry**: the landing page's web-app link is `/app/clients?sample=1`. `enterVisitorSample()` seeds the sample (the same generator as the internal demo, `announceFeatures: false`) **only when the database has none of the person's own clients, projects, entries, expenses or documents**; an empty business profile (e.g. from "Skip for now") doesn't count. Otherwise it changes nothing and the app opens on their data.
+2. **Session**: a `localStorage` record (`mutaba3a-sample-session`) holds the sample business it opened on, the optional areas the seed switched on, and `startedAt`. A second visit with a live session reuses the sample; a session whose sample rows are gone is dropped and the sample seeds again.
+3. **Opening**: the sample business with the most clients owing is selected; no dialog opens (the Welcome dialog waits while the sample is prepared); one in-flow bar says it is sample data.
+4. **Leaving** ("Start with your own"): remove every `demo_` row **and every row created after `startedAt`** in the session tables (business profiles, clients, projects, entries, payment records, expenses, documents, retainers) — the database held none of the person's data when the session began, so anything newer was added while looking around. Rows with an older `createdAt` (a restored backup) survive. Switch off exactly the areas the sample switched on. If the visitor added anything, the bar asks first and names the count; otherwise it leaves in one tap. Then the first run.
+5. The internal demo (`?demo=1`) keeps its own behaviour.
+
+**Consequences**: The sample can never mix with real data on entry, and leaving restores a first-run database. A visitor who types real data into the sample and then chooses "Start with your own" is warned that it goes too. Importing a backup during a session keeps the backup's rows on leaving.
+
+**Alternatives Considered**: start empty with the sample optional (rejected by Basel: an empty app doesn't show the value the page just promised); keep the demo flow and fix its bugs (rejected: an internal tool's confirm dialog as a visitor's first sight); delete only `demo_` rows on leaving (rejected: rows the visitor added to a sample business would be orphaned on a profile that no longer exists).
 

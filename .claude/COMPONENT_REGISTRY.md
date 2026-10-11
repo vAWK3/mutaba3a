@@ -224,6 +224,14 @@ Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Payments").
 
 ---
 
+### SampleDataBar
+**Location**: `src/components/ui/SampleDataBar.tsx`
+**Purpose**: The visitor sample's one line (MUT-78, ADR-042): "You're looking at sample data. · Start with your own ›", shown while `useSampleSessionStore().status === 'active'`. Leaves through `useLeaveSample()`; asks first (with a CLDR plural count) only when `countSessionAdditions()` finds rows the visitor added. Rendered at the top of `<main>` in `AppShell`, in flow, so it can never cover a drawer.
+
+Tests: `src/components/ui/__tests__/SampleDataBar.test.tsx`.
+
+---
+
 ### OnboardingOverlay
 **Location**: `src/components/onboarding/OnboardingOverlay.tsx`
 **Purpose**: First-run guided flow over `onboardingStore` (client → project → income). While the Projects area is off (MUT-16) an effect completes the project step with no entity, so the flow is client → income; the store's order and completion rule are unchanged. The effect waits for `useFeaturesLoaded()` so a loading settings row is not read as "off". The drawers advance the step by calling `completeStep` on the store directly.
@@ -1238,6 +1246,14 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |
 
 ---
+
+## Visitor sample (`src/demo`) — MUT-78
+
+- `visitorSample.ts`: `enterVisitorSample()` (seed only into a database without the person's own data; reuse a live session), `leaveVisitorSample()` (remove `demo_` rows and rows created during the session; switch the sample's areas back off), `countSessionAdditions()`.
+- `sampleSession.ts`: the `localStorage` session record and `SAMPLE_QUERY_PARAM`; no database imports, so UI tests can mock `visitorSample` alone.
+- `sampleSessionStore.ts`: `none | preparing | active` for the UI.
+- `useVisitorSample.ts`: `useVisitorSampleEntry()` (mounted once in `AppShell`; StrictMode-safe) and `useLeaveSample()`.
+- `seedData`: `seedDemoData({ announceFeatures })` returns `featuresEnabled`; `createDemoProfiles({ existingDefault })`; `dates.ts` `notAfter()`.
 
 ## Data access (`src/db`) — the seam every consumer goes through
 

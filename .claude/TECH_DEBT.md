@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-051: A first run stacks two first-run surfaces
+**Status**: Open
+**Added**: 2026-10-12 (MUT-78)
+**Priority**: Low
+**Impact**: With no business profile, Home renders its "Get Started" onboarding card and `WelcomeModal` opens on top of it, so a first run shows two competing first steps. Seen after "Start with your own" (MUT-78), but true of any fresh install.
+**Remediation**: one first-run surface: either the Welcome dialog creates/skips the profile and then the card guides, or the card absorbs the profile step. Out of MUT-74's scope.
+
 ### TD-050: The document page's payment-request actions fail silently
 **Status**: Open
 **Added**: 2026-10-12 (MUT-5 final pass)

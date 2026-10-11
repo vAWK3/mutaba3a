@@ -7,6 +7,8 @@
 
 import { db } from '../../db/database';
 import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
+import { settingsRepo } from '../../db/repository';
+import type { FeatureKey } from '../../types';
 import type { DemoDataStats } from '../types';
 import { DEMO_ID_PREFIX } from '../constants';
 
@@ -76,16 +78,37 @@ export async function removeDemoData(): Promise<void> {
   console.log('Demo data removed successfully');
 }
 
+export interface SeedDemoOptions {
+  /**
+   * Show the "Switched on for your existing data" notice for the areas the
+   * sample switches on. True for the internal demo; false for a visitor, for
+   * whom it isn't their data (MUT-78).
+   */
+  announceFeatures?: boolean;
+}
+
+/** Drop `keys` from the pending auto-enable notice, keeping any others. */
+async function withdrawFeatureNotice(keys: FeatureKey[]): Promise<void> {
+  const settings = await settingsRepo.get();
+  const remaining = (settings.featureNotice ?? []).filter((key) => !keys.includes(key));
+  await settingsRepo.update({ featureNotice: remaining.length > 0 ? remaining : undefined });
+}
+
 /**
  * Seed the database with demo data
  * Idempotent - removes existing demo data first
  */
-export async function seedDemoData(): Promise<DemoDataStats> {
+export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions = {}): Promise<DemoDataStats> {
   // First, remove any existing demo data for idempotency
   await removeDemoData();
 
+  // Never add a second default next to one the person already has.
+  const existingDefault = !!(await db.businessProfiles
+    .filter((p) => !!p.isDefault && !p.archivedAt && !p.id.startsWith(DEMO_ID_PREFIX))
+    .first());
+
   // Generate all demo data (order matters for dependencies)
-  const profiles = createDemoProfiles();
+  const profiles = createDemoProfiles({ existingDefault });
   const clients = createDemoClients();
   const projects = createDemoProjects();
   const categories = createDemoCategories();
@@ -134,7 +157,10 @@ export async function seedDemoData(): Promise<DemoDataStats> {
 
   // The demo exercises invoices, retainers, expenses and projects: switch
   // those areas on so a fresh install does not show a mostly empty app (MUT-12).
-  await reconcileFeaturesAfterDataLoad('demo', db);
+  const featuresEnabled = await reconcileFeaturesAfterDataLoad('demo', db);
+  if (!announceFeatures && featuresEnabled.length > 0) {
+    await withdrawFeatureNotice(featuresEnabled);
+  }
 
   console.log(`Demo data seeded successfully: ${profiles.length} profiles, ${clients.length} clients, ${projects.length} projects, ${transactions.length} transactions`);
 
@@ -149,6 +175,7 @@ export async function seedDemoData(): Promise<DemoDataStats> {
     expenses: expenses.length,
     expenseCategories: expenseCategories.length,
     recurringRules: recurringRules.length,
+    featuresEnabled,
   };
 }
 

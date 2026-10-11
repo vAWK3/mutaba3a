@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-78: "Open the web app" lands straight in sample data, with no dialogs
+
+**Scope:**
+- `src/demo/visitorSample.ts` (new: `enterVisitorSample`, `leaveVisitorSample`, `countSessionAdditions`), `sampleSession.ts` (new: the session record), `sampleSessionStore.ts` (new), `useVisitorSample.ts` (new: `useVisitorSampleEntry`, `useLeaveSample`)
+- `src/demo/seedData/index.ts` (`seedDemoData({ announceFeatures })`, returns `featuresEnabled`, never a second default), `profile.ts` (`createDemoProfiles({ existingDefault })`), `transactions.ts` + `expenses.ts` (dates capped at today via `dates.ts` `notAfter`), `src/demo/types.ts`
+- `src/components/ui/SampleDataBar.tsx` + `.css` (new); `src/components/layout/AppShell.tsx` (entry hook, bar, "Setting up the sample…"); `src/components/modals/WelcomeModal.tsx` (held back while preparing)
+- `src/content/download-config.ts` (`WEB_APP_URL` → `/app/clients?sample=1`)
+- `src/lib/i18n/translations/{en,ar}.json` (`sample.*`, Arabic with all six plural forms)
+- Tests: `src/demo/__tests__/{visitorSample,seedDates,useVisitorSample}.test.*`, `SampleDataBar.test.tsx`, `WelcomeModal.sample.test.tsx`
+- ADR-042; TD-051; test plan `.claude/designs/mut-78-sample-entry-tests.md`
+
+### Changed
+- **The landing page's web-app link opens a sample business's Clients list in one tap** — no Welcome dialog over a demo confirmation, no "DEMO MODE" bar, no "Switched on for your existing data" notice. Before, the link opened the internal demo tool (`?demo=1`): two stacked dialogs, then an empty Clients list because "Default Profile" stayed selected while the sample lived in three other profiles.
+- **One quiet line while looking around**: "You're looking at sample data. · Start with your own ›", in the content flow (it cannot cover a drawer). "Start with your own" removes the sample, anything added while looking around, and the optional areas the sample switched on, then lands on the first run. It asks first only when the visitor added things ("This also removes the 2 things you added…").
+- The sample goes only into a database without the person's own data; otherwise the link just opens their app. A second visit reuses the sample instead of seeding again.
+- The internal demo (`?demo=1`, freeze time, reset) is unchanged.
+
+### Fixed
+- The demo seed wrote payments and expenses dated after today (a "Last payment" of Oct 19 on Oct 11), against ADR-038. Both generators cap at today.
+- Seeding next to an existing default profile made two defaults; the sample now becomes the default only when nothing else is.
+
 ## [Unreleased] - 2026-10-11 — MUT-5: the income entry is the work record
 
 **Scope:**
