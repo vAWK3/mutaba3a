@@ -132,6 +132,55 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(screen.queryByText('Receipts')).not.toBeInTheDocument();
   });
 
+  it('PATCHes on edit with no currency field and null (not omitted) for a cleared field', async () => {
+    // UpdateExpenseRequest has no `currency` at all (the API never changes it
+    // on a PATCH) and its optional fields are `string | null`, where `null`
+    // clears a field and omission leaves it unchanged — sending `undefined`
+    // for a field the user cleared would silently fail to clear it.
+    const user = userEvent.setup();
+    let patchBody: Record<string, unknown> | null = null;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/expenses/e1': () =>
+        ok({
+          id: 'e1', occurredOn: '2026-09-01', amount: '99.99', currency: 'ILS', title: 'Hosting', vendor: 'ACME',
+          categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', version: 3,
+          createdAt: '', updatedAt: '', receipts: [],
+        }),
+    });
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input), 'http://portal.test');
+      const method = (init.method ?? 'GET').toUpperCase();
+      if (method === 'GET' && url.pathname === '/v1/expense-categories') return ok(EMPTY_CATEGORIES);
+      if (method === 'GET' && (url.pathname === '/v1/customers' || url.pathname === '/v1/projects')) return ok(EMPTY_DIRECTORY);
+      if (method === 'GET' && url.pathname === '/v1/expenses/e1') {
+        return ok({
+          id: 'e1', occurredOn: '2026-09-01', amount: '99.99', currency: 'ILS', title: 'Hosting', vendor: 'ACME',
+          categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', version: 3,
+          createdAt: '', updatedAt: '', receipts: [],
+        });
+      }
+      if (method === 'PATCH' && url.pathname === '/v1/expenses/e1') {
+        patchBody = JSON.parse(String(init.body));
+        return ok({ id: 'e1' });
+      }
+      return fail(404, 'NOT_FOUND');
+    });
+
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1' });
+    const vendorInput = await screen.findByDisplayValue('ACME');
+    await user.clear(vendorInput);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(patchBody).not.toBeNull();
+    expect(patchBody).not.toHaveProperty('currency');
+    expect((patchBody as Record<string, unknown>).vendor).toBeNull();
+    expect((patchBody as Record<string, unknown>).title).toBe('Hosting');
+  });
+
   it('shows a field-level error for an archived category and does not close the drawer', async () => {
     const user = userEvent.setup();
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {

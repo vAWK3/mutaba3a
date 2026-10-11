@@ -71,6 +71,20 @@ describe('ExpensesList', () => {
     expect(locationOf(router)).toContain('newExpense=true');
   });
 
+  it('does not refetch the list when the drawer opens or closes (cache key excludes drawer state)', async () => {
+    const { user, api } = portal(`/p/${ORG_A}/expenses`, { 'GET /v1/expenses': () => ok(page([expense()])) });
+    await screen.findByText('Office supplies');
+    const before = api.count('GET /v1/expenses');
+    expect(before).toBeGreaterThan(0);
+
+    await user.click(screen.getAllByRole('button', { name: 'Record expense' })[0]);
+    await screen.findByText('Record expense', { selector: '.drawer-title' });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByText('Record expense', { selector: '.drawer-title' })).not.toBeInTheDocument());
+
+    expect(api.count('GET /v1/expenses')).toBe(before);
+  });
+
   it('opens the drawer in edit mode by clicking a row, with ?expense=<id>', async () => {
     const { user, router } = portal(`/p/${ORG_A}/expenses`, { 'GET /v1/expenses': () => ok(page([expense()])), 'GET /v1/expenses/e1': () => ok(expense({ receipts: [] })) });
     const table = await screen.findByRole('table', { name: 'Expenses' });

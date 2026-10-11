@@ -20,16 +20,21 @@ const PAGE_LIMIT = 50;
 const STALE_MS = 30_000;
 
 export function useExpenses(profileId: string, filters: ExpenseFilters) {
-  return useCursorList<Expense>(profileKey(profileId, 'expenses', filters), (cursor) =>
-    api.expenses(profileId, {
-      limit: PAGE_LIMIT,
-      cursor,
-      currency: filters.currency,
-      categoryId: filters.categoryId,
-      customerId: filters.customerId,
-      from: filters.from,
-      to: filters.to,
-    }),
+  // Keyed on exactly these five fields, not the caller's `filters` object as a
+  // whole: ExpensesList passes its full ExpensesPageSearch (list filters *and*
+  // the drawer's ?expense=/?newExpense= state), and keying on that would make
+  // opening or closing the drawer look like a filter change — a fresh
+  // useInfiniteQuery entry with no cached data, so a visible reload of the
+  // list underneath for a value this call never even sends to the server.
+  const key = {
+    currency: filters.currency,
+    categoryId: filters.categoryId,
+    customerId: filters.customerId,
+    from: filters.from,
+    to: filters.to,
+  };
+  return useCursorList<Expense>(profileKey(profileId, 'expenses', key), (cursor) =>
+    api.expenses(profileId, { limit: PAGE_LIMIT, cursor, ...key }),
   );
 }
 

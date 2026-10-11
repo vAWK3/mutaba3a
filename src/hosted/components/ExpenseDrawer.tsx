@@ -117,23 +117,37 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose }: ExpenseDr
   };
 
   const onSubmit = async (values: HostedExpenseFormValues) => {
-    const body: CreateExpenseRequest | UpdateExpenseRequest = {
-      occurredOn: values.occurredAt,
-      amount: values.amount,
-      currency: values.currency,
-      title: values.title || undefined,
-      vendor: values.vendor || undefined,
-      categoryId: values.categoryId || undefined,
-      customerId: values.clientId || undefined,
-      projectId: values.projectId || undefined,
-      notes: values.notes || undefined,
-    };
-
     try {
       if (mode === 'edit' && existingExpense) {
+        // UpdateExpenseRequest has no `currency` field at all — the API never
+        // changes it on a PATCH — and its optional fields are `string | null`,
+        // where `null` clears the field and omission leaves it unchanged. Both
+        // differ from CreateExpenseRequest, so this body is built separately
+        // rather than sharing one object coerced across the two shapes.
+        const body: UpdateExpenseRequest = {
+          occurredOn: values.occurredAt,
+          amount: values.amount,
+          title: values.title || null,
+          vendor: values.vendor || null,
+          categoryId: values.categoryId || null,
+          customerId: values.clientId || null,
+          projectId: values.projectId || null,
+          notes: values.notes || null,
+        };
         await updateMutation.mutateAsync({ expenseId: existingExpense.id, body, version: String(existingExpense.version) });
       } else {
-        await createMutation.mutateAsync(body as CreateExpenseRequest);
+        const body: CreateExpenseRequest = {
+          occurredOn: values.occurredAt,
+          amount: values.amount,
+          currency: values.currency,
+          title: values.title || undefined,
+          vendor: values.vendor || undefined,
+          categoryId: values.categoryId || undefined,
+          customerId: values.clientId || undefined,
+          projectId: values.projectId || undefined,
+          notes: values.notes || undefined,
+        };
+        await createMutation.mutateAsync(body);
       }
       onClose();
     } catch (error) {
