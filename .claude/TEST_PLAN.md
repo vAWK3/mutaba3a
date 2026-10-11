@@ -803,7 +803,9 @@ Plan: `.claude/designs/mut-37-operator-accounts-tests.md`. Written red first.
 | No self-registration | `src/__tests__/no-self-registration.test.ts` | router and published contract: no path outside `/admin/` matches signup / register / invite / forgot / reset (non-vacuous: >50 paths inspected) |
 | CLI | `src/scripts/__tests__/users-cli.test.ts` | create / grant / revoke / rotate / disable / enable against the in-process app; password printed exactly once; no token → non-zero, no secret; server error codes surfaced; unknown subcommand → usage |
 
-**Baseline after MUT-37 (2026-10-11)**: server 363 passed, 8 skipped (Postgres
-suites skip without `MUTABA3A_TEST_DATABASE_URL`). One pre-existing flake seen
+**Baseline after MUT-37 (2026-10-11)**: server 363 passed, 8 skipped without a
+database; **410 passed, 0 skipped** with `npm run test:db` against an isolated
+`mutaba3a_test_mut34` database (users contract green on Postgres). Root app
+unchanged: 2,149 passed, 5 skipped. One pre-existing flake seen
 under full-suite load: `routes-m6` "lists the organization's events by entity"
 (TD-032), never reproduced in isolation (0/20).
