@@ -1487,3 +1487,51 @@ updater pubkey to ADR-031's canonical key).
 
 **When to use**: any committed file whose contents a build, a signer, a remote
 validator or an installed client depends on verbatim.
+
+---
+
+## Serving patterns — added 2026-10-11 (MUT-45)
+
+### Optional-feature dependency wiring: `{ ... } | null`, not a second app factory
+
+**Purpose**: `createApp()` already had this shape for attachments
+(`attachments?: AttachmentStorage | null` — absent/null means the routes
+answer 503, not that they don't exist) and sessions. The portal follows it:
+`portal?: { distDir: string } | null`. When unset, every existing route and
+every existing test is byte-for-byte unaffected — no second code path to
+maintain, no flag threaded through callers, no behavior change for the ~60
+test files that never pass `portal` at all.
+
+**Instances**: `server/src/app.ts` (`AppDependencies.portal`), wired from
+`server/src/index.ts` via `config.PORTAL_DIST_DIR` (optional, Dockerfile-set).
+
+**Rules**:
+- Register the optional feature's routes/middleware *after* every required
+  route, guarded by a single `if (deps.optionalThing) { ... }` block — never
+  scatter `if` checks through the rest of `createApp()`.
+- The dependency's shape should make "disabled" the natural default (`null`
+  or `undefined`), not a boolean flag plus a separately-optional config value.
+- A fixture-based test (temp dir, temp store, etc.) proves the enabled path;
+  the disabled path is already proven by every other test file in the suite
+  not regressing.
+
+**When to use**: a feature that an operator may or may not configure for a
+given deployment (attachments bucket, portal build, future: a search index,
+an email sender), where "not configured" must be indistinguishable from
+"before this feature existed."
+
+### CSP `connect-src` must be audited against every non-house `fetch`, not just the obvious ones
+
+**Purpose**: MUT-44's receipt upload bypasses the shared API client on purpose
+(`putToSignedUrl`, a bare cross-origin `fetch` to a GCS signed URL) — exactly
+the kind of call a CSP review can miss if it only looks at the "normal" data
+layer (`api/client.ts`'s `request()`, which is same-origin and already
+covered by `'self'`). The MUT-44 amendment to ADR-037 flagged this by name;
+MUT-45's CSP (`server/src/app.ts`) adds `https://storage.googleapis.com` to
+`connect-src` to close it, verified against `@google-cloud/storage`'s actual
+`PATH_STYLED_HOST` constant rather than assumed.
+
+**Rule**: before locking a CSP, grep the frontend for every `fetch(`/`XHR`/
+`WebSocket` call outside the house HTTP client, and name the host each one
+actually hits. A CSP written from the data-layer's abstraction instead of the
+network tab will miss exactly this class of call.
