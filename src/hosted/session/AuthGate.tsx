@@ -49,7 +49,8 @@ function RedirectToSignIn() {
   useEffect(() => {
     if (sent.current) return;
     sent.current = true;
-    void navigate({ to: '/sign-in', search: { next: router.state.location.href }, replace: true });
+    const next = router.state.location.href;
+    void navigate({ to: '/sign-in', search: next === '/' ? {} : { next }, replace: true });
   }, [navigate, router]);
   return null;
 }

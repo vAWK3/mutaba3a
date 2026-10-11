@@ -29,8 +29,8 @@ export function SessionBridge() {
   useEffect(
     () =>
       onSignedOutElsewhere(() => {
-        // This tab may be the one that signed out (it hears its own announcement) or already be on sign-in.
-        if (router.state.location.pathname === '/sign-in') return void queryClient.clear();
+        // On sign-in there is nothing to clear: whatever brought this tab here already ended its session.
+        if (router.state.location.pathname === '/sign-in') return;
         endSession(queryClient, router, { reason: 'signed_out' });
       }),
     [queryClient, router],

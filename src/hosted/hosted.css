@@ -337,7 +337,7 @@
 .hp-table-wrapper .table .hp-num, .hp-subtable .hp-num { text-align: end; }
 .hp-detail-row > td { background: var(--surface-2); }
 .hp-subtable { width: 100%; }
-.hp-expander { display: inline-flex; align-items: center; gap: var(--space-1-5); }
+.hp-expander { display: inline-flex; align-items: center; gap: var(--space-1-5); white-space: nowrap; }
 .hp-expand {
   border: 0;
   background: transparent;

@@ -78,6 +78,13 @@ describe('S3 sign in', () => {
     expect(screen.getByText("Can't sign in? Ask the person who set up your account for a new password.")).toBeInTheDocument();
   });
 
+  it('adds no next when the person was headed to the root', async () => {
+    stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
+    const { router } = renderPortal('/');
+    await screen.findByLabelText('Email');
+    expect(locationOf(router)).toBe('/sign-in');
+  });
+
   it('toggles password visibility with an aria-pressed button', async () => {
     stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
     const { user } = renderPortal('/sign-in');
@@ -280,6 +287,10 @@ describe('S13 / E2 sign out', () => {
     expect(locationOf(router)).toBe('/sign-in?reason=signed_out');
     expect(queryClient.getQueryCache().findAll({ queryKey: ['p'] })).toHaveLength(0);
     await waitFor(() => expect(received).toEqual(['signed_out']));
+    // This tab hears its own announcement too; the sign-in form must survive it (not fall back to the session check).
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await screen.findByLabelText('Email')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
     listener.close();
   });
 });
@@ -320,6 +331,22 @@ describe('E3 signed out in another tab', () => {
     expect(await screen.findByText("You've signed out.")).toBeInTheDocument();
     expect(locationOf(router)).toBe('/sign-in?reason=signed_out');
     other.close();
+  });
+});
+
+describe('E3 on the sign-in page', () => {
+  it('leaves the form alone when a signed_out announcement arrives (the signing-out tab hears its own)', async () => {
+    stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
+    const { user } = renderPortal('/sign-in?reason=signed_out');
+    await screen.findByLabelText('Email');
+    const announcer = new BroadcastChannel(SESSION_CHANNEL);
+    announcer.postMessage('signed_out');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Any re-render after the announcement (here a language switch) must still find a settled session check.
+    await user.click(screen.getByRole('button', { name: 'عربي' }));
+    expect(await screen.findByLabelText('البريد الإلكتروني', {}, { timeout: 1500 })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+    announcer.close();
   });
 });
 

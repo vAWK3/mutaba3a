@@ -10,12 +10,21 @@ const HOSTED_DEV_PORT = 5175;
 
 /**
  * The server's SPA fallback serves `index.html` (hosted-portal.md §9), while the
- * source entry is `hosted.html` so it can sit beside the app's `index.html`.
+ * source entry is `hosted.html` so it can sit beside the app's `index.html`. In
+ * dev, every page request gets `hosted.html` too, so `vite --mode hosted` never
+ * serves the local app (and its IndexedDB) from the portal's origin.
  */
 function emitHostedEntryAsIndex(): Plugin {
   return {
     name: "mutaba3a:hosted-index",
     enforce: "post",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const isPage = req.method === "GET" && (req.headers.accept ?? "").includes("text/html");
+        if (isPage && !req.url?.startsWith("/v1/")) req.url = "/hosted.html";
+        next();
+      });
+    },
     generateBundle(_options, bundle) {
       const entry = bundle["hosted.html"];
       if (entry?.type !== "asset") return;
