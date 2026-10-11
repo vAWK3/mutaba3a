@@ -14,7 +14,7 @@ export function GetItSection() {
   const windowsAvailable = release?.hasWindowsBuild !== false;
 
   return (
-    <section data-part="get-it" aria-labelledby="get-it-title" className="landing-section landing-get-it">
+    <section id="get-it" data-part="get-it" aria-labelledby="get-it-title" className="landing-section landing-get-it">
       <div className="landing-container">
         <h2 id="get-it-title" className="landing-section-headline">
           {t('landing.getIt.title')}

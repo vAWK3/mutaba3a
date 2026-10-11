@@ -4,23 +4,17 @@ import { Card } from '../../components/ui/Card';
 import { Toast } from '../../components/ui/Toast';
 import { useLatestRelease } from '../../hooks/useLatestRelease';
 import { DOWNLOAD_URLS, PLATFORM_CONFIG } from '../../content/download-config';
+import { currentDevice } from '../../lib/platform';
 import { useT } from '../../lib/i18n';
 import './DownloadPage.css';
 
 type OS = 'mac' | 'windows' | 'unknown';
 
 
+/** Mac or Windows get their own card first; everything else sees both equally. */
 function detectOS(): OS {
-  const ua = navigator.userAgent.toLowerCase();
-  const platform = (navigator.platform?.toLowerCase() || '');
-
-  if (platform.includes('mac') || ua.includes('macintosh')) {
-    return 'mac';
-  }
-  if (platform.includes('win') || ua.includes('windows')) {
-    return 'windows';
-  }
-  return 'unknown';
+  const device = currentDevice();
+  return device === 'mac' || device === 'windows' ? device : 'unknown';
 }
 
 interface PlatformCardProps {

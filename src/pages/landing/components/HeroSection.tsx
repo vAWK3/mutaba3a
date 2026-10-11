@@ -1,13 +1,41 @@
+import { useMemo, type ComponentType } from 'react';
 import { useT } from '../../../lib/i18n';
 import { useLatestRelease } from '../../../hooks/useLatestRelease';
 import { DOWNLOAD_URLS, WEB_APP_URL } from '../../../content/download-config';
-import { AppleIcon, WindowsIcon } from './PlatformIcons';
+import { currentDevice } from '../../../lib/platform';
+import { chooseHeroCta, secondaryHeroLink, type HeroCta } from '../heroCta';
+import { AppleIcon, BrowserIcon, WindowsIcon } from './PlatformIcons';
+import { ClientsListMock } from './mocks';
 import './HeroSection.css';
+
+const CTA: Record<HeroCta, { href: string; Icon: ComponentType; label: string; hint: string }> = {
+  mac: {
+    href: DOWNLOAD_URLS.mac,
+    Icon: AppleIcon,
+    label: 'landing.hero.ctaMac',
+    hint: 'landing.hero.ctaMacHint',
+  },
+  windows: {
+    href: DOWNLOAD_URLS.windowsMsi,
+    Icon: WindowsIcon,
+    label: 'landing.hero.ctaWindows',
+    hint: 'landing.hero.ctaWindowsHint',
+  },
+  web: {
+    href: WEB_APP_URL,
+    Icon: BrowserIcon,
+    label: 'landing.hero.ctaWeb',
+    hint: 'landing.hero.ctaWebHint',
+  },
+};
 
 export function HeroSection() {
   const t = useT();
   const { release } = useLatestRelease();
-  const windowsAvailable = release?.hasWindowsBuild !== false;
+  const device = useMemo(() => currentDevice(), []);
+  const cta = chooseHeroCta(device, release?.hasWindowsBuild !== false);
+  const { href, Icon, label, hint } = CTA[cta];
+  const alternative = secondaryHeroLink(cta);
 
   return (
     <section data-part="hero" aria-labelledby="hero-title" className="landing-section landing-hero">
@@ -20,42 +48,28 @@ export function HeroSection() {
             </h1>
             <p className="landing-subheadline-large">{t('landing.hero.subheadline')}</p>
 
-            <div className="hero-download-ctas">
-              <a href={DOWNLOAD_URLS.mac} className="hero-download-btn hero-download-btn--mac">
-                <AppleIcon />
-                <span className="hero-download-btn-text">
-                  <span className="hero-download-btn-label">{t('landing.hero.downloadMac')}</span>
-                  <span className="hero-download-btn-hint">{t('landing.hero.appleSilicon')}</span>
+            <div className="hero-cta">
+              <a href={href} className="hero-cta-primary">
+                <Icon />
+                <span className="hero-cta-text">
+                  <span className="hero-cta-label">{t(label)}</span>
+                  <span className="hero-cta-hint">{t(hint)}</span>
                 </span>
               </a>
-              {windowsAvailable && (
-                <a href={DOWNLOAD_URLS.windowsMsi} className="hero-download-btn hero-download-btn--windows">
-                  <WindowsIcon />
-                  <span className="hero-download-btn-text">
-                    <span className="hero-download-btn-label">
-                      {t('landing.hero.downloadWindows')}
-                    </span>
-                    {release && <span className="hero-download-btn-hint">{release.version}</span>}
-                  </span>
+              {alternative === 'web' ? (
+                <a href={WEB_APP_URL} className="hero-cta-alt">
+                  {t('landing.hero.altWeb')}
+                </a>
+              ) : (
+                <a href="#get-it" className="hero-cta-alt">
+                  {t('landing.hero.altDesktop')}
                 </a>
               )}
             </div>
-
-            <p className="hero-alt-link">
-              <a href={WEB_APP_URL} className="hero-web-link">
-                {t('landing.hero.webAppLink')}
-              </a>
-            </p>
           </div>
 
-          <div className="hero-preview">
-            <div className="hero-preview-frame">
-              <img
-                src="/assets/landing/hero-dashboard.png"
-                alt={t('landing.hero.previewAlt')}
-                className="hero-preview-img"
-              />
-            </div>
+          <div className="hero-visual">
+            <ClientsListMock />
           </div>
         </div>
       </div>

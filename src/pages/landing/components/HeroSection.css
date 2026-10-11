@@ -1,31 +1,33 @@
-/* Hero Section - Privacy-first, download-focused */
+/* Hero: the two-beat line, one button matched to the device, and the Clients list. */
 .landing-hero {
-  padding-top: 120px;
-  padding-bottom: 80px;
+  padding-top: 128px;
+  padding-bottom: 96px;
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%);
   overflow: hidden;
 }
 
 .hero-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 64px;
+  /* the copy column is wider so each beat of the headline stays on one line */
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-12);
   align-items: center;
 }
 
 .hero-content {
-  max-width: 560px;
+  max-width: 600px;
 }
 
-/* Headlines */
+/* Headline */
 .landing-headline-large {
   font-family: var(--font-heading);
-  font-size: clamp(32px, 5vw, 48px);
+  font-size: clamp(2.25rem, 4.6vw, 3.5rem);
   font-weight: var(--weight-bold);
-  line-height: 1.15;
+  line-height: 1.04;
   letter-spacing: -0.03em;
-  margin: 0 0 20px 0;
+  margin: 0 0 var(--space-6);
   color: var(--text);
+  text-wrap: balance;
 }
 
 .hero-headline-line {
@@ -41,119 +43,97 @@
 }
 
 .landing-subheadline-large {
-  font-size: clamp(16px, 2vw, 20px);
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
   color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0 0 28px 0;
-  max-width: 480px;
+  line-height: var(--leading-relaxed);
+  margin: 0 0 var(--space-8);
+  max-width: 34rem;
 }
 
-/* Download CTAs */
-.hero-download-ctas {
+/* One filled button, one text link */
+.hero-cta {
   display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
 }
 
-.hero-download-btn {
-  display: flex;
+.hero-cta-primary {
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 24px;
-  border-radius: var(--radius-lg);
-  text-decoration: none;
-  transition: all 0.2s ease;
-  min-width: 180px;
-}
-
-.hero-download-btn--mac {
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6) var(--space-3) var(--space-5);
+  border-radius: var(--radius-xl);
   background: var(--text);
   color: var(--bg);
+  text-decoration: none;
+  transition: transform 0.1s ease-out, opacity 0.15s ease;
 }
 
-.hero-download-btn--mac:hover {
-  background: #fff;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(231, 238, 249, 0.2);
+.hero-cta-primary:hover {
+  opacity: 0.88;
 }
 
-.hero-download-btn--windows {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
+.hero-cta-primary:active {
+  transform: scale(0.97);
 }
 
-.hero-download-btn--windows:hover {
-  background: var(--surface-hover);
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
+.hero-cta-primary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
-.hero-download-btn svg {
+.hero-cta-primary svg {
   flex-shrink: 0;
 }
 
-.hero-download-btn-text {
+.hero-cta-text {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
 }
 
-.hero-download-btn-label {
-  font-size: var(--text-md);
+.hero-cta-label {
+  font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
 }
 
-.hero-download-btn-hint {
-  font-size: var(--text-xs);
-  opacity: 0.7;
-}
-
-/* Alt Link */
-.hero-alt-link {
+.hero-cta-hint {
   font-size: var(--text-sm);
-  color: var(--muted);
-  margin: 0;
+  opacity: 0.72;
 }
 
-.hero-web-link {
+.hero-cta-alt {
   color: var(--accent);
-  text-decoration: none;
+  font-size: var(--text-md);
   font-weight: var(--weight-medium);
+  text-decoration: none;
 }
 
-.hero-web-link:hover {
+.hero-cta-alt::after {
+  content: ' ›';
+}
+
+.hero-cta-alt:hover {
   text-decoration: underline;
 }
 
-/* Preview */
-.hero-preview {
-  position: relative;
+/* The Clients list */
+.hero-visual {
+  display: flex;
+  justify-content: center;
 }
 
-.hero-preview-frame {
-  position: relative;
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  box-shadow:
-    0 0 0 1px var(--border-subtle),
-    0 24px 80px rgba(0, 0, 0, 0.4),
-    0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.hero-preview-img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius-lg);
+.hero-visual .landing-mock {
+  max-width: 500px;
 }
 
 /* Responsive */
 @media (max-width: 1024px) {
   .hero-layout {
     grid-template-columns: 1fr;
-    gap: 48px;
+    gap: var(--space-12);
     text-align: center;
   }
 
@@ -164,79 +144,30 @@
     align-items: center;
   }
 
-  .landing-subheadline-large {
-    max-width: 540px;
-  }
-
-  .hero-download-ctas {
-    justify-content: center;
-  }
-
-  .hero-preview {
-    max-width: 600px;
-    margin: 0 auto;
+  .hero-cta {
+    align-items: center;
   }
 }
 
 @media (max-width: 640px) {
   .landing-hero {
-    padding-top: 100px;
-    padding-bottom: 60px;
+    padding-top: 96px;
+    padding-bottom: 64px;
   }
 
-  .hero-download-ctas {
-    flex-direction: column;
+  .hero-cta-primary {
     width: 100%;
-    max-width: 280px;
-  }
-
-  .hero-download-btn {
-    width: 100%;
+    max-width: 320px;
     justify-content: center;
   }
 }
 
-/* RTL Support */
-:lang(ar) .hero-layout {
-  text-align: right;
-}
-
-:lang(ar) .hero-content {
-  align-items: flex-end;
-}
-
-:lang(ar) .hero-download-btn-text {
-  align-items: flex-end;
-}
-
-@media (max-width: 1024px) {
-  :lang(ar) .hero-layout {
-    text-align: center;
-  }
-
-  :lang(ar) .hero-content {
-    align-items: center;
-  }
-
-  :lang(ar) .hero-download-btn-text {
-    align-items: flex-start;
-  }
-}
-
-/* Light mode */
-:root[data-theme="light"] .hero-download-btn--mac {
-  background: var(--bg);
-  color: var(--text);
-}
-
-:root[data-theme="light"] .hero-download-btn--mac:hover {
-  background: #1a1a1a;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .hero-download-btn {
-    transition: none;
+  .hero-cta-primary {
+    transition: opacity 0.15s ease;
+  }
+
+  .hero-cta-primary:active {
+    transform: none;
   }
 }
