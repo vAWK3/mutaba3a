@@ -21,17 +21,17 @@
 
 ## 2. Acceptance criteria
 
-- [ ] "Review now" is a button. Clicking it opens an **Unassigned records** drawer over the current page; the URL doesn't change and the page doesn't reload (web and desktop)
-- [ ] The drawer lists every record the banner counts, grouped **Clients / Projects / Income / Expenses**, each with its count; empty groups are hidden
-- [ ] **One active profile:** rows have no per-row picker; one primary action, "Assign all to ‹profile›"
-- [ ] **Several profiles:** a quick action "Assign all to ‹default›", plus a profile picker on every row and Save
-- [ ] Each row's picker starts on the profile of its linked client, then its linked project, then the default profile (projects follow their client; clients start on the default)
-- [ ] On success, the records get their `profileId`, every list refreshes, the banner disappears, the drawer closes and a toast says how many were assigned
-- [ ] If some rows fail (e.g. a locked income entry, F6), the rest are still saved, the drawer stays open listing only the failed rows, and an inline message says how many couldn't be assigned
-- [ ] No business profile at all → a message saying to add one first, and no assign actions
-- [ ] Cancel, the close button, Escape and the overlay close the drawer
-- [ ] Clients and Projects no longer open a modal by themselves
-- [ ] Copy in en + ar from `orphanedRecords.*`; no raw keys; works in RTL
+- [x] "Review now" is a button. Clicking it opens an **Unassigned records** drawer over the current page; the URL doesn't change and the page doesn't reload (web and desktop)
+- [x] The drawer lists every record the banner counts, grouped **Clients / Projects / Income / Expenses**, each with its count; empty groups are hidden
+- [x] **One active profile:** rows have no per-row picker; one primary action, "Assign all to ‹profile›"
+- [x] **Several profiles:** a quick action "Assign all to ‹default›", plus a profile picker on every row and Save
+- [x] Each row's picker starts on the profile of its linked client, then its linked project, then the default profile (projects follow their client; clients start on the default)
+- [x] On success, the records get their `profileId`, every list refreshes, the banner disappears, the drawer closes and a toast says how many were assigned
+- [x] If some rows fail (e.g. a locked income entry, F6), the rest are still saved, the drawer stays open listing only the failed rows, and an inline message says how many couldn't be assigned
+- [x] No business profile at all → a message saying to add one first, and no assign actions
+- [x] Cancel, the close button, Escape and the overlay close the drawer (Cancel is tested here; the other three come from the shared `Drawer`)
+- [x] Clients and Projects no longer open a modal by themselves
+- [x] Copy in en + ar from `orphanedRecords.*`; no raw keys; works in RTL
 
 ## 3. Decisions
 
@@ -46,7 +46,7 @@
 | D7 | **Writes go one row at a time through `getRepositories().base.<table>.update(id, { profileId })`**, the same path the modal and every drawer use. A failed row doesn't stop the batch; the hook returns `{ assigned, failedIds }` and **invalidates every query on settle** | A profile change touches every profile-scoped list, the summaries and the banner, so a full refetch is the honest choice for a rare repair action. Per-row failure means one locked entry (F6) can't block the other 99 | One Dexie transaction: the repos open their own and a lock error would roll everything back |
 | D8 | **The lock rule stays as it is (F6).** A locked, unassigned income entry fails, stays listed, and is reported | Relaxing ADR-014 ("fill a missing profileId on a locked entry") is a decision about financial immutability, not part of this fix. Flagged as a follow-up (TD) | Allowing `profileId` on locked entries without an ADR |
 | D9 | **Drawer state lives in `useDrawerStore` (`orphanedRecordsDrawer.isOpen`), not the URL** | Same as the client, project and profile drawers it sits beside | `?orphans=1` deep link: nobody links to a repair screen |
-| D10 | **Settings › Data tools is unchanged** | `fix/settings-integrity-i18n` is open on that section. Pointing its "Run Check" result at this drawer is a one-line follow-up after it lands | Editing it here and merging into a conflict |
+| D10 | **Settings › Data tools is unchanged** | `fix/settings-integrity-i18n` was open on that section while this was built (it has since merged as `DataToolsSection`). Pointing its "Run Check" result at this drawer is a small follow-up | Editing it here and merging into a conflict |
 
 ## 4. Components
 
@@ -73,6 +73,7 @@ interface OrphanedRecordSet {
   clients: Client[]; projects: Project[]; transactions: Transaction[]; expenses: Expense[];
   clientProfileIds: Record<string, string>;   // assigned clients only
   projectProfileIds: Record<string, string>;  // assigned projects only
+  clientNames: Record<string, string>;        // every client, for row labels
 }
 interface OrphanAssignment { table: OrphanTable; id: string; profileId: string }
 interface AssignResult { assigned: number; failedIds: string[] }
@@ -96,6 +97,6 @@ None. Client-only, offline.
 
 ## 9. Follow-ups (not in this change)
 
-- Decide whether a locked income entry may have a *missing* `profileId` filled in (ADR-014 exception, like ADR-030 for payments)
-- Settings › Data tools: once `fix/settings-integrity-i18n` lands, let a failed "Run Check" open this drawer
-- Where orphans come from: `ClientDrawer.tsx:165` and `ProjectDrawer.tsx:175` offer a "Default profile" option whose value is `''`, which `:66`/`:76` save as `profileId: undefined`, an unassigned record
+- TD-034: decide whether a locked income entry may have a *missing* `profileId` filled in (ADR-014 exception, like ADR-030 for payments)
+- Settings › Data tools (`DataToolsSection`, merged): let a "Run Check" that finds unassigned records offer to open this drawer
+- TD-035, where orphans come from: `ClientDrawer.tsx:165` and `ProjectDrawer.tsx:175` offer a "Default profile" option whose value is `''`, which `:66`/`:76` save as `profileId: undefined`, an unassigned record

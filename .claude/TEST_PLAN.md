@@ -127,6 +127,21 @@ removing it from either locale file fails the `as Translations` cast in
 `context.tsx`. Not run on this change: the full `npx vitest run` (stopped on
 request; only this file was run). Still manual: the banner in RTL.
 
+#### Unassigned records: Review now opens a drawer in place (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/db/__tests__/orphanedRecords.test.ts` | Unit (real Dexie) | 16 | **Full** - `findOrphanedRecords`: empty, one of each kind vs assigned, archived/soft-deleted skipped, profile maps hold assigned rows only, client names; same ids as `runIntegrityCheck`. `startingProfileId`: client none, project → client, income/expense → client then project, no links, non-selectable profile skipped |
+| `src/components/drawers/__tests__/OrphanedRecordsDrawer.test.tsx` | Component (real Dexie) | 14 | store open/close; groups with counts, empty groups hidden, untitled income named after its client with date and amount; one profile: no pickers, assign all writes four kinds + toast + close; several: rows start on linked client's profile, per-row Save, quick action ignores pickers; locked income fails, others saved, row stays with alert; no profiles; nothing left; Cancel writes nothing; Arabic copy; en/ar key parity and placeholders |
+| `src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` (extended) | Component | 7 (+2) | Review now is a `type="button"`, no `<a href>` in the banner; click opens the drawer store, URL unchanged |
+| `src/pages/clients/__tests__/ClientsPage.test.tsx`, `src/pages/projects/__tests__/ProjectsPage.test.tsx` (extended) | Page | +1 each | an unassigned client/project no longer opens a dialog |
+| `src/db/__tests__/integrityCheck.test.ts` | Unit | 6 (unchanged) | still green on the shared `isOrphaned` predicates |
+
+Removed: `src/components/modals/__tests__/OrphanedRecordsModal.test.tsx` (10),
+with the modal. Full suite after merging main: 142 files, 2,333 passed,
+5 skipped. Checked by hand in the web dev build: no URL change or reload on
+Review now, Arabic/RTL drawer, Save clears the banner. Not covered:
+`AppShell` mounting the drawer (no AppShell test exists; covered by the manual run).
+
 #### Settings › Data Tools copy (added 2026-10-11)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

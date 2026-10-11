@@ -11,7 +11,7 @@
 |----------|----------|
 | **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
 | **State** | URL State, Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place |
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
@@ -1282,6 +1282,20 @@ function over rows (`summarizeOwedByCurrency(transactions, today)` in
 second repository method. It takes `today` explicitly (ADR-022), returns one
 entry per currency in a fixed order and never converts. The overdue counts that
 disagreed across five screens before MUT-17 are the reason.
+
+The same goes for a record state that one screen counts and another fixes.
+"Unassigned" is `isOrphaned.{clients,projects,transactions,expenses}` in
+`src/db/orphanedRecords.ts`; the banner's count (`runIntegrityCheck`) and the
+drawer's rows (`findOrphanedRecords`) both filter with it, and a test asserts
+the two return the same ids.
+
+### Repair actions open in place (2026-10-11)
+A banner or notice that points at a problem fixes it where the user is: its
+action is a `<button type="button">` that opens a drawer through
+`useDrawerStore`, mounted in `AppShell` like the entity drawers. Never a raw
+`<a href>`: on the web build the router's `basepath: '/app'` doesn't apply to
+it, so it leaves the PWA scope and reloads the app. When a banner only needs
+to *navigate*, it uses the router's `Link` (`FeatureNoticeBanner`).
 
 ### Ordering across currencies (MUT-7, ADR-035)
 Never compare or add raw minor units of different currencies. To order a list
