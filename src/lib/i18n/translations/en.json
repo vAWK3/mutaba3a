@@ -72,10 +72,6 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "sections": {
-      "main": "Main",
-      "workspace": "Workspace",
-      "work": "Work",
-      "money": "Money",
       "system": "System",
       "optional": "More"
     },

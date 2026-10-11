@@ -272,6 +272,9 @@ td {
 .sidebar.collapsed .sidebar-header {
   padding: var(--space-3);
   justify-content: center;
+  /* the 64px rail cannot hold the brand and the chevron side by side */
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .sidebar.collapsed .brand {
@@ -313,11 +316,6 @@ td {
   transform: rotate(180deg);
 }
 
-.sidebar.collapsed .sidebar-collapse-toggle {
-  position: absolute;
-  right: var(--space-2);
-  top: var(--space-4);
-}
 
 /* Profile Switcher Area */
 .sidebar-profile {
@@ -351,6 +349,13 @@ td {
 
 .sidebar.collapsed .nav-section-header {
   display: none;
+}
+
+/* Collapsed, the headers are hidden: a hairline keeps the core group and
+   "More" apart (MUT-15) */
+.sidebar.collapsed .nav-section + .nav-section {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
 }
 
 /* Nav Item Updates */
@@ -522,11 +527,11 @@ td {
 }
 
 /* Expand Toggle (visible only when collapsed) */
+/* In flow below the footer: absolutely positioned it had no containing block
+   in the sidebar and floated at the bottom of the window (MUT-15) */
 .sidebar-expand-toggle {
-  position: absolute;
-  bottom: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
+  align-self: center;
+  margin-bottom: var(--space-4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -538,12 +543,11 @@ td {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: all var(--transition-fast);
-  z-index: 10;
 }
 
 .sidebar-expand-toggle:hover {
   background: var(--accent-hover);
-  transform: translateX(-50%) scale(1.05);
+  transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
@@ -3219,6 +3223,16 @@ td {
 [dir="rtl"] .sidebar {
   border-right: none;
   border-left: 1px solid var(--border);
+}
+
+/* Collapse chevron points toward the edge the sidebar collapses to (MUT-15):
+   right while expanded, left (toward the content) while collapsed */
+[dir="rtl"] .sidebar-collapse-toggle .nav-icon {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .sidebar-collapse-toggle .nav-icon.rotated {
+  transform: none;
 }
 
 /* Table text alignment - use logical alignment */

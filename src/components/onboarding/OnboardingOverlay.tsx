@@ -5,7 +5,14 @@ import { useDrawerStore } from '../../lib/stores';
 import { useT } from '../../lib/i18n';
 import { useFeatureEnabled, useFeaturesLoaded } from '../../lib/features/useFeatures';
 import { UsersIcon, FolderIcon, PlusIcon, CheckIcon } from '../icons';
+import type { OnboardingStep } from '../../lib/onboardingStore';
 import './OnboardingOverlay.css';
+
+// The steps the indicator shows. Projects off (the default) skips the project
+// step, so the user sees two numbered steps, not a ticked one they never took
+// (TD-027). The store's order and completion rule stay as they are (ADR-032).
+const STEPS_WITH_PROJECT: readonly OnboardingStep[] = ['client', 'project', 'income'];
+const STEPS_WITHOUT_PROJECT: readonly OnboardingStep[] = ['client', 'income'];
 
 interface OnboardingOverlayProps {
   onComplete: () => void;
@@ -126,6 +133,7 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
         <p className="onboarding-subtitle">{t('onboarding.subtitle')}</p>
 
         <OnboardingStepIndicator
+          steps={projectsEnabled ? STEPS_WITH_PROJECT : STEPS_WITHOUT_PROJECT}
           currentStep={currentStep}
           completedSteps={completedSteps}
         />
