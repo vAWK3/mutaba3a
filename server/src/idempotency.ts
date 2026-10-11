@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { MiddlewareHandler } from 'hono';
-import type { AppEnv } from './auth/middleware.js';
+import type { AppEnv, AuthContext } from './auth/middleware.js';
 import { ApiError } from './errors.js';
 import type { LedgerStore } from './repositories/ports.js';
 
@@ -34,9 +34,10 @@ export function idempotent(store: LedgerStore, operation: string): MiddlewareHan
     const body = await c.req.raw.clone().text();
     const fingerprint = createHash('sha256').update(`${c.req.method}\n${c.req.path}\n${body}`).digest('hex');
 
+    const claimKey = claimKeyFor(auth, key);
     const claim = await store.idempotency.claim({
       organizationId: auth.organization.id,
-      key,
+      key: claimKey,
       operation,
       fingerprint,
       at: now,
@@ -58,13 +59,13 @@ export function idempotent(store: LedgerStore, operation: string): MiddlewareHan
     try {
       await next();
     } catch (err) {
-      await store.idempotency.fail({ organizationId: auth.organization.id, key, at: now });
+      await store.idempotency.fail({ organizationId: auth.organization.id, key: claimKey, at: now });
       throw err;
     }
 
     const res = c.res;
     if (res.status >= 500) {
-      await store.idempotency.fail({ organizationId: auth.organization.id, key, at: now });
+      await store.idempotency.fail({ organizationId: auth.organization.id, key: claimKey, at: now });
       return;
     }
     const text = await res.clone().text();
@@ -76,10 +77,25 @@ export function idempotent(store: LedgerStore, operation: string): MiddlewareHan
     }
     await store.idempotency.complete({
       organizationId: auth.organization.id,
-      key,
+      key: claimKey,
       responseStatus: res.status,
       responseBody: parsed,
       at: c.get('now')(),
     });
   };
+}
+
+/**
+ * The key a write is claimed under (MUT-42 brief §2). A session's keys live in
+ * its user's namespace, so Malafat's GET /v1/operations/{key} can never return
+ * a session's stored response, and the two principals never collide on a key.
+ * API keys keep the bare key, as before.
+ */
+export function claimKeyFor(auth: AuthContext, key: string): string {
+  return auth.kind === 'session' ? sessionClaimKey(auth.user.id, key) : key;
+}
+
+/** `s:` + SHA-256 of user and key: 66 characters, so it fits the existing 128-character column. Reaching it from another principal would take the session's own key and user id. */
+export function sessionClaimKey(userId: string, key: string): string {
+  return `s:${createHash('sha256').update(`${userId}\n${key}`).digest('hex')}`;
 }

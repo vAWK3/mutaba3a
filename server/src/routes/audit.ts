@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, type AppEnv } from '../auth/middleware.js';
 import type { LedgerStore } from '../repositories/ports.js';
+import { EXPENSE_ENTITY_TYPES } from '../expenses/compose.js';
 import { AuditPageSchema, ListAuditQuerySchema } from '../schemas.js';
 import { serializeAuditEvent } from '../serializers.js';
 import { encodeNextCursor, errorResponses, toPageRequest, validationResponse } from './shared.js';
@@ -24,7 +25,8 @@ export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { organization } = c.get('auth');
       const q = c.req.valid('query');
-      const page = await store.audit.list(organization.id, { ...(q.entityType ? { entityType: q.entityType } : {}), ...(q.entityId ? { entityId: q.entityId } : {}), ...(q.action ? { action: q.action } : {}) }, toPageRequest(q));
+      // MUT-42: expense activity is a hosted profile's own; Malafat's key never lists it.
+      const page = await store.audit.list(organization.id, { ...(q.entityType ? { entityType: q.entityType } : {}), ...(q.entityId ? { entityId: q.entityId } : {}), ...(q.action ? { action: q.action } : {}), excludeEntityTypes: EXPENSE_ENTITY_TYPES }, toPageRequest(q));
       return c.json({ items: page.items.map(serializeAuditEvent), nextCursor: encodeNextCursor(page.nextCursor) }, 200);
     },
   );

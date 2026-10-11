@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.10.0-mut39
+  version: 1.11.0-mut42
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -13,9 +13,9 @@ info:
 
     PATCH routes require `If-Match: <version>` (optimistic concurrency).
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -28,6 +28,8 @@ info:
     Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.
 
     Writability (MUT-39): a session may read a hosted profile's ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile's Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.
+
+    Expenses (MUT-42) are a hosted profile's own record, written by the signed-in person: /v1/expenses*, /v1/expense-categories* and /v1/summaries/expenses accept sessions only, never an API key, and nothing about them appears in any operation an API key can call (audit and operations included). Each expense keeps its original amount and currency; summaries are per currency. Receipts use the attachments bucket and signed-URL lifetime. The expenses:read / expenses:write scopes are session-only and cannot be issued to a key.
 
     Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.
 
@@ -59,6 +61,8 @@ tags:
     description: Money received, its allocations, reversals, and the operations lookup
   - name: Sessions
     description: Hosted-portal sign-in, sign-out and the signed-in person
+  - name: Expenses
+    description: A hosted profile's expenses, categories, receipts and expense summary (sessions only)
   - name: Admin
     description: "Operator provisioning: organizations, API keys, users and memberships"
 components:
@@ -3457,6 +3461,392 @@ components:
         - expiresAt
         - filename
         - mimeType
+    ExpensePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Expense"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    Expense:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        title:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        categoryId:
+          type: string
+          nullable: true
+          format: uuid
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        notes:
+          type: string
+          nullable: true
+        createdByUserId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - occurredOn
+        - amount
+        - currency
+        - title
+        - vendor
+        - categoryId
+        - customerId
+        - projectId
+        - notes
+        - createdByUserId
+        - version
+        - createdAt
+        - updatedAt
+    ExpenseDetail:
+      allOf:
+        - $ref: "#/components/schemas/Expense"
+        - type: object
+          properties:
+            receipts:
+              type: array
+              items:
+                $ref: "#/components/schemas/ExpenseReceipt"
+          required:
+            - receipts
+    ExpenseReceipt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        expenseId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        mimeType:
+          $ref: "#/components/schemas/AttachmentMimeType"
+        sizeBytes:
+          type: integer
+        status:
+          $ref: "#/components/schemas/AttachmentStatus"
+        uploadedByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - expenseId
+        - filename
+        - mimeType
+        - sizeBytes
+        - status
+        - uploadedByUserId
+        - createdAt
+        - completedAt
+    CreateExpenseRequest:
+      type: object
+      properties:
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Greater than zero, in the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        vendor:
+          type: string
+          minLength: 1
+          maxLength: 200
+        categoryId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+          description: With projectId alone, customerId is the project's customer
+        notes:
+          type: string
+          maxLength: 4000
+      required:
+        - occurredOn
+        - amount
+        - currency
+      additionalProperties: false
+    UpdateExpenseRequest:
+      type: object
+      properties:
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        title:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+        vendor:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+        categoryId:
+          type: string
+          nullable: true
+          format: uuid
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        notes:
+          type: string
+          nullable: true
+          maxLength: 4000
+      additionalProperties: false
+    CreateReceiptUploadResponse:
+      type: object
+      properties:
+        receipt:
+          $ref: "#/components/schemas/ExpenseReceipt"
+        upload:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            method:
+              type: string
+              enum:
+                - PUT
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+            expiresAt:
+              type: string
+              format: date-time
+          required:
+            - url
+            - method
+            - headers
+            - expiresAt
+      required:
+        - receipt
+        - upload
+    CreateReceiptUploadRequest:
+      type: object
+      properties:
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 200
+        mimeType:
+          $ref: "#/components/schemas/AttachmentMimeType"
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+      required:
+        - filename
+        - mimeType
+        - sizeBytes
+      additionalProperties: false
+    ExpenseSummary:
+      type: object
+      properties:
+        from:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                $ref: "#/components/schemas/Currency"
+              total:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits
+              count:
+                type: integer
+              byCategory:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    categoryId:
+                      type: string
+                      nullable: true
+                      format: uuid
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits
+                    count:
+                      type: integer
+                  required:
+                    - categoryId
+                    - total
+                    - count
+              byCustomer:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    customerId:
+                      type: string
+                      nullable: true
+                      format: uuid
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits
+                    count:
+                      type: integer
+                  required:
+                    - customerId
+                    - total
+                    - count
+            required:
+              - currency
+              - total
+              - count
+              - byCategory
+              - byCustomer
+      required:
+        - from
+        - to
+        - currencies
+    ExpenseCategoryList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseCategory"
+      required:
+        - items
+    ExpenseCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          type: string
+          nullable: true
+        archived:
+          type: boolean
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - color
+        - archived
+        - version
+        - createdAt
+        - updatedAt
+    CreateExpenseCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+      required:
+        - name
+      additionalProperties: false
+    UpdateExpenseCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        color:
+          type: string
+          nullable: true
+          pattern: ^#[0-9a-fA-F]{6}$
+        archived:
+          type: boolean
+      additionalProperties: false
     CreateOrganizationRequest:
       type: object
       properties:
@@ -7391,6 +7781,817 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses:
+    get:
+      tags:
+        - Expenses
+      summary: List expenses, newest first
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive
+          required: false
+          description: Inclusive
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive
+          required: false
+          description: Inclusive
+          name: to
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Currency"
+          required: false
+          name: currency
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: categoryId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: customerId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: projectId
+          in: query
+        - schema:
+            type: string
+            enum:
+              - none
+            description: "`none`: only expenses linked to no client"
+          required: false
+          description: "`none`: only expenses linked to no client"
+          name: linked
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpensePage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Expenses
+      summary: Record an expense
+      description: In its original amount and currency, never converted. Personal versus firm-associated is the profile, optionally narrowed by customerId/projectId; with projectId alone the customer is the project's.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseRequest"
+      responses:
+        "201":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}:
+    get:
+      tags:
+        - Expenses
+      summary: An expense with its receipts
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+      responses:
+        "200":
+          description: The expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags:
+        - Expenses
+      summary: Change an expense (optimistic, If-Match)
+      description: Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExpenseRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Expenses
+      summary: Delete an expense (soft; its receipts and their files go with it)
+      description: 204 again for an expense already deleted; 404 for an id this profile never had.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+      responses:
+        "204":
+          description: Done
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}/receipts:
+    post:
+      tags:
+        - Expenses
+      summary: "Start a receipt upload: a PENDING_UPLOAD receipt and a short-lived signed PUT URL"
+      description: PDF, JPEG or PNG up to 10 MB; at most 10 per expense. PUT the bytes to upload.url with upload.headers, then POST …/receipts/{receiptId}/complete. The object key never contains the filename.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceiptUploadRequest"
+      responses:
+        "201":
+          description: Upload started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateReceiptUploadResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}/receipts/{receiptId}/complete:
+    post:
+      tags:
+        - Expenses
+      summary: "Finish a receipt upload: verify the object and mark the receipt READY"
+      description: 422 UPLOAD_INCOMPLETE when no object exists yet; 422 UPLOAD_MISMATCH when its size or content type differ from what was declared. Idempotent once READY.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receiptId
+          in: path
+      responses:
+        "200":
+          description: READY
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseReceipt"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}/receipts/{receiptId}/download:
+    get:
+      tags:
+        - Expenses
+      summary: A short-lived signed download URL for a READY receipt
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receiptId
+          in: path
+      responses:
+        "200":
+          description: Signed URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentDownload"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}/receipts/{receiptId}:
+    delete:
+      tags:
+        - Expenses
+      summary: Delete a receipt (soft; the object is removed)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receiptId
+          in: path
+      responses:
+        "204":
+          description: Done
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/expenses:
+    get:
+      tags:
+        - Expenses
+      summary: Expenses per currency for a date range, by category and by client
+      description: Defaults to this month in the organization timezone; from and to are inclusive. One block per currency — never summed across currencies. customerId null = spending linked to no client.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the first of this month in the organization timezone
+          required: false
+          description: Inclusive; defaults to the first of this month in the organization timezone
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the last of this month
+          required: false
+          description: Inclusive; defaults to the last of this month
+          name: to
+          in: query
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseSummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expense-categories:
+    get:
+      tags:
+        - Expenses
+      summary: The profile’s expense categories, in creation order
+      description: "The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the general one otherwise. Archived categories only with includeArchived=true."
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+          required: false
+          name: includeArchived
+          in: query
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseCategoryList"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Expenses
+      summary: Add an expense category
+      description: 409 CATEGORY_NAME_TAKEN when the profile already has the name in any letter case.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseCategoryRequest"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseCategory"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expense-categories/{categoryId}:
+    patch:
+      tags:
+        - Expenses
+      summary: Rename, recolour, archive or restore a category (optimistic, If-Match)
+      description: An archived category stays on the expenses that have it but cannot be newly chosen.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: categoryId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExpenseCategoryRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseCategory"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
           content:
             application/json:
               schema:

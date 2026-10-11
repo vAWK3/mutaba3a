@@ -142,7 +142,9 @@ const INVENTORY: Operation[] = (() => {
 })();
 const SCOPED = INVENTORY.filter((op) => op.scopes.length > 0);
 const KEY_ONLY = SCOPED.filter((op) => op.principals.has('apiKey') && !op.principals.has('session'));
-const SESSION_READS = SCOPED.filter((op) => op.principals.has('session'));
+const SESSION_READS = SCOPED.filter((op) => op.principals.has('session') && op.method === 'GET');
+/** Reads that write by design: the first category list seeds a preset (MUT-42 D2). */
+const SEEDING_READS = new Set(['GET /v1/expense-categories']);
 
 const grants = (access: Access, scope: string) => access === 'read-write' || (access === 'read' && scope.endsWith(':read'));
 const malafatWrite = (op: Operation) =>
@@ -152,7 +154,8 @@ const malafatWrite = (op: Operation) =>
     .find((d) => d !== undefined && matrixRow(d).writerOfRecord === 'MALAFAT');
 const bigintSafe = (value: unknown) => JSON.stringify(value, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
 const accessOf = (c: Call): MethodAccess | undefined => (STORE_ACCESS as Record<string, Record<string, MethodAccess>>)[c.repo]?.[c.method];
-const writes = (calls: Call[]) => calls.filter((c) => typeof accessOf(c) === 'object').map((c) => `${c.repo}.${c.method}`);
+const isWrite = (a: MethodAccess | undefined) => typeof a === 'object' && 'write' in a;
+const writes = (calls: Call[]) => calls.filter((c) => isWrite(accessOf(c))).map((c) => `${c.repo}.${c.method}`);
 
 function send(h: Harness, op: Operation, headers: Record<string, string>, ids: Record<string, string> = {}) {
   const path = op.path.replace(/:([A-Za-z]+)/g, (_m, name: string) => ids[name] ?? PLACEHOLDER);
@@ -166,7 +169,8 @@ function send(h: Harness, op: Operation, headers: Record<string, string>, ids: R
 describe('every route sits inside the matrix', () => {
   it('reads a non-trivial inventory', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
-    expect(SESSION_READS.length).toBe(20);
+    // The portal's 20 ledger reads (MUT-38) and 5 expense reads (MUT-42).
+    expect(SESSION_READS.length).toBe(25);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -314,7 +318,7 @@ describe('lazy posting during a session read is a system act (ADR-037 decision 8
     for (const op of others) {
       h.calls.length = 0;
       await send(h, op, as(f.org.id), { customerId: f.customer.id, projectId: f.project.id, agreementId: f.agreement.id });
-      expect(writes(h.calls), op.key).toEqual([]);
+      expect(writes(h.calls), op.key).toEqual(SEEDING_READS.has(op.key) ? ['expenseCategories.seed'] : []);
     }
   });
 

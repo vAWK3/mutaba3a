@@ -58,6 +58,13 @@ curl -si -c /tmp/jar -H 'origin: http://localhost:8787' -H 'content-type: applic
 curl -s -b /tmp/jar http://localhost:8787/v1/me
 ```
 
+**Expenses (MUT-42).** A hosted profile's own record, written by the signed-in
+person and reachable by sessions only: `/v1/expenses*` (with receipts, in the
+attachments bucket under `org/{id}/expense-receipts/`), `/v1/expense-categories*`
+(the first list seeds a preset) and `/v1/summaries/expenses?from&to` (per
+currency). Malafat's key can't reach any of it, and expense activity is left out
+of `GET /v1/audit` and `GET /v1/operations/{key}`.
+
 ## Verify
 
 ```bash

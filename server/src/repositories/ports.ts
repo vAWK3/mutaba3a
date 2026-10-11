@@ -1,5 +1,5 @@
 import type { ApiKeyEnvironment } from '../auth/api-key.js';
-import type { Scope } from '../auth/scopes.js';
+import type { KeyScope } from '../auth/scopes.js';
 import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
 
@@ -36,7 +36,7 @@ export interface ApiKeyRecord {
   environment: ApiKeyEnvironment;
   prefix: string;
   keyHash: string;
-  scopes: Scope[];
+  scopes: KeyScope[];
   createdAt: Date;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
@@ -50,7 +50,7 @@ export interface CreateApiKeyInput {
   environment: ApiKeyEnvironment;
   prefix: string;
   keyHash: string;
-  scopes: Scope[];
+  scopes: KeyScope[];
   expiresAt: Date | null;
 }
 
@@ -154,6 +154,8 @@ export interface AuditFilter {
   entityType?: string;
   entityId?: string;
   action?: string;
+  /** Entity types left out of the listing (MUT-42: expense activity never reaches Malafat's key). */
+  excludeEntityTypes?: readonly string[];
 }
 
 export interface AuditRepository {
@@ -897,6 +899,10 @@ export interface LedgerStore {
   ping(): Promise<void>;
   attachments: AttachmentRepository;
   feeProposals: FeeProposalRepository;
+  /** MUT-42: expenses on hosted profiles; session-only, invisible to API keys (store guard `{ read: 'expenses' }`). */
+  expenses: ExpenseRepository;
+  expenseCategories: ExpenseCategoryRepository;
+  expenseReceipts: ExpenseReceiptRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -975,4 +981,159 @@ export interface FeeProposalRepository {
   findOpenByProject(organizationId: string, projectId: string): Promise<FeeProposalRecord | null>;
   /** Conditional on the current status being one of `from`; bumps the version. */
   transition(organizationId: string, id: string, from: readonly FeeProposalStatus[], patch: FeeProposalTransitionPatch, at: Date): Promise<TransitionResult<FeeProposalRecord>>;
+}
+
+// ---- MUT-42: expenses on hosted profiles ------------------------------------
+
+/**
+ * One expense, in its original amount and currency (never converted). Mirrors
+ * the offline `Expense`: `customerId` is the offline `clientId`, `occurredOn`
+ * the offline `occurredAt` used as a date. Personal versus firm-associated is
+ * the profile it belongs to, optionally narrowed by customer/project — there is
+ * no classification field.
+ */
+export interface ExpenseRecord {
+  id: string;
+  organizationId: string;
+  occurredOn: IsoDate;
+  amountMinor: bigint;
+  currency: string;
+  title: string | null;
+  vendor: string | null;
+  categoryId: string | null;
+  customerId: string | null;
+  projectId: string | null;
+  notes: string | null;
+  createdByUserId: string;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+export interface CreateExpenseInput {
+  organizationId: string;
+  occurredOn: IsoDate;
+  amountMinor: bigint;
+  currency: string;
+  title: string | null;
+  vendor: string | null;
+  categoryId: string | null;
+  customerId: string | null;
+  projectId: string | null;
+  notes: string | null;
+  createdByUserId: string;
+}
+
+/** Absent key = unchanged; null = cleared. The currency never changes after create. */
+export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'title' | 'vendor' | 'categoryId' | 'customerId' | 'projectId' | 'notes'>>;
+
+export interface ExpenseFilter {
+  /** Inclusive. */
+  from?: IsoDate;
+  /** Inclusive. */
+  to?: IsoDate;
+  currency?: string;
+  categoryId?: string;
+  customerId?: string;
+  projectId?: string;
+  /** Only expenses linked to no customer (the firm's own or personal spending). */
+  unlinked?: boolean;
+}
+
+/** Expenses page newest first: (occurredOn, id) descending. */
+export interface ExpenseCursor {
+  occurredOn: IsoDate;
+  id: string;
+}
+
+export interface ExpensePage {
+  items: ExpenseRecord[];
+  nextCursor: ExpenseCursor | null;
+}
+
+export interface ExpenseRepository {
+  create(input: CreateExpenseInput, at: Date): Promise<ExpenseRecord>;
+  /** Live expenses only; a deleted one reads null. */
+  getById(organizationId: string, id: string): Promise<ExpenseRecord | null>;
+  list(organizationId: string, filter: ExpenseFilter, page: { limit: number; cursor: ExpenseCursor | null }): Promise<ExpensePage>;
+  update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
+  /** Null for an id the organization never had; `changed: false` when it was already deleted. */
+  softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseRecord; changed: boolean } | null>;
+}
+
+export interface ExpenseCategoryRecord {
+  id: string;
+  organizationId: string;
+  name: string;
+  /** `#rrggbb`, as offline. */
+  color: string | null;
+  archivedAt: Date | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ExpenseCategoryInput {
+  name: string;
+  color: string | null;
+}
+
+export interface UpdateExpenseCategoryPatch {
+  name?: string;
+  color?: string | null;
+  archived?: boolean;
+}
+
+export interface ExpenseCategoryRepository {
+  /** UniqueViolation('expense_categories.name') when the name is taken in the organization, case-insensitively. */
+  create(organizationId: string, input: ExpenseCategoryInput, at: Date): Promise<ExpenseCategoryRecord>;
+  getById(organizationId: string, id: string): Promise<ExpenseCategoryRecord | null>;
+  /** Creation order. */
+  list(organizationId: string, options: { includeArchived: boolean }): Promise<ExpenseCategoryRecord[]>;
+  /** Inserts the preset only into an organization with no categories at all; true when it did. Concurrent seeds insert it once. */
+  seed(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): Promise<boolean>;
+  /** UniqueViolation on a rename onto a taken name. */
+  update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpenseCategoryPatch, at: Date): Promise<UpdateResult<ExpenseCategoryRecord>>;
+}
+
+/** A receipt file behind the M6 signed-URL pipeline, in its own table so Malafat's attachment routes can never reach it (MUT-42 D1). */
+export interface ExpenseReceiptRecord {
+  id: string;
+  organizationId: string;
+  expenseId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: AttachmentStatus;
+  storageKey: string;
+  uploadedByUserId: string;
+  requestId: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+  deletedAt: Date | null;
+}
+
+export interface CreateExpenseReceiptInput {
+  organizationId: string;
+  expenseId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedByUserId: string;
+  requestId: string | null;
+}
+
+export interface ExpenseReceiptRepository {
+  /** Created with a placeholder key; the caller derives the real key from the id and `setKey`s it (as M6). */
+  create(input: CreateExpenseReceiptInput, at: Date): Promise<ExpenseReceiptRecord>;
+  setKey(organizationId: string, id: string, storageKey: string): Promise<ExpenseReceiptRecord | null>;
+  /** Live receipts only. */
+  getById(organizationId: string, id: string): Promise<ExpenseReceiptRecord | null>;
+  /** READY, live receipts of one expense, oldest first. */
+  listByExpense(organizationId: string, expenseId: string): Promise<ExpenseReceiptRecord[]>;
+  complete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
+  softDelete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
+  /** Every live receipt of the expense, pending ones included; returns those it deleted (their objects are removed by the caller). */
+  softDeleteByExpense(organizationId: string, expenseId: string, at: Date): Promise<ExpenseReceiptRecord[]>;
 }

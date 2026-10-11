@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkUpload, contentDisposition, MAX_ATTACHMENT_BYTES, storageKey } from '../rules.js';
+import { checkFile, checkUpload, contentDisposition, MAX_ATTACHMENT_BYTES, receiptStorageKey, storageKey } from '../rules.js';
 
 describe('attachment rules', () => {
   const base = { mimeType: 'application/pdf', sizeBytes: 1024, filename: 'INV-2026-117.pdf', paymentId: 'pay1' };
@@ -24,5 +24,21 @@ describe('attachment rules', () => {
     expect(storageKey('org1', 'att1')).toBe('org/org1/att1');
     expect(storageKey('org1', 'att1')).not.toContain('.pdf');
     expect(contentDisposition('فاتورة "A".pdf')).toBe(`attachment; filename="______ _A_.pdf"; filename*=UTF-8''${encodeURIComponent('فاتورة "A".pdf')}`);
+  });
+});
+
+describe('file rules shared with expense receipts (MUT-42)', () => {
+  const file = { mimeType: 'application/pdf', sizeBytes: 1024, filename: 'receipt.pdf' };
+
+  it('checkFile is the file part of checkUpload, without a target', () => {
+    expect(checkFile(file)).toEqual({ ok: true });
+    expect(checkFile({ ...file, mimeType: 'text/plain' })).toEqual({ ok: false, reason: 'MIME_TYPE_UNSUPPORTED' });
+    expect(checkFile({ ...file, sizeBytes: MAX_ATTACHMENT_BYTES + 1 })).toEqual({ ok: false, reason: 'FILE_TOO_LARGE' });
+    expect(checkFile({ ...file, filename: '../etc/passwd' })).toEqual({ ok: false, reason: 'FILENAME_INVALID' });
+    expect(checkUpload({ ...file, mimeType: 'text/plain', paymentId: 'p' })).toEqual(checkFile({ ...file, mimeType: 'text/plain' }));
+  });
+
+  it('keys a receipt by organization and receipt id only', () => {
+    expect(receiptStorageKey('org-1', 'rec-1')).toBe('org/org-1/expense-receipts/rec-1');
   });
 });

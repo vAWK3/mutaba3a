@@ -18,6 +18,8 @@ import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/session
 import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
+import { expenseCategoryRoutes } from './routes/expense-categories.js';
+import { expenseRoutes } from './routes/expenses.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { customerRoutes } from './routes/customers.js';
 import { feeProposalRoutes } from './routes/fee-proposals.js';
@@ -60,7 +62,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.10.0-mut39';
+export const API_VERSION = '1.11.0-mut42';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -157,6 +159,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', summaryRoutes(store));
   app.route('/', auditRoutes(store));
   app.route('/', attachmentRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
+  app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
+  app.route('/', expenseCategoryRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
 
@@ -210,6 +214,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Writability (MUT-39): a session may read a hosted profile\'s ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile\'s Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.',
         '',
+        'Expenses (MUT-42) are a hosted profile\'s own record, written by the signed-in person: /v1/expenses*, /v1/expense-categories* and /v1/summaries/expenses accept sessions only, never an API key, and nothing about them appears in any operation an API key can call (audit and operations included). Each expense keeps its original amount and currency; summaries are per currency. Receipts use the attachments bucket and signed-URL lifetime. The expenses:read / expenses:write scopes are session-only and cannot be issued to a key.',
+        '',
         'Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.',
         '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
@@ -229,6 +235,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Receivables', description: 'What is owed, and credits against it' },
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
+      { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });

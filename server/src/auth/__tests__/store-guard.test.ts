@@ -24,10 +24,12 @@ function outcome(guard: ReturnType<typeof principalStoreGuard>, repo: string, me
   }
 }
 
-function expected(access: MethodAccess, column: Access | undefined, writer: 'MALAFAT' | null): string {
+function expected(access: MethodAccess, principal: 'apiKey' | 'session', writer: 'MALAFAT' | null): string {
   if (access === 'read' || access === 'control') return 'allowed';
   if (access === 'operator') return 'PRINCIPAL_NOT_ACCEPTED:null';
+  if ('read' in access) return row(access.read)[principal] === 'none' ? 'PRINCIPAL_NOT_ACCEPTED:null' : 'allowed';
   const r = row(access.write);
+  const column: Access = r[principal];
   if (column === 'read-write') return 'allowed';
   return r.writerOfRecord === 'MALAFAT'
     ? `READ_ONLY_PROFILE:${JSON.stringify({ domain: access.write, writerOfRecord: writer })}`
@@ -46,9 +48,23 @@ describe('STORE_ACCESS', () => {
     }
   });
 
-  it('names a matrix domain for every write', () => {
+  it('names a matrix domain for every domain-scoped method', () => {
     for (const [, , access] of entries) {
-      if (typeof access === 'object') expect(row(access.write), access.write).toBeDefined();
+      if (typeof access === 'object') {
+        const domain = 'read' in access ? access.read : access.write;
+        expect(row(domain), domain).toBeDefined();
+      }
+    }
+  });
+
+  it('puts every expense repository method in the expenses domain, reads included (MUT-42)', () => {
+    const expenseRepos = ['expenses', 'expenseCategories', 'expenseReceipts'];
+    const methods = entries.filter(([repo]) => expenseRepos.includes(repo));
+    expect(new Set(methods.map(([repo]) => repo))).toEqual(new Set(expenseRepos));
+    for (const [repo, method, access] of methods) {
+      expect(typeof access === 'object' && ('read' in access ? access.read : access.write), `${repo}.${method}`).toBe('expenses');
+      expect(outcome(principalStoreGuard('apiKey', null), repo, method), `${repo}.${method}`).toBe('PRINCIPAL_NOT_ACCEPTED:null');
+      expect(outcome(principalStoreGuard('session', 'MALAFAT'), repo, method), `${repo}.${method}`).toBe('allowed');
     }
   });
 
@@ -67,13 +83,19 @@ describe('STORE_ACCESS', () => {
   });
 });
 
-describe('storeRefusal on the expenses row (no store methods until MUT-42)', () => {
+describe('storeRefusal on the expenses row', () => {
   it('lets a session write expenses on a Malafat-fed profile', () => {
     expect(storeRefusal('session', 'MALAFAT', { write: 'expenses' })).toBeNull();
   });
 
   it('refuses Malafat’s key any expense write, as not its business', () => {
     expect(storeRefusal('apiKey', null, { write: 'expenses' })?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+
+  it('refuses Malafat’s key even an expense read, and lets a session read (MUT-42)', () => {
+    expect(storeRefusal('apiKey', null, { read: 'expenses' })?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+    expect(storeRefusal('session', null, { read: 'expenses' })).toBeNull();
+    expect(storeRefusal('apiKey', null, { read: 'summaries' })).toBeNull();
   });
 });
 
@@ -84,8 +106,7 @@ describe.each([
 ] as const)('%s guard (writer of record %s)', (principal, writer) => {
   const guard = principalStoreGuard(principal, writer);
   it.each(entries)('%s.%s', (repo, method, access) => {
-    const column = typeof access === 'object' ? row(access.write)[principal] : undefined;
-    expect(outcome(guard, repo, method)).toBe(expected(access, column, writer));
+    expect(outcome(guard, repo, method)).toBe(expected(access, principal, writer));
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateApiKey, hashApiKey, hashesMatch, maskApiKey, parseApiKey } from '../api-key.js';
-import { hasScope, missingScopes, parseScopes, SCOPES } from '../scopes.js';
+import { hasScope, MALAFAT_REQUIRED_SCOPES, missingScopes, parseScopes, SCOPES, SESSION_ONLY_SCOPES } from '../scopes.js';
+import { sessionScopes } from '../writability.js';
 
 describe('generateApiKey', () => {
   it('produces the documented format and a hash that is not the secret', () => {
@@ -65,5 +66,28 @@ describe('scopes', () => {
 
   it('publishes every scope with a resource:verb shape', () => {
     for (const s of SCOPES) expect(s).toMatch(/^[a-z]+:(read|write)$/);
+  });
+});
+
+describe('session-only scopes (MUT-42 D4)', () => {
+  const KEY_VOCABULARY = [
+    'integration:read', 'integration:write', 'customers:read', 'customers:write', 'projects:read', 'projects:write',
+    'agreements:read', 'agreements:write', 'payments:read', 'payments:write', 'attachments:read', 'attachments:write',
+    'summaries:read', 'audit:read',
+  ];
+
+  it('leaves the key vocabulary Malafat sees exactly as it was', () => {
+    expect([...SCOPES]).toEqual(KEY_VOCABULARY);
+    expect([...MALAFAT_REQUIRED_SCOPES]).toEqual(KEY_VOCABULARY);
+  });
+
+  it('never issues an expense scope to a key', () => {
+    expect(parseScopes(['payments:read', 'expenses:read'])).toEqual({ ok: false, invalid: ['expenses:read'] });
+    expect(parseScopes(['expenses:write'])).toEqual({ ok: false, invalid: ['expenses:write'] });
+  });
+
+  it('grants both expense scopes to a session, from the matrix', () => {
+    expect(SESSION_ONLY_SCOPES).toEqual(['expenses:read', 'expenses:write']);
+    expect(sessionScopes()).toEqual(expect.arrayContaining(['expenses:read', 'expenses:write']));
   });
 });

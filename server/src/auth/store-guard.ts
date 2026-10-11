@@ -2,14 +2,16 @@ import { tryGetContext } from 'hono/context-storage';
 import { ApiError } from '../errors.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
-import { mayWrite, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
+import { mayRead, mayWrite, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * The third layer of the writability matrix (hosted-portal.md §5, ADR-037
  * decision 7): a guard below the routes, so no route can opt out.
  *
  * Every repository method is classified once:
- *  - `read`     — reads; any principal.
+ *  - `read`     — reads of shared ledger data; any principal.
+ *  - `{ read }` — reads of one matrix domain; refused where the principal's
+ *                 column is `none` (MUT-42: an API key reads no expense).
  *  - `control`  — bookkeeping every request needs (audit rows, idempotency
  *                 claims, last-used stamps); any principal.
  *  - `operator` — provisioning that only /admin and the operator scripts do
@@ -21,7 +23,7 @@ import { mayWrite, writeRefusal, type Domain, type Principal, type ProfileWriter
  * The map is typed over LedgerStore, so a new store method does not compile
  * until it is classified here.
  */
-export type MethodAccess = 'read' | 'control' | 'operator' | { write: Domain };
+export type MethodAccess = 'read' | 'control' | 'operator' | { read: Domain } | { write: Domain };
 
 type Repositories = Omit<LedgerStore, 'ping'>;
 export type StoreAccess = { readonly [R in keyof Repositories]: { readonly [M in keyof Repositories[R]]-?: MethodAccess } };
@@ -115,6 +117,30 @@ export const STORE_ACCESS: StoreAccess = {
     softDelete: { write: 'attachments' },
   },
   feeProposals: { create: { write: 'agreements' }, getById: 'read', list: 'read', findOpenByProject: 'read', transition: { write: 'agreements' } },
+  // MUT-42: the session's whole write surface, and nothing an API key may even read.
+  expenses: {
+    create: { write: 'expenses' },
+    getById: { read: 'expenses' },
+    list: { read: 'expenses' },
+    update: { write: 'expenses' },
+    softDelete: { write: 'expenses' },
+  },
+  expenseCategories: {
+    create: { write: 'expenses' },
+    getById: { read: 'expenses' },
+    list: { read: 'expenses' },
+    seed: { write: 'expenses' },
+    update: { write: 'expenses' },
+  },
+  expenseReceipts: {
+    create: { write: 'expenses' },
+    setKey: { write: 'expenses' },
+    getById: { read: 'expenses' },
+    listByExpense: { read: 'expenses' },
+    complete: { write: 'expenses' },
+    softDelete: { write: 'expenses' },
+    softDeleteByExpense: { write: 'expenses' },
+  },
 };
 
 export interface StoreGuard {
@@ -125,7 +151,10 @@ export interface StoreGuard {
 /** The decision for one classified method, for a principal on a profile whose writer of record is `profileWriter`. */
 export function storeRefusal(principal: Principal, profileWriter: ProfileWriter, access: MethodAccess): ApiError | null {
   if (access === 'read' || access === 'control') return null;
-  if (access === 'operator') return new ApiError('PRINCIPAL_NOT_ACCEPTED', 'This operation does not accept this kind of credential');
+  if (access === 'operator' || ('read' in access && !mayRead(principal, access.read))) {
+    return new ApiError('PRINCIPAL_NOT_ACCEPTED', 'This operation does not accept this kind of credential');
+  }
+  if ('read' in access) return null;
   return mayWrite(principal, access.write) ? null : writeRefusal(access.write, profileWriter);
 }
 

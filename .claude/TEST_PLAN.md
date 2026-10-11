@@ -989,4 +989,19 @@ Plan: `.claude/designs/mut-39-writability-tests.md`. The guard and drift tests w
 | Routes from the matrix | `src/__tests__/writability-routes.test.ts` | every scoped operation: scopes are matrix rows, granted by each declared principal's column; every key-only operation × session naming a Malafat-fed / personal / non-member profile → READ_ONLY_PROFILE `{domain, MALAFAT \| null}` or PRINCIPAL_NOT_ACCEPTED, nothing written; session list reads 200; AC writes (agreement, installment trigger, credit, payment, customer); `unguarded(`/`lazyPostingOf(` call sites; 7 lazy-posting reads post once as SYSTEM, no other read writes; no cross-profile id reaches any store call |
 | Route security | `src/__tests__/route-security.test.ts` | key-only operations: READ_ONLY_PROFILE on Malafat writes (>20), PRINCIPAL_NOT_ACCEPTED elsewhere; every key-reachable operation has tagged scopes |
 
+### MUT-42 — expenses on the hosted ledger (`server/`)
+
+Plan: `.claude/designs/mut-42-hosted-expenses-tests.md`. The tests were written red first; the closures were mutation-checked.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Storage contract (memory + Postgres) | `store-contract-expenses.ts` | full-field round trip (bigint); organization scoping; newest-first `(occurredOn, id)` paging with same-date rows; every filter; optimistic update with null/absent semantics; soft delete twice; category name unique case-insensitively; archive and restore; seeding once under a race; receipts pending → READY → soft delete (one or all) |
+| Pure units | `expenses/__tests__/{summary,presets,cursor}.test.ts`, `rules.test.ts`, `api-key.test.ts` | per-currency blocks with ordered breakdowns; preset parity with the offline source; cursor round-trip and refusals; `checkFile`/`receiptStorageKey`; key vocabulary unchanged; expense scopes session-only |
+| Guard | `store-guard.test.ts` | `{ read }` decided per column; all 17 expense methods in `expenses`, refused to the key, allowed to a session |
+| Routes | `routes-expenses.test.ts` | MUT-39's carried criteria (session write on a Malafat-fed profile; key refused on all 13 operations); exact wire shape; idempotent replay/reuse; 9 validations; links and mismatch; archived links; PATCH (If-Match, null, currency immutable, archived category); delete; paging and filters on a personal profile; receipt flow, TTL, incomplete/mismatch, cap, M6 rules, 503; seeding (locale, preset per writer, once, SYSTEM); category CRUD and conflict; summary default month, inclusive range, `END_BEFORE_START`; USER audit |
+| Invisible to Malafat | `expenses-invisible.test.ts` | canary sweep over every key-readable operation × every canary id; `/v1/audit` excludes expense types; idempotency namespaced (lookup 404, no collision, digest ≤ 128) |
+| Inventory | `route-security.test.ts`, `writability-routes.test.ts` | 13 expense operations session-only; 25 session GETs; the category list is the one read that writes (seed) |
+
+**Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.
+
 **Baseline after MUT-39 (2026-10-11)**: server `npm test` 924 passed, 9 skipped; `npm run test:db` 978 passed (after re-migrating the local test database).
