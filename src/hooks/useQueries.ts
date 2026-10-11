@@ -18,6 +18,17 @@ import type {
 } from '../types';
 
 /**
+ * Invalidates every payment-record list, including the client payment history
+ * (MUT-4). Any income write can change it: Mark paid writes a PaymentRecord,
+ * and a retitled, re-dated or deleted entry changes or removes its rows. Lives
+ * here, beside the keys it owns, so the income write path calls this rather
+ * than repeating the key (TD-021).
+ */
+export function invalidatePaymentRecordLists(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['paymentRecords'] });
+}
+
+/**
  * Invalidates all transaction-related queries.
  * Extracted to avoid repeating 8 invalidation calls in each mutation.
  */
@@ -31,6 +42,7 @@ function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryCli
   queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
   queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
   queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
+  invalidatePaymentRecordLists(queryClient);
   // Money events are derived from this data, so the Overview KPI strip and
   // attention feed have to refetch with it.
   invalidateMoneyEventQueries(queryClient);
@@ -73,6 +85,7 @@ export const queryKeys = {
   paymentRecords: (transactionId: string) => ['paymentRecords', transactionId] as const,
   paymentRecordsByClient: (clientId: string, filters: PaymentByClientFilters) =>
     ['paymentRecords', 'client', clientId, filters] as const,
+  recentPayments: (profileId?: string, limit?: number) => ['paymentRecords', 'recent', { profileId, limit }] as const,
 };
 
 // Transaction hooks
@@ -196,7 +209,7 @@ function invalidatePaymentRecordQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   transactionId: string
 ) {
-  queryClient.invalidateQueries({ queryKey: ['paymentRecords'] });
+  invalidatePaymentRecordLists(queryClient);
   queryClient.invalidateQueries({ queryKey: queryKeys.paymentRecords(transactionId) });
   queryClient.invalidateQueries({ queryKey: ['income'] });
   queryClient.invalidateQueries({ queryKey: ['receivables'] });
@@ -221,6 +234,18 @@ export function usePaymentsByClient(
     queryKey: queryKeys.paymentRecordsByClient(clientId!, filters),
     queryFn: () => getRepositories().base.paymentRecords.listByClient(clientId!, filters),
     enabled: !!clientId,
+  });
+}
+
+/**
+ * The newest payments across every client (MUT-8, Home). Keyed under
+ * ['paymentRecords'], so invalidatePaymentRecordLists refreshes it after any
+ * payment or income write.
+ */
+export function useRecentPayments(profileId?: string, limit = 10) {
+  return useQuery({
+    queryKey: queryKeys.recentPayments(profileId, limit),
+    queryFn: () => getRepositories().base.paymentRecords.listRecent({ profileId, limit }),
   });
 }
 

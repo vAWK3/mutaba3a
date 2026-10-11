@@ -33,8 +33,6 @@
     "sort": {
       "nameAZ": "Name (A-Z)",
       "nameZA": "Name (Z-A)",
-      "valueHigh": "Value (High to Low)",
-      "valueLow": "Value (Low to High)",
       "unpaidHigh": "Unpaid (High to Low)",
       "unpaidLow": "Unpaid (Low to High)",
       "activityRecent": "Recent Activity",
@@ -72,10 +70,6 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "sections": {
-      "main": "Main",
-      "workspace": "Workspace",
-      "work": "Work",
-      "money": "Money",
       "system": "System",
       "optional": "More"
     },
@@ -167,14 +161,20 @@
     },
     "needsAttention": "Needs Attention",
     "noAttention": "No overdue or upcoming receivables",
-    "recentActivity": "Recent Activity",
-    "noRecent": "No recent transactions",
     "welcome": {
       "title": "Welcome to Mutaba3a",
       "description": "Start tracking your cash flow by adding your first client, project, or income entry.",
       "addClient": "Add Client",
       "addProject": "Add Project",
       "addIncome": "Add Income"
+    },
+    "recentPayments": "Recent Payments",
+    "noPayments": "No payments recorded yet",
+    "noClient": "No client",
+    "empty": {
+      "title": "Nothing to track yet",
+      "description": "Add what you did for a client and what it's worth. Home then shows what you're owed, who is late, and what came in.",
+      "action": "Add income"
     }
   },
   "onboarding": {
@@ -195,38 +195,6 @@
     "skip": "Skip for now",
     "complete": "Go to Dashboard",
     "stepOf": "Step {current} of {total}"
-  },
-  "home": {
-    "forecast": {
-      "willMakeIt": "Will I Make It?",
-      "willMakeItHelp": "End-of-month forecast: your current cash plus expected income minus upcoming expenses. Assumes unpaid invoices will be collected by their due date.",
-      "endOfMonth": "End-of-month forecast",
-      "cashOnHand": "Cash on Hand",
-      "cashOnHandHelp": "Your current balance based on actual paid income and expenses to date. Does not include unpaid invoices or projections.",
-      "currentBalance": "Current balance",
-      "comingLeaving": "Coming / Leaving",
-      "comingLeavingHelp": "Coming: unpaid income due this month plus expected retainer payments. Leaving: known expenses scheduled for the rest of the month.",
-      "coming": "Coming",
-      "leaving": "Leaving",
-      "net": "Net"
-    },
-    "actuals": {
-      "title": "This Month's Actuals",
-      "received": "Received",
-      "unpaid": "Unpaid",
-      "expenses": "Expenses",
-      "net": "Net"
-    },
-    "attention": {
-      "title": "Needs Attention",
-      "viewAll": "View all",
-      "empty": "All clear! No items need attention.",
-      "markPaid": "Mark Paid",
-      "viewDetails": "View",
-      "viewUnpaid": "View Unpaid",
-      "showMore": "Show {count} more",
-      "showLess": "Show less"
-    }
   },
   "income": {
     "empty": "No income yet",
@@ -305,38 +273,21 @@
     "columns": {
       "client": "Client",
       "activeProjects": "Active Projects",
-      "received": "Received",
       "paidIncome": "Paid Income",
       "unpaid": "Unpaid",
       "expenses": "Expenses",
       "lastPayment": "Last Payment",
-      "lastActivity": "Last Activity"
+      "lastActivity": "Last Activity",
+      "owedNow": "Owed Now",
+      "overdue": "Overdue"
     },
     "summary": {
       "clientsCount": "{count} clients",
-      "clientsCountOne": "1 client",
-      "totalReceived": "Total Received",
-      "totalUnpaid": "Total Unpaid"
-    },
-    "tabs": {
-      "summary": "Summary",
-      "projects": "Projects",
-      "receivables": "Receivables",
-      "transactions": "Transactions"
+      "clientsCountOne": "1 client"
     },
     "detail": {
-      "clientDetails": "Client Details",
-      "email": "Email",
-      "phone": "Phone",
-      "recentActivity": "Recent Activity",
-      "noRecentActivity": "No recent activity",
-      "viewAllTransactions": "View All Transactions",
-      "noProjects": "No projects",
-      "noProjectsHint": "Add your first project for this client.",
       "noReceivables": "No receivables",
       "noReceivablesHint": "All payments have been received.",
-      "noTransactions": "No transactions",
-      "noTransactionsHint": "Add your first transaction for this client.",
       "retainers": {
         "title": "Retainers",
         "empty": "No retainers for this client yet.",
@@ -346,10 +297,37 @@
         "dueNow": "Due now"
       }
     },
-    "receivables": {
-      "dueDate": "Due Date",
-      "daysOverdue": "Days Overdue",
-      "action": "Action"
+    "profile": {
+      "owedNow": "Owed now",
+      "nothingOwed": "Nothing owed",
+      "overdueAmount": "{amount} overdue",
+      "nothingOverdue": "Nothing overdue",
+      "work": {
+        "title": "Work and billing",
+        "add": "Add income",
+        "what": "What",
+        "untitled": "Untitled",
+        "emptyTitle": "No work recorded for this client yet",
+        "emptyHint": "Add what you did and what it's worth. That's all it takes.",
+        "noMatches": "No entries match these filters",
+        "clearFilters": "Clear filters"
+      },
+      "payments": {
+        "title": "Payments",
+        "for": "For",
+        "recordedOnEntry": "Recorded on the entry",
+        "openEntry": "Open income entry"
+      }
+    },
+    "emptyFiltered": "No clients match your search",
+    "emptyFilteredCount": "{count} clients in total.",
+    "clearSearch": "Clear search",
+    "crossProfileTxCount": "{count} entries",
+    "index": {
+      "settled": "Settled",
+      "neverPaid": "Never paid",
+      "oldestOverdue": "oldest {days}d",
+      "owedOrderHint": "Ordered by today's exchange rate. Amounts are never converted."
     }
   },
   "insights": {
@@ -609,9 +587,13 @@
     "backup": "Export Backup",
     "backupDesc": "Download a full backup of all your data as JSON.",
     "backupExport": "Export Backup",
+    "backupDone": "Backup downloaded",
+    "backupFailed": "Backup failed",
     "importBackup": "Import Backup",
     "importBackupDesc": "Restore from a previously exported backup file.",
     "importBackupBtn": "Import Backup",
+    "importBackupDoneSingular": "Restored {count} record from backup (v{version})",
+    "importBackupDonePlural": "Restored {count} records from backup (v{version})",
     "exportReceipts": "Export receipts",
     "exportReceiptsDesc": "{count} uploaded receipt files, as a ZIP with one folder per profile and month",
     "exportReceiptsNone": "No uploaded receipts in this database",
@@ -1477,13 +1459,37 @@
     }
   },
   "orphanedRecords": {
-    "title": "Assign Profiles",
-    "description": {
-      "clients": "The following clients don't have a profile assigned. Please assign them to a profile to continue.",
-      "projects": "The following projects don't have a profile assigned. Please assign them to a profile to continue."
+    "title": "Unassigned records",
+    "description": "These records don't belong to any business profile, so no profile's lists show them. Choose where each one belongs.",
+    "descriptionSingleProfile": "These records don't belong to any business profile, so no profile's lists show them.",
+    "groups": {
+      "clients": "Clients ({count})",
+      "projects": "Projects ({count})",
+      "transactions": "Income ({count})",
+      "expenses": "Expenses ({count})"
     },
-    "assignAllToDefault": "Assign All to Default Profile",
-    "assignIndividually": "Assign Individually",
-    "or": "or"
+    "assignAllTo": "Assign all to {profile}",
+    "profileFor": "Profile for {record}",
+    "untitledIncome": "Income entry",
+    "untitledExpense": "Expense",
+    "noProfiles": "Add a business profile first, then assign these records to it.",
+    "allAssigned": "Every record belongs to a profile.",
+    "assignedSingular": "{count} record assigned.",
+    "assignedPlural": "{count} records assigned.",
+    "partialFailureSingular": "{count} record couldn't be assigned. It's still listed below.",
+    "partialFailurePlural": "{count} records couldn't be assigned. They're still listed below."
+  },
+  "integrity": {
+    "orphanedRecordSingular": "{count} record isn't assigned to any profile.",
+    "orphanedRecordPlural": "{count} records aren't assigned to any profile.",
+    "reviewNow": "Review now",
+    "dismiss": "Dismiss",
+    "checkClean": "No issues found. Records checked: {total}.",
+    "checkIssuesSingular": "Found {count} issue. Records checked: {total}.",
+    "checkIssuesPlural": "Found {count} issues. Records checked: {total}.",
+    "checkFailed": "Integrity check failed",
+    "toastClean": "Data integrity check passed",
+    "toastIssuesSingular": "{count} data integrity issue found",
+    "toastIssuesPlural": "{count} data integrity issues found"
   }
 }

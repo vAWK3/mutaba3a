@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { transactionRepo, clientRepo, projectRepo, TransactionLockedError } from '../repository';
+import { formatLocalDate } from '../../lib/dates';
 import type { Transaction, Client, Project } from '../../types';
 
 describe('transactionRepo', () => {
@@ -688,6 +689,72 @@ describe('transactionRepo', () => {
       const attention = await transactionRepo.getAttentionReceivables({ currency: 'USD' });
 
       expect(attention).toHaveLength(0);
+    });
+
+    /**
+     * MUT-8: Home's Needs attention renders this list directly, across every
+     * currency, so its window and order are pinned here.
+     */
+    describe('as Home\'s Needs attention (MUT-8)', () => {
+      const inDays = (n: number) => {
+        const d = new Date();
+        d.setDate(d.getDate() + n);
+        return formatLocalDate(d);
+      };
+      const receivable = (title: string, dueInDays: number, overrides: Partial<Transaction> = {}) =>
+        transactionRepo.create(
+          createTestTransaction({ kind: 'income', status: 'unpaid', title, dueDate: inDays(dueInDays), ...overrides })
+        );
+
+      it('includes due today and due in exactly 7 days, but not 8 days out', async () => {
+        await receivable('Today', 0);
+        await receivable('Seven', 7);
+        await receivable('Eight', 8);
+
+        const titles = (await transactionRepo.getAttentionReceivables({})).map((t) => t.title);
+
+        expect(titles).toEqual(['Today', 'Seven']);
+      });
+
+      it('marks only items due before today as overdue', async () => {
+        await receivable('Yesterday', -1);
+        await receivable('Today', 0);
+
+        const rows = await transactionRepo.getAttentionReceivables({});
+
+        expect(rows.map((r) => [r.title, r.daysOverdue])).toEqual([
+          ['Yesterday', 1],
+          ['Today', undefined],
+        ]);
+      });
+
+      it('covers every currency when no currency is given, EUR included', async () => {
+        await receivable('Euro', -2, { currency: 'EUR' });
+        await receivable('Shekel', -1, { currency: 'ILS' });
+
+        const rows = await transactionRepo.getAttentionReceivables({});
+
+        expect(rows.map((r) => r.currency)).toEqual(['EUR', 'ILS']);
+      });
+
+      it('orders oldest due first, then by client name, so equal dates never reshuffle', async () => {
+        const zed = await clientRepo.create({ name: 'Zed' });
+        const abe = await clientRepo.create({ name: 'Abe' });
+        await receivable('Zed job', -3, { clientId: zed.id });
+        await receivable('Abe job', -3, { clientId: abe.id });
+        await receivable('Older', -10);
+
+        const titles = (await transactionRepo.getAttentionReceivables({})).map((t) => t.title);
+
+        expect(titles).toEqual(['Older', 'Abe job', 'Zed job']);
+      });
+
+      it('leaves out archived entries', async () => {
+        const archived = await receivable('Archived', -5);
+        await transactionRepo.archive(archived.id);
+
+        expect(await transactionRepo.getAttentionReceivables({})).toEqual([]);
+      });
     });
   });
 });

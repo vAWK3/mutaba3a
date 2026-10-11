@@ -9,15 +9,23 @@ export function getLocaleFromLanguage(language: Language): string {
   return language === 'ar' ? 'ar' : 'en-US';
 }
 
+// Intl.NumberFormat is costly to build and formatAmount runs once per amount
+// cell, so one formatter per locale + currency is kept and reused.
+const amountFormatters = new Map<string, Intl.NumberFormat>();
+
 export function formatAmount(amountMinor: number, currency: Currency, locale: string = 'en-US'): string {
-  const amount = amountMinor / 100;
-  const formatter = new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-  return formatter.format(amount);
+  const key = `${locale}|${currency}`;
+  let formatter = amountFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+    amountFormatters.set(key, formatter);
+  }
+  return formatter.format(amountMinor / 100);
 }
 
 export function formatAmountShort(amountMinor: number, currency: Currency): string {

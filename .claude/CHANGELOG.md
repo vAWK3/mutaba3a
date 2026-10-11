@@ -136,6 +136,437 @@ Docs only; no code. Gates MUT-37/38/39/42/43/44/45 (epic MUT-34).
 - **TD-013:** the synced-decorator upgrade no longer waits on MUT-43, because the portal doesn't inject into the registry. It now waits on the SQLite swap.
 - **COMPONENT_REGISTRY:** `DataTable` and `CellAmount` are listed but don't exist (`src/components/tables/` is absent); a correction note points at the real page-local tables.
 
+## [Unreleased] - 2026-10-11 — "Review now" fixes unassigned records in place
+
+**Scope:** `src/components/drawers/OrphanedRecordsDrawer.tsx` (new),
+`src/db/orphanedRecords.ts` (new), `src/hooks/useOrphanedRecords.ts` (new),
+`src/components/layout/{OrphanedRecordsBanner,AppShell}.tsx`,
+`src/db/integrityCheck.ts`, `src/lib/stores.ts`, `src/index.css`,
+`src/pages/{clients/ClientsPage,projects/ProjectsPage}.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/components/modals/{OrphanedRecordsModal.tsx,OrphanedRecordsModal.css,index.ts}`
+(deleted / export removed), tests below,
+`.claude/designs/orphan-banner-review{,-tests}.md`,
+`.claude/{CHANGELOG,TEST_PLAN,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,SYSTEM_OVERVIEW}.md`.
+
+### Fixed
+- The orphaned-records banner's **Review now** was `<a href="/settings">`.
+  On the web build (router `basepath: '/app'`) it did a full page load to
+  `/settings`, outside the PWA scope and the service worker's offline
+  fallback (verified in the dev build). On desktop it reloaded the app.
+  Settings could only count the records anyway. It's now a button that opens
+  the new **Unassigned records** drawer over the current page.
+- Clients and Projects opened the assign modal by themselves whenever an
+  unassigned client/project existed, and **Cancel couldn't close it**: the
+  page set it open again during render. The pages no longer open anything;
+  the banner is the one entry point.
+- Unassigned income entries and expenses, which the banner counts, couldn't
+  be fixed anywhere. The drawer covers all four kinds.
+
+### Added
+- `OrphanedRecordsDrawer`: clients, projects, income and expenses grouped
+  with counts. With one profile it offers "Assign all to ‹profile›"; with
+  several, "Assign all to ‹default›" plus a picker per row and Save. A row
+  starts on its linked client's profile, then its project's, then the
+  default. Rows that fail stay listed with a message; the rest are saved.
+- `src/db/orphanedRecords.ts`: `isOrphaned` (the one definition of
+  "unassigned", now also used by `runIntegrityCheck`), `findOrphanedRecords`,
+  `startingProfileId`.
+- `useOrphanedRecords` / `useAssignOrphanedRecords`: row-by-row writes through
+  the `base` repositories, then every query refetches.
+
+### Removed
+- `OrphanedRecordsModal` (+ CSS, 10 tests, barrel export); the
+  `orphanedRecords.description.*`, `assignIndividually`, `assignAllToDefault`
+  and `or` keys.
+
+### Debt
+- TD-035 (locked unassigned income can't be assigned: lock rule unchanged,
+  ADR needed) and TD-036 (client/project drawers save `profileId: undefined`
+  for the "Default profile" option).
+
+### Verified
+- `npx tsc -b` clean; `npm run lint` 0 errors (17 warnings, all in files
+  this change doesn't touch); `npx vitest run` after merging main (with
+  MUT-8, f210b31): 139 files, 2,306 passed, 5 skipped, 0 failed.
+- Browser pane, web dev build: Review now opens the drawer with the URL still
+  `/app/` and no document reload; Arabic/RTL layout; Save assigned 6 records
+  as suggested, the banner disappeared and the toast showed the count.
+
+---
+
+## [Unreleased] - 2026-10-11 — MUT-8: Home is owed now, needs attention and recent payments
+
+**Scope:** `src/pages/overview/OverviewPage.tsx`, `src/components/home/{HomeNeedsAttention,HomeRecentPayments}.tsx` (new),
+`src/components/home/{PredictiveKpiStrip,MonthActualsRow,AttentionFeed,KpiCard}.tsx` (deleted) and their tests,
+`src/db/{repository,interfaces}.ts`, `src/sync/core/synced-repository.ts`, `src/hooks/useQueries.ts`,
+`src/types/index.ts`, `src/index.css`, `src/lib/i18n/*`, `src/__tests__/noDeadHomeModules.test.ts` (new),
+`docs/ux-redesign/UX-REDESIGN-SPEC.md`, `.claude/designs/{insights-reintegration,mut-1-client-accounting-core,mut-8-home-owed-attention-payments}.md`,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`.
+Branch `feature/mut-1-client-core`.
+
+### Changed
+- **Home is three blocks** (ADR-036):
+  - **Owed now:** the largest figure on the page, per currency, with the
+    overdue part called out, over every receivable in the active profile.
+  - **Needs attention:** every overdue item and every item due within 7 days,
+    in all currencies, oldest due date first. Each row shows the client, what
+    it was for, the remaining amount and "Nd overdue", "Due in Nd" or "Due
+    today".
+  - **Recent payments:** the last 10, with date, amount, client and what each
+    was for. Income saved as Received is included.
+- **Every row opens its client profile**, or the entry when it has no client.
+- **A new install that skipped onboarding** now sees one action, **Add
+  income**, instead of zeroes.
+
+### Removed
+- The forecast strip ("Will I make it?", cash on hand, coming/leaving), the
+  month-actuals row, the guidance attention feed (which never showed EUR) and
+  "Recent activity", by Basel's decision (D10 = B). That covers
+  `PredictiveKpiStrip`, `MonthActualsRow`, `AttentionFeed` and
+  `KpiCard`/`KpiStrip`.
+- Their five test files, about 600 lines of `.kpi-*`, `.attention-*` and
+  `.actuals-*` CSS, and the `home.*`, `overview.recentActivity` and
+  `overview.noRecent` keys.
+- A guard test keeps the deleted files gone. MUT-58 prunes the money-event
+  read side they leave unused (TD-034).
+
+### Fixed
+- **Onboarding, and the new empty state, flashed on every Home load.** The
+  clients and entries queries looked empty while Dexie was still reading.
+  Home now shows a spinner until both have answered.
+
+### Technical
+- `paymentRecordRepo.listRecent({ profileId, limit = 10 })`, plus
+  `useRecentPayments`, keyed under `['paymentRecords']` so every write
+  refreshes it.
+- `getAttentionReceivables` breaks equal due dates by client name, then id.
+  Its 7-day window, every-currency coverage and archived exclusion are now
+  pinned by tests.
+- **Tests:** +32 new: OverviewPage 15, attention 5, `listRecent` 6, refresh 1,
+  guard 5. 59 tests left with the deleted components. Full suite 2,258
+  passed, 5 skipped, 0 failed. Lint 0 errors, typecheck clean.
+- **Browser check:** 1280px in English and 1024px in Arabic on seeded data.
+  Values matched expectations, rows opened their clients, there was no
+  horizontal scroll, and no onboarding flashed. The brand-new-install empty
+  state is covered by tests only.
+
+---
+
+## [Unreleased] - 2026-10-11 — Settings › Data Tools messages follow the app language
+
+**Scope:** `src/pages/settings/DataToolsSection.tsx` (new, moved out of
+`SettingsPage.tsx`), `src/pages/settings/SettingsPage.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/pages/settings/__tests__/DataToolsSection.test.tsx` (new),
+`.claude/{CHANGELOG,TEST_PLAN,COMPONENT_REGISTRY,TECH_DEBT}.md`.
+
+### Fixed
+- The integrity check's result line and toasts were hardcoded English
+  ("All N records verified…", "Found N issue(s) across N records.",
+  "Data integrity check passed", "N data integrity issue(s) found",
+  "Integrity check failed"), with an English-only `issue${n !== 1 ? 's' : ''}`
+  plural. They now come from `integrity.checkClean`,
+  `checkIssuesSingular/Plural`, `checkFailed`, `toastClean` and
+  `toastIssuesSingular/Plural`, with `{count}` / `{total}` filled by `t()`.
+- The backup and restore toasts in the same section were hardcoded too
+  ("Backup downloaded", "Backup failed", "Restored N records from backup (vN)",
+  "Import failed"). They now use `settings.backupDone`, `backupFailed`,
+  `importBackupDoneSingular/Plural`, and the existing
+  `settings.data.importFailed` ("Import failed: {error}").
+- A scan that stopped part-way said "Found 0 issues…" and toasted
+  "0 data integrity issues found": `runIntegrityCheck` reports failures in
+  `result.error` instead of throwing, so the page's `catch` never ran. An
+  `error` now takes the failure path (toast `integrity.checkFailed`, the row
+  goes back to its default description).
+
+### Changed
+- English copy reads correctly for 0 and 1 records: "No issues found. Records
+  checked: 42." / "Found 1 issue. Records checked: 1." The old "All 1 records
+  verified" and "All 0 records verified" are gone.
+- Arabic plurals use a "label: {count}" phrasing (e.g. "عدد المشكلات: {count}")
+  that reads correctly for 2, 3–10 and 11+, as in the orphaned-records banner.
+- The result line is stored as numbers and worded at render, so switching
+  language on the Settings page rewords it. It used to stay in the language it
+  was produced in.
+- `DataToolsSection` moved to its own file, as `AdvancedFeaturesSection` did,
+  so it can be tested without the whole Settings page.
+- `Translations` now lists the integrity-check keys and every Data Tools key
+  under `settings`, so `tsc -b` fails if either locale drops one (checked by
+  deleting `integrity.checkClean` from ar.json).
+
+---
+
+## [Unreleased] - 2026-10-11 — MUT-7: the clients index answers "who owes me, and who is late"
+
+**Scope:** `src/pages/clients/ClientsPage.tsx`, `src/components/clients/clientIndexRows.ts` (new),
+`src/components/ui/SortableHeader.{tsx,css}` (new), `src/db/{aggregations,repository}.ts`,
+`src/types/index.ts`, `src/lib/utils.ts`, `src/index.css`,
+`src/lib/i18n/{types.ts,translations/en.json,translations/ar.json}`, tests beside each,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`,
+`.claude/designs/mut-7-clients-who-owes-me.md`. Branch `feature/mut-1-client-core`.
+
+### Changed
+- `/clients` columns are now **Client · Owed Now · Overdue · Last Payment ·
+  Last Activity**:
+  - **Owed Now:** one line per currency, or **Settled** when nothing is owed.
+  - **Overdue:** each late currency in the error colour with "oldest Nd", or a
+    dash.
+  - **Last Payment:** the date over the amount, or **Never paid**.
+  - Active projects and received are gone.
+- **Default order is owed now, descending**, ranked by today's exchange rate
+  with nothing converted on screen (ADR-035). The header tooltip says so. The
+  Overdue column sorts by days late, Last Payment and Last Activity by date,
+  Client by name. Ties fall back to name, then id.
+- **Click a column header to sort** (`SortableHeader`, with `aria-sort`). It
+  replaces the sort dropdown and stays in the URL (`?sort=&dir=`).
+- **The whole row opens the client profile**; the name is still a link.
+- **The strip** shows the client count plus `OwedNowSummary` for everyone
+  listed, per currency. It replaces the "Total received" and "Total unpaid"
+  figures, which were converted to ILS.
+
+### Fixed
+- **Last payment ignored partial, backdated and received-at-creation
+  payments.** `lastPaymentAt` was read only from fully paid entries'
+  `tx.paidAt`. It now comes from the same payment rows as the profile's
+  Payments section (parent-brief D6).
+- **Sorting by value or unpaid added raw minor units across USD, ILS and EUR.**
+- **Unpaid on the index counted archived income.** The index now reads
+  `owed` (TD-030, index half).
+- **The search-empty state showed raw keys** (`clients.emptyFiltered`,
+  `clients.emptyFilteredCount`, `clients.clearSearch`), and the cross-profile
+  badge showed a literal "txns". Both are translated in en and ar now.
+
+### Technical
+- `clientSummaryRepo.list/get` return `owed`, `oldestOverdueDays` and
+  `lastPayment`. `list()` reads transactions and payment records once and
+  groups them, instead of scanning every transaction once per client.
+- New pure helpers in `aggregations.ts`: `paymentRowsForIncome` (the
+  ADR-033 derivation, moved out of `listByClient`), `latestPayment`,
+  `combineOwed`, `summarizeClientCollection` and `groupBy`.
+  `OwedByCurrency` and `LastPayment` move to `src/types`.
+- **Brief D4 reverted mid-build:** the per-currency paid/unpaid report fields
+  stay, because Insights and Reports read them.
+- `formatAmount` reuses one `Intl.NumberFormat` per locale + currency.
+- Pruned: the `.clients-summary-strip/item/label` CSS,
+  `clients.columns.received`, `clients.summary.totalReceived/totalUnpaid` and
+  `common.sort.valueHigh/valueLow`.
+- **Tests:** 21 more in total. Added: aggregations +9, client summary +9,
+  `clientIndexRows` 14, `SortableHeader` 4. The page suite was rewritten from
+  33 to 18. The old suite asserted the name-ascending default and
+  cross-currency sums.
+- **Verification:** full suite 2,222 passed, 5 skipped, 0 failed. Lint 0
+  errors (17 pre-existing warnings), typecheck clean.
+- **Browser check** on seeded data at 1280px and 1024px, in English and
+  Arabic. Order matched the ranking by rate. Archived client and archived
+  income were excluded. Last payment covered a partial payment, income saved
+  as received and a backdated Mark paid. The row opened a profile that agrees
+  with its index row. No horizontal scroll, and amount columns align to the
+  end edge in RTL.
+
+---
+
+## [Unreleased] - 2026-10-11 — MUT-15: the sidebar is Home / Clients / Income / Settings
+
+**Scope:** `src/components/layout/{SidebarNav,TopBar,AppShell}.tsx`, `src/components/layout/addMenuActions.ts` (new),
+`src/hooks/useMenuButton.ts` (new), `src/lib/features/{features,routeGuard}.ts`,
+`src/components/onboarding/{OnboardingOverlay,OnboardingStepIndicator}.tsx`, `src/index.css`,
+`src/lib/i18n/translations/{en,ar}.json`, `e2e/navigation.spec.ts`; tests
+`src/components/layout/__tests__/{SidebarNav.features,TopBar.addMenu,addMenuActions}.test.*`,
+`src/hooks/__tests__/useMenuButton.test.tsx`, `src/lib/features/__tests__/{features,leaveDisabledArea}.test.*`,
+`src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`, `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (mock);
+`.claude/{DECISIONS,SYSTEM_OVERVIEW,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN}.md`; brief
+`.claude/designs/mut-15-sidebar-core-four{,-tests}.md`. Branch `feature/mut-2-strip-core`. ADR-034.
+
+### Changed
+- **Sidebar core.** One header-less group, Home → Clients → Income, that no
+  switch can move (a constant rendered above "More"). The "Main" and
+  "Workspace" headers are gone; "More" and "System" stay. Fresh install: exactly
+  Home, Clients, Income, Settings.
+- **`+ Add` menus.** The sidebar **New** menu and the top bar **Add** menu read
+  one list (`visibleAddMenuActions`) and now offer the same order: Income,
+  Client, then Expense / Project while those areas are on (the top bar used to
+  list Income, Expense, Project, Client).
+- **Keyboard.** Both menus follow the menu-button pattern (`useMenuButton`):
+  opening focuses the first item, ArrowUp/Down/Home/End move, Escape closes and
+  returns focus to the button, Tab and outside clicks close. Before, the
+  sidebar menu declared `role="menu"` but ignored arrows and the top bar menu
+  had no roles and did not return focus.
+- **Onboarding (TD-027).** The step indicator takes its step list from the
+  overlay: with projects off a fresh install sees steps 1–2, not a pre-ticked
+  "Project" step 2.
+
+### Added
+- **Leaving a switched-off area.** `useLeaveDisabledArea` (mounted in
+  `AppShell`) re-runs the route guards (`router.invalidate()`) when any area
+  goes from on to off, so a page whose area was switched off, for example in
+  another window of the web build, lands on Home with `replace`. Verified in
+  the browser with two tabs.
+
+### Fixed
+- **Collapsed sidebar.** The collapse chevron and the expand button were
+  absolutely positioned with no containing block in the sidebar, so they
+  floated at the window's top-right (beside `+ Add`) and bottom-centre (behind
+  the download banner). Both are in flow now: chevron under the brand, expand
+  button under Settings. A hairline separates the core group from "More"
+  while headers are hidden.
+- **RTL.** The collapse chevron pointed the wrong way in Arabic; it now points
+  toward the edge the sidebar collapses to in all four direction × state
+  combinations (checked in the browser).
+
+### Removed
+- `nav.sections.main | workspace | work | money` (en, ar): unused.
+- `SidebarNav`'s `/download` external-link branch and a commented-out icon.
+
+### Technical
+- `e2e/navigation.spec.ts` rewritten for the core four (it walked Overview →
+  Projects → Transactions → Reports from the landing page). Run locally: 2/2
+  pass. The other 13 e2e cases fail for reasons that predate this change
+  (TD-004 updated).
+- Verification: `npm run lint` 0 errors (17 pre-existing warnings, none in
+  changed files); `npm run typecheck` and `npx tsc -b` clean; full suite
+  134 files, 2,207 passed, 5 skipped, 0 failed (baseline 130 / 2,149);
+  `npm run build` succeeds.
+
+---
+
+## [Unreleased] - 2026-10-11 — Orphaned-records banner shows text, not i18n keys
+
+**Scope:** `src/components/layout/OrphanedRecordsBanner.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` (new),
+`.claude/{CHANGELOG,TEST_PLAN}.md`.
+
+### Fixed
+- With records saved without a `profileId`, the banner read
+  "8 integrity.orphanedRecordPlural" and its link "integrity.reviewNow", in
+  both languages (seen 2026-10-11 on a dev build). Neither locale file had an
+  `integrity` section. The `|| 'fallback'` strings in the banner never ran,
+  because `t()` returns the key itself when one is missing.
+- Added `integrity.orphanedRecordSingular`, `orphanedRecordPlural`,
+  `reviewNow` and `dismiss` to en.json and ar.json, and the section to the
+  `Translations` type, so `tsc -b` fails if either file drops it.
+
+### Changed
+- The banner passes `{ count }` to `t()` instead of printing the number before
+  the translated phrase, so each language places the number itself. The
+  Arabic plural is a "count: N" label ("عدد السجلات غير المرتبطة بأي ملف
+  تجاري: {count}"). It reads correctly for 2, 3–10 and 11+, which a fixed
+  "{count} سجلات" does not.
+- The dismiss button's `aria-label` is translated (was hardcoded "Dismiss").
+  The dead fallback strings are gone.
+
+---
+
+## [Unreleased] - 2026-10-11 — Release commit carries both lockfiles (v0.0.65 Windows build failure)
+
+**Scope:** `deploy.sh`, `scripts/release.ts`, `scripts/release-files.ts` (new),
+`scripts/__tests__/release-files.test.ts` (new), `vitest.config.ts`,
+`.claude/{CHANGELOG,TEST_PLAN,CI_CD}.md`.
+
+### Fixed
+- The v0.0.65 Windows build ([run 38106560692](https://github.com/vAWK3/mutaba3a/actions/runs/38106560692))
+  failed the Tauri CLI's npm-vs-crate version check: `tauri (v2.11.2) :
+  @tauri-apps/api (v2.12.1)` and `tauri-plugin-opener (v2.5.5) :
+  @tauri-apps/plugin-opener (v2.7.0)`. The tag held a `Cargo.toml` requiring
+  tauri 2.12.1 (an uncommitted dependency bump the release commit swept in)
+  beside a `Cargo.lock` still pinning 2.11.2. `build_mac` had rewritten the
+  lock on disk, but `tag_and_push` only staged `package.json`,
+  `tauri.conf.json` and `Cargo.toml`. Every tag back to at least v0.0.58 held
+  a `Cargo.lock` at least one app version behind, fixed up by hand later (`0c57247 misc`).
+- `tag_and_push` now stages `package-lock.json` and `src-tauri/Cargo.lock`
+  with their manifests, so the tag holds the lock the mac build used.
+- Both version writers (`update_version` in deploy.sh, `writeVersionFiles` in
+  release.ts) use `npm version --no-git-tag-version`, which also bumps
+  `package-lock.json`'s own version. That version was stuck at 0.0.63.
+
+### Changed
+- `npm run release` now warns when a file that goes into the release commit is
+  already modified before the bump, and prints the `git diff` to review. This
+  is the change that let v0.0.65's tauri bump ride in without notice. The
+  "left out" warning now lists the files from the shared list.
+- The release-commit file list lives in `scripts/release-files.ts`
+  (`RELEASE_COMMIT_FILES`). A test asserts it equals the paths deploy.sh's
+  `git add` stages, so the two cannot drift.
+
+### Considered and dropped
+- A `cargo metadata --locked` preflight. It would not have caught this
+  failure: `cargo update --workspace` makes the lock satisfy `Cargo.toml`
+  while leaving `tauri-plugin-opener` at 2.5.5 against npm's 2.7.0. Once the
+  lock is committed, `tauri build` on the mac already runs the same version
+  check against exactly the files that get tagged.
+
+### Not done here
+- v0.0.65 still has no Windows installers. Either cut v0.0.66 (pushes
+  `0c57247` with the fixed lock) or move the `v0.0.65` tag to `0c57247` and
+  re-run `build-windows.yml`. Both need a push by the operator.
+
+---
+
+## [Unreleased] - 2026-10-11 — MUT-3: the client profile is one page answering the three questions (with the MUT-4 Payments UI)
+
+**Scope:** `src/pages/clients/ClientDetailPage.tsx`,
+`src/components/clients/{OwedNowSummary,ClientWorkSection,ClientPaymentsSection}.tsx` (new),
+`src/components/clients/clientProfileRows.ts` (new), `src/db/{aggregations,repository,database}.ts`,
+`src/types/index.ts`, `src/hooks/{useQueries,useIncomeQueries}.ts`, `src/index.css`,
+`src/lib/i18n/{types.ts,translations/en.json,translations/ar.json}`, tests beside each,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`,
+`.claude/designs/mut-3-client-profile{,-tests}.md`. Branch `feature/mut-1-client-core`.
+
+### Changed
+- `/clients/:id` loses its four tabs. One page now shows, top to bottom: the
+  contact details and **Owed now** (the largest figure on the page, one amount
+  per currency, overdue part called out or "Nothing overdue", "Nothing owed"
+  when settled); **Work and billing** (every income entry: date, title,
+  project tag, amount, status, remaining balance on partial rows, due/overdue
+  line; date range + status + search as one filter object; Record payment,
+  Mark paid, invoice actions, duplicate); **Payments** (full history newest
+  first: date, amount, what it was for, notes). Retainers card unchanged
+  below, while Retainers is on.
+- A client with no work shows one primary action, **Add income**, which opens
+  the income drawer for that client; filters that match nothing say so and
+  offer **Clear filters** instead.
+- The project is a tag inside the "What" cell — a link while Projects is on,
+  text while off (MUT-16), absent when unset.
+- Removed from the page: the stats strip (active projects, paid income,
+  unpaid, expenses), Recent activity, the Projects table, expense rows.
+
+### Fixed
+- **Owed now was always zero on the client page.** The old strip read
+  `unpaidIncomeMinorUSD/ILS/EUR`, which `clientSummaryRepo.get` never returns,
+  and showed them through `CurrencySummaryPopup`, which converts to one ILS
+  sum. `summarizeOwedByCurrency` (ADR-033) replaces both.
+- **Payment history missed income saved as Received.** Such entries are
+  marked paid with no `PaymentRecord`; `listByClient` now adds one `entry`
+  row per uncovered amount (ADR-033 §3, TD-029 for the write-side fix).
+- **Payment lists went stale after Mark paid**, retitling or deleting an
+  entry, for the 60s staleTime: transaction and income writes now invalidate
+  `['paymentRecords']` too (also refreshes the payment drawer's history).
+- `listByClient` date bounds compare the calendar date of `paidAt`, so a
+  payment stored as a timestamp on the `dateTo` day is included.
+- The v18 migration's English note ("Migrated from accumulated total") shows
+  as the existing `transactions.partialPayment.migratedNote` translation.
+- MUT-23: the discarded `useProjects(clientId)` call is gone.
+
+### Technical
+- New: `summarizeOwedByCurrency`, `OwedByCurrency` (`aggregations.ts`);
+  `PaymentByClientRow.source: 'record' | 'entry'`; `invalidatePaymentRecordLists`;
+  `MIGRATED_PAYMENT_NOTE` (`database.ts`, value-identical, v18 upgrade
+  unchanged); `toWorkRow` / `WorkRow` (`clientProfileRows.ts`).
+- i18n: `clients.profile.*` added in en + ar; dead `clients.tabs`,
+  `clients.receivables` and ten `clients.detail.*` keys pruned from both files
+  and from `Translations`.
+- Tests: +45 (8 owed-now, 8 `listByClient`, 4 invalidation incl. a real-Dexie
+  Mark paid → Payments refresh, 7 row shaping, 5 `OwedNowSummary`, page suite
+  rewritten to 34). Full suite 2,194 passed, 5 skipped, 0 failed; lint 0
+  errors; typecheck and build clean. `npm run test:tz` has 4 failures, all
+  pre-existing on `main` (TD-014 note).
+- Browser check at 1024 and 1280 px, English and Arabic: no horizontal
+  scroll, Owed now is the largest text (30px), amounts stay LTR in Arabic,
+  Mark paid updates Owed now and Payments without a reload.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 handover refreshed for M8 and the pilot
 
 **Scope:** `.claude/designs/money-v1-handover.md`, `.claude/CHANGELOG.md`. Docs only; no code.

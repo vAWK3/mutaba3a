@@ -3,7 +3,20 @@
  * Extracted from repository.ts to reduce duplication.
  */
 
-import type { Transaction, Currency, Client, Project, Category } from '../types';
+import type {
+  Transaction,
+  Currency,
+  Client,
+  Project,
+  Category,
+  PaymentRecord,
+  PaymentByClientRow,
+  OwedByCurrency,
+  LastPayment,
+} from '../types';
+import { isReceivable, isOverdueReceivable, daysOverdue } from '../lib/dates';
+
+export type { OwedByCurrency, LastPayment };
 
 // Types for aggregation results
 export interface TransactionTotals {
@@ -22,6 +35,9 @@ export interface TransactionTotalsWithActivity extends TransactionTotals {
   lastActivityAt?: string;
   lastPaymentAt?: string;
 }
+
+/** Fixed display order, so a currency never moves around between screens. */
+const OWED_CURRENCY_ORDER: readonly Currency[] = ['USD', 'ILS', 'EUR'];
 
 export interface DateFilter {
   dateFrom?: string;
@@ -44,6 +60,157 @@ export function accumulateIncomeAmount(tx: Transaction): { paid: number; unpaid:
   }
   const received = tx.receivedAmountMinor ?? 0;
   return { paid: received, unpaid: tx.amountMinor - received };
+}
+
+/**
+ * Owed Now, per currency: the remaining balance of every unpaid income, with
+ * the overdue part split out. The single definition behind the client profile
+ * (MUT-3), the clients index (MUT-7) and home (MUT-8).
+ *
+ * Counts unpaid, non-deleted, non-archived income -- the same rows the income
+ * lists show, so the figure always adds up to what is listed beneath it.
+ * Currencies are never combined; one with nothing owed is left out.
+ */
+export function summarizeOwedByCurrency(transactions: Transaction[], today: string): OwedByCurrency[] {
+  const totals = new Map<Currency, OwedByCurrency>();
+
+  for (const tx of transactions) {
+    if (!isReceivable(tx) || tx.deletedAt || tx.archivedAt) continue;
+    const remaining = Math.max(0, accumulateIncomeAmount(tx).unpaid);
+    if (remaining === 0) continue;
+
+    const entry = totals.get(tx.currency) ?? { currency: tx.currency, owedMinor: 0, overdueMinor: 0 };
+    entry.owedMinor += remaining;
+    if (isOverdueReceivable(tx, today)) entry.overdueMinor += remaining;
+    totals.set(tx.currency, entry);
+  }
+
+  return OWED_CURRENCY_ORDER.flatMap((currency) => totals.get(currency) ?? []);
+}
+
+/** Group items by a key; ES2022-safe stand-in for Map.groupBy. */
+export function groupBy<T, K>(items: T[], keyOf: (item: T) => K): Map<K, T[]> {
+  const groups = new Map<K, T[]>();
+  for (const item of items) {
+    const key = keyOf(item);
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  return groups;
+}
+
+/**
+ * Owed Now summed across several clients, per currency (MUT-7 strip). Sums
+ * within a currency only; the order stays USD, ILS, EUR.
+ */
+export function combineOwed(lists: OwedByCurrency[][]): OwedByCurrency[] {
+  const totals = new Map<Currency, OwedByCurrency>();
+  for (const { currency, owedMinor, overdueMinor } of lists.flat()) {
+    const entry = totals.get(currency) ?? { currency, owedMinor: 0, overdueMinor: 0 };
+    entry.owedMinor += owedMinor;
+    entry.overdueMinor += overdueMinor;
+    totals.set(currency, entry);
+  }
+  return OWED_CURRENCY_ORDER.flatMap((currency) => totals.get(currency) ?? []);
+}
+
+/**
+ * The payments one income entry stands for (ADR-033): a row per non-deleted
+ * PaymentRecord, plus one 'entry' row for money the entry says was received
+ * that no record covers -- income saved as Received writes no record. The
+ * single derivation behind a client's Payments section and the clients
+ * index's last payment.
+ *
+ * @param records the entry's non-deleted payment records
+ */
+export function paymentRowsForIncome(tx: Transaction, records: PaymentRecord[]): PaymentByClientRow[] {
+  const rows: PaymentByClientRow[] = records.map((record) => ({
+    id: record.id,
+    transactionId: tx.id,
+    transactionTitle: tx.title,
+    amountMinor: record.amountMinor,
+    currency: tx.currency,
+    paidAt: record.paidAt,
+    notes: record.notes,
+    source: 'record',
+  }));
+
+  const recordedMinor = records.reduce((sum, r) => sum + r.amountMinor, 0);
+  const uncoveredMinor = accumulateIncomeAmount(tx).paid - recordedMinor;
+  if (uncoveredMinor > 0) {
+    rows.push({
+      id: `entry:${tx.id}`,
+      transactionId: tx.id,
+      transactionTitle: tx.title,
+      amountMinor: uncoveredMinor,
+      currency: tx.currency,
+      paidAt: tx.paidAt ?? tx.occurredAt,
+      notes: undefined,
+      source: 'entry',
+    });
+  }
+  return rows;
+}
+
+/**
+ * The newest payment by paidAt. A same-day tie goes to the larger amount,
+ * then the smaller id, so the answer never depends on the input order.
+ */
+export function latestPayment(rows: PaymentByClientRow[]): LastPayment | undefined {
+  let latest: PaymentByClientRow | undefined;
+  for (const row of rows) {
+    if (!latest || isLaterPayment(row, latest)) latest = row;
+  }
+  return latest && { paidAt: latest.paidAt, amountMinor: latest.amountMinor, currency: latest.currency };
+}
+
+function isLaterPayment(a: PaymentByClientRow, b: PaymentByClientRow): boolean {
+  const byDate = a.paidAt.slice(0, 10).localeCompare(b.paidAt.slice(0, 10));
+  if (byDate !== 0) return byDate > 0;
+  if (a.amountMinor !== b.amountMinor) return a.amountMinor > b.amountMinor;
+  return a.id < b.id;
+}
+
+export interface ClientCollection {
+  owed: OwedByCurrency[];
+  oldestOverdueDays?: number;
+  lastPayment?: LastPayment;
+}
+
+/**
+ * What the clients index shows per client (MUT-7): owed now, how late the
+ * oldest overdue item is, and the newest payment. Owed and overdue come from
+ * the same rows as summarizeOwedByCurrency (archived income excluded); the
+ * last payment from paymentRowsForIncome, so it matches the profile's
+ * Payments section -- archived entries' payments included, they happened.
+ *
+ * @param transactions one client's transactions (any kind; filtered here)
+ * @param recordsByTx that client's non-deleted payment records by transaction
+ */
+export function summarizeClientCollection(
+  transactions: Transaction[],
+  recordsByTx: Map<string, PaymentRecord[]>,
+  today: string
+): ClientCollection {
+  const incomes = transactions.filter((tx) => tx.kind === 'income' && !tx.deletedAt);
+
+  let oldestOverdueDays: number | undefined;
+  for (const tx of incomes) {
+    if (tx.archivedAt) continue;
+    const days = daysOverdue(tx, today);
+    if (days !== undefined && (oldestOverdueDays === undefined || days > oldestOverdueDays)) {
+      oldestOverdueDays = days;
+    }
+  }
+
+  const payments = incomes.flatMap((tx) => paymentRowsForIncome(tx, recordsByTx.get(tx.id) ?? []));
+
+  return {
+    owed: summarizeOwedByCurrency(incomes, today),
+    oldestOverdueDays,
+    lastPayment: latestPayment(payments),
+  };
 }
 
 /**

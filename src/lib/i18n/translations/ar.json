@@ -33,8 +33,6 @@
     "sort": {
       "nameAZ": "الاسم (أ-ي)",
       "nameZA": "الاسم (ي-أ)",
-      "valueHigh": "القيمة (الأعلى أولاً)",
-      "valueLow": "القيمة (الأقل أولاً)",
       "unpaidHigh": "المستحق (الأعلى أولاً)",
       "unpaidLow": "المستحق (الأقل أولاً)",
       "activityRecent": "النشاط الأحدث",
@@ -72,10 +70,6 @@
     "collapse": "طي الشريط الجانبي",
     "expand": "توسيع الشريط الجانبي",
     "sections": {
-      "main": "الرئيسية",
-      "workspace": "مساحة العمل",
-      "work": "العمل",
-      "money": "المالية",
       "system": "النظام",
       "optional": "المزيد"
     },
@@ -167,14 +161,20 @@
     },
     "needsAttention": "يتطلب الانتباه",
     "noAttention": "لا توجد مستحقات متأخرة أو قادمة",
-    "recentActivity": "النشاط الأخير",
-    "noRecent": "لا توجد معاملات حديثة",
     "welcome": {
       "title": "مرحباً بك في متابعة",
       "description": "ابدأ بتتبع التدفق النقدي عبر إضافة أول عميل أو مشروع أو إيراد.",
       "addClient": "إضافة عميل",
       "addProject": "إضافة مشروع",
       "addIncome": "إضافة إيراد"
+    },
+    "recentPayments": "أحدث الدفعات",
+    "noPayments": "لا توجد دفعات مسجلة بعد",
+    "noClient": "بدون عميل",
+    "empty": {
+      "title": "لا يوجد ما يُتابَع بعد",
+      "description": "أضف ما أنجزته لعميل وقيمته. ستعرض الصفحة الرئيسية بعدها ما هو مستحق لك، ومن تأخر، وما وصلك.",
+      "action": "إضافة إيراد"
     }
   },
   "onboarding": {
@@ -195,38 +195,6 @@
     "skip": "تخطي الآن",
     "complete": "الذهاب للوحة التحكم",
     "stepOf": "الخطوة {current} من {total}"
-  },
-  "home": {
-    "forecast": {
-      "willMakeIt": "هل سأتدبّر الأمر؟",
-      "willMakeItHelp": "توقعات نهاية الشهر: نقدك الحالي مضافاً إليه الدخل المتوقع ومخصوماً منه المصروفات القادمة. يفترض تحصيل الفواتير غير المدفوعة بحلول تاريخ استحقاقها.",
-      "endOfMonth": "توقعات نهاية الشهر",
-      "cashOnHand": "النقد المتاح",
-      "cashOnHandHelp": "رصيدك الحالي بناءً على الدخل المحصّل والمصروفات الفعلية حتى الآن. لا يشمل الفواتير غير المدفوعة أو التوقعات.",
-      "currentBalance": "الرصيد الحالي",
-      "comingLeaving": "الوارد / الخارج",
-      "comingLeavingHelp": "الوارد: الدخل غير المحصّل المستحق هذا الشهر بالإضافة إلى مدفوعات العقود المتكررة المتوقعة. الخارج: المصروفات المعروفة المجدولة لبقية الشهر.",
-      "coming": "وارد",
-      "leaving": "خارج",
-      "net": "صافي"
-    },
-    "actuals": {
-      "title": "الأرقام الفعلية لهذا الشهر",
-      "received": "محصّل",
-      "unpaid": "غير محصّل",
-      "expenses": "مصروفات",
-      "net": "صافي"
-    },
-    "attention": {
-      "title": "يحتاج انتباه",
-      "viewAll": "عرض الكل",
-      "empty": "كل شيء تمام! لا توجد عناصر تحتاج انتباه.",
-      "markPaid": "تم الدفع",
-      "viewDetails": "عرض",
-      "viewUnpaid": "عرض غير المحصّل",
-      "showMore": "عرض {count} المزيد",
-      "showLess": "عرض أقل"
-    }
   },
   "income": {
     "empty": "لا توجد إيرادات بعد",
@@ -305,38 +273,21 @@
     "columns": {
       "client": "العميل",
       "activeProjects": "المشاريع النشطة",
-      "received": "المحصّل",
       "paidIncome": "الإيرادات المحصّلة",
       "unpaid": "غير المحصّل",
       "expenses": "المصروفات",
       "lastPayment": "آخر دفعة",
-      "lastActivity": "آخر نشاط"
+      "lastActivity": "آخر نشاط",
+      "owedNow": "المستحق الآن",
+      "overdue": "المتأخر"
     },
     "summary": {
       "clientsCount": "{count} عملاء",
-      "clientsCountOne": "عميل واحد",
-      "totalReceived": "إجمالي المحصّل",
-      "totalUnpaid": "إجمالي غير المحصّل"
-    },
-    "tabs": {
-      "summary": "ملخص",
-      "projects": "المشاريع",
-      "receivables": "المستحقات",
-      "transactions": "المعاملات"
+      "clientsCountOne": "عميل واحد"
     },
     "detail": {
-      "clientDetails": "تفاصيل العميل",
-      "email": "البريد الإلكتروني",
-      "phone": "الهاتف",
-      "recentActivity": "النشاط الأخير",
-      "noRecentActivity": "لا يوجد نشاط حديث",
-      "viewAllTransactions": "عرض كل المعاملات",
-      "noProjects": "لا توجد مشاريع",
-      "noProjectsHint": "أضف أول مشروع لهذا العميل.",
       "noReceivables": "لا توجد مستحقات",
       "noReceivablesHint": "تم تحصيل جميع المستحقات.",
-      "noTransactions": "لا توجد معاملات",
-      "noTransactionsHint": "أضف أول معاملة لهذا العميل.",
       "retainers": {
         "title": "العقود الشهرية",
         "empty": "لا توجد عقود شهرية لهذا العميل بعد.",
@@ -346,10 +297,37 @@
         "dueNow": "مستحق الآن"
       }
     },
-    "receivables": {
-      "dueDate": "تاريخ الاستحقاق",
-      "daysOverdue": "أيام التأخير",
-      "action": "إجراء"
+    "profile": {
+      "owedNow": "المستحق الآن",
+      "nothingOwed": "لا توجد مستحقات",
+      "overdueAmount": "{amount} متأخر",
+      "nothingOverdue": "لا شيء متأخر",
+      "work": {
+        "title": "العمل والفوترة",
+        "add": "إضافة إيراد",
+        "what": "العمل",
+        "untitled": "بدون عنوان",
+        "emptyTitle": "لم يُسجَّل أي عمل لهذا العميل بعد",
+        "emptyHint": "أضف ما أنجزته وقيمته. هذا كل ما يلزم.",
+        "noMatches": "لا توجد إدخالات تطابق عوامل التصفية",
+        "clearFilters": "مسح عوامل التصفية"
+      },
+      "payments": {
+        "title": "الدفعات",
+        "for": "مقابل",
+        "recordedOnEntry": "مسجّلة في الإدخال",
+        "openEntry": "فتح إدخال الإيراد"
+      }
+    },
+    "emptyFiltered": "لا يوجد عملاء مطابقون للبحث",
+    "emptyFilteredCount": "{count} عميل إجمالاً.",
+    "clearSearch": "مسح البحث",
+    "crossProfileTxCount": "{count} إدخال",
+    "index": {
+      "settled": "مسدَّد",
+      "neverPaid": "لم يدفع بعد",
+      "oldestOverdue": "الأقدم {days} يوم",
+      "owedOrderHint": "مرتّبة حسب سعر الصرف اليوم. لا تُحوَّل المبالغ أبداً."
     }
   },
   "insights": {
@@ -609,9 +587,13 @@
     "backup": "تصدير نسخة احتياطية",
     "backupDesc": "تحميل نسخة احتياطية كاملة من جميع بياناتك بصيغة JSON.",
     "backupExport": "تصدير نسخة احتياطية",
+    "backupDone": "تم تنزيل النسخة الاحتياطية",
+    "backupFailed": "فشل تصدير النسخة الاحتياطية",
     "importBackup": "استيراد نسخة احتياطية",
     "importBackupDesc": "استعادة من ملف نسخة احتياطية تم تصديره مسبقاً.",
     "importBackupBtn": "استيراد نسخة احتياطية",
+    "importBackupDoneSingular": "تمت استعادة سجل واحد من النسخة الاحتياطية (الإصدار {version})",
+    "importBackupDonePlural": "تمت الاستعادة من النسخة الاحتياطية (الإصدار {version})، عدد السجلات: {count}",
     "exportReceipts": "تصدير الإيصالات",
     "exportReceiptsDesc": "{count} ملف إيصال مرفوع، كملف ZIP بمجلد لكل ملف تعريف وشهر",
     "exportReceiptsNone": "لا توجد إيصالات مرفوعة في قاعدة البيانات",
@@ -1512,13 +1494,37 @@
     }
   },
   "orphanedRecords": {
-    "title": "تعيين الملفات التجارية",
-    "description": {
-      "clients": "العملاء التاليون ليس لديهم ملف تجاري معين. يرجى تعيينهم لملف تجاري للمتابعة.",
-      "projects": "المشاريع التالية ليس لديها ملف تجاري معين. يرجى تعيينها لملف تجاري للمتابعة."
+    "title": "سجلات غير مرتبطة",
+    "description": "هذه السجلات لا تنتمي إلى أي ملف تجاري، لذلك لا تظهر في قوائم أي ملف. اختر الملف الذي ينتمي إليه كل سجل.",
+    "descriptionSingleProfile": "هذه السجلات لا تنتمي إلى أي ملف تجاري، لذلك لا تظهر في قوائم أي ملف.",
+    "groups": {
+      "clients": "العملاء ({count})",
+      "projects": "المشاريع ({count})",
+      "transactions": "الإيرادات ({count})",
+      "expenses": "المصروفات ({count})"
     },
-    "assignAllToDefault": "تعيين الكل للملف الافتراضي",
-    "assignIndividually": "تعيين فردياً",
-    "or": "أو"
+    "assignAllTo": "تعيين الكل إلى {profile}",
+    "profileFor": "الملف التجاري لـ {record}",
+    "untitledIncome": "إيراد",
+    "untitledExpense": "مصروف",
+    "noProfiles": "أضف ملفاً تجارياً أولاً، ثم عيّن هذه السجلات له.",
+    "allAssigned": "كل السجلات مرتبطة بملف تجاري.",
+    "assignedSingular": "تم تعيين سجل واحد.",
+    "assignedPlural": "عدد السجلات التي تم تعيينها: {count}",
+    "partialFailureSingular": "تعذّر تعيين سجل واحد، وما زال ظاهراً أدناه.",
+    "partialFailurePlural": "عدد السجلات التي تعذّر تعيينها: {count}. ما زالت ظاهرة أدناه."
+  },
+  "integrity": {
+    "orphanedRecordSingular": "سجل واحد غير مرتبط بأي ملف تجاري.",
+    "orphanedRecordPlural": "عدد السجلات غير المرتبطة بأي ملف تجاري: {count}",
+    "reviewNow": "مراجعة الآن",
+    "dismiss": "إغلاق",
+    "checkClean": "لا توجد مشكلات. عدد السجلات المفحوصة: {total}",
+    "checkIssuesSingular": "تم العثور على مشكلة واحدة. عدد السجلات المفحوصة: {total}",
+    "checkIssuesPlural": "عدد المشكلات: {count}، عدد السجلات المفحوصة: {total}",
+    "checkFailed": "فشل فحص سلامة البيانات",
+    "toastClean": "اكتمل فحص سلامة البيانات دون مشكلات",
+    "toastIssuesSingular": "تم العثور على مشكلة واحدة في سلامة البيانات",
+    "toastIssuesPlural": "عدد مشكلات سلامة البيانات: {count}"
   }
 }

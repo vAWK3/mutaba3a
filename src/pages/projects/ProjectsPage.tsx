@@ -4,7 +4,6 @@ import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { EmptyState } from '../../components/ui';
-import { OrphanedRecordsModal } from '../../components/modals';
 import { useProjectSummaries, useProjects } from '../../hooks/useQueries';
 import { useSortState } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
@@ -18,7 +17,6 @@ export function ProjectsPage() {
   const { openProjectDrawer } = useDrawerStore();
   const t = useT();
   const [search, setSearch] = useState('');
-  const [showOrphanedModal, setShowOrphanedModal] = useState(false);
 
   // URL-persisted sorting
   const { sortField, sortDir, setSort } = useSortState<SortField>({
@@ -30,14 +28,8 @@ export function ProjectsPage() {
   // Get active profile - STRICT MODE: always operates on active profile only
   const profileId = useProfileFilter();
 
-  // Fetch all projects to check for orphaned records
+  // Fetch all projects (every profile) for the filtered-empty copy
   const { data: allProjects = [] } = useProjects(undefined, undefined);
-
-  // Check for orphaned projects and show modal
-  const hasOrphanedProjects = allProjects.some((p) => !p.profileId && !p.archivedAt);
-  if (hasOrphanedProjects && !showOrphanedModal) {
-    setShowOrphanedModal(true);
-  }
 
   // Always fetch all currencies - no currency filter
   const { data: rawProjects = [], isLoading } = useProjectSummaries(profileId, undefined, search);
@@ -108,11 +100,6 @@ export function ProjectsPage() {
 
   return (
     <>
-      <OrphanedRecordsModal
-        isOpen={showOrphanedModal}
-        onClose={() => setShowOrphanedModal(false)}
-        type="projects"
-      />
       <TopBar title={t('projects.title')} />
       <div className="page-content">
         <div className="filters-row">

@@ -117,6 +117,56 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
 
+#### Orphaned-records banner copy (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` | Component | 5 | en + ar × 1 and 8 records: message from `integrity.*` with `{count}` filled, no raw key or `{count}` left, translated link and dismiss label, no "Translation missing" warning; exact English sentences for 1 and 8 |
+
+`tsc -b` also guards the section: `integrity` is required in `Translations`, so
+removing it from either locale file fails the `as Translations` cast in
+`context.tsx`. Not run on this change: the full `npx vitest run` (stopped on
+request; only this file was run). Still manual: the banner in RTL.
+
+#### Unassigned records: Review now opens a drawer in place (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/db/__tests__/orphanedRecords.test.ts` | Unit (real Dexie) | 16 | **Full** - `findOrphanedRecords`: empty, one of each kind vs assigned, archived/soft-deleted skipped, profile maps hold assigned rows only, client names; same ids as `runIntegrityCheck`. `startingProfileId`: client none, project → client, income/expense → client then project, no links, non-selectable profile skipped |
+| `src/components/drawers/__tests__/OrphanedRecordsDrawer.test.tsx` | Component (real Dexie) | 14 | store open/close; groups with counts, empty groups hidden, untitled income named after its client with date and amount; one profile: no pickers, assign all writes four kinds + toast + close; several: rows start on linked client's profile, per-row Save, quick action ignores pickers; locked income fails, others saved, row stays with alert; no profiles; nothing left; Cancel writes nothing; Arabic copy; en/ar key parity and placeholders |
+| `src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` (extended) | Component | 7 (+2) | Review now is a `type="button"`, no `<a href>` in the banner; click opens the drawer store, URL unchanged |
+| `src/pages/clients/__tests__/ClientsPage.test.tsx`, `src/pages/projects/__tests__/ProjectsPage.test.tsx` (extended) | Page | +1 each | an unassigned client/project no longer opens a dialog |
+| `src/db/__tests__/integrityCheck.test.ts` | Unit | 6 (unchanged) | still green on the shared `isOrphaned` predicates |
+
+Removed: `src/components/modals/__tests__/OrphanedRecordsModal.test.tsx` (10),
+with the modal. Full suite after merging main (with MUT-8, f210b31): 139 files,
+2,306 passed, 5 skipped. Checked by hand in the web dev build: no URL change or reload on
+Review now, Arabic/RTL drawer, Save clears the banner. Not covered:
+`AppShell` mounting the drawer (no AppShell test exists; covered by the manual run).
+
+#### Settings › Data Tools copy (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/pages/settings/__tests__/DataToolsSection.test.tsx` | Component | 24 | en + ar: heading, row and button labels; clean run (result line + success toast); 1, 3 and 12 issues mixing orphaned and broken references (singular/plural line + toast); a failed check, both returned `error` and thrown, shows the failure toast, not "0 issues"; backup toast, success and failure; restore toast for 1 and 57 records with the backup version; failed restore wrapped in `settings.data.importFailed`. Each test also checks for no raw key or `{placeholder}` left and no "Translation missing" warning. Plus exact English sentences, and a check that Arabic plural templates are "label: {count}" |
+
+`tsc -b` guards the keys (`integrity.*` and the Data Tools keys under
+`settings` are required in `Translations`). The full suite passed on the
+branch as first written on `d2a050d` (135 files, 2230 passed, 5 skipped). It
+was not re-run, on request, after an `eslint-disable-next-line` comment was
+added to the new test or after the rebase onto main with MUT-7 and MUT-15
+(no overlap in `src/pages/settings` or the i18n keys; lint and `tsc -b` pass). The restore tests print jsdom's
+"Not implemented: navigation" because `Location.reload` can't be stubbed.
+Still manual: the Data Tools row in RTL.
+
+#### Release tooling (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `scripts/__tests__/release-files.test.ts` | Unit + contract | 7 | **Full** - each manifest staged with its lockfile; `RELEASE_COMMIT_FILES` equals deploy.sh `tag_and_push`'s `git add` (parsed from the script); porcelain partition: unstaged/staged/both columns, untracked, rename destination, leading-space first line, clean tree |
+
+`vitest.config.ts` includes `scripts/**/*.{test,spec}.ts` for this. Still manual
+(no unit seam): `update_version` / `writeVersionFiles` bumping
+`package-lock.json`, and the release commit's contents. Both were dry-run on
+2026-10-11 in a local clone with `origin` removed, so `tag_and_push` committed
+and then failed at the push.
+
 #### Expenses collapse (MUT-14, added 2026-10-10)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
@@ -177,7 +227,7 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
 | `src/pages/clients/__tests__/ClientsPage.test.tsx` | Page | 33 | **70.08%** - Sorting, search, multi-currency |
-| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Page | 10 | Partial - Detail view |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Page | 34 | Rewritten for MUT-3: three sections, empty states, MUT-6/13/16 gates |
 | `src/pages/projects/__tests__/ProjectsPage.test.tsx` | Page | ~40 | **73.03%** - Projects list |
 | `src/pages/projects/__tests__/ProjectDetailPage.test.tsx` | Page | ~30 | Partial - Project detail |
 | `src/pages/income/__tests__/IncomePage.test.tsx` | Page | 30 | **~90%** - Income ledger, filters, interactions |
@@ -789,6 +839,109 @@ existing `DocumentDrawer` and document page tests, which still pass.
 **Baseline after TD-028 (2026-10-10)**: 2,149 unit tests passing, 5 skipped,
 0 failing. The 18 `ExpensesLedgerPage` failures noted above no longer exist on
 `main`; the page was removed by the MUT-2 strip.
+
+### MUT-3 — one-page client profile (with the MUT-4 Payments UI)
+
+| Area | File | What is pinned |
+|---|---|---|
+| Owed Now definition (ADR-033 §1–2) | `src/db/__tests__/aggregations.test.ts` (8) | empty → `[]`; unpaid in full; partial counts remaining only; paid, expense, soft-deleted and archived ignored; overdue = due before today only (due today is not); currencies apart in USD → ILS → EUR order; fully covered currency omitted; over-received clamps to 0 |
+| Payment history (ADR-033 §3) | `src/db/__tests__/paymentRecords.test.ts` (+8) | record rows carry `source: 'record'`; income saved as paid with no records → one `entry` row (`entry:<id>`, full amount, `paidAt`); `occurredAt` fallback; no double count when records cover it; partial cover → only the gap; unpaid with nothing received → no row; soft-deleted entry → nothing; currency/date/limit apply to entry rows and sort with records; a timestamped `paidAt` on the `dateTo` day is included |
+| Refresh after any income write | `useQueries.test.tsx` (real Dexie), `useIncomeQueries.test.tsx` (3) | Mark paid → `usePaymentsByClient` refetches and shows the new record with no manual invalidation; `useMarkIncomePaid`, `useUpdateIncome`, `useDeleteIncome` invalidate `['paymentRecords']` |
+| Row shaping | `src/components/clients/__tests__/clientProfileRows.test.ts` (7) | fields copied; remaining only when partial; overdue vs due-in vs due-today; paid has neither; missing title stays undefined; status derived when absent |
+| Hero | `src/components/clients/__tests__/OwedNowSummary.test.tsx` (5) | one amount per currency; overdue line in the overdue style; "Nothing overdue"; "Nothing owed"; `dir="ltr"` and U+2066/U+2069 around the sentence amount |
+| Page | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (34, rewritten) | no tab buttons, three regions at once, contact details; Owed Now per currency from unfiltered receivables and unchanged by work filters; row content incl. remaining and due lines; project tag link/text/absent; untitled label; row click → income drawer; filters as one object; no-work empty state with exactly one Add income → `openIncomeDrawer({ mode: 'create', defaultClientId })`; filtered-empty with Clear filters; Record payment gate and remaining amount (MUT-6); Mark paid only on receivables; Payments rows, record → `editPaymentRecord`, entry → income drawer, row menu "Open income entry", migrated note translated, empty text; invoice actions off/on, retainers card off/on, + Project on/off (MUT-13/16); `useProjects` never called (MUT-23) |
+
+Dates are pinned with `vi.useFakeTimers({ shouldAdvanceTime: true })` at
+2026-10-11 and date strings are asserted through `formatDate` itself, so the
+page suite also passes under `npm run test:tz`.
+
+Manual (browser, 2026-10-11, seeded data, 1024 px and 1280 px, English and
+Arabic): no horizontal scroll on page or either table; Owed Now is the largest
+text (30px vs an 18px title); amounts stay LTR in Arabic; Mark paid from the
+row menu updates Owed Now, the row and Payments without a reload; the no-work
+client shows one Add income that opens the drawer with the client filled in;
+a payment row opens the drawer in edit mode on the right record.
+
+**Baseline after MUT-3 (2026-10-11)**: 2,194 unit tests passing, 5 skipped,
+0 failing. `npm run test:tz`: 4 failures, all pre-existing on `main` (TD-014).
+
+### MUT-15 — the sidebar is Home / Clients / Income / Settings
+
+| Area | File | What is pinned |
+|---|---|---|
+| Core shape (AC 1, 2, 8) | `src/components/layout/__tests__/SidebarNav.features.test.tsx` | fresh install: exactly Home, Clients, Income, Settings in DOM (Tab) order, no Main/Workspace/More header; every area on: the core three first, More holds the six in order, Settings last; switching an area on then off adds and removes it below the core with the core link **nodes** identical throughout; Settings is inside `.sidebar-footer`, never `.sidebar-nav`, with all areas off and on |
+| Active state (AC 6) | same file | parametrised over `/`, `/clients`, `/clients/c1`, `/income`, `/expenses`, `/documents/d1/edit`, `/retainers`, `/insights`, `/planning`, `/projects/p1`, `/settings/profiles/p1`, `/settings/import`: exactly one link has `active` + `aria-current="page"` and it is the expected entry; nothing active on `/theme-demo` |
+| Collapsed mode (AC 7) | same file | four icon links titled with their labels, no labels or headers rendered; the toggle collapses/expands and writes `localStorage.sidebarCollapsed` |
+| `+ Add` actions (AC 5) | `layout/__tests__/addMenuActions.test.ts`, `SidebarNav.features.test.tsx`, `TopBar.addMenu.test.tsx` | Income, Client always; Expense / Project appended only while on; all 64 flag combinations keep Income, Client first; both menus render the same order |
+| Menu keyboard (D5) | `src/hooks/__tests__/useMenuButton.test.tsx` (11), plus one case in each menu's test | `aria-haspopup`/`aria-expanded`/`aria-controls`; opening focuses the first item (ArrowUp on the button: last); arrows wrap; Home/End; Escape closes and refocuses the button (also when the button has focus); Tab and outside mousedown close, inside mousedown does not; a picked item runs and the menu closes without pulling focus back |
+| Redirect on disable (AC 4) | `src/lib/features/__tests__/leaveDisabledArea.test.tsx` (6), `features.test.ts` (`featuresTurnedOff`, 5) | real memory-history router + real `requireFeature`: switching the open page's area off lands on `/` with history length 1 (replace); a core page stays; another area off re-runs the guard and stays; switching on, a non-feature settings change and the first load never call `router.invalidate` (spied before the first render) |
+| Onboarding (TD-027) | `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx` (+3) | projects off: two circles numbered 1, 2, none ticked, first current; after the client step, 1 ticked and 2 current; projects on: three circles |
+| E2E | `e2e/navigation.spec.ts` (run locally against a worktree dev server) | `/app/` shows the four links in order with no optional or legacy link; each navigates and gets `aria-current="page"` |
+
+Browser check (2026-10-11, dev server): English and Arabic × expanded and
+collapsed × no areas and two areas on — core order, More below, Settings in
+the footer, active rail on the inline-start edge, collapse chevron direction
+in all four direction × state combinations, collapsed toggles in flow with no
+overlap. Two-tab check: tab A on `/app/expenses`, tab B switches Expenses off,
+tab A's settings query refetches → More loses Expenses and the tab lands on
+`/app/` with history length unchanged.
+
+**Baseline after MUT-15 (2026-10-11)**: 134 files, 2,207 passed, 5 skipped,
+0 failed (was 130 / 2,149).
+
+### MUT-7 — clients index: who owes me, and who is late
+
+| Area | File | What is pinned |
+|---|---|---|
+| Payment derivation, extracted (ADR-033) | `src/db/__tests__/aggregations.test.ts` (+9) | `paymentRowsForIncome`: record rows; one entry row for the uncovered received amount; `occurredAt` fallback; nothing for unpaid. `latestPayment`: none → undefined; newest wins; same-day tie → larger amount, then id, whatever the input order. `combineOwed`: sums within a currency only, `[]` when settled. `listByClient`'s 15 existing tests guard the refactor |
+| Summary collection fields | `src/db/__tests__/clientRepo.test.ts` (+9) | owed per currency without paid or archived income; settled → `[]` and no overdue age; oldest overdue age, with due-today not overdue; last payment from a partial record; a backdated record beats an older paid entry; deleted records ignored; income saved as paid counts; never paid → undefined; archived clients excluded; `get()` follows payments too. Dates are relative to the real today (no fake timers around Dexie) |
+| Row shaping and ordering | `src/components/clients/__tests__/clientIndexRows.test.ts` (14) | settled flag; overdue lists only late currencies; `owedRank` converts rated currencies, keeps unrated ones in their own slot, all zeros when settled; owed desc/asc by rate with settled last; unrated amounts rank after rated; overdue by days; last payment newest first with never-paid last; activity; name; ties name then id in both directions |
+| Header | `src/components/ui/__tests__/SortableHeader.test.tsx` (4) | `aria-sort` none, descending, ascending; click reports the field; end alignment and title |
+| Page | `src/pages/clients/__tests__/ClientsPage.test.tsx` (18, rewritten from 33) | exact column set; per-currency lines in Owed Now; Overdue amounts plus "oldest Nd"; Settled and dash; last payment date and amount, or Never paid; order hint on the header; default order and `aria-sort`; order flips when the USD rate changes; toggle; each column's order; sort in the URL; ties by name; strip count and per-currency total owed; row click → profile; name is a link; empty, search-empty (translated keys, debounce awaited) and loading states |
+
+The old page suite asserted the name-ascending default and cross-currency
+sums, both of which this ticket removes. Its search and empty-state cases were
+kept in spirit. Archived-client exclusion is pinned at the repository, where
+it happens.
+
+Manual (browser, 2026-10-11, seeded data, 1280px and 1024px, English and
+Arabic): order Gamma ₪12,000 > Acme $1,300 + ₪4,200 > Beta $900 > the
+settled clients, at a live rate of ₪3.06/$. The strip read $2,200 and
+₪16,200 with the overdue parts. The archived client and archived-only debt
+were left out. Header clicks and the URL matched. A row opened a profile
+that agrees with its index row. No horizontal scroll, and RTL amount columns
+sit at the end edge.
+
+**Baseline after MUT-7 (2026-10-11)**: 2,222 unit tests passing, 5 skipped,
+0 failing.
+
+### MUT-8 — Home: owed now, needs attention, recent payments
+
+| Area | File | What is pinned |
+|---|---|---|
+| Needs attention data | `src/db/__tests__/transactionRepo.test.ts` (+5, "as Home's Needs attention") | due today and day 7 in, day 8 out; only before-today is overdue (`daysOverdue` 1 vs undefined); every currency incl. EUR without a filter; oldest first, equal dates by client name; archived entries left out. Dates are relative to the real today via `formatLocalDate` |
+| Recent payments data | `src/db/__tests__/paymentRecords.test.ts` (+6, `listRecent`) | empty → `[]`; across clients, newest first, client and what-for named, record and entry rows; client-less income kept unnamed; default limit 10 and a smaller limit; profile scoping; deleted entries and records out, archived entries' payments in |
+| Refresh | `src/hooks/__tests__/useQueries.test.tsx` (+1, real Dexie) | Mark paid → `useRecentPayments` shows the payment with no manual invalidation (inherits MUT-3's `['paymentRecords']` prefix, so it passed on first run as a regression guard) |
+| Page | `src/pages/overview/__tests__/OverviewPage.test.tsx` (15, new — Home had no test) | block order; Owed now per currency with overdue part; profile-scoped queries; old blocks absent; attention rows in repo order with client, what for, remaining; bucketing (3d overdue, Due today not overdue); day-7 label; row → client or entry drawer; attention empty state; payments rows and navigation; payments empty state; new install → one page action, Add income, no tables; loading → spinner, no onboarding or empty-state flash; onboarding still shown when not skipped |
+| Deletion guard | `src/__tests__/noDeadHomeModules.test.ts` (5) | the four deleted component files stay gone; the home barrel exports only the two MUT-8 sections |
+
+Removed with the deleted components: `PredictiveKpiStrip.test.tsx`,
+`MonthActualsRow.test.tsx`, `AttentionFeed.test.tsx`,
+`AttentionFeed.features.test.tsx` and `src/components/__tests__/KpiCard.test.tsx`
+(59 tests).
+
+Manual (browser, 2026-10-11, seeded data, 1280px English, 1024px Arabic):
+- Owed now read $3,434 and ₪16,200. The $1,234 above the clients index belongs
+  to the archived client (ADR-036 §5), and the archived EUR entry was left out.
+- Needs attention listed Gamma 31d, Acme 3d and Beta due in 5d. The 9- and
+  10-day items were left out.
+- Recent payments listed three rows, newest first.
+- A row opened Gamma's profile. No horizontal scroll, RTL stacked to one
+  column, and amounts stayed LTR.
+- No onboarding flash after the loading fix.
+
+**Baseline after MUT-8 (2026-10-11)**: 2,258 unit tests passing, 5 skipped,
+0 failing.
 
 ### MUT-37 — operator-only user accounts (`server/`)
 

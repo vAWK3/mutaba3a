@@ -24,7 +24,7 @@ MUT-36 acceptance, and where each one is met:
 
 - **Reused as-is** (each checked to import nothing from `db`, `sync`, the stores or the local hooks): CSS variables and tokens, `Button`, `Badge`, `Card`, `EmptyState`, `SegmentedTabs`, `SearchInput`, `Pagination`, `Table.css`, `ThemeProvider`, `LanguageProvider`/`t()`/RTL.
 - **Not reused:**
-  - `KpiCard` reads `useFxRate` and formats minor-unit numbers.
+  - `KpiCard` read `useFxRate` and formatted minor-unit numbers; MUT-8 has since deleted it from `main`.
   - `StatusSegment` is typed to the local `TxStatus` (paid/unpaid).
   - The portal's strip and status filter are built from `Card` and `SegmentedTabs` instead.
 

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProjectsPage } from '../ProjectsPage';
@@ -284,6 +284,24 @@ describe('ProjectsPage', () => {
       renderWithProviders(<ProjectsPage />);
       const summaryStrip = document.querySelector('.projects-summary-strip');
       expect(summaryStrip).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Unassigned projects', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('does not open a modal on its own; the app-wide banner handles them', () => {
+      vi.spyOn(useQueries, 'useProjects').mockReturnValue({
+        data: [{ id: 'project-orphan', name: 'Unassigned project', createdAt: '', updatedAt: '' }],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useProjects>);
+
+      renderWithProviders(<ProjectsPage />);
+
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 });

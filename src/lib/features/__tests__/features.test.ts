@@ -4,6 +4,7 @@ import {
   DEFAULT_FEATURES,
   resolveFeatures,
   withFeature,
+  featuresTurnedOff,
   FEATURE_DATA_PROBES,
 } from '../features';
 
@@ -77,5 +78,31 @@ describe('withFeature', () => {
   it('can switch a key off again', () => {
     const on = withFeature(DEFAULT_FEATURES, 'retainers', true);
     expect(withFeature(on, 'retainers', false)).toEqual(DEFAULT_FEATURES);
+  });
+});
+
+describe('featuresTurnedOff (MUT-15)', () => {
+  it('is empty when nothing changed', () => {
+    const flags = resolveFeatures({ expenses: true });
+    expect(featuresTurnedOff(flags, resolveFeatures({ expenses: true }))).toEqual([]);
+  });
+
+  it('names a key that went from on to off', () => {
+    expect(featuresTurnedOff(resolveFeatures({ expenses: true }), DEFAULT_FEATURES)).toEqual(['expenses']);
+  });
+
+  it('ignores keys that were switched on', () => {
+    expect(featuresTurnedOff(DEFAULT_FEATURES, resolveFeatures({ projects: true, insights: true }))).toEqual([]);
+  });
+
+  it('lists several keys in FEATURE_KEYS order', () => {
+    const before = resolveFeatures({ projects: true, invoices: true, planning: true });
+    expect(featuresTurnedOff(before, DEFAULT_FEATURES)).toEqual(['invoices', 'planning', 'projects']);
+  });
+
+  it('reports only the key that went off when another went on', () => {
+    const before = resolveFeatures({ retainers: true });
+    const after = resolveFeatures({ expenses: true });
+    expect(featuresTurnedOff(before, after)).toEqual(['retainers']);
   });
 });

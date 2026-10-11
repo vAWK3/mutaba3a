@@ -1,41 +1,34 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Navigation', () => {
-  test('should navigate to all main pages', async ({ page }) => {
-    await page.goto('/');
+  // MUT-15: a fresh install's sidebar is the core four; optional areas are
+  // off by default, so none of their entries (or the legacy ones) appear.
+  test('a fresh install shows Home, Clients, Income, Settings and each one navigates', async ({ page }) => {
+    await page.goto('/app/');
+    const welcome = page.getByRole('dialog');
+    if (await welcome.isVisible().catch(() => false)) {
+      await welcome.getByRole('button', { name: /skip for now/i }).click();
+      await expect(welcome).toBeHidden();
+    }
 
-    // Verify we're on the Overview page
-    await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: /overview/i })).toBeVisible();
+    const sidebar = page.locator('aside.sidebar');
+    await expect(sidebar.locator('a.nav-item')).toHaveText(['Home', 'Clients', 'Income', 'Settings']);
+    await expect(sidebar.getByRole('link', { name: /projects|transactions|reports|expenses/i })).toHaveCount(0);
 
-    // Navigate to Projects
-    await page.getByRole('link', { name: /projects/i }).click();
-    await expect(page).toHaveURL('/projects');
-    await expect(page.getByRole('heading', { name: /projects/i })).toBeVisible();
-
-    // Navigate to Clients
-    await page.getByRole('link', { name: /clients/i }).click();
-    await expect(page).toHaveURL('/clients');
-    await expect(page.getByRole('heading', { name: /clients/i })).toBeVisible();
-
-    // Navigate to Transactions
-    await page.getByRole('link', { name: /transactions/i }).click();
-    await expect(page).toHaveURL('/transactions');
-    await expect(page.getByRole('heading', { name: /transactions/i })).toBeVisible();
-
-    // Navigate to Reports
-    await page.getByRole('link', { name: /reports/i }).click();
-    await expect(page).toHaveURL('/reports');
-    await expect(page.getByRole('heading', { name: /reports/i })).toBeVisible();
-
-    // Navigate to Settings
-    await page.getByRole('link', { name: /settings/i }).click();
-    await expect(page).toHaveURL('/settings');
-    await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
+    for (const [name, path] of [
+      ['Clients', '/app/clients'],
+      ['Income', '/app/income'],
+      ['Settings', '/app/settings'],
+      ['Home', '/app/'],
+    ] as const) {
+      await sidebar.getByRole('link', { name, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${path}$`));
+      await expect(sidebar.getByRole('link', { name, exact: true })).toHaveAttribute('aria-current', 'page');
+    }
   });
 
   test('should have responsive sidebar navigation', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/app/');
 
     // Check sidebar exists
     const sidebar = page.locator('[class*="sidebar"], [class*="nav"]');

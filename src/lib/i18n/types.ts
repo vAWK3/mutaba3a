@@ -81,8 +81,14 @@ export interface Translations {
     };
     needsAttention: string;
     noAttention: string;
-    recentActivity: string;
-    noRecent: string;
+    recentPayments: string;
+    noPayments: string;
+    noClient: string;
+    empty: {
+      title: string;
+      description: string;
+      action: string;
+    };
   };
   projects: {
     title: string;
@@ -134,35 +140,51 @@ export interface Translations {
     notFound: string;
     notFoundHint: string;
     confirmArchive: string;
+    emptyFiltered: string;
+    emptyFilteredCount: string;
+    clearSearch: string;
+    crossProfileTxCount: string;
     columns: {
       client: string;
+      owedNow: string;
+      overdue: string;
       activeProjects: string;
       paidIncome: string;
       unpaid: string;
       lastPayment: string;
       lastActivity: string;
     };
-    tabs: {
-      summary: string;
-      projects: string;
-      receivables: string;
-      transactions: string;
-    };
     detail: {
-      clientDetails: string;
-      email: string;
-      phone: string;
-      noProjects: string;
-      noProjectsHint: string;
       noReceivables: string;
       noReceivablesHint: string;
-      noTransactions: string;
-      noTransactionsHint: string;
     };
-    receivables: {
-      dueDate: string;
-      daysOverdue: string;
-      action: string;
+    index: {
+      settled: string;
+      neverPaid: string;
+      oldestOverdue: string;
+      owedOrderHint: string;
+    };
+    profile: {
+      owedNow: string;
+      nothingOwed: string;
+      overdueAmount: string;
+      nothingOverdue: string;
+      work: {
+        title: string;
+        add: string;
+        what: string;
+        untitled: string;
+        emptyTitle: string;
+        emptyHint: string;
+        noMatches: string;
+        clearFilters: string;
+      };
+      payments: {
+        title: string;
+        for: string;
+        recordedOnEntry: string;
+        openEntry: string;
+      };
     };
   };
   reports: {
@@ -229,6 +251,28 @@ export interface Translations {
       name: string;
       description: string;
     };
+    // Data Tools (DataToolsSection)
+    dataTools: string;
+    integrityCheck: string;
+    integrityCheckDesc: string;
+    integrityCheckRun: string;
+    integrityCheckRunning: string;
+    backup: string;
+    backupDesc: string;
+    backupExport: string;
+    backupDone: string;
+    backupFailed: string;
+    importBackup: string;
+    importBackupDesc: string;
+    importBackupBtn: string;
+    importBackupDoneSingular: string;
+    importBackupDonePlural: string;
+    exportReceipts: string;
+    exportReceiptsDesc: string;
+    exportReceiptsNone: string;
+    exportReceiptsBtn: string;
+    exportReceiptsDone: string;
+    exportReceiptsFailed: string;
   };
   drawer: {
     transaction: {
@@ -316,5 +360,39 @@ export interface Translations {
     yearsAgo: string;
     daysOverdue: string;
     dueInDays: string;
+  };
+  integrity: {
+    orphanedRecordSingular: string;
+    orphanedRecordPlural: string;
+    reviewNow: string;
+    dismiss: string;
+    checkClean: string;
+    checkIssuesSingular: string;
+    checkIssuesPlural: string;
+    checkFailed: string;
+    toastClean: string;
+    toastIssuesSingular: string;
+    toastIssuesPlural: string;
+  };
+  orphanedRecords: {
+    title: string;
+    description: string;
+    descriptionSingleProfile: string;
+    groups: {
+      clients: string;
+      projects: string;
+      transactions: string;
+      expenses: string;
+    };
+    assignAllTo: string;
+    profileFor: string;
+    untitledIncome: string;
+    untitledExpense: string;
+    noProfiles: string;
+    allAssigned: string;
+    assignedSingular: string;
+    assignedPlural: string;
+    partialFailureSingular: string;
+    partialFailurePlural: string;
   };
 }

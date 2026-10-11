@@ -6,6 +6,7 @@
  */
 
 import { db } from './database';
+import { isOrphaned } from './orphanedRecords';
 
 export interface OrphanedRecord {
   id: string;
@@ -48,7 +49,7 @@ export async function runIntegrityCheck(): Promise<IntegrityResult> {
     totalRecords += transactions.length;
     for (const tx of transactions) {
       if (tx.deletedAt) continue;
-      if (!tx.profileId) {
+      if (isOrphaned.transactions(tx)) {
         orphanedRecords.push({ id: tx.id, table: 'transactions', issue: 'missing_profileId' });
       }
       if (tx.clientId && !clientIds.has(tx.clientId)) {
@@ -64,7 +65,7 @@ export async function runIntegrityCheck(): Promise<IntegrityResult> {
     totalRecords += expenses.length;
     for (const exp of expenses) {
       if (exp.deletedAt) continue;
-      if (!exp.profileId) {
+      if (isOrphaned.expenses(exp)) {
         orphanedRecords.push({ id: exp.id, table: 'expenses', issue: 'missing_profileId' });
       }
     }
@@ -74,7 +75,7 @@ export async function runIntegrityCheck(): Promise<IntegrityResult> {
     totalRecords += projects.length;
     for (const proj of projects) {
       if (proj.archivedAt) continue;
-      if (!proj.profileId) {
+      if (isOrphaned.projects(proj)) {
         orphanedRecords.push({ id: proj.id, table: 'projects', issue: 'missing_profileId' });
       }
       if (proj.clientId && !clientIds.has(proj.clientId)) {
@@ -87,7 +88,7 @@ export async function runIntegrityCheck(): Promise<IntegrityResult> {
     totalRecords += clients.length;
     for (const client of clients) {
       if (client.archivedAt) continue;
-      if (!client.profileId) {
+      if (isOrphaned.clients(client)) {
         orphanedRecords.push({ id: client.id, table: 'clients', issue: 'missing_profileId' });
       }
     }

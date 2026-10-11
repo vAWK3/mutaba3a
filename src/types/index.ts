@@ -197,15 +197,39 @@ export interface ProjectSummary {
 }
 
 // Client summary for list view
+/** What a client (or everyone) owes in one currency, right now (ADR-033). */
+export interface OwedByCurrency {
+  currency: Currency;
+  owedMinor: number;
+  /** The part of owedMinor whose due date has passed (ADR-010) */
+  overdueMinor: number;
+}
+
+/** A client's most recent payment, in its own currency (MUT-7). */
+export interface LastPayment {
+  paidAt: string;
+  amountMinor: number;
+  currency: Currency;
+}
+
 export interface ClientSummary {
   id: string;
   name: string;
   activeProjectCount: number;
   paidIncomeMinor: number;
   unpaidIncomeMinor: number;
+  /** Owed now per currency; [] when settled. Archived income excluded (ADR-033) */
+  owed: OwedByCurrency[];
+  /** Whole days the client's oldest overdue item is late; undefined when none is */
+  oldestOverdueDays?: number;
+  /** Newest payment: records plus income saved as received (ADR-033) */
+  lastPayment?: LastPayment;
+  /** lastPayment.paidAt */
   lastPaymentAt?: string;
   lastActivityAt?: string;
-  // Per-currency breakdown (present when currency filter is undefined)
+  // Per-currency report totals (present when list() has no currency filter).
+  // Read by the Insights and Reports client tables. Unlike `owed`, unpaid here
+  // still counts archived income (TD-030).
   paidIncomeMinorUSD?: number;
   paidIncomeMinorILS?: number;
   paidIncomeMinorEUR?: number;
@@ -222,7 +246,12 @@ export interface PaymentByClientFilters {
   limit?: number;
 }
 
-// A payment record joined to its parent income transaction, for display
+// A payment joined to its parent income transaction, for display.
+// 'record' rows are PaymentRecords. 'entry' rows stand for money an income
+// entry says was received but no record covers -- income saved as Received in
+// the income drawer writes none (MUT-3). An entry row's id is `entry:<txId>`.
+export type PaymentRowSource = 'record' | 'entry';
+
 export interface PaymentByClientRow {
   id: string;
   transactionId: string;
@@ -231,6 +260,14 @@ export interface PaymentByClientRow {
   currency: Currency;
   paidAt: string;
   notes?: string;
+  source: PaymentRowSource;
+}
+
+// A payment on Home's Recent payments (MUT-8): a client payment row plus the
+// client it came from (absent for income with no client)
+export interface RecentPaymentRow extends PaymentByClientRow {
+  clientId?: string;
+  clientName?: string;
 }
 
 // Transaction with resolved names for display

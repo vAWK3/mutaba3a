@@ -24,6 +24,7 @@ import type {
   PaymentStatus,
   PaymentRecord,
   PaymentByClientRow,
+  RecentPaymentRow,
   PaymentByClientFilters,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
@@ -37,6 +38,9 @@ import {
   filterTransactionsByEntityAndDate,
   createNameMap,
   sortByLastActivity,
+  paymentRowsForIncome,
+  summarizeClientCollection,
+  groupBy,
   type TransactionTotalsByCurrency,
 } from './aggregations';
 
@@ -499,10 +503,13 @@ export const transactionRepo = {
       // derived its 7-day bound via toISOString(), i.e. the UTC date, so the
       // window was a day off west of UTC.
       return isOverdueReceivable(tx, today) || isDueSoon(tx, today);
-    }).sort((a, b) => {
-      // Sort by due date ascending (most urgent first)
-      return (a.dueDate || '').localeCompare(b.dueDate || '');
-    });
+    }).sort((a, b) =>
+      // Oldest due date first; equal dates by client name, then id, so Home's
+      // Needs attention (MUT-8) never reshuffles between renders
+      (a.dueDate || '').localeCompare(b.dueDate || '') ||
+      (a.clientName ?? '').localeCompare(b.clientName ?? '') ||
+      a.id.localeCompare(b.id)
+    );
   },
 };
 
@@ -610,51 +617,36 @@ export const projectSummaryRepo = {
 
 // Client Summary Repository
 export const clientSummaryRepo = {
+  /**
+   * One row per non-archived client: totals, activity and the MUT-7 collection
+   * fields (owed now, oldest overdue age, last payment). Transactions and
+   * payment records are each read and grouped once, so a few hundred clients
+   * cost one pass, not one scan per client.
+   */
   async list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]> {
     const clients = await clientRepo.list({ profileId: filters?.profileId });
-    const projects = await db.projects.toArray();
-    const transactions = await db.transactions.toArray();
+    const [projects, transactions, records] = await Promise.all([
+      db.projects.toArray(),
+      db.transactions.toArray(),
+      db.paymentRecords.filter((r) => !r.deletedAt).toArray(),
+    ]);
+
+    const liveTxs = transactions.filter((tx) => !tx.deletedAt && tx.clientId);
+    const txsByClient = groupBy(liveTxs, (tx) => tx.clientId!);
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const activeProjects = groupBy(projects.filter((p) => p.clientId && !p.archivedAt), (p) => p.clientId!);
+    const today = todayLocalISO();
+    const searchLower = filters?.search?.toLowerCase();
 
     const summaries = clients
-      .filter((c) => {
-        if (filters?.search) {
-          const searchLower = filters.search.toLowerCase();
-          if (!c.name.toLowerCase().includes(searchLower)) {
-            return false;
-          }
-        }
-        return true;
-      })
+      .filter((c) => !searchLower || c.name.toLowerCase().includes(searchLower))
       .map((c) => {
-        const clientProjects = projects.filter((p) => p.clientId === c.id && !p.archivedAt);
-        const clientTxs = filterTransactionsByEntity(transactions, 'client', c.id, filters?.currency);
-        const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
-
-        // When no currency filter, also compute per-currency breakdowns
-        let perCurrencyData = {};
-        if (!filters?.currency) {
-          const allClientTxs = filterTransactionsByEntity(transactions, 'client', c.id);
-          const byCurrency = aggregateTransactionTotalsByCurrency(allClientTxs);
-          perCurrencyData = {
-            paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
-            paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
-            paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
-            unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
-            unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
-            unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
-          };
-        }
-
-        return {
-          id: c.id,
-          name: c.name,
-          activeProjectCount: clientProjects.length,
-          paidIncomeMinor: totals.paidIncomeMinor,
-          unpaidIncomeMinor: totals.unpaidIncomeMinor,
-          lastPaymentAt: totals.lastPaymentAt,
-          lastActivityAt: totals.lastActivityAt,
-          ...perCurrencyData,
-        };
+        const allClientTxs = txsByClient.get(c.id) ?? [];
+        const clientTxs = filters?.currency
+          ? allClientTxs.filter((tx) => tx.currency === filters.currency)
+          : allClientTxs;
+        const summary = buildClientSummary(c, clientTxs, activeProjects.get(c.id)?.length ?? 0, recordsByTx, today);
+        return filters?.currency ? summary : { ...summary, ...perCurrencyReportTotals(allClientTxs) };
       });
 
     return sortByLastActivity(summaries);
@@ -666,22 +658,51 @@ export const clientSummaryRepo = {
 
     const projects = await db.projects.toArray();
     const transactions = await db.transactions.toArray();
-
-    const clientProjects = projects.filter((p) => p.clientId === clientId && !p.archivedAt);
     const clientTxs = filterTransactionsByEntityAndDate(transactions, 'client', clientId, filters || {});
-    const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
+    const records = await db.paymentRecords
+      .where('transactionId')
+      .anyOf(clientTxs.map((tx) => tx.id))
+      .filter((r) => !r.deletedAt)
+      .toArray();
+    const activeProjectCount = projects.filter((p) => p.clientId === clientId && !p.archivedAt).length;
 
-    return {
-      id: client.id,
-      name: client.name,
-      activeProjectCount: clientProjects.length,
-      paidIncomeMinor: totals.paidIncomeMinor,
-      unpaidIncomeMinor: totals.unpaidIncomeMinor,
-      lastPaymentAt: totals.lastPaymentAt,
-      lastActivityAt: totals.lastActivityAt,
-    };
+    return buildClientSummary(client, clientTxs, activeProjectCount, groupBy(records, (r) => r.transactionId), todayLocalISO());
   },
 };
+
+/** The Insights and Reports client tables' paid/unpaid columns, per currency. */
+function perCurrencyReportTotals(clientTxs: Transaction[]) {
+  const byCurrency = aggregateTransactionTotalsByCurrency(clientTxs);
+  return {
+    paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
+    paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+    paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
+    unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
+    unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+    unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
+  };
+}
+
+function buildClientSummary(
+  client: Client,
+  clientTxs: Transaction[],
+  activeProjectCount: number,
+  recordsByTx: Map<string, PaymentRecord[]>,
+  today: string
+): ClientSummary {
+  const totals = aggregateTransactionTotalsWithActivity(clientTxs);
+  const collection = summarizeClientCollection(clientTxs, recordsByTx, today);
+  return {
+    id: client.id,
+    name: client.name,
+    activeProjectCount,
+    paidIncomeMinor: totals.paidIncomeMinor,
+    unpaidIncomeMinor: totals.unpaidIncomeMinor,
+    ...collection,
+    lastPaymentAt: collection.lastPayment?.paidAt,
+    lastActivityAt: totals.lastActivityAt,
+  };
+}
 
 // FX Rate Repository
 export const fxRateRepo = {
@@ -1492,49 +1513,84 @@ export const paymentRecordRepo = {
   },
 
   /**
+   * The newest payments across every client (MUT-8, Home's Recent payments):
+   * the same rows as a client's Payments section (ADR-033), each naming its
+   * client. Deleted entries and records are left out; archived entries'
+   * payments stay -- they happened.
+   */
+  async listRecent(filters: { profileId?: string; limit?: number } = {}): Promise<RecentPaymentRow[]> {
+    const incomes = await db.transactions
+      .filter((tx) => tx.kind === 'income' && !tx.deletedAt && scopeToProfile(tx, filters.profileId))
+      .toArray();
+    if (incomes.length === 0) return [];
+
+    const [records, clients] = await Promise.all([
+      db.paymentRecords
+        .where('transactionId')
+        .anyOf(incomes.map((tx) => tx.id))
+        .filter((r) => !r.deletedAt)
+        .toArray(),
+      db.clients.toArray(),
+    ]);
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const clientNames = createNameMap(clients);
+
+    const rows: RecentPaymentRow[] = incomes.flatMap((tx) =>
+      paymentRowsForIncome(tx, recordsByTx.get(tx.id) ?? []).map((row) => ({
+        ...row,
+        clientId: tx.clientId,
+        clientName: tx.clientId ? clientNames.get(tx.clientId) : undefined,
+      }))
+    );
+
+    rows.sort((a, b) => b.paidAt.localeCompare(a.paidAt) || a.id.localeCompare(b.id));
+    return rows.slice(0, filters.limit ?? 10);
+  },
+
+  /**
    * List a client's payment history, joined to parent income transactions.
    * Sorted by paidAt descending; filters applied before sort and limit.
+   *
+   * Returns every non-deleted PaymentRecord of the client's live income, plus
+   * one 'entry' row per income whose received amount its records do not cover
+   * (MUT-3 D3). Income saved as Received writes no record, so without those
+   * rows the history would omit every job logged as already paid. Reconciling
+   * on read keeps every write path, past and future, correct with no
+   * migration.
+   *
+   * Index: transactions.clientId, then paymentRecords.transactionId (anyOf).
+   * Date bounds compare the calendar date of paidAt, which may be a timestamp.
    */
   async listByClient(
     clientId: string,
     filters: PaymentByClientFilters = {}
   ): Promise<PaymentByClientRow[]> {
-    const txs = await db.transactions
+    const incomes = await db.transactions
       .where('clientId')
       .equals(clientId)
-      .filter((tx) => !tx.deletedAt)
+      .filter((tx) => !tx.deletedAt && tx.kind === 'income')
       .toArray();
 
-    if (txs.length === 0) return [];
+    if (incomes.length === 0) return [];
 
-    const txById = new Map(txs.map((tx) => [tx.id, tx]));
     const records = await db.paymentRecords
       .where('transactionId')
-      .anyOf([...txById.keys()])
+      .anyOf(incomes.map((tx) => tx.id))
+      .filter((r) => !r.deletedAt)
       .toArray();
 
-    const rows: PaymentByClientRow[] = [];
-    for (const record of records) {
-      if (record.deletedAt) continue;
-      const tx = txById.get(record.transactionId);
-      if (!tx || tx.kind !== 'income') continue;
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const rows = incomes.flatMap((tx) => paymentRowsForIncome(tx, recordsByTx.get(tx.id) ?? []));
 
-      if (filters.dateFrom && record.paidAt < filters.dateFrom) continue;
-      if (filters.dateTo && record.paidAt > filters.dateTo) continue;
-      if (filters.currency && tx.currency !== filters.currency) continue;
+    const matching = rows.filter((row) => {
+      const paidOn = row.paidAt.slice(0, 10);
+      if (filters.dateFrom && paidOn < filters.dateFrom) return false;
+      if (filters.dateTo && paidOn > filters.dateTo) return false;
+      if (filters.currency && row.currency !== filters.currency) return false;
+      return true;
+    });
 
-      rows.push({
-        id: record.id,
-        transactionId: record.transactionId,
-        transactionTitle: tx.title,
-        amountMinor: record.amountMinor,
-        currency: tx.currency,
-        paidAt: record.paidAt,
-        notes: record.notes,
-      });
-    }
-
-    rows.sort((a, b) => b.paidAt.localeCompare(a.paidAt));
-    return filters.limit !== undefined ? rows.slice(0, filters.limit) : rows;
+    matching.sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+    return filters.limit !== undefined ? matching.slice(0, filters.limit) : matching;
   },
 };

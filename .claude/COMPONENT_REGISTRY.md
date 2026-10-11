@@ -9,16 +9,17 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
+| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
-| **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
-| **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
+| **Table headers** | SortableHeader |
+| **Display** | Card, Badge, StatusBadge, EmptyState |
+| **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateBanner, CurrencyBadge |
+| **Money** | OwedNowSummary, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateBanner, CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -61,11 +62,12 @@
 ```
 
 **Features**:
-- Active state highlighting
-- Keyboard navigation
-- RTL support
-- Collapsible (future)
-- Optional areas (MUT-13/14/16): `optionalItems` renders the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `newMenuItems` entries with a `feature` key (expense, project) follow the same switches. Main is Home + Income, workspace is Clients; final grouping is MUT-15's.
+- Active state highlighting (prefix match, Home exact; one entry active per route, pinned by tests for every route)
+- Keyboard navigation (links in DOM order; the New menu via `useMenuButton`)
+- RTL support (logical rail and menu offsets; the collapse chevron points toward the collapsing edge)
+- Collapsible to a 64px rail (choice kept in `localStorage.sidebarCollapsed`); toggles in normal flow; a hairline separates core from "More"
+- **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
+- New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
 
 ---
 
@@ -88,7 +90,37 @@
 | `breadcrumbs?` | BreadcrumbItem[] | Navigation trail |
 | `actions?` | ReactNode | Right-side action buttons |
 
-The `+ Add` menu's New expense and New project items render only while their areas are on (`useFeatureEnabled`, MUT-14/16).
+The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon.
+
+---
+
+### addMenuActions
+**Location**: `src/components/layout/addMenuActions.ts`
+**Purpose**: The single list of `+ Add` actions, their area gates and their order, shared by the sidebar New menu and the top bar Add menu (MUT-15).
+
+```ts
+visibleAddMenuActions(flags); // ['income', 'client'] with every area off
+```
+
+Core actions first, optional appended, so a switch never moves a core entry. Each menu maps an `AddMenuAction` to its own label, icon and click behaviour. Tests: `layout/__tests__/addMenuActions.test.ts` (all 64 flag combinations keep Income, Client first).
+
+---
+
+### useMenuButton
+**Location**: `src/hooks/useMenuButton.ts`
+**Purpose**: A button that opens a menu of actions with WAI-ARIA menu-button keyboard behaviour (MUT-15).
+
+```tsx
+const menu = useMenuButton();
+<button {...menu.buttonProps} type="button">Add</button>
+{menu.isOpen && (
+  <div {...menu.menuProps}>
+    <button role="menuitem" tabIndex={-1} onClick={() => { menu.close(); run(); }}>Income</button>
+  </div>
+)}
+```
+
+Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; arrows wrap; Home/End jump; Escape closes and refocuses the button; Tab and a mousedown outside close. Used by `SidebarNav` and `TopBar`. `RowActionsMenu` still has its own listeners (TD-031). Tests: `hooks/__tests__/useMenuButton.test.tsx`.
 
 ---
 
@@ -130,15 +162,51 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ---
 
+### DataToolsSection
+**Location**: `src/pages/settings/DataToolsSection.tsx`
+**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch.
+
+```tsx
+<DataToolsSection />   // rendered by SettingsPage below the main settings
+```
+
+Tests: `src/pages/settings/__tests__/DataToolsSection.test.tsx`.
+
+---
+
 ### ClientRetainersCard
 **Location**: `src/components/clients/ClientRetainersCard.tsx`
-**Purpose**: Retainer status for one client on the client profile's Summary tab (MUT-13): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
+**Purpose**: Retainer status for one client, below Payments on the client profile (MUT-13; the Summary tab it first lived in is gone with MUT-3): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
 
 ```tsx
 {retainersEnabled && <ClientRetainersCard clientId={client.id} />}
 ```
 
 Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Advanced-feature entry points").
+
+---
+
+### ClientWorkSection
+**Location**: `src/components/clients/ClientWorkSection.tsx`
+**Purpose**: "What have I worked on for this client?" on the client profile (MUT-3): the client's income entries as one table — date, title with project tag, amount, status with due/overdue line, remaining balance on partial rows — with its own filter row (date range, status, search held as one object) and the row actions (Record payment via `RecordPaymentButton`, Mark paid, invoice actions while Invoices is on, duplicate). No work at all → `EmptyState` with one action, Add income, prefilled with the client; filters that hide every row → "No entries match" + Clear filters. Rows are shaped by `toWorkRow` (`clientProfileRows.ts`) in a `useMemo`.
+
+```tsx
+<ClientWorkSection clientId={clientId} />
+```
+
+Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Work and billing"), `src/components/clients/__tests__/clientProfileRows.test.ts`.
+
+---
+
+### ClientPaymentsSection
+**Location**: `src/components/clients/ClientPaymentsSection.tsx`
+**Purpose**: "When did they pay, and for what?" on the client profile (MUT-3, the MUT-4 UI): `usePaymentsByClient(clientId)` unfiltered, newest first — date, amount, the entry it paid for, notes. A `record` row opens `editPaymentRecord` (the payment drawer's edit mode, which also deletes); an `entry` row (money saved on the income entry itself, ADR-033) opens the income drawer and reads "Recorded on the entry". Never totals across currencies.
+
+```tsx
+<ClientPaymentsSection clientId={clientId} />
+```
+
+Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Payments").
 
 ---
 
@@ -275,6 +343,22 @@ navigate({ search: { newProject: true, clientId } }); // Create
 - Tax settings
 - Bank details
 - Default currency/language
+
+---
+
+### OrphanedRecordsDrawer
+**Location**: `src/components/drawers/OrphanedRecordsDrawer.tsx`
+**Purpose**: Lists every record without a business profile (the ones `OrphanedRecordsBanner` counts) grouped Clients / Projects / Income / Expenses, and assigns them. One profile: no pickers, one "Assign all to ‹profile›" action. Several: "Assign all to ‹default›" plus a picker per row and Save. Each row starts on its linked client's profile, then its project's, then the default (`startingProfileId`). A row that fails (TD-035) stays listed with an inline message. Replaced `OrphanedRecordsModal` (deleted 2026-10-11).
+
+```tsx
+// Opened from the banner's "Review now"; mounted by AppShell
+useDrawerStore.getState().openOrphanedRecordsDrawer();
+{orphanedRecordsDrawer.isOpen && <OrphanedRecordsDrawer />}
+```
+
+Data: `useOrphanedRecords()` → `findOrphanedRecords()` and `useAssignOrphanedRecords()` (`src/hooks/useOrphanedRecords.ts`); "unassigned" is defined once by `isOrphaned` in `src/db/orphanedRecords.ts`, which `runIntegrityCheck` also uses.
+
+Tests: `src/components/drawers/__tests__/OrphanedRecordsDrawer.test.tsx`, `src/db/__tests__/orphanedRecords.test.ts`.
 
 ---
 
@@ -492,9 +576,24 @@ new column, so it cannot push the amount column off-screen.
 </td>
 ```
 
-**Used by**: ClientDetailPage (receivables + transactions tabs), IncomePage,
+**Used by**: ClientWorkSection (client profile work list, MUT-3), IncomePage,
 ProjectDetailPage.
 **Tests**: `src/components/ui/__tests__/RecordPaymentButton.test.tsx`
+
+---
+
+### SortableHeader
+**Location**: `src/components/ui/SortableHeader.tsx` (+ `.css`)
+**Purpose**: A `<th>` whose label is a button that sorts its column (MUT-7). It sets `aria-sort` (`ascending` / `descending` / `none`) and shows an arrow on the active column. It optionally aligns to the end edge for numeric columns, and its `title` can explain the ordering. Props-in: the caller owns the state (usually `useSortState`) and decides what a click does. The clients index toggles the active column, or switches to the clicked one in its natural direction.
+
+```tsx
+<SortableHeader field="owed" label={t('clients.columns.owedNow')} align="end"
+  title={t('clients.index.owedOrderHint')}
+  sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+```
+
+**Used by**: ClientsPage. ProjectsPage still uses a sort dropdown and can adopt this.
+**Tests**: `src/components/ui/__tests__/SortableHeader.test.tsx`
 
 ---
 
@@ -560,150 +659,27 @@ ProjectDetailPage.
 
 ---
 
-### KPICard
-**Location**: `src/components/ui/KPICard.tsx`
-**Purpose**: Key metric display on dashboard.
-
-```tsx
-<KPICard
-  title="Paid Income"
-  value={formatCurrency(paidIncomeMinor, currency)}
-  trend={{ value: 12, direction: 'up' }}
-  icon={<DollarIcon />}
-/>
-```
-
----
-
 ## Home Components
 
-### PredictiveKpiStrip
-**Location**: `src/components/home/PredictiveKpiStrip.tsx`
-**Purpose**: Display predictive KPI cards showing current vs projected values for the month.
+Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone.
+
+### HomeNeedsAttention
+**Location**: `src/components/home/HomeNeedsAttention.tsx`
+**Purpose**: "Who is late?" (MUT-8). It renders `useAttentionReceivables(undefined, profileId)` as is: overdue or due within 7 days (inclusive), every currency, oldest due date first, ties by client name then id. Each row shows the client (or "No client"), what it was for, the remaining amount in its own currency, and "Nd overdue", "Due in Nd" or "Due today". Rows are shaped with `toWorkRow`, so bucketing uses the ADR-010/022 helpers. A row opens the client profile, or the entry's income drawer when there is no client. The empty state reads "No overdue or upcoming receivables".
 
 ```tsx
-<PredictiveKpiStrip
-  className="my-strip"
-/>
+<HomeNeedsAttention profileId={profileId} />
 ```
 
-**Features**:
-- Fetches guidance data for current month (USD and ILS)
-- Shows KPI cards for: Income, Expenses, Net
-- Each card displays current actual amount and projected amount
-- Projected amounts include unpaid income and projected retainers
-- Responsive: stacks on mobile (480px breakpoint)
-- Currency-aware: shows both USD and ILS totals
-
-**Sub-components**:
-- `KpiCardForecast`: Individual KPI card with actual/projected display
+### HomeRecentPayments
+**Location**: `src/components/home/HomeRecentPayments.tsx`
+**Purpose**: "What came in?" (MUT-8). It renders `useRecentPayments(profileId)`, the last 10 payments across clients from `paymentRecordRepo.listRecent`. These are the same payment rows as a client's Payments section (ADR-033), so they include income saved as Received. Each row shows the client, what it was for, the date and the amount in its own currency; nothing is totalled. A row opens the client profile, or the entry when there is no client.
 
 ```tsx
-<KpiCardForecast
-  title="Income"
-  actualMinor={500000}
-  projectedMinor={750000}
-  currency="USD"
-  locale="en-US"
-  type="income"
-/>
+<HomeRecentPayments profileId={profileId} />
 ```
 
-**Props (KpiCardForecast)**:
-| Prop | Type | Description |
-|------|------|-------------|
-| `title` | string | Card title (i18n key result) |
-| `actualMinor` | number | Current actual amount in minor units |
-| `projectedMinor` | number | Projected amount in minor units |
-| `currency` | Currency | 'USD' \| 'ILS' |
-| `locale` | string | Locale for formatting |
-| `type` | 'income' \| 'expense' \| 'net' | Affects color styling |
-
-**Related**: `useGuidance` hook for data fetching
-
----
-
-### AttentionFeed
-**Location**: `src/components/home/AttentionFeed.tsx`
-**Purpose**: Display severity-ordered attention items for unpaid income on the Home page.
-
-```tsx
-<AttentionFeed className="my-feed" />
-```
-
-**Features**:
-- Shows unpaid income needing attention (overdue, due soon, missing due dates)
-- Maximum 5 items shown
-- Critical items always visible
-- Warning/Info items collapse if >3 total
-- "View all" links to Income page with unpaid filter
-- Actions route through canonical IncomeDrawer
-- Accessibility: proper list semantics, ARIA labels
-
-**Severity Levels**:
-- `critical`: Red icon (AlertCircle) - overdue items
-- `warning`: Yellow icon (AlertTriangle) - due soon
-- `info`: Blue icon (InfoCircle) - no due date
-
-**Props**:
-| Prop | Type | Description |
-|------|------|-------------|
-| `className?` | string | Additional CSS class |
-
-**Data Source**: `useGuidance` hook with `includeUnpaidIncome: true`
-
-**Accessibility**:
-- Uses semantic `<ul>` / `<li>` elements
-- `role="list"` and `role="listitem"` for screen readers
-- `aria-label` on list container
-- `aria-hidden="true"` on decorative icons
-- `aria-expanded` on show more/less toggle
-
----
-
-### MonthActualsRow
-**Location**: `src/components/home/MonthActualsRow.tsx`
-**Purpose**: Display actual income and expenses for the current month with currency tabs.
-
-```tsx
-<MonthActualsRow className="my-row" />
-```
-
-**Features**:
-- Shows actuals for current month (not projections)
-- Currency tabs to switch between USD and ILS
-- Grid of KPI cards: Paid Income, Unpaid, Expenses, Net
-- Responsive grid: 2 columns on mobile
-
-**Props**:
-| Prop | Type | Description |
-|------|------|-------------|
-| `className?` | string | Additional CSS class |
-
-**Data Source**: `useGuidance` hook for income/expenses data
-
----
-
-### QuickSummaries
-**Location**: `src/components/home/QuickSummaries.tsx`
-**Purpose**: Display quick summary cards for recent activity and top clients.
-
-```tsx
-<QuickSummaries className="my-summaries" />
-```
-
-**Features**:
-- Recent transactions list
-- Top clients by revenue
-- Quick actions for common operations
-
----
-
-### KpiStrip
-**Location**: `src/components/home/KpiStrip.tsx`
-**Purpose**: Legacy KPI strip component (superseded by PredictiveKpiStrip).
-
-**Note**: Consider using `PredictiveKpiStrip` for new features requiring projected values.
+Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactionRepo.test.ts` ("as Home's Needs attention") and `paymentRecords.test.ts` (`listRecent`).
 
 ---
 
@@ -933,6 +909,21 @@ toast.info('Syncing...');
 ---
 
 ## Money Components
+
+### OwedNowSummary
+**Location**: `src/components/clients/OwedNowSummary.tsx`
+**Purpose**: Owed Now as the dominant figure (MUT-3): one large amount per currency — never converted, never combined — with the overdue part beneath it ("$500 overdue" in the error colour, or "Nothing overdue"), and "Nothing owed" when the list is empty. Presentational: compute the input with `summarizeOwedByCurrency(transactions, today)` (`src/db/aggregations.ts`, ADR-033) so every screen that shows Owed Now agrees. Amounts are `<bdi dir="ltr">`; the amount inside the translated overdue sentence is wrapped in U+2066/U+2069.
+
+```tsx
+const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receivables, today]);
+<OwedNowSummary owed={owed} />
+```
+
+**Use when**: showing what is owed now. Used by the client profile and, as the clients index strip (MUT-7), over `combineOwed(summaries.map((s) => s.owed))`. Home (MUT-8) uses it over every receivable in the active profile. Not for period totals (paid income, expenses): those are not "now" figures.
+**Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
+Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
+
+---
 
 ### UnifiedAmount
 **Location**: `src/components/ui/UnifiedAmount.tsx`

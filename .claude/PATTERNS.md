@@ -9,10 +9,10 @@
 
 | Category | Patterns |
 |----------|----------|
-| **Data Access** | Repository Pattern, Query Hooks, Mutations |
+| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
 | **State** | URL State, Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern |
-| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place |
+| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
 
@@ -1219,6 +1219,34 @@ loading just delays the entry); **acting** on "off" — completing a step,
 clearing a value, redirecting inside React — must also check
 `useFeaturesLoaded()`, or the first render treats "not read yet" as "off".
 
+### Core first, optional appended (MUT-15)
+Any list that mixes core entries with optional-area entries (the sidebar, both
+`+ Add` menus) puts the core entries first as a **constant** and appends the
+optional ones after, filtered by the flags. A switch (or the flags reading
+`false` while settings load) can then only add or remove rows *below* the
+core, so nothing the user already reaches for moves and there is no layout
+shift. One list per concern: `coreItems`/`optionalItems` for the sidebar,
+`visibleAddMenuActions(flags)` for both menus; a menu only maps an action to
+its own label, icon and click handler.
+
+### Leaving an area that was switched off (MUT-15)
+Do not add a second table of which route belongs to which area. The router
+already knows: every gated route has `requireFeature(key)`. When an area goes
+from on to off, `useLeaveDisabledArea()` (mounted once in `AppShell`) calls
+`router.invalidate()`, which re-runs the open route's `beforeLoad`; the gate
+then redirects home with `replace`, exactly as a deep link would. The hook
+compares the previous resolved map with the new one (`featuresTurnedOff`) and
+ignores the first load and switch-ons, so unrelated settings writes never
+touch the router. Test it with a real memory-history router and the real
+guard (`leaveDisabledArea.test.tsx`), not a mocked `useNavigate`.
+
+### Menu buttons (MUT-15)
+A button that opens a list of actions uses `useMenuButton()` and spreads
+`buttonProps` / `menuProps`; items are `role="menuitem"` with `tabIndex={-1}`
+and call `menu.close()` before running their action. The hook owns focus on
+open, arrow/Home/End movement, Escape (refocus the button), Tab and
+outside-click closing; do not add per-menu document listeners.
+
 ### Pruning after a UI deletion (MUT-14)
 Run the consumer audit (exports and repository methods with zero references
 outside their own file and tests), then make a **reachability pass** before
@@ -1233,6 +1261,70 @@ retention test, and user *files* get a plain export before their viewer goes
 (ADR-029 addendum).
 
 ---
+
+### Reconcile on read when a write path skips a derived record (MUT-3, ADR-033)
+When one write path leaves out a row other readers depend on — income saved as
+Received writes no `PaymentRecord` — and fixing the write needs its own design,
+the **reader** derives the missing rows from the source of truth instead of a
+backfill migration. `paymentRecordRepo.listByClient` adds one `source: 'entry'`
+row for the amount an income says was received but its records do not cover;
+real rows carry `source: 'record'`. Rules: the derived row is computed from the
+gap (`effectiveReceived − Σrecords`), never in addition to records, so the day
+the write path is fixed the derived rows vanish with no reader change; give it
+a distinct, stable id (`entry:<txId>`) and a `source` so the UI can route a
+click to whatever owns it; record the write-side fix as debt (TD-029). Do not
+use this to paper over a write path you are already touching.
+
+### One definition per money question (MUT-3)
+A figure that more than one screen shows — Owed Now today — is one pure
+function over rows (`summarizeOwedByCurrency(transactions, today)` in
+`src/db/aggregations.ts`) that every screen calls, not a per-page reduce or a
+second repository method. It takes `today` explicitly (ADR-022), returns one
+entry per currency in a fixed order and never converts. The overdue counts that
+disagreed across five screens before MUT-17 are the reason.
+
+The same goes for a record state that one screen counts and another fixes.
+"Unassigned" is `isOrphaned.{clients,projects,transactions,expenses}` in
+`src/db/orphanedRecords.ts`; the banner's count (`runIntegrityCheck`) and the
+drawer's rows (`findOrphanedRecords`) both filter with it, and a test asserts
+the two return the same ids.
+
+### Repair actions open in place (2026-10-11)
+A banner or notice that points at a problem fixes it where the user is: its
+action is a `<button type="button">` that opens a drawer through
+`useDrawerStore`, mounted in `AppShell` like the entity drawers. Never a raw
+`<a href>`: on the web build the router's `basepath: '/app'` doesn't apply to
+it, so it leaves the PWA scope and reloads the app. When a banner only needs
+to *navigate*, it uses the router's `Link` (`FeatureNoticeBanner`).
+
+### Decide "new user" only after the data has answered (MUT-8)
+A screen that branches on "no data yet" (onboarding, an empty state with a
+first action) must not treat a query that is still loading as empty. Dexie
+reads are fast but asynchronous, so `data = []` defaults make every load look
+like a fresh install for a frame or two. That made onboarding flash on Home.
+Branch on `!isLoading && list.length === 0` for every query involved, and
+render a spinner, not the populated layout with zeroes, until they have all
+answered.
+
+### Ordering across currencies (MUT-7, ADR-035)
+Never compare or add raw minor units of different currencies. To order a list
+by money owed in several currencies, rank by a tuple: [the ILS-converted
+total over the currencies that have a rate today, then each unrated
+currency's raw amount, in USD → ILS → EUR order] (`owedRank`). Compute it once
+per row while shaping, not inside the comparator. Show every amount in its
+own currency, and say on the header that the order uses today's rate. Columns
+that can compare something currency-free (days late, dates, names) do that
+instead. Every comparator ends with a name-then-id tie-break so equal rows
+never reshuffle.
+
+### Amounts stay LTR inside RTL text (MUT-3)
+A standalone amount renders in `<bdi dir="ltr">` (or a cell the RTL rules
+already isolate, like `.amount-cell`). An amount *inside a translated sentence*
+("{amount} overdue") is passed to `t()` wrapped in U+2066 … U+2069 (LEFT-TO-RIGHT
+ISOLATE … POP DIRECTIONAL ISOLATE), so translators keep control of word order
+and the number still reads left to right in Arabic. Tests that assert the
+sentence strip `[\u2066-\u2069]` first. Phone numbers and e-mail addresses in
+an RTL header get the same `<bdi dir="ltr">`.
 
 ### Operator CLIs are functions over an injected fetch (MUT-37)
 `smoke.ts` started it; `scripts/users.ts` makes it the rule. The script exports

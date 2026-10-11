@@ -390,6 +390,7 @@ export const syncedPaymentRecordRepo = {
   get: paymentRecordRepo.get.bind(paymentRecordRepo),
   listByTransaction: paymentRecordRepo.listByTransaction.bind(paymentRecordRepo),
   listByClient: paymentRecordRepo.listByClient.bind(paymentRecordRepo),
+  listRecent: paymentRecordRepo.listRecent.bind(paymentRecordRepo),
 
   // Write operations - capture ops
   async create(data: {
