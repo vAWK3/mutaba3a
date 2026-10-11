@@ -38,8 +38,7 @@ export type IncomeWrite = Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>;
 type EntryFields = Omit<IncomeWrite, 'status' | 'paidAt' | 'receivedAmountMinor'>;
 
 function entryFields(values: IncomeEntryValues): EntryFields {
-  const isReceived = values.incomeStatus === 'received';
-  return {
+  const fields: EntryFields = {
     kind: 'income',
     profileId: values.profileId,
     title: values.title || undefined,
@@ -48,9 +47,13 @@ function entryFields(values: IncomeEntryValues): EntryFields {
     amountMinor: values.amountMinor,
     currency: values.currency,
     occurredAt: new Date(values.occurredAt).toISOString(),
-    dueDate: !isReceived && values.dueDate ? values.dueDate : undefined,
     notes: values.notes || undefined,
   };
+  // The due date field is hidden for Received, so a Received save leaves the
+  // stored date alone: an entry reopened later (a payment deleted, an amount
+  // raised above its payments) still has its due date and can go overdue.
+  if (values.incomeStatus !== 'received') fields.dueDate = values.dueDate || undefined;
+  return fields;
 }
 
 /** The write for a new entry. Received means paid now, in full. */

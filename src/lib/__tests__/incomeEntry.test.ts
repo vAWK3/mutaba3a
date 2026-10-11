@@ -67,6 +67,44 @@ describe('buildIncomeCreate / buildIncomeUpdate', () => {
     });
   });
 
+  // Review fix: a Received save used to write dueDate: undefined, which Dexie
+  // treats as a delete, so an entry reopened later (a payment deleted, or an
+  // amount raised above its payments) had no due date and never went overdue.
+  describe('due date on a Received save', () => {
+    it('is left out of a new Received entry', () => {
+      const write = buildIncomeCreate(values({ incomeStatus: 'received', dueDate: '2026-11-01' }), NOW);
+      expect('dueDate' in write).toBe(false);
+    });
+
+    it('is left untouched when a paid entry is saved as Received again', () => {
+      const write = buildIncomeUpdate(values({ incomeStatus: 'received', dueDate: '' }), {
+        now: NOW,
+        existing: { status: 'paid', paidAt: EARLIER },
+        hasRecords: false,
+      });
+      expect('dueDate' in write).toBe(false);
+    });
+
+    it('is left untouched on an entry whose payments are recorded', () => {
+      const write = buildIncomeUpdate(values({ incomeStatus: 'received', dueDate: '' }), {
+        now: NOW,
+        existing: { status: 'paid', paidAt: EARLIER },
+        hasRecords: true,
+      });
+      expect('dueDate' in write).toBe(false);
+    });
+
+    it('is still cleared when an unpaid entry is saved with the field emptied', () => {
+      const write = buildIncomeUpdate(values({ incomeStatus: 'invoiced', dueDate: '' }), {
+        now: NOW,
+        existing: { status: 'unpaid' },
+        hasRecords: false,
+      });
+      expect('dueDate' in write).toBe(true);
+      expect(write.dueDate).toBeUndefined();
+    });
+  });
+
   describe('edit without payment records', () => {
     it('paid → paid keeps the original payment date', () => {
       const write = buildIncomeUpdate(values({ incomeStatus: 'received', title: 'Retitled' }), {
