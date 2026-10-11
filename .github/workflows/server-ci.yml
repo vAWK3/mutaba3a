@@ -74,6 +74,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the hosted-portal bundle (MUT-45; the image serves it from PORTAL_DIST_DIR)
+        working-directory: .
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:hosted
+      - name: Copy the portal build into the server's Docker context
+        working-directory: .
+        run: cp -r dist-hosted server/dist-hosted
       - name: Build the service image
         run: docker build -t mutaba3a-api:ci .
       - name: Boot the service image and probe /health
