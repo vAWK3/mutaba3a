@@ -32,6 +32,8 @@ const envSchema = z.object({
   PORTAL_ORIGIN: z.string().url().optional(),
   /** How many proxies in front of the service append to X-Forwarded-For (Cloud Run front end = 1; a load balancer adds one). */
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
+  /** Built hosted-portal assets (MUT-45), mounted by the Dockerfile. Unset = the server serves no portal, API-only. */
+  PORTAL_DIST_DIR: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;

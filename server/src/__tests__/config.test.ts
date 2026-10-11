@@ -60,3 +60,17 @@ describe('loadConfig — sessions (MUT-38)', () => {
     expect(loadConfig({ ...base, PORTAL_ORIGIN: 'https://portal.mutaba3a.app' }).PORTAL_ORIGIN).toBe('https://portal.mutaba3a.app');
   });
 });
+
+describe('loadConfig — portal serving (MUT-45)', () => {
+  it('defaults to no portal dist dir (API-only)', () => {
+    expect(loadConfig(base).PORTAL_DIST_DIR).toBeUndefined();
+  });
+
+  it('accepts a portal dist dir path', () => {
+    expect(loadConfig({ ...base, PORTAL_DIST_DIR: '/app/portal' }).PORTAL_DIST_DIR).toBe('/app/portal');
+  });
+
+  it('refuses an empty PORTAL_DIST_DIR', () => {
+    expect(() => loadConfig({ ...base, PORTAL_DIST_DIR: '' })).toThrow('PORTAL_DIST_DIR');
+  });
+});
