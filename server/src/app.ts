@@ -71,8 +71,11 @@ function isPortalExcludedPath(path: string): boolean {
   return PORTAL_EXCLUDED_EXACT.has(path) || PORTAL_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+// connect-src includes the GCS signed-URL host: receipt uploads (MUT-44) PUT
+// bytes directly to it via fetch(), which connect-src governs. Downloads are
+// top-level navigations instead, so they need no entry here.
 const PORTAL_CSP =
-  "default-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+  "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
 
 function defaultSessionSettings(): SessionSettings {
   return { pepper: randomBytes(32).toString('hex'), idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 };

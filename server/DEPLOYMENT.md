@@ -313,13 +313,19 @@ cookies or CORS beyond what MUT-38 already built:
   since there is no custom domain (see the note at the end of §5). Setting
   `PORTAL_ORIGIN` only becomes necessary if a reverse proxy or load balancer is
   ever put in front of the service with a different public hostname.
-- **CSP**: `default-src 'self'; connect-src 'self'; img-src 'self' data:;
-  frame-ancestors 'none'; form-action 'self'` on every response. `'self'`
-  everywhere is possible precisely because the portal and the API share an
-  origin; `frame-ancestors 'none'` blocks the portal from being framed
-  anywhere; `form-action 'self'` and no `script-src` relaxations keep the
-  policy as tight as the app allows without inline scripts or third-party
-  calls.
+- **CSP**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com;
+  img-src 'self' data:; frame-ancestors 'none'; form-action 'self'` on every
+  response. `'self'` everywhere else is possible precisely because the portal
+  and the API share an origin; `frame-ancestors 'none'` blocks the portal from
+  being framed anywhere; `form-action 'self'` and no `script-src` relaxations
+  keep the policy as tight as the app allows without inline scripts or
+  third-party calls. The one addition to the design brief's draft policy is
+  `https://storage.googleapis.com` in `connect-src`: receipt uploads (MUT-44)
+  `fetch()` a `PUT` directly to a GCS v4 signed URL — `storage.googleapis.com`
+  is the library's default, path-styled host (`@google-cloud/storage`'s
+  `PATH_STYLED_HOST`, `virtualHostedStyle` not set) — and `connect-src` governs
+  that call. Receipt *downloads* need no entry here: `downloadNavigator.open()`
+  is a top-level navigation, which `connect-src` does not restrict.
 
 ## 5. Wire Malafat to it
 
