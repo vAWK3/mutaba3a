@@ -2921,9 +2921,16 @@ td {
   white-space: nowrap;
 }
 
+/* A narrow cell truncates the title first; the tag keeps its natural width
+   up to 60% of the cell, so a short project name is never cut */
+.client-work-title {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .project-tag {
-  flex-shrink: 0;
-  max-width: 40%;
+  flex: 0 0 auto;
+  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
