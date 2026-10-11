@@ -28,6 +28,49 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — Release commit carries both lockfiles (v0.0.65 Windows build failure)
+
+**Scope:** `deploy.sh`, `scripts/release.ts`, `scripts/release-files.ts` (new),
+`scripts/__tests__/release-files.test.ts` (new), `vitest.config.ts`,
+`.claude/{CHANGELOG,TEST_PLAN,CI_CD}.md`.
+
+### Fixed
+- The v0.0.65 Windows build ([run 38106560692](https://github.com/vAWK3/mutaba3a/actions/runs/38106560692))
+  failed the Tauri CLI's npm-vs-crate version check: `tauri (v2.11.2) :
+  @tauri-apps/api (v2.12.1)` and `tauri-plugin-opener (v2.5.5) :
+  @tauri-apps/plugin-opener (v2.7.0)`. The tag held a `Cargo.toml` requiring
+  tauri 2.12.1 (an uncommitted dependency bump the release commit swept in)
+  beside a `Cargo.lock` still pinning 2.11.2. `build_mac` had rewritten the
+  lock on disk, but `tag_and_push` only staged `package.json`,
+  `tauri.conf.json` and `Cargo.toml`. Every tag back to at least v0.0.58 held
+  a `Cargo.lock` at least one app version behind, fixed up by hand later (`0c57247 misc`).
+- `tag_and_push` now stages `package-lock.json` and `src-tauri/Cargo.lock`
+  with their manifests, so the tag holds the lock the mac build used.
+- Both version writers (`update_version` in deploy.sh, `writeVersionFiles` in
+  release.ts) use `npm version --no-git-tag-version`, which also bumps
+  `package-lock.json`'s own version. That version was stuck at 0.0.63.
+
+### Changed
+- `npm run release` now warns when a file that goes into the release commit is
+  already modified before the bump, and prints the `git diff` to review. This
+  is the change that let v0.0.65's tauri bump ride in without notice. The
+  "left out" warning now lists the files from the shared list.
+- The release-commit file list lives in `scripts/release-files.ts`
+  (`RELEASE_COMMIT_FILES`). A test asserts it equals the paths deploy.sh's
+  `git add` stages, so the two cannot drift.
+
+### Considered and dropped
+- A `cargo metadata --locked` preflight. It would not have caught this
+  failure: `cargo update --workspace` makes the lock satisfy `Cargo.toml`
+  while leaving `tauri-plugin-opener` at 2.5.5 against npm's 2.7.0. Once the
+  lock is committed, `tauri build` on the mac already runs the same version
+  check against exactly the files that get tagged.
+
+### Not done here
+- v0.0.65 still has no Windows installers. Either cut v0.0.66 (pushes
+  `0c57247` with the fixed lock) or move the `v0.0.65` tag to `0c57247` and
+  re-run `build-windows.yml`. Both need a push by the operator.
+
 ## [Unreleased] - 2026-10-10 — Money v1 handover refreshed for M8 and the pilot
 
 **Scope:** `.claude/designs/money-v1-handover.md`, `.claude/CHANGELOG.md`. Docs only; no code.

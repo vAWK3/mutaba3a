@@ -117,6 +117,17 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
 
+#### Release tooling (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `scripts/__tests__/release-files.test.ts` | Unit + contract | 7 | **Full** - each manifest staged with its lockfile; `RELEASE_COMMIT_FILES` equals deploy.sh `tag_and_push`'s `git add` (parsed from the script); porcelain partition: unstaged/staged/both columns, untracked, rename destination, leading-space first line, clean tree |
+
+`vitest.config.ts` includes `scripts/**/*.{test,spec}.ts` for this. Still manual
+(no unit seam): `update_version` / `writeVersionFiles` bumping
+`package-lock.json`, and the release commit's contents. Both were dry-run on
+2026-10-11 in a local clone with `origin` removed, so `tag_and_push` committed
+and then failed at the push.
+
 #### Expenses collapse (MUT-14, added 2026-10-10)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

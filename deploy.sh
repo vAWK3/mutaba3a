@@ -13,8 +13,10 @@ NC='\033[0m' # No Color
 
 # File paths
 PACKAGE_JSON="package.json"
+PACKAGE_LOCK="package-lock.json"
 TAURI_CONF="src-tauri/tauri.conf.json"
 CARGO_TOML="src-tauri/Cargo.toml"
+CARGO_LOCK="src-tauri/Cargo.lock"
 RELEASE_DIR="release"
 
 # GitHub repository info (auto-detected from git remote)
@@ -91,12 +93,9 @@ update_version() {
 
     echo -e "${BLUE}Updating version to ${GREEN}$new_version${NC}"
 
-    # Update package.json
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$new_version\"/" "$PACKAGE_JSON"
-    else
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$new_version\"/" "$PACKAGE_JSON"
-    fi
+    # Update package.json and package-lock.json's own version (top level and
+    # root entry). Not sed: every dependency in the lockfile has a "version" too.
+    npm version "$new_version" --no-git-tag-version --allow-same-version --ignore-scripts > /dev/null
 
     # Update tauri.conf.json
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -192,8 +191,12 @@ tag_and_push() {
 
   echo -e "${BLUE}Preparing git commit, tag and push...${NC}"
 
-  # 1) Commit the version/config changes (so the tag points to the right commit)
-  git add "$PACKAGE_JSON" "$TAURI_CONF" "$CARGO_TOML" || true
+  # 1) Commit the version/config changes (so the tag points to the right commit).
+  #    Each manifest goes in with its lockfile: build_mac has just rewritten
+  #    Cargo.lock for the new version, and the Windows CI build reads the lock
+  #    from the tag (v0.0.65 failed on a stale one). Keep in sync with
+  #    RELEASE_COMMIT_FILES in scripts/release-files.ts (a test enforces it).
+  git add "$PACKAGE_JSON" "$PACKAGE_LOCK" "$TAURI_CONF" "$CARGO_TOML" "$CARGO_LOCK" || true
 
   if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
     git commit -m "Release $tag" || true
