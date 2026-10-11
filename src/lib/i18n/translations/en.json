@@ -699,7 +699,10 @@
       "statusLabel": "Status",
       "moreDetails": "More details",
       "lessDetails": "Fewer details",
-      "paymentsRecordedHint": "Payments are recorded for this entry, so its status follows them. Manage payments from the client page."
+      "paymentsRecordedHint": "Payments are recorded for this entry, so its status follows them. Manage payments from the client page.",
+      "currencyLockedHint": "Payments are recorded in {currency}, so the currency can't change.",
+      "savePaymentsChanged": "This entry's payments changed while it was open. Reopen it to see the latest.",
+      "saveFailed": "Couldn't save this entry. Try again."
     },
     "transaction": {
       "new": "New Transaction",
@@ -839,7 +842,7 @@
     "profileRequired": "Profile is required",
     "amountInvalid": "Enter an amount like 1200 or 1,200.50",
     "amountPositive": "Amount must be more than zero",
-    "amountBelowRecorded": "{amount} is already recorded as paid, so the amount can’t be less",
+    "amountBelowRecorded": "{amount} is already recorded as paid, so the amount can't be less",
     "clientNotPicked": "Pick a client from the list, or press Enter to create it"
   },
   "time": {

@@ -56,8 +56,11 @@ import type { TxStatus } from '../../types';
  * never writes those fields. Write rules live in lib/incomeEntry.ts.
  */
 
+const INCOME_STATUSES = ['earned', 'invoiced', 'received'] as const satisfies readonly IncomeStatus[];
+const CURRENCIES = ['USD', 'ILS', 'EUR'] as const;
+
 const schema = z.object({
-  incomeStatus: z.enum(['earned', 'invoiced', 'received']),
+  incomeStatus: z.enum(INCOME_STATUSES),
   profileId: z.string().min(1, 'validation.profileRequired'),
   amount: z
     .string()
@@ -65,7 +68,7 @@ const schema = z.object({
     .min(1, 'validation.amountRequired')
     .refine((value) => !value || parseAmountInput(value) !== null, 'validation.amountInvalid')
     .refine((value) => (parseAmountInput(value) ?? 1) > 0, 'validation.amountPositive'),
-  currency: z.enum(['USD', 'ILS', 'EUR']),
+  currency: z.enum(CURRENCIES),
   occurredAt: z.string().min(1, 'validation.dateRequired'),
   clientId: z.string().optional(),
   /** Text left in the client box without picking a client (MUT-5) */
@@ -99,9 +102,9 @@ const STATUS_HINT_KEYS: Record<IncomeStatus, string> = {
   received: 'drawer.income.statusReceivedHint',
 };
 
-const INCOME_STATUSES: IncomeStatus[] = ['earned', 'invoiced', 'received'];
-
-const CURRENCIES = ['USD', 'ILS', 'EUR'] as const;
+// Bidi isolates: keep an LTR amount whole inside an Arabic sentence
+const LTR_ISOLATE = '\u2066';
+const POP_ISOLATE = '\u2069';
 
 // Map stored status to the drawer's three-step status: paid → received,
 // unpaid → invoiced (the storage does not keep earned vs invoiced apart).
@@ -123,7 +126,8 @@ export function IncomeDrawer() {
   const { data: projectsData = [] } = useProjects();
   const { data: businessProfiles = [] } = useBusinessProfiles();
   const { data: settings } = useSettings();
-  const { data: paymentRecords = [] } = usePaymentRecords(mode === 'edit' ? transactionId : undefined);
+  const paymentRecordsQuery = usePaymentRecords(mode === 'edit' ? transactionId : undefined);
+  const paymentRecords = paymentRecordsQuery.data ?? [];
 
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
@@ -144,8 +148,11 @@ export function IncomeDrawer() {
     navigate({ to: '/documents/$documentId', params: { documentId } });
   };
 
-  // Payment records own this entry's payment state (ADR-030, MUT-5)
+  // Payment records own this entry's payment state (ADR-030, ADR-039). Until
+  // they have loaded the drawer can't know, so status, currency and Save wait.
+  const recordsPending = mode === 'edit' && !!transactionId && !paymentRecordsQuery.isSuccess;
   const hasRecords = mode === 'edit' && paymentRecords.length > 0;
+  const paymentStateLocked = hasRecords || recordsPending;
   const recordedMinor = recordedTotalMinor(paymentRecords);
 
   // Determine initial profile
@@ -271,13 +278,16 @@ export function IncomeDrawer() {
   };
 
   const onSubmit = async (data: FormData) => {
-    if (isLocked) return; // the notice explains; the repository would refuse anyway
+    if (isLocked || recordsPending) return; // the notice explains / the records are still loading
     const amountMinor = parseAmountInput(data.amount);
     if (amountMinor === null) return; // the schema already reported it
 
     // The repository rejects this too (ADR-030); checking here turns it into
     // a translated field message instead of a thrown error.
-    if (hasRecords && isBelowRecordedTotal(amountMinor, paymentRecords)) {
+    // Only an amount change is checked, as in the repository, so a legacy entry
+    // with more recorded than its total can still be retitled.
+    const amountChanged = !existingTx || amountMinor !== existingTx.amountMinor;
+    if (hasRecords && amountChanged && isBelowRecordedTotal(amountMinor, paymentRecords)) {
       form.setError('amount', { type: BELOW_RECORDED, message: 'validation.amountBelowRecorded' });
       return;
     }
@@ -296,7 +306,12 @@ export function IncomeDrawer() {
     };
 
     try {
-      if (mode === 'edit' && transactionId && existingTx) {
+      if (mode === 'edit') {
+        // An edit never falls through to creating a new entry
+        if (!transactionId || !existingTx) {
+          showToast(t('drawer.income.saveFailed'), { type: 'error' });
+          return;
+        }
         await updateMutation.mutateAsync({
           id: transactionId,
           data: buildIncomeUpdate(values, { now: nowISO(), existing: existingTx, hasRecords }),
@@ -319,6 +334,14 @@ export function IncomeDrawer() {
       closeIncomeDrawer();
     } catch (error) {
       console.error('Failed to save income:', error);
+      const name = error instanceof Error ? error.name : '';
+      const message =
+        name === 'PaymentRecordError'
+          ? t('drawer.income.savePaymentsChanged')
+          : name === 'TransactionLockedError'
+            ? t('drawer.income.locked.titleNoNumber')
+            : t('drawer.income.saveFailed');
+      showToast(message, { type: 'error' });
     }
   };
 
@@ -356,7 +379,8 @@ export function IncomeDrawer() {
     const error = form.formState.errors[field];
     if (!error?.message) return null;
     if (error.type === BELOW_RECORDED) {
-      return t(error.message, { amount: formatAmount(recordedMinor, watchedCurrency, locale) });
+      const amount = formatAmount(recordedMinor, existingTx?.currency ?? watchedCurrency, locale);
+      return t(error.message, { amount: `${LTR_ISOLATE}${amount}${POP_ISOLATE}` });
     }
     return t(error.message);
   };
@@ -438,7 +462,7 @@ export function IncomeDrawer() {
               type="submit"
               form="income-form"
               className="btn btn-primary"
-              disabled={isSubmitting || isLocked}
+              disabled={isSubmitting || isLocked || recordsPending}
             >
               {isSubmitting ? t('common.saving') : t('common.save')}
             </button>
@@ -551,7 +575,7 @@ export function IncomeDrawer() {
                     type="button"
                     className={cn('type-selector-btn', selectedStatus === status && 'active')}
                     aria-pressed={selectedStatus === status}
-                    disabled={hasRecords}
+                    disabled={paymentStateLocked}
                     onClick={() => setValue('incomeStatus', status)}
                   >
                     <span className="type-selector-label">{t(STATUS_LABEL_KEYS[status])}</span>
@@ -586,6 +610,7 @@ export function IncomeDrawer() {
                       className="select"
                       style={{ width: '100%' }}
                       {...field}
+                      disabled={paymentStateLocked}
                       onChange={(event) => {
                         setCurrencyChosen(true);
                         field.onChange(event);
@@ -613,6 +638,11 @@ export function IncomeDrawer() {
                 {errorText('occurredAt') && <p className="form-error">{errorText('occurredAt')}</p>}
               </div>
             </div>
+            {hasRecords && (
+              <p className="form-hint">
+                {t('drawer.income.currencyLockedHint', { currency: existingTx?.currency ?? watchedCurrency })}
+              </p>
+            )}
 
             {/* Project — optional grouping tag, shown only while the Projects area is on (MUT-16) */}
             {projectsEnabled && (

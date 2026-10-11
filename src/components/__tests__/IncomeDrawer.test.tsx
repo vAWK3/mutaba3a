@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,7 +11,9 @@ import {
   businessProfileRepo,
   settingsRepo,
   paymentRecordRepo,
+  PaymentRecordError,
 } from '../../db/repository';
+import { useToastStore } from '../../lib/toastStore';
 import { useDrawerStore } from '../../lib/stores';
 import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
@@ -263,7 +265,9 @@ describe('IncomeDrawer', () => {
       renderDrawer();
 
       const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      // the clients query has answered once its option is listed
+      await userEvent.setup().click(clientInput);
+      expect(await screen.findByRole('option', { name: 'Some Client' })).toBeInTheDocument();
       expect(clientInput).toHaveValue('');
     });
   });
@@ -551,10 +555,13 @@ describe('IncomeDrawer', () => {
         title: 'Plain entry',
       });
 
+      // a second profile puts the profile name in the defaults line, which proves
+      // the profiles (the expansion rule's input) have loaded before asserting
+      await businessProfileRepo.create({ name: 'Second Studio', defaultCurrency: 'ILS' });
       await openEdit(tx.id);
 
       await waitFor(() => expect(titleInput().value).toBe('Plain entry'));
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await waitFor(() => expect(screen.getByTestId('income-defaults')).toHaveTextContent('Test Profile'));
       expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'false');
     });
 
@@ -699,8 +706,9 @@ describe('IncomeDrawer', () => {
         await user.click(saveButton());
 
         const recorded = formatAmount(5000, 'USD', 'en-US');
+        // the amount is bidi-isolated so it stays whole inside the Arabic sentence too
         expect(
-          await screen.findByText(`${recorded} is already recorded as paid, so the amount can’t be less`)
+          await screen.findByText(`\u2066${recorded}\u2069 is already recorded as paid, so the amount can't be less`)
         ).toBeInTheDocument();
         expect((await transactionRepo.get(txId))?.amountMinor).toBe(10000);
       });
@@ -721,6 +729,234 @@ describe('IncomeDrawer', () => {
           expect(updated?.status).toBe('unpaid');
         });
       });
+    });
+  });
+
+  describe('pre-landing review fixes', () => {
+    it('holds a Save pressed while a new client is being created, then saves with that client', async () => {
+      const user = userEvent.setup();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const realCreate = clientRepo.create.bind(clientRepo);
+      const createSpy = vi.spyOn(clientRepo, 'create').mockImplementation(async (data) => {
+        await gate;
+        return realCreate(data);
+      });
+      try {
+        renderDrawer();
+        await user.type(await screen.findByLabelText(/^Amount/), '100');
+        await user.type(screen.getByPlaceholderText(CLIENT_PLACEHOLDER), 'Brand New Co');
+        await user.keyboard('{Enter}'); // picks "create Brand New Co"
+        await waitFor(() => expect(createSpy).toHaveBeenCalled());
+        await user.click(saveButton()); // the client is still being saved
+
+        expect(await transactionRepo.list({})).toHaveLength(0);
+        release();
+
+        await waitFor(async () => {
+          const created = (await db.clients.toArray()).find((c) => c.name === 'Brand New Co');
+          const [tx] = await transactionRepo.list({});
+          expect(created).toBeDefined();
+          expect(tx?.clientId).toBe(created?.id);
+        });
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
+    it('does not save a queued entry without its client when creating the client fails', async () => {
+      const user = userEvent.setup();
+      let fail!: (error: Error) => void;
+      const createSpy = vi.spyOn(clientRepo, 'create').mockImplementation(
+        () => new Promise((_, reject) => { fail = reject; })
+      );
+      try {
+        renderDrawer();
+        await user.type(await screen.findByLabelText(/^Amount/), '100');
+        const clientInput = screen.getByPlaceholderText(CLIENT_PLACEHOLDER);
+        await user.type(clientInput, 'Brand New Co');
+        await user.keyboard('{Enter}');
+        await waitFor(() => expect(createSpy).toHaveBeenCalled());
+        await user.click(saveButton());
+        fail(new Error('QuotaExceededError'));
+
+        expect(
+          await screen.findByText('Pick a client from the list, or press Enter to create it')
+        ).toBeInTheDocument();
+        expect(clientInput).toHaveValue('Brand New Co');
+        expect(await transactionRepo.list({})).toHaveLength(0);
+        expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(true);
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
+    it('holds the status switch and Save until the payment records have loaded', async () => {
+      const user = userEvent.setup();
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Waiting on records',
+      });
+      const recordsSpy = vi
+        .spyOn(paymentRecordRepo, 'listByTransaction')
+        .mockImplementation(() => new Promise(() => {}));
+      try {
+        await openEdit(tx.id);
+        await waitFor(() => expect(titleInput().value).toBe('Waiting on records'));
+        await openMoreDetails(user);
+
+        expect(statusButton('Received')).toBeDisabled();
+        expect(screen.getByLabelText('Currency')).toBeDisabled();
+        expect(saveButton()).toBeDisabled();
+      } finally {
+        recordsSpy.mockRestore();
+      }
+    });
+
+    it('locks the currency of an entry with recorded payments', async () => {
+      const user = userEvent.setup();
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+      });
+      await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 4000, paidAt: '2024-03-20' });
+
+      await openEdit(tx.id);
+      await openMoreDetails(user);
+
+      await waitFor(() => expect(screen.getByLabelText('Currency')).toBeDisabled());
+      expect(screen.getByText("Payments are recorded in USD, so the currency can't change.")).toBeInTheDocument();
+    });
+
+    it('keeps an edited entry in its stored currency when its profile default differs', async () => {
+      const user = userEvent.setup();
+      const ils = await businessProfileRepo.create({ name: 'Shekel Studio', defaultCurrency: 'ILS' });
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: ils.id,
+        amountMinor: 30000,
+        currency: 'EUR',
+        occurredAt: '2024-03-15',
+        title: 'Euro job',
+      });
+
+      await openEdit(tx.id);
+      await waitFor(() => expect(amountInput().value).toBe('300'));
+      await user.click(saveButton());
+
+      await waitFor(async () => expect((await transactionRepo.get(tx.id))?.title).toBe('Euro job'));
+      expect((await transactionRepo.get(tx.id))?.currency).toBe('EUR');
+      expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
+    });
+
+    it('keeps a duplicated entry in its source currency', async () => {
+      const user = userEvent.setup();
+      const ils = await businessProfileRepo.create({ name: 'Shekel Studio', defaultCurrency: 'ILS' });
+      const source = await transactionRepo.create({
+        kind: 'income',
+        status: 'paid',
+        profileId: ils.id,
+        amountMinor: 30000,
+        currency: 'EUR',
+        occurredAt: '2024-03-15',
+        title: 'Retainer',
+      });
+      useDrawerStore.setState({
+        incomeDrawer: { isOpen: true, mode: 'create', duplicateFromId: source.id },
+      });
+      renderDrawer();
+
+      await waitFor(() => expect(amountInput().value).toBe('300'));
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const copy = (await transactionRepo.list({})).find((t) => t.id !== source.id);
+        expect(copy?.currency).toBe('EUR');
+      });
+    });
+
+    it('stays open and says so when the repository refuses the save', async () => {
+      const user = userEvent.setup();
+      useToastStore.setState({ toasts: [] });
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+      });
+      const updateSpy = vi
+        .spyOn(transactionRepo, 'update')
+        .mockRejectedValueOnce(
+          new PaymentRecordError('Payment amount already recorded (50 USD) exceeds the new amount', {
+            transactionId: tx.id,
+          })
+        );
+      try {
+        await openEdit(tx.id);
+        await waitFor(() => expect(amountInput().value).toBe('100'));
+        await user.click(saveButton());
+
+        await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+        await waitFor(() =>
+          expect(useToastStore.getState().toasts.map((toast) => toast.message)).toContain(
+            "This entry's payments changed while it was open. Reopen it to see the latest."
+          )
+        );
+        expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(true);
+      } finally {
+        updateSpy.mockRestore();
+      }
+    });
+
+    it('lets a legacy entry with more recorded than its amount still be retitled', async () => {
+      const user = userEvent.setup();
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Old entry',
+      });
+      await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 5000, paidAt: '2024-03-20' });
+      await db.transactions.update(tx.id, { amountMinor: 4000 }); // saved before the guard existed
+
+      await openEdit(tx.id);
+      await waitFor(() => expect(titleInput().value).toBe('Old entry'));
+      await user.type(titleInput(), ', renamed');
+      await user.click(saveButton());
+
+      await waitFor(async () => expect((await transactionRepo.get(tx.id))?.title).toBe('Old entry, renamed'));
+    });
+
+    it('never turns an edit of a missing entry into a new entry', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({
+        incomeDrawer: { isOpen: true, mode: 'edit', transactionId: 'no-such-entry' },
+      });
+      renderDrawer();
+      await screen.findByText('Edit Income');
+
+      await user.type(await screen.findByLabelText(/^Amount/), '100');
+      await user.click(saveButton());
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(await transactionRepo.list({})).toHaveLength(0);
     });
   });
 

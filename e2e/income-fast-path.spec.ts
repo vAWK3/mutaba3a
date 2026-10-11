@@ -30,9 +30,11 @@ test.describe('Income fast path (MUT-5)', () => {
     await page.keyboard.type('Acme Studio');
 
     // The only option is "create Acme Studio", already highlighted: Enter picks it.
-    // The list is then closed, so the next Enter belongs to the form and saves,
-    // even when pressed before the new client has finished saving.
+    // While the new client is being saved the field is busy and holds Enter;
+    // once it exists the list is closed and the next Enter saves the entry.
     await page.keyboard.press('Enter');
+    await expect(client).toHaveValue('Acme Studio');
+    await expect(client).not.toHaveAttribute('aria-busy', 'true');
     await page.keyboard.press('Enter');
     await expect(drawer).toBeHidden();
 
@@ -59,5 +61,25 @@ test.describe('Income fast path (MUT-5)', () => {
     await expect(drawer.getByRole('listbox')).toBeHidden();
     await expect(drawer).toBeVisible();
     await expect(drawer.getByLabel('What did you do?')).toHaveValue('Kept work');
+  });
+
+  test('the amount stays left-to-right, currency first, in Arabic', async ({ page }) => {
+    await page.goto('/app/settings');
+    await page.getByRole('button', { name: /skip for now/i }).click();
+    await page.getByRole('button', { name: 'العربية' }).click();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+    await page.goto('/app/income');
+    await page.getByRole('button', { name: 'إضافة إيراد' }).click();
+    const drawer = page.getByRole('dialog').filter({ hasText: 'إيراد جديد' });
+    await drawer.getByLabel('ماذا أنجزت؟').fill('هوية بصرية');
+
+    // theme.css sets :lang(ar) { direction: rtl } on every element; the group must win
+    const group = drawer.getByTestId('income-amount-group');
+    await expect(group).toHaveCSS('direction', 'ltr');
+    await expect(group.locator('input')).toHaveCSS('direction', 'ltr');
+    const prefix = await group.locator('.input-prefix').boundingBox();
+    const input = await group.locator('input').boundingBox();
+    expect(prefix && input && prefix.x < input.x).toBe(true);
   });
 });
