@@ -4,7 +4,7 @@
 - **Epic:** MUT-2 "Strip to the core: delete dead surface, gate the optional" (last open ticket)
 - **Blocked by:** MUT-12 (Done). **Builds on:** MUT-13/14/16 (every optional area already gated: `requireFeature` route guards, the sidebar's "More" section, flag-aware `+ Add` entries; ADR-032 and its addenda).
 - **Worktree:** `.claude/worktrees/mut-2-strip-core`, branch `feature/mut-2-strip-core` (recreated from `main` 0c57247).
-- **Status:** brief for owner approval.
+- **Status:** approved by the owner 2026-10-11, D1–D5 as recommended (no core header; shared `+ Add` list; redirect-on-disable via the route guards; TD-027 fixed here; keyboard support for both menus).
 
 ---
 
