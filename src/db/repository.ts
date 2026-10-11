@@ -195,7 +195,7 @@ export const categoryRepo = {
 
 // Transaction Repository
 // Fields an entry's payment records own once it has any (ADR-039)
-const PAYMENT_STATE_KEYS = ['status', 'paidAt', 'receivedAmountMinor'] as const;
+export const PAYMENT_STATE_KEYS = ['status', 'paidAt', 'receivedAmountMinor'] as const;
 
 export const transactionRepo = {
   async list(filters: QueryFilters = {}): Promise<TransactionDisplay[]> {
