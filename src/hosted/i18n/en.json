@@ -90,6 +90,7 @@
       "currency": "Currency",
       "status": "Status",
       "kind": "Type",
+      "category": "Category",
       "all": "All",
       "from": "From",
       "to": "To"

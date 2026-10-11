@@ -34,5 +34,5 @@
     "https://tanstack.com",
     "https://tinyurl.com"
   ],
-  "hosted": ["http://localhost", "http://www.w3.org", "https://react.dev", "https://tanstack.com"]
+  "hosted": ["http://localhost", "http://www.w3.org", "http://json-schema.org", "https://json-schema.org", "https://react.dev", "https://tanstack.com"]
 }

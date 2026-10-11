@@ -110,6 +110,10 @@ export interface ExpenseDrawerSearch {
 export const parseExpenseDrawer = (raw: Raw): ExpenseDrawerSearch =>
   compact({ expense: id(raw.expense), newExpense: raw.newExpense === '1' || raw.newExpense === true ? true : undefined });
 
+/** The /expenses route's full search: the list's own filters plus the drawer's open/edit state. */
+export type ExpensesPageSearch = ExpenseFilters & ExpenseDrawerSearch;
+export const parseExpensesPage = (raw: Raw): ExpensesPageSearch => ({ ...parseExpenses(raw), ...parseExpenseDrawer(raw) });
+
 export const DOCUMENT_KINDS = ['INVOICE', 'RECEIPT', 'OTHER'] as const;
 
 export interface DocumentFilters {

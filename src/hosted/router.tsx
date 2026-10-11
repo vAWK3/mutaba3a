@@ -4,13 +4,14 @@ import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { AuthGate, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
-import { parseClientDetail, parseClients, parseDocuments, parseOverview, parsePayments, parseReceivables } from './data/filters';
+import { parseClientDetail, parseClients, parseDocuments, parseExpensesPage, parseOverview, parsePayments, parseReceivables } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
 import { ReceivablesPage } from './pages/views/ReceivablesList';
 import { PaymentsPage } from './pages/views/PaymentsList';
 import { DocumentsPage } from './pages/views/DocumentsList';
+import { ExpensesPage } from './pages/views/ExpensesList';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -124,11 +125,20 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
+  const expensesRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    path: '/expenses',
+    validateSearch: parseExpensesPage,
+    component: function Expenses() {
+      return <ExpensesPage filters={expensesRoute.useSearch()} setFilters={useReplaceSearch()} />;
+    },
+  });
+
   const routeTree = rootRoute.addChildren([
     signInRoute,
     authedRoute.addChildren([
       homeRoute,
-      profileRoute.addChildren([overviewRoute, clientsRoute, clientRoute, receivablesRoute, paymentsRoute, documentsRoute]),
+      profileRoute.addChildren([overviewRoute, clientsRoute, clientRoute, receivablesRoute, paymentsRoute, documentsRoute, expensesRoute]),
     ]),
   ]);
 
