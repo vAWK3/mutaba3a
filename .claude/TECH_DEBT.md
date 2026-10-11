@@ -18,6 +18,42 @@
 
 ## Open Debt
 
+### TD-052: The hosted portal's "income isn't recorded" copy is now false for personal profiles
+**Status**: Open — follow-up filed, MUT-93
+**Added**: 2026-10-12 (MUT-65)
+**Priority**: Medium — a false statement in the product's own UI
+**Impact**: `hosted-portal.md` §7.4 and `src/hosted/i18n/en.json:85` hard-code
+*"Income isn't recorded on hosted profiles yet. This profile is for
+expenses."* for a read-only domain. After MUT-65, a personal profile's income
+**is** recorded — by the user, through the phone capture app — so the string
+is wrong, and the portal's read-only affordances (`§7.4`'s suppressed
+"Record payment"/edit actions) arguably should unsuppress for a personal
+profile too. This is `src/hosted/**` portal-UI work (copy + a real UX call
+on whether to also enable editing, not just reword a sentence), a different
+module than this ticket's `server/` scope and large enough to be its own
+pass. Filed as MUT-93 rather than folded in, the way MUT-44's CSP gap was
+left for MUT-45 to pick up.
+**Fix**: reword `hosted.*` copy to reflect the mechanism `GET /v1/me`'s
+`access` map already publishes per profile (MUT-65 made this mechanically
+correct; only the portal's own prose and affordances are stale), decide
+whether the portal gains write UI for a personal profile's income in the
+same pass or a later one.
+
+### TD-053: Owed capture is always OUT_OF_SCOPE VAT, never the organization's real rate
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-65)
+**Priority**: Low until VAT-aware personal capture is actually requested
+**Impact**: `income/compose.ts`'s `owedVatFields` always returns
+`{ vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0 }` regardless of any
+`VatRate` configured on the organization — a deliberate simplification named
+in the design brief, not an oversight. A personal profile has no VAT
+settings UI, and the phone capture app's keypad flow (MUT-68) does not
+describe a VAT field; computing a real rate would need both to exist first.
+**Fix**: if VAT-aware personal capture is wanted, it is its own ticket
+(capture-app VAT field + compose.ts + a product decision on whether
+`vatTreatment` becomes configurable per personal profile) — not a silent
+addition to this one. Explicitly not folded in here (scope guard).
+
 ### TD-051: A first run stacks two first-run surfaces
 **Status**: Open
 **Added**: 2026-10-12 (MUT-78)
@@ -155,6 +191,11 @@ appends two events in one millisecond and expects insertion order.
 **Seen again in MUT-42 (2026-10-11):** `routes-expenses.test.ts`'s audit test
 compared actions in order and failed once. It now compares them as a set, so
 nothing new depends on the order.
+
+**Seen again in MUT-65 (2026-10-12):** `income-routes.test.ts`'s captureSource
+audit test indexed `events[0]`/`events[1]` positionally and was flaky for the
+same reason. Rewritten to `find()` by a distinguishing field instead of by
+position, like MUT-42's fix.
 
 ### TD-037: The Sync Op-Log Has No Notion of a Profile
 **Status**: Accepted (recorded by MUT-36; deliberately not built)

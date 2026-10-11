@@ -28,6 +28,40 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-65: personal hosted profiles accept income, clients and matters from the user
+
+**Scope:** `server/` only.
+- `prisma/schema.prisma` and migration `20261012090000_mut65_personal_income` (column-altering: `payments.customerId` and `receivables.projectId` drop `NOT NULL`; new `payments.{projectId,createdByUserId}` and `receivables.{title,createdByUserId,deletedAt}`)
+- `src/income/{compose,__tests__/compose}.ts` (new); `src/routes/income.ts` (new); `src/routes/receivables.ts` (+settle)
+- `src/auth/{writability,middleware,store-guard}.ts`, `src/routes/{sessions,customers,projects,payments,expenses,summaries}.ts`, `src/repositories/{ports,memory,prisma}.ts`, `src/{schemas,serializers}.ts`, `src/app.ts`
+- `openapi/openapi.yaml`
+- tests: `src/income/__tests__/compose.test.ts`, `src/__tests__/{income-routes,receivables-settle}.test.ts` (new); `src/auth/__tests__/writability.test.ts` (new); extensions to `src/auth/__tests__/store-guard.test.ts`, `src/__tests__/{writability-drift,writability-routes,routes-sessions,route-security,routes-m2..m8}.test.ts`, `src/repositories/__tests__/store-contract-m4.ts`, `src/retainers/__tests__/proration.test.ts`, `src/summaries/__tests__/compute.test.ts`
+- records: the approved brief `mut-65-personal-profile-income.md` and its test plan; ADR-037 amendment; ADR-038 addendum
+
+### Added
+- **`POST /v1/income`** (session-only, `payments:write`): Received (optionally with no client at all, optionally carrying a matter) or Owed (a client is required — explicit or resolved from a matter, else `422 CUSTOMER_REQUIRED_FOR_OWED`). Received is an ordinary `Payment`, created through the existing M4 transaction unmodified; Owed is a new, agreement-less `Receivable` (`origin: ADJUSTMENT`), always `OUT_OF_SCOPE` VAT at a zero rate, due `EOM_15` of the occurred date by default (the existing `dueDateFor` helper, no new date math). `occurredOn` may not be later than today; a capture source (`app|siri|widget|quick_action|share`) lands on the audit row only, never persisted on the entity.
+- **`DELETE /v1/income/{id}`** (undo): voids an unsettled Owed entry of the caller's own, or reverses an unallocated Received payment of the caller's own (the existing M4 `reverse()`), each idempotent on repeat calls. Never reveals another user's or another profile's row (404, not 403).
+- **`POST /v1/receivables/{id}/settle`**: one payment + one allocation against a session's own receivable, no preview/allocation dance; `amount` defaults to the full outstanding, `paidAt` to today (and may not be later).
+- **A personal hosted profile can now write customers, projects and payments through its own session** (hosted-portal.md §5a amendment): `sessionAccessFor`/`sessionScopesFor`/`mayWriteFor` make the session column of exactly these three matrix rows a function of the profile (`profileWriter === null` → read-write) rather than a constant; a Malafat-fed profile is unchanged (still read-only there). `POST /v1/customers` and `POST /v1/projects` now accept a session as well as an API key; a session's `externalReference` is refused (`EXTERNAL_REFERENCE_NOT_ALLOWED`); the audit actor is `actorOf(c)` (USER for a session) instead of always API_KEY.
+- `receivables.createAdjustment` / `softDeleteAdjustment` and an internal `createPaymentTx`/`createAdjustmentTx` split on the Prisma repository (the `settleReceivable(tx, …)` idiom), so MUT-66 can compose a payment or adjustment inside its own transaction without re-touching this code.
+- `receivables.getByIdIncludingDeleted`: the undo route's own idempotency re-check needs to see an already-voided row; every other reader keeps using the deletedAt-filtered `getById`/`list`.
+
+### Changed
+- **`GET /v1/me`'s `access` map is now computed per organization** (`sessionAccessFor`), not once from a static table — a personal profile's `access` actually reflects what it can write.
+- **`Receivable.projectId` and `Payment.customerId` are now nullable**, rippling into `routes/payments.ts`'s allocation engine (a projectless receivable is never eligible there — Owed is read/settled through `/v1/income`/`/v1/receivables/{id}/settle` instead), the organization summary's per-customer breakdown (a clientless payment contributes to the currency block's own totals but keys no row), and the `ReceivableSchema`/`PaymentSchema` wire contracts.
+- `expenses.ts`'s create route threads an optional `captureSource` into its audit metadata, the one existing write path the ticket names.
+- Contract: new reasons `CUSTOMER_REQUIRED_FOR_OWED`, `EXTERNAL_REFERENCE_NOT_ALLOWED`, `PAYMENT_HAS_NO_CUSTOMER` (422) and `ALREADY_SETTLED`, `ALREADY_ALLOCATED` (409); an "Income" tag and description paragraph; API `1.12.0-mut65`.
+
+### Deviation from the plan (verified against ground truth)
+- The design doc's §4.1/§4.6 assumed `occurredOn`'s future-date rejection could reuse `assertNotAbsurdDate` (agreements/compose.ts), the same call `POST /v1/payments` makes on `receivedOn`. Read against the real code, that function only rejects a date **more than ten years ahead** — Malafat's `receivedOn` is not rejected for being merely tomorrow. Ticket AC 7 requires a real "not later than today" rule, so `income/compose.ts` adds `assertNotFuture` (reusing the existing `DATE_INVALID` reason, not a new one) instead. `payments.ts`'s own `receivedOn` check is untouched — out of scope for this ticket.
+
+### Verified
+- **Mutation checks** (temporarily applied, confirmed failing, reverted): the undo route's ownership check; the `paidMinor`/`creditedMinor` guard before voiding an Owed entry; the `sessionScopesFor` wiring in `selectProfile`; the `mayWriteFor` change in `store-guard.ts`'s `storeRefusal`. Each genuinely breaks the relevant test when removed. The `deletedAt` exclusion from `listEligible`/`countOutstandingByProject` is pinned permanently in `store-contract-m4.ts`.
+- `npm test`: 1159 passed, 11 skipped. lint, typecheck, build and `openapi:check` pass. `npm run test:db` and the migration against a live Postgres could not be run in this environment (no `DATABASE_URL`/`MUTABA3A_TEST_DATABASE_URL`) — flagged, not claimed.
+- openapi.yaml diff on `/v1/customers`/`/v1/projects` is exactly a second `security` entry plus description text, confirmed by hand — no schema or operation shape Malafat's vendored contract pins changes. No vendored-contract test exists in this repo to run automatically (Malafat owns that file, in its own repository).
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-78: "Open the web app" lands straight in sample data, with no dialogs
 
 **Scope:**

@@ -1394,6 +1394,23 @@ Then prove it with a **canary sweep**, generated from the published document:
    path slot;
 3. no response body may contain a canary (`expenses-invisible.test.ts`).
 
+### A writability-matrix row can depend on the profile, not just the principal (MUT-65)
+Most rows are a constant per principal (`WRITABILITY_MATRIX[i].session`). Three
+rows (`customers`, `projects`, `payments`) are not: a personal profile
+(`profileWriter === null`) may write them through its own session; a
+Malafat-fed one may not, unchanged from before. The matrix itself stays
+unedited — a `sessionAccessFor(domain, profileWriter)` wrapper layers the
+per-profile branch on top for exactly `PROFILE_DEPENDENT_DOMAINS`, and falls
+through to the static `matrixRow(domain).session` for everything else.
+`sessionScopesFor`/`mayWriteFor` are the profile-aware counterparts of
+`sessionScopes`/`mayWrite`, used at the two points that actually decide
+access (`selectProfile()`, `store-guard.ts`'s `storeRefusal`); the static
+originals are kept, since other call sites (e.g. the API-key column) never
+needed to change. The brief's matrix cell for such a row gets a fixed,
+**literal suffix** (`` `read; read-write on a personal profile` ``) rather than
+a richer cell grammar — keep the table one `Access` value per cell plus a
+pinned string, not a format a drift test has to parse.
+
 ### A view in error renders no data (MUT-43)
 After a failed refetch, TanStack Query keeps the last `data`. A portal view
 ignores it while any of its queries is in error and shows the unreachable card
