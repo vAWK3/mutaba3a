@@ -24,6 +24,15 @@ export type CustomerSummary = Schemas['CustomerSummary'];
 export type ProjectSummary = Schemas['ProjectSummary'];
 export type ItemStatus = Schemas['ItemStatus'];
 export type CustomerSummaryStatus = Schemas['CustomerSummaryStatus'];
+export type Expense = Schemas['Expense'];
+export type ExpenseDetail = Schemas['ExpenseDetail'];
+export type ExpenseCategory = Schemas['ExpenseCategory'];
+export type ExpenseReceipt = Schemas['ExpenseReceipt'];
+export type ExpenseSummary = Schemas['ExpenseSummary'];
+export type CreateExpenseRequest = Schemas['CreateExpenseRequest'];
+export type UpdateExpenseRequest = Schemas['UpdateExpenseRequest'];
+export type CreateReceiptUploadRequest = Schemas['CreateReceiptUploadRequest'];
+export type CreateReceiptUploadResponse = Schemas['CreateReceiptUploadResponse'];
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
 export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
@@ -78,6 +87,10 @@ interface RequestOptions {
   query?: Record<string, QueryValue>;
   body?: unknown;
   signal?: AbortSignal;
+  /** Client-generated key for a write that must not replay (MUT-42 §14.2). Omitted for receipt-upload starts, which are idempotent by nature — a repeat leaves an unlisted PENDING row. */
+  idempotencyKey?: string;
+  /** The `version` read before an optimistic PATCH; sent as `If-Match`, refused with 409 on a stale value. */
+  ifMatchVersion?: string;
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
@@ -122,10 +135,12 @@ async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-export async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
+export async function request<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
+  if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
+  if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
 
   let response: Response;
   try {
@@ -179,6 +194,47 @@ export const api = {
     request<Get<'/v1/attachments/{attachmentId}/download'>>(
       'GET',
       `/v1/attachments/${encodeURIComponent(attachmentId)}/download`,
+      { profileId },
+    ),
+
+  // Expenses (MUT-44) — the portal's only write. See mut-44-expense-capture.md §4.
+  expenses: (profileId: string, query: Query<'/v1/expenses'> = {}) =>
+    request<Get<'/v1/expenses'>>('GET', '/v1/expenses', { profileId, query }),
+  expense: (profileId: string, expenseId: string) =>
+    request<Get<'/v1/expenses/{expenseId}'>>('GET', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
+  createExpense: (profileId: string, body: CreateExpenseRequest, idempotencyKey: string) =>
+    request<Expense>('POST', '/v1/expenses', { profileId, body, idempotencyKey }),
+  updateExpense: (profileId: string, expenseId: string, body: UpdateExpenseRequest, version: string) =>
+    request<Expense>('PATCH', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId, body, ifMatchVersion: version }),
+  deleteExpense: (profileId: string, expenseId: string) =>
+    request<void>('DELETE', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
+
+  expenseCategories: (profileId: string) =>
+    request<Get<'/v1/expense-categories'>>('GET', '/v1/expense-categories', { profileId }),
+
+  expenseSummary: (profileId: string, query: Query<'/v1/summaries/expenses'>) =>
+    request<Get<'/v1/summaries/expenses'>>('GET', '/v1/summaries/expenses', { profileId, query }),
+
+  // Receipts: start has no Idempotency-Key, like M6's attachment-upload start — a repeat
+  // leaves an unlisted PENDING row rather than replaying (mut-42-hosted-expenses.md §10).
+  startReceipt: (profileId: string, expenseId: string, body: CreateReceiptUploadRequest) =>
+    request<CreateReceiptUploadResponse>('POST', `/v1/expenses/${encodeURIComponent(expenseId)}/receipts`, { profileId, body }),
+  completeReceipt: (profileId: string, expenseId: string, receiptId: string) =>
+    request<ExpenseReceipt>(
+      'POST',
+      `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/complete`,
+      { profileId },
+    ),
+  deleteReceipt: (profileId: string, expenseId: string, receiptId: string) =>
+    request<void>(
+      'DELETE',
+      `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}`,
+      { profileId },
+    ),
+  receiptDownload: (profileId: string, expenseId: string, receiptId: string) =>
+    request<Get<'/v1/expenses/{expenseId}/receipts/{receiptId}/download'>>(
+      'GET',
+      `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
       { profileId },
     ),
 };

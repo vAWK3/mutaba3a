@@ -91,6 +91,92 @@ describe('errors', () => {
   });
 });
 
+describe('expenses (MUT-44)', () => {
+  const body = { occurredOn: '2026-10-11', amount: '12.50', currency: 'ILS' as const };
+
+  it('createExpense sends idempotency-key and the request body, profile-scoped', async () => {
+    fetchMock.mockResolvedValue(json(201, { id: 'e1' }));
+    await api.createExpense('org-1', body, 'idem-1');
+    const { url, init, headers } = lastCall();
+    expect(url).toBe('/v1/expenses');
+    expect(init.method).toBe('POST');
+    expect(headers.get('idempotency-key')).toBe('idem-1');
+    expect(headers.get('x-mutaba3a-profile')).toBe('org-1');
+    expect(JSON.parse(String(init.body))).toEqual(body);
+  });
+
+  it('updateExpense sends if-match with the given version and PATCHes the expense', async () => {
+    fetchMock.mockResolvedValue(json(200, { id: 'e1' }));
+    await api.updateExpense('org-1', 'e1', { title: 'Taxi' }, '3');
+    const { url, init, headers } = lastCall();
+    expect(url).toBe('/v1/expenses/e1');
+    expect(init.method).toBe('PATCH');
+    expect(headers.get('if-match')).toBe('3');
+  });
+
+  it('deleteExpense DELETEs by id, profile-scoped', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await api.deleteExpense('org-1', 'e1');
+    const { url, init, headers } = lastCall();
+    expect(url).toBe('/v1/expenses/e1');
+    expect(init.method).toBe('DELETE');
+    expect(headers.get('x-mutaba3a-profile')).toBe('org-1');
+  });
+
+  it('expenses lists with cursor pagination', async () => {
+    fetchMock.mockResolvedValue(json(200, { items: [], nextCursor: null }));
+    await api.expenses('org-1', { limit: 50, cursor: 'c1' });
+    expect(lastCall().url).toBe('/v1/expenses?limit=50&cursor=c1');
+  });
+
+  it('expense fetches a single expense with receipts', async () => {
+    fetchMock.mockResolvedValue(json(200, { id: 'e1' }));
+    await api.expense('org-1', 'e1');
+    expect(lastCall().url).toBe('/v1/expenses/e1');
+  });
+
+  it('expenseCategories lists without an idempotency or if-match header', async () => {
+    fetchMock.mockResolvedValue(json(200, { items: [] }));
+    await api.expenseCategories('org-1');
+    const { url, headers } = lastCall();
+    expect(url).toBe('/v1/expense-categories');
+    expect(headers.has('idempotency-key')).toBe(false);
+  });
+
+  it('expenseSummary sends the date range', async () => {
+    fetchMock.mockResolvedValue(json(200, { from: '2026-10-01', to: '2026-10-31', currencies: [] }));
+    await api.expenseSummary('org-1', { from: '2026-10-01', to: '2026-10-31' });
+    expect(lastCall().url).toBe('/v1/summaries/expenses?from=2026-10-01&to=2026-10-31');
+  });
+
+  it('startReceipt POSTs with no idempotency-key (M6 pattern — a repeat leaves an unlisted PENDING row)', async () => {
+    fetchMock.mockResolvedValue(json(201, { receipt: { id: 'r1' }, upload: { url: 'https://x', method: 'PUT', headers: {}, expiresAt: '2026-10-11T00:00:00Z' } }));
+    await api.startReceipt('org-1', 'e1', { filename: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 100 });
+    const { url, init, headers } = lastCall();
+    expect(url).toBe('/v1/expenses/e1/receipts');
+    expect(init.method).toBe('POST');
+    expect(headers.has('idempotency-key')).toBe(false);
+  });
+
+  it('completeReceipt POSTs to the completion path', async () => {
+    fetchMock.mockResolvedValue(json(200, { id: 'r1' }));
+    await api.completeReceipt('org-1', 'e1', 'r1');
+    expect(lastCall().url).toBe('/v1/expenses/e1/receipts/r1/complete');
+  });
+
+  it('deleteReceipt DELETEs the receipt', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await api.deleteReceipt('org-1', 'e1', 'r1');
+    expect(lastCall().init.method).toBe('DELETE');
+  });
+
+  it('receiptDownload fetches the signed-URL envelope', async () => {
+    fetchMock.mockResolvedValue(json(200, { url: 'https://x' }));
+    await api.receiptDownload('org-1', 'e1', 'r1');
+    expect(lastCall().url).toBe('/v1/expenses/e1/receipts/r1/download');
+  });
+});
+
 describe('unauthorised handler', () => {
   it('fires once for a 401 from any call except sign-in', async () => {
     const handler = vi.fn();
