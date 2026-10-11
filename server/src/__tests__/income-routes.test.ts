@@ -410,3 +410,33 @@ describe('read-surface agreement (AC 3): captured income shows up where its mone
     expect(ils.customers.find((x: Loose) => x.customerId === c.id).outstanding).toBe('350.00');
   });
 });
+
+describe('a session creates a customer and a project under it, on its own personal profile (AC 4)', () => {
+  it('POST /v1/customers → 201, audited as USER; POST /v1/projects under it → 201, audited as USER', async () => {
+    const { h, p, u } = await setup();
+    const customerRes = await h.app.request('/v1/customers', json({ name: 'Nadia' }, { ...u.as(p.id), ...idem() }));
+    expect(customerRes.status).toBe(201);
+    const c = await read(customerRes);
+    expect(c).toMatchObject({ name: 'Nadia', status: 'ACTIVE' });
+
+    const projectRes = await h.app.request('/v1/projects', json({ customerId: c.id, name: 'Logo redesign', currency: 'ILS' }, { ...u.as(p.id), ...idem() }));
+    expect(projectRes.status).toBe(201);
+    const proj = await read(projectRes);
+    expect(proj).toMatchObject({ customerId: c.id, name: 'Logo redesign', currency: 'ILS', status: 'ACTIVE' });
+
+    const customerEvents = (await h.store.audit.list(p.id, { action: 'customer.created' }, { limit: 10, cursor: null })).items;
+    const projectEvents = (await h.store.audit.list(p.id, { action: 'project.created' }, { limit: 10, cursor: null })).items;
+    expect(customerEvents[0]).toMatchObject({ actorType: 'USER', actorId: u.userId, entityId: c.id });
+    expect(projectEvents[0]).toMatchObject({ actorType: 'USER', actorId: u.userId, entityId: proj.id });
+  });
+
+  it("a session's externalReference is refused (a session has no external system to reference)", async () => {
+    const { h, p, u } = await setup();
+    const res = await h.app.request(
+      '/v1/customers',
+      json({ name: 'Nadia', externalReference: { provider: 'MALAFAT', externalId: 'ext-1' } }, { ...u.as(p.id), ...idem() }),
+    );
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ field: 'externalReference', reason: 'EXTERNAL_REFERENCE_NOT_ALLOWED' });
+  });
+});

@@ -253,6 +253,11 @@ describe('the acceptance criteria’s entity writes, refused with nothing writte
     ['receivable: a credit', () => `/v1/receivables/${receivableId}/credits`, () => ({ amount: '10.00', reason: 'Goodwill' }), 'payments'],
     ['payment: recording one', () => '/v1/payments', () => ({ customerId: a.customer.id, currency: 'ILS', amount: '100.00', receivedOn: '2026-10-26' }), 'payments'],
     ['customer: creating one', () => '/v1/customers', () => ({ name: 'New client' }), 'customers'],
+    // MUT-65
+    ['project: creating one', () => '/v1/projects', () => ({ customerId: a.customer.id, name: 'New matter', currency: 'ILS' }), 'projects'],
+    ['income: Received, no client', () => '/v1/income', () => ({ kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-26' }), 'payments'],
+    ['income: Owed, with client', () => '/v1/income', () => ({ kind: 'owed', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-26', customerId: a.customer.id }), 'payments'],
+    ['receivable: settle', () => `/v1/receivables/${receivableId}/settle`, () => ({}), 'payments'],
   ];
 
   it.each(cases)('%s → 403 READ_ONLY_PROFILE', async (_label, path, body, domain) => {
