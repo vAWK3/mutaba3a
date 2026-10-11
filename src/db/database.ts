@@ -39,6 +39,13 @@ import type {
   SyncHistoryEntry,
 } from '../sync/core/ops-types';
 
+/**
+ * Note the v18 upgrade wrote on the payment records it created from
+ * accumulated totals. Stored as data, so the UI matches it and shows the
+ * translated `transactions.partialPayment.migratedNote` instead.
+ */
+export const MIGRATED_PAYMENT_NOTE = 'Migrated from accumulated total';
+
 export class MiniCrmDatabase extends Dexie {
   // Core business tables
   clients!: Table<Client, string>;
@@ -885,7 +892,7 @@ export class MiniCrmDatabase extends Dexie {
             transactionId: t.id,
             amountMinor: receivedAmount,
             paidAt: t.paidAt || t.updatedAt || t.createdAt,
-            notes: 'Migrated from accumulated total',
+            notes: MIGRATED_PAYMENT_NOTE,
             createdAt: now,
             updatedAt: now,
           });
@@ -896,7 +903,7 @@ export class MiniCrmDatabase extends Dexie {
             transactionId: t.id,
             amountMinor: t.amountMinor,
             paidAt: t.paidAt || t.updatedAt || t.createdAt,
-            notes: 'Migrated from accumulated total',
+            notes: MIGRATED_PAYMENT_NOTE,
             createdAt: now,
             updatedAt: now,
           });

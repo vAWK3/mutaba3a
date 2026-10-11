@@ -73,6 +73,13 @@ call it. The *income* key duplication described above is untouched and still
 open; the precedent for fixing it is to put the list in the module that owns
 the keys rather than in a new `src/hooks/invalidation.ts`.
 
+**Note (2026-10-11, MUT-3):** the payment-record list key followed the same
+precedent: `invalidatePaymentRecordLists` lives in `useQueries.ts` beside the
+keys and both `invalidateTransactionQueries` and `invalidateIncomeQueries`
+call it. Before that, Mark paid (which writes a record) left the client
+Payments section stale for the 60s staleTime. The income key list itself is
+still duplicated.
+
 ### TD-020: Import State Loads Linked Entities One By One
 **Status**: Open
 **Added**: 2026-10-08
@@ -154,6 +161,16 @@ affects receivable overdue, but both are the same class of defect:
 For the record, MUT-17 found **six** `todayISO`/`getTodayISO` definitions in
 total, not the three its description listed. Four now delegate to
 `todayLocalISO()`; these two do not.
+
+**Note (2026-10-11, MUT-3):** `npm run test:tz` on `main` 0c57247 fails four
+tests, all outside MUT-3 and reproduced on an untouched `main` checkout:
+`aggregations.test.ts > getDaysInMonth` and `pdf.test.ts > Date Formatting`
+(both listed above), plus `utils.test.ts > todayISO` and
+`transactionRepo.test.ts > getDisplay > daysOverdue`. The two
+`forecastCalculations` failures are gone with the MUT-14 expense strip. Same
+class, user-visible: `formatDate(dateOnly)` (`src/lib/utils.ts`) parses
+`YYYY-MM-DD` as UTC midnight, so every date-only value displays one day early
+west of UTC — on every list, including the client profile.
 
 **Resolution**: audit each remaining site, classify it as instant (keep
 `toISOString()`) or calendar date (move to `src/lib/dates.ts`), and fix the
@@ -553,6 +570,30 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 **Impact**: D4 auto-completes the project step in `OnboardingOverlay` while projects is off, so a fresh install's `OnboardingStepIndicator` still renders three steps with step 2 ticked before the user did anything. Harmless functionally (the flow is client → income) but reads as odd on the first launch.
 
 **Remediation**: make `OnboardingStepIndicator` take the step list from the overlay and omit `project` while the area is off; or let `onboardingStore` carry a step list set at `startOnboarding()` from the flags (needs a persisted-state migration). Decide alongside MUT-15's sidebar/add-menu shape.
+
+**Effort**: Small
+
+---
+
+### TD-029: Income saved as "Received" writes no PaymentRecord
+**Status**: Open
+**Priority**: Medium
+**Introduced**: pre-existing; surfaced by MUT-3, 2026-10-11
+**Impact**: `IncomeDrawer` (`:184-199`) saves a Received entry as `status: 'paid'`, `paidAt` and `receivedAmountMinor = amount` with no `PaymentRecord`, so anything that reads records alone misses those payments. ADR-033 works around it on read: `paymentRecordRepo.listByClient` adds an `entry` row for the uncovered amount. Other record readers (the payment drawer's history via `listByTransaction`, a future statement export) still see nothing for such an entry, and the drawer's received→invoiced edit path clears `receivedAmountMinor` directly.
+
+**Remediation**: in MUT-5 (or alongside it), make create/edit-as-received go through `paymentRecordRepo.create` and define what received→invoiced does to existing records; backfill one record per uncovered paid entry in a Dexie upgrade. The `entry` rows then stop appearing on their own.
+
+**Effort**: Medium
+
+---
+
+### TD-030: Owed Now excludes archived income; client summaries and overview totals include it
+**Status**: Open
+**Priority**: Low
+**Introduced**: MUT-3, 2026-10-11 (ADR-033 §2)
+**Impact**: The client profile's Owed Now (`summarizeOwedByCurrency`) skips archived entries so it adds up to the lists beneath it. `clientSummaryRepo.list/get` (`aggregateTransactionTotals*`, `filterTransactionsByEntity*`) and `transactionRepo.getOverviewTotals*` still count archived rows, so a client with an archived unpaid entry shows a larger "unpaid" on `/clients` than "owed now" on its profile until MUT-7/MUT-8 move those screens to the shared helper.
+
+**Remediation**: MUT-7 and MUT-8 compute owed now with `summarizeOwedByCurrency`; then decide whether the remaining aggregate helpers should skip archived rows too.
 
 **Effort**: Small
 

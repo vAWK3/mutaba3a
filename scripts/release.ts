@@ -6,7 +6,8 @@
  * bash menu does badly or not at all:
  *   - a real version-bump choice (deploy.sh always increments patch)
  *   - a working-tree check that says which files will actually land in the
- *     release commit, instead of implying everything dirty will
+ *     release commit, instead of implying everything dirty will, and flags
+ *     changes already sitting in those files before the bump
  *   - a maintained post-release checklist (release-steps.ts)
  *
  * It does NOT reimplement signing, notarization, tagging, or publishing —
@@ -22,6 +23,7 @@ import { execSync, spawn } from 'child_process';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import * as readline from 'readline';
+import { RELEASE_COMMIT_FILES, partitionDirtyFiles, type DirtyFiles } from './release-files';
 import { getStepsForVersion, type ReleaseStep } from './release-steps';
 
 // --- Console Colors ---
@@ -76,6 +78,12 @@ async function confirmAction(question: string, defaultYes = false): Promise<bool
   return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
 }
 
+async function continueOrExit(): Promise<void> {
+  if (await confirmAction('Continue anyway?')) return;
+  console.log(colorize('Cancelled.', 'yellow'));
+  process.exit(0);
+}
+
 function runCommandStreaming(command: string, args: string[]): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn(command, args, { stdio: 'inherit' });
@@ -119,9 +127,12 @@ function bumpVersion(current: string, bump: VersionBump, custom?: string): strin
 }
 
 function writeVersionFiles(newVersion: string): void {
-  const pkg = JSON.parse(readFileSync(PACKAGE_JSON, 'utf-8'));
-  pkg.version = newVersion;
-  writeFileSync(PACKAGE_JSON, JSON.stringify(pkg, null, 2) + '\n');
+  // package.json plus package-lock.json's own version (top level and root
+  // entry), leaving every dependency's "version" alone.
+  execSync(`npm version ${newVersion} --no-git-tag-version --allow-same-version --ignore-scripts`, {
+    cwd: ROOT,
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
 
   const tauriConf = JSON.parse(readFileSync(TAURI_CONF, 'utf-8'));
   tauriConf.version = newVersion;
@@ -137,28 +148,31 @@ function writeVersionFiles(newVersion: string): void {
   }
   writeFileSync(CARGO_TOML, updatedCargoToml);
 
-  console.log(colorize(`✓ Updated version to ${newVersion} in package.json, tauri.conf.json, Cargo.toml`, 'green'));
+  console.log(
+    colorize(
+      `✓ Updated version to ${newVersion} in package.json, package-lock.json, tauri.conf.json, Cargo.toml`,
+      'green',
+    ),
+  );
 }
 
 // --- Working tree check ---
 
-const VERSION_FILES = new Set(['package.json', 'src-tauri/tauri.conf.json', 'src-tauri/Cargo.toml']);
-
 /**
- * deploy.sh's release commit only ever stages package.json, tauri.conf.json
- * and Cargo.toml (`tag_and_push`'s `git add`). Any other uncommitted change
- * is silently left out of the release commit and stays dirty on disk — not
- * lost, but easy to mistake for "will be committed" if you only read deploy.sh's
- * own working-tree warning.
+ * deploy.sh's release commit only ever stages RELEASE_COMMIT_FILES
+ * (`tag_and_push`'s `git add`). Any other uncommitted change is silently left
+ * out of the release commit and stays dirty on disk — not lost, but easy to
+ * mistake for "will be committed" if you only read deploy.sh's own
+ * working-tree warning. The opposite trap is a change already sitting in one
+ * of those files: it rides into the release silently. That is how v0.0.65's
+ * tauri bump in Cargo.toml shipped in its release commit.
  */
-function checkWorkingTree(): { otherDirtyFiles: string[] } {
-  const status = execSync('git status --porcelain', { encoding: 'utf-8' });
-  const otherDirtyFiles = status
-    .split('\n')
-    .map((line) => line.slice(3).trim())
-    .filter(Boolean)
-    .filter((file) => !VERSION_FILES.has(file));
-  return { otherDirtyFiles };
+function checkWorkingTree(): DirtyFiles {
+  return partitionDirtyFiles(execSync('git status --porcelain', { encoding: 'utf-8' }));
+}
+
+function printFileList(files: string[]): void {
+  files.forEach((f) => console.log(colorize(`    ${f}`, 'dim')));
 }
 
 // --- Post-release checklist ---
@@ -256,30 +270,36 @@ async function main() {
         'yellow',
       ),
     );
-    const proceed = await confirmAction('Continue anyway?');
-    if (!proceed) {
-      console.log(colorize('Cancelled.', 'yellow'));
-      process.exit(0);
-    }
+    await continueOrExit();
   }
 
-  const { otherDirtyFiles } = checkWorkingTree();
-  if (otherDirtyFiles.length > 0) {
-    console.log(colorize('\n⚠ Uncommitted changes outside the version files:', 'yellow'));
-    otherDirtyFiles.forEach((f) => console.log(colorize(`    ${f}`, 'dim')));
+  const { inReleaseCommit, leftOut } = checkWorkingTree();
+  if (inReleaseCommit.length > 0) {
+    console.log(colorize('\n⚠ Already-modified files that WILL be in the release commit:', 'yellow'));
+    printFileList(inReleaseCommit);
     console.log(
       colorize(
-        '  These will NOT be included in the release commit — deploy.sh only stages\n' +
-        '  package.json, tauri.conf.json and Cargo.toml. They will stay uncommitted\n' +
-        '  on disk after the release is pushed.\n',
+        '  Whatever is in them now ships with the version bump — a dependency change\n' +
+        '  in Cargo.toml or package.json included. Review before continuing:\n' +
+        `    git diff -- ${inReleaseCommit.join(' ')}\n`,
         'dim',
       ),
     );
-    const proceed = await confirmAction('Continue anyway?');
-    if (!proceed) {
-      console.log(colorize('Cancelled.', 'yellow'));
-      process.exit(0);
-    }
+    await continueOrExit();
+  }
+
+  if (leftOut.length > 0) {
+    console.log(colorize('\n⚠ Uncommitted changes outside the release commit:', 'yellow'));
+    printFileList(leftOut);
+    console.log(
+      colorize(
+        '  These will NOT be included in the release commit — deploy.sh only stages\n' +
+        `  ${RELEASE_COMMIT_FILES.join(', ')}.\n` +
+        '  They will stay uncommitted on disk after the release is pushed.\n',
+        'dim',
+      ),
+    );
+    await continueOrExit();
   }
 
   const currentVersion = getVersion();

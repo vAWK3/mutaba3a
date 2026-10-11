@@ -4,6 +4,7 @@
  */
 
 import type { Transaction, Currency, Client, Project, Category } from '../types';
+import { isReceivable, isOverdueReceivable } from '../lib/dates';
 
 // Types for aggregation results
 export interface TransactionTotals {
@@ -22,6 +23,17 @@ export interface TransactionTotalsWithActivity extends TransactionTotals {
   lastActivityAt?: string;
   lastPaymentAt?: string;
 }
+
+/** What one client (or everyone) owes in a single currency, right now. */
+export interface OwedByCurrency {
+  currency: Currency;
+  owedMinor: number;
+  /** The part of owedMinor whose due date has passed (ADR-010) */
+  overdueMinor: number;
+}
+
+/** Fixed display order, so a currency never moves around between screens. */
+const OWED_CURRENCY_ORDER: readonly Currency[] = ['USD', 'ILS', 'EUR'];
 
 export interface DateFilter {
   dateFrom?: string;
@@ -44,6 +56,32 @@ export function accumulateIncomeAmount(tx: Transaction): { paid: number; unpaid:
   }
   const received = tx.receivedAmountMinor ?? 0;
   return { paid: received, unpaid: tx.amountMinor - received };
+}
+
+/**
+ * Owed Now, per currency: the remaining balance of every unpaid income, with
+ * the overdue part split out. The single definition behind the client profile
+ * (MUT-3), the clients index (MUT-7) and home (MUT-8).
+ *
+ * Counts unpaid, non-deleted, non-archived income -- the same rows the income
+ * lists show, so the figure always adds up to what is listed beneath it.
+ * Currencies are never combined; one with nothing owed is left out.
+ */
+export function summarizeOwedByCurrency(transactions: Transaction[], today: string): OwedByCurrency[] {
+  const totals = new Map<Currency, OwedByCurrency>();
+
+  for (const tx of transactions) {
+    if (!isReceivable(tx) || tx.deletedAt || tx.archivedAt) continue;
+    const remaining = Math.max(0, accumulateIncomeAmount(tx).unpaid);
+    if (remaining === 0) continue;
+
+    const entry = totals.get(tx.currency) ?? { currency: tx.currency, owedMinor: 0, overdueMinor: 0 };
+    entry.owedMinor += remaining;
+    if (isOverdueReceivable(tx, today)) entry.overdueMinor += remaining;
+    totals.set(tx.currency, entry);
+  }
+
+  return OWED_CURRENCY_ORDER.flatMap((currency) => totals.get(currency) ?? []);
 }
 
 /**

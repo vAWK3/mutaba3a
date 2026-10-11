@@ -27,6 +27,8 @@ import {
   useSetDefaultBusinessProfile,
   useArchiveBusinessProfile,
   useCreatePaymentRecord,
+  useMarkTransactionPaid,
+  usePaymentsByClient,
 } from '../useQueries';
 import type { BusinessProfile, Document } from '../../types';
 
@@ -525,6 +527,45 @@ describe('Payment Record Hooks', () => {
       const updated = await transactionRepo.get(tx.id);
       expect(updated?.receivedAmountMinor).toBe(10000);
       expect(updated?.status).toBe('paid');
+    });
+  });
+
+  /**
+   * MUT-3: Mark paid writes a PaymentRecord, but used to invalidate only the
+   * transaction keys, so the client profile's Payments section kept showing
+   * the pre-payment history until the 60s staleTime ran out.
+   */
+  describe('useMarkTransactionPaid', () => {
+    it('refreshes the client payment history it just wrote to', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        title: 'Homepage',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-03-01',
+        clientId: client.id,
+      });
+
+      const queryClient = createTestQueryClient();
+      const { result } = renderHook(
+        () => ({ payments: usePaymentsByClient(client.id), markPaid: useMarkTransactionPaid() }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await waitFor(() => expect(result.current.payments.data).toEqual([]));
+
+      await result.current.markPaid.mutateAsync(tx.id);
+
+      await waitFor(() => {
+        expect(result.current.payments.data).toHaveLength(1);
+      });
+      expect(result.current.payments.data?.[0]).toMatchObject({
+        transactionTitle: 'Homepage',
+        amountMinor: 10000,
+        source: 'record',
+      });
     });
   });
 });

@@ -29,6 +29,7 @@ import type {
 import { excludeDeleted, scopeToProfile } from './baseQuery';
 import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
 import {
+  accumulateIncomeAmount,
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
   aggregateTransactionTotalsWithActivity,
@@ -1494,47 +1495,83 @@ export const paymentRecordRepo = {
   /**
    * List a client's payment history, joined to parent income transactions.
    * Sorted by paidAt descending; filters applied before sort and limit.
+   *
+   * Returns every non-deleted PaymentRecord of the client's live income, plus
+   * one 'entry' row per income whose received amount its records do not cover
+   * (MUT-3 D3). Income saved as Received writes no record, so without those
+   * rows the history would omit every job logged as already paid. Reconciling
+   * on read keeps every write path, past and future, correct with no
+   * migration.
+   *
+   * Index: transactions.clientId, then paymentRecords.transactionId (anyOf).
+   * Date bounds compare the calendar date of paidAt, which may be a timestamp.
    */
   async listByClient(
     clientId: string,
     filters: PaymentByClientFilters = {}
   ): Promise<PaymentByClientRow[]> {
-    const txs = await db.transactions
+    const incomes = await db.transactions
       .where('clientId')
       .equals(clientId)
-      .filter((tx) => !tx.deletedAt)
+      .filter((tx) => !tx.deletedAt && tx.kind === 'income')
       .toArray();
 
-    if (txs.length === 0) return [];
+    if (incomes.length === 0) return [];
 
-    const txById = new Map(txs.map((tx) => [tx.id, tx]));
     const records = await db.paymentRecords
       .where('transactionId')
-      .anyOf([...txById.keys()])
+      .anyOf(incomes.map((tx) => tx.id))
+      .filter((r) => !r.deletedAt)
       .toArray();
 
-    const rows: PaymentByClientRow[] = [];
+    const recordsByTx = new Map<string, PaymentRecord[]>();
     for (const record of records) {
-      if (record.deletedAt) continue;
-      const tx = txById.get(record.transactionId);
-      if (!tx || tx.kind !== 'income') continue;
+      const list = recordsByTx.get(record.transactionId) ?? [];
+      list.push(record);
+      recordsByTx.set(record.transactionId, list);
+    }
+    const rows: PaymentByClientRow[] = [];
 
-      if (filters.dateFrom && record.paidAt < filters.dateFrom) continue;
-      if (filters.dateTo && record.paidAt > filters.dateTo) continue;
-      if (filters.currency && tx.currency !== filters.currency) continue;
+    for (const tx of incomes) {
+      const txRecords = recordsByTx.get(tx.id) ?? [];
+      for (const record of txRecords) {
+        rows.push({
+          id: record.id,
+          transactionId: tx.id,
+          transactionTitle: tx.title,
+          amountMinor: record.amountMinor,
+          currency: tx.currency,
+          paidAt: record.paidAt,
+          notes: record.notes,
+          source: 'record',
+        });
+      }
 
-      rows.push({
-        id: record.id,
-        transactionId: record.transactionId,
-        transactionTitle: tx.title,
-        amountMinor: record.amountMinor,
-        currency: tx.currency,
-        paidAt: record.paidAt,
-        notes: record.notes,
-      });
+      const recordedMinor = txRecords.reduce((sum, r) => sum + r.amountMinor, 0);
+      const uncoveredMinor = accumulateIncomeAmount(tx).paid - recordedMinor;
+      if (uncoveredMinor > 0) {
+        rows.push({
+          id: `entry:${tx.id}`,
+          transactionId: tx.id,
+          transactionTitle: tx.title,
+          amountMinor: uncoveredMinor,
+          currency: tx.currency,
+          paidAt: tx.paidAt ?? tx.occurredAt,
+          notes: undefined,
+          source: 'entry',
+        });
+      }
     }
 
-    rows.sort((a, b) => b.paidAt.localeCompare(a.paidAt));
-    return filters.limit !== undefined ? rows.slice(0, filters.limit) : rows;
+    const matching = rows.filter((row) => {
+      const paidOn = row.paidAt.slice(0, 10);
+      if (filters.dateFrom && paidOn < filters.dateFrom) return false;
+      if (filters.dateTo && paidOn > filters.dateTo) return false;
+      if (filters.currency && row.currency !== filters.currency) return false;
+      return true;
+    });
+
+    matching.sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+    return filters.limit !== undefined ? matching.slice(0, filters.limit) : matching;
   },
 };

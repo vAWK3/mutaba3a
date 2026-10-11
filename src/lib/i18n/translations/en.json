@@ -318,25 +318,9 @@
       "totalReceived": "Total Received",
       "totalUnpaid": "Total Unpaid"
     },
-    "tabs": {
-      "summary": "Summary",
-      "projects": "Projects",
-      "receivables": "Receivables",
-      "transactions": "Transactions"
-    },
     "detail": {
-      "clientDetails": "Client Details",
-      "email": "Email",
-      "phone": "Phone",
-      "recentActivity": "Recent Activity",
-      "noRecentActivity": "No recent activity",
-      "viewAllTransactions": "View All Transactions",
-      "noProjects": "No projects",
-      "noProjectsHint": "Add your first project for this client.",
       "noReceivables": "No receivables",
       "noReceivablesHint": "All payments have been received.",
-      "noTransactions": "No transactions",
-      "noTransactionsHint": "Add your first transaction for this client.",
       "retainers": {
         "title": "Retainers",
         "empty": "No retainers for this client yet.",
@@ -346,10 +330,27 @@
         "dueNow": "Due now"
       }
     },
-    "receivables": {
-      "dueDate": "Due Date",
-      "daysOverdue": "Days Overdue",
-      "action": "Action"
+    "profile": {
+      "owedNow": "Owed now",
+      "nothingOwed": "Nothing owed",
+      "overdueAmount": "{amount} overdue",
+      "nothingOverdue": "Nothing overdue",
+      "work": {
+        "title": "Work and billing",
+        "add": "Add income",
+        "what": "What",
+        "untitled": "Untitled",
+        "emptyTitle": "No work recorded for this client yet",
+        "emptyHint": "Add what you did and what it's worth. That's all it takes.",
+        "noMatches": "No entries match these filters",
+        "clearFilters": "Clear filters"
+      },
+      "payments": {
+        "title": "Payments",
+        "for": "For",
+        "recordedOnEntry": "Recorded on the entry",
+        "openEntry": "Open income entry"
+      }
     }
   },
   "insights": {

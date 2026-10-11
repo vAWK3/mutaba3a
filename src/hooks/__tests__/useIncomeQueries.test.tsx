@@ -389,3 +389,57 @@ describe('Mutation Hooks', () => {
     });
   });
 });
+
+/**
+ * MUT-3: every income write can change the client payment history -- Mark paid
+ * writes a PaymentRecord, and a retitled or deleted entry changes or removes
+ * its rows -- so each one refreshes the payment lists too.
+ */
+describe('income writes refresh the payment lists', () => {
+  const invalidatedRoots = async (run: (queryClient: QueryClient) => Promise<void>) => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    await run(queryClient);
+    return invalidateQueries.mock.calls.map(([arg]) => (arg as { queryKey: unknown[] }).queryKey[0]);
+  };
+
+  const wrapperFor = (queryClient: QueryClient) =>
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    };
+
+  it('useMarkIncomePaid invalidates paymentRecords', async () => {
+    (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const roots = await invalidatedRoots(async (queryClient) => {
+      const { result } = renderHook(() => useMarkIncomePaid(), { wrapper: wrapperFor(queryClient) });
+      await act(async () => {
+        await result.current.mutateAsync('tx-1');
+      });
+    });
+    expect(roots).toContain('paymentRecords');
+  });
+
+  it('useUpdateIncome invalidates paymentRecords', async () => {
+    (transactionRepo.update as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const roots = await invalidatedRoots(async (queryClient) => {
+      const { result } = renderHook(() => useUpdateIncome(), { wrapper: wrapperFor(queryClient) });
+      await act(async () => {
+        await result.current.mutateAsync({ id: 'tx-1', data: { title: 'Renamed' } });
+      });
+    });
+    expect(roots).toContain('paymentRecords');
+  });
+
+  it('useDeleteIncome invalidates paymentRecords', async () => {
+    (transactionRepo.softDelete as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const roots = await invalidatedRoots(async (queryClient) => {
+      const { result } = renderHook(() => useDeleteIncome(), { wrapper: wrapperFor(queryClient) });
+      await act(async () => {
+        await result.current.mutateAsync('tx-1');
+      });
+    });
+    expect(roots).toContain('paymentRecords');
+  });
+});
