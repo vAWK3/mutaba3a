@@ -789,3 +789,27 @@ existing `DocumentDrawer` and document page tests, which still pass.
 **Baseline after TD-028 (2026-10-10)**: 2,149 unit tests passing, 5 skipped,
 0 failing. The 18 `ExpensesLedgerPage` failures noted above no longer exist on
 `main`; the page was removed by the MUT-2 strip.
+
+### MUT-15 — the sidebar is Home / Clients / Income / Settings
+
+| Area | File | What is pinned |
+|---|---|---|
+| Core shape (AC 1, 2, 8) | `src/components/layout/__tests__/SidebarNav.features.test.tsx` | fresh install: exactly Home, Clients, Income, Settings in DOM (Tab) order, no Main/Workspace/More header; every area on: the core three first, More holds the six in order, Settings last; switching an area on then off adds and removes it below the core with the core link **nodes** identical throughout; Settings is inside `.sidebar-footer`, never `.sidebar-nav`, with all areas off and on |
+| Active state (AC 6) | same file | parametrised over `/`, `/clients`, `/clients/c1`, `/income`, `/expenses`, `/documents/d1/edit`, `/retainers`, `/insights`, `/planning`, `/projects/p1`, `/settings/profiles/p1`, `/settings/import`: exactly one link has `active` + `aria-current="page"` and it is the expected entry; nothing active on `/theme-demo` |
+| Collapsed mode (AC 7) | same file | four icon links titled with their labels, no labels or headers rendered; the toggle collapses/expands and writes `localStorage.sidebarCollapsed` |
+| `+ Add` actions (AC 5) | `layout/__tests__/addMenuActions.test.ts`, `SidebarNav.features.test.tsx`, `TopBar.addMenu.test.tsx` | Income, Client always; Expense / Project appended only while on; all 64 flag combinations keep Income, Client first; both menus render the same order |
+| Menu keyboard (D5) | `src/hooks/__tests__/useMenuButton.test.tsx` (11), plus one case in each menu's test | `aria-haspopup`/`aria-expanded`/`aria-controls`; opening focuses the first item (ArrowUp on the button: last); arrows wrap; Home/End; Escape closes and refocuses the button (also when the button has focus); Tab and outside mousedown close, inside mousedown does not; a picked item runs and the menu closes without pulling focus back |
+| Redirect on disable (AC 4) | `src/lib/features/__tests__/leaveDisabledArea.test.tsx` (6), `features.test.ts` (`featuresTurnedOff`, 5) | real memory-history router + real `requireFeature`: switching the open page's area off lands on `/` with history length 1 (replace); a core page stays; another area off re-runs the guard and stays; switching on, a non-feature settings change and the first load never call `router.invalidate` (spied before the first render) |
+| Onboarding (TD-027) | `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx` (+3) | projects off: two circles numbered 1, 2, none ticked, first current; after the client step, 1 ticked and 2 current; projects on: three circles |
+| E2E | `e2e/navigation.spec.ts` (run locally against a worktree dev server) | `/app/` shows the four links in order with no optional or legacy link; each navigates and gets `aria-current="page"` |
+
+Browser check (2026-10-11, dev server): English and Arabic × expanded and
+collapsed × no areas and two areas on — core order, More below, Settings in
+the footer, active rail on the inline-start edge, collapse chevron direction
+in all four direction × state combinations, collapsed toggles in flow with no
+overlap. Two-tab check: tab A on `/app/expenses`, tab B switches Expenses off,
+tab A's settings query refetches → More loses Expenses and the tab lands on
+`/app/` with history length unchanged.
+
+**Baseline after MUT-15 (2026-10-11)**: 134 files, 2,207 passed, 5 skipped,
+0 failed (was 130 / 2,149).

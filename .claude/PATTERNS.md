@@ -1219,6 +1219,34 @@ loading just delays the entry); **acting** on "off" — completing a step,
 clearing a value, redirecting inside React — must also check
 `useFeaturesLoaded()`, or the first render treats "not read yet" as "off".
 
+### Core first, optional appended (MUT-15)
+Any list that mixes core entries with optional-area entries (the sidebar, both
+`+ Add` menus) puts the core entries first as a **constant** and appends the
+optional ones after, filtered by the flags. A switch (or the flags reading
+`false` while settings load) can then only add or remove rows *below* the
+core, so nothing the user already reaches for moves and there is no layout
+shift. One list per concern: `coreItems`/`optionalItems` for the sidebar,
+`visibleAddMenuActions(flags)` for both menus; a menu only maps an action to
+its own label, icon and click handler.
+
+### Leaving an area that was switched off (MUT-15)
+Do not add a second table of which route belongs to which area. The router
+already knows: every gated route has `requireFeature(key)`. When an area goes
+from on to off, `useLeaveDisabledArea()` (mounted once in `AppShell`) calls
+`router.invalidate()`, which re-runs the open route's `beforeLoad`; the gate
+then redirects home with `replace`, exactly as a deep link would. The hook
+compares the previous resolved map with the new one (`featuresTurnedOff`) and
+ignores the first load and switch-ons, so unrelated settings writes never
+touch the router. Test it with a real memory-history router and the real
+guard (`leaveDisabledArea.test.tsx`), not a mocked `useNavigate`.
+
+### Menu buttons (MUT-15)
+A button that opens a list of actions uses `useMenuButton()` and spreads
+`buttonProps` / `menuProps`; items are `role="menuitem"` with `tabIndex={-1}`
+and call `menu.close()` before running their action. The hook owns focus on
+open, arrow/Home/End movement, Escape (refocus the button), Tab and
+outside-click closing; do not add per-menu document listeners.
+
 ### Pruning after a UI deletion (MUT-14)
 Run the consumer audit (exports and repository methods with zero references
 outside their own file and tests), then make a **reachability pass** before

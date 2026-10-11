@@ -195,3 +195,24 @@ export function useLeaveDisabledArea(): void {
 - First launch shows the product's job in three entries, client work in the middle and the money ledger beside it. A user who turns on an area sees it appear under "More" while their core entries stay where their hands already are.
 - Both `+ Add` menus read the same way, so "Add client" is always the second choice.
 - Closes MUT-2: every optional area is gated and the default surface is the client-accounting core.
+
+## Build notes (2026-10-11)
+
+- **Collapsed rail, found in the browser check.** With no positioning context
+  on `.sidebar`, the collapsed-mode chevron (`position: absolute; right`) and
+  the expand button (`position: absolute; bottom; left: 50%`) were placed
+  against the window: top-right beside the top bar's `+ Add`, and
+  bottom-centre behind the download banner. Giving the sidebar a containing
+  block made them collide with the brand and cover Settings, so both went
+  into normal flow instead (chevron under the brand, expand button under
+  Settings). Behaviour unchanged; layout only. Within AC 7.
+- **RTL chevron** uses `rotate(180deg)` rather than `scaleX(-1)` so it
+  animates like LTR; direction verified for all four direction × state
+  combinations.
+- **e2e:** the navigation spec passes; the remaining 13 e2e cases fail for
+  pre-existing reasons, recorded on TD-004.
+- New debt: TD-029 (`RowActionsMenu` listeners), TD-030 (the two menus' click
+  behaviour differs). TD-027 resolved.
+- Verification: lint 0 errors, typecheck and `tsc -b` clean, 134 files /
+  2,207 tests passing (5 skipped), build succeeds.
+

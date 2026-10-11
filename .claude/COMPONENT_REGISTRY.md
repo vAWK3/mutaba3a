@@ -61,11 +61,12 @@
 ```
 
 **Features**:
-- Active state highlighting
-- Keyboard navigation
-- RTL support
-- Collapsible (future)
-- Optional areas (MUT-13/14/16): `optionalItems` renders the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `newMenuItems` entries with a `feature` key (expense, project) follow the same switches. Main is Home + Income, workspace is Clients; final grouping is MUT-15's.
+- Active state highlighting (prefix match, Home exact; one entry active per route, pinned by tests for every route)
+- Keyboard navigation (links in DOM order; the New menu via `useMenuButton`)
+- RTL support (logical rail and menu offsets; the collapse chevron points toward the collapsing edge)
+- Collapsible to a 64px rail (choice kept in `localStorage.sidebarCollapsed`); toggles in normal flow; a hairline separates core from "More"
+- **Shape (MUT-15, ADR-033):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
+- New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
 
 ---
 
@@ -88,7 +89,37 @@
 | `breadcrumbs?` | BreadcrumbItem[] | Navigation trail |
 | `actions?` | ReactNode | Right-side action buttons |
 
-The `+ Add` menu's New expense and New project items render only while their areas are on (`useFeatureEnabled`, MUT-14/16).
+The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon.
+
+---
+
+### addMenuActions
+**Location**: `src/components/layout/addMenuActions.ts`
+**Purpose**: The single list of `+ Add` actions, their area gates and their order, shared by the sidebar New menu and the top bar Add menu (MUT-15).
+
+```ts
+visibleAddMenuActions(flags); // ['income', 'client'] with every area off
+```
+
+Core actions first, optional appended, so a switch never moves a core entry. Each menu maps an `AddMenuAction` to its own label, icon and click behaviour. Tests: `layout/__tests__/addMenuActions.test.ts` (all 64 flag combinations keep Income, Client first).
+
+---
+
+### useMenuButton
+**Location**: `src/hooks/useMenuButton.ts`
+**Purpose**: A button that opens a menu of actions with WAI-ARIA menu-button keyboard behaviour (MUT-15).
+
+```tsx
+const menu = useMenuButton();
+<button {...menu.buttonProps} type="button">Add</button>
+{menu.isOpen && (
+  <div {...menu.menuProps}>
+    <button role="menuitem" tabIndex={-1} onClick={() => { menu.close(); run(); }}>Income</button>
+  </div>
+)}
+```
+
+Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; arrows wrap; Home/End jump; Escape closes and refocuses the button; Tab and a mousedown outside close. Used by `SidebarNav` and `TopBar`. `RowActionsMenu` still has its own listeners (TD-029). Tests: `hooks/__tests__/useMenuButton.test.tsx`.
 
 ---
 
