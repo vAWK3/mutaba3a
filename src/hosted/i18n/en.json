@@ -1,0 +1,264 @@
+{
+  "common": {
+    "search": "Search..."
+  },
+  "hosted": {
+    "brand": "Mutaba3a",
+    "auth": {
+      "title": "Sign in",
+      "email": "Email",
+      "password": "Password",
+      "show": "Show",
+      "hide": "Hide",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "emailRequired": "Enter your email.",
+      "emailInvalid": "Enter an email address, like name@firm.ps.",
+      "passwordRequired": "Enter your password.",
+      "invalid": "That email and password don't match. After 5 tries, sign-in pauses for 15 minutes.",
+      "rateLimited": {
+        "one": "Too many attempts from this network. Try again in {count} minute.",
+        "other": "Too many attempts from this network. Try again in {count} minutes."
+      },
+      "unreachable": "Couldn't reach Mutaba3a. Check your connection and try again.",
+      "expired": "You've been signed out. Sign in again to continue.",
+      "signedOut": "You've signed out.",
+      "help": "Can't sign in? Ask the person who set up your account for a new password.",
+      "checking": "Checking your session",
+      "boot": {
+        "title": "Can't reach Mutaba3a right now",
+        "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
+        "retry": "Try again"
+      },
+      "noProfiles": {
+        "title": "Your account isn't connected to a profile yet",
+        "body": "Ask the person who set up your account to give you access."
+      },
+      "unavailable": {
+        "title": "This profile isn't available",
+        "body": "It may have been removed from your account.",
+        "goTo": "Go to {name}"
+      },
+      "signOut": "Sign out",
+      "signOutFailed": "Couldn't sign out. Check your connection and try again."
+    },
+    "shell": {
+      "sections": "Sections",
+      "nav": {
+        "overview": "Overview",
+        "clients": "Clients",
+        "receivables": "Receivables",
+        "payments": "Payments",
+        "documents": "Documents"
+      },
+      "switcher": {
+        "label": "Switch profile",
+        "hosted": "Hosted",
+        "sourceMalafat": "Income recorded by Malafat",
+        "sourceExpensesOnly": "Expenses only",
+        "localFooter": "Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it."
+      },
+      "account": "Account",
+      "language": "Language"
+    },
+    "states": {
+      "unreachable": {
+        "title": "Can't reach Mutaba3a right now",
+        "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
+        "retry": "Try again"
+      },
+      "loading": "Loading",
+      "showMore": "Show more",
+      "loadingMore": "Loading more…",
+      "clearFilters": "Clear filters",
+      "noMatch": "Nothing matches these filters."
+    },
+    "readOnly": {
+      "malafat": "Malafat records income and payments for this profile. To change them, use Malafat.",
+      "none": "Income isn't recorded on hosted profiles yet. This profile is for expenses."
+    },
+    "filters": {
+      "client": "Client",
+      "matter": "Matter",
+      "currency": "Currency",
+      "status": "Status",
+      "kind": "Type",
+      "all": "All",
+      "from": "From",
+      "to": "To"
+    },
+    "status": {
+      "item": {
+        "PENDING": "Not yet due",
+        "DUE": "Due",
+        "OVERDUE": "Overdue",
+        "PARTIALLY_PAID": "Partly paid",
+        "PAID": "Paid",
+        "VOID": "Void"
+      },
+      "customer": {
+        "SETTLED": "Settled",
+        "OVERDUE": "Overdue",
+        "OUTSTANDING": "Outstanding",
+        "UP_TO_DATE": "Up to date"
+      },
+      "project": {
+        "NONE": "No fee yet",
+        "PENDING": "Not yet due",
+        "OUTSTANDING": "Outstanding",
+        "PARTIALLY_PAID": "Partly paid",
+        "OVERDUE": "Overdue",
+        "PAID_IN_FULL": "Paid in full",
+        "UP_TO_DATE": "Up to date",
+        "CANCELLED": "Cancelled",
+        "SETTLED": "Settled"
+      },
+      "payment": {
+        "POSTED": "Recorded",
+        "REVERSED": "Reversed"
+      },
+      "open": {
+        "OPEN": "Open",
+        "SETTLED": "Settled"
+      }
+    },
+    "overview": {
+      "title": "Overview",
+      "owed": "Owed",
+      "overdue": "Overdue",
+      "proposed": "Proposed",
+      "asOf": "As of {date}",
+      "columns": {
+        "client": "Client",
+        "outstanding": "Outstanding",
+        "overdue": "Overdue",
+        "lastPayment": "Last payment",
+        "status": "Status"
+      },
+      "empty": {
+        "title": "No money recorded on this profile yet",
+        "body": "Fees and payments recorded for this profile appear here."
+      }
+    },
+    "clients": {
+      "title": "Clients",
+      "search": "Search clients",
+      "columns": {
+        "name": "Client",
+        "outstanding": "Outstanding",
+        "overdue": "Overdue",
+        "lastPayment": "Last payment",
+        "status": "Status"
+      },
+      "empty": {
+        "title": "No clients on this profile yet",
+        "body": "Clients recorded for this profile appear here."
+      },
+      "noMatch": "No clients match \"{query}\"."
+    },
+    "client": {
+      "back": "All clients",
+      "notFound": {
+        "title": "This client isn't on this profile",
+        "body": "It may have been archived or belong to another profile."
+      },
+      "tabs": {
+        "summary": "Summary",
+        "receivables": "Receivables",
+        "payments": "Payments",
+        "documents": "Documents"
+      },
+      "lastPayment": "Last payment: {date}",
+      "noPayments": "No payments yet",
+      "outstanding": "Outstanding",
+      "overdue": "Overdue",
+      "dueToday": "Due today",
+      "notYetDue": "Not yet due",
+      "unallocated": "Not yet applied",
+      "matters": "Matters",
+      "matterColumns": {
+        "matter": "Matter",
+        "agreed": "Agreed",
+        "posted": "Billed",
+        "paid": "Paid",
+        "outstanding": "Outstanding",
+        "status": "Status"
+      },
+      "noMatters": "No matters with fees on this client yet."
+    },
+    "receivables": {
+      "title": "Receivables",
+      "columns": {
+        "client": "Client",
+        "matter": "Matter",
+        "due": "Due",
+        "gross": "Amount",
+        "paid": "Paid",
+        "outstanding": "Outstanding",
+        "status": "Status"
+      },
+      "dueFrom": "Due from",
+      "dueTo": "Due to",
+      "empty": {
+        "title": "Nothing is owed on this profile right now",
+        "body": "Receivables recorded for this profile appear here."
+      }
+    },
+    "payments": {
+      "title": "Payments",
+      "columns": {
+        "number": "No.",
+        "client": "Client",
+        "received": "Received",
+        "method": "Method",
+        "amount": "Amount",
+        "unallocated": "Not yet applied",
+        "status": "Status"
+      },
+      "method": {
+        "CASH": "Cash",
+        "BANK": "Bank transfer"
+      },
+      "receivedFrom": "Received from",
+      "receivedTo": "Received to",
+      "showAllocations": "Show where this payment went",
+      "hideAllocations": "Hide where this payment went",
+      "allocations": {
+        "title": "Applied to",
+        "matter": "Matter",
+        "amount": "Amount",
+        "remaining": "Left on that receivable",
+        "none": "Not applied to any receivable yet."
+      },
+      "empty": {
+        "title": "No payments recorded on this profile yet",
+        "body": "Payments recorded for this profile appear here."
+      }
+    },
+    "documents": {
+      "title": "Documents",
+      "columns": {
+        "name": "File",
+        "kind": "Type",
+        "client": "Client",
+        "invoice": "Invoice no.",
+        "added": "Added",
+        "size": "Size"
+      },
+      "kind": {
+        "INVOICE": "Invoice",
+        "RECEIPT": "Receipt",
+        "OTHER": "Other"
+      },
+      "download": "Download",
+      "downloadNamed": "Download {name}",
+      "preparing": "Preparing…",
+      "downloadFailed": "Couldn't prepare the download. Try again.",
+      "uploading": "Still uploading",
+      "empty": {
+        "title": "No documents on this profile yet",
+        "body": "Invoices and receipts recorded for this profile appear here."
+      }
+    }
+  }
+}
