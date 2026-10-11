@@ -726,8 +726,6 @@
       "projectPlaceholder": "Select project...",
       "category": "Category",
       "categoryPlaceholder": "Select category...",
-      "title": "Title",
-      "titlePlaceholder": "Brief description...",
       "notes": "Notes",
       "notesPlaceholder": "Additional notes..."
     },

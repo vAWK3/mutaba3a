@@ -1215,11 +1215,14 @@ div.input-with-prefix {
   transform: rotate(90deg);
 }
 
+/* rotate, not mirror: rotate(180deg) -> rotate(90deg) animates as a clean quarter turn */
 [dir="rtl"] .form-disclosure[aria-expanded="false"] .form-disclosure-chevron {
-  transform: scaleX(-1);
+  transform: rotate(180deg);
 }
 
 .form-disclosure-label {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-weight: var(--weight-medium);
 }
 
@@ -1234,6 +1237,11 @@ div.input-with-prefix {
   font-size: var(--text-sm);
   color: var(--muted);
   margin-top: var(--space-1);
+}
+
+/* A hint under the status selector belongs to it, not to the field below */
+.type-selector + .form-hint {
+  margin-top: calc(var(--space-1) - var(--space-5));
 }
 
 /* Buttons */
