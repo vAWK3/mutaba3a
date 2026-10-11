@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { transactionRepo, paymentRecordRepo, clientRepo } from '../repository';
+import { transactionRepo, paymentRecordRepo, clientRepo, PaymentRecordError } from '../repository';
 
 describe('paymentRecordRepo', () => {
   let incomeId: string;
@@ -463,6 +463,78 @@ describe('paymentRecordRepo', () => {
           paidAt: '2024-01-20',
         })
       ).rejects.toThrow('Payment amount');
+    });
+  });
+
+  describe('transactionRepo.update on an entry with payment records (MUT-5)', () => {
+    it('rejects an amount below what is already recorded and leaves the entry unchanged', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+
+      await expect(transactionRepo.update(incomeId, { amountMinor: 4000 })).rejects.toBeInstanceOf(
+        PaymentRecordError
+      );
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.amountMinor).toBe(10000);
+      expect(tx?.receivedAmountMinor).toBe(5000);
+    });
+
+    it('marks the entry paid when the amount is cut to exactly what was recorded', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+
+      await transactionRepo.update(incomeId, { amountMinor: 5000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.amountMinor).toBe(5000);
+      expect(tx?.status).toBe('paid');
+      expect(tx?.receivedAmountMinor).toBe(5000);
+      expect(tx?.paidAt).toBeDefined();
+    });
+
+    it('reopens a paid entry when its amount is raised above what was recorded', async () => {
+      await transactionRepo.markPaid(incomeId, { paidAt: '2024-01-20' });
+      expect((await transactionRepo.get(incomeId))?.status).toBe('paid');
+
+      await transactionRepo.update(incomeId, { amountMinor: 12000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.status).toBe('unpaid');
+      expect(tx?.receivedAmountMinor).toBe(10000);
+      expect(tx?.paidAt).toBeUndefined();
+    });
+
+    it('does not recalculate when the amount is sent unchanged with other edits', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+      // A value only a recalculation would overwrite
+      await db.transactions.update(incomeId, { receivedAmountMinor: 1234 });
+
+      await transactionRepo.update(incomeId, { title: 'Retitled', amountMinor: 10000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.title).toBe('Retitled');
+      expect(tx?.receivedAmountMinor).toBe(1234);
+    });
+
+    it('changes the amount of an entry without records with no guard and no recalculation', async () => {
+      await transactionRepo.update(incomeId, { amountMinor: 1000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.amountMinor).toBe(1000);
+      expect(tx?.status).toBe('unpaid');
+      expect(tx?.receivedAmountMinor).toBeUndefined();
+    });
+
+    it('ignores deleted records when checking the new amount', async () => {
+      const record = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 5000,
+        paidAt: '2024-01-20',
+      });
+      await paymentRecordRepo.delete(record.id);
+
+      await transactionRepo.update(incomeId, { amountMinor: 1000 });
+
+      expect((await transactionRepo.get(incomeId))?.amountMinor).toBe(1000);
     });
   });
 

@@ -369,7 +369,32 @@ export const transactionRepo = {
       }
     }
 
-    await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+    const newAmountMinor = data.amountMinor;
+    if (newAmountMinor === undefined || newAmountMinor === existing.amountMinor) {
+      await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+      return;
+    }
+
+    // Payment records own received/status/paidAt (ADR-030, MUT-5): a new amount
+    // may not fall below what they add up to, and the entry's payment state is
+    // re-derived from them so it can't claim paid with money still owed.
+    await db.transaction('rw', [db.transactions, db.paymentRecords], async () => {
+      const records = await db.paymentRecords
+        .where('transactionId')
+        .equals(id)
+        .filter((r) => !r.deletedAt)
+        .toArray();
+      const recordedMinor = records.reduce((sum, r) => sum + r.amountMinor, 0);
+      if (newAmountMinor < recordedMinor) {
+        throw new PaymentRecordError(
+          `Payment amount already recorded (${recordedMinor / 100} ${existing.currency}) exceeds the new amount`,
+          { transactionId: id }
+        );
+      }
+
+      await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+      if (records.length > 0) await recalculateReceivedAmount(id);
+    });
   },
 
   async markPaid(id: string, opts?: { paidAt?: string }): Promise<void> {
