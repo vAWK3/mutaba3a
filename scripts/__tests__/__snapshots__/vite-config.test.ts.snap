@@ -1,0 +1,153 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
+{
+  "base": "./",
+  "build": {
+    "outDir": "dist-desktop",
+    "rollupOptions": {
+      "output": {
+        "manualChunks": {
+          "vendor-db": [
+            "dexie",
+          ],
+          "vendor-forms": [
+            "react-hook-form",
+            "zod",
+          ],
+          "vendor-query": [
+            "@tanstack/react-query",
+          ],
+          "vendor-react": [
+            "react",
+            "react-dom",
+            "react/jsx-runtime",
+          ],
+          "vendor-router": [
+            "@tanstack/react-router",
+          ],
+        },
+      },
+    },
+    "target": "esnext",
+  },
+  "clearScreen": false,
+  "define": {
+    "__APP_VERSION__": ""0.0.65"",
+    "__BUILD_MODE__": ""desktop"",
+  },
+  "plugins": [
+    "vite:react-babel",
+    "vite:react-refresh",
+    "vite:react-virtual-preamble",
+    "vite-plugin-pwa",
+    "vite-plugin-pwa:info",
+    "vite-plugin-pwa:build",
+    "vite-plugin-pwa:dev-sw",
+    "vite-plugin-pwa:pwa-assets",
+  ],
+  "server": {
+    "host": "127.0.0.1",
+    "port": 5173,
+    "proxy": {
+      "/download/mac": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+      "/download/release-notes": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+      "/download/windows": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+      "/download/windows-exe": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+    },
+    "strictPort": true,
+  },
+}
+`;
+
+exports[`vite.config > leaves the web build exactly as it was 1`] = `
+{
+  "base": "/",
+  "build": {
+    "outDir": "dist-web",
+    "rollupOptions": {
+      "output": {
+        "manualChunks": {
+          "vendor-db": [
+            "dexie",
+          ],
+          "vendor-forms": [
+            "react-hook-form",
+            "zod",
+          ],
+          "vendor-query": [
+            "@tanstack/react-query",
+          ],
+          "vendor-react": [
+            "react",
+            "react-dom",
+            "react/jsx-runtime",
+          ],
+          "vendor-router": [
+            "@tanstack/react-router",
+          ],
+        },
+      },
+    },
+    "target": "esnext",
+  },
+  "clearScreen": false,
+  "define": {
+    "__APP_VERSION__": ""0.0.65"",
+    "__BUILD_MODE__": ""web"",
+  },
+  "plugins": [
+    "vite:react-babel",
+    "vite:react-refresh",
+    "vite:react-virtual-preamble",
+    "vite-plugin-pwa",
+    "vite-plugin-pwa:info",
+    "vite-plugin-pwa:build",
+    "vite-plugin-pwa:dev-sw",
+    "vite-plugin-pwa:pwa-assets",
+  ],
+  "server": {
+    "host": "127.0.0.1",
+    "port": 5173,
+    "proxy": {
+      "/download/mac": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+      "/download/release-notes": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+      "/download/windows": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+      "/download/windows-exe": {
+        "changeOrigin": true,
+        "rewrite": [Function],
+        "target": "https://github.com",
+      },
+    },
+    "strictPort": true,
+  },
+}
+`;

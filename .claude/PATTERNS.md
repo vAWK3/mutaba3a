@@ -1394,6 +1394,35 @@ Then prove it with a **canary sweep**, generated from the published document:
    path slot;
 3. no response body may contain a canary (`expenses-invisible.test.ts`).
 
+### A view in error renders no data (MUT-43)
+After a failed refetch, TanStack Query keeps the last `data`. A portal view
+ignores it while any of its queries is in error and shows the unreachable card
+(`QueryView`). A figure on screen is always one the server just confirmed. There
+is no `placeholderData`, no persister and no service worker.
+
+### Portal figures are keyed by profile (MUT-43)
+Every portal query key starts `['p', profileId, …]` (`profileKey`). Switching
+profile can't show another profile's numbers, and the views remount under a
+keyed fragment. Sign-out drops everything with one `queryClient.clear()`, made
+*before* navigating to sign-in (`endSession`).
+
+### Plurals go through `tp()` (MUT-43, ADR-019)
+A plural string is an object of CLDR forms (`zero|one|two|few|many|other`);
+`tp(key, count, vars)` picks the form `Intl.PluralRules` names, falling back to
+`other`, with `{count}` always available. English needs `one` + `other`; Arabic
+all six (parity-tested in `src/hosted/i18n`).
+
+### One broadcast channel per tab (MUT-43)
+A tab that announces something to its other tabs must use the same
+`BroadcastChannel` object it listens on: the browser never delivers a message to
+the object that posted it. A fresh channel per post makes the tab hear itself.
+
+### A build target that must stay apart is proven on the built output (MUT-43)
+Claims like "the local app contains no portal code" are checked against the
+built bundles (`npm run test:bundles` with `scripts/bundle-rules.ts`), not
+argued from imports. New external origins fail until they are reviewed and added
+to `scripts/bundle-origins.json`.
+
 ### Log redaction is spelled out per depth (MUT-38, TD-039)
 pino's `*.x` matches one level only. `logger.ts` generates every sensitive key
 at depths 0–3; add a key to `SENSITIVE_KEYS`, never a one-off path, and the

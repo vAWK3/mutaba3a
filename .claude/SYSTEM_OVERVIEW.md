@@ -219,6 +219,7 @@
 | macOS | GitHub Releases | Auto-update via Tauri |
 | Windows | GitHub Releases | Auto-update via Tauri |
 | **Hosted API** (`server/`, since 2026-10-08) | GCP me-west1: Cloud Run service + migration job, Cloud SQL 16, Secret Manager — Terraform in `server/infrastructure/terraform/`, rolled out by `server/scripts/deploy.sh`, CI in `server-ci.yml`. Deployable; not yet deployed by an operator (runbook: `server/DEPLOYMENT.md`) | Consumed by Malafat's Money section with an organization API key. Separate package, separate database, separate deploy. Production only, `live` keys. M1 (integration, keys), M2 (customers, projects, external references, import) and M3 (effective-dated VAT, fixed-fee agreements with installments and supplements, basic retainers with monthly charges, receivables with server-computed statuses) and M4 (payments with previewed allocations and two suggestion strategies, later allocation of unallocated funds, whole-payment reversal, append-only credits against posted receivables, `PAY-YYYY-NNNN` numbering, operations lookup) implemented; M5 (retainer changes with effective-dated versions, proration, cancel preview, reconcile script), M6 (summaries with server-computed statuses, audit listing, attachments through signed URLs) M7 (fee proposals: the negotiation before an agreement; project summaries carry the current proposal) and M8 (approval creates the agreement in one transaction: `PROPOSED → APPROVED | WITHDRAWN`; the organization summary carries each customer's open proposals and their total; archive refused while a proposal is open; lazy posting heals unposted IMMEDIATE installments) implemented. MUT-37 (hosted epic MUT-34, ADR-037): operator-issued portal users and memberships with argon2id passwords, admin routes and `npm run provision:user` & co. MUT-38: browser sessions beside API keys (httpOnly `__Host-` cookie, idle + absolute expiry, lockout that cannot enumerate accounts, per-route principals from the OpenAPI `security`, `X-Mutaba3a-Profile` selection, `GET /v1/me`); the portal's 20 read routes accept sessions. MUT-39: the writability matrix is enforced three times — session scopes, `403 READ_ONLY_PROFILE { domain, writerOfRecord }` for a session on Malafat's write routes, and a store guard below the routes that classifies every repository method (provisioning refused under any guard); lazy posting in a session read runs as SYSTEM on the unguarded store. MUT-42: a hosted profile's expenses (CRUD in the original currency, receipts in the attachments bucket, per-profile categories seeded from the offline presets, a per-currency expense summary) — session-only and invisible to Malafat's key at every door (routes, store guard reads, audit listing, idempotency lookup, a separate receipts table). See ADR-024/025/026/033 and `.claude/designs/money-v1-*`, `hosted-portal.md` |
+| **Hosted portal** (`dist-hosted/`, MUT-43) | Not served yet: MUT-45 serves the built files from the API service on the same origin (hosted-portal.md §9) | Malafat tenants' partners sign in with operator-issued email + password and read their firm's money: overview, clients, receivables, payments, documents. Hosted profiles only; nothing persisted on the device but the language. A separate build target (`vite --mode hosted`), its own TypeScript program and its own dictionaries; `npm run test:bundles` proves the local builds carry none of it |
 
 The hosted API does not change the privacy model of the app above this line:
 the desktop/PWA stores nothing off-device and never calls the hosted API. The
@@ -232,11 +233,15 @@ is subject to the encryption, residency and deletion obligations in ADR-024.
 npm run dev              # Default (desktop mode in Tauri context)
 npm run dev:web          # Web mode
 npm run dev:desktop      # Desktop mode
+npm run dev:hosted       # Hosted portal on :5175, /v1 proxied to the API (MUTABA3A_API_ORIGIN, default :8787)
 
 # Production
 npm run build            # Auto-detect mode
 npm run build:web        # → dist-web/
 npm run build:desktop    # → dist-desktop/
+npm run build:hosted     # → dist-hosted/ (the portal; MUT-43)
+npm run test:bundles     # build all three, then prove they stay apart
+npm run hosted:types:check  # the portal's typed client matches server/openapi
 
 # Desktop packaging
 npm run tauri build      # macOS/Windows bundles
@@ -491,3 +496,4 @@ mini-crm/
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-02-09 | 0.0.48 | Initial SYSTEM_OVERVIEW created |
+| 2026-10-11 | 0.0.65 | MUT-43: hosted portal build target (sign-in, session states, six read views), bundle-separation check, i18n core split |

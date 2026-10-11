@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal Auth States</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<style>
+  /* Token values copied from src/styles/theme.css so the wireframe previews the real look. */
+  :root {
+    --bg: #F6F8FA; --bg-subtle: #EEF1F5; --surface: #FFFFFF; --surface-2: #F3F5F8; --surface-3: #EBEEF2;
+    --text: #0B1220; --text-secondary: #3D4B5C; --muted: #516077; --muted-2: #7A8899; --placeholder: #9CA3AF;
+    --border: rgba(11, 18, 32, 0.12); --border-strong: rgba(11, 18, 32, 0.18); --divider: rgba(11, 18, 32, 0.08);
+    --shadow-1: 0 1px 2px rgba(11, 18, 32, 0.04), 0 1px 3px rgba(11, 18, 32, 0.06);
+    --shadow-3: 0 4px 8px rgba(11, 18, 32, 0.06), 0 8px 16px rgba(11, 18, 32, 0.1);
+    --accent: #1D8A84; --accent-subtle: rgba(29, 138, 132, 0.1); --accent-solid: #1D8A84; --accent-solid-hover: #167A75; --on-accent: #FFFFFF;
+    --accent-2: #1976D2; --accent-2-subtle: rgba(25, 118, 210, 0.1);
+    --error: #DC2626; --error-subtle: rgba(220, 38, 38, 0.1); --error-muted: rgba(220, 38, 38, 0.15);
+    --focus: rgba(29, 138, 132, 0.4);
+    --font-en: "Inter", system-ui, -apple-system, sans-serif;
+    --font-ar: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
+    --font-heading: "Source Serif 4", Georgia, serif;
+    --wf-bar: #0B1220; --wf-bar-text: #F6F8FA; --wf-note: #8A6D1F; --wf-note-bg: #F6F0DE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #070C16; --bg-subtle: #0D1422; --surface: #111827; --surface-2: #1A2235; --surface-3: #212B42;
+      --text: #E7EEF9; --text-secondary: #C5D0E0; --muted: #A6B4CC; --muted-2: #8494B0; --placeholder: #6B7A94;
+      --border: rgba(231, 238, 249, 0.1); --border-strong: rgba(231, 238, 249, 0.15); --divider: rgba(231, 238, 249, 0.06);
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.2), 0 8px 16px rgba(0, 0, 0, 0.35);
+      --accent: #2CB6A6; --accent-subtle: rgba(44, 182, 166, 0.12); --accent-solid: #117A72; --accent-solid-hover: #117A72;
+      --accent-2: #60A5FA; --accent-2-subtle: rgba(96, 165, 250, 0.12);
+      --error: #F87171; --error-subtle: rgba(248, 113, 113, 0.12); --error-muted: rgba(248, 113, 113, 0.18);
+      --focus: rgba(44, 182, 166, 0.4);
+      --wf-bar: #1A2235; --wf-note: #E0C068; --wf-note-bg: rgba(224, 192, 104, 0.1);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg-subtle); color: var(--text); font: 14px/1.5 var(--font-en); }
+  [dir="rtl"] body, [dir="rtl"] .device { font-family: var(--font-ar); }
+  [hidden] { display: none !important; }
+
+  /* Wireframe chrome (not product UI) */
+  .controls { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    padding: 10px 16px; background: var(--wf-bar); color: var(--wf-bar-text); font: 12px/1.4 var(--font-en); direction: ltr; }
+  .controls .grp { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .controls b { font-weight: 600; margin-inline-end: 4px; }
+  .controls button { font: inherit; background: transparent; color: inherit; border: 1px solid rgba(246, 248, 250, 0.3);
+    border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+  .controls button[aria-pressed="true"] { background: var(--wf-bar-text); color: var(--wf-bar); }
+  .frame { max-width: 1180px; margin: 20px auto 48px; padding: 0 16px; direction: ltr; }
+  .label { font: 600 12px/1.4 var(--font-en); letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .wf-note { border-inline-start: 3px solid var(--wf-note); background: var(--wf-note-bg); padding: 10px 14px;
+    font: 13px/1.5 var(--font-en); margin: 12px 0 0; border-radius: 4px; color: var(--text); }
+  .wf-note b { font-weight: 600; }
+
+  /* Device */
+  .device { position: relative; height: 640px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--bg);
+    overflow: hidden; box-shadow: var(--shadow-3); margin-inline: auto; }
+  .device.phone { width: 375px; max-width: 100%; height: 720px; }
+  .screen { position: absolute; inset: 0; }
+
+  /* Boot */
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 16px; gap: 16px; }
+  .wordmark { font: 600 22px/1.2 var(--font-heading); letter-spacing: -0.01em; color: var(--text); }
+  [dir="rtl"] .wordmark { font-family: var(--font-ar); font-weight: 600; }
+  .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-1); }
+  .boot-card { max-width: 420px; padding: 20px 22px; text-align: start; }
+  .boot-card h2 { font-size: 16px; margin: 0 0 6px; }
+  .boot-card p { color: var(--muted); margin: 0 0 16px; }
+
+  /* Sign-in */
+  .signin { display: flex; flex-direction: column; height: 100%; }
+  .signin-top { display: flex; justify-content: flex-end; padding: 14px 16px; }
+  .lang { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--surface); }
+  .lang span { padding: 3px 10px; font-size: 12px; color: var(--muted); }
+  .lang .on { background: var(--surface-3); color: var(--text); font-weight: 500; }
+  .signin-body { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 24px 16px; gap: 18px; }
+  .signin-card { width: 100%; max-width: 360px; padding: 24px; }
+  .signin-card h1 { font: 600 20px/1.3 var(--font-en); margin: 0 0 16px; }
+  [dir="rtl"] .signin-card h1 { font-family: var(--font-ar); }
+  .banner { display: flex; gap: 10px; border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; font-size: 13px; }
+  .banner.err { background: var(--error-subtle); border: 1px solid var(--error-muted); color: var(--text); }
+  .banner.info { background: var(--accent-2-subtle); border: 1px solid var(--border); color: var(--text); }
+  .banner .ic { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+  .banner.err .ic { color: var(--error); }
+  .banner.info .ic { color: var(--accent-2); }
+  .field { margin: 0 0 14px; }
+  .field label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin: 0 0 6px; }
+  .control { position: relative; }
+  .input { width: 100%; font: 14px/1.4 var(--font-en); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 6px; padding: 9px 11px; direction: ltr; text-align: left; }
+  [dir="rtl"] .input { text-align: right; }
+  .input::placeholder { color: var(--placeholder); }
+  .input:focus, .input.focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+  .input.invalid { border-color: var(--error); }
+  .input[readonly] { background: var(--surface-2); color: var(--muted); }
+  /* The input is dir="ltr" while the toggle follows the page direction, so pad by physical side. */
+  .with-toggle .input { padding-right: 64px; }
+  [dir="rtl"] .with-toggle .input { padding-right: 11px; padding-left: 64px; }
+  .toggle { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); font: 500 12px var(--font-en);
+    color: var(--accent); background: transparent; border: 0; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+  [dir="rtl"] .toggle { font-family: var(--font-ar); }
+  .field-msg { font-size: 12px; color: var(--error); margin: 6px 0 0; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: 500 14px/1 var(--font-en);
+    border-radius: 6px; padding: 10px 14px; cursor: pointer; border: 1px solid transparent; }
+  [dir="rtl"] .btn { font-family: var(--font-ar); }
+  .btn-primary { background: var(--accent-solid); color: var(--on-accent); }
+  .btn-primary:disabled { opacity: 0.7; cursor: progress; }
+  .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-block { width: 100%; margin-top: 4px; }
+  .btn .spinner { width: 14px; height: 14px; border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff; }
+  .help { max-width: 360px; text-align: center; font-size: 12.5px; color: var(--muted); margin: 0; }
+
+  /* Shell */
+  .shell { display: grid; grid-template-columns: 232px 1fr; height: 100%; }
+  .side { display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; background: var(--surface); border-inline-end: 1px solid var(--border); position: relative; }
+  .side .wordmark { font-size: 17px; padding: 4px 8px 10px; }
+  .switcher { display: flex; align-items: center; gap: 8px; width: 100%; text-align: start; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font: inherit; color: var(--text); cursor: pointer; }
+  .switcher .nm { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chev { color: var(--muted); font-size: 11px; }
+  .chip { flex: none; font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 9999px; background: var(--accent-subtle); color: var(--accent); }
+  .nav { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav a { padding: 7px 10px; border-radius: 6px; color: var(--text-secondary); text-decoration: none; font-size: 13.5px; }
+  .nav a.on { background: var(--surface-3); color: var(--text); font-weight: 500; }
+  .spacer { flex: 1; }
+  .usermenu { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: 0; padding: 8px; border-radius: 8px;
+    font: inherit; color: var(--text); cursor: pointer; text-align: start; }
+  .usermenu.open, .usermenu:hover { background: var(--surface-2); }
+  .avatar { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); color: var(--text-secondary);
+    display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+  .usermenu .who { min-width: 0; line-height: 1.25; }
+  .usermenu .who small { display: block; color: var(--muted); font-size: 11.5px; direction: ltr; text-align: start; }
+  [dir="rtl"] .usermenu .who small { text-align: right; }
+  .pop { position: absolute; z-index: 5; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-3); padding: 6px; }
+  .pop-switcher { top: 92px; inset-inline-start: 10px; width: 300px; }
+  .pop-user { bottom: 60px; inset-inline-start: 10px; width: 212px; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 6px; }
+  .opt.on { background: var(--surface-2); }
+  .opt .t { flex: 1; min-width: 0; }
+  .opt .t .l1 { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+  .opt .t .l2 { font-size: 12px; color: var(--muted); }
+  .check { color: var(--accent); font-weight: 700; width: 14px; }
+  .pop-foot { border-top: 1px solid var(--divider); margin-top: 6px; padding: 8px 10px 4px; font-size: 12px; color: var(--muted); }
+  .menu-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 6px; font-size: 13.5px; }
+  .menu-row.hl { background: var(--surface-2); }
+  .menu-sep { border-top: 1px solid var(--divider); margin: 4px 0; }
+  main.page { padding: 24px 28px; overflow: auto; min-width: 0; }
+  .page h1 { font: 600 20px/1.3 var(--font-en); margin: 0 0 4px; }
+  [dir="rtl"] .page h1 { font-family: var(--font-ar); }
+  .ghost { background: var(--surface-3); border-radius: 4px; height: 12px; }
+  .ghost-row { display: flex; gap: 14px; margin: 18px 0; }
+  .ghost-row .ghost { flex: 1; height: 44px; border-radius: 8px; }
+  .empty { max-width: 460px; margin: 72px auto 0; text-align: center; }
+  .empty h2 { font-size: 16px; margin: 0 0 6px; }
+  .empty p { color: var(--muted); margin: 0 0 16px; }
+  .toast { position: absolute; bottom: 18px; inset-inline-end: 18px; display: flex; gap: 10px; align-items: flex-start; max-width: 340px;
+    background: var(--surface); border: 1px solid var(--error-muted); border-inline-start: 3px solid var(--error); border-radius: 8px;
+    box-shadow: var(--shadow-3); padding: 10px 12px; font-size: 13px; }
+  .toast .ic { color: var(--error); flex: none; width: 16px; height: 16px; margin-top: 2px; }
+  .topbar { display: none; }
+
+  /* Phone */
+  .phone .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .phone .side { display: none; }
+  .phone .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); position: relative; }
+  .phone .topbar .switcher { flex: 1; min-width: 0; padding: 6px 8px; }
+  .phone .topbar .avatar { width: 30px; height: 30px; cursor: pointer; }
+  .phone main.page { padding: 16px; }
+  .phone .pop-switcher { top: 56px; inset-inline-start: 12px; width: calc(100% - 24px); }
+  .phone .pop-user { top: 56px; bottom: auto; inset-inline-start: auto; inset-inline-end: 12px; }
+  .phone .toast { inset-inline: 12px; max-width: none; }
+  .phone .signin-card { padding: 20px; }
+  .phone .empty { margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="controls" role="toolbar" aria-label="Wireframe controls">
+  <div class="grp" id="states"><b>State</b></div>
+  <div class="grp"><b>Language</b><button data-lang="en" aria-pressed="true">EN</button><button data-lang="ar" aria-pressed="false">عربي</button></div>
+  <div class="grp"><b>Width</b><button data-width="desktop" aria-pressed="true">Desktop</button><button data-width="phone" aria-pressed="false">Phone</button></div>
+</div>
+
+<div class="frame">
+  <p class="label" id="stateLabel"></p>
+  <div class="device" id="device">
+
+    <!-- S1 checking session -->
+    <section class="screen" data-s="S1">
+      <div class="center"><div class="wordmark" data-t="brand"></div><div class="spinner" role="status" aria-label="Loading"></div></div>
+    </section>
+
+    <!-- S2 boot unreachable -->
+    <section class="screen" data-s="S2">
+      <div class="center">
+        <div class="wordmark" data-t="brand"></div>
+        <div class="card boot-card" role="alert">
+          <h2 data-t="bootTitle"></h2>
+          <p data-t="bootBody"></p>
+          <button class="btn btn-secondary" data-t="retry"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- S3–S10 sign-in -->
+    <section class="screen" data-s="S3 S4 S5 S6 S7 S8 S9 S10">
+      <div class="signin">
+        <div class="signin-top"><div class="lang" aria-label="Language"><span data-lang-chip="en">EN</span><span data-lang-chip="ar">عربي</span></div></div>
+        <div class="signin-body">
+          <div class="wordmark" data-t="brand"></div>
+          <form class="card signin-card" novalidate onsubmit="return false">
+            <h1 data-t="title"></h1>
+            <div class="banner info" data-s="S9" role="note"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm.75 10.5h-1.5V7h1.5v4.5ZM8 5.75a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z"/></svg><span data-t="expired"></span></div>
+            <div class="banner info" data-s="S10" role="note"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm.75 10.5h-1.5V7h1.5v4.5ZM8 5.75a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z"/></svg><span data-t="signedOut"></span></div>
+            <div class="banner err" data-s="S6 S7 S8" role="alert" id="banner"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm.75 10.5h-1.5V10h1.5v1.5Zm0-3h-1.5v-4h1.5v4Z"/></svg>
+              <span data-s="S6" data-t="invalid"></span><span data-s="S7" data-t="rateLimited"></span><span data-s="S8" data-t="unreachable"></span></div>
+            <div class="field">
+              <label for="em" data-t="email"></label>
+              <div class="control"><input class="input" id="em" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" dir="ltr" placeholder="name@firm.ps"></div>
+              <p class="field-msg" data-s="S4" data-t="emailRequired"></p>
+            </div>
+            <div class="field">
+              <label for="pw" data-t="password"></label>
+              <div class="control with-toggle"><input class="input" id="pw" type="password" autocomplete="current-password" dir="ltr">
+                <button type="button" class="toggle" aria-pressed="false" aria-controls="pw" data-t="show"></button></div>
+              <p class="field-msg" data-s="S4" data-t="passwordRequired"></p>
+            </div>
+            <button class="btn btn-primary btn-block" id="submit"><span class="spinner" data-s="S5" aria-hidden="true"></span><span data-s="S3 S4 S6 S7 S8 S9 S10" data-t="submit"></span><span data-s="S5" data-t="submitting"></span></button>
+          </form>
+          <p class="help" data-t="help"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- S11–S13 and the signed-in reference -->
+    <section class="screen" data-s="S11 S12 S13 IN">
+      <div class="shell">
+        <div class="topbar">
+          <button class="switcher" data-s="S12 S13 IN"><span class="nm" data-t="p1"></span><span class="chip" data-t="hosted"></span><span class="chev">▾</span></button>
+          <span class="wordmark" data-s="S11" style="flex:1;font-size:17px" data-t="brand"></span>
+          <span class="avatar" aria-label="Account">NH</span>
+        </div>
+        <aside class="side">
+          <div class="wordmark" data-t="brand"></div>
+          <button class="switcher" data-s="S12 S13 IN"><span class="nm" data-t="p1"></span><span class="chip" data-t="hosted"></span><span class="chev">▾</span></button>
+          <nav class="nav" data-s="S12 S13 IN" aria-label="Sections">
+            <a class="on" href="#" data-t="overview"></a><a href="#" data-t="clients"></a><a href="#" data-t="receivables"></a><a href="#" data-t="payments"></a><a href="#" data-t="documents"></a>
+          </nav>
+          <div class="spacer"></div>
+          <button class="usermenu" id="userBtn"><span class="avatar">NH</span><span class="who"><span data-t="userName"></span><small>nour@firm.ps</small></span></button>
+        </aside>
+        <main class="page">
+          <div data-s="IN S13">
+            <h1 data-t="overview"></h1>
+            <div class="ghost" style="width:180px"></div>
+            <div class="ghost-row"><div class="ghost"></div><div class="ghost"></div><div class="ghost"></div></div>
+            <div class="ghost" style="height:180px;border-radius:8px"></div>
+          </div>
+          <div class="empty" data-s="S11">
+            <h2 data-t="noProfilesTitle"></h2><p data-t="noProfilesBody"></p>
+            <button class="btn btn-secondary" data-t="signOut"></button>
+          </div>
+          <div class="empty" data-s="S12">
+            <h2 data-t="unavailableTitle"></h2><p data-t="unavailableBody"></p>
+            <button class="btn btn-primary" data-t="goTo"></button>
+          </div>
+        </main>
+      </div>
+      <!-- switcher popover -->
+      <div class="pop pop-switcher" data-s="IN" role="listbox">
+        <div class="opt on"><span class="check">✓</span><div class="t"><div class="l1"><span data-t="p1"></span><span class="chip" data-t="hosted"></span></div><div class="l2" data-t="srcMalafat"></div></div></div>
+        <div class="opt"><span class="check"></span><div class="t"><div class="l1"><span data-t="p2"></span><span class="chip" data-t="hosted"></span></div><div class="l2" data-t="srcExpenses"></div></div></div>
+        <div class="pop-foot" data-t="localFooter"></div>
+      </div>
+      <!-- user menu popover -->
+      <div class="pop pop-user" data-s="S13" role="menu">
+        <div class="menu-row"><span data-t="language"></span><span class="lang"><span data-lang-chip="en">EN</span><span data-lang-chip="ar">عربي</span></span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-row hl" role="menuitem" data-t="signOut"></div>
+      </div>
+      <div class="toast" data-s="S13" role="alert"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm.75 10.5h-1.5V10h1.5v1.5Zm0-3h-1.5v-4h1.5v4Z"/></svg><span data-t="signOutFailed"></span></div>
+    </section>
+  </div>
+  <div class="wf-note" id="note"></div>
+</div>
+
+<script>
+const STATES = [
+  ['S1', 'Checking session', '<b>Trigger:</b> first load, <code>GET /v1/me</code> in flight. <b>Shows:</b> the wordmark; the spinner appears only after 400 ms. Never the form or the shell, so neither flashes for someone already signed in.'],
+  ['S2', 'Can\'t reach (boot)', '<b>Trigger:</b> <code>/v1/me</code> fails with a network error or 5xx. <b>Why not the sign-in page:</b> we don\'t know the person is signed out, and a password typed into a page that can\'t reach the server goes nowhere. Try again refetches <code>/v1/me</code>.'],
+  ['S3', 'Sign in', '<b>Trigger:</b> <code>/v1/me</code> answers 401, or <code>/sign-in</code> opened directly. Email has focus. No signup, invite or "forgot" link exists; the help line is plain text. Email and password stay LTR in Arabic.'],
+  ['S4', 'Missing input', '<b>Trigger:</b> submit with an empty or malformed field. No request is sent; focus moves to the first invalid field.'],
+  ['S5', 'Signing in', '<b>Trigger:</b> request in flight. Button disabled, fields read-only: no double submit.'],
+  ['S6', 'Didn\'t match', '<b>Trigger:</b> <code>401 INVALID_CREDENTIALS</code>. One banner for wrong password, unknown email, lockout and disabled account (the server makes them indistinguishable). Password cleared and focused, email kept. <b>Delta:</b> the second sentence about the 15-minute pause is new; without it, a locked-out person who now types the right password is told it doesn\'t match.'],
+  ['S7', 'Too many attempts', '<b>Trigger:</b> <code>429 RATE_LIMITED</code> (20 per minute per IP). Minutes from <code>Retry-After</code>, rounded up, pluralised with <code>tp()</code>.'],
+  ['S8', 'Can\'t reach (sign-in)', '<b>Trigger:</b> network error, 5xx, or an unexpected 403/422. Both fields keep their values.'],
+  ['S9', 'Session ended', '<b>Trigger:</b> any 401 mid-session (idle 2 h, 12 h cap, operator password rotation or disable, sign-out elsewhere). The query cache is cleared <i>before</i> navigating. Returns to <code>next</code> after sign-in.'],
+  ['S10', 'Signed out', '<b>Trigger:</b> Sign out from the user menu. No <code>next</code>: the next person on a shared machine starts at <code>/</code>. Other open tabs get a <code>BroadcastChannel</code> message and land here too.'],
+  ['S11', 'No profiles', '<b>Trigger:</b> signed in, <code>me.profiles</code> is empty. No profile nav; the only action is Sign out.'],
+  ['S12', 'Profile unavailable', '<b>Trigger:</b> <code>$profileId</code> not in <code>me.profiles</code>, or a profile-scoped call answers 404 and a refetch of <code>/v1/me</code> no longer lists it. A 404 for one record while the profile is still listed is an ordinary not-found, not this state.'],
+  ['S13', 'Sign-out failed', '<b>Trigger:</b> <code>DELETE /v1/sessions/current</code> fails. The person stays put with a toast. The cookie is httpOnly, so the page can\'t clear it; pretending to sign out would leave the next person signed in.'],
+  ['IN', 'Signed in · switcher open (reference)', 'Not an auth state: the shell and profile switcher from brief §7.2, for context. Each profile shows the "Hosted" chip and its source sentence; the footer says where local profiles live.'],
+];
+const T = {
+  en: { brand: 'Mutaba3a', title: 'Sign in', email: 'Email', password: 'Password', show: 'Show', submit: 'Sign in', submitting: 'Signing in…',
+    emailRequired: 'Enter your email.', passwordRequired: 'Enter your password.',
+    invalid: 'That email and password don\'t match. After 5 tries, sign-in pauses for 15 minutes.',
+    rateLimited: 'Too many attempts from this network. Try again in 3 minutes.',
+    unreachable: 'Couldn\'t reach Mutaba3a. Check your connection and try again.',
+    expired: 'You\'ve been signed out. Sign in again to continue.', signedOut: 'You\'ve signed out.',
+    help: 'Can\'t sign in? Ask the person who set up your account for a new password.',
+    bootTitle: 'Can\'t reach Mutaba3a right now', bootBody: 'Figures aren\'t stored on this device, so nothing is shown until the connection is back.', retry: 'Try again',
+    noProfilesTitle: 'Your account isn\'t connected to a profile yet', noProfilesBody: 'Ask the person who set up your account to give you access.',
+    unavailableTitle: 'This profile isn\'t available', unavailableBody: 'It may have been removed from your account.', goTo: 'Go to Haddad & Partners',
+    signOut: 'Sign out', signOutFailed: 'Couldn\'t sign out. Check your connection and try again.', language: 'Language',
+    userName: 'Nour Haddad', p1: 'Haddad & Partners', p2: 'Nour — personal', hosted: 'Hosted',
+    srcMalafat: 'Income recorded by Malafat', srcExpenses: 'Expenses only',
+    localFooter: 'Your local profiles stay in the Mutaba3a app on your device. They aren\'t shown here and never leave it.',
+    overview: 'Overview', clients: 'Clients', receivables: 'Receivables', payments: 'Payments', documents: 'Documents' },
+  ar: { brand: 'متابعة', title: 'تسجيل الدخول', email: 'البريد الإلكتروني', password: 'كلمة المرور', show: 'إظهار', submit: 'تسجيل الدخول', submitting: 'جارٍ تسجيل الدخول…',
+    emailRequired: 'أدخل بريدك الإلكتروني.', passwordRequired: 'أدخل كلمة المرور.',
+    invalid: 'البريد الإلكتروني وكلمة المرور غير متطابقين. بعد 5 محاولات يتوقف تسجيل الدخول لمدة 15 دقيقة.',
+    rateLimited: 'محاولات كثيرة من هذه الشبكة. حاول مجدداً بعد 3 دقائق.',
+    unreachable: 'تعذّر الوصول إلى متابعة. تحقّق من اتصالك وحاول مجدداً.',
+    expired: 'انتهت جلستك. سجّل الدخول مجدداً للمتابعة.', signedOut: 'تم تسجيل خروجك.',
+    help: 'لا تستطيع الدخول؟ اطلب كلمة مرور جديدة ممّن أعدّ حسابك.',
+    bootTitle: 'تعذّر الوصول إلى متابعة الآن', bootBody: 'لا تُحفظ الأرقام على هذا الجهاز، لذلك لا يظهر شيء حتى يعود الاتصال.', retry: 'حاول مجدداً',
+    noProfilesTitle: 'حسابك غير مرتبط بأي ملف بعد', noProfilesBody: 'اطلب ممّن أعدّ حسابك أن يمنحك الوصول.',
+    unavailableTitle: 'هذا الملف غير متاح', unavailableBody: 'ربما أُزيل من حسابك.', goTo: 'الانتقال إلى حداد وشركاؤه',
+    signOut: 'تسجيل الخروج', signOutFailed: 'تعذّر تسجيل الخروج. تحقّق من اتصالك وحاول مجدداً.', language: 'اللغة',
+    userName: 'نور حداد', p1: 'حداد وشركاؤه', p2: 'نور — شخصي', hosted: 'مستضاف',
+    srcMalafat: 'الإيرادات تُسجَّل في ملفات', srcExpenses: 'المصروفات فقط',
+    localFooter: 'ملفاتك المحلية تبقى في تطبيق متابعة على جهازك، ولا تظهر هنا ولا تغادره أبداً.',
+    overview: 'نظرة عامة', clients: 'العملاء', receivables: 'المستحقات', payments: 'الدفعات', documents: 'المستندات' },
+};
+const FIELD_VALUES = {
+  S3: ['', ''], S4: ['', ''], S5: ['nour@firm.ps', '••••••••••••••••'], S6: ['nour@firm.ps', ''], S7: ['nour@firm.ps', '••••••••••••'],
+  S8: ['nour@firm.ps', '••••••••••••'], S9: ['nour@firm.ps', ''], S10: ['', ''],
+};
+const view = { state: 'S3', lang: 'en', width: 'desktop' };
+const stateBar = document.getElementById('states');
+for (const [id, name] of STATES) {
+  const b = document.createElement('button');
+  b.textContent = id === 'IN' ? 'Signed in' : `${id} ${name}`;
+  b.dataset.state = id;
+  stateBar.appendChild(b);
+}
+function render() {
+  const { state, lang, width } = view;
+  const dict = T[lang];
+  document.documentElement.lang = lang;
+  const device = document.getElementById('device');
+  device.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  device.classList.toggle('phone', width === 'phone');
+  device.querySelectorAll('[data-t]').forEach((el) => { el.textContent = dict[el.dataset.t]; });
+  device.querySelectorAll('[data-s]').forEach((el) => { el.hidden = !el.dataset.s.split(' ').includes(state); });
+  device.querySelectorAll('[data-lang-chip]').forEach((el) => el.classList.toggle('on', el.dataset.langChip === lang));
+  const [email, pw] = FIELD_VALUES[state] ?? ['', ''];
+  const em = document.getElementById('em'), pwd = document.getElementById('pw');
+  em.value = email; pwd.value = pw.replace(/•/g, 'x');
+  const busy = state === 'S5';
+  em.readOnly = pwd.readOnly = busy;
+  document.getElementById('submit').disabled = busy;
+  em.classList.toggle('invalid', state === 'S4'); pwd.classList.toggle('invalid', state === 'S4');
+  em.classList.toggle('focus', state === 'S3' || state === 'S4' || state === 'S10');
+  pwd.classList.toggle('focus', state === 'S6' || state === 'S9');
+  document.getElementById('userBtn').classList.toggle('open', state === 'S13');
+  const [, name, note] = STATES.find(([id]) => id === state);
+  document.getElementById('stateLabel').textContent = `${state === 'IN' ? '' : state + ' · '}${name}`;
+  document.getElementById('note').innerHTML = note;
+  document.querySelectorAll('[data-state]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.state === state)));
+  document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+  document.querySelectorAll('[data-width]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.width === width)));
+}
+document.querySelector('.controls').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.state) view.state = b.dataset.state;
+  if (b.dataset.lang) view.lang = b.dataset.lang;
+  if (b.dataset.width) view.width = b.dataset.width;
+  render();
+});
+render();
+</script>
+</body>
+</html>

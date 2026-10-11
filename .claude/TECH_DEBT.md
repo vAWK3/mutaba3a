@@ -18,6 +18,34 @@
 
 ## Open Debt
 
+### TD-044: The portal's Clients view loads the whole directory
+**Status**: Accepted
+**Added**: 2026-10-11 (MUT-43)
+**Priority**: Low until a firm has thousands of clients
+**Impact**: `useCustomerDirectory` pages through `GET /v1/customers` 200 at a
+time and keeps every client in memory, so the name search is instant and every
+list can show names for the ids it carries. A firm has hundreds of clients. At
+thousands, add a server-side name filter to `GET /v1/customers` and search
+against it.
+
+### TD-043: Portal tables scroll sideways on a phone
+**Status**: Open
+**Added**: 2026-10-11 (MUT-43)
+**Priority**: Low
+**Impact**: below 760 px the shell becomes a top bar, but the tables keep their
+columns and scroll horizontally inside their frame (the page itself doesn't).
+The M8 wireframe's phone layout stacks each row into two lines. Port that
+pattern to `HostedTable` when phone use is real.
+
+### TD-042: `SearchInput` has no programmatic label and an unnamed clear button
+**Status**: Open
+**Added**: 2026-10-11 (MUT-43, found while reusing it in the portal)
+**Priority**: Low
+**Impact**: `src/components/filters/SearchInput.tsx` takes its accessible name
+from the placeholder only, and its clear (×) button has no accessible name. It
+affects every app list that uses it and the portal's Clients view. Fix in the
+component (accept `aria-label`, name the clear button) so both get it.
+
 ### TD-041: The Expense Summary Aggregates in Process
 **Status**: Open
 **Added**: 2026-10-11 (MUT-42)

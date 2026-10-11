@@ -3,7 +3,7 @@
 - **Date:** 2026-10-11 · **Status:** approved by the owner as written (2026-10-11) — gates MUT-37, MUT-38, MUT-39, MUT-42, MUT-43, MUT-44, MUT-45
 - **Tickets:** MUT-36 (this brief + ADR-037) under epic MUT-34 · **Builds on:** ADR-024, ADR-025, ADR-026, MUT-35 (repository seam), M6 summaries, M8 overview IA (`money-v1-m8-overview-ia.md`, wireframe state 5)
 - **Repo side:** Mutaba3a only. `server/` gains a user principal, sessions, an access join and one enforced matrix; the root package gains a third build target (`hosted`) beside `web` and `desktop`. **Malafat unchanged** except a vendored-contract refresh (§4.6).
-- **Owner decisions this brief assumes (2026-10-10, epic MUT-34):** a profile has a source, `local` or `hosted`; neither syncs to the other; on a hosted profile income/receivables/payments are read-only and expenses are writable server-side; accounts are operator-issued only, no signup/invite/reset route in any environment; "sign in with Malafat" is not v1.
+- **Owner decisions this brief assumes (2026-10-10, epic MUT-34):** a profile has a source, `local` or `hosted`; neither syncs to the other; on a hosted profile income/receivables/payments are read-only and expenses are writable server-side; accounts are operator-issued only, no signup/invite/reset route in any environment.
 
 ## 1. Problem and acceptance criteria
 
@@ -240,6 +240,8 @@ Tests generated from the table (MUT-39):
 
 ## 7. The portal (MUT-43, MUT-44)
 
+> **As built (MUT-43, 2026-10-11).** Auth states follow `mut-43-auth-states.md` (approved). The portal's strings live in `src/hosted/i18n/{en,ar}.json`, not in the app's files. It is its own TypeScript program (`tsconfig.hosted.json`). Cursor lists use "Show more" instead of `Pagination`. See the ADR-037 MUT-43 amendment.
+
 ### 7.1 Shell, routes, state
 
 - **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), the profile switcher, the user menu (name, language, sign out), and the page. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
@@ -301,7 +303,7 @@ The notice reads `profile.access`, not a hard-coded list. If the server ever ans
 ### 7.6 Sign-in page
 
 - Email, password, submit. That is the whole form.
-- **No** "create account", "forgot password", "invite" or "sign in with Malafat" affordance, and no route to any of them.
+- **No** "create account", "forgot password" or "invite" affordance, and no route to any of them.
 - A failed attempt shows one sentence for every cause: "That email and password don't match." A 429 shows "Too many attempts. Try again in a few minutes."
 - Language switch in the corner. The page is RTL-correct.
 
@@ -368,4 +370,4 @@ Order is unchanged: 37 → 38 → 39 → {42, 43} → 44, with 45 in parallel af
 
 ## 12. Out of scope
 
-Any local↔hosted sync or migration of a local profile into a hosted one; showing local profiles in the portal; sign in with Malafat (OAuth) for the web (MUT-28's client is a desktop loopback client); self-serve signup, invite, password reset or signed-in password change; MFA, SSO, refresh tokens, "remember this device"; roles or per-user permissions beyond membership; writing income, receivables, payments, customers, projects or agreements from a session; Reports and CSV export; offline, PWA or any client-side persistence for hosted profiles; Hebrew; the desktop app signing in to the hosted service; horizontal scaling (TD-017).
+Any local↔hosted sync or migration of a local profile into a hosted one; showing local profiles in the portal; self-serve signup, invite, password reset or signed-in password change; MFA, SSO, refresh tokens, "remember this device"; roles or per-user permissions beyond membership; writing income, receivables, payments, customers, projects or agreements from a session; Reports and CSV export; offline, PWA or any client-side persistence for hosted profiles; Hebrew; the desktop app signing in to the hosted service; horizontal scaling (TD-017).

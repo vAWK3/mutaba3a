@@ -1013,6 +1013,25 @@ Plan: `.claude/designs/mut-42-hosted-expenses-tests.md`. The tests were written 
 
 Rehearsed once by hand, the way production deploys: `migrate deploy` of the acb1144 history, then of `main`. That included a refusal and the `migrate resolve --rolled-back` recovery.
 
+### MUT-43 — the hosted portal (root package)
+
+Plan: `.claude/designs/mut-43-hosted-portal-tests.md`. Tests were written before the code they pin, except the shell's CSS.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Build target | `scripts/__tests__/vite-config.test.ts` | web and desktop configs equal a snapshot taken before the hosted branch existed; hosted: `dist-hosted`, own public dir, no PWA plugin, entry emitted as `index.html`, `/v1` proxied |
+| Bundle rules | `scripts/__tests__/check-bundles.test.ts` | each portal marker in a local bundle; IndexedDB / Dexie / service worker and each en/ar self-service string in the portal; "sign in" and `تسجيل الدخول` not mistaken; origins extracted and diffed |
+| Lint guards | `scripts/__tests__/hosted-lint.test.ts` | every forbidden import and `Number`/`parseFloat`/`parseInt`/unary `+` fire under `src/hosted`; the i18n core and UI kit are allowed; the app is unaffected |
+| i18n | `src/lib/i18n/__tests__/{core,plural}.test.*`, `src/hosted/i18n/__tests__/*` | the app provider behaves as before the split; CLDR forms en/ar; full-tree en/ar parity with plural rules; `common.*` pinned to the app; E4 precedence |
+| Client | `src/hosted/api/__tests__/client.test.ts` | credentials, no `Authorization`, profile header only on scoped calls, query encoding, envelope → `ApiError`, `Retry-After`, `UNKNOWN`/`NETWORK`, one 401 handler, never on sign-in |
+| Auth states | `src/hosted/session/__tests__/{auth-states,safeNext}.test.*` | S1–S13 and E1–E4 of the addendum, including the cache cleared before sign-in renders, the broadcast, and the sign-in form surviving a late announcement |
+| Views | `src/hosted/pages/__tests__/views.test.tsx` | each view's states; the stale-figure AC; strip, sort and the D13 currency rule; filters as one URL object with `replace`; cursor "show more"; allocations; signed-URL download and no preview; read-only reasons for both writers; switcher chips, sources, footer and no cross-profile figures |
+| Formatting | `src/hosted/format/__tests__/format.test.tsx` | exact decimal formatting (no float), zero spellings, LTR isolation, calendar dates never shifted, instants in the organization zone |
+
+Also run once by hand against the real API on a scratch database (2026-10-11): wrong then right password, every view, allocations, the switcher to an expenses-only profile, Arabic, phone width, sign-out, and an operator `revoke-sessions` landing on the expired note with `next` kept. Two bugs found there are now covered (see CHANGELOG).
+
+**Baseline after MUT-43 (2026-10-11)**: root `npx vitest run` 151 files, 2462 passed, 5 skipped; `npm run test:bundles`, `npm run hosted:types:check`, `npm run typecheck` (both programs), `npm run lint` (0 errors) and `npm run build` pass. The server package is unchanged.
+
 **Baseline after MUT-59 (2026-10-11)**: server `npm test` 1056 passed, 11 skipped; `npm run test:db` 1122 passed.
 
 **Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.
