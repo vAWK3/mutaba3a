@@ -1138,6 +1138,8 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5
 | `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +7 (1 rewritten) | Prefix-first highlight; select-only single option; Enter held on unmatched text and after Escape; Enter held with `aria-busy` while an async pick runs; Enter submits after tab-in with nothing typed; `aria-controls` / `aria-activedescendant`. "Selects the only option with nothing typed" was rewritten to "Enter goes through". |
 | `src/components/ui/__tests__/ClientTypeahead.test.tsx` | +1 | A failed create keeps the typed name unpicked, with `onCreatingChange` going true then false. |
 | `src/components/__tests__/IncomeDrawer.test.tsx` | +9 | A queued save during a client create and its failure path (regression pins, green on the typeahead fix); the records-loading gate; the currency lock; currency kept on edit and duplicate (pins); the refused-save toast; the legacy retitle; a missing entry never created. The 30ms sleeps are replaced by settle signals. |
+| `src/hooks/__tests__/useQueries.test.tsx` | +2 | Each money key is invalidated once per payment save; an edit invalidates `['transactionDisplay']`. |
+| `e2e/income-fast-path.spec.ts` | +1 (1 updated) | Arabic: the amount group's computed direction is LTR and the prefix sits left of the input. This fails without the CSS fix. The keyboard spec waits for `aria-busy` to clear before the saving Enter. |
 
 **Adversarial re-review fixes (2026-10-11):** every new test was shown failing first; the `£`/one-token and "types again" cases are guards.
 
@@ -1153,6 +1155,20 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5
 | `src/lib/__tests__/queryClient.test.ts` (new) | 2 | A local query and a mutation settle while `onlineManager` is offline. |
 | `src/hooks/__tests__/useFxRate.test.tsx` | +1 | Offline, the FX query waits instead of fetching or erroring, and loads once online. |
 | `e2e/income-fast-path.spec.ts` | +1 | Enter, Enter straight away creates the client and saves the entry; it fails with the replay disabled. |
-| `src/hooks/__tests__/useQueries.test.tsx` | +2 | Each money key is invalidated once per payment save; an edit invalidates `['transactionDisplay']`. |
-| `e2e/income-fast-path.spec.ts` | +1 (1 updated) | Arabic: the amount group's computed direction is LTR and the prefix sits left of the input. This fails without the CSS fix. The keyboard spec waits for `aria-busy` to clear before the saving Enter. |
+
+### MUT-75 — the landing page story (epic MUT-74)
+
+Test plan: `.claude/designs/mut-75-landing-story-tests.md`.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Structure | `src/pages/landing/__tests__/LandingPage.test.tsx` | `main` holds exactly hero, three chapters, privacy, get-it, faq in order, then the footer; the two-beat h1; each chapter's h2 |
+| Honesty | same | no Buy / $49 / Universal / Intel in `main` (EN), no شراء / 49 (AR); "Free during early access"; Windows link only when `hasWindowsBuild`, otherwise a plain "isn't in this release" note; Mac says Apple Silicon; downloads still offered while the release is unknown |
+| FAQ | same | exactly six disclosure buttons with `aria-expanded`/`aria-controls`/`hidden`; the data-loss warning appears once, inside the backup answer; the currency answer names all three currencies |
+| Language | same | Arabic sets `dir="rtl"` and renders the Arabic h1; no raw `landing.` key in EN or AR; the payment chapter shows the app's own Record Payment label |
+| Copy | `src/pages/landing/__tests__/landingCopy.test.ts` | `landing.*` key sets identical in en/ar; `CURRENCY_NAME_KEYS` covers USD/ILS/EUR (and `Record<Currency, …>` makes a missing one a compile error) |
+
+Checked by hand in the browser pane (2026-10-11): 1440/1024/375 widths in EN and AR, live release v0.0.65 (no Windows build) showing the unavailable note, no horizontal scroll at 375.
+
+**Baseline after MUT-75 (2026-10-11)**: root `npx vitest run` 162 files, 2574 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings in untouched files) and `npm run test:bundles` (web, desktop, hosted builds + bundle check) pass.
 

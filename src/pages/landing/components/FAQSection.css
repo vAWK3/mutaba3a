@@ -1,6 +1,6 @@
-/* FAQ Section Styles - extracted from LandingPage.css */
+/* FAQ: six questions, each a disclosure button controlling its answer. */
 .landing-faq-list {
-  max-width: 700px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
@@ -12,28 +12,36 @@
   border-bottom: none;
 }
 
+.landing-faq-heading {
+  margin: 0;
+  font: inherit;
+}
+
 .landing-faq-question {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-4);
   width: 100%;
-  padding: 20px 0;
+  padding: var(--space-5) 0;
   background: none;
   border: none;
   color: var(--text);
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: var(--weight-medium);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: color 0.15s ease;
 }
 
-:lang(ar) .landing-faq-question {
-  text-align: right;
-}
-
 .landing-faq-question:hover {
   color: var(--accent);
+}
+
+.landing-faq-question:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-md);
 }
 
 .landing-faq-question svg {
@@ -47,32 +55,26 @@
 }
 
 .landing-faq-answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease, padding 0.3s ease;
-}
-
-.landing-faq-item--open .landing-faq-answer {
-  max-height: 300px;
-  padding-bottom: 20px;
+  padding-bottom: var(--space-5);
 }
 
 .landing-faq-answer p {
   margin: 0;
-  font-size: var(--text-sm);
-  color: var(--muted);
-  line-height: 1.6;
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+  max-width: 62ch;
 }
 
 @media (max-width: 768px) {
   .landing-faq-question {
-    font-size: var(--text-sm);
-    padding: 16px 0;
+    font-size: var(--text-md);
+    padding: var(--space-4) 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-faq-answer,
+  .landing-faq-question,
   .landing-faq-question svg {
     transition: none;
   }
