@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-10 — Money v1 handover refreshed for M8 and the pilot
+
+**Scope:** `.claude/designs/money-v1-handover.md`, `.claude/CHANGELOG.md`. Docs only; no code.
+
+### Changed
+- The handover now records the real state rather than the 2026-10-08 one: M1–M8
+  merged and pushed in both repos, the Mutaba3a server deployed, Malafat
+  production on `web@2.2.2` (M1–M7, not M8), and the pilot firm onboarded with
+  its manual runbook still to walk.
+- New §2 "Ship M8 to both sides together". Malafat M7 against Mutaba3a M8
+  breaks only the fee-proposal actions: `/agree` is gone, `/approve` changed
+  its body, and `feeProposalId` was dropped from agreement creation.
+- New §2a records a read-only check for databases that ran the **original** M7
+  migration. M8 edited it in place (D20), and `prisma migrate deploy` never
+  re-runs an applied migration. Such a database has no `APPROVED` enum value
+  and needs a forward repair migration, which is not written yet.
+- §5 lists the follow-up tickets filed today: MUT-56 (malware scan, gates GA),
+  MAL-950 (native ar/he review), MAL-951 (375px LTR/RTL pass) and MAL-952
+  (closing a matter archives its project; D19 copy). It also lists the still-open
+  MUT-28, MAL-870 and MAL-150.
+
 ## [Unreleased] - 2026-10-10 — TD-028: every by-id query hook resolves `null`, not `undefined`, for a missing row
 
 **Scope:** `src/hooks/{useQueries,useIncomeQueries,useExpenseQueries,useRecurringExpenseQueries,useRetainerQueries,usePlanQueries}.ts`,
