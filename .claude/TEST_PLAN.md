@@ -943,3 +943,37 @@ Manual (browser, 2026-10-11, seeded data, 1280px English, 1024px Arabic):
 **Baseline after MUT-8 (2026-10-11)**: 2,258 unit tests passing, 5 skipped,
 0 failing.
 
+### MUT-37 — operator-only user accounts (`server/`)
+
+Plan: `.claude/designs/mut-37-operator-accounts-tests.md`. Written red first.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Pure helpers | `src/auth/__tests__/users.test.ts` | email normalisation (trim, NFKC, lower-case, idempotent); 24-char base64url one-time passwords, no repeats in 1,000; argon2id PHC string with the configured m/t/p; verify true/false; salted; malformed stored hash → false |
+| Config | `src/__tests__/config.test.ts` | argon2 defaults = OWASP profile 1; anything below is a `ConfigError` naming the variable |
+| Storage contract (memory + Postgres) | `src/repositories/__tests__/store-contract-users.ts` | user + first membership in one transaction; unique email; unknown organization → `ForeignKeyViolation` and no user; `setPassword` clears lockout counters; `setStatus`; idempotent `grant` keeps `createdAt`; `revoke` once; organization isolation |
+| Routes | `src/__tests__/routes-users.test.ts` | the seven admin routes: 201/200/404/409/422; email normalised on create and lookup; hash never returned; reset invalidates the old password; idempotent disable/enable; audit per member organization; 401 without or with a wrong admin token on all eight route forms; **no password or `$argon2id$` in any log line** at `trace` |
+| No self-registration | `src/__tests__/no-self-registration.test.ts` | router and published contract: no path outside `/admin/` matches signup / register / invite / forgot / reset (non-vacuous: >50 paths inspected) |
+| CLI | `src/scripts/__tests__/users-cli.test.ts` | create / grant / revoke / rotate / disable / enable against the in-process app; password printed exactly once; no token → non-zero, no secret; server error codes surfaced; unknown subcommand → usage |
+
+**Baseline after MUT-37 (2026-10-11)**: server 363 passed, 8 skipped without a
+database; **410 passed, 0 skipped** with `npm run test:db` against an isolated
+`mutaba3a_test_mut34` database (users contract green on Postgres). Root app
+unchanged: 2,149 passed, 5 skipped. One pre-existing flake seen
+under full-suite load: `routes-m6` "lists the organization's events by entity"
+(TD-040), never reproduced in isolation (0/20).
+
+### MUT-38 — session auth beside API keys (`server/`)
+
+Plan: `.claude/designs/mut-38-session-auth-tests.md`. Written red first (57 failing before implementation).
+
+| Area | File | What is pinned |
+|---|---|---|
+| Pure helpers | `src/auth/__tests__/sessions.test.ts` | 43-char tokens; HMAC digest per pepper; `__Host-` name only when Secure; trusted-hop client IP (forged leftmost ignored); same-origin rule; throttle locks on the 5th failure, unlocks at 15:00, forgets old failures |
+| Config | `src/__tests__/config.test.ts` | pepper required ≥ 32; idle/absolute/hops bounds and defaults; optional portal origin |
+| Storage contract (memory + Postgres) | `store-contract-sessions.ts` | create/find by digest; unique digest; FK user; touch; revoke wins once; `revokeAllForUser` counts only live ones; failed/success sign-in bookkeeping; audit actor `USER` |
+| Routes | `src/__tests__/routes-sessions.test.ts` | cookie attributes; Me body without the token; four refusals identical with exactly one argon2 verify each; dummy hash parameters; lockout + one `user.locked_out` + unlock after 15 min; unknown emails lock identically; per-IP 429; cross-site sign-in and sign-out refused; `/v1/me` writer of record and access; idle and absolute expiry; sign-out revokes server-side; reset/disable/explicit revoke end sessions; both credentials refused; profile header 422/200/404s incl. removed membership; lazy posting attributed to `SYSTEM`; session rate limit; token, digest and password never logged |
+| Route security | `src/__tests__/route-security.test.ts` | generated from the published document: every `/v1` operation declares principals (only sign-in is public); exactly 22 operations accept sessions; a session is refused on every key-only operation and let through on every session operation; a key is refused on both identity routes; every key-reachable operation enforces a scope |
+| Logger | `src/__tests__/logger.test.ts` | 10 sensitive keys × depths 0–3, request cookie, response Set-Cookie |
+
+**Baseline after MUT-38 (2026-10-11)**: server `npm test` 466 passed, 9 skipped; `npm run test:db` 520 passed.

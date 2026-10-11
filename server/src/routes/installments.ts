@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, installmentDueDate, installmentView, postingDateFor, todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
@@ -32,7 +32,7 @@ export function installmentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = (c.req.valid('json') ?? {}) as { dueDate?: string | undefined };
       const now = c.get('now')();
       const today = todayFor(organization, now);

@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { todayFor } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
@@ -23,16 +23,16 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
       description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: OrganizationSummarySchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
+      await postDueItems(store, organization, today, now, postingActorOf(c));
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor }));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED' }, { limit: 200, cursor }));
       // M8 (D17): open proposals ride the summary, so the overview's figure and its pills share one source; a currency with proposals only still gets a block.
@@ -73,19 +73,19 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/summaries/customers/{customerId}',
       tags: ['Summaries'],
       summary: 'One customer: buckets, unallocated and status per currency, with a summary per project',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: CustomerIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: CustomerSummarySchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const customerId = c.req.valid('param').customerId;
       const customer = await store.customers.getById(organization.id, customerId);
       if (!customer) throw new ApiError('NOT_FOUND', 'No such customer');
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
+      await postDueItems(store, organization, today, now, postingActorOf(c));
       const projects = await listAll((cursor) => store.projects.list(organization.id, { customerId }, { limit: 200, cursor }));
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { customerId }, { limit: 200, cursor }));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { customerId, status: 'POSTED' }, { limit: 200, cursor }));
@@ -109,18 +109,18 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/summaries/projects/{projectId}',
       tags: ['Summaries'],
       summary: 'One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: ProjectIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ProjectSummaryResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const project = await store.projects.getById(organization.id, c.req.valid('param').projectId);
       if (!project) throw new ApiError('NOT_FOUND', 'No such project');
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
+      await postDueItems(store, organization, today, now, postingActorOf(c));
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
       const figures = await projectSummary(organization, project, receivables, today);
       return c.json({ ...projectWire(project, figures), asOf: today }, 200);

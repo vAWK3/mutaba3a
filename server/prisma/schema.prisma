@@ -49,6 +49,8 @@ enum AuditActorType {
   API_KEY
   ADMIN
   SYSTEM
+  /// A signed-in person acting through a session (MUT-38); actorId = user id.
+  USER
 }
 
 enum EntityStatus {
@@ -156,6 +158,7 @@ model Organization {
 
   attachments  Attachment[]
   feeProposals FeeProposal[]
+  memberships  Membership[]
 
   @@map("organizations")
 }
@@ -181,6 +184,71 @@ model ApiKey {
 
   @@index([organizationId])
   @@map("api_keys")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+/// A person who may sign in to the hosted portal (MUT-37, ADR-037). Issued by
+/// an operator only; there is no signup, invite or self-service reset. Not
+/// organization-scoped: access is the Membership join.
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  /// Normalised before storage (trim, NFKC, lower-case), so uniqueness is case-insensitive.
+  email             String     @unique
+  displayName       String
+  /// argon2id PHC string. The password itself is never stored.
+  passwordHash      String
+  /// 'en' | 'ar', validated by the API.
+  locale            String     @db.VarChar(5)
+  status            UserStatus @default(ACTIVE)
+  /// Written by sign-in (MUT-38).
+  failedSignIns     Int        @default(0)
+  lockedUntil       DateTime?
+  passwordChangedAt DateTime
+  lastSignInAt      DateTime?
+  createdAt         DateTime
+  updatedAt         DateTime
+
+  memberships Membership[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+/// Access/no-access: the user may see this organization's hosted profile.
+model Membership {
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime
+
+  @@id([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+/// A server-side browser session (MUT-38, ADR-037). The cookie carries an
+/// opaque token; only its HMAC-SHA256 digest (SESSION_TOKEN_PEPPER) is stored.
+model Session {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  user              User      @relation(fields: [userId], references: [id])
+  tokenDigest       String    @unique @db.VarChar(64)
+  createdAt         DateTime
+  lastSeenAt        DateTime
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  revokedReason     String?
+  /// Truncated to 200 characters; for the operator's eyes only.
+  userAgent         String?   @db.VarChar(200)
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 /// A binding between an organization and an external system's tenant.

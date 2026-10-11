@@ -157,7 +157,7 @@ export const OrganizationDetailSchema = z
 export const AuditEventSchema = z
   .object({
     id: z.string().uuid(),
-    actorType: z.enum(['API_KEY', 'ADMIN', 'SYSTEM']),
+    actorType: z.enum(['API_KEY', 'ADMIN', 'SYSTEM', 'USER']),
     actorId: z.string().nullable(),
     action: z.string(),
     entityType: z.string(),
@@ -169,6 +169,116 @@ export const AuditEventSchema = z
   .openapi('AuditEvent');
 
 export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).openapi('AuditList');
+
+// ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
+
+export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
+
+/** Never includes the password hash. */
+export const UserSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    /** Normalised: trimmed, NFKC, lower-cased. */
+    email: z.string(),
+    displayName: z.string(),
+    locale: UserLocaleSchema,
+    status: z.enum(['ACTIVE', 'DISABLED']),
+    passwordChangedAt: z.string().datetime(),
+    lastSignInAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+  })
+  .openapi('UserSummary');
+
+export const MembershipSchema = z
+  .object({ organizationId: z.string().uuid(), createdAt: z.string().datetime() })
+  .openapi('Membership');
+
+export const CreateUserRequestSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+    displayName: z.string().trim().min(1).max(200),
+    locale: UserLocaleSchema.default('en'),
+    /** The user's first membership. More are granted with POST /admin/v1/users/{userId}/memberships. */
+    organizationId: z.string().uuid(),
+  })
+  .openapi('CreateUserRequest');
+
+export const CreateUserResponseSchema = z
+  .object({
+    user: UserSummarySchema,
+    memberships: z.array(MembershipSchema),
+    /** Shown exactly once; the service stores only its argon2id hash. Deliver it to the person over a secure channel. */
+    initialPassword: z.string(),
+  })
+  .openapi('CreateUserResponse');
+
+export const UserDetailSchema = z
+  .object({ user: UserSummarySchema, memberships: z.array(MembershipSchema) })
+  .openapi('UserDetail');
+
+export const UserListSchema = z.object({ users: z.array(UserSummarySchema) }).openapi('UserList');
+
+export const GrantMembershipRequestSchema = z
+  .object({ organizationId: z.string().uuid() })
+  .openapi('GrantMembershipRequest');
+
+export const GrantMembershipResponseSchema = z
+  .object({
+    membership: MembershipSchema,
+    /** false when the user already had this membership (idempotent grant). */
+    created: z.boolean(),
+  })
+  .openapi('GrantMembershipResponse');
+
+export const RemoveMembershipResponseSchema = z
+  .object({ removed: z.boolean() })
+  .openapi('RemoveMembershipResponse');
+
+export const UserStatusResponseSchema = z.object({ user: UserSummarySchema }).openapi('UserStatusResponse');
+
+// ---- Sessions and the signed-in user (MUT-38, ADR-037) ---------------------
+
+export const SignInRequestSchema = z
+  .object({
+    email: z.string().min(1).max(320),
+    password: z.string().min(1).max(1024),
+  })
+  .openapi('SignInRequest');
+
+const AccessSchema = z.enum(['read-write', 'read', 'none']);
+
+/** One organization the signed-in user may open (hosted-portal.md §6). Local profiles never reach the server. */
+export const HostedProfileSchema = z
+  .object({
+    /** The organization id; send it as X-Mutaba3a-Profile. */
+    id: z.string().uuid(),
+    name: z.string(),
+    source: z.literal('hosted'),
+    defaultCurrency: CurrencySchema,
+    timezone: z.string(),
+    /** MALAFAT when a connected Malafat integration records this profile's income; null when nothing does. */
+    writerOfRecord: z.enum(['MALAFAT']).nullable(),
+    /** The session column of the writability matrix, per domain. */
+    access: z.record(z.string(), AccessSchema),
+  })
+  .openapi('HostedProfile');
+
+export const MeSchema = z
+  .object({
+    user: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), locale: UserLocaleSchema }),
+    profiles: z.array(HostedProfileSchema),
+  })
+  .openapi('Me');
+
+export const RevokeSessionsResponseSchema = z.object({ revoked: z.number().int().min(0) }).openapi('RevokeSessionsResponse');
+
+export const PasswordResetResponseSchema = z
+  .object({
+    user: UserSummarySchema,
+    /** The new one-time password, shown exactly once. */
+    password: z.string(),
+  })
+  .openapi('PasswordResetResponse');
 
 // ---- Milestone 2: customers, projects, import --------------------------------
 
@@ -450,6 +560,8 @@ export const VALIDATION_REASONS = [
   'ATTACHMENT_NOT_READY',
   // M7
   'PROJECT_NOT_FOUND',
+  // MUT-38: a session request to an organization-scoped route without X-Mutaba3a-Profile
+  'PROFILE_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

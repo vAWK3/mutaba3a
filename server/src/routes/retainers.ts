@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, loadAgreementContext, parseAmount, retainerPreviewToken, todayFor, validationError } from '../agreements/compose.js';
 import { generateCharges, postDueItems } from '../agreements/posting.js';
 import { addMonths, dueDateFor, monthOf } from '../dates.js';
@@ -119,7 +119,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Created', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const { previewToken: token, ...body } = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -163,18 +163,18 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/retainers/{agreementId}/charges',
       tags: ['Retainers'],
       summary: 'The retainer and its charges to date',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { params: AgreementIdParamSchema },
       responses: { 200: { description: 'Charges', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);
       if (agreement.type !== 'RECURRING') throw validationError('NOT_RECURRING', 'Not a retainer');
-      await generateCharges(store, organization, agreement, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
+      await generateCharges(store, organization, agreement, today, now, postingActorOf(c));
       return c.json(await chargesView(organization, agreement.id, today), 200);
     },
   );
@@ -251,7 +251,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Changed', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const { previewToken: token, ...body } = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -370,7 +370,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Cancelled (or already was): the retainer with its versions and charges, including the prorated or credited final month', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const { previewToken: token, ...body } = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -410,7 +410,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'What was posted', content: { 'application/json': { schema: ReconcileResponseSchema } } }, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const now = c.get('now')();
       const summary = await postDueItems(store, organization, todayFor(organization, now), now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
       return c.json(summary, 200);

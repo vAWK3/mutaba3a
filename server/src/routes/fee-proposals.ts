@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, assertNotAbsurdDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { agreementDetail, composePreview, createAgreementFromPreview, type PreviewBody } from '../agreements/create.js';
 import { addMonths, clampDay, monthOf, type IsoDate } from '../dates.js';
@@ -49,7 +49,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Proposed', ...proposalJson }, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -99,7 +99,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/fee-proposals',
       tags: ['Fee proposals'],
       summary: 'List fee proposals',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('agreements:read')] as const,
       request: { query: ListFeeProposalsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: FeeProposalPageSchema } } }, ...validationResponse, ...errorResponses },
@@ -127,7 +127,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/fee-proposals/{proposalId}',
       tags: ['Fee proposals'],
       summary: 'Get a fee proposal',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('agreements:read')] as const,
       request: { params: FeeProposalIdParamSchema },
       responses: { 200: { description: 'The proposal', ...proposalJson }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -152,7 +152,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Approved; the agreement and its installments', content: { 'application/json': { schema: ApproveFeeProposalResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -207,7 +207,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Withdrawn (or already was)', ...proposalJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const current = await mustGet(store, organization.id, c.req.valid('param').proposalId);

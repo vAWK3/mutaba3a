@@ -28,6 +28,114 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-38: session auth, a second principal beside API keys
+
+**Scope:** `server/` only:
+- `prisma/schema.prisma` and migration `20261011042708_mut38_sessions_user_actor` (`sessions` table, `AuditActorType` + `USER`)
+- `src/auth/{sessions,writability,middleware}.ts`, `src/routes/sessions.ts`
+- `src/routes/{admin-users,agreements,attachments,customers,fee-proposals,import,installments,integration,payments,projects,receivables,retainers,summaries,vat}.ts`
+- `src/{app,index,config,errors,logger,schemas}.ts`, `src/repositories/{ports,memory,prisma}.ts`, `src/scripts/users.ts`
+- `infrastructure/terraform/{main,outputs}.tf`, `.env.example`, `README.md`, `DEPLOYMENT.md`, `openapi/openapi.yaml`, `package.json`
+- tests: `src/auth/__tests__/sessions.test.ts`, `src/__tests__/{routes-sessions,route-security,logger}.test.ts`, `src/repositories/__tests__/store-{contract,memory,prisma}-sessions*`; additions to the `config` and `users-cli` tests; version pins in `routes-m*`
+
+### Added
+- **Sign-in, sign-out, `/v1/me`.**
+  - `POST /v1/sessions` sets an httpOnly, `Secure`, `SameSite=Strict`, `__Host-mut_session` cookie on the API's own origin. The token is 32 random bytes; only `HMAC-SHA256(SESSION_TOKEN_PEPPER, token)` is stored.
+  - Sessions expire after 120 minutes idle (activity slides the deadline) and 12 hours absolute.
+  - `DELETE /v1/sessions/current` revokes the session server-side and clears the cookie.
+  - `GET /v1/me` lists the hosted profiles the person may open, each with `source`, `writerOfRecord` and `access`.
+- **Sign-in never reveals accounts.**
+  - Unknown email, wrong password, disabled user and locked account all get the same `401 INVALID_CREDENTIALS`.
+  - Each attempt runs exactly one argon2 verify; an unknown email is verified against a pre-warmed dummy hash with the same parameters.
+  - Lockout (5 failures in 15 minutes → locked 15 minutes) keys on the normalised email whether or not it exists.
+  - Attempts are capped at 20 per minute per client IP, taken from the trusted `X-Forwarded-For` hop.
+  - Sign-ins (`user.signed_in`, actor `USER`) and locks (`user.locked_out`, actor `SYSTEM`) are audited on each member organization.
+- **One principal per request, declared per route.**
+  - `authenticate()` replaces `apiKeyAuth` on `/v1/*` and enforces each operation's OpenAPI `security`, using an index built from the registry. A request carrying both credentials gets 401 `ambiguous_credentials`.
+  - Non-GET session requests and sign-in must be same-origin, otherwise `403 CROSS_SITE_REQUEST`.
+  - Sessions select an organization with `X-Mutaba3a-Profile`: missing → `422 PROFILE_REQUIRED`; non-member → 404 (ADR-025 §2 amended for sessions only).
+  - Sessions are rate-limited like keys.
+- **The portal's 20 read routes accept sessions.** These are the GET routes in the `read` rows of the writability matrix, now a const in `auth/writability.ts`. Session scopes come from it. Lazy posting during a session read is audited as `SYSTEM`.
+- **Operator controls.**
+  - An operator reset or a disable revokes all of the user's sessions.
+  - New `POST /admin/v1/users/{id}/sessions/revoke` route, and `npm run revoke:sessions`.
+  - A session is also void once its user is disabled or their password changes.
+- **Contract.** Error codes `INVALID_CREDENTIALS`, `SESSION_EXPIRED`, `PRINCIPAL_NOT_ACCEPTED`, `CROSS_SITE_REQUEST`; reason `PROFILE_REQUIRED`; a `session` cookie security scheme; audit actor `USER`; API `1.9.0-mut38`.
+- **Configuration and Terraform.**
+  - Config: `SESSION_TOKEN_PEPPER` (required, ≥ 32 characters), `SESSION_IDLE_MINUTES`, `SESSION_ABSOLUTE_HOURS`, `PORTAL_ORIGIN` (optional), `TRUSTED_PROXY_HOPS`.
+  - Terraform generates, stores and mounts the pepper secret `mutaba3a-api-session-pepper` (moved forward from MUT-45 so `main` stays deployable).
+
+### Changed
+- **Handlers.** Key-only handlers read `keyAuth(c)` instead of destructuring `auth.apiKey`. Session-reachable handlers use `postingActorOf(c)`.
+- **Log redaction (TD-039 resolved).** Every sensitive key, now including cookies, `Set-Cookie`, `password` and `sessionToken`, is redacted at depths 0–3, and a test pins it.
+
+### Verified
+- Server gates: lint, typecheck, `openapi:check`.
+- `npm test`: 466 passed. `npm run test:db`: 520 passed.
+- `terraform validate` (scratch copy).
+- HTTP smoke against a running server: sign-in, `me`, a scoped read, `PROFILE_REQUIRED`, `PRINCIPAL_NOT_ACCEPTED`, sign-out, replay refused, bad password. Zero log lines contained the token or password.
+
+## [Unreleased] - 2026-10-11 — MUT-37: operator-only user accounts on the hosted service
+
+**Scope:** `server/` only:
+- `prisma/schema.prisma` and migration `20261011040107_mut37_users_memberships`
+- `src/auth/users.ts`, `src/config.ts`
+- `src/repositories/{ports,memory,prisma}.ts`
+- `src/routes/admin-users.ts`, `src/schemas.ts`, `src/serializers.ts`, `src/app.ts`, `src/index.ts`
+- `src/scripts/users.ts`, `package.json` (+ `@node-rs/argon2` 2.2.1, six npm scripts)
+- `openapi/openapi.yaml`, `README.md`, `DEPLOYMENT.md`
+- tests (new): `src/auth/__tests__/users.test.ts`, `src/__tests__/{config,routes-users,no-self-registration}.test.ts`, `src/repositories/__tests__/store-{contract,memory,prisma}-users*`, `src/scripts/__tests__/users-cli.test.ts`
+- `src/__tests__/routes-m{2,3,4,5,6,8}.test.ts`: version pin only
+
+No `src/` (app) change.
+
+### Added
+- **Users and memberships.** `users` and `memberships` tables via an additive migration. A user isn't organization-scoped: a person can belong to several firms. Creating a user always creates its first membership in the same transaction.
+- **Password hashing.** argon2id via `@node-rs/argon2` behind a `PasswordHasher` port. `ARGON2_MEMORY_KIB`, `ARGON2_TIME_COST` and `ARGON2_PARALLELISM` default to OWASP profile 1, and the service refuses to boot below it.
+- **Admin routes** behind `X-Admin-Token`:
+  - `POST /admin/v1/users` returns a one-time password, shown once.
+  - `GET /admin/v1/users?email=` and `GET /admin/v1/users/{id}`.
+  - Grant and remove memberships.
+  - Operator password reset.
+  - Disable and enable.
+- **Audit.** Every account change is audited as `ADMIN` on each member organization: `user.created` (with email and display name), `membership.granted`, `membership.revoked`, `user.password_reset`, `user.disabled`, `user.enabled`.
+- **Operator CLI** `src/scripts/users.ts`, run as `npm run provision:user`, `grant:user`, `revoke:user`, `rotate:password`, `disable:user` and `enable:user`. It is a function over an injected fetch and is tested against the in-process app.
+- **No self-registration test.** No route or published path outside `/admin/` may match signup, register, invite, forgot or reset.
+- API version `1.8.0-mut37`.
+
+### Changed vs the original MUT-37 ticket (per its MUT-36 re-cut)
+- There is no `organizationId` on the user and no owner/member roles.
+- The audit actor is `ADMIN`, because the admin token carries no person.
+- **Session invalidation on reset and disable moved to MUT-38**, which introduces sessions.
+- `enable` was added as the inverse of `disable`, so a mistaken disable doesn't need database surgery.
+
+### Technical
+- **TD-040 (new):** audit rows written in the same millisecond have no defined order (`(createdAt, id)` with a random UUID tie-breaker in both stores). This causes an intermittent `routes-m6` failure under full-suite load, seen once in three runs and never in 20 isolated runs. It predates MUT-37.
+
+## [Unreleased] - 2026-10-11 — MUT-36: hosted portal design brief and ADR-037 (approved)
+
+**Scope:** `.claude/designs/hosted-portal.md` (new), `.claude/{DECISIONS,TECH_DEBT,COMPONENT_REGISTRY,CHANGELOG}.md`.
+Docs only; no code. Gates MUT-37/38/39/42/43/44/45 (epic MUT-34).
+
+### Added
+- **Design brief** deciding the four forks that block the hosted build stories:
+  - the portal is a hosted-only Vite build target served same-origin by the API, not the existing app repointed through the MUT-35 registry;
+  - a hosted profile is `Membership × Organization`, with `ProfileSource = 'local' | 'hosted'` as a client-side union;
+  - one parseable writability matrix, enforced as effective scopes, principal declarations and a compiler-exhaustive store guard;
+  - httpOnly `__Host-` cookie sessions beside API keys, with routes declaring principals in the OpenAPI `security` field.
+
+  It also re-cuts MUT-37/38/39/42/43/44/45.
+- **ADR-037** (approved by the owner as written on 2026-10-11). It extends ADR-025 with a user principal and amends ADR-025 §2 for sessions only (`X-Mutaba3a-Profile` header, non-member → 404). It states that ADR-013 is untouched and that hosted profile data is a separate dataset from local profile data.
+- **TD-037:** the sync op-log has no `profileId` concept. Recorded, deliberately not built.
+- **TD-038:** en/ar translation drift (30 `retainers.*` keys missing in en); parity is tested for `settings.features` only.
+- **TD-039:** server log redaction is untested and pino's `*.x` wildcards are one level deep. MUT-38 resolves it; the MUT-38 AC that assumed an existing redaction test is corrected in the brief.
+
+### Changed
+- **ADR-023:** override note. Its "no account system, no password storage, no session" clause no longer describes the hosted service. The rest of the ADR still governs the desktop's Malafat connection.
+- **TD-018:** correction. Users are operator-issued like keys, with no self-serve signup, invite or reset; "Mutaba3a keeps no account system" no longer holds.
+- **TD-013:** the synced-decorator upgrade no longer waits on MUT-43, because the portal doesn't inject into the registry. It now waits on the SQLite swap.
+- **COMPONENT_REGISTRY:** `DataTable` and `CellAmount` are listed but don't exist (`src/components/tables/` is absent); a correction note points at the real page-local tables.
+
 ## [Unreleased] - 2026-10-11 — "Review now" fixes unassigned records in place
 
 **Scope:** `src/components/drawers/OrphanedRecordsDrawer.tsx` (new),

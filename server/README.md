@@ -24,6 +24,40 @@ MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2) \
 
 Then from Malafat, Settings › Money & Mutaba3a › Connect, paste the secret.
 
+Give a person access to the hosted portal (MUT-37). Users are operator-issued
+only: there is no signup, invite or self-service reset anywhere. The one-time
+password prints once, on its own line:
+
+```bash
+export MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2)
+npm run provision:user -- --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> --locale ar
+npm run grant:user -- --email nour@firm.ps --organization-id <another uuid>   # a second firm
+npm run revoke:user -- --email nour@firm.ps --organization-id <uuid>
+npm run rotate:password -- --email nour@firm.ps                               # operator reset
+npm run disable:user -- --email nour@firm.ps                                  # enable:user undoes it
+```
+
+Sign a person out everywhere: `npm run revoke:sessions -- --email nour@firm.ps`
+(an operator reset or a disable does this too).
+
+Every script takes `--url` (default `http://localhost:8787`). Password hashing
+is argon2id; `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` / `ARGON2_PARALLELISM`
+default to OWASP profile 1 and the service refuses to start below it.
+
+**Sessions (MUT-38).** `POST /v1/sessions` signs a person in and sets an
+httpOnly, `SameSite=Strict` cookie on the API's own origin (`__Host-mut_session`;
+plain `mut_session` without `Secure` only when `NODE_ENV=development`). The
+service needs `SESSION_TOKEN_PEPPER` (≥ 32 characters) to boot — add it to an
+existing `.env`. Session calls to organization-scoped routes send
+`X-Mutaba3a-Profile: <organizationId>`; `GET /v1/me` lists the profiles a
+person may open. Try it locally:
+
+```bash
+curl -si -c /tmp/jar -H 'origin: http://localhost:8787' -H 'content-type: application/json' \
+  -d '{"email":"nour@firm.ps","password":"<one-time password>"}' http://localhost:8787/v1/sessions
+curl -s -b /tmp/jar http://localhost:8787/v1/me
+```
+
 ## Verify
 
 ```bash

@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -54,7 +54,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const reference = body.externalReference;
@@ -101,7 +101,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/customers',
       tags: ['Customers'],
       summary: 'List customers',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('customers:read')] as const,
       request: { query: ListCustomersQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: CustomerPageSchema } } }, ...validationResponse, ...errorResponses },
@@ -125,7 +125,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/customers/{customerId}',
       tags: ['Customers'],
       summary: 'Get a customer',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('customers:read')] as const,
       request: { params: CustomerIdParamSchema },
       responses: { 200: { description: 'The customer', ...customerJson }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -150,7 +150,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Updated', ...customerJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const patch: UpdateCustomerPatch = {};
       if (body.name !== undefined) patch.name = body.name;
@@ -191,7 +191,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Archived (or already was)', ...customerJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const customer = await mustGet(store, organization.id, c.req.valid('param').customerId);
       const refs = await referencesByEntity(store, organization.id, 'CUSTOMER', [customer.id]);
       if (customer.status === 'ARCHIVED') return c.json(serializeCustomer(customer, refs.get(customer.id)), 200);

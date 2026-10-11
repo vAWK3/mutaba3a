@@ -31,7 +31,7 @@
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
 | ADR-021 | Question-First UX Redesign | Active; §1 (navigation) superseded by ADR-034 | 2026-03 |
 | ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
-| ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth | Active | 2026-10 |
+| ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth (account clause overridden for the hosted service by ADR-037) | Active | 2026-10 |
 | ADR-024 | Override of ADR-005: A Hosted Mutaba3a Service Exists Beside the Local-First App | Active | 2026-10 |
 | ADR-025 | Hosted Financial API (Money v1 Option B): Organization-Scoped Ledger Service, Malafat as API-Key Client | Active | 2026-10 |
 | ADR-026 | Hosted API Deployment: Terraform Owns the Stack Including the Image Tag, One Local Script Rolls It (Local Build, Local Migrations), One Instance Until TD-017 | Active | 2026-10 |
@@ -45,6 +45,7 @@
 | ADR-034 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
 | ADR-035 | Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted | Active | 2026-10 |
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
+| ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
 
 ---
 
@@ -705,6 +706,14 @@ Supporting choices, each with a test that pins it:
 Sync) remain Active and in conflict with cloud sync. Overriding them is MUT-30's
 job and must happen before any cloud sync ships. This ADR covers only how a
 client authenticates when that work is approved.
+
+> **Override note (2026-10-11, ADR-037).** The clause "builds no account
+> system, no password storage, and no session of its own" no longer describes
+> the hosted service: ADR-037 gives `server/` operator-provisioned users,
+> argon2id password hashes and server-side sessions for the hosted portal.
+> The rest of this ADR stands — it still governs how the *desktop* app
+> authenticates to a Malafat tenant (MUT-28), and no part of ADR-037 touches
+> the desktop.
 
 ---
 
@@ -1497,3 +1506,138 @@ answers); a hidden sum of raw minor units (the old behaviour; wrong).
 - Remove them from Home but keep the code (rejected: dead code).
 - Reshape `AttentionFeed` to the new list (rejected: its guidance engine is month-bound and USD/ILS-only, while `getAttentionReceivables` already was the right list).
 
+---
+
+## ADR-037: Hosted Users and Sessions — A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix
+
+**Status**: Active (extends ADR-025; partial override of ADR-023 for the
+hosted service; ADR-013 untouched) — approved by the owner with
+`.claude/designs/hosted-portal.md` on 2026-10-11 (MUT-36)
+**Date**: 2026-10-11
+**Context**: Epic MUT-34. Money v1's only principal is Malafat's organization
+API key (ADR-025 §2–3); a firm partner has no way to see the firm's money on
+Mutaba3a. The owner decided on 2026-10-10: a profile has a source (`local` or
+`hosted`); neither syncs to the other; on a hosted profile income,
+receivables and payments are read-only (Malafat is writer of record) and
+expenses are writable server-side; accounts are operator-issued only; "sign in
+with Malafat" is not v1 because MUT-28's client is a desktop loopback client
+and gives no hosted web login. Full design, cost and test strategy:
+`.claude/designs/hosted-portal.md`.
+
+**Decision**:
+
+1. **A human principal exists on the hosted service.** `User` (operator-
+   provisioned, email + argon2id password hash, `ACTIVE | DISABLED`) and
+   `Membership` (user ↔ organization, access/no-access). Users are created,
+   granted, reset and disabled only through `/admin/v1/users*` behind
+   `MUTABA3A_ADMIN_TOKEN` and `npm run` wrappers. **No signup, invite or
+   password-reset route exists in any environment**; a route-inventory test
+   and a bundle test assert it.
+2. **A hosted profile is `Membership × Organization`**, not a table. The
+   client-side type is `ProfileSource = 'local' | 'hosted'`; the server only
+   ever emits `hosted`. **Hosted profile data is a separate dataset from local
+   profile data**: no shared ids, no hosted row in Dexie, no op in the op-log,
+   no IndexedDB in the portal.
+3. **Sessions are server-side records behind an httpOnly cookie on the API's
+   own origin.** `__Host-mut_session; Secure; HttpOnly; SameSite=Strict;
+   Path=/`; a 32-byte random token stored as
+   `HMAC-SHA256(SESSION_TOKEN_PEPPER, token)`; idle (default 120 min) and
+   absolute (default 12 h) expiry; sign-out revokes the record server-side;
+   rotating the pepper (Secret Manager, Terraform-generated) signs everyone out.
+   Non-GET session requests must be same-origin (`Sec-Fetch-Site` / `Origin`).
+   The server keeps no CORS.
+4. **Sign-in does not reveal accounts.** Unknown email and wrong password give
+   the same `401 INVALID_CREDENTIALS` with matched timing (dummy argon2 verify);
+   throttling and lockout key on the normalised email string whether or not an
+   account exists; a real account's lockout is written to `User.lockedUntil`
+   and to each member organization's audit log.
+5. **Routes declare accepted principals in the OpenAPI `security` field, and
+   one `authenticate()` middleware enforces that same declaration.** A request
+   carrying both an API key and a session cookie is refused. Every `/v1` route
+   must declare `security` and call `requireScope` — a test enforces it, closing
+   today's opt-in gap.
+6. **ADR-025 §2 is amended for sessions only.** An API key still implies its
+   organization and no API-key request accepts an organization id. A session
+   selects one of its memberships per request with `X-Mutaba3a-Profile`;
+   a non-member, unknown or malformed id answers `404`, exactly like a
+   cross-organization id today.
+7. **One writability matrix, enforced three times.** The table in the brief
+   (§5, between `writability-matrix` markers) is mirrored as a `const` in
+   `server/src/auth/writability.ts`; a drift test fails if they diverge. It
+   generates a session's effective scopes, maps a refused session write to
+   `403 READ_ONLY_PROFILE { domain, writerOfRecord }`, and drives a
+   per-request store guard whose method classification is compiler-exhaustive
+   over `LedgerStore`, so a write cannot be added below the routes without
+   being classified. Expense routes accept sessions only, so Malafat's key
+   cannot reach them with any scope set.
+8. **Lazy posting during a session read is a system act.** Due installments
+   and retainer charges posted by a session's read run on the unguarded store
+   with actor `SYSTEM`. API-key behaviour is unchanged.
+9. **Audit gains actor `USER`.** A published enum change: Malafat's vendored
+   contract is refreshed, and its parser confirmed tolerant, before any session
+   can write an audit row.
+10. **The portal is a hosted-only build target of this repo** (`vite build
+    --mode hosted` → `dist-hosted/`), served by the API service from the same
+    origin. It reuses the design system and i18n/RTL kit, and is forbidden by
+    lint from importing `src/db`, `src/sync`, the local hooks, shell or
+    drawers. It shows hosted profiles only. A bundle test proves the `web` and
+    `desktop` builds contain no portal code and the portal contains no Dexie.
+
+**ADR-013 is untouched.** Nothing in this decision writes the op-log, reads
+it, or gives it a remote peer; local and hosted profiles share no data, so
+there is nothing to sync. Making the hosted service a sync target remains a
+separate ADR gated on MUT-27 and TD-015 (ADR-024). TD-037 records that the
+op-log has no `profileId` concept at all, so profile-selective sync is not
+even expressible today.
+
+**ADR-024's guarantee is demonstrated, not asserted**: the desktop/PWA bundles
+are checked to contain none of the portal's endpoints, cookie name or headers,
+and no new network origins; Dexie schema, profile types, profile store,
+switcher and `src/sync/` are not edited.
+
+**Override log — ADR-023 (partial)**: *What*: its clause "builds no account
+system, no password storage, and no session of its own". *Why*: the owner's
+2026-10-10 decision that tenants sign in to a hosted web portal with
+operator-issued accounts, while MUT-28's OAuth client is a desktop public
+client on a loopback redirect and cannot provide a hosted web login. *What
+replaces it*: decisions 1, 3 and 4 above, for the hosted service only.
+ADR-023 otherwise stays Active for the desktop's Malafat connection. *Date*:
+2026-10-11. **TD-018** stays Accepted with corrected wording (users are
+operator-provisioned like keys; "Mutaba3a keeps no account system" no longer
+holds).
+
+**Consequences**:
+- `server/` gains three tables (`users`, `memberships`, `sessions`), five error
+  codes (`INVALID_CREDENTIALS`, `SESSION_EXPIRED`, `PRINCIPAL_NOT_ACCEPTED`,
+  `READ_ONLY_PROFILE`, `CROSS_SITE_REQUEST`), a cookie security scheme, one
+  secret (`SESSION_TOKEN_PEPPER`) and a minor API version.
+- Route handlers move from a closed-over store to a per-request `c.var.store`
+  and from `auth.apiKey.id` to `actorOf(auth)` — one mechanical refactor.
+- The service must keep `max_instances = 1` (TD-017): sign-in throttling and
+  lockout counters are in process, like the API-key limiter.
+- The portal ships with the API image; a custom domain needs a load balancer or
+  proxy in front of the one service (MUT-45), because `__Host-` cookies require
+  the page and the API to share an origin.
+- MUT-35's registry is not the portal's data path; TD-013's "upgrade when
+  MUT-43 lands" note moves to "when a second implementation is injected".
+
+**Alternatives Considered**:
+- *Repoint the existing app through the MUT-35 provider*: the hosted ledger
+  (agreements, installments, posted receivables, allocations, VAT, credits)
+  does not map to `Transaction`/`PaymentRecord` without inventing data; ~17 of
+  20 repository slots would throw; the shell opens Dexie before React mounts;
+  the registry cannot swap in production. Rejected.
+- *Show in-browser local profiles inside the portal*: the sign-in would not
+  protect them on a shared machine, and the portal would carry Dexie and the
+  op-log. Rejected.
+- *Bearer tokens in browser storage*: one XSS becomes account takeover.
+  Rejected.
+- *A BFF holding Malafat's all-scope key*: read-only would depend on the BFF,
+  not the server. Rejected.
+- *Cross-site cookie with CORS, or a Netlify proxy*: unreliable under
+  third-party cookie blocking; a non-`me-west1` edge on firm data (ADR-024
+  residency). Rejected.
+- *Sign in with Malafat (OAuth) for the web*: no hosted web client exists, and
+  the owner deferred it. Revisit with MAL-870.
+- *A server `Profile` table*: a second id for the same organization, with
+  nothing to hold in v1. Rejected.

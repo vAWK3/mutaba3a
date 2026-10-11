@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { MALAFAT_REQUIRED_SCOPES, missingScopes } from '../auth/scopes.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
@@ -43,7 +43,7 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const integration = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
       return c.json(
         {
@@ -88,7 +88,7 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
 
@@ -156,7 +156,7 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const now = c.get('now')();
       const existing = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
       if (!existing) throw new ApiError('NOT_FOUND', 'This organization has no integration to disconnect');
@@ -193,7 +193,7 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const now = c.get('now')();
       const record = await store.apiKeys.revoke(apiKey.id, 'ROTATED_BY_CLIENT', now);
       await store.audit.append({

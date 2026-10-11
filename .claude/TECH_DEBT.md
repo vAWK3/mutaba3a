@@ -18,6 +18,89 @@
 
 ## Open Debt
 
+### TD-040: Audit Events Written in the Same Millisecond Have No Defined Order
+**Status**: Open
+**Added**: 2026-10-11 (found during MUT-37)
+**Priority**: Low (history readability) — and one flaky test
+**Impact**: `GET /v1/audit` ("oldest first") can list two events of one
+request in the wrong order; `routes-m6` "lists the organization's events by
+entity" fails intermittently under full-suite load
+
+Audit rows are stamped with millisecond precision (`createdAt` in the memory
+store via `new Date()`, `TIMESTAMP(3)` with `DEFAULT CURRENT_TIMESTAMP` in
+Postgres) and keyset-paginated by `(createdAt, id)`. Two events appended in the
+same millisecond — `payment.recorded` then `payment.reversed` in a fast test —
+fall back to comparing random UUIDs, so their order is a coin flip. Seen once
+in three full `npm test` runs during MUT-37; 0 failures in 20 isolated runs.
+
+**Fix**: a monotonic per-organization sequence (or a `bigserial`) as the
+tie-breaker in both stores and in the cursor, with a contract test that
+appends two events in one millisecond and expects insertion order.
+
+### TD-037: The Sync Op-Log Has No Notion of a Profile
+**Status**: Accepted (recorded by MUT-36; deliberately not built)
+**Added**: 2026-10-11
+**Priority**: Low today — becomes a blocker the day profile-selective sync is proposed
+**Impact**: Profile-selective sync ("sync my firm profile, not my personal one")
+cannot be expressed
+
+`src/sync/` contains zero references to `profileId` (and `src-tauri/src` none
+to `profileId`/`profile_id`). The word "profile" there means the per-field LWW
+merge (`ConflictType 'profile_field'`, `applyProfileFieldOp`) and the
+`businessProfile` entity type — nothing partitions, filters or scopes
+operations by business profile. A sync session exchanges every captured op
+(clients, projects, transactions, categories, FX rates, documents, business
+profiles, payment records) regardless of which profile they belong to.
+
+This is not a defect today: ADR-013 syncs a person's own devices, where all
+profiles belong to the same person. It matters only if a future decision lets
+one profile sync to a hosted service or to another person while others stay
+local. MUT-34 avoided that path (ADR-037: local and hosted profiles are
+separate datasets; neither syncs), so the gap is recorded, not fixed.
+
+**If it is ever needed**: add `profileId` to `Operation`, backfill it from the
+entity at capture time, and make transport filters profile-aware — a sync
+protocol change requiring its own ADR (with MUT-27, TD-015).
+
+### TD-038: English and Arabic Translations Have Drifted; Parity Is Tested for One Subtree
+**Status**: Open
+**Added**: 2026-10-11 (found during MUT-36)
+**Priority**: Medium
+**Impact**: English users can see raw keys on the retainers views; new drift
+goes unnoticed
+
+`en.json` has 1,131 leaf keys and `ar.json` 1,160. `en` is missing about 30
+keys that `ar` has (`retainers.view.*`, `retainers.inspector.*`,
+`retainers.scheduleState.*`, `retainers.filters.*`, `retainers.status.*`), and
+`retainers.summary`
+is a string in `en` but an object in `ar`. The only parity test
+(`src/lib/features/__tests__/i18nParity.test.ts`) covers `settings.features`.
+`t()` takes a plain string, so keys are not type-checked either.
+
+**Fix**: a full-tree parity test (same key set, same leaf types, same `{var}`
+names), then fill the gaps. MUT-43 adds the same check for the new `hosted.*`
+subtree only; the rest is this entry.
+
+### TD-039: Server Log Redaction Is Untested and Only One Level Deep
+**Status**: Resolved 2026-10-11 by MUT-38 — `logger.ts` spells every sensitive key (now incl. `cookie`, `set-cookie`, `password`, `sessionToken`) at depths 0–3; `__tests__/logger.test.ts` pins all 40 combinations plus request cookies and response Set-Cookie
+**Added**: 2026-10-11 (found during MUT-36)
+**Priority**: High once sessions exist
+**Impact**: A credential nested two levels deep in a logged object would be
+written to Cloud Logging in clear
+
+`server/src/logger.ts` redacts `req.headers.authorization`,
+`req.headers["x-admin-token"]`, `*.authorization`, `*.apiKey`, `*.secret`,
+`*.token`, `*.key` and the bare names. Its comment says these match "at any
+depth", but pino's `*.x` wildcard matches exactly one level below the root.
+No test asserts redaction (the handover's "logs redact credentials" was
+exercised by hand in the 2026-10-08 e2e run). Today the request log line
+carries no headers or body, so nothing leaks in practice; MUT-38 adds
+`password`, a session cookie and `Set-Cookie` to the request surface.
+
+**Fix (MUT-38)**: add the session cookie, `cookie`, `set-cookie` and
+`password` paths at every depth that can occur, and a test that logs a nested
+object carrying each credential and asserts `[redacted]`.
+
 ### TD-022: Release Pipeline Does Not Verify the Signer Against the Compiled-In Updater Key
 **Status**: Open (ticketed as MUT-51)
 **Added**: 2026-10-10
@@ -267,6 +350,12 @@ tests — but a hosted data source injected by MUT-43 would be silently bypassed
 on every synced write path. Upgrade when MUT-43 lands: resolve the decorators
 lazily through `getRepositories().base`, with a test asserting ops are captured
 against a swapped base.
+
+> **Re-homed (2026-10-11, MUT-36).** The hosted portal does not inject into
+> the registry (ADR-037 decision 10: it is a separate build target with its own
+> HTTP client), so MUT-43 will not trigger this. The upgrade is now due when a
+> second implementation is actually injected — the SQLite/Tauri swap this
+> entry tracks.
 
 **Every declared slot has a real caller.** Verified by grepping
 `base.<slot>.<method>` across `src/`: nine consumers resolve through the
@@ -757,6 +846,13 @@ will be no self-serve account, organization or key-management flow. Mutaba3a
 keeps no account system (ADR-023). Malafat's side records the same decision in
 its ADR-150 addendum (MAL-870). Revisit only if a customer other than Malafat
 needs keys without an operator.
+
+> **Correction (2026-10-11, ADR-037).** "Mutaba3a keeps no account system" is
+> no longer true: the hosted service gains
+> users, memberships and sessions for the hosted portal. The *decision* this
+> entry records is unchanged and extends to users — they are operator-issued
+> through `/admin/v1/users*` exactly like keys, with no self-serve signup,
+> invite or password reset in any environment.
 
 ### TD-019: No CI for `server/`
 **Status**: Resolved

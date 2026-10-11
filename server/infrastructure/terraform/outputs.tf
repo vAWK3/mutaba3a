@@ -36,6 +36,11 @@ output "admin_token_secret" {
   value       = google_secret_manager_secret.admin_token.secret_id
 }
 
+output "session_pepper_secret" {
+  description = "Secret Manager id of the session HMAC key (MUT-38). Never needed by an operator; rotate with -replace=random_password.session_pepper."
+  value       = google_secret_manager_secret.session_pepper.secret_id
+}
+
 output "database_url_secret" {
   value = google_secret_manager_secret.database_url.secret_id
 }

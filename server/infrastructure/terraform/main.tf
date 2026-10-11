@@ -23,8 +23,9 @@ locals {
   # Operator-side migrations: Cloud SQL Auth Proxy listens here (scripts/deploy.sh).
   proxy_port = 5440
 
-  secret_database_url = "mutaba3a-api-database-url${local.suffix}"
-  secret_admin_token  = "mutaba3a-api-admin-token${local.suffix}"
+  secret_database_url   = "mutaba3a-api-database-url${local.suffix}"
+  secret_admin_token    = "mutaba3a-api-admin-token${local.suffix}"
+  secret_session_pepper = "mutaba3a-api-session-pepper${local.suffix}"
 
   labels = {
     app         = "mutaba3a-api"
@@ -184,6 +185,35 @@ resource "google_secret_manager_secret_version" "admin_token" {
   secret_data = random_password.admin_token.result
 }
 
+# HMAC key for hosted-portal session digests (MUT-38, ADR-037). Generated here,
+# never a tfvars value. Rotating it (`-replace=random_password.session_pepper`,
+# then redeploy) signs every portal user out at once.
+resource "random_password" "session_pepper" {
+  length  = 64
+  special = false
+}
+
+resource "google_secret_manager_secret" "session_pepper" {
+  project   = var.project_id
+  secret_id = local.secret_session_pepper
+  labels    = local.labels
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "session_pepper" {
+  secret      = google_secret_manager_secret.session_pepper.id
+  secret_data = random_password.session_pepper.result
+}
+
 # ============================================================================
 # Service account and least-privilege IAM
 # ============================================================================
@@ -210,6 +240,13 @@ resource "google_secret_manager_secret_iam_member" "api_reads_database_url" {
 resource "google_secret_manager_secret_iam_member" "api_reads_admin_token" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.admin_token.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_session_pepper" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.session_pepper.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
 }
@@ -297,6 +334,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+      env {
+        name = "SESSION_TOKEN_PEPPER"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.session_pepper.secret_id
+            version = "latest"
+          }
+        }
+      }
 
       startup_probe {
         http_get {
@@ -340,8 +386,10 @@ resource "google_cloud_run_v2_service" "api" {
   depends_on = [
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.admin_token,
+    google_secret_manager_secret_version.session_pepper,
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_iam_member.api_reads_admin_token,
+    google_secret_manager_secret_iam_member.api_reads_session_pepper,
   ]
 }
 

@@ -41,6 +41,14 @@ import type {
   CreateCustomerInput,
   CreateOrganizationInput,
   CreateProjectInput,
+  CreateUserInput,
+  CreateSessionInput,
+  MembershipRecord,
+  MembershipRepository,
+  SessionRecord,
+  SessionRepository,
+  UserRecord,
+  UserRepository,
   CreateFeeProposalInput,
   FeeProposalFilter,
   FeeProposalRecord,
@@ -99,6 +107,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly credits = new Map<string, CreditRecord>();
   private readonly counters = new Map<string, number>();
   private readonly props = new Map<string, FeeProposalRecord>();
+  private readonly people = new Map<string, UserRecord>();
+  private readonly members = new Map<string, MembershipRecord>();
+  private readonly sessionsById = new Map<string, SessionRecord>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -150,6 +161,121 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       return { ...k, scopes: [...k.scopes] };
     },
+  };
+
+  readonly users: UserRepository = {
+    create: async (input: CreateUserInput) => {
+      for (const u of this.people.values()) {
+        if (u.email === input.email) throw new UniqueViolation('users.email');
+      }
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('memberships.organizationId');
+      const user: UserRecord = {
+        id: randomUUID(),
+        email: input.email,
+        displayName: input.displayName,
+        passwordHash: input.passwordHash,
+        locale: input.locale,
+        status: 'ACTIVE',
+        failedSignIns: 0,
+        lockedUntil: null,
+        passwordChangedAt: input.at,
+        lastSignInAt: null,
+        createdAt: input.at,
+        updatedAt: input.at,
+      };
+      const membership: MembershipRecord = { userId: user.id, organizationId: input.organizationId, createdAt: input.at };
+      this.people.set(user.id, user);
+      this.members.set(membershipKey(user.id, input.organizationId), membership);
+      return { user: { ...user }, membership: { ...membership } };
+    },
+    getById: async (id) => clone(this.people.get(id)),
+    findByEmail: async (email) => clone([...this.people.values()].find((u) => u.email === email)),
+    setPassword: async (id, passwordHash, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { passwordHash, passwordChangedAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at });
+      return { ...u };
+    },
+    setStatus: async (id, status, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { status, updatedAt: at });
+      return { ...u };
+    },
+    recordFailedSignIn: async (id, at, lockUntil) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { failedSignIns: u.failedSignIns + 1, updatedAt: at, ...(lockUntil ? { lockedUntil: lockUntil } : {}) });
+      return { ...u };
+    },
+    recordSignIn: async (id, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { lastSignInAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at });
+      return { ...u };
+    },
+  };
+
+  readonly sessions: SessionRepository = {
+    create: async (input: CreateSessionInput) => {
+      for (const s of this.sessionsById.values()) {
+        if (s.tokenDigest === input.tokenDigest) throw new UniqueViolation('sessions.tokenDigest');
+      }
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('sessions.userId');
+      const record: SessionRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        createdAt: input.at,
+        lastSeenAt: input.at,
+        idleExpiresAt: input.idleExpiresAt,
+        absoluteExpiresAt: input.absoluteExpiresAt,
+        revokedAt: null,
+        revokedReason: null,
+        userAgent: input.userAgent,
+      };
+      this.sessionsById.set(record.id, record);
+      return { ...record };
+    },
+    findByDigest: async (tokenDigest) => clone([...this.sessionsById.values()].find((s) => s.tokenDigest === tokenDigest)),
+    touch: async (id, at, idleExpiresAt) => {
+      const s = this.sessionsById.get(id);
+      if (s) Object.assign(s, { lastSeenAt: at, idleExpiresAt });
+    },
+    revoke: async (id, reason, at) => {
+      const s = this.sessionsById.get(id);
+      if (!s) return null;
+      if (!s.revokedAt) Object.assign(s, { revokedAt: at, revokedReason: reason });
+      return { ...s };
+    },
+    revokeAllForUser: async (userId, reason, at) => {
+      let count = 0;
+      for (const s of this.sessionsById.values()) {
+        if (s.userId === userId && !s.revokedAt) {
+          Object.assign(s, { revokedAt: at, revokedReason: reason });
+          count++;
+        }
+      }
+      return count;
+    },
+  };
+
+  readonly memberships: MembershipRepository = {
+    grant: async (userId, organizationId, at) => {
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('memberships.userId');
+      if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('memberships.organizationId');
+      const key = membershipKey(userId, organizationId);
+      const existing = this.members.get(key);
+      if (existing) return { membership: { ...existing }, created: false };
+      const membership: MembershipRecord = { userId, organizationId, createdAt: at };
+      this.members.set(key, membership);
+      return { membership: { ...membership }, created: true };
+    },
+    revoke: async (userId, organizationId) => this.members.delete(membershipKey(userId, organizationId)),
+    find: async (userId, organizationId) => clone(this.members.get(membershipKey(userId, organizationId))),
+    listByUser: async (userId) => [...this.members.values()].filter((m) => m.userId === userId).map((m) => ({ ...m })),
+    listByOrganization: async (organizationId) =>
+      [...this.members.values()].filter((m) => m.organizationId === organizationId).map((m) => ({ ...m })),
   };
 
   readonly integrations: IntegrationRepository = {
@@ -809,6 +935,10 @@ export class MemoryLedgerStore implements LedgerStore {
   auditCount(organizationId: string): number {
     return this.events.filter((e) => e.organizationId === organizationId).length;
     }
+}
+
+function membershipKey(userId: string, organizationId: string): string {
+  return `${userId}:${organizationId}`;
 }
 
 export class UniqueViolation extends Error {

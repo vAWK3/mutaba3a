@@ -698,6 +698,14 @@ Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactio
 
 ## Table Components
 
+> **Correction (2026-10-11, found during MUT-36).** `DataTable` and
+> `CellAmount` below describe files that do not exist —
+> `src/components/tables/` is absent. Tables are page-local `<table>` markup
+> styled by `src/components/ui/Table.css`. Before building a table, read an
+> existing page (`ClientsPage`, `OverviewPage`) instead of these entries. The
+> hosted portal (MUT-43) adds a `DecimalAmount` and a small table wrapper and
+> registers them when built.
+
 ### DataTable
 **Location**: `src/components/tables/DataTable.tsx`
 **Purpose**: Generic data table with sorting and row click.
@@ -1085,6 +1093,13 @@ Before creating a new component:
 | `retainers/schedule.ts` | chargeable months with end/cancel rules | retainers routes, reconcile |
 | `payments/allocate.ts`, `payments/credit.ts`, `payments/numbering.ts`, `payments/preview-token.ts` | allocation validation + strategies + resulting balances; credit VAT split; payment numbers; balance-covering preview token | payments, receivables (credits) routes; M6 summaries will reuse `outstandingOf` and the balance shapes |
 | `routes/operations.ts` | `GET /v1/operations/{key}` over `idempotency.get` | any client reconciling a lost response |
+| `auth/users.ts` (MUT-37) | `normalizeEmail` (trim + NFKC + lower-case), `generateOneTimePassword` (24 base64url chars), `PasswordHasher` port + `createArgon2Hasher`, `ARGON2_MINIMUMS` (OWASP profile 1, enforced by `config.ts`) | admin user routes; MUT-38 sign-in verifies with the same hasher and normalises emails the same way |
+| `routes/admin-users.ts` (MUT-37) | operator user/membership routes; `audit()` appends one ADMIN event per member organization | the only way to create or change a portal user |
+| `auth/sessions.ts` (MUT-38) | `generateSessionToken`, `sessionDigest` (HMAC under the pepper), `sessionCookieName`, `clientIp` (trusted-hop X-Forwarded-For), `isSameOriginRequest` (CSRF rule), `SignInThrottle` + `SIGN_IN_POLICY` | sign-in route, `authenticate()` |
+| `auth/writability.ts` (MUT-38) | `WRITABILITY_MATRIX` (brief §5 as a const), `sessionScopes()`, `sessionAccess()` | session effective scopes, `GET /v1/me`; MUT-39 adds READ_ONLY_PROFILE + the store guard on the same rows |
+| `auth/middleware.ts` (MUT-38 rewrite) | `authenticate()` (one principal per request, enforces each route's OpenAPI `security`), `buildRouteAccessIndex`, `requireScope` (either principal), `keyAuth(c)` for key-only handlers, `postingActorOf(c)` for lazy posting, `AuthContext = ApiKeyAuth \| SessionAuth`, `c.get('identity')` | every /v1 route |
+| `routes/sessions.ts` (MUT-38) | `POST /v1/sessions`, `DELETE /v1/sessions/current`, `GET /v1/me`; `ORGANIZATION_INDEPENDENT_ROUTES` | the portal (MUT-43) |
+| `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |
 
 ---
 
