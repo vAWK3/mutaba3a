@@ -595,6 +595,8 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 **Remediation**: MUT-7 and MUT-8 compute owed now with `summarizeOwedByCurrency`; then decide whether the remaining aggregate helpers should skip archived rows too.
 
+**Update (2026-10-11, MUT-7):** the clients index half is resolved. `clientSummaryRepo.list` now returns `owed` from `summarizeOwedByCurrency`, and the index reads only that. What remains: the per-currency `paidIncomeMinor*/unpaidIncomeMinor*` report fields (read by the Insights and Reports client tables) and `transactionRepo.getOverviewTotals*` still count archived income. Home (MUT-8) is next.
+
 **Effort**: Small
 
 ---

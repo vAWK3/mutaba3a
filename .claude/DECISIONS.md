@@ -42,6 +42,7 @@
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
 | ADR-033 | Owed Now Has One Definition; a Client's Payment History Is Reconciled on Read | Active | 2026-10 |
+| ADR-034 | Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted | Active | 2026-10 |
 
 ---
 
@@ -1357,4 +1358,53 @@ design); showing records only, as MUT-4 specified literally (rejected —
 silently wrong for question 3); fixing `clientSummaryRepo.get` to return
 per-currency fields for the hero (rejected — no overdue split, and it counts
 archived rows the page hides).
+
+---
+
+## ADR-034: Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-7 (epic MUT-1). The clients index's default order is "owed
+now, descending", and clients owe in different currencies. A client owing
+$5,000 cannot be ranked against one owing ₪12,000 without either a conversion
+or an arbitrary rule. The old comparator added raw minor units across USD, ILS
+and EUR, which is wrong on both counts. ADR-004 forbids *silent* conversions
+"that could mislead users". Basel chose this option over "main currency first"
+and "rank by lateness" (brief `.claude/designs/mut-7-clients-who-owes-me.md`
+§5, 2026-10-11).
+
+**Decision**:
+1. **A list may be *ordered* by an amount converted at today's rate**, using
+   the same `useFxRate` rates `AmountWithConversion` already uses for its
+   tooltips. No converted figure is displayed. Every amount on screen stays in
+   its own currency, one line per currency.
+2. **The ordering is disclosed**: the column header's tooltip reads "Ordered
+   by today's exchange rate. Amounts are never converted."
+3. **No rate, no guess.** The rank key is a tuple: [ILS-converted total over
+   the currencies that have a rate, then the raw amount of each currency that
+   has none, in USD → ILS → EUR order]. An amount without a rate ranks after
+   every amount with one (`owedRank`, `src/components/clients/clientIndexRows.ts`).
+4. **Only owed-now ordering needs this.** The overdue column orders by days
+   late, and payment and activity columns order by date. Each of those
+   comparisons is currency-free.
+5. Ties fall back to name A–Z, then id, so a re-render never reshuffles equal
+   rows.
+
+**Relation to ADR-004**: this refines it rather than overriding it. ADR-004's
+rules are about *displayed* totals (per-currency by default; a converted view
+must show its rates). A ranking displays no total, and its basis is disclosed
+on the header.
+
+**Consequences**: the order can change when the rate moves, which is the
+honest answer to "who owes me most" across currencies. Tests pin the order
+at fixed rates and show it flipping when the dollar's rate changes. Any future
+list that needs a cross-currency order reuses `owedRank`'s tuple rule, not a
+new one.
+
+**Alternatives Considered**: rank by the profile's default currency, then the
+others (rejected — a client owing only ₪ always sorts below anyone owing $);
+rank by lateness instead of size (rejected — it departs from the ticket and
+answers a different question, which the Overdue column's own sort already
+answers); a hidden sum of raw minor units (the old behaviour; wrong).
 

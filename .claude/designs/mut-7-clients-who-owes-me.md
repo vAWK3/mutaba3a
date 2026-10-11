@@ -79,7 +79,7 @@ ClientSortField = 'name' | 'owed' | 'overdue' | 'lastPayment' | 'activity'
 
 No thrown errors are added. An empty database lists nothing, and the existing empty state renders.
 
-## 5. Open decisions (need Basel)
+## 5. Open decisions (resolved 2026-10-11: D8 = A, D9 = 1)
 
 **D8 — how "owed now, descending" orders clients who owe in different currencies.** You cannot rank $5,000 against ₪12,000 without either a conversion or a rule.
 

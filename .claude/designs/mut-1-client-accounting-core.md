@@ -5,7 +5,7 @@
 - **Blockers in scope:** MUT-17 (overdue unification), MUT-18 (backdatable markPaid), MUT-19 (IncomeDrawer tests), MUT-22 (lint errors)
 - **Explicitly out:** MUT-9 (statement export, optional), MUT-20 (ExpensesLedger tests — known debt), engagements/retainers/invoice generation, expense analytics, forecasting
 - **Status:** approved at intake review 2026-10-08
-- **Progress (2026-10-11):** MUT-6 merged. MUT-3 built on `feature/mut-1-client-core` together with the MUT-4 Payments UI and MUT-23 — brief `.claude/designs/mut-3-client-profile.md`, ADR-033. The MUT-4 data layer (`listByClient`, `usePaymentsByClient`) landed 2026-10-08 and was extended by MUT-3 (entry rows, calendar-date bounds). D6 (`lastPaymentAt` payment-record aware) is still open and belongs to MUT-7.
+- **Progress (2026-10-11):** MUT-6 merged. MUT-3 built on `feature/mut-1-client-core` together with the MUT-4 Payments UI and MUT-23 — brief `.claude/designs/mut-3-client-profile.md`, ADR-033. The MUT-4 data layer (`listByClient`, `usePaymentsByClient`) landed 2026-10-08 and was extended by MUT-3 (entry rows, calendar-date bounds). D6 (`lastPaymentAt` payment-record aware) is closed by MUT-7 (2026-10-11, brief `.claude/designs/mut-7-clients-who-owes-me.md`, ADR-034). D10 (Home's `PredictiveKpiStrip` / `MonthActualsRow`) remains for MUT-8.
 
 ---
 
