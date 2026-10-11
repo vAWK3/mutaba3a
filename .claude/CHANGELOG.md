@@ -28,6 +28,50 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — Settings › Data Tools messages follow the app language
+
+**Scope:** `src/pages/settings/DataToolsSection.tsx` (new, moved out of
+`SettingsPage.tsx`), `src/pages/settings/SettingsPage.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/pages/settings/__tests__/DataToolsSection.test.tsx` (new),
+`.claude/{CHANGELOG,TEST_PLAN,COMPONENT_REGISTRY,TECH_DEBT}.md`.
+
+### Fixed
+- The integrity check's result line and toasts were hardcoded English
+  ("All N records verified…", "Found N issue(s) across N records.",
+  "Data integrity check passed", "N data integrity issue(s) found",
+  "Integrity check failed"), with an English-only `issue${n !== 1 ? 's' : ''}`
+  plural. They now come from `integrity.checkClean`,
+  `checkIssuesSingular/Plural`, `checkFailed`, `toastClean` and
+  `toastIssuesSingular/Plural`, with `{count}` / `{total}` filled by `t()`.
+- The backup and restore toasts in the same section were hardcoded too
+  ("Backup downloaded", "Backup failed", "Restored N records from backup (vN)",
+  "Import failed"). They now use `settings.backupDone`, `backupFailed`,
+  `importBackupDoneSingular/Plural`, and the existing
+  `settings.data.importFailed` ("Import failed: {error}").
+- A scan that stopped part-way said "Found 0 issues…" and toasted
+  "0 data integrity issues found": `runIntegrityCheck` reports failures in
+  `result.error` instead of throwing, so the page's `catch` never ran. An
+  `error` now takes the failure path (toast `integrity.checkFailed`, the row
+  goes back to its default description).
+
+### Changed
+- English copy reads correctly for 0 and 1 records: "No issues found. Records
+  checked: 42." / "Found 1 issue. Records checked: 1." The old "All 1 records
+  verified" and "All 0 records verified" are gone.
+- Arabic plurals use a "label: {count}" phrasing (e.g. "عدد المشكلات: {count}")
+  that reads correctly for 2, 3–10 and 11+, as in the orphaned-records banner.
+- The result line is stored as numbers and worded at render, so switching
+  language on the Settings page rewords it. It used to stay in the language it
+  was produced in.
+- `DataToolsSection` moved to its own file, as `AdvancedFeaturesSection` did,
+  so it can be tested without the whole Settings page.
+- `Translations` now lists the integrity-check keys and every Data Tools key
+  under `settings`, so `tsc -b` fails if either locale drops one (checked by
+  deleting `integrity.checkClean` from ar.json).
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-7: the clients index answers "who owes me, and who is late"
 
 **Scope:** `src/pages/clients/ClientsPage.tsx`, `src/components/clients/clientIndexRows.ts` (new),

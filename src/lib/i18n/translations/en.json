@@ -613,9 +613,13 @@
     "backup": "Export Backup",
     "backupDesc": "Download a full backup of all your data as JSON.",
     "backupExport": "Export Backup",
+    "backupDone": "Backup downloaded",
+    "backupFailed": "Backup failed",
     "importBackup": "Import Backup",
     "importBackupDesc": "Restore from a previously exported backup file.",
     "importBackupBtn": "Import Backup",
+    "importBackupDoneSingular": "Restored {count} record from backup (v{version})",
+    "importBackupDonePlural": "Restored {count} records from backup (v{version})",
     "exportReceipts": "Export receipts",
     "exportReceiptsDesc": "{count} uploaded receipt files, as a ZIP with one folder per profile and month",
     "exportReceiptsNone": "No uploaded receipts in this database",
@@ -1494,6 +1498,13 @@
     "orphanedRecordSingular": "{count} record isn't assigned to any profile.",
     "orphanedRecordPlural": "{count} records aren't assigned to any profile.",
     "reviewNow": "Review now",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "checkClean": "No issues found. Records checked: {total}.",
+    "checkIssuesSingular": "Found {count} issue. Records checked: {total}.",
+    "checkIssuesPlural": "Found {count} issues. Records checked: {total}.",
+    "checkFailed": "Integrity check failed",
+    "toastClean": "Data integrity check passed",
+    "toastIssuesSingular": "{count} data integrity issue found",
+    "toastIssuesPlural": "{count} data integrity issues found"
   }
 }

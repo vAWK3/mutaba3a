@@ -613,9 +613,13 @@
     "backup": "تصدير نسخة احتياطية",
     "backupDesc": "تحميل نسخة احتياطية كاملة من جميع بياناتك بصيغة JSON.",
     "backupExport": "تصدير نسخة احتياطية",
+    "backupDone": "تم تنزيل النسخة الاحتياطية",
+    "backupFailed": "فشل تصدير النسخة الاحتياطية",
     "importBackup": "استيراد نسخة احتياطية",
     "importBackupDesc": "استعادة من ملف نسخة احتياطية تم تصديره مسبقاً.",
     "importBackupBtn": "استيراد نسخة احتياطية",
+    "importBackupDoneSingular": "تمت استعادة سجل واحد من النسخة الاحتياطية (الإصدار {version})",
+    "importBackupDonePlural": "تمت الاستعادة من النسخة الاحتياطية (الإصدار {version})، عدد السجلات: {count}",
     "exportReceipts": "تصدير الإيصالات",
     "exportReceiptsDesc": "{count} ملف إيصال مرفوع، كملف ZIP بمجلد لكل ملف تعريف وشهر",
     "exportReceiptsNone": "لا توجد إيصالات مرفوعة في قاعدة البيانات",
@@ -1529,6 +1533,13 @@
     "orphanedRecordSingular": "سجل واحد غير مرتبط بأي ملف تجاري.",
     "orphanedRecordPlural": "عدد السجلات غير المرتبطة بأي ملف تجاري: {count}",
     "reviewNow": "مراجعة الآن",
-    "dismiss": "إغلاق"
+    "dismiss": "إغلاق",
+    "checkClean": "لا توجد مشكلات. عدد السجلات المفحوصة: {total}",
+    "checkIssuesSingular": "تم العثور على مشكلة واحدة. عدد السجلات المفحوصة: {total}",
+    "checkIssuesPlural": "عدد المشكلات: {count}، عدد السجلات المفحوصة: {total}",
+    "checkFailed": "فشل فحص سلامة البيانات",
+    "toastClean": "اكتمل فحص سلامة البيانات دون مشكلات",
+    "toastIssuesSingular": "تم العثور على مشكلة واحدة في سلامة البيانات",
+    "toastIssuesPlural": "عدد مشكلات سلامة البيانات: {count}"
   }
 }
