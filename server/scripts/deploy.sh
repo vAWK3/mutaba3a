@@ -5,15 +5,18 @@
 #
 # Everything that can run on this machine does (ADR-026), the same way
 # Malafat's `pnpm release` works:
-#   1. docker build (linux/amd64) with your local daemon, docker push to
-#      Artifact Registry as mutaba3a-api:<short git sha>.
-#   2. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy`
+#   1. npm run build:hosted at the repo root (MUT-45): the hosted-portal
+#      bundle, copied into this build context as dist-hosted/.
+#   2. docker build (linux/amd64) with your local daemon, docker push to
+#      Artifact Registry as mutaba3a-api:<short git sha>. The image serves
+#      dist-hosted/ from the same origin as the API (hosted-portal.md §9).
+#   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy`
 #      from this directory against the production database. The proxy is
 #      stopped afterwards. A failed migration stops here; the service is not
 #      touched.
-#   3. terraform apply -var image_tag=<sha>: the service rolls to the new
+#   4. terraform apply -var image_tag=<sha>: the service rolls to the new
 #      image with SERVICE_VERSION=<sha>. Everything else is reconciled too.
-#   4. scripts/smoke.ts against the service URL.
+#   5. scripts/smoke.ts against the service URL, API and portal both.
 #
 # Prerequisites (DEPLOYMENT.md §1): gcloud (authenticated), docker daemon
 # running, cloud-sql-proxy v2, terraform >= 1.5, node 22, and
@@ -30,6 +33,7 @@ AUTO_APPROVE="${AUTO_APPROVE:-0}"
 PROXY_PORT="${PROXY_PORT:-5440}"
 
 SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "${SERVER_DIR}/.." && pwd)"
 TF_DIR="${SERVER_DIR}/infrastructure/terraform"
 SHORT_SHA="${IMAGE_TAG:-$(git -C "${SERVER_DIR}" rev-parse --short HEAD)}"
 REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}"
@@ -51,8 +55,10 @@ need terraform "brew install terraform"
 need node "node 22"
 docker info >/dev/null 2>&1 || die "the docker daemon is not running"
 [[ -f "${TF_DIR}/${ENVIRONMENT}.tfvars" ]] || die "missing ${TF_DIR}/${ENVIRONMENT}.tfvars (copy ${ENVIRONMENT}.tfvars.example)"
-if [[ -n "$(git -C "${SERVER_DIR}" status --porcelain -- . 2>/dev/null)" && -z "${IMAGE_TAG:-}" ]]; then
-  die "server/ has uncommitted changes; commit first so the image tag names what you deploy (or pass IMAGE_TAG=)"
+# The image now bundles the hosted-portal build (MUT-45) alongside server/, so
+# the whole repo must be clean for the tag to name everything that went in.
+if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" && -z "${IMAGE_TAG:-}" ]]; then
+  die "the repo has uncommitted changes; commit first so the image tag names what you deploy (or pass IMAGE_TAG=)"
 fi
 
 info "environment=${ENVIRONMENT} project=${GCP_PROJECT_ID} region=${GCP_REGION} tag=${SHORT_SHA}"
@@ -77,7 +83,18 @@ SQL_CONNECTION="$(terraform output -raw cloud_sql_connection_name)"
 popd >/dev/null
 
 # ---------------------------------------------------------------------------
-# 1. Build locally, push
+# 1. Build the hosted-portal bundle, copy it into the Docker build context
+# ---------------------------------------------------------------------------
+pushd "${REPO_ROOT}" >/dev/null
+info "building the hosted-portal bundle (npm run build:hosted)"
+npm ci --no-audit --no-fund
+npm run --silent build:hosted
+popd >/dev/null
+rm -rf "${SERVER_DIR}/dist-hosted"
+cp -r "${REPO_ROOT}/dist-hosted" "${SERVER_DIR}/dist-hosted"
+
+# ---------------------------------------------------------------------------
+# 2. Build the image locally, push
 # ---------------------------------------------------------------------------
 pushd "${SERVER_DIR}" >/dev/null
 info "building ${IMAGE} with the local docker daemon"
@@ -87,7 +104,7 @@ info "pushing ${IMAGE}"
 docker push "${IMAGE}"
 
 # ---------------------------------------------------------------------------
-# 2. Migrate from this machine through the Cloud SQL Auth Proxy
+# 3. Migrate from this machine through the Cloud SQL Auth Proxy
 # ---------------------------------------------------------------------------
 info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT}"
 cloud-sql-proxy "${SQL_CONNECTION}" --port "${PROXY_PORT}" --quiet &
@@ -103,7 +120,7 @@ kill "${PROXY_PID}" 2>/dev/null || true; PROXY_PID=""
 popd >/dev/null
 
 # ---------------------------------------------------------------------------
-# 3. Roll the service and reconcile everything else
+# 4. Roll the service and reconcile everything else
 # ---------------------------------------------------------------------------
 pushd "${TF_DIR}" >/dev/null
 info "applying the full stack at ${SHORT_SHA}"
@@ -113,7 +130,7 @@ popd >/dev/null
 [[ -n "${SERVICE_URL}" ]] || die "terraform did not create the Cloud Run service (no service_url output); fix the error above and re-run this script — everything already created is kept"
 
 # ---------------------------------------------------------------------------
-# 4. Smoke
+# 5. Smoke (API and portal both — see server/src/smoke.ts)
 # ---------------------------------------------------------------------------
 info "smoke-testing ${SERVICE_URL}"
 pushd "${SERVER_DIR}" >/dev/null

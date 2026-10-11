@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -8,6 +11,19 @@ import { parseBaseUrl, runSmoke, type Fetch } from '../smoke.js';
 const ADMIN_TOKEN = 'test-admin-token-with-at-least-32-characters';
 const BASE = 'https://mutaba3a-api.example';
 
+// A real deployment always bakes a portal build into the image (MUT-45), so
+// every harness here gets one too, the same way scripts/deploy.sh does.
+let portalDistDir: string;
+
+beforeAll(async () => {
+  portalDistDir = await mkdtemp(join(tmpdir(), 'mutaba3a-smoke-portal-'));
+  await writeFile(join(portalDistDir, 'index.html'), '<!doctype html><html><body>portal shell</body></html>');
+});
+
+afterAll(async () => {
+  await rm(portalDistDir, { recursive: true, force: true });
+});
+
 function appFetch(version = '0.1.0-test', store = new MemoryLedgerStore()): Fetch {
   const app = createApp({
     store,
@@ -16,6 +32,7 @@ function appFetch(version = '0.1.0-test', store = new MemoryLedgerStore()): Fetc
     adminToken: ADMIN_TOKEN,
     keyEnvironment: 'test',
     version,
+    portal: { distDir: portalDistDir },
   });
   return async (input, init) => app.request(input.slice(BASE.length), init);
 }
@@ -26,12 +43,28 @@ describe('post-deploy smoke checks', () => {
     expect(results.map((r) => [r.name, r.ok])).toEqual([
       ['GET /health', true],
       ['SERVICE_VERSION matches the deployed tag', true],
+      ['GET / (hosted portal)', true],
       ['GET /ready (database reachable)', true],
       ['GET /openapi.json', true],
       ['GET /v1/integration without a key → 401 UNAUTHENTICATED', true],
       ['GET /v1/integration with a forged key → 401', true],
       ['POST /admin/v1/organizations without X-Admin-Token → 401', true],
     ]);
+  });
+
+  it('fails the portal check when the service has no portal configured (pre-MUT-45 shape)', async () => {
+    const apiOnly = createApp({
+      store: new MemoryLedgerStore(),
+      logger: pino({ level: 'silent' }),
+      rateLimiter: new SlidingWindowRateLimiter(1000),
+      adminToken: ADMIN_TOKEN,
+      keyEnvironment: 'test',
+      version: '0.1.0-test',
+    });
+    const fetchApiOnly: Fetch = async (input, init) => apiOnly.request(input.slice(BASE.length), init);
+    const results = await runSmoke({ baseUrl: BASE, fetch: fetchApiOnly });
+    const portal = results.find((r) => r.name === 'GET / (hosted portal)');
+    expect(portal?.ok).toBe(false);
   });
 
   it('fails the version check when the deployed tag is not the expected one', async () => {
