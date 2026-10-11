@@ -194,6 +194,9 @@ export const categoryRepo = {
 };
 
 // Transaction Repository
+// Fields an entry's payment records own once it has any (ADR-039)
+const PAYMENT_STATE_KEYS = ['status', 'paidAt', 'receivedAmountMinor'] as const;
+
 export const transactionRepo = {
   async list(filters: QueryFilters = {}): Promise<TransactionDisplay[]> {
     const transactions = await db.transactions.toArray();
@@ -369,31 +372,47 @@ export const transactionRepo = {
       }
     }
 
-    const newAmountMinor = data.amountMinor;
-    if (newAmountMinor === undefined || newAmountMinor === existing.amountMinor) {
+    const paymentStateSent = PAYMENT_STATE_KEYS.some((key) => key in data);
+    const amountChanged = data.amountMinor !== undefined && data.amountMinor !== existing.amountMinor;
+    const currencyChanged = data.currency !== undefined && data.currency !== existing.currency;
+    if (!paymentStateSent && !amountChanged && !currencyChanged) {
       await db.transactions.update(id, { ...data, updatedAt: nowISO() });
       return;
     }
 
-    // Payment records own received/status/paidAt (ADR-030, MUT-5): a new amount
-    // may not fall below what they add up to, and the entry's payment state is
-    // re-derived from them so it can't claim paid with money still owed.
+    // Payment records own received/status/paidAt (ADR-030, ADR-039). With live
+    // records, a caller can't set those three, can't move the payments into
+    // another currency, and can't cut the amount below what they add up to;
+    // the payment state is then re-derived from the records.
     await db.transaction('rw', [db.transactions, db.paymentRecords], async () => {
       const records = await db.paymentRecords
         .where('transactionId')
         .equals(id)
         .filter((r) => !r.deletedAt)
         .toArray();
+      if (records.length === 0) {
+        await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+        return;
+      }
+
       const recordedMinor = records.reduce((sum, r) => sum + r.amountMinor, 0);
-      if (newAmountMinor < recordedMinor) {
+      if (currencyChanged) {
+        throw new PaymentRecordError(
+          `Payment amount already recorded in ${existing.currency}; the currency can't change`,
+          { transactionId: id }
+        );
+      }
+      if (amountChanged && data.amountMinor! < recordedMinor) {
         throw new PaymentRecordError(
           `Payment amount already recorded (${recordedMinor / 100} ${existing.currency}) exceeds the new amount`,
           { transactionId: id }
         );
       }
 
-      await db.transactions.update(id, { ...data, updatedAt: nowISO() });
-      if (records.length > 0) await recalculateReceivedAmount(id);
+      const changes: Partial<Transaction> = { ...data };
+      for (const key of PAYMENT_STATE_KEYS) delete changes[key];
+      await db.transactions.update(id, { ...changes, updatedAt: nowISO() });
+      if (amountChanged || paymentStateSent) await recalculateReceivedAmount(id);
     });
   },
 

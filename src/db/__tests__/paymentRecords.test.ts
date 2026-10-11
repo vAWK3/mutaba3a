@@ -560,6 +560,44 @@ describe('paymentRecordRepo', () => {
       expect(tx?.receivedAmountMinor).toBeUndefined();
     });
 
+    it('re-derives status, paidAt and received instead of taking them from the caller', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 4000, paidAt: '2024-01-20' });
+
+      // e.g. a form that wrote payment state before the records had loaded
+      await transactionRepo.update(incomeId, {
+        status: 'paid',
+        paidAt: '2024-02-01T00:00:00.000Z',
+        receivedAmountMinor: 10000,
+      });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.status).toBe('unpaid');
+      expect(tx?.receivedAmountMinor).toBe(4000);
+      expect(tx?.paidAt).toBeUndefined();
+    });
+
+    it('refuses a currency change once payments are recorded', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 4000, paidAt: '2024-01-20' });
+
+      await expect(transactionRepo.update(incomeId, { currency: 'ILS' })).rejects.toBeInstanceOf(PaymentRecordError);
+      expect((await transactionRepo.get(incomeId))?.currency).toBe('USD');
+    });
+
+    it('allows a currency change while no payment is recorded', async () => {
+      await transactionRepo.update(incomeId, { currency: 'ILS' });
+      expect((await transactionRepo.get(incomeId))?.currency).toBe('ILS');
+    });
+
+    it('still lets a legacy overpaid entry be retitled when its amount is unchanged', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+      // An entry saved before the guard existed, with more recorded than its total
+      await db.transactions.update(incomeId, { amountMinor: 4000 });
+
+      await transactionRepo.update(incomeId, { title: 'Renamed', amountMinor: 4000 });
+
+      expect((await transactionRepo.get(incomeId))?.title).toBe('Renamed');
+    });
+
     it('ignores deleted records when checking the new amount', async () => {
       const record = await paymentRecordRepo.create({
         transactionId: incomeId,
