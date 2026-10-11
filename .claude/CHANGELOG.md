@@ -28,6 +28,34 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — Orphaned-records banner shows text, not i18n keys
+
+**Scope:** `src/components/layout/OrphanedRecordsBanner.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` (new),
+`.claude/{CHANGELOG,TEST_PLAN}.md`.
+
+### Fixed
+- With records saved without a `profileId`, the banner read
+  "8 integrity.orphanedRecordPlural" and its link "integrity.reviewNow", in
+  both languages (seen 2026-10-11 on a dev build). Neither locale file had an
+  `integrity` section. The `|| 'fallback'` strings in the banner never ran,
+  because `t()` returns the key itself when one is missing.
+- Added `integrity.orphanedRecordSingular`, `orphanedRecordPlural`,
+  `reviewNow` and `dismiss` to en.json and ar.json, and the section to the
+  `Translations` type, so `tsc -b` fails if either file drops it.
+
+### Changed
+- The banner passes `{ count }` to `t()` instead of printing the number before
+  the translated phrase, so each language places the number itself. The
+  Arabic plural is a "count: N" label ("عدد السجلات غير المرتبطة بأي ملف
+  تجاري: {count}"). It reads correctly for 2, 3–10 and 11+, which a fixed
+  "{count} سجلات" does not.
+- The dismiss button's `aria-label` is translated (was hardcoded "Dismiss").
+  The dead fallback strings are gone.
+
+---
+
 ## [Unreleased] - 2026-10-11 — Release commit carries both lockfiles (v0.0.65 Windows build failure)
 
 **Scope:** `deploy.sh`, `scripts/release.ts`, `scripts/release-files.ts` (new),
