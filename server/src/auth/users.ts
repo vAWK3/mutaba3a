@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { hash as argon2Hash, verify as argon2Verify } from '@node-rs/argon2';
 
 /**
- * Human principals on the hosted service (ADR-033, MUT-37). Users are issued by
+ * Human principals on the hosted service (ADR-037, MUT-37). Users are issued by
  * an operator only — there is no signup, invite or self-service reset — so the
  * only secrets this module creates are operator-delivered one-time passwords.
  */

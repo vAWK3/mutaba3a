@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
 /**
- * Browser sessions on the hosted service (MUT-38, ADR-033 decisions 3–4,
+ * Browser sessions on the hosted service (MUT-38, ADR-037 decisions 3–4,
  * hosted-portal.md §4). A session is a server-side record; the browser holds
  * only an opaque random token in an httpOnly cookie on the API's own origin,
  * and the store holds only its HMAC digest.

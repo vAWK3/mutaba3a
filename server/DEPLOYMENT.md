@@ -226,7 +226,7 @@ page): `npm run provision -- --url "$URL" --organization-id <uuid> --key-name "M
 
 ### 4a. Before the first deploy that contains MUT-38 (blocking)
 
-Sessions add the audit actor `USER` (ADR-033 decision 9). Malafat reads
+Sessions add the audit actor `USER` (ADR-037 decision 9). Malafat reads
 `GET /v1/audit`; its client does no runtime validation and its history view
 only tests `actorType === "SYSTEM"`, so a `USER` row cannot break it (checked
 2026-10-11). Still, refresh Malafat's vendored contract in the same release
@@ -248,7 +248,7 @@ The service reads `SESSION_TOKEN_PEPPER` from the Secret Manager secret
 The first `./scripts/deploy.sh` after this change creates it; nothing to do by
 hand.
 
-Portal users are operator-issued exactly like keys (ADR-033, TD-018): there is
+Portal users are operator-issued exactly like keys (ADR-037, TD-018): there is
 no signup, invite or password-reset route in any environment. The one-time
 password is printed **once**; deliver it like a key secret.
 
@@ -334,7 +334,7 @@ statuses below are what the code supports, for you to apply.
 | **MUT-33** Frontend CI | Unchanged | `server-ci.yml` covers only `server/`; the desktop/PWA workflow is still MUT-33's. |
 | **TD-019** No CI for `server/` | Resolved | `.github/workflows/server-ci.yml`. |
 | **TD-017** Rate limiter per instance | Open, mitigated | `max_instances = 1` enforced by Terraform validation. |
-| **TD-018** Operator-provisioned keys and users | Accepted (product decision, ADR-033) | `npm run provision` and `npm run provision:user` are the only paths; no self-serve flow in any environment. |
+| **TD-018** Operator-provisioned keys and users | Accepted (product decision, ADR-037) | `npm run provision` and `npm run provision:user` are the only paths; no self-serve flow in any environment. |
 | **MAL-939** Money v1 (epic) | In progress | M1 code merged; deploy wiring (`MUTABA3A_API_URL` secret in the release contract) landed; waiting on steps 2–5 above. |
 | **MAL-870** Add-on entitlement + OAuth money scopes | Open | Still the product owner's call; gate is `roles: ["PARTNER"]` only. |
 | **MAL-869 / MAL-871** CRM-side spikes | Done | Answered by the audit and the implemented client. |

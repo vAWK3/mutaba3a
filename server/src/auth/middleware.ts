@@ -11,7 +11,7 @@ import { isSameOriginRequest, sessionCookieName, sessionDigest } from './session
 import { sessionScopes } from './writability.js';
 
 /**
- * Two principals on /v1 (ADR-033 decisions 3–6):
+ * Two principals on /v1 (ADR-037 decisions 3–6):
  *  - an organization API key (Malafat's backend), which implies its organization;
  *  - a user session (the hosted portal), which selects one of the user's
  *    memberships per request with X-Mutaba3a-Profile.
@@ -210,7 +210,7 @@ async function authenticateSession(c: Context<AppEnv>, token: string, options: A
   return { user, session };
 }
 
-/** ADR-025 §2 as amended by ADR-033: a session names one of its memberships; anything else is indistinguishable from absent. */
+/** ADR-025 §2 as amended by ADR-037: a session names one of its memberships; anything else is indistinguishable from absent. */
 async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<SessionAuth> {
   const requested = c.req.header('x-mutaba3a-profile');
   if (!requested) {
@@ -263,7 +263,7 @@ export function keyAuth(c: AuthReader): ApiKeyAuth {
 }
 
 /**
- * Who lazy posting is attributed to (ADR-033 decision 8): the calling key for
+ * Who lazy posting is attributed to (ADR-037 decision 8): the calling key for
  * Malafat, SYSTEM for a session — catching up due items is the reconcile job's
  * work done early, not the person writing the ledger.
  */

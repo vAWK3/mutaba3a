@@ -22,7 +22,7 @@ import {
 import { serializeMembership, serializeUser } from '../serializers.js';
 
 /**
- * Operator-only user accounts (MUT-37, ADR-033 decision 1). Every route sits
+ * Operator-only user accounts (MUT-37, ADR-037 decision 1). Every route sits
  * under /admin/ behind MUTABA3A_ADMIN_TOKEN; nothing here is reachable by an
  * API key or, later, a session. There is deliberately no signup, invite or
  * self-service reset anywhere in the service (no-self-registration.test.ts).

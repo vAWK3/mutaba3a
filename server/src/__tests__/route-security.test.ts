@@ -5,7 +5,7 @@ import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
 /**
- * ADR-033 decision 5: every /v1 route declares the principals it accepts in its
+ * ADR-037 decision 5: every /v1 route declares the principals it accepts in its
  * OpenAPI `security`, and authenticate() enforces exactly that declaration.
  * Everything here is generated from the published document, so a new route is
  * covered the moment it exists.

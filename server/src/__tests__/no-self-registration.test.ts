@@ -5,7 +5,7 @@ import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
 /**
- * ADR-033 decision 1 / TD-018: accounts are operator-issued only. No route
+ * ADR-037 decision 1 / TD-018: accounts are operator-issued only. No route
  * outside the operator surface (`/admin/`) may let anyone sign up, register,
  * be invited or reset a password, in any environment. This walks both the
  * router and the published contract so neither can grow one unnoticed.

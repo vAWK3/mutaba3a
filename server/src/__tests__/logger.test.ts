@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLogger } from '../logger.js';
 
 /**
- * TD-031 / MUT-38: redaction is the only place credential hygiene is enforced
+ * TD-039 / MUT-38: redaction is the only place credential hygiene is enforced
  * for logs. pino's `*.x` wildcard matches one level, so the paths are spelled
  * out to the depths our objects reach; this pins every one of them.
  */

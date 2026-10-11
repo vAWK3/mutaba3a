@@ -185,7 +185,7 @@ resource "google_secret_manager_secret_version" "admin_token" {
   secret_data = random_password.admin_token.result
 }
 
-# HMAC key for hosted-portal session digests (MUT-38, ADR-033). Generated here,
+# HMAC key for hosted-portal session digests (MUT-38, ADR-037). Generated here,
 # never a tfvars value. Rotating it (`-replace=random_password.session_pepper`,
 # then redeploy) signs every portal user out at once.
 resource "random_password" "session_pepper" {

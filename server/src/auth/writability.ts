@@ -1,7 +1,7 @@
 import { isScope, type Scope } from './scopes.js';
 
 /**
- * The writability matrix (hosted-portal.md §5, ADR-033 decision 7) — the one
+ * The writability matrix (hosted-portal.md §5, ADR-037 decision 7) — the one
  * table that says what each principal may do per domain on a hosted profile.
  * The brief's table between the `writability-matrix` markers and this const
  * must stay identical (MUT-39 drift test).

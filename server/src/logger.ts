@@ -6,7 +6,7 @@ import pino, { type DestinationStream, type Logger } from 'pino';
  * `redact` is the only place credential hygiene is enforced for logs. pino's
  * `*.x` wildcard matches exactly one level, so every sensitive key is spelled
  * out at depths 0–3 (deeper than any object this service logs); the request
- * cookie and response Set-Cookie headers are named explicitly. TD-031: pinned
+ * cookie and response Set-Cookie headers are named explicitly. TD-039: pinned
  * by `__tests__/logger.test.ts`.
  */
 const SENSITIVE_KEYS = ['authorization', 'cookie', 'set-cookie', 'password', 'token', 'secret', 'apiKey', 'key', 'x-admin-token', 'sessionToken'];

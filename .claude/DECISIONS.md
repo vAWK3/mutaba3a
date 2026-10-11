@@ -31,7 +31,7 @@
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
 | ADR-021 | Question-First UX Redesign | Active | 2026-03 |
 | ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
-| ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth (account clause overridden for the hosted service by ADR-033) | Active | 2026-10 |
+| ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth (account clause overridden for the hosted service by ADR-037) | Active | 2026-10 |
 | ADR-024 | Override of ADR-005: A Hosted Mutaba3a Service Exists Beside the Local-First App | Active | 2026-10 |
 | ADR-025 | Hosted Financial API (Money v1 Option B): Organization-Scoped Ledger Service, Malafat as API-Key Client | Active | 2026-10 |
 | ADR-026 | Hosted API Deployment: Terraform Owns the Stack Including the Image Tag, One Local Script Rolls It (Local Build, Local Migrations), One Instance Until TD-017 | Active | 2026-10 |
@@ -41,7 +41,7 @@
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
-| ADR-033 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
+| ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
 
 ---
 
@@ -703,12 +703,12 @@ Sync) remain Active and in conflict with cloud sync. Overriding them is MUT-30's
 job and must happen before any cloud sync ships. This ADR covers only how a
 client authenticates when that work is approved.
 
-> **Override note (2026-10-11, ADR-033).** The clause "builds no account
+> **Override note (2026-10-11, ADR-037).** The clause "builds no account
 > system, no password storage, and no session of its own" no longer describes
-> the hosted service: ADR-033 gives `server/` operator-provisioned users,
+> the hosted service: ADR-037 gives `server/` operator-provisioned users,
 > argon2id password hashes and server-side sessions for the hosted portal.
 > The rest of this ADR stands — it still governs how the *desktop* app
-> authenticates to a Malafat tenant (MUT-28), and no part of ADR-033 touches
+> authenticates to a Malafat tenant (MUT-28), and no part of ADR-037 touches
 > the desktop.
 
 ---
@@ -1308,7 +1308,7 @@ the reconcile now makes visible (TD-023).
 
 ---
 
-## ADR-033: Hosted Users and Sessions — A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix
+## ADR-037: Hosted Users and Sessions — A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix
 
 **Status**: Active (extends ADR-025; partial override of ADR-023 for the
 hosted service; ADR-013 untouched) — approved by the owner with
@@ -1386,7 +1386,7 @@ and gives no hosted web login. Full design, cost and test strategy:
 **ADR-013 is untouched.** Nothing in this decision writes the op-log, reads
 it, or gives it a remote peer; local and hosted profiles share no data, so
 there is nothing to sync. Making the hosted service a sync target remains a
-separate ADR gated on MUT-27 and TD-015 (ADR-024). TD-029 records that the
+separate ADR gated on MUT-27 and TD-015 (ADR-024). TD-037 records that the
 op-log has no `profileId` concept at all, so profile-selective sync is not
 even expressible today.
 

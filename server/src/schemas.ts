@@ -170,7 +170,7 @@ export const AuditEventSchema = z
 
 export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).openapi('AuditList');
 
-// ---- Admin: operator-provisioned users (MUT-37, ADR-033) --------------------
+// ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
 
@@ -236,7 +236,7 @@ export const RemoveMembershipResponseSchema = z
 
 export const UserStatusResponseSchema = z.object({ user: UserSummarySchema }).openapi('UserStatusResponse');
 
-// ---- Sessions and the signed-in user (MUT-38, ADR-033) ---------------------
+// ---- Sessions and the signed-in user (MUT-38, ADR-037) ---------------------
 
 export const SignInRequestSchema = z
   .object({

@@ -808,7 +808,7 @@ database; **410 passed, 0 skipped** with `npm run test:db` against an isolated
 `mutaba3a_test_mut34` database (users contract green on Postgres). Root app
 unchanged: 2,149 passed, 5 skipped. One pre-existing flake seen
 under full-suite load: `routes-m6` "lists the organization's events by entity"
-(TD-032), never reproduced in isolation (0/20).
+(TD-040), never reproduced in isolation (0/20).
 
 ### MUT-38 — session auth beside API keys (`server/`)
 

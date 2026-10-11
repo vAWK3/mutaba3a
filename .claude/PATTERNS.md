@@ -1253,7 +1253,7 @@ second time); session-reachable handlers read `c.get('auth').organization` and
 attribute lazy posting with `postingActorOf(c)` (SYSTEM for a session). Never
 read `auth.apiKey` directly.
 
-### Log redaction is spelled out per depth (MUT-38, TD-031)
+### Log redaction is spelled out per depth (MUT-38, TD-039)
 pino's `*.x` matches one level only. `logger.ts` generates every sensitive key
 at depths 0–3; add a key to `SENSITIVE_KEYS`, never a one-off path, and the
 logger test covers it automatically.

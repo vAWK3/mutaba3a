@@ -191,7 +191,7 @@ enum UserStatus {
   DISABLED
 }
 
-/// A person who may sign in to the hosted portal (MUT-37, ADR-033). Issued by
+/// A person who may sign in to the hosted portal (MUT-37, ADR-037). Issued by
 /// an operator only; there is no signup, invite or self-service reset. Not
 /// organization-scoped: access is the Membership join.
 model User {
@@ -231,7 +231,7 @@ model Membership {
   @@map("memberships")
 }
 
-/// A server-side browser session (MUT-38, ADR-033). The cookie carries an
+/// A server-side browser session (MUT-38, ADR-037). The cookie carries an
 /// opaque token; only its HMAC-SHA256 digest (SESSION_TOKEN_PEPPER) is stored.
 model Session {
   id                String    @id @default(uuid()) @db.Uuid

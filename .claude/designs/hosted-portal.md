@@ -1,7 +1,7 @@
 # Hosted Mutaba3a — portal architecture, profile source model, writability matrix (design brief)
 
 - **Date:** 2026-10-11 · **Status:** approved by the owner as written (2026-10-11) — gates MUT-37, MUT-38, MUT-39, MUT-42, MUT-43, MUT-44, MUT-45
-- **Tickets:** MUT-36 (this brief + ADR-033) under epic MUT-34 · **Builds on:** ADR-024, ADR-025, ADR-026, MUT-35 (repository seam), M6 summaries, M8 overview IA (`money-v1-m8-overview-ia.md`, wireframe state 5)
+- **Tickets:** MUT-36 (this brief + ADR-037) under epic MUT-34 · **Builds on:** ADR-024, ADR-025, ADR-026, MUT-35 (repository seam), M6 summaries, M8 overview IA (`money-v1-m8-overview-ia.md`, wireframe state 5)
 - **Repo side:** Mutaba3a only. `server/` gains a user principal, sessions, an access join and one enforced matrix; the root package gains a third build target (`hosted`) beside `web` and `desktop`. **Malafat unchanged** except a vendored-contract refresh (§4.6).
 - **Owner decisions this brief assumes (2026-10-10, epic MUT-34):** a profile has a source, `local` or `hosted`; neither syncs to the other; on a hosted profile income/receivables/payments are read-only and expenses are writable server-side; accounts are operator-issued only, no signup/invite/reset route in any environment; "sign in with Malafat" is not v1.
 
@@ -14,8 +14,8 @@ MUT-36 acceptance, and where each one is met:
 - `.claude/designs/hosted-portal.md` exists in the house format → this file.
 - Rendering decision with rejected alternatives and cost → §2.
 - Writability matrix a test suite can be written from → §5 (machine-parseable block; MUT-39's drift test reads it).
-- ADR extending ADR-025, stating ADR-013 is untouched and hosted profile data is a separate dataset → ADR-033 in `DECISIONS.md`.
-- `TECH_DEBT.md` records that the sync op-log has no `profileId` awareness → TD-029.
+- ADR extending ADR-025, stating ADR-013 is untouched and hosted profile data is a separate dataset → ADR-037 in `DECISIONS.md`.
+- `TECH_DEBT.md` records that the sync op-log has no `profileId` awareness → TD-037.
 - Concrete enough for `/eng-ticket` to plan the build stories → §4–§9, and the re-cuts in §10.
 
 ## 2. Rendering surface — decision: a hosted-only build target in this repo, served same-origin by the API
@@ -309,7 +309,7 @@ The notice reads `profile.access`, not a hard-coded list. If the server ever ans
   - It falls back to `other`.
   - Adding an ICU parser was rejected: it adds bundle weight and conflicts with ADR-019 for one helper's worth of need.
   - `tp` is registered in `PATTERNS.md`.
-- **Parity.** A new full-tree parity test runs over the `hosted.*` subtree only. It checks the same key set, the same leaf types, the same `{var}` names per key, and all six plural keys in `ar` wherever `en` has a plural. The existing en/ar drift elsewhere (30 `retainers.*` keys) is recorded as TD-030, not fixed here.
+- **Parity.** A new full-tree parity test runs over the `hosted.*` subtree only. It checks the same key set, the same leaf types, the same `{var}` names per key, and all six plural keys in `ar` wherever `en` has a plural. The existing en/ar drift elsewhere (30 `retainers.*` keys) is recorded as TD-038, not fixed here.
 - Dates use `Intl.DateTimeFormat` with the organization's `timezone` for date-only fields (server dates are organization-calendar dates, M6). Amounts follow §7.3.
 
 ## 8. Local profiles are unaffected — demonstrated, not asserted
@@ -322,7 +322,7 @@ Each claim names the check that fails if it stops being true.
 | The portal bundle contains no Dexie, no IndexedDB, no op-log | the same script asserts `dist-hosted` has no `indexedDB` or `Dexie` and no `sync/` module ids; ESLint `no-restricted-imports` zone forbids `src/hosted/**` → `src/db/**`, `src/sync/**`, `src/hooks/**`, `src/components/layout/**`, `src/components/drawers/**`, `src/lib/stores*` |
 | No sign-up/reset affordance in the portal | `check-bundles` asserts `dist-hosted` contains none of `sign up`, `create account`, `forgot`, `reset password`, `invite` (case-insensitive, en and ar equivalents) |
 | Dexie schema, `BusinessProfile`, profile store and switcher are unchanged | no edits to `src/db/database.ts`, `src/types/index.ts` (profile types), `src/lib/profileStore.ts`, `ProfileSwitcher.tsx`; the existing suite (≈130 files) passes unchanged |
-| The op-log is unchanged | no edits under `src/sync/`; TD-029 records that it has no `profileId` concept at all |
+| The op-log is unchanged | no edits under `src/sync/`; TD-037 records that it has no `profileId` concept at all |
 | Root files touched outside new code are additive | `vite.config.ts` gains a `hosted` branch (the `web`/`desktop` branches unchanged, asserted by snapshotting their resolved config in a test); `en.json`/`ar.json` gain only `hosted.*`; `package.json` gains `build:hosted`, `hosted:types:check`, `test:bundles` |
 | The local app's network behaviour is unchanged | `check-bundles` asserts the `web`/`desktop` bundles contain no new origins compared with a committed allowlist (today: Frankfurter FX, GitHub releases) |
 
@@ -342,7 +342,7 @@ These replace the "thin" scope text in Jira once the owner approves the brief.
 
 - **MUT-37 (accounts):** §3.1 models + migration, §3.2 admin routes and scripts, argon2id, the route-inventory "no signup/reset" test. Session and portal work is out.
 - **MUT-38 (sessions):** §4 in full: cookie transport, CSRF rule, expiry, sign-in and lockout, the `authenticate()` middleware and `security` declarations, the `AuthContext` union and `actorOf`, `GET /v1/me`, error codes, the `USER` actor, config and Terraform secret, the Malafat vendored-contract check.
-  - **Correction to its AC:** there is **no existing log-redaction test**. `logger.ts` redaction is untested, and pino's `*.key` wildcards match one level only (TD-031). MUT-38 *creates* the test, covering the session cookie, the `Set-Cookie` header and `password`, and fixes the depth.
+  - **Correction to its AC:** there is **no existing log-redaction test**. `logger.ts` redaction is untested, and pino's `*.key` wildcards match one level only (TD-039). MUT-38 *creates* the test, covering the session cookie, the `Set-Cookie` header and `password`, and fixes the depth.
 - **MUT-39 (writability):** §5 in full: the `const` matrix, effective scopes, `READ_ONLY_PROFILE` mapping, per-request store and the exhaustive guard, system-actor lazy posting, the profile header and membership check, the `describe.each` matrix tests and the drift test. Also the AC "switching profile never leaks figures": two memberships, the same session, and an assertion at the store query layer that every call carries the header's organization id.
 - **MUT-42 (expenses domain):** unchanged in intent. Its routes declare `security: [{ session: [] }]` and the `expenses:*` scopes from the matrix's last rows. Attachments for expense receipts reuse the attachment storage with `uploadedByUserId`; that decision belongs to MUT-42's brief.
 - **MUT-43 (portal read views):** §7.1–§7.7 except expenses: build target, shell, sign-in, switcher, the six views, `DecimalAmount`, `tp`, `hosted.*` i18n with the parity test, the four states, `check-bundles`, the import-zone lint. Two parallelisable halves:
@@ -355,11 +355,11 @@ Order is unchanged: 37 → 38 → 39 → {42, 43} → 44, with 45 in parallel af
 
 ## 11. Records updated with this brief
 
-- **ADR-033** (new) in `DECISIONS.md`.
-- **ADR-023** keeps Active status for the desktop↔Malafat OAuth connection, with an override note (in ADR-033 and on ADR-023 itself) that its "no account system, no password storage, no session of its own" clause no longer describes the hosted service.
+- **ADR-037** (new) in `DECISIONS.md`.
+- **ADR-023** keeps Active status for the desktop↔Malafat OAuth connection, with an override note (in ADR-037 and on ADR-023 itself) that its "no account system, no password storage, no session of its own" clause no longer describes the hosted service.
 - **TD-018** stays Accepted with corrected wording: users are operator-provisioned like keys, but "Mutaba3a keeps no account system" is no longer true.
 - **TD-013:** the "upgrade when MUT-43 lands" note becomes "upgrade when a second implementation is injected (SQLite/Tauri)", because the portal does not inject into the registry.
-- **TD-029** (sync op-log has no `profileId`), **TD-030** (en/ar drift; parity covers only `settings.features`), **TD-031** (server log redaction untested and one level deep).
+- **TD-037** (sync op-log has no `profileId`), **TD-038** (en/ar drift; parity covers only `settings.features`), **TD-039** (server log redaction untested and one level deep).
 - **COMPONENT_REGISTRY:** correction note that `DataTable` and `CellAmount` are listed but no such files exist (tables are page-local `<table>` with `Table.css`). The portal adds `DecimalAmount` and a small hosted table wrapper, registered when built (MUT-43), not now.
 
 ## 12. Out of scope

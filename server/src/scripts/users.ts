@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 /**
- * Operator CLI for hosted-portal users (MUT-37, ADR-033). Talks to the admin
+ * Operator CLI for hosted-portal users (MUT-37, ADR-037). Talks to the admin
  * API of a running service, like `npm run provision`. There is no other way to
  * create a user, grant access or reset a password — by design.
  *

@@ -67,7 +67,7 @@
 
 ### Changed
 - **Handlers.** Key-only handlers read `keyAuth(c)` instead of destructuring `auth.apiKey`. Session-reachable handlers use `postingActorOf(c)`.
-- **Log redaction (TD-031 resolved).** Every sensitive key, now including cookies, `Set-Cookie`, `password` and `sessionToken`, is redacted at depths 0–3, and a test pins it.
+- **Log redaction (TD-039 resolved).** Every sensitive key, now including cookies, `Set-Cookie`, `password` and `sessionToken`, is redacted at depths 0–3, and a test pins it.
 
 ### Verified
 - Server gates: lint, typecheck, `openapi:check`.
@@ -110,9 +110,9 @@ No `src/` (app) change.
 - `enable` was added as the inverse of `disable`, so a mistaken disable doesn't need database surgery.
 
 ### Technical
-- **TD-032 (new):** audit rows written in the same millisecond have no defined order (`(createdAt, id)` with a random UUID tie-breaker in both stores). This causes an intermittent `routes-m6` failure under full-suite load, seen once in three runs and never in 20 isolated runs. It predates MUT-37.
+- **TD-040 (new):** audit rows written in the same millisecond have no defined order (`(createdAt, id)` with a random UUID tie-breaker in both stores). This causes an intermittent `routes-m6` failure under full-suite load, seen once in three runs and never in 20 isolated runs. It predates MUT-37.
 
-## [Unreleased] - 2026-10-11 — MUT-36: hosted portal design brief and ADR-033 (approved)
+## [Unreleased] - 2026-10-11 — MUT-36: hosted portal design brief and ADR-037 (approved)
 
 **Scope:** `.claude/designs/hosted-portal.md` (new), `.claude/{DECISIONS,TECH_DEBT,COMPONENT_REGISTRY,CHANGELOG}.md`.
 Docs only; no code. Gates MUT-37/38/39/42/43/44/45 (epic MUT-34).
@@ -125,10 +125,10 @@ Docs only; no code. Gates MUT-37/38/39/42/43/44/45 (epic MUT-34).
   - httpOnly `__Host-` cookie sessions beside API keys, with routes declaring principals in the OpenAPI `security` field.
 
   It also re-cuts MUT-37/38/39/42/43/44/45.
-- **ADR-033** (approved by the owner as written on 2026-10-11). It extends ADR-025 with a user principal and amends ADR-025 §2 for sessions only (`X-Mutaba3a-Profile` header, non-member → 404). It states that ADR-013 is untouched and that hosted profile data is a separate dataset from local profile data.
-- **TD-029:** the sync op-log has no `profileId` concept. Recorded, deliberately not built.
-- **TD-030:** en/ar translation drift (30 `retainers.*` keys missing in en); parity is tested for `settings.features` only.
-- **TD-031:** server log redaction is untested and pino's `*.x` wildcards are one level deep. MUT-38 resolves it; the MUT-38 AC that assumed an existing redaction test is corrected in the brief.
+- **ADR-037** (approved by the owner as written on 2026-10-11). It extends ADR-025 with a user principal and amends ADR-025 §2 for sessions only (`X-Mutaba3a-Profile` header, non-member → 404). It states that ADR-013 is untouched and that hosted profile data is a separate dataset from local profile data.
+- **TD-037:** the sync op-log has no `profileId` concept. Recorded, deliberately not built.
+- **TD-038:** en/ar translation drift (30 `retainers.*` keys missing in en); parity is tested for `settings.features` only.
+- **TD-039:** server log redaction is untested and pino's `*.x` wildcards are one level deep. MUT-38 resolves it; the MUT-38 AC that assumed an existing redaction test is corrected in the brief.
 
 ### Changed
 - **ADR-023:** override note. Its "no account system, no password storage, no session" clause no longer describes the hosted service. The rest of the ADR still governs the desktop's Malafat connection.

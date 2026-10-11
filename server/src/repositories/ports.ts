@@ -772,7 +772,7 @@ export interface ExternalReferenceRepository {
   findByEntities(organizationId: string, entityType: ExternalEntityType, entityIds: string[]): Promise<ExternalReferenceRecord[]>;
 }
 
-// ---- MUT-37: operator-provisioned users and memberships (ADR-033) -----------
+// ---- MUT-37: operator-provisioned users and memberships (ADR-037) -----------
 
 export type UserStatus = 'ACTIVE' | 'DISABLED';
 export type UserLocale = 'en' | 'ar';
@@ -841,7 +841,7 @@ export interface MembershipRepository {
   listByOrganization(organizationId: string): Promise<MembershipRecord[]>;
 }
 
-// ---- MUT-38: browser sessions (ADR-033 decision 3) -------------------------
+// ---- MUT-38: browser sessions (ADR-037 decision 3) -------------------------
 
 /** A server-side session. Only the HMAC digest of the cookie token is stored. */
 export interface SessionRecord {

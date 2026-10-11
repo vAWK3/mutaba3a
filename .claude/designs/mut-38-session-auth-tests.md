@@ -1,6 +1,6 @@
 # MUT-38 — session auth beside API keys (test plan)
 
-Companion to `hosted-portal.md` §4 and §6 (approved 2026-10-11), ADR-033 decisions 3–6 and 9, and the "Re-cut after MUT-36" section on MUT-38. Written before implementation. Paths are under `server/`.
+Companion to `hosted-portal.md` §4 and §6 (approved 2026-10-11), ADR-037 decisions 3–6 and 9, and the "Re-cut after MUT-36" section on MUT-38. Written before implementation. Paths are under `server/`.
 
 ## Boundary with MUT-39
 
@@ -14,7 +14,7 @@ Companion to `hosted-portal.md` §4 and §6 (approved 2026-10-11), ADR-033 decis
 - Opening the 20 portal GET routes (the `read` rows of brief §5) to sessions.
 - System-actor lazy posting for session reads.
 - Session revocation on operator reset and disable.
-- The log-redaction fix (TD-031).
+- The log-redaction fix (TD-039).
 - The `SESSION_TOKEN_PEPPER` Terraform secret, so `main` stays deployable.
 
 **MUT-39 builds:**
