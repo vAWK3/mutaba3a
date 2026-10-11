@@ -49,6 +49,8 @@ enum AuditActorType {
   API_KEY
   ADMIN
   SYSTEM
+  /// A signed-in person acting through a session (MUT-38); actorId = user id.
+  USER
 }
 
 enum EntityStatus {
@@ -211,6 +213,7 @@ model User {
   updatedAt         DateTime
 
   memberships Membership[]
+  sessions    Session[]
 
   @@map("users")
 }
@@ -226,6 +229,26 @@ model Membership {
   @@id([userId, organizationId])
   @@index([organizationId])
   @@map("memberships")
+}
+
+/// A server-side browser session (MUT-38, ADR-033). The cookie carries an
+/// opaque token; only its HMAC-SHA256 digest (SESSION_TOKEN_PEPPER) is stored.
+model Session {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  user              User      @relation(fields: [userId], references: [id])
+  tokenDigest       String    @unique @db.VarChar(64)
+  createdAt         DateTime
+  lastSeenAt        DateTime
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  revokedReason     String?
+  /// Truncated to 200 characters; for the operator's eyes only.
+  userAgent         String?   @db.VarChar(200)
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 /// A binding between an organization and an external system's tenant.

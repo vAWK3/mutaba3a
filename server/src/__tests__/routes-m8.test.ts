@@ -269,8 +269,8 @@ describe('the M8 contract', () => {
   it('publishes 1.7.0-m8 with the three-state lifecycle, the approve body and the summary fields; the agree route and feeProposalId are gone', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(API_VERSION).toBe('1.8.0-mut37');
-    expect(doc.info.version).toBe('1.8.0-mut37');
+    expect(API_VERSION).toBe('1.9.0-mut38');
+    expect(doc.info.version).toBe('1.9.0-mut38');
     for (const path of ['/v1/fee-proposals', '/v1/fee-proposals/{proposalId}', '/v1/fee-proposals/{proposalId}/approve', '/v1/fee-proposals/{proposalId}/withdraw']) expect(doc.paths[path], path).toBeDefined();
     expect(doc.paths['/v1/fee-proposals/{proposalId}/agree']).toBeUndefined();
     expect(doc.components.schemas.FeeProposalStatus.enum).toEqual(['PROPOSED', 'APPROVED', 'WITHDRAWN']);

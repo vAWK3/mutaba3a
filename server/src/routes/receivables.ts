@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
@@ -25,17 +25,17 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Receivables'],
       summary: 'List receivables',
       description: 'Posted items only. Dated installments and retainer charges whose date has arrived are posted before the list is read.',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { query: ListReceivablesQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ReceivablePageSchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization } = c.get('auth');
       const q = c.req.valid('query');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') });
+      await postDueItems(store, organization, today, now, postingActorOf(c));
       const page = await store.receivables.list(
         organization.id,
         {
@@ -58,7 +58,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/receivables/{receivableId}',
       tags: ['Receivables'],
       summary: 'Get a receivable',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { params: ReceivableIdParamSchema },
       responses: { 200: { description: 'The receivable', content: { 'application/json': { schema: ReceivableSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -86,7 +86,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Credited', content: { 'application/json': { schema: CreditResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -121,7 +121,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/receivables/{receivableId}/credits',
       tags: ['Receivables'],
       summary: 'The credits on a receivable, newest first',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { params: ReceivableIdParamSchema },
       responses: { 200: { description: 'Credits', content: { 'application/json': { schema: CreditsResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },

@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import {
   assertIsoDate,
   installmentDueDate,
@@ -38,8 +38,6 @@ const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'appli
 /** /v1/agreements — fixed-fee agreements, installments, supplements, cancel (M3 brief §2.3). */
 export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
-
-  const actor = (c: { get: (k: 'auth') => { apiKey: { id: string } } } & { get(k: 'requestId'): string }) => ({ actorType: 'API_KEY' as const, actorId: c.get('auth').apiKey.id, requestId: c.get('requestId') });
 
   // ---- preview ----
   app.openapi(
@@ -85,7 +83,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (!verifyPreviewToken(token, [organization.id, 'agreement', body, preview.vatRateBasisPoints])) {
         throw new ApiError('CONFLICT', 'previewToken does not match this body and the VAT rate in force; preview again', { reason: 'PREVIEW_STALE' });
       }
-      const created = await createAgreementFromPreview(store, organization, actor(c), body, preview, today, now);
+      const created = await createAgreementFromPreview(store, organization, postingActorOf(c), body, preview, today, now);
       return c.json(await agreementDetail(store, organization, created.agreement, today), 201);
     },
   );
@@ -97,7 +95,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/agreements',
       tags: ['Agreements'],
       summary: 'List agreements (fixed and recurring)',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('agreements:read')] as const,
       request: { query: ListAgreementsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: AgreementPageSchema } } }, ...validationResponse, ...errorResponses },
@@ -106,7 +104,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const q = c.req.valid('query');
       const now = c.get('now')();
-      await postDueItems(store, organization, todayFor(organization, now), now, actor(c));
+      await postDueItems(store, organization, todayFor(organization, now), now, postingActorOf(c));
       const page = await store.agreements.list(organization.id, { ...(q.projectId ? { projectId: q.projectId } : {}), ...(q.customerId ? { customerId: q.customerId } : {}), ...(q.status ? { status: q.status } : {}), ...(q.type ? { type: q.type } : {}) }, toPageRequest(q));
       return c.json({ items: page.items.map(serializeAgreement), nextCursor: encodeNextCursor(page.nextCursor) }, 200);
     },
@@ -118,7 +116,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/agreements/{agreementId}',
       tags: ['Agreements'],
       summary: 'Get an agreement with its installments and supplements',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('agreements:read')] as const,
       request: { params: AgreementIdParamSchema },
       responses: { 200: { description: 'The agreement', content: { 'application/json': { schema: AgreementDetailSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -127,7 +125,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, actor(c));
+      await postDueItems(store, organization, today, now, postingActorOf(c));
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);
       return c.json(await agreementDetail(store, organization, agreement, today), 200);
     },
@@ -147,7 +145,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Applied', content: { 'application/json': { schema: SupplementResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -258,7 +256,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Cancelled (or already was)', content: { 'application/json': { schema: AgreementDetailSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);

@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { validationError } from '../agreements/compose.js';
 import { checkUpload, storageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
@@ -39,7 +39,7 @@ export function attachmentRoutes(store: LedgerStore, options: AttachmentOptions)
     }),
     async (c) => {
       const s = storage();
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const check = checkUpload(body);
@@ -69,7 +69,7 @@ export function attachmentRoutes(store: LedgerStore, options: AttachmentOptions)
     }),
     async (c) => {
       const s = storage();
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const now = c.get('now')();
       const attachment = await store.attachments.getById(organization.id, c.req.valid('param').attachmentId);
       if (!attachment) throw new ApiError('NOT_FOUND', 'No such attachment');
@@ -92,7 +92,7 @@ export function attachmentRoutes(store: LedgerStore, options: AttachmentOptions)
       path: '/v1/attachments',
       tags: ['Attachments'],
       summary: 'List READY attachments of a customer, project or payment',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('attachments:read')] as const,
       request: { query: ListAttachmentsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: AttachmentPageSchema } } }, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -112,7 +112,7 @@ export function attachmentRoutes(store: LedgerStore, options: AttachmentOptions)
       path: '/v1/attachments/{attachmentId}/download',
       tags: ['Attachments'],
       summary: 'A short-lived signed download URL for a READY attachment',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('attachments:read')] as const,
       request: { params: AttachmentIdParamSchema },
       responses: { 200: { description: 'Signed URL', content: { 'application/json': { schema: AttachmentDownloadSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -142,7 +142,7 @@ export function attachmentRoutes(store: LedgerStore, options: AttachmentOptions)
     }),
     async (c) => {
       const s = storage();
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const now = c.get('now')();
       const attachment = await store.attachments.getById(organization.id, c.req.valid('param').attachmentId);
       if (!attachment) {

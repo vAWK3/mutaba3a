@@ -138,6 +138,7 @@ Rejected:
   | { kind: 'session', organization, user, session, profile: HostedProfile }
   ```
   - The 31 handlers that destructure `apiKey` move to an `actorOf(auth)` helper. It returns `{ actorType: 'API_KEY' | 'USER', actorId }` for audit rows and `uploadedBy*`.
+  - *As built in MUT-38:* key-only handlers read `keyAuth(c)`, which narrows the union and refuses a session a second time. Session-reachable reads use `c.get('auth').organization` and `postingActorOf(c)` (§5, lazy posting). The route index is built from the OpenAPI registry and matched with `hono/route`'s `matchedRoutes`. `GET /v1/me` and `DELETE /v1/sessions/current` read `c.get('identity')` instead, since they are organization-independent.
   - `Integration.connectedByApiKeyId` stays key-only, because only key routes bind integrations.
 
 ### 4.5 Organization selection — ADR-025 §2 amended for sessions only
@@ -172,7 +173,8 @@ An API key still implies its organization, and no API-key request accepts an org
 | `SESSION_TOKEN_PEPPER` | string, min 32 | Secret Manager, Terraform `random_password` (as `MUTABA3A_ADMIN_TOKEN`) — never a tfvars value |
 | `SESSION_IDLE_MINUTES` | int 5–1440, default 120 | env |
 | `SESSION_ABSOLUTE_HOURS` | int 1–168, default 12 | env |
-| `PORTAL_ORIGIN` | URL, required when `NODE_ENV=production` | Terraform variable (MUT-45) |
+| `PORTAL_ORIGIN` | optional URL. As built in MUT-38: when unset, a non-GET session request's `Origin` must equal the request's own origin (`Sec-Fetch-Site: same-origin` is accepted either way), so production stays safe before MUT-45 sets it | Terraform variable (MUT-45) |
+| `TRUSTED_PROXY_HOPS` | int 0–5, default 1 (Cloud Run's front end). Picks the client IP for sign-in throttling from the right of `X-Forwarded-For` | env (MUT-45 raises it behind a load balancer) |
 | `PORTAL_DIST_DIR` | optional path; when unset the server serves no portal (API-only, as today) | Dockerfile |
 
 ## 5. Writability matrix
@@ -347,7 +349,7 @@ These replace the "thin" scope text in Jira once the owner approves the brief.
   - (a) shell, sign-in and switcher once MUT-38's `/v1/me` contract is in `openapi.yaml`;
   - (b) the views, which can be built against the server's in-memory store in dev before MUT-39 lands.
 - **MUT-44 (expense capture):** a portal `ExpenseDrawer` over MUT-42's routes. It may reuse the local expense form's presentational component; it must not import the local expense hooks or `src/db`.
-- **MUT-45 (serving):** §9, plus the `SESSION_TOKEN_PEPPER` secret, `PORTAL_ORIGIN`, and the domain/LB choice.
+- **MUT-45 (serving):** §9, `PORTAL_ORIGIN`, the trusted proxy hop count, and the domain/LB choice. *As built:* the `SESSION_TOKEN_PEPPER` secret landed in MUT-38's Terraform, because the service refuses to boot without it.
 
 Order is unchanged: 37 → 38 → 39 → {42, 43} → 44, with 45 in parallel after this brief.
 

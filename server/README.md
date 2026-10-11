@@ -37,9 +37,26 @@ npm run rotate:password -- --email nour@firm.ps                               # 
 npm run disable:user -- --email nour@firm.ps                                  # enable:user undoes it
 ```
 
+Sign a person out everywhere: `npm run revoke:sessions -- --email nour@firm.ps`
+(an operator reset or a disable does this too).
+
 Every script takes `--url` (default `http://localhost:8787`). Password hashing
 is argon2id; `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` / `ARGON2_PARALLELISM`
 default to OWASP profile 1 and the service refuses to start below it.
+
+**Sessions (MUT-38).** `POST /v1/sessions` signs a person in and sets an
+httpOnly, `SameSite=Strict` cookie on the API's own origin (`__Host-mut_session`;
+plain `mut_session` without `Secure` only when `NODE_ENV=development`). The
+service needs `SESSION_TOKEN_PEPPER` (≥ 32 characters) to boot — add it to an
+existing `.env`. Session calls to organization-scoped routes send
+`X-Mutaba3a-Profile: <organizationId>`; `GET /v1/me` lists the profiles a
+person may open. Try it locally:
+
+```bash
+curl -si -c /tmp/jar -H 'origin: http://localhost:8787' -H 'content-type: application/json' \
+  -d '{"email":"nour@firm.ps","password":"<one-time password>"}' http://localhost:8787/v1/sessions
+curl -s -b /tmp/jar http://localhost:8787/v1/me
+```
 
 ## Verify
 

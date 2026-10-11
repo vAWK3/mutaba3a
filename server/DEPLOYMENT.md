@@ -226,6 +226,11 @@ page): `npm run provision -- --url "$URL" --organization-id <uuid> --key-name "M
 
 ### 4a. Give a person access to the hosted portal (MUT-37)
 
+The service reads `SESSION_TOKEN_PEPPER` from the Secret Manager secret
+`mutaba3a-api-session-pepper`, which Terraform generates and mounts (MUT-38).
+The first `./scripts/deploy.sh` after this change creates it; nothing to do by
+hand.
+
 Portal users are operator-issued exactly like keys (ADR-033, TD-018): there is
 no signup, invite or password-reset route in any environment. The one-time
 password is printed **once**; deliver it like a key secret.
@@ -274,9 +279,11 @@ service.
 | Roll back the service | `IMAGE_TAG=<old sha> ./scripts/deploy.sh` — migrations are forward-only; a rollback that needs a schema revert is a new migration |
 | Logs | `gcloud run services logs read mutaba3a-api --region=me-west1 --limit=200` (pino JSON; `requestId` matches the error envelope Malafat shows) |
 | Rotate the admin token | `cd infrastructure/terraform && terraform apply -var-file=production.tfvars -var image_tag=<current sha> -replace=random_password.admin_token`, then `./scripts/deploy.sh` so the new revision reads the new version |
+| Sign every portal user out | `terraform apply … -replace=random_password.session_pepper`, then `./scripts/deploy.sh` (the pepper keys every session digest; a new one voids them all) |
 | Rotate the DB password | same with `-replace=random_password.db` (Cloud SQL user and the URL secret update together), then redeploy |
 | Revoke a firm's key | `curl -X POST "$URL/admin/v1/api-keys/<id>/revoke" -H "x-admin-token: $MUTABA3A_ADMIN_TOKEN" -H 'content-type: application/json' -d '{"reason":"…"}'`; key ids are on `GET /admin/v1/organizations/<id>` |
 | Audit trail of a firm | `GET /admin/v1/organizations/<id>/audit` with the admin token |
+| Sign one portal user out everywhere | `npm run revoke:sessions -- --url "$URL" --email <email>` |
 | Reset a portal user's password | `npm run rotate:password -- --url "$URL" --email <email>` (prints the new one-time password once) |
 | Disable / re-enable a portal user | `npm run disable:user -- --url "$URL" --email <email>` / `npm run enable:user …` |
 | Remove a person's access to a firm | `npm run revoke:user -- --url "$URL" --email <email> --organization-id <uuid>` |

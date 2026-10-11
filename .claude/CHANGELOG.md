@@ -28,6 +28,53 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-38: session auth, a second principal beside API keys
+
+**Scope:** `server/` only:
+- `prisma/schema.prisma` and migration `20261011042708_mut38_sessions_user_actor` (`sessions` table, `AuditActorType` + `USER`)
+- `src/auth/{sessions,writability,middleware}.ts`, `src/routes/sessions.ts`
+- `src/routes/{admin-users,agreements,attachments,customers,fee-proposals,import,installments,integration,payments,projects,receivables,retainers,summaries,vat}.ts`
+- `src/{app,index,config,errors,logger,schemas}.ts`, `src/repositories/{ports,memory,prisma}.ts`, `src/scripts/users.ts`
+- `infrastructure/terraform/{main,outputs}.tf`, `.env.example`, `README.md`, `DEPLOYMENT.md`, `openapi/openapi.yaml`, `package.json`
+- tests: `src/auth/__tests__/sessions.test.ts`, `src/__tests__/{routes-sessions,route-security,logger}.test.ts`, `src/repositories/__tests__/store-{contract,memory,prisma}-sessions*`; additions to the `config` and `users-cli` tests; version pins in `routes-m*`
+
+### Added
+- **Sign-in, sign-out, `/v1/me`.**
+  - `POST /v1/sessions` sets an httpOnly, `Secure`, `SameSite=Strict`, `__Host-mut_session` cookie on the API's own origin. The token is 32 random bytes; only `HMAC-SHA256(SESSION_TOKEN_PEPPER, token)` is stored.
+  - Sessions expire after 120 minutes idle (activity slides the deadline) and 12 hours absolute.
+  - `DELETE /v1/sessions/current` revokes the session server-side and clears the cookie.
+  - `GET /v1/me` lists the hosted profiles the person may open, each with `source`, `writerOfRecord` and `access`.
+- **Sign-in never reveals accounts.**
+  - Unknown email, wrong password, disabled user and locked account all get the same `401 INVALID_CREDENTIALS`.
+  - Each attempt runs exactly one argon2 verify; an unknown email is verified against a pre-warmed dummy hash with the same parameters.
+  - Lockout (5 failures in 15 minutes → locked 15 minutes) keys on the normalised email whether or not it exists.
+  - Attempts are capped at 20 per minute per client IP, taken from the trusted `X-Forwarded-For` hop.
+  - Sign-ins (`user.signed_in`, actor `USER`) and locks (`user.locked_out`, actor `SYSTEM`) are audited on each member organization.
+- **One principal per request, declared per route.**
+  - `authenticate()` replaces `apiKeyAuth` on `/v1/*` and enforces each operation's OpenAPI `security`, using an index built from the registry. A request carrying both credentials gets 401 `ambiguous_credentials`.
+  - Non-GET session requests and sign-in must be same-origin, otherwise `403 CROSS_SITE_REQUEST`.
+  - Sessions select an organization with `X-Mutaba3a-Profile`: missing → `422 PROFILE_REQUIRED`; non-member → 404 (ADR-025 §2 amended for sessions only).
+  - Sessions are rate-limited like keys.
+- **The portal's 20 read routes accept sessions.** These are the GET routes in the `read` rows of the writability matrix, now a const in `auth/writability.ts`. Session scopes come from it. Lazy posting during a session read is audited as `SYSTEM`.
+- **Operator controls.**
+  - An operator reset or a disable revokes all of the user's sessions.
+  - New `POST /admin/v1/users/{id}/sessions/revoke` route, and `npm run revoke:sessions`.
+  - A session is also void once its user is disabled or their password changes.
+- **Contract.** Error codes `INVALID_CREDENTIALS`, `SESSION_EXPIRED`, `PRINCIPAL_NOT_ACCEPTED`, `CROSS_SITE_REQUEST`; reason `PROFILE_REQUIRED`; a `session` cookie security scheme; audit actor `USER`; API `1.9.0-mut38`.
+- **Configuration and Terraform.**
+  - Config: `SESSION_TOKEN_PEPPER` (required, ≥ 32 characters), `SESSION_IDLE_MINUTES`, `SESSION_ABSOLUTE_HOURS`, `PORTAL_ORIGIN` (optional), `TRUSTED_PROXY_HOPS`.
+  - Terraform generates, stores and mounts the pepper secret `mutaba3a-api-session-pepper` (moved forward from MUT-45 so `main` stays deployable).
+
+### Changed
+- **Handlers.** Key-only handlers read `keyAuth(c)` instead of destructuring `auth.apiKey`. Session-reachable handlers use `postingActorOf(c)`.
+- **Log redaction (TD-031 resolved).** Every sensitive key, now including cookies, `Set-Cookie`, `password` and `sessionToken`, is redacted at depths 0–3, and a test pins it.
+
+### Verified
+- Server gates: lint, typecheck, `openapi:check`.
+- `npm test`: 466 passed. `npm run test:db`: 520 passed.
+- `terraform validate` (scratch copy).
+- HTTP smoke against a running server: sign-in, `me`, a scoped read, `PROFILE_REQUIRED`, `PRINCIPAL_NOT_ACCEPTED`, sign-out, replay refused, bad password. Zero log lines contained the token or password.
+
 ## [Unreleased] - 2026-10-11 — MUT-37: operator-only user accounts on the hosted service
 
 **Scope:** `server/` only:

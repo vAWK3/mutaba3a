@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.8.0-mut37
+  version: 1.9.0-mut38
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.
 
@@ -15,7 +15,7 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -26,6 +26,8 @@ info:
     Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
 
     Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.
+
+    Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.
 
     Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
@@ -53,6 +55,8 @@ tags:
     description: What is owed, and credits against it
   - name: Payments
     description: Money received, its allocations, reversals, and the operations lookup
+  - name: Sessions
+    description: Hosted-portal sign-in, sign-out and the signed-in person
   - name: Admin
     description: "Operator provisioning: organizations, API keys, users and memberships"
 components:
@@ -61,6 +65,11 @@ components:
       type: http
       scheme: bearer
       description: "Organization API key: `Authorization: Bearer mut_live_<prefix>_<secret>`"
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-mut_session
+      description: "Hosted-portal session (MUT-38). Set by POST /v1/sessions; httpOnly, SameSite=Strict, same origin only. Organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user's memberships."
     adminToken:
       type: apiKey
       in: header
@@ -104,6 +113,138 @@ components:
       required:
         - status
         - checks
+    Me:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+            displayName:
+              type: string
+            locale:
+              $ref: "#/components/schemas/UserLocale"
+          required:
+            - id
+            - email
+            - displayName
+            - locale
+        profiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/HostedProfile"
+      required:
+        - user
+        - profiles
+    UserLocale:
+      type: string
+      enum:
+        - en
+        - ar
+    HostedProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        source:
+          type: string
+          enum:
+            - hosted
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+        writerOfRecord:
+          type: string
+          nullable: true
+          enum:
+            - MALAFAT
+            - null
+        access:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - read-write
+              - read
+              - none
+      required:
+        - id
+        - name
+        - source
+        - defaultCurrency
+        - timezone
+        - writerOfRecord
+        - access
+    Currency:
+      type: string
+      enum:
+        - ILS
+        - USD
+        - EUR
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                - UNAUTHENTICATED
+                - INVALID_API_KEY
+                - API_KEY_REVOKED
+                - API_KEY_EXPIRED
+                - API_KEY_ENVIRONMENT_MISMATCH
+                - ADMIN_UNAUTHORIZED
+                - INVALID_CREDENTIALS
+                - SESSION_EXPIRED
+                - INSUFFICIENT_SCOPE
+                - PRINCIPAL_NOT_ACCEPTED
+                - CROSS_SITE_REQUEST
+                - NOT_FOUND
+                - ORGANIZATION_MISMATCH
+                - CONFLICT
+                - OPERATION_IN_PROGRESS
+                - VALIDATION_FAILED
+                - IDEMPOTENCY_KEY_REUSED
+                - IDEMPOTENCY_KEY_REQUIRED
+                - RATE_LIMITED
+                - INTERNAL
+                - ATTACHMENTS_NOT_CONFIGURED
+            message:
+              type: string
+            details:
+              nullable: true
+            requestId:
+              type: string
+          required:
+            - code
+            - message
+            - requestId
+      required:
+        - error
+    SignInRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          minLength: 1
+          maxLength: 320
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      required:
+        - email
+        - password
     IntegrationStatusResponse:
       type: object
       properties:
@@ -168,12 +309,6 @@ components:
         - defaultCurrency
         - timezone
         - createdAt
-    Currency:
-      type: string
-      enum:
-        - ILS
-        - USD
-        - EUR
     ApiKeySummary:
       type: object
       properties:
@@ -270,44 +405,6 @@ components:
         - status
         - connectedAt
         - disconnectedAt
-    ErrorEnvelope:
-      type: object
-      properties:
-        error:
-          type: object
-          properties:
-            code:
-              type: string
-              enum:
-                - UNAUTHENTICATED
-                - INVALID_API_KEY
-                - API_KEY_REVOKED
-                - API_KEY_EXPIRED
-                - API_KEY_ENVIRONMENT_MISMATCH
-                - ADMIN_UNAUTHORIZED
-                - INSUFFICIENT_SCOPE
-                - NOT_FOUND
-                - ORGANIZATION_MISMATCH
-                - CONFLICT
-                - OPERATION_IN_PROGRESS
-                - VALIDATION_FAILED
-                - IDEMPOTENCY_KEY_REUSED
-                - IDEMPOTENCY_KEY_REQUIRED
-                - RATE_LIMITED
-                - INTERNAL
-                - ATTACHMENTS_NOT_CONFIGURED
-            message:
-              type: string
-            details:
-              nullable: true
-            requestId:
-              type: string
-          required:
-            - code
-            - message
-            - requestId
-      required:
-        - error
     BindIntegrationResponse:
       type: object
       properties:
@@ -3152,6 +3249,7 @@ components:
             - API_KEY
             - ADMIN
             - SYSTEM
+            - USER
         actorId:
           type: string
           nullable: true
@@ -3490,11 +3588,6 @@ components:
         - passwordChangedAt
         - lastSignInAt
         - createdAt
-    UserLocale:
-      type: string
-      enum:
-        - en
-        - ar
     Membership:
       type: object
       properties:
@@ -3590,6 +3683,14 @@ components:
           $ref: "#/components/schemas/UserSummary"
       required:
         - user
+    RevokeSessionsResponse:
+      type: object
+      properties:
+        revoked:
+          type: integer
+          minimum: 0
+      required:
+        - revoked
   parameters: {}
 paths:
   /health:
@@ -3622,6 +3723,97 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Ready"
+  /v1/sessions:
+    post:
+      tags:
+        - Sessions
+      summary: Sign in (sets the session cookie)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInRequest"
+      responses:
+        "201":
+          description: Signed in; the session cookie is set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          description: INVALID_CREDENTIALS — the same answer for every refusal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/sessions/current:
+    delete:
+      tags:
+        - Sessions
+      summary: Sign out (revokes the session server-side and clears the cookie)
+      security:
+        - session: []
+      responses:
+        "204":
+          description: Signed out
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me:
+    get:
+      tags:
+        - Sessions
+      summary: The signed-in person and the hosted profiles they may open
+      security:
+        - session: []
+      responses:
+        "200":
+          description: Me
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/integration:
     get:
       tags:
@@ -3866,6 +4058,7 @@ paths:
       summary: List customers
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -3939,6 +4132,7 @@ paths:
       summary: Get a customer
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -4192,6 +4386,7 @@ paths:
       summary: List projects
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -4276,6 +4471,7 @@ paths:
       summary: Get a project
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -4575,6 +4771,7 @@ paths:
       summary: List the firm’s VAT rates, newest first, with the one in force today
       security:
         - apiKey: []
+        - session: []
       responses:
         "200":
           description: Rates
@@ -4724,6 +4921,7 @@ paths:
       summary: List fee proposals
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -4807,6 +5005,7 @@ paths:
       summary: Get a fee proposal
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -5109,6 +5308,7 @@ paths:
       summary: List agreements (fixed and recurring)
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -5193,6 +5393,7 @@ paths:
       summary: Get an agreement with its installments and supplements
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -5574,6 +5775,7 @@ paths:
       summary: The retainer and its charges to date
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -5932,6 +6134,7 @@ paths:
       description: Posted items only. Dated installments and retainer charges whose date has arrived are posted before the list is read.
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -6029,6 +6232,7 @@ paths:
       summary: Get a receivable
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -6152,6 +6356,7 @@ paths:
       summary: The credits on a receivable, newest first
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -6320,6 +6525,7 @@ paths:
       summary: List payments
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -6409,6 +6615,7 @@ paths:
       summary: Get a payment with its allocations
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -6659,6 +6866,7 @@ paths:
       description: outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block.
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             $ref: "#/components/schemas/Currency"
@@ -6703,6 +6911,7 @@ paths:
       summary: "One customer: buckets, unallocated and status per currency, with a summary per project"
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -6754,6 +6963,7 @@ paths:
       summary: "One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status"
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -6998,6 +7208,7 @@ paths:
       summary: List READY attachments of a customer, project or payment
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: integer
@@ -7083,6 +7294,7 @@ paths:
       summary: A short-lived signed download URL for a READY attachment
       security:
         - apiKey: []
+        - session: []
       parameters:
         - schema:
             type: string
@@ -7657,6 +7869,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserStatusResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/sessions/revoke:
+    post:
+      tags:
+        - Admin
+      summary: Sign a user out everywhere (revokes every live session)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: How many sessions were revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeSessionsResponse"
         "401":
           description: Missing or invalid admin token
           content:

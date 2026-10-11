@@ -157,7 +157,7 @@ export const OrganizationDetailSchema = z
 export const AuditEventSchema = z
   .object({
     id: z.string().uuid(),
-    actorType: z.enum(['API_KEY', 'ADMIN', 'SYSTEM']),
+    actorType: z.enum(['API_KEY', 'ADMIN', 'SYSTEM', 'USER']),
     actorId: z.string().nullable(),
     action: z.string(),
     entityType: z.string(),
@@ -235,6 +235,42 @@ export const RemoveMembershipResponseSchema = z
   .openapi('RemoveMembershipResponse');
 
 export const UserStatusResponseSchema = z.object({ user: UserSummarySchema }).openapi('UserStatusResponse');
+
+// ---- Sessions and the signed-in user (MUT-38, ADR-033) ---------------------
+
+export const SignInRequestSchema = z
+  .object({
+    email: z.string().min(1).max(320),
+    password: z.string().min(1).max(1024),
+  })
+  .openapi('SignInRequest');
+
+const AccessSchema = z.enum(['read-write', 'read', 'none']);
+
+/** One organization the signed-in user may open (hosted-portal.md §6). Local profiles never reach the server. */
+export const HostedProfileSchema = z
+  .object({
+    /** The organization id; send it as X-Mutaba3a-Profile. */
+    id: z.string().uuid(),
+    name: z.string(),
+    source: z.literal('hosted'),
+    defaultCurrency: CurrencySchema,
+    timezone: z.string(),
+    /** MALAFAT when a connected Malafat integration records this profile's income; null when nothing does. */
+    writerOfRecord: z.enum(['MALAFAT']).nullable(),
+    /** The session column of the writability matrix, per domain. */
+    access: z.record(z.string(), AccessSchema),
+  })
+  .openapi('HostedProfile');
+
+export const MeSchema = z
+  .object({
+    user: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), locale: UserLocaleSchema }),
+    profiles: z.array(HostedProfileSchema),
+  })
+  .openapi('Me');
+
+export const RevokeSessionsResponseSchema = z.object({ revoked: z.number().int().min(0) }).openapi('RevokeSessionsResponse');
 
 export const PasswordResetResponseSchema = z
   .object({
@@ -524,6 +560,8 @@ export const VALIDATION_REASONS = [
   'ATTACHMENT_NOT_READY',
   // M7
   'PROJECT_NOT_FOUND',
+  // MUT-38: a session request to an organization-scoped route without X-Mutaba3a-Profile
+  'PROFILE_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

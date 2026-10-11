@@ -42,8 +42,11 @@ import type {
   CreateOrganizationInput,
   CreateProjectInput,
   CreateUserInput,
+  CreateSessionInput,
   MembershipRecord,
   MembershipRepository,
+  SessionRecord,
+  SessionRepository,
   UserRecord,
   UserRepository,
   CreateFeeProposalInput,
@@ -106,6 +109,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly props = new Map<string, FeeProposalRecord>();
   private readonly people = new Map<string, UserRecord>();
   private readonly members = new Map<string, MembershipRecord>();
+  private readonly sessionsById = new Map<string, SessionRecord>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -197,6 +201,62 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!u) return null;
       Object.assign(u, { status, updatedAt: at });
       return { ...u };
+    },
+    recordFailedSignIn: async (id, at, lockUntil) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { failedSignIns: u.failedSignIns + 1, updatedAt: at, ...(lockUntil ? { lockedUntil: lockUntil } : {}) });
+      return { ...u };
+    },
+    recordSignIn: async (id, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { lastSignInAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at });
+      return { ...u };
+    },
+  };
+
+  readonly sessions: SessionRepository = {
+    create: async (input: CreateSessionInput) => {
+      for (const s of this.sessionsById.values()) {
+        if (s.tokenDigest === input.tokenDigest) throw new UniqueViolation('sessions.tokenDigest');
+      }
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('sessions.userId');
+      const record: SessionRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        createdAt: input.at,
+        lastSeenAt: input.at,
+        idleExpiresAt: input.idleExpiresAt,
+        absoluteExpiresAt: input.absoluteExpiresAt,
+        revokedAt: null,
+        revokedReason: null,
+        userAgent: input.userAgent,
+      };
+      this.sessionsById.set(record.id, record);
+      return { ...record };
+    },
+    findByDigest: async (tokenDigest) => clone([...this.sessionsById.values()].find((s) => s.tokenDigest === tokenDigest)),
+    touch: async (id, at, idleExpiresAt) => {
+      const s = this.sessionsById.get(id);
+      if (s) Object.assign(s, { lastSeenAt: at, idleExpiresAt });
+    },
+    revoke: async (id, reason, at) => {
+      const s = this.sessionsById.get(id);
+      if (!s) return null;
+      if (!s.revokedAt) Object.assign(s, { revokedAt: at, revokedReason: reason });
+      return { ...s };
+    },
+    revokeAllForUser: async (userId, reason, at) => {
+      let count = 0;
+      for (const s of this.sessionsById.values()) {
+        if (s.userId === userId && !s.revokedAt) {
+          Object.assign(s, { revokedAt: at, revokedReason: reason });
+          count++;
+        }
+      }
+      return count;
     },
   };
 

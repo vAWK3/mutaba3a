@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -54,7 +54,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const reference = body.externalReference;
@@ -101,7 +101,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/projects',
       tags: ['Projects'],
       summary: 'List projects',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('projects:read')] as const,
       request: { query: ListProjectsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ProjectPageSchema } } }, ...validationResponse, ...errorResponses },
@@ -130,7 +130,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/projects/{projectId}',
       tags: ['Projects'],
       summary: 'Get a project',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('projects:read')] as const,
       request: { params: ProjectIdParamSchema },
       responses: { 200: { description: 'The project', ...projectJson }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -156,7 +156,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Updated', ...projectJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       const id = c.req.valid('param').projectId;
       const current = await mustGet(store, organization.id, id);
@@ -206,7 +206,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Archived (or already was)', ...projectJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const project = await mustGet(store, organization.id, c.req.valid('param').projectId);
       const refs = await referencesByEntity(store, organization.id, 'PROJECT', [project.id]);
       if (project.status === 'ARCHIVED') return c.json(serializeProject(project, refs.get(project.id)), 200);

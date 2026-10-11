@@ -1243,6 +1243,21 @@ in-process — argument parsing, error surfacing and "the secret prints exactly
 once" are all asserted, with no server running. Secrets come from the
 environment, never a flag.
 
+### A route's principals live in its OpenAPI `security` (MUT-38)
+`security: [{ apiKey: [] }]`, `[{ session: [] }]`, both, or `[]` (public) is
+the declaration; `authenticate()` builds an index from the OpenAPI registry
+and enforces it, so the published contract and the behaviour cannot drift.
+`route-security.test.ts` sweeps every operation both ways. Handlers of
+key-only routes read `keyAuth(c)` (narrows the union and refuses a session a
+second time); session-reachable handlers read `c.get('auth').organization` and
+attribute lazy posting with `postingActorOf(c)` (SYSTEM for a session). Never
+read `auth.apiKey` directly.
+
+### Log redaction is spelled out per depth (MUT-38, TD-031)
+pino's `*.x` matches one level only. `logger.ts` generates every sensitive key
+at depths 0–3; add a key to `SENSITIVE_KEYS`, never a one-off path, and the
+logger test covers it automatically.
+
 ### Account changes are audited on every member organization (MUT-37)
 A user is not organization-scoped but `audit_events` is. An account change is
 appended once per organization the user belongs to after the change (a removed

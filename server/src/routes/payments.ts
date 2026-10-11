@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, assertNotAbsurdDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import type { IsoDate } from '../dates.js';
@@ -37,7 +37,10 @@ interface Actor {
 export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  const actorOf = (c: { get: (k: 'auth') => { organization: Organization; apiKey: { id: string } } } & { get(k: 'requestId'): string }): Actor => ({ organizationId: c.get('auth').organization.id, apiKeyId: c.get('auth').apiKey.id, requestId: c.get('requestId') });
+  const actorOf = (c: Parameters<typeof keyAuth>[0]): Actor => {
+    const { organization, apiKey } = keyAuth(c);
+    return { organizationId: organization.id, apiKeyId: apiKey.id, requestId: c.get('requestId') };
+  };
 
   const audit = (a: Actor, action: string, entityType: string, entityId: string, metadata: Record<string, unknown>) =>
     store.audit.append({ organizationId: a.organizationId, actorType: 'API_KEY', actorId: a.apiKeyId, action, entityType, entityId, metadata, requestId: a.requestId });
@@ -130,7 +133,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: c.get('auth').apiKey.id, requestId: c.get('requestId') });
+      await postDueItems(store, organization, today, now, postingActorOf(c));
       const src = await source(organization, body);
       const explicit = parseAllocations(body.allocations, src.currency);
       const { eligible, value, balances, token } = await plan(organization, src, explicit, body.strategy, today);
@@ -221,7 +224,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/payments',
       tags: ['Payments'],
       summary: 'List payments',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { query: ListPaymentsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: PaymentPageSchema } } }, ...validationResponse, ...errorResponses },
@@ -243,7 +246,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/payments/{paymentId}',
       tags: ['Payments'],
       summary: 'Get a payment with its allocations',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { params: PaymentIdParamSchema },
       responses: { 200: { description: 'The payment', content: { 'application/json': { schema: PaymentSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },

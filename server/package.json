@@ -32,6 +32,7 @@
     "rotate:password": "tsx src/scripts/users.ts rotate",
     "disable:user": "tsx src/scripts/users.ts disable",
     "enable:user": "tsx src/scripts/users.ts enable",
+    "revoke:sessions": "tsx src/scripts/users.ts revoke-sessions",
     "smoke": "tsx src/scripts/smoke.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",

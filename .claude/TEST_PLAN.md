@@ -809,3 +809,18 @@ database; **410 passed, 0 skipped** with `npm run test:db` against an isolated
 unchanged: 2,149 passed, 5 skipped. One pre-existing flake seen
 under full-suite load: `routes-m6` "lists the organization's events by entity"
 (TD-032), never reproduced in isolation (0/20).
+
+### MUT-38 — session auth beside API keys (`server/`)
+
+Plan: `.claude/designs/mut-38-session-auth-tests.md`. Written red first (57 failing before implementation).
+
+| Area | File | What is pinned |
+|---|---|---|
+| Pure helpers | `src/auth/__tests__/sessions.test.ts` | 43-char tokens; HMAC digest per pepper; `__Host-` name only when Secure; trusted-hop client IP (forged leftmost ignored); same-origin rule; throttle locks on the 5th failure, unlocks at 15:00, forgets old failures |
+| Config | `src/__tests__/config.test.ts` | pepper required ≥ 32; idle/absolute/hops bounds and defaults; optional portal origin |
+| Storage contract (memory + Postgres) | `store-contract-sessions.ts` | create/find by digest; unique digest; FK user; touch; revoke wins once; `revokeAllForUser` counts only live ones; failed/success sign-in bookkeeping; audit actor `USER` |
+| Routes | `src/__tests__/routes-sessions.test.ts` | cookie attributes; Me body without the token; four refusals identical with exactly one argon2 verify each; dummy hash parameters; lockout + one `user.locked_out` + unlock after 15 min; unknown emails lock identically; per-IP 429; cross-site sign-in and sign-out refused; `/v1/me` writer of record and access; idle and absolute expiry; sign-out revokes server-side; reset/disable/explicit revoke end sessions; both credentials refused; profile header 422/200/404s incl. removed membership; lazy posting attributed to `SYSTEM`; session rate limit; token, digest and password never logged |
+| Route security | `src/__tests__/route-security.test.ts` | generated from the published document: every `/v1` operation declares principals (only sign-in is public); exactly 22 operations accept sessions; a session is refused on every key-only operation and let through on every session operation; a key is refused on both identity routes; every key-reachable operation enforces a scope |
+| Logger | `src/__tests__/logger.test.ts` | 10 sensitive keys × depths 0–3, request cookie, response Set-Cookie |
+
+**Baseline after MUT-38 (2026-10-11)**: server `npm test` 466 passed, 9 skipped; `npm run test:db` 520 passed.

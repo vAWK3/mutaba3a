@@ -14,6 +14,7 @@ import {
   GrantMembershipResponseSchema,
   PasswordResetResponseSchema,
   RemoveMembershipResponseSchema,
+  RevokeSessionsResponseSchema,
   UserDetailSchema,
   UserListSchema,
   UserStatusResponseSchema,
@@ -29,7 +30,8 @@ import { serializeMembership, serializeUser } from '../serializers.js';
  * Each mutation is audited with actor ADMIN on every organization the user
  * belongs to after it (a removed membership is audited on the organization it
  * removed). Passwords are generated here, returned once, and stored only as
- * argon2id hashes; no route ever returns or logs a hash.
+ * argon2id hashes; no route ever returns or logs a hash. A reset or a disable
+ * also revokes every live session of the user (MUT-38).
  */
 export interface AdminUserOptions {
   store: LedgerStore;
@@ -232,8 +234,10 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const existing = await mustGetUser(c.req.valid('param').userId);
       const password = generateOneTimePassword();
-      const user = await store.users.setPassword(existing.id, await passwordHasher.hash(password), c.get('now')());
+      const now = c.get('now')();
+      const user = await store.users.setPassword(existing.id, await passwordHasher.hash(password), now);
       if (!user) throw new ApiError('NOT_FOUND', 'User not found');
+      await store.sessions.revokeAllForUser(user.id, 'password_reset', now);
       await audit(c, await memberOrganizations(user.id), user.id, 'user.password_reset');
       return c.json({ user: serializeUser(user), password }, 200);
     },
@@ -259,13 +263,36 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       }),
       async (c) => {
         const existing = await mustGetUser(c.req.valid('param').userId);
-        const user = await store.users.setStatus(existing.id, status, c.get('now')());
+        const now = c.get('now')();
+        const user = await store.users.setStatus(existing.id, status, now);
         if (!user) throw new ApiError('NOT_FOUND', 'User not found');
+        if (status === 'DISABLED') await store.sessions.revokeAllForUser(user.id, 'disabled', now);
         if (existing.status !== status) await audit(c, await memberOrganizations(user.id), user.id, action);
         return c.json({ user: serializeUser(user) }, 200);
       },
     );
   }
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/admin/v1/users/{userId}/sessions/revoke',
+      tags: ['Admin'],
+      summary: 'Sign a user out everywhere (revokes every live session)',
+      security: [{ adminToken: [] }],
+      request: { params: UserIdParam },
+      responses: {
+        200: { description: 'How many sessions were revoked', content: { 'application/json': { schema: RevokeSessionsResponseSchema } } },
+        404: notFound,
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const user = await mustGetUser(c.req.valid('param').userId);
+      const revoked = await store.sessions.revokeAllForUser(user.id, 'operator', c.get('now')());
+      return c.json({ revoked }, 200);
+    },
+  );
 
   return app;
 }

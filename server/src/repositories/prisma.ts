@@ -53,6 +53,8 @@ import type {
   TransitionResult,
   MembershipRecord,
   MembershipRepository,
+  SessionRecord,
+  SessionRepository,
   UserLocale,
   UserRecord,
   UserRepository,
@@ -136,6 +138,46 @@ export class PrismaLedgerStore implements LedgerStore {
       const { count } = await this.prisma.user.updateMany({ where: { id }, data: { status, updatedAt: at } });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
+    recordFailedSignIn: async (id, at, lockUntil) => {
+      const { count } = await this.prisma.user.updateMany({
+        where: { id },
+        data: { failedSignIns: { increment: 1 }, updatedAt: at, ...(lockUntil ? { lockedUntil: lockUntil } : {}) },
+      });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
+    recordSignIn: async (id, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { lastSignInAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
+  };
+
+  readonly sessions: SessionRepository = {
+    create: async (input) =>
+      toSession(
+        await translate(() =>
+          this.prisma.session.create({
+            data: {
+              userId: input.userId,
+              tokenDigest: input.tokenDigest,
+              createdAt: input.at,
+              lastSeenAt: input.at,
+              idleExpiresAt: input.idleExpiresAt,
+              absoluteExpiresAt: input.absoluteExpiresAt,
+              userAgent: input.userAgent,
+            },
+          }),
+        ),
+      ),
+    findByDigest: async (tokenDigest) => mapNullable(await this.prisma.session.findUnique({ where: { tokenDigest } }), toSession),
+    touch: async (id, at, idleExpiresAt) => {
+      await this.prisma.session.updateMany({ where: { id }, data: { lastSeenAt: at, idleExpiresAt } });
+    },
+    revoke: async (id, reason, at) => {
+      await this.prisma.session.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
+      return mapNullable(await this.prisma.session.findUnique({ where: { id } }), toSession);
+    },
+    revokeAllForUser: async (userId, reason, at) =>
+      (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
   };
 
   readonly memberships: MembershipRepository = {
@@ -914,6 +956,21 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     lastSignInAt: row.lastSignInAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenDigest: row.tokenDigest,
+    createdAt: row.createdAt,
+    lastSeenAt: row.lastSeenAt,
+    idleExpiresAt: row.idleExpiresAt,
+    absoluteExpiresAt: row.absoluteExpiresAt,
+    revokedAt: row.revokedAt,
+    revokedReason: row.revokedReason,
+    userAgent: row.userAgent,
   };
 }
 

@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
  *   npm run rotate:password -- --email nour@firm.ps
  *   npm run disable:user    -- --email nour@firm.ps
  *   npm run enable:user     -- --email nour@firm.ps
+ *   npm run revoke:sessions -- --email nour@firm.ps   (sign out everywhere)
  *
  * MUTABA3A_ADMIN_TOKEN is read from the environment, never from a flag, so it
  * does not land in shell history. Passwords are printed once, on a line of
@@ -27,7 +28,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -38,6 +39,7 @@ const USAGE = [
   '  rotate  --email <email>',
   '  disable --email <email>',
   '  enable  --email <email>',
+  '  revoke-sessions --email <email>',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -163,6 +165,11 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   },
   disable: async (ctx) => setStatus(ctx, 'disable'),
   enable: async (ctx) => setStatus(ctx, 'enable'),
+  'revoke-sessions': async ({ client, need, out }) => {
+    const user = await client.userByEmail(need('email'));
+    const { revoked } = await client.call<{ revoked: number }>('POST', `/admin/v1/users/${user.id}/sessions/revoke`);
+    out(`${user.email}: ${revoked} ${revoked === 1 ? 'session' : 'sessions'} revoked`);
+  },
 };
 
 async function setStatus({ client, need, out }: HandlerContext, verb: 'disable' | 'enable'): Promise<void> {

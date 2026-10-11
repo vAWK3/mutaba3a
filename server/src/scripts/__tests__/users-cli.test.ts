@@ -82,6 +82,15 @@ describe('users CLI (npm run provision:user and friends)', () => {
     expect((await h.store.users.findByEmail('nour@firm.ps'))?.status).toBe('ACTIVE');
   });
 
+  it('revoke-sessions prints how many sessions were ended', async () => {
+    const h = harness();
+    const o = await org(h.store, 'Firm');
+    await h.run(['create', '--email', 'nour@firm.ps', '--name', 'Nour', '--organization-id', o.id]);
+    h.out.length = 0;
+    expect(await h.run(['revoke-sessions', '--email', 'nour@firm.ps'])).toBe(0);
+    expect(h.out.join('\n')).toMatch(/0 sessions? revoked/);
+  });
+
   it('fails without a token, prints no secret', async () => {
     const h = harness();
     const o = await org(h.store, 'Firm');

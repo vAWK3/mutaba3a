@@ -1,16 +1,18 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
-import { apiKeyAuth, type AppEnv } from './auth/middleware.js';
+import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
+import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
 import { ApiError, ERROR_CODES } from './errors.js';
 import type { Logger } from './logger.js';
-import type { RateLimiter } from './rate-limit.js';
+import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
+import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
@@ -43,10 +45,20 @@ export interface AppDependencies {
   attachmentUrlTtlSeconds?: number;
   /** argon2id hasher for user passwords (MUT-37). Defaults to the OWASP minimum profile; production passes the configured one. */
   passwordHasher?: PasswordHasher;
+  /** Browser sessions (MUT-38). Production passes the configured pepper and limits; tests get a random pepper and the defaults. */
+  sessions?: SessionSettings;
+  /** Sign-in lockout state (in process, one instance until TD-017). */
+  signInThrottle?: SignInThrottle;
+  /** Per-IP sign-in attempt budget. */
+  signInIpLimiter?: RateLimiter;
+}
+
+function defaultSessionSettings(): SessionSettings {
+  return { pepper: randomBytes(32).toString('hex'), idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 };
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.8.0-mut37';
+export const API_VERSION = '1.9.0-mut38';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -96,10 +108,34 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     return c.json(err.toEnvelope(c.get('requestId')), err.status);
   });
 
-  app.use('/v1/*', apiKeyAuth({ store: deps.store, environment: deps.keyEnvironment, rateLimiter: deps.rateLimiter }));
+  const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
+  const sessions = deps.sessions ?? defaultSessionSettings();
+  let routeAccess: RouteAccessIndex | undefined;
+  app.use(
+    '/v1/*',
+    authenticate({
+      store: deps.store,
+      environment: deps.keyEnvironment,
+      rateLimiter: deps.rateLimiter,
+      sessions,
+      // Built on first request, after every route below has registered its OpenAPI definition.
+      routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions)),
+      organizationIndependent: ORGANIZATION_INDEPENDENT_ROUTES,
+    }),
+  );
   app.use('/admin/*', adminAuth(deps.adminToken));
 
   app.route('/', healthRoutes(deps.store, deps.version));
+  app.route(
+    '/',
+    sessionRoutes({
+      store: deps.store,
+      passwordHasher,
+      settings: sessions,
+      throttle: deps.signInThrottle ?? new SignInThrottle(),
+      ipLimiter: deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute),
+    }),
+  );
   app.route('/', integrationRoutes(deps.store, deps.version));
   app.route('/', customerRoutes(deps.store));
   app.route('/', projectRoutes(deps.store));
@@ -116,12 +152,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', auditRoutes(deps.store));
   app.route('/', attachmentRoutes(deps.store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store: deps.store, passwordHasher: deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS), logger: deps.logger }));
+  app.route('/', adminUserRoutes({ store: deps.store, passwordHasher, logger: deps.logger }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',
     scheme: 'bearer',
     description: 'Organization API key: `Authorization: Bearer mut_live_<prefix>_<secret>`',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'session', {
+    type: 'apiKey',
+    in: 'cookie',
+    name: '__Host-mut_session',
+    description: 'Hosted-portal session (MUT-38). Set by POST /v1/sessions; httpOnly, SameSite=Strict, same origin only. Organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user\'s memberships.',
   });
   app.openAPIRegistry.registerComponent('securitySchemes', 'adminToken', {
     type: 'apiKey',
@@ -160,6 +202,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.',
         '',
+        'Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.',
+        '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),
     },
@@ -176,6 +220,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Retainers', description: 'Recurring agreements and their monthly charges' },
       { name: 'Receivables', description: 'What is owed, and credits against it' },
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
+      { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });

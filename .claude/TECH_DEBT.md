@@ -82,7 +82,7 @@ names), then fill the gaps. MUT-43 adds the same check for the new `hosted.*`
 subtree only; the rest is this entry.
 
 ### TD-031: Server Log Redaction Is Untested and Only One Level Deep
-**Status**: Open (to be resolved by MUT-38)
+**Status**: Resolved 2026-10-11 by MUT-38 — `logger.ts` spells every sensitive key (now incl. `cookie`, `set-cookie`, `password`, `sessionToken`) at depths 0–3; `__tests__/logger.test.ts` pins all 40 combinations plus request cookies and response Set-Cookie
 **Added**: 2026-10-11 (found during MUT-36)
 **Priority**: High once sessions exist
 **Impact**: A credential nested two levels deep in a logged object would be

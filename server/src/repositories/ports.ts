@@ -78,7 +78,8 @@ export interface ConnectIntegrationInput {
   at: Date;
 }
 
-export type AuditActorType = 'API_KEY' | 'ADMIN' | 'SYSTEM';
+/** USER (MUT-38): a signed-in person acting through a session; actorId is the user id. */
+export type AuditActorType = 'API_KEY' | 'ADMIN' | 'SYSTEM' | 'USER';
 
 export interface AuditEventInput {
   organizationId: string;
@@ -822,6 +823,10 @@ export interface UserRepository {
   /** Replaces the hash, stamps passwordChangedAt and clears failedSignIns / lockedUntil. */
   setPassword(id: string, passwordHash: string, at: Date): Promise<UserRecord | null>;
   setStatus(id: string, status: UserStatus, at: Date): Promise<UserRecord | null>;
+  /** MUT-38: one more failed sign-in; `lockUntil` persists a lock when the throttle just imposed one. */
+  recordFailedSignIn(id: string, at: Date, lockUntil: Date | null): Promise<UserRecord | null>;
+  /** MUT-38: stamps lastSignInAt and clears failedSignIns / lockedUntil. */
+  recordSignIn(id: string, at: Date): Promise<UserRecord | null>;
 }
 
 export interface MembershipRepository {
@@ -836,11 +841,48 @@ export interface MembershipRepository {
   listByOrganization(organizationId: string): Promise<MembershipRecord[]>;
 }
 
+// ---- MUT-38: browser sessions (ADR-033 decision 3) -------------------------
+
+/** A server-side session. Only the HMAC digest of the cookie token is stored. */
+export interface SessionRecord {
+  id: string;
+  userId: string;
+  tokenDigest: string;
+  createdAt: Date;
+  lastSeenAt: Date;
+  idleExpiresAt: Date;
+  absoluteExpiresAt: Date;
+  revokedAt: Date | null;
+  revokedReason: string | null;
+  userAgent: string | null;
+}
+
+export interface CreateSessionInput {
+  userId: string;
+  tokenDigest: string;
+  at: Date;
+  idleExpiresAt: Date;
+  absoluteExpiresAt: Date;
+  userAgent: string | null;
+}
+
+export interface SessionRepository {
+  /** UniqueViolation on a duplicate digest; ForeignKeyViolation on an unknown user. */
+  create(input: CreateSessionInput): Promise<SessionRecord>;
+  findByDigest(tokenDigest: string): Promise<SessionRecord | null>;
+  touch(id: string, at: Date, idleExpiresAt: Date): Promise<void>;
+  /** The first revocation wins (time and reason are kept). Null for an unknown id. */
+  revoke(id: string, reason: string, at: Date): Promise<SessionRecord | null>;
+  /** Revokes the user's live sessions; returns how many. */
+  revokeAllForUser(userId: string, reason: string, at: Date): Promise<number>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
   users: UserRepository;
   memberships: MembershipRepository;
+  sessions: SessionRepository;
   integrations: IntegrationRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;

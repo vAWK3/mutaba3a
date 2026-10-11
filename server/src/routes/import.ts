@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { planImport, type ImportRow, type ImportState, type PlanRow } from '../import/plan.js';
@@ -68,7 +68,7 @@ export function importRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Per-row outcomes', content: { 'application/json': { schema: ImportCommitResponseSchema } } }, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       await requireConnectedIntegration(store, organization.id, body.provider);
       if (!verifyPreviewToken(body.previewToken, organization.id, body.provider, body.rows)) {

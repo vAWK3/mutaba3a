@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, todayFor } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import type { LedgerStore } from '../repositories/ports.js';
@@ -17,7 +17,7 @@ export function vatRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/vat-rates',
       tags: ['VAT'],
       summary: 'List the firm’s VAT rates, newest first, with the one in force today',
-      security: [{ apiKey: [] }],
+      security: [{ apiKey: [] }, { session: [] }],
       middleware: [requireScope('agreements:read')] as const,
       responses: { 200: { description: 'Rates', content: { 'application/json': { schema: VatRatesResponseSchema } } }, ...errorResponses },
     }),
@@ -48,7 +48,7 @@ export function vatRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const { organization, apiKey } = c.get('auth');
+      const { organization, apiKey } = keyAuth(c);
       const body = c.req.valid('json');
       assertIsoDate(body.effectiveFrom, 'effectiveFrom');
       const result = await store.vatRates.upsert(organization.id, body.rateBasisPoints, body.effectiveFrom, c.get('now')());
