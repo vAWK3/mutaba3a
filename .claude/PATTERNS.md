@@ -1360,7 +1360,24 @@ column of the principal. Code outside a request (scripts, reconcile) and
 READ_ONLY_PROFILE on a Malafat row, PRINCIPAL_NOT_ACCEPTED elsewhere — never a
 bare 403. Route scopes are read from tagged `requireScope` middleware, so tests
 and `authenticate()` derive expectations from `route × matrix` rather than a
-hand-kept list.
+hand-kept list. A domain a principal must not even read (the API key on
+`expenses`) classifies its reads `{ read: Domain }` too (MUT-42).
+
+### A domain one principal must never see is closed at every door (MUT-42)
+Declaring routes `[{ session: [] }]` is not enough. Check each shared path an
+API key can read:
+1. routes (`security`);
+2. store reads (`{ read: Domain }`);
+3. the audit listing (`excludeEntityTypes`);
+4. the idempotency lookup (`claimKeyFor` namespaces session keys);
+5. any table a key-readable route lists (give the domain its own table rather
+   than filtering a shared one).
+
+Then prove it with a **canary sweep**, generated from the published document:
+1. a session writes distinctive values;
+2. the key calls every key-readable operation, with every canary id in every
+   path slot;
+3. no response body may contain a canary (`expenses-invisible.test.ts`).
 
 ### Log redaction is spelled out per depth (MUT-38, TD-039)
 pino's `*.x` matches one level only. `logger.ts` generates every sensitive key

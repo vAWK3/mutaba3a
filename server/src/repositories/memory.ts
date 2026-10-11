@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
   AttachmentFilter,
@@ -54,6 +55,19 @@ import type {
   FeeProposalRecord,
   FeeProposalRepository,
   FeeProposalTransitionPatch,
+  CreateExpenseInput,
+  CreateExpenseReceiptInput,
+  ExpenseCategoryInput,
+  ExpenseCategoryRecord,
+  ExpenseCategoryRepository,
+  ExpenseCursor,
+  ExpenseFilter,
+  ExpenseReceiptRecord,
+  ExpenseReceiptRepository,
+  ExpenseRecord,
+  ExpenseRepository,
+  UpdateExpenseCategoryPatch,
+  UpdateExpensePatch,
   CustomerFilter,
   CustomerRecord,
   CustomerRepository,
@@ -110,6 +124,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly people = new Map<string, UserRecord>();
   private readonly members = new Map<string, MembershipRecord>();
   private readonly sessionsById = new Map<string, SessionRecord>();
+  private readonly exps = new Map<string, ExpenseRecord>();
+  private readonly expCats = new Map<string, ExpenseCategoryRecord>();
+  private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -339,7 +356,14 @@ export class MemoryLedgerStore implements LedgerStore {
         .map((e) => ({ ...e })),
     list: async (organizationId, filter: AuditFilter, page) =>
       paginate(
-        this.events.filter((e) => e.organizationId === organizationId && (!filter.entityType || e.entityType === filter.entityType) && (!filter.entityId || e.entityId === filter.entityId) && (!filter.action || e.action === filter.action)),
+        this.events.filter(
+          (e) =>
+            e.organizationId === organizationId &&
+            (!filter.entityType || e.entityType === filter.entityType) &&
+            (!filter.entityId || e.entityId === filter.entityId) &&
+            (!filter.action || e.action === filter.action) &&
+            !(filter.excludeEntityTypes ?? []).includes(e.entityType),
+        ),
         page,
       ),
   };
@@ -927,6 +951,138 @@ export class MemoryLedgerStore implements LedgerStore {
     return new Set(refs.map((r) => r.entityId));
   }
 
+  // ---- MUT-42: expenses ----------------------------------------------------
+
+  readonly expenses: ExpenseRepository = {
+    create: async (input: CreateExpenseInput, at) => {
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('expenses.organizationId');
+      const record: ExpenseRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
+      this.exps.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const e = this.exps.get(id);
+      return e && e.organizationId === organizationId && !e.deletedAt ? { ...e } : null;
+    },
+    list: async (organizationId, filter: ExpenseFilter, page) => {
+      const rows = [...this.exps.values()]
+        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
+        .sort(newestFirst)
+        .slice(0, page.limit + 1);
+      const items = rows.slice(0, page.limit).map((e) => ({ ...e }));
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { occurredOn: last.occurredOn, id: last.id } : null };
+    },
+    update: async (organizationId, id, expectedVersion, patch: UpdateExpensePatch, at) => {
+      const e = this.exps.get(id);
+      if (!e || e.organizationId !== organizationId || e.deletedAt) return { kind: 'not_found' };
+      if (e.version !== expectedVersion) return { kind: 'stale', record: { ...e } };
+      Object.assign(e, definedOnly(patch));
+      e.version += 1;
+      e.updatedAt = at;
+      return { kind: 'updated', record: { ...e } };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const e = this.exps.get(id);
+      if (!e || e.organizationId !== organizationId) return null;
+      const changed = !e.deletedAt;
+      if (changed) e.deletedAt = at;
+      return { record: { ...e }, changed };
+    },
+  };
+
+  readonly expenseCategories: ExpenseCategoryRepository = {
+    create: async (organizationId, input: ExpenseCategoryInput, at) => {
+      if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('expense_categories.organizationId');
+      if (this.categoryNamed(organizationId, input.name)) throw new UniqueViolation('expense_categories.name');
+      const record: ExpenseCategoryRecord = { id: randomUUID(), organizationId, name: input.name, color: input.color, archivedAt: null, version: 1, createdAt: at, updatedAt: at };
+      this.expCats.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const c = this.expCats.get(id);
+      return c && c.organizationId === organizationId ? { ...c } : null;
+    },
+    list: async (organizationId, options) =>
+      [...this.expCats.values()]
+        .filter((c) => c.organizationId === organizationId && (options.includeArchived || !c.archivedAt))
+        .sort(compareByCreatedAtThenId)
+        .map((c) => ({ ...c })),
+    seed: async (organizationId, preset, at) => {
+      if ([...this.expCats.values()].some((c) => c.organizationId === organizationId)) return false;
+      // Same instant for the whole preset; the 1 ms steps keep creation order equal to preset order.
+      preset.forEach((p, i) => {
+        const record: ExpenseCategoryRecord = { id: randomUUID(), organizationId, name: p.name, color: p.color, archivedAt: null, version: 1, createdAt: new Date(at.getTime() + i), updatedAt: at };
+        this.expCats.set(record.id, record);
+      });
+      return true;
+    },
+    update: async (organizationId, id, expectedVersion, patch: UpdateExpenseCategoryPatch, at) => {
+      const c = this.expCats.get(id);
+      if (!c || c.organizationId !== organizationId) return { kind: 'not_found' };
+      if (c.version !== expectedVersion) return { kind: 'stale', record: { ...c } };
+      if (patch.name !== undefined) {
+        const taken = this.categoryNamed(organizationId, patch.name);
+        if (taken && taken.id !== id) throw new UniqueViolation('expense_categories.name');
+        c.name = patch.name;
+      }
+      if (patch.color !== undefined) c.color = patch.color;
+      if (patch.archived !== undefined) c.archivedAt = patch.archived ? (c.archivedAt ?? at) : null;
+      c.version += 1;
+      c.updatedAt = at;
+      return { kind: 'updated', record: { ...c } };
+    },
+  };
+
+  readonly expenseReceipts: ExpenseReceiptRepository = {
+    create: async (input: CreateExpenseReceiptInput, at) => {
+      if (!this.exps.has(input.expenseId)) throw new ForeignKeyViolation('expense_receipts.expenseId');
+      const record: ExpenseReceiptRecord = { id: randomUUID(), ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at, completedAt: null, deletedAt: null };
+      this.expReceipts.set(record.id, record);
+      return { ...record };
+    },
+    setKey: async (organizationId, id, storageKey) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.organizationId !== organizationId) return null;
+      r.storageKey = storageKey;
+      return { ...r };
+    },
+    getById: async (organizationId, id) => {
+      const r = this.expReceipts.get(id);
+      return r && r.organizationId === organizationId && !r.deletedAt ? { ...r } : null;
+    },
+    listByExpense: async (organizationId, expenseId) =>
+      [...this.expReceipts.values()]
+        .filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && r.status === 'READY' && !r.deletedAt)
+        .sort(compareByCreatedAtThenId)
+        .map((r) => ({ ...r })),
+    complete: async (organizationId, id, at) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
+      if (r.status !== 'READY') {
+        r.status = 'READY';
+        r.completedAt = at;
+      }
+      return { ...r };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.organizationId !== organizationId) return null;
+      if (!r.deletedAt) r.deletedAt = at;
+      return { ...r };
+    },
+    softDeleteByExpense: async (organizationId, expenseId, at) => {
+      const live = [...this.expReceipts.values()].filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && !r.deletedAt);
+      for (const r of live) r.deletedAt = at;
+      return live.map((r) => ({ ...r }));
+    },
+  };
+
+  private categoryNamed(organizationId: string, name: string): ExpenseCategoryRecord | undefined {
+    const key = categoryNameKey(name);
+    return [...this.expCats.values()].find((c) => c.organizationId === organizationId && categoryNameKey(c.name) === key);
+  }
+
   async ping(): Promise<void> {
     /* always up */
   }
@@ -983,6 +1139,33 @@ function settle(r: ReceivableRecord): void {
 
 function clone<T extends object>(value: T | undefined): T | null {
   return value ? { ...value } : null;
+}
+
+function matchesExpense(e: ExpenseRecord, f: ExpenseFilter): boolean {
+  return (
+    (!f.from || e.occurredOn >= f.from) &&
+    (!f.to || e.occurredOn <= f.to) &&
+    (!f.currency || e.currency === f.currency) &&
+    (!f.categoryId || e.categoryId === f.categoryId) &&
+    (!f.customerId || e.customerId === f.customerId) &&
+    (!f.projectId || e.projectId === f.projectId) &&
+    (!f.unlinked || e.customerId === null)
+  );
+}
+
+/** (occurredOn, id) descending. ISO dates compare as strings. */
+function newestFirst(a: ExpenseRecord, b: ExpenseRecord): number {
+  if (a.occurredOn !== b.occurredOn) return a.occurredOn < b.occurredOn ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+function isBeforeExpenseCursor(e: ExpenseRecord, cursor: ExpenseCursor): boolean {
+  return e.occurredOn < cursor.occurredOn || (e.occurredOn === cursor.occurredOn && e.id < cursor.id);
+}
+
+/** The keys of a patch that are present (undefined = unchanged; null = cleared). */
+function definedOnly<T extends object>(patch: T): Partial<T> {
+  return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
 function paginate<T extends { id: string; createdAt: Date }>(rows: T[], page: PageRequest): Page<T> {

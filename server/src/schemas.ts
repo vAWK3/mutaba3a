@@ -502,6 +502,8 @@ export const CONFLICT_REASONS = [
   // M7
   'PROPOSAL_OPEN',
   'PROPOSAL_NOT_OPEN',
+  // MUT-42
+  'CATEGORY_NAME_TAKEN',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -562,6 +564,11 @@ export const VALIDATION_REASONS = [
   'PROJECT_NOT_FOUND',
   // MUT-38: a session request to an organization-scoped route without X-Mutaba3a-Profile
   'PROFILE_REQUIRED',
+  // MUT-42: expenses on hosted profiles
+  'PROJECT_CUSTOMER_MISMATCH',
+  'CATEGORY_NOT_FOUND',
+  'CATEGORY_ARCHIVED',
+  'TOO_MANY_RECEIPTS',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -1269,3 +1276,136 @@ export const ListAttachmentsQuerySchema = z.object({
 });
 export const AttachmentPageSchema = z.object({ items: z.array(AttachmentSchema), nextCursor: z.string().nullable() }).openapi('AttachmentPage');
 export const AttachmentIdParamSchema = z.object({ attachmentId: uuid.openapi({ param: { name: 'attachmentId', in: 'path' } }) });
+
+// ---- MUT-42: expenses on hosted profiles (session-only) ----------------------
+
+const expenseText = z.string().trim().min(1).max(200);
+const expenseNotes = z.string().max(4000);
+const categoryName = z.string().trim().min(1).max(60);
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, '#rrggbb');
+
+export const ExpenseSchema = z
+  .object({
+    id: uuid,
+    occurredOn: IsoDateSchema,
+    /** The original amount, in `currency`; never converted. */
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    title: z.string().nullable(),
+    vendor: z.string().nullable(),
+    categoryId: uuid.nullable(),
+    /** The client this expense is for, if any. Null = the firm's own (or, on a personal profile, personal) spending. */
+    customerId: uuid.nullable(),
+    projectId: uuid.nullable(),
+    notes: z.string().nullable(),
+    createdByUserId: uuid,
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('Expense');
+
+export const ExpenseReceiptSchema = z
+  .object({
+    id: uuid,
+    expenseId: uuid,
+    filename: z.string(),
+    mimeType: AttachmentMimeTypeSchema,
+    sizeBytes: z.number().int(),
+    status: AttachmentStatusSchema,
+    uploadedByUserId: uuid,
+    createdAt: z.string().datetime(),
+    completedAt: z.string().datetime().nullable(),
+  })
+  .openapi('ExpenseReceipt');
+
+export const ExpenseDetailSchema = ExpenseSchema.extend({ receipts: z.array(ExpenseReceiptSchema) }).openapi('ExpenseDetail');
+export const ExpensePageSchema = z.object({ items: z.array(ExpenseSchema), nextCursor: z.string().nullable() }).openapi('ExpensePage');
+
+export const CreateExpenseRequestSchema = z
+  .object({
+    occurredOn: IsoDateSchema,
+    amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
+    currency: CurrencySchema,
+    title: expenseText.optional(),
+    vendor: expenseText.optional(),
+    categoryId: uuid.optional(),
+    customerId: uuid.optional(),
+    projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
+    notes: expenseNotes.optional(),
+  })
+  .strict()
+  .openapi('CreateExpenseRequest');
+
+/** No `currency`: a row's currency never changes, so it is never converted. Null clears an optional field. */
+export const UpdateExpenseRequestSchema = z
+  .object({
+    occurredOn: IsoDateSchema.optional(),
+    amount: AmountSchema.optional(),
+    title: expenseText.nullable().optional(),
+    vendor: expenseText.nullable().optional(),
+    categoryId: uuid.nullable().optional(),
+    customerId: uuid.nullable().optional(),
+    projectId: uuid.nullable().optional(),
+    notes: expenseNotes.nullable().optional(),
+  })
+  .strict()
+  .openapi('UpdateExpenseRequest');
+
+export const ListExpensesQuerySchema = z.object({
+  ...pageQuery,
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
+  to: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
+  currency: CurrencySchema.optional(),
+  categoryId: uuid.optional(),
+  customerId: uuid.optional(),
+  projectId: uuid.optional(),
+  linked: z.enum(['none']).optional().openapi({ description: '`none`: only expenses linked to no client' }),
+});
+
+export const ExpenseIdParamSchema = z.object({ expenseId: uuid });
+export const ExpenseReceiptParamSchema = z.object({ expenseId: uuid, receiptId: uuid });
+
+export const CreateReceiptUploadRequestSchema = z
+  .object({ filename: z.string().min(1).max(200), mimeType: AttachmentMimeTypeSchema, sizeBytes: z.number().int().min(1).max(10 * 1024 * 1024) })
+  .strict()
+  .openapi('CreateReceiptUploadRequest');
+
+export const CreateReceiptUploadResponseSchema = z
+  .object({
+    receipt: ExpenseReceiptSchema,
+    upload: z.object({ url: z.string().url(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string().datetime() }),
+  })
+  .openapi('CreateReceiptUploadResponse');
+
+export const ExpenseCategorySchema = z
+  .object({ id: uuid, name: z.string(), color: z.string().nullable(), archived: z.boolean(), version: z.number().int(), createdAt: z.string().datetime(), updatedAt: z.string().datetime() })
+  .openapi('ExpenseCategory');
+export const ExpenseCategoryListSchema = z.object({ items: z.array(ExpenseCategorySchema) }).openapi('ExpenseCategoryList');
+export const ListExpenseCategoriesQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).optional() });
+export const ExpenseCategoryIdParamSchema = z.object({ categoryId: uuid });
+export const CreateExpenseCategoryRequestSchema = z.object({ name: categoryName, color: hexColor.optional() }).strict().openapi('CreateExpenseCategoryRequest');
+export const UpdateExpenseCategoryRequestSchema = z
+  .object({ name: categoryName.optional(), color: hexColor.nullable().optional(), archived: z.boolean().optional() })
+  .strict()
+  .openapi('UpdateExpenseCategoryRequest');
+
+const expenseBucket = { total: AmountSchema, count: z.number().int() };
+export const ExpenseSummaryQuerySchema = z.object({
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive; defaults to the first of this month in the organization timezone' }),
+  to: IsoDateSchema.optional().openapi({ description: 'Inclusive; defaults to the last of this month' }),
+});
+export const ExpenseSummarySchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    currencies: z.array(
+      z.object({
+        currency: CurrencySchema,
+        ...expenseBucket,
+        byCategory: z.array(z.object({ categoryId: uuid.nullable(), ...expenseBucket })),
+        byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })),
+      }),
+    ),
+  })
+  .openapi('ExpenseSummary');

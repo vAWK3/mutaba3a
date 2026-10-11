@@ -4,6 +4,9 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type {
+  ExpenseCategoryRecord,
+  ExpenseReceiptRecord,
+  ExpenseRecord,
   FeeProposalRecord,
   AttachmentRecord,
   AgreementRecord,
@@ -392,4 +395,42 @@ export function serializeFeeProposal(p: FeeProposalRecord) {
 export function serializeFeeProposalSummary(p: FeeProposalRecord | null) {
   if (!p) return null;
   return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId };
+}
+
+/** MUT-42: the original amount, formatted in its own currency — never converted. */
+export function serializeExpense(e: ExpenseRecord) {
+  return {
+    id: e.id,
+    occurredOn: e.occurredOn,
+    amount: formatMoney({ minor: e.amountMinor, currency: e.currency as Currency }),
+    currency: e.currency as Currency,
+    title: e.title,
+    vendor: e.vendor,
+    categoryId: e.categoryId,
+    customerId: e.customerId,
+    projectId: e.projectId,
+    notes: e.notes,
+    createdByUserId: e.createdByUserId,
+    version: e.version,
+    createdAt: e.createdAt.toISOString(),
+    updatedAt: e.updatedAt.toISOString(),
+  };
+}
+
+export function serializeExpenseReceipt(r: ExpenseReceiptRecord) {
+  return {
+    id: r.id,
+    expenseId: r.expenseId,
+    filename: r.filename,
+    mimeType: r.mimeType as 'application/pdf' | 'image/jpeg' | 'image/png',
+    sizeBytes: r.sizeBytes,
+    status: r.status,
+    uploadedByUserId: r.uploadedByUserId,
+    createdAt: r.createdAt.toISOString(),
+    completedAt: iso(r.completedAt),
+  };
+}
+
+export function serializeExpenseCategory(c: ExpenseCategoryRecord) {
+  return { id: c.id, name: c.name, color: c.color, archived: c.archivedAt !== null, version: c.version, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
 }

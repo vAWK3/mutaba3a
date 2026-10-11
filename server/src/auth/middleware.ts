@@ -333,6 +333,13 @@ export function keyAuth(c: AuthReader): ApiKeyAuth {
   return auth;
 }
 
+/** For handlers of session-only routes (MUT-42): the mirror of keyAuth. */
+export function sessionAuth(c: AuthReader): SessionAuth {
+  const auth = c.get('auth');
+  if (auth.kind !== 'session') throw principalNotAccepted();
+  return auth;
+}
+
 /**
  * Who lazy posting is attributed to (ADR-037 decision 8): the calling key for
  * Malafat, SYSTEM for a session — catching up due items is the reconcile job's

@@ -190,9 +190,9 @@ An API key still implies its organization, and no API-key request accepts an org
 | agreements | agreements:read, agreements:write | /v1/agreements*, /v1/installments/*, /v1/retainers* (except charges), /v1/fee-proposals*, /v1/vat-rates, /v1/settings/vat | read-write | read | MALAFAT | device |
 | payments | payments:read, payments:write | /v1/receivables*, /v1/payments*, /v1/allocations/*, /v1/retainers/{id}/charges, /v1/operations/* | read-write | read | MALAFAT | device |
 | attachments | attachments:read, attachments:write | /v1/attachments* | read-write | read | MALAFAT | device |
-| summaries | summaries:read | /v1/summaries/* | read | read | — | device |
+| summaries | summaries:read | /v1/summaries/* (except expenses) | read | read | — | device |
 | audit | audit:read | /v1/audit | read | none | — | device |
-| expenses | expenses:read, expenses:write | /v1/expenses* (MUT-42) | none | read-write | USER | device |
+| expenses | expenses:read, expenses:write | /v1/expenses*, /v1/expense-categories*, /v1/summaries/expenses | none | read-write | USER | device |
 | identity | — | /v1/me, /v1/sessions/current | none | read-write | USER | device |
 <!-- writability-matrix:end -->
 
@@ -348,7 +348,7 @@ These replace the "thin" scope text in Jira once the owner approves the brief.
 - **MUT-38 (sessions):** §4 in full: cookie transport, CSRF rule, expiry, sign-in and lockout, the `authenticate()` middleware and `security` declarations, the `AuthContext` union and `actorOf`, `GET /v1/me`, error codes, the `USER` actor, config and Terraform secret, the Malafat vendored-contract check.
   - **Correction to its AC:** there is **no existing log-redaction test**. `logger.ts` redaction is untested, and pino's `*.key` wildcards match one level only (TD-039). MUT-38 *creates* the test, covering the session cookie, the `Set-Cookie` header and `password`, and fixes the depth.
 - **MUT-39 (writability):** §5 in full: the `const` matrix, effective scopes, `READ_ONLY_PROFILE` mapping, per-request store and the exhaustive guard, system-actor lazy posting, the profile header and membership check, the `describe.each` matrix tests and the drift test. Also the AC "switching profile never leaks figures": two memberships, the same session, and an assertion at the store query layer that every call carries the header's organization id.
-- **MUT-42 (expenses domain):** unchanged in intent. Its routes declare `security: [{ session: [] }]` and the `expenses:*` scopes from the matrix's last rows. Attachments for expense receipts reuse the attachment storage with `uploadedByUserId`; that decision belongs to MUT-42's brief.
+- **MUT-42 (expenses domain):** unchanged in intent. Its routes declare `security: [{ session: [] }]` and the `expenses:*` scopes from the matrix's last rows. Attachments for expense receipts reuse the attachment storage with `uploadedByUserId`; that decision belongs to MUT-42's brief. **Decided (2026-10-11, `mut-42-hosted-expenses.md` D1):** receipts get their own `expense_receipts` table with `uploadedByUserId`, on the same bucket and TTL. Malafat reads `attachments`, so the shared table would have needed filtering out of every one of its queries. The expense scopes are session-only (D4), and the summary is its own operation, `GET /v1/summaries/expenses` (D3).
 - **MUT-43 (portal read views):** §7.1–§7.7 except expenses: build target, shell, sign-in, switcher, the six views, `DecimalAmount`, `tp`, `hosted.*` i18n with the parity test, the four states, `check-bundles`, the import-zone lint. Two parallelisable halves:
   - (a) shell, sign-in and switcher once MUT-38's `/v1/me` contract is in `openapi.yaml`;
   - (b) the views, which can be built against the server's in-memory store in dev before MUT-39 lands.

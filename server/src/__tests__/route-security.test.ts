@@ -19,8 +19,26 @@ const admin = { 'x-admin-token': ADMIN_TOKEN };
 const PLACEHOLDER = '00000000-0000-4000-8000-0000000000aa';
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
 
-/** The portal's read surface (hosted-portal.md §5–§6) plus the two identity routes. */
+/** MUT-42: a hosted profile's expenses — sessions only, never a key. */
+const EXPENSE_OPERATIONS = [
+  'PATCH /v1/expense-categories/{categoryId}',
+  'DELETE /v1/expenses/{expenseId}',
+  'DELETE /v1/expenses/{expenseId}/receipts/{receiptId}',
+  'GET /v1/expense-categories',
+  'GET /v1/expenses',
+  'GET /v1/expenses/{expenseId}',
+  'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  'GET /v1/summaries/expenses',
+  'PATCH /v1/expenses/{expenseId}',
+  'POST /v1/expense-categories',
+  'POST /v1/expenses',
+  'POST /v1/expenses/{expenseId}/receipts',
+  'POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete',
+];
+
+/** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */
 const SESSION_OPERATIONS = [
+  ...EXPENSE_OPERATIONS,
   'DELETE /v1/sessions/current',
   'GET /v1/agreements',
   'GET /v1/agreements/{agreementId}',
@@ -156,7 +174,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

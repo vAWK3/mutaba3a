@@ -28,6 +28,46 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-42: expenses on the hosted ledger
+
+**Scope:** `server/` only.
+- `prisma/schema.prisma` and migration `20261011080000_mut42_expenses` (additive: `expenses`, `expense_categories`, `expense_receipts`)
+- `src/expenses/{compose,cursor,names,presets,summary}.ts` (new); `src/routes/{expenses,expense-categories}.ts` (new)
+- `src/auth/{scopes,store-guard,writability,middleware}.ts`, `src/{idempotency,app,schemas,serializers}.ts`, `src/attachments/rules.ts`, `src/routes/audit.ts`, `src/repositories/{ports,memory,prisma}.ts`
+- `openapi/openapi.yaml`, `README.md`
+- tests: new store contract (memory and Postgres), unit tests (summary, presets, cursor), `routes-expenses` and `expenses-invisible`; additions to the rules, scopes and guard tests; `route-security` and `writability-routes`; version pins
+- records: the approved brief `mut-42-hosted-expenses.md` and its test plan; ADR-037 amendment; TD-041
+
+### Added
+- **Expenses on a hosted profile, sessions only.**
+  - Record, list (newest first, with filters), read, change (`If-Match`; the currency never changes) and soft-delete.
+  - Each expense keeps its original amount and currency. A client or matter link is optional; a matter alone brings its client, and currencies are never compared.
+  - Personal versus firm-associated is the profile. There is no classification field.
+- **Receipts:** the M6 signed-URL flow, on the same bucket and TTL, under `org/{id}/expense-receipts/{receiptId}`, in a table of their own. At most 10 per expense; uploaded by a user (`uploadedByUserId`).
+- **Categories:** per profile, as offline (name, colour, archive).
+  - The first list seeds a preset in the user's language, as `SYSTEM`: law-firm on a Malafat-fed profile, general on a personal one.
+  - A parity test keeps the presets equal to the offline app's.
+- **`GET /v1/summaries/expenses?from&to`:** defaults to this month. One block per currency, broken down by category and by client (`null` = linked to no client).
+- **Audit:** actor `USER` with the user id on every write.
+
+### Changed
+- **Expenses are invisible to Malafat's key.** The routes are session-only.
+  - The store guard gains `{ read: Domain }`, so expense reads are refused to a key below the routes.
+  - `GET /v1/audit` leaves expense activity out.
+  - Session idempotency keys are namespaced per user, so `GET /v1/operations/{key}` can't return them.
+- **`expenses:read` and `expenses:write` are session-only scopes** (`SESSION_ONLY_SCOPES`). They can't be issued to a key, and Malafat's scope vocabulary is unchanged.
+- **Small refactors:** `checkFile` is factored out of `checkUpload`, and `sessionAuth(c)` is the session counterpart of `keyAuth(c)`.
+- **Contract:** reasons `PROJECT_CUSTOMER_MISMATCH`, `CATEGORY_NOT_FOUND`, `CATEGORY_ARCHIVED`, `TOO_MANY_RECEIPTS` and `CATEGORY_NAME_TAKEN`; an "Expenses" tag and description paragraph; API `1.11.0-mut42`.
+
+### Verified
+- **Canary sweep:** every key-readable operation, handed every expense, receipt and category id, returns none of the canaries.
+- **Mutation checks:** removing the audit exclusion or the key namespacing fails the invisibility tests.
+- **The migration** applies from an empty database with no schema drift.
+- `npm test`: 1056 passed, 10 skipped. `npm run test:db`: 1117 passed. lint, typecheck, build and `openapi:check` pass.
+- **MUT-39's carried criteria hold:** a session writes an expense on a Malafat-fed profile, and the key is refused on all 13 expense operations.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-39: server-enforced writability on hosted profiles
 
 **Scope:** `server/` only. No schema change.

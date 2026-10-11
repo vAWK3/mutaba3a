@@ -1662,3 +1662,12 @@ holds).
   `guardStore(store, matrix, principal)` wording (§5 now carries an "As
   built" note).
 - Decisions 1–10 are otherwise unchanged.
+
+**Amendment (MUT-42, 2026-10-11)**: closing the expenses domain to Malafat at every door, and decision 7's scopes. Approved by the owner with `.claude/designs/mut-42-hosted-expenses.md`.
+- *What changed*:
+  - **Session-only scopes.** `expenses:read` and `expenses:write` live in `SESSION_ONLY_SCOPES`. `Scope` is the union, and `parseScopes` (key issuance) refuses them, so the key vocabulary in `SCOPES`, `MALAFAT_REQUIRED_SCOPES` and the published document is unchanged. This replaces the plan for expense scopes to "join the closed SCOPES vocabulary".
+  - **`{ read: Domain }` in the store guard.** A domain-scoped read is refused where the principal's column is `none`. Every expense repository method is classified in `expenses`, so Malafat's key can't read an expense even through a future, mis-declared route.
+  - **Audit and idempotency don't leak.** `GET /v1/audit` excludes the expense entity types. A session's `Idempotency-Key` is claimed under `s:` + SHA-256(user id, key), so `GET /v1/operations/{key}` can't return it and the two principals never collide.
+  - **Receipts have their own table** (`expense_receipts`), on the same bucket and TTL as M6 attachments, because Malafat reads the `attachments` table.
+- *Why*: the routes being session-only (decision 7) left four other paths by which a key could see expense data. Each is now closed structurally rather than by a filter on Malafat's queries. A generated canary sweep over every key-readable operation proves it.
+- *What it replaces*: the `expenses:*`-in-`SCOPES` note in `writability.ts`, and the brief's "Routes covered" cell for expenses. That cell is now `/v1/expenses*, /v1/expense-categories*, /v1/summaries/expenses`; summaries reads `/v1/summaries/* (except expenses)`.

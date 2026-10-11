@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
-import type { Scope } from '../auth/scopes.js';
+import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
+import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, StateConflict, UniqueViolation } from './memory.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import type {
@@ -58,6 +59,13 @@ import type {
   UserLocale,
   UserRecord,
   UserRepository,
+  ExpenseCategoryRecord,
+  ExpenseCategoryRepository,
+  ExpenseCursor,
+  ExpenseFilter,
+  ExpenseReceiptRepository,
+  ExpenseRecord,
+  ExpenseRepository,
 } from './ports.js';
 
 /**
@@ -273,7 +281,7 @@ export class PrismaLedgerStore implements LedgerStore {
       })),
     list: async (organizationId, filter: AuditFilter, page) => {
       const rows = await this.prisma.auditEvent.findMany({
-        where: { organizationId, ...(filter.entityType ? { entityType: filter.entityType } : {}), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...(filter.action ? { action: filter.action } : {}), ...cursorWhere(page) },
+        where: { organizationId, ...entityTypeWhere(filter), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...(filter.action ? { action: filter.action } : {}), ...cursorWhere(page) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: page.limit + 1,
       });
@@ -852,6 +860,126 @@ export class PrismaLedgerStore implements LedgerStore {
     const refs = await this.externalReferences.findByExternalIds(organizationId, filter.provider ?? 'MALAFAT', entityType, [filter.externalId]);
     return refs.map((r) => r.entityId);
   }
+
+  // ---- MUT-42: expenses ----------------------------------------------------
+
+  readonly expenses: ExpenseRepository = {
+    create: (input, at) => translate(() => this.prisma.expense.create({ data: { ...input, createdAt: at, updatedAt: at } })),
+    getById: (organizationId, id) => this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    list: async (organizationId, filter, page) => {
+      const rows: ExpenseRecord[] = await this.prisma.expense.findMany({
+        where: { organizationId, deletedAt: null, ...expenseWhere(filter), ...expenseCursorWhere(page.cursor) },
+        orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const items = rows.slice(0, page.limit);
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { occurredOn: last.occurredOn, id: last.id } : null };
+    },
+    update: async (organizationId, id, expectedVersion, patch, at) => {
+      const data: Prisma.ExpenseUncheckedUpdateManyInput = { version: { increment: 1 }, updatedAt: at };
+      for (const [k, v] of Object.entries(patch)) if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+      const { count } = await translate(() => this.prisma.expense.updateMany({ where: { id, organizationId, deletedAt: null, version: expectedVersion }, data }));
+      const record = await this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const { count } = await this.prisma.expense.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+      const record = await this.prisma.expense.findFirst({ where: { id, organizationId } });
+      return record ? { record, changed: count === 1 } : null;
+    },
+  };
+
+  readonly expenseCategories: ExpenseCategoryRepository = {
+    create: async (organizationId, input, at) =>
+      toExpenseCategory(await translate(() => this.prisma.expenseCategory.create({ data: { organizationId, name: input.name, nameKey: categoryNameKey(input.name), color: input.color, createdAt: at, updatedAt: at } }))),
+    getById: async (organizationId, id) => mapNullable(await this.prisma.expenseCategory.findFirst({ where: { id, organizationId } }), toExpenseCategory),
+    list: async (organizationId, options) =>
+      (
+        await this.prisma.expenseCategory.findMany({
+          where: { organizationId, ...(options.includeArchived ? {} : { archivedAt: null }) },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+      ).map(toExpenseCategory),
+    seed: (organizationId, preset, at) =>
+      this.prisma.$transaction(async (tx) => {
+        if ((await tx.expenseCategory.count({ where: { organizationId } })) > 0) return false;
+        // A racing seed blocks on the unique index and then skips every row, so the preset lands once.
+        const { count } = await tx.expenseCategory.createMany({
+          data: preset.map((p, i) => ({ organizationId, name: p.name, nameKey: categoryNameKey(p.name), color: p.color, createdAt: new Date(at.getTime() + i), updatedAt: at })),
+          skipDuplicates: true,
+        });
+        return count > 0;
+      }),
+    update: async (organizationId, id, expectedVersion, patch, at) => {
+      const current = await this.prisma.expenseCategory.findFirst({ where: { id, organizationId } });
+      if (!current) return { kind: 'not_found' };
+      const data: Prisma.ExpenseCategoryUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
+      if (patch.name !== undefined) {
+        data.name = patch.name;
+        data.nameKey = categoryNameKey(patch.name);
+      }
+      if (patch.color !== undefined) data.color = patch.color;
+      if (patch.archived !== undefined) data.archivedAt = patch.archived ? (current.archivedAt ?? at) : null;
+      const { count } = await translate(() => this.prisma.expenseCategory.updateMany({ where: { id, organizationId, version: expectedVersion }, data }));
+      const record = toExpenseCategory((await this.prisma.expenseCategory.findFirst({ where: { id, organizationId } }))!);
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+  };
+
+  readonly expenseReceipts: ExpenseReceiptRepository = {
+    create: (input, at) => translate(() => this.prisma.expenseReceipt.create({ data: { ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at } })),
+    setKey: async (organizationId, id, storageKey) => {
+      const { count } = await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId }, data: { storageKey } });
+      return count === 1 ? this.prisma.expenseReceipt.findUnique({ where: { id } }) : null;
+    },
+    getById: (organizationId, id) => this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    listByExpense: (organizationId, expenseId) =>
+      this.prisma.expenseReceipt.findMany({ where: { organizationId, expenseId, status: 'READY', deletedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    complete: async (organizationId, id, at) => {
+      await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' }, data: { status: 'READY', completedAt: at } });
+      return this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } });
+    },
+    softDelete: async (organizationId, id, at) => {
+      await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+      return this.prisma.expenseReceipt.findFirst({ where: { id, organizationId } });
+    },
+    softDeleteByExpense: (organizationId, expenseId, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const live = await tx.expenseReceipt.findMany({ where: { organizationId, expenseId, deletedAt: null } });
+        await tx.expenseReceipt.updateMany({ where: { id: { in: live.map((r) => r.id) }, deletedAt: null }, data: { deletedAt: at } });
+        return live.map((r) => ({ ...r, deletedAt: at }));
+      }),
+  };
+}
+
+function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
+  return {
+    ...(f.from || f.to ? { occurredOn: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } } : {}),
+    ...(f.currency ? { currency: f.currency } : {}),
+    ...(f.categoryId ? { categoryId: f.categoryId } : {}),
+    ...(f.customerId ? { customerId: f.customerId } : {}),
+    ...(f.projectId ? { projectId: f.projectId } : {}),
+    ...(f.unlinked ? { customerId: null } : {}),
+  };
+}
+
+/** Newest first: rows strictly before the cursor in (occurredOn, id) descending order. */
+function expenseCursorWhere(cursor: ExpenseCursor | null): Prisma.ExpenseWhereInput {
+  if (!cursor) return {};
+  return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: { lt: cursor.id } }] }] };
+}
+
+function toExpenseCategory(row: Prisma.ExpenseCategoryGetPayload<object>): ExpenseCategoryRecord {
+  return { id: row.id, organizationId: row.organizationId, name: row.name, color: row.color, archivedAt: row.archivedAt, version: row.version, createdAt: row.createdAt, updatedAt: row.updatedAt };
+}
+
+/** `entityType` equals the filter's and is none of the excluded ones (MUT-42). */
+function entityTypeWhere(filter: AuditFilter): { entityType?: Prisma.StringFilter } {
+  const excluded = filter.excludeEntityTypes ?? [];
+  if (!filter.entityType && excluded.length === 0) return {};
+  return { entityType: { ...(filter.entityType ? { equals: filter.entityType } : {}), ...(excluded.length ? { notIn: [...excluded] } : {}) } };
 }
 
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
@@ -925,7 +1053,7 @@ function toPage<T extends { id: string; createdAt: Date }>(rows: T[], page: Page
 
 function toApiKey(row: PrismaApiKey): ApiKeyRecord {
   const parsed = parseScopes(row.scopes);
-  const scopes: Scope[] = parsed.ok ? parsed.scopes : [];
+  const scopes: KeyScope[] = parsed.ok ? parsed.scopes : [];
   return {
     id: row.id,
     organizationId: row.organizationId,

@@ -18,6 +18,23 @@
 
 ## Open Debt
 
+### TD-041: The Expense Summary Aggregates in Process
+**Status**: Open
+**Added**: 2026-10-11 (MUT-42)
+**Priority**: Low until a profile has thousands of expenses in one range
+**Impact**: `GET /v1/summaries/expenses` reads every live expense in the range
+(pages of 200 through the store) and sums them in `expenses/summary.ts`. A month
+is a few dozen rows; a multi-year range on a busy firm would move every row to
+the service.
+
+The range scan uses the `(organizationId, occurredOn DESC, id DESC)` index, so
+the cost is transfer and memory, not a table scan.
+
+**Fix**: a `summarize(organizationId, from, to)` store method grouping by
+`(currency, categoryId)` and `(currency, customerId)` in SQL (memory store:
+the same function over its rows). Keep `summarizeExpenses` as the shaping step
+and pin both with one contract test. Also consider capping the range.
+
 ### TD-040: Audit Events Written in the Same Millisecond Have No Defined Order
 **Status**: Open
 **Added**: 2026-10-11 (found during MUT-37)
@@ -36,6 +53,10 @@ in three full `npm test` runs during MUT-37; 0 failures in 20 isolated runs.
 **Fix**: a monotonic per-organization sequence (or a `bigserial`) as the
 tie-breaker in both stores and in the cursor, with a contract test that
 appends two events in one millisecond and expects insertion order.
+
+**Seen again in MUT-42 (2026-10-11):** `routes-expenses.test.ts`'s audit test
+compared actions in order and failed once. It now compares them as a set, so
+nothing new depends on the order.
 
 ### TD-037: The Sync Op-Log Has No Notion of a Profile
 **Status**: Accepted (recorded by MUT-36; deliberately not built)

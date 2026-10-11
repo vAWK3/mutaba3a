@@ -160,6 +160,10 @@ model Organization {
   feeProposals FeeProposal[]
   memberships  Membership[]
 
+  expenses          Expense[]
+  expenseCategories ExpenseCategory[]
+  expenseReceipts   ExpenseReceipt[]
+
   @@map("organizations")
 }
 
@@ -214,6 +218,9 @@ model User {
 
   memberships Membership[]
   sessions    Session[]
+
+  expenses        Expense[]
+  expenseReceipts ExpenseReceipt[]
 
   @@map("users")
 }
@@ -340,6 +347,7 @@ model Customer {
   projects   Project[]
   agreements Agreement[]
   payments   Payment[]
+  expenses   Expense[]
 
   @@index([organizationId, createdAt, id])
   @@map("customers")
@@ -364,6 +372,7 @@ model Project {
   updatedAt      DateTime      @default(now())
 
   agreements Agreement[]
+  expenses   Expense[]
 
   @@index([organizationId, customerId])
   @@index([organizationId, createdAt, id])
@@ -744,4 +753,90 @@ model FeeProposal {
   @@index([organizationId, customerId])
   @@index([organizationId, createdAt, id])
   @@map("fee_proposals")
+}
+
+// ---- MUT-42: expenses on hosted profiles ------------------------------------
+// Additive: three new tables, nothing existing altered. Session-only; Malafat's
+// key reaches none of it (hosted-portal.md §5, mut-42-hosted-expenses.md).
+
+/// One expense in its original amount and currency — never converted. Soft-deleted.
+model Expense {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  /// Calendar date in the organization timezone, YYYY-MM-DD.
+  occurredOn      String           @db.VarChar(10)
+  amountMinor     BigInt
+  currency        String           @db.VarChar(3)
+  title           String?
+  vendor          String?
+  categoryId      String?          @db.Uuid
+  category        ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  customerId      String?          @db.Uuid
+  customer        Customer?        @relation(fields: [customerId], references: [id])
+  projectId       String?          @db.Uuid
+  project         Project?         @relation(fields: [projectId], references: [id])
+  notes           String?
+  createdByUserId String           @db.Uuid
+  createdBy       User             @relation(fields: [createdByUserId], references: [id])
+  version         Int              @default(1)
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime?
+
+  receipts ExpenseReceipt[]
+
+  /// The ledger and the summary: newest first by date within an organization.
+  @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])
+  /// A client's and a matter's expenses.
+  @@index([organizationId, customerId, occurredOn])
+  @@index([organizationId, projectId, occurredOn])
+  /// Whether a category is in use.
+  @@index([organizationId, categoryId])
+  @@map("expenses")
+}
+
+/// A per-organization expense category, as the offline ExpenseCategory. Archived, never deleted.
+model ExpenseCategory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  /// Trimmed, NFKC, lower-cased name: one category per spelling.
+  nameKey        String
+  color          String?      @db.VarChar(7)
+  archivedAt     DateTime?
+  version        Int          @default(1)
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  expenses Expense[]
+
+  @@unique([organizationId, nameKey])
+  @@index([organizationId, createdAt, id])
+  @@map("expense_categories")
+}
+
+/// A receipt file in the attachments bucket under org/{organizationId}/expense-receipts/{id}. Kept apart from `attachments`, which Malafat reads.
+model ExpenseReceipt {
+  id               String           @id @default(uuid()) @db.Uuid
+  organizationId   String           @db.Uuid
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  expenseId        String           @db.Uuid
+  expense          Expense          @relation(fields: [expenseId], references: [id])
+  filename         String
+  mimeType         String
+  sizeBytes        Int
+  status           AttachmentStatus @default(PENDING_UPLOAD)
+  storageKey       String
+  uploadedByUserId String           @db.Uuid
+  uploadedBy       User             @relation(fields: [uploadedByUserId], references: [id])
+  requestId        String?
+  createdAt        DateTime
+  completedAt      DateTime?
+  deletedAt        DateTime?
+
+  /// The receipts of one expense.
+  @@index([organizationId, expenseId, createdAt])
+  @@map("expense_receipts")
 }

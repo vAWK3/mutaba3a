@@ -23,7 +23,7 @@ export type ProfileWriter = 'MALAFAT' | null;
 
 export interface MatrixRow {
   domain: Domain;
-  /** As published in the brief; `expenses:*` join the closed SCOPES vocabulary with MUT-42. */
+  /** As published in the brief; `expenses:*` are session-only scopes (MUT-42 D4), never issuable to a key. */
   scopes: readonly string[];
   /** The brief's "Routes covered" cell, verbatim. */
   routes: string;
@@ -39,9 +39,9 @@ export const WRITABILITY_MATRIX: readonly MatrixRow[] = [
   { domain: 'agreements', scopes: ['agreements:read', 'agreements:write'], routes: '/v1/agreements*, /v1/installments/*, /v1/retainers* (except charges), /v1/fee-proposals*, /v1/vat-rates, /v1/settings/vat', apiKey: 'read-write', session: 'read', writerOfRecord: 'MALAFAT' },
   { domain: 'payments', scopes: ['payments:read', 'payments:write'], routes: '/v1/receivables*, /v1/payments*, /v1/allocations/*, /v1/retainers/{id}/charges, /v1/operations/*', apiKey: 'read-write', session: 'read', writerOfRecord: 'MALAFAT' },
   { domain: 'attachments', scopes: ['attachments:read', 'attachments:write'], routes: '/v1/attachments*', apiKey: 'read-write', session: 'read', writerOfRecord: 'MALAFAT' },
-  { domain: 'summaries', scopes: ['summaries:read'], routes: '/v1/summaries/*', apiKey: 'read', session: 'read', writerOfRecord: null },
+  { domain: 'summaries', scopes: ['summaries:read'], routes: '/v1/summaries/* (except expenses)', apiKey: 'read', session: 'read', writerOfRecord: null },
   { domain: 'audit', scopes: ['audit:read'], routes: '/v1/audit', apiKey: 'read', session: 'none', writerOfRecord: null },
-  { domain: 'expenses', scopes: ['expenses:read', 'expenses:write'], routes: '/v1/expenses* (MUT-42)', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
+  { domain: 'expenses', scopes: ['expenses:read', 'expenses:write'], routes: '/v1/expenses*, /v1/expense-categories*, /v1/summaries/expenses', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
   { domain: 'identity', scopes: [], routes: '/v1/me, /v1/sessions/current', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
 ];
 
@@ -69,6 +69,10 @@ export function matrixRow(domain: Domain): MatrixRow {
 /** The row a scope belongs to, e.g. `payments:write` → payments. */
 export function domainOfScope(scope: string): Domain | undefined {
   return WRITABILITY_MATRIX.find((r) => r.scopes.includes(scope))?.domain;
+}
+
+export function mayRead(principal: Principal, domain: Domain): boolean {
+  return matrixRow(domain)[principal] !== 'none';
 }
 
 export function mayWrite(principal: Principal, domain: Domain): boolean {
