@@ -127,6 +127,20 @@ removing it from either locale file fails the `as Translations` cast in
 `context.tsx`. Not run on this change: the full `npx vitest run` (stopped on
 request; only this file was run). Still manual: the banner in RTL.
 
+#### Settings › Data Tools copy (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/pages/settings/__tests__/DataToolsSection.test.tsx` | Component | 24 | en + ar: heading, row and button labels; clean run (result line + success toast); 1, 3 and 12 issues mixing orphaned and broken references (singular/plural line + toast); a failed check, both returned `error` and thrown, shows the failure toast, not "0 issues"; backup toast, success and failure; restore toast for 1 and 57 records with the backup version; failed restore wrapped in `settings.data.importFailed`. Each test also checks for no raw key or `{placeholder}` left and no "Translation missing" warning. Plus exact English sentences, and a check that Arabic plural templates are "label: {count}" |
+
+`tsc -b` guards the keys (`integrity.*` and the Data Tools keys under
+`settings` are required in `Translations`). The full suite passed on the
+branch as first written on `d2a050d` (135 files, 2230 passed, 5 skipped). It
+was not re-run, on request, after an `eslint-disable-next-line` comment was
+added to the new test or after the rebase onto main with MUT-7 and MUT-15
+(no overlap in `src/pages/settings` or the i18n keys; lint and `tsc -b` pass). The restore tests print jsdom's
+"Not implemented: navigation" because `Location.reload` can't be stubbed.
+Still manual: the Data Tools row in RTL.
+
 #### Release tooling (added 2026-10-11)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|

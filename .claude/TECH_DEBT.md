@@ -635,6 +635,27 @@ the handlers next to `visibleAddMenuActions` so both menus call the same one.
 
 ---
 
+### TD-033: Data Tools still shows some English inside Arabic copy
+**Status**: Open
+**Priority**: Low
+**Introduced**: found 2026-10-11 while translating the Data Tools messages
+**Impact**: A failed restore toasts `settings.data.importFailed` with the raw
+`Error.message` as `{error}`: `restoreFromBackup` throws English developer
+strings ("Invalid backup file: missing version or tables", "Backup is from a
+newer version…"), and a malformed file gives the browser's `JSON.parse`
+message, so Arabic reads "فشل الاستيراد: Invalid backup file…". Separately,
+`settings.exportReceiptsDone` / `exportReceiptsDesc` have one plural form:
+English says "1 receipts exported", and the Arabic "{count} إيصالًا" /
+"{count} ملف إيصال" is only right for 11+.
+
+**Remediation**: have `restoreFromBackup` throw typed errors (invalid file,
+newer version with `{backup}` / `{app}`) that the section maps to keys; split
+the receipts strings into singular/plural keys with "label: {count}" Arabic.
+
+**Effort**: Small
+
+---
+
 ## In Progress
 
 *No items currently in progress.*

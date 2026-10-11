@@ -245,6 +245,28 @@ export interface Translations {
       name: string;
       description: string;
     };
+    // Data Tools (DataToolsSection)
+    dataTools: string;
+    integrityCheck: string;
+    integrityCheckDesc: string;
+    integrityCheckRun: string;
+    integrityCheckRunning: string;
+    backup: string;
+    backupDesc: string;
+    backupExport: string;
+    backupDone: string;
+    backupFailed: string;
+    importBackup: string;
+    importBackupDesc: string;
+    importBackupBtn: string;
+    importBackupDoneSingular: string;
+    importBackupDonePlural: string;
+    exportReceipts: string;
+    exportReceiptsDesc: string;
+    exportReceiptsNone: string;
+    exportReceiptsBtn: string;
+    exportReceiptsDone: string;
+    exportReceiptsFailed: string;
   };
   drawer: {
     transaction: {
@@ -338,5 +360,12 @@ export interface Translations {
     orphanedRecordPlural: string;
     reviewNow: string;
     dismiss: string;
+    checkClean: string;
+    checkIssuesSingular: string;
+    checkIssuesPlural: string;
+    checkFailed: string;
+    toastClean: string;
+    toastIssuesSingular: string;
+    toastIssuesPlural: string;
   };
 }
