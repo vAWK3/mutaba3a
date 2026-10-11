@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-049: `isMacOS()` is true on an iPad and `isLinux()` is true on Android
+**Status**: Open
+**Added**: 2026-10-12 (MUT-76)
+**Priority**: Low
+**Impact**: Both read `navigator.platform`/`userAgent` substrings. iPadOS 13+ reports `MacIntel`, and Android's UA contains "Linux", so `MacDownloadBanner` (the only `isMacOS` caller) offers the Mac app to iPad users. `detectDevice()` in the same file gets both right.
+**Remediation**: MUT-79 (app frame) shows the Mac-app bar only on a Mac — switch `MacDownloadBanner` to `currentDevice() === 'mac'` there, then decide whether `isMacOS`/`isWindows`/`isLinux` can be deleted (their only other users are tests).
+
 ### TD-048: `theme.css` sets `font-family` on every `:lang()` element, so inline elements inside headings lose the heading face
 **Status**: Open
 **Added**: 2026-10-11 (MUT-75)

@@ -1571,3 +1571,11 @@ above only sets the header when `onFound` actually fired for that request.
 
 Copy that isn't backed by code (the story, the FAQ prose) stays in i18n, and a test pins the claims that must never appear (`LandingPage.test.tsx`, "honesty").
 
+### A count-up never moves the layout (MUT-76)
+
+Animate the digits on top of the final value, which is laid out with `visibility: hidden` in the same grid cell (`display: inline-grid`, both children `grid-area: 1 / 1`). The box is the final value's size from the first frame, so nothing around it shifts while the number grows. The animating span is `aria-hidden`; a `.sr-only` span carries the final value for screen readers. See `CountUpAmount`.
+
+### Reduced motion in JS is a subscription, not an effect (MUT-76)
+
+Read `prefers-reduced-motion` with `useSyncExternalStore` (`usePrefersReducedMotion`), not `useState` + `useEffect` + `setState` — the React lint rules reject synchronous `setState` in an effect, and the external-store form stays in step with the OS setting for free. Likewise, an animation hook that must "restart" on a new target derives its value (`frame.target === target ? frame.value : 0`) instead of resetting state inside the effect (`useCountUp`).
+
