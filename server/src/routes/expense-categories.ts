@@ -19,7 +19,7 @@ import {
 import { serializeExpenseCategory } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
-const SESSION_ONLY = [{ session: [] }];
+const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const categoryJson = { content: { 'application/json': { schema: ExpenseCategorySchema } } };
 

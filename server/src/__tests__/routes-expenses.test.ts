@@ -67,7 +67,10 @@ async function partner(h: Harness, organizationIds: string[], locale: 'en' | 'ar
   const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const as = (profile: string, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': profile, ...SAME_ORIGIN, ...extra });
-  return { as, userId: created.user.id as string };
+  // MUT-64: the same person's device-session bearer token, for the "a device session can write expenses too" check.
+  const deviceRes = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.initialPassword })));
+  const asDevice = (profile: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${deviceRes.token}`, 'x-mutaba3a-profile': profile, ...extra });
+  return { as, asDevice, userId: created.user.id as string };
 }
 
 async function setup(opts: { bucket?: boolean; locale?: 'en' | 'ar' } = {}) {
@@ -83,6 +86,20 @@ describe('MUT-42 carries MUT-39’s expense criteria', () => {
   it('a session writes an expense on a Malafat-fed profile', async () => {
     const { create } = await setup();
     expect((await create({})).status).toBe(201);
+  });
+
+  it('a device-session token can create, edit and delete an expense (MUT-64)', async () => {
+    const { h, a, p } = await setup();
+    const created = await read(
+      await h.app.request('/v1/expenses', json({ occurredOn: '2026-10-05', amount: '80.00', currency: 'ILS' }, { ...p.asDevice(a.org.id), ...idem() })),
+    );
+    expect(created.id).toBeTruthy();
+
+    const updated = await h.app.request(`/v1/expenses/${created.id}`, json({ notes: 'from the app' }, { ...p.asDevice(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(updated.status).toBe(200);
+
+    const deleted = await h.app.request(`/v1/expenses/${created.id}`, { method: 'DELETE', headers: p.asDevice(a.org.id) });
+    expect(deleted.status).toBe(204);
   });
 
   it('Malafat’s key is refused on every expense operation', async () => {

@@ -39,7 +39,7 @@ export interface ExpenseRouteOptions {
   urlTtlSeconds: number;
 }
 
-const SESSION_ONLY = [{ session: [] }];
+const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const noContent = { 204: { description: 'Done' } } as const;
 const notConfigured = { 503: { description: 'No attachments bucket is configured for this deployment', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } } as const;

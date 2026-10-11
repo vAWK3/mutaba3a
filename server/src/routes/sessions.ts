@@ -104,7 +104,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       path: '/v1/me',
       tags: ['Sessions'],
       summary: 'The signed-in person and the hosted profiles they may open',
-      security: [{ session: [] }],
+      security: [{ session: [] }, { deviceSession: [] }],
       responses: {
         200: { description: 'Me', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('No valid session'),

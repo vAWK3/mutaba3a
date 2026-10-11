@@ -17,7 +17,7 @@ export function vatRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/vat-rates',
       tags: ['VAT'],
       summary: 'List the firm’s VAT rates, newest first, with the one in force today',
-      security: [{ apiKey: [] }, { session: [] }],
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('agreements:read')] as const,
       responses: { 200: { description: 'Rates', content: { 'application/json': { schema: VatRatesResponseSchema } } }, ...errorResponses },
     }),

@@ -62,8 +62,12 @@ const SESSION_OPERATIONS = [
   'GET /v1/summaries/projects/{projectId}',
   'GET /v1/vat-rates',
 ].sort();
-const PUBLIC_OPERATIONS = ['POST /v1/sessions'];
+/** MUT-64: the same surface, minus cookie-only sign-out, plus the device-only sign-out. A device token gets exactly a cookie session's reach. */
+const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DELETE /v1/sessions/current'), 'DELETE /v1/device-sessions/current'].sort();
+const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions'];
 const IDENTITY_OPERATIONS = ['GET /v1/me', 'DELETE /v1/sessions/current'];
+/** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
+const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'DELETE /v1/device-sessions/current'];
 
 interface Operation {
   key: string;
@@ -82,6 +86,7 @@ let app: ReturnType<typeof createApp>;
 let operations: Operation[];
 let routeAccess: RouteAccessIndex;
 let sessionCookie: string;
+let deviceToken: string;
 let orgId: string;
 let fullKey: string;
 const scopedKeys: string[] = [];
@@ -113,9 +118,12 @@ beforeAll(async () => {
   const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: created.initialPassword }, { origin: 'http://localhost' }));
   expect(signIn.status).toBe(201);
   sessionCookie = (signIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+
+  const deviceSignIn = (await (await app.request('/v1/device-sessions', json({ email: 'nour@firm.ps', password: created.initialPassword }))).json()) as { token: string };
+  deviceToken = deviceSignIn.token;
 });
 
-const accepts = (op: Operation, scheme: 'apiKey' | 'session') => (op.security ?? []).some((req) => scheme in req);
+const accepts = (op: Operation, scheme: 'apiKey' | 'session' | 'deviceSession') => (op.security ?? []).some((req) => scheme in req);
 const scopesOf = (op: Operation) => routeAccess.get(`${op.method} ${op.path.replace(/\{([^}]+)\}/g, ':$1')}`)?.scopes ?? [];
 /** hosted-portal.md §5 layer 2: writes in a domain Malafat owns are read-only to a session; everything else key-only is not its business. */
 const malafatWriteDomain = (op: Operation) =>
@@ -145,6 +153,10 @@ describe('route security declarations', () => {
   it('exactly the portal read surface and the identity routes accept sessions', () => {
     expect(operations.filter((op) => accepts(op, 'session')).map((op) => op.key).sort()).toEqual(SESSION_OPERATIONS);
   });
+
+  it('exactly the same surface (minus cookie sign-out, plus device sign-out) accepts a device session (MUT-64)', () => {
+    expect(operations.filter((op) => accepts(op, 'deviceSession')).map((op) => op.key).sort()).toEqual(DEVICE_SESSION_OPERATIONS);
+  });
 });
 
 describe('authenticate() enforces each declaration', () => {
@@ -172,10 +184,32 @@ describe('authenticate() enforces each declaration', () => {
     expect(readOnly.length).toBeGreaterThan(20);
   });
 
+  it('a device bearer is refused on every key-only operation the same way a cookie session is (MUT-64)', async () => {
+    const wrong: string[] = [];
+    for (const op of operations.filter((o) => accepts(o, 'apiKey') && !accepts(o, 'deviceSession'))) {
+      const res = await request(op, { authorization: `Bearer ${deviceToken}`, 'x-mutaba3a-profile': orgId });
+      const body = (await res.json()) as Loose;
+      const domain = malafatWriteDomain(op);
+      const want = domain ? 'READ_ONLY_PROFILE' : 'PRINCIPAL_NOT_ACCEPTED';
+      if (res.status !== 403 || body.error?.code !== want) wrong.push(`${op.key} → ${res.status} ${body.error?.code}, want ${want}`);
+    }
+    expect(wrong).toEqual([]);
+  });
+
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
     expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS].sort());
     for (const op of sessionOnly) {
+      const res = await request(op, { authorization: `Bearer ${fullKey}` });
+      expect(res.status, op.key).toBe(403);
+      expect(((await res.json()) as Loose).error.code, op.key).toBe('PRINCIPAL_NOT_ACCEPTED');
+    }
+  });
+
+  it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
+    const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS].sort());
+    for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
       expect(((await res.json()) as Loose).error.code, op.key).toBe('PRINCIPAL_NOT_ACCEPTED');
@@ -187,6 +221,16 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared session mid-loop; routes-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'session') && o.key !== 'DELETE /v1/sessions/current')) {
       const res = await request(op, { cookie: sessionCookie, 'x-mutaba3a-profile': orgId, origin: 'http://localhost' });
+      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+    }
+    expect(refused).toEqual([]);
+  });
+
+  it('a device token is let through on every operation that declares it, same as a cookie session (MUT-64)', async () => {
+    const refused: string[] = [];
+    // Sign-out would end the shared device session mid-loop; routes-device-sessions.test.ts covers it.
+    for (const op of operations.filter((o) => accepts(o, 'deviceSession') && o.key !== 'DELETE /v1/device-sessions/current')) {
+      const res = await request(op, { authorization: `Bearer ${deviceToken}`, 'x-mutaba3a-profile': orgId });
       if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
     }
     expect(refused).toEqual([]);
