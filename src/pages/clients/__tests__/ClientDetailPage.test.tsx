@@ -24,6 +24,8 @@ vi.mock('@tanstack/react-router', () => ({
 const featureFlags: Record<string, boolean> = { invoices: false, retainers: false, projects: true };
 vi.mock('../../../lib/features/useFeatures', () => ({
   useFeatureEnabled: (key: string) => featureFlags[key] ?? false,
+  // the top bar's Add menu reads the whole map (MUT-15)
+  useFeatureFlags: () => ({ ...featureFlags }),
 }));
 
 // Mock i18n
