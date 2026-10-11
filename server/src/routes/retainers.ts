@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, lazyPostingOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, loadAgreementContext, parseAmount, retainerPreviewToken, todayFor, validationError } from '../agreements/compose.js';
 import { generateCharges, postDueItems } from '../agreements/posting.js';
 import { addMonths, dueDateFor, monthOf } from '../dates.js';
@@ -174,7 +174,8 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const today = todayFor(organization, now);
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);
       if (agreement.type !== 'RECURRING') throw validationError('NOT_RECURRING', 'Not a retainer');
-      await generateCharges(store, organization, agreement, today, now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await generateCharges(posting.store, organization, agreement, today, now, posting.actor);
       return c.json(await chargesView(organization, agreement.id, today), 200);
     },
   );

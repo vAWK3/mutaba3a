@@ -1641,3 +1641,24 @@ holds).
   the owner deferred it. Revisit with MAL-870.
 - *A server `Profile` table*: a second id for the same organization, with
   nothing to hold in v1. Rejected.
+
+**Amendment (MUT-39, 2026-10-11)**: decision 7's third layer, as built.
+- *What changed*:
+  - The guard lives in the store, not in a `c.var.store`. Every route factory
+    receives `requestScopedStore(store)`, a proxy that reads the current
+    request's guard through Hono `contextStorage`, so the consequence
+    "handlers move to a per-request `c.var.store`" did not happen.
+  - Store methods have a fourth class, `operator` (provisioning), which is
+    refused under every guard.
+  - Lazy posting goes through `lazyPostingOf(c, store)`, the one caller of
+    `unguarded()`.
+- *Why*: the proxy reaches helpers that are handed the store as well as
+  handlers, without a 58-handler edit. It is also the only form in which "no
+  route can opt out" holds structurally. `operator` keeps decision 1
+  ("accounts are operator-issued") true below the routes, not just at them.
+  Pairing the actor and the store in one function means a session's catch-up
+  can never be attributed to a key, and a key's never runs unguarded.
+- *What it replaces*: the "`c.var.store`" consequence above, and the brief's
+  `guardStore(store, matrix, principal)` wording (§5 now carries an "As
+  built" note).
+- Decisions 1–10 are otherwise unchanged.

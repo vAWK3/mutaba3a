@@ -1,9 +1,11 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
+import { contextStorage } from 'hono/context-storage';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
+import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
 import { ApiError, ERROR_CODES } from './errors.js';
 import type { Logger } from './logger.js';
@@ -58,7 +60,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.9.0-mut38';
+export const API_VERSION = '1.10.0-mut39';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -78,6 +80,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     },
   });
 
+  // The store guard reads the request it runs in from here (store-guard.ts).
+  app.use('*', contextStorage());
   app.use('*', async (c, next) => {
     const requestId = c.req.header('x-request-id') ?? randomUUID();
     c.set('requestId', requestId);
@@ -109,6 +113,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
+  // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
+  const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
   let routeAccess: RouteAccessIndex | undefined;
   app.use(
@@ -119,40 +125,40 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
-      routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions)),
+      routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
       organizationIndependent: ORGANIZATION_INDEPENDENT_ROUTES,
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
 
-  app.route('/', healthRoutes(deps.store, deps.version));
+  app.route('/', healthRoutes(store, deps.version));
   app.route(
     '/',
     sessionRoutes({
-      store: deps.store,
+      store,
       passwordHasher,
       settings: sessions,
       throttle: deps.signInThrottle ?? new SignInThrottle(),
       ipLimiter: deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute),
     }),
   );
-  app.route('/', integrationRoutes(deps.store, deps.version));
-  app.route('/', customerRoutes(deps.store));
-  app.route('/', projectRoutes(deps.store));
-  app.route('/', importRoutes(deps.store));
-  app.route('/', vatRoutes(deps.store));
-  app.route('/', feeProposalRoutes(deps.store));
-  app.route('/', agreementRoutes(deps.store));
-  app.route('/', installmentRoutes(deps.store));
-  app.route('/', retainerRoutes(deps.store));
-  app.route('/', receivableRoutes(deps.store));
-  app.route('/', paymentRoutes(deps.store));
-  app.route('/', operationRoutes(deps.store));
-  app.route('/', summaryRoutes(deps.store));
-  app.route('/', auditRoutes(deps.store));
-  app.route('/', attachmentRoutes(deps.store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
-  app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store: deps.store, passwordHasher, logger: deps.logger }));
+  app.route('/', integrationRoutes(store, deps.version));
+  app.route('/', customerRoutes(store));
+  app.route('/', projectRoutes(store));
+  app.route('/', importRoutes(store));
+  app.route('/', vatRoutes(store));
+  app.route('/', feeProposalRoutes(store));
+  app.route('/', agreementRoutes(store));
+  app.route('/', installmentRoutes(store));
+  app.route('/', retainerRoutes(store));
+  app.route('/', receivableRoutes(store));
+  app.route('/', paymentRoutes(store));
+  app.route('/', operationRoutes(store));
+  app.route('/', summaryRoutes(store));
+  app.route('/', auditRoutes(store));
+  app.route('/', attachmentRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
+  app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
+  app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',
@@ -201,6 +207,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         'Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer\'s open proposals and their per-currency total (proposed).',
         '',
         'Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.',
+        '',
+        'Writability (MUT-39): a session may read a hosted profile\'s ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile\'s Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.',
         '',
         'Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.',
         '',

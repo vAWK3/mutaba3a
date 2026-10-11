@@ -6,9 +6,10 @@ import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
-import { hasScope, type Scope } from './scopes.js';
+import { hasScope, isScope, type Scope } from './scopes.js';
 import { isSameOriginRequest, sessionCookieName, sessionDigest } from './sessions.js';
-import { sessionScopes } from './writability.js';
+import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
+import { domainOfScope, matrixRow, profileWriterOf, sessionScopes, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * Two principals on /v1 (ADR-037 decisions 3–6):
@@ -31,6 +32,8 @@ export interface SessionAuth {
   session: SessionRecord;
   /** Effective scopes from the writability matrix's session column. */
   scopes: readonly Scope[];
+  /** The selected profile's writer of record, for READ_ONLY_PROFILE. */
+  writerOfRecord: ProfileWriter;
 }
 
 /** What every organization-scoped route can read from the context. */
@@ -48,16 +51,18 @@ export type AppEnv = {
     auth: AuthContext;
     identity: SessionIdentity;
     now: () => Date;
+    /** Set by authenticate(); the store guard (store-guard.ts) every repository call consults. Absent on /admin, health and sign-in. */
+    storeGuard: StoreGuard;
     /** Set by the If-Match middleware on PATCH routes. */
     expectedVersion: number;
   };
 };
 
-export type Principal = 'apiKey' | 'session';
-
 export interface RouteAccess {
   public: boolean;
   principals: ReadonlySet<Principal>;
+  /** From the route's `requireScope` middleware, in declaration order. */
+  scopes: readonly Scope[];
 }
 
 /** Keyed `METHOD /hono/:path`, built from the OpenAPI registry so enforcement reads what the contract publishes. */
@@ -68,7 +73,26 @@ interface RouteDefinition {
   route?: { method: string; path: string; security?: Array<Record<string, unknown>> };
 }
 
-export function buildRouteAccessIndex(definitions: readonly RouteDefinition[]): RouteAccessIndex {
+/** An entry of Hono's `app.routes`: each middleware and handler of a route, in order. */
+interface RegisteredHandler {
+  method: string;
+  path: string;
+  handler: unknown;
+}
+
+/**
+ * Principals come from the published `security`; scopes from the tagged
+ * `requireScope` middleware the route registered (the registry does not keep
+ * middleware), so neither needs a second declaration.
+ */
+export function buildRouteAccessIndex(definitions: readonly RouteDefinition[], handlers: readonly RegisteredHandler[] = []): RouteAccessIndex {
+  const scopes = new Map<string, Scope[]>();
+  for (const h of handlers) {
+    const scope = requiredScopeOf(h.handler);
+    if (!scope) continue;
+    const key = `${h.method} ${h.path}`;
+    scopes.set(key, [...(scopes.get(key) ?? []), scope]);
+  }
   const index = new Map<string, RouteAccess>();
   for (const def of definitions) {
     if (def.type !== 'route' || !def.route) continue;
@@ -78,8 +102,8 @@ export function buildRouteAccessIndex(definitions: readonly RouteDefinition[]): 
       if ('apiKey' in requirement) principals.add('apiKey');
       if ('session' in requirement) principals.add('session');
     }
-    const path = def.route.path.replace(/\{([^}]+)\}/g, ':$1');
-    index.set(`${def.route.method.toUpperCase()} ${path}`, { public: Array.isArray(def.route.security) && security.length === 0, principals });
+    const key = `${def.route.method.toUpperCase()} ${def.route.path.replace(/\{([^}]+)\}/g, ':$1')}`;
+    index.set(key, { public: Array.isArray(def.route.security) && security.length === 0, principals, scopes: scopes.get(key) ?? [] });
   }
   return index;
 }
@@ -126,17 +150,24 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
       const auth = await authenticateApiKey(c, bearer, options);
       if (access && !access.principals.has('apiKey')) throw principalNotAccepted();
       c.set('auth', auth);
+      c.set('storeGuard', principalStoreGuard('apiKey', null));
       return next();
     }
 
     if (cookie) {
       const identity = await authenticateSession(c, cookie, options);
-      if (access && !access.principals.has('session')) throw principalNotAccepted();
+      if (access && !access.principals.has('session')) throw await keyOnlyRefusal(c, identity, access, options.store);
       if (!SAFE_METHODS.has(c.req.method) && !isSameOriginRequest(c.req, options.sessions.portalOrigin)) {
         throw new ApiError('CROSS_SITE_REQUEST', 'This request must come from the Mutaba3a portal itself');
       }
       c.set('identity', identity);
-      if (endpoint && !options.organizationIndependent.has(endpoint)) c.set('auth', await selectProfile(c, identity, options.store));
+      let profileWriter: ProfileWriter = null;
+      if (endpoint && !options.organizationIndependent.has(endpoint)) {
+        const auth = await selectProfile(c, identity, options.store);
+        c.set('auth', auth);
+        profileWriter = auth.writerOfRecord;
+      }
+      c.set('storeGuard', principalStoreGuard('session', profileWriter));
       return next();
     }
 
@@ -212,14 +243,35 @@ async function authenticateSession(c: Context<AppEnv>, token: string, options: A
 
 /** ADR-025 §2 as amended by ADR-037: a session names one of its memberships; anything else is indistinguishable from absent. */
 async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<SessionAuth> {
-  const requested = c.req.header('x-mutaba3a-profile');
-  if (!requested) {
+  if (!c.req.header('x-mutaba3a-profile')) {
     throw new ApiError('VALIDATION_FAILED', 'Name the profile to act on in the X-Mutaba3a-Profile header', { reason: 'PROFILE_REQUIRED' });
   }
-  const membership = UUID_RE.test(requested) ? await store.memberships.find(identity.user.id, requested) : null;
-  const organization = membership ? await store.organizations.getById(membership.organizationId) : null;
+  const organization = await namedMemberOrganization(c, identity, store);
   if (!organization) throw new ApiError('NOT_FOUND', 'Profile not found');
-  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopes() };
+  const writerOfRecord = await profileWriterOf(store, organization.id);
+  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopes(), writerOfRecord };
+}
+
+async function namedMemberOrganization(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<Organization | null> {
+  const requested = c.req.header('x-mutaba3a-profile');
+  const membership = requested && UUID_RE.test(requested) ? await store.memberships.find(identity.user.id, requested) : null;
+  return membership ? store.organizations.getById(membership.organizationId) : null;
+}
+
+/**
+ * hosted-portal.md §5 layer 2: a session on a key-only route that writes a
+ * domain Malafat owns is told the profile is read-only; any other key-only
+ * route was never the session's to use. The writer of record is resolved only
+ * for a member organization, so the refusal says nothing about anyone else's.
+ */
+async function keyOnlyRefusal(c: Context<AppEnv>, identity: SessionIdentity, access: RouteAccess, store: LedgerStore): Promise<ApiError> {
+  const domain = access.scopes
+    .filter((s) => s.endsWith(':write'))
+    .map(domainOfScope)
+    .find((d) => d !== undefined && matrixRow(d).writerOfRecord === 'MALAFAT');
+  if (!domain) return principalNotAccepted();
+  const organization = await namedMemberOrganization(c, identity, store);
+  return writeRefusal(domain, organization ? await profileWriterOf(store, organization.id) : null);
 }
 
 async function enforceRateLimit(c: Context<AppEnv>, limiter: RateLimiter, key: string, now: Date, message: string): Promise<void> {
@@ -232,11 +284,29 @@ async function enforceRateLimit(c: Context<AppEnv>, limiter: RateLimiter, key: s
   }
 }
 
+const REQUIRED_SCOPE = Symbol('requiredScope');
+
+/** The scope a `requireScope` middleware enforces, or undefined for any other handler. */
+export function requiredScopeOf(handler: unknown): Scope | undefined {
+  const scope: unknown = typeof handler === 'function' ? (handler as unknown as Record<symbol, unknown>)[REQUIRED_SCOPE] : undefined;
+  return typeof scope === 'string' && isScope(scope) ? scope : undefined;
+}
+
+/**
+ * The per-route scope check. Tagged with its scope so buildRouteAccessIndex
+ * can read every route's requirement. A session lacking a write the matrix
+ * gives Malafat is told the profile is read-only, not that a scope is missing
+ * (hosted-portal.md §5 layer 1).
+ */
 export function requireScope(scope: Scope): MiddlewareHandler<AppEnv> {
-  return async (c, next) => {
+  const middleware: MiddlewareHandler<AppEnv> = async (c, next) => {
     const auth = c.get('auth');
     const granted = auth.kind === 'apiKey' ? auth.apiKey.scopes : auth.scopes;
     if (!hasScope(granted, scope)) {
+      const domain = domainOfScope(scope);
+      if (auth.kind === 'session' && scope.endsWith(':write') && domain && matrixRow(domain).writerOfRecord === 'MALAFAT') {
+        throw writeRefusal(domain, auth.writerOfRecord);
+      }
       throw new ApiError('INSUFFICIENT_SCOPE', `This operation requires the "${scope}" scope`, {
         required: scope,
         granted,
@@ -244,6 +314,7 @@ export function requireScope(scope: Scope): MiddlewareHandler<AppEnv> {
     }
     await next();
   };
+  return Object.assign(middleware, { [REQUIRED_SCOPE]: scope });
 }
 
 /** Structural view of a route context, so helpers accept any route's typed Context. */
@@ -272,6 +343,17 @@ export function postingActorOf(c: AuthReader): PostingActor {
   return auth.kind === 'apiKey'
     ? { actorType: 'API_KEY', actorId: auth.apiKey.id, requestId: c.get('requestId') }
     : { actorType: 'SYSTEM', actorId: null, requestId: c.get('requestId') };
+}
+
+/**
+ * The store and actor for lazy posting during a read (ADR-037 decision 8).
+ * A key posts through the guarded store as itself; a session's read posts as
+ * SYSTEM on the store beneath the guard, because the catch-up is the reconcile
+ * job's, not a write by the person. The two always travel together.
+ */
+export function lazyPostingOf(c: AuthReader, store: LedgerStore): { store: LedgerStore; actor: PostingActor } {
+  const actor = postingActorOf(c);
+  return { store: actor.actorType === 'SYSTEM' ? unguarded(store) : store, actor };
 }
 
 function endpointKey(c: Context): string | null {

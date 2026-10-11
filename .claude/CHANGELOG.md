@@ -28,6 +28,46 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-39: server-enforced writability on hosted profiles
+
+**Scope:** `server/` only. No schema change.
+- `src/auth/{store-guard (new),writability,middleware}.ts`, `src/{app,errors}.ts`
+- `src/routes/{summaries,receivables,agreements,retainers}.ts`, `openapi/openapi.yaml`
+- tests: `src/auth/__tests__/store-guard.test.ts`, `src/__tests__/{writability-drift,writability-routes}.test.ts` (new); `route-security.test.ts`; version pins in `routes-m*`
+- records: `.claude/designs/hosted-portal.md` §5 "As built", `mut-39-writability-tests.md`, ADR-037 amendment
+
+### Added
+- **`403 READ_ONLY_PROFILE { domain, writerOfRecord }`.** A session that writes customers, projects, agreements, payments or attachments gets this refusal.
+  - It comes from `authenticate()` on the key-only write routes, and from `requireScope` should a session-reachable route ever need a write scope.
+  - `writerOfRecord` is `MALAFAT` when the profile's Malafat integration is CONNECTED, otherwise `null`. It is resolved only for a member organization, so a non-member's is never revealed.
+  - Every other key-only route still answers `PRINCIPAL_NOT_ACCEPTED`, as before.
+- **A store guard below the routes (`auth/store-guard.ts`).**
+  - `STORE_ACCESS` classifies all 98 repository methods: 53 read, 8 control, 8 operator and 29 writes, each in one matrix domain. It is typed over `LedgerStore`, so a new method does not compile until it is classified.
+  - Every route factory now receives `requestScopedStore(store)`. Each repository call checks the guard `authenticate()` put on the request: the session column for a session, the API-key column for a key.
+  - Provisioning (`operator`) is refused under any guard.
+- **Route scopes are readable.** `requireScope` tags its middleware, and `buildRouteAccessIndex` reads the tags from `app.routes`, so every operation's scopes are known without a second declaration.
+- **The matrix const carries the brief's "Routes covered" cell,** and a drift test compares the two cell by cell.
+
+### Changed
+- **Lazy posting by the portal's reads** (three summaries, the receivables list, the agreements list and detail, retainer charges) goes through `lazyPostingOf(c, store)`:
+  - a key posts through the guarded store as itself;
+  - a session posts as `SYSTEM` on `unguarded(store)`.
+  `unguarded()` has no other caller, and a test pins both functions' call sites.
+- **Contract.** Error code `READ_ONLY_PROFILE`; a "Writability" paragraph in the API description; API `1.10.0-mut39`.
+
+### Verified
+- Generated route tests cover every key-only operation for a session naming a Malafat-fed profile, a personal profile and a non-member, with nothing written. They also cover the AC's income, receivable, payment and customer writes, lazy posting as `SYSTEM` on all seven reads, and that the other profile's organization id never reaches any store call.
+- Mutation checks: with layers 1–2 off, the AC cases fail. Lazy posting without `unguarded` gets 403 on every read, which shows the guard is beneath them.
+- `npm test`: 924 passed, 9 skipped. `npm run test:db`: 978 passed. The local test database was re-migrated first: it had only the first of nine migrations applied.
+- lint, typecheck, build and `openapi:check` pass.
+
+### Not in this ticket
+- The expense AC ("an expense write succeeds"; "Malafat's key cannot see, read or write expenses"): no expense routes or store methods exist until MUT-42.
+  - The guard rule is tested: a session may write expenses, the key may not.
+  - Expense routes will declare `[{ session: [] }]`.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-38: session auth, a second principal beside API keys
 
 **Scope:** `server/` only:

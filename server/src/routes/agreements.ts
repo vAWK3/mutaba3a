@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, lazyPostingOf, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import {
   assertIsoDate,
   installmentDueDate,
@@ -104,7 +104,8 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const q = c.req.valid('query');
       const now = c.get('now')();
-      await postDueItems(store, organization, todayFor(organization, now), now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, todayFor(organization, now), now, posting.actor);
       const page = await store.agreements.list(organization.id, { ...(q.projectId ? { projectId: q.projectId } : {}), ...(q.customerId ? { customerId: q.customerId } : {}), ...(q.status ? { status: q.status } : {}), ...(q.type ? { type: q.type } : {}) }, toPageRequest(q));
       return c.json({ items: page.items.map(serializeAgreement), nextCursor: encodeNextCursor(page.nextCursor) }, 200);
     },
@@ -125,7 +126,8 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, today, now, posting.actor);
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);
       return c.json(await agreementDetail(store, organization, agreement, today), 200);
     },
