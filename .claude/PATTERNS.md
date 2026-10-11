@@ -1297,6 +1297,15 @@ action is a `<button type="button">` that opens a drawer through
 it, so it leaves the PWA scope and reloads the app. When a banner only needs
 to *navigate*, it uses the router's `Link` (`FeatureNoticeBanner`).
 
+### Decide "new user" only after the data has answered (MUT-8)
+A screen that branches on "no data yet" (onboarding, an empty state with a
+first action) must not treat a query that is still loading as empty. Dexie
+reads are fast but asynchronous, so `data = []` defaults make every load look
+like a fresh install for a frame or two. That made onboarding flash on Home.
+Branch on `!isLoading && list.length === 0` for every query involved, and
+render a spinner, not the populated layout with zeroes, until they have all
+answered.
+
 ### Ordering across currencies (MUT-7, ADR-035)
 Never compare or add raw minor units of different currencies. To order a list
 by money owed in several currencies, rank by a tuple: [the ILS-converted

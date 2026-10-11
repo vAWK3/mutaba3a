@@ -44,7 +44,7 @@
 | D5 | **Starting profile = `startingProfileId(table, record, links, selectableIds) ?? defaultProfileId`**: income and expenses take their client's profile, then their project's; projects take their client's; clients have no link. A linked profile counts only if it's selectable (active), otherwise the row falls back to the default | "Income stays with its client" (approved). Pure, so it's tested at 100% | Always the default profile (what the modal does) |
 | D6 | **Default profile = the active profile marked `isDefault`, else the first active profile** | `businessProfiles.list()` already excludes archived profiles; a data set without an `isDefault` flag still gets a usable fallback | No fallback: the quick action would be disabled with no explanation |
 | D7 | **Writes go one row at a time through `getRepositories().base.<table>.update(id, { profileId })`**, the same path the modal and every drawer use. A failed row doesn't stop the batch; the hook returns `{ assigned, failedIds }` and **invalidates every query on settle** | A profile change touches every profile-scoped list, the summaries and the banner, so a full refetch is the honest choice for a rare repair action. Per-row failure means one locked entry (F6) can't block the other 99 | One Dexie transaction: the repos open their own and a lock error would roll everything back |
-| D8 | **The lock rule stays as it is (F6).** A locked, unassigned income entry fails, stays listed, and is reported | Relaxing ADR-014 ("fill a missing profileId on a locked entry") is a decision about financial immutability, not part of this fix. Flagged as a follow-up (TD) | Allowing `profileId` on locked entries without an ADR |
+| D8 | **The lock rule stays as it is (F6).** A locked, unassigned income entry fails, stays listed, and is reported | Relaxing ADR-014 ("fill a missing profileId on a locked entry") is a decision about financial immutability, not part of this fix. Flagged as a follow-up (TD-035) | Allowing `profileId` on locked entries without an ADR |
 | D9 | **Drawer state lives in `useDrawerStore` (`orphanedRecordsDrawer.isOpen`), not the URL** | Same as the client, project and profile drawers it sits beside | `?orphans=1` deep link: nobody links to a repair screen |
 | D10 | **Settings › Data tools is unchanged** | `fix/settings-integrity-i18n` was open on that section while this was built (it has since merged as `DataToolsSection`). Pointing its "Run Check" result at this drawer is a small follow-up | Editing it here and merging into a conflict |
 
@@ -97,6 +97,6 @@ None. Client-only, offline.
 
 ## 9. Follow-ups (not in this change)
 
-- TD-034: decide whether a locked income entry may have a *missing* `profileId` filled in (ADR-014 exception, like ADR-030 for payments)
+- TD-035: decide whether a locked income entry may have a *missing* `profileId` filled in (ADR-014 exception, like ADR-030 for payments)
 - Settings › Data tools (`DataToolsSection`, merged): let a "Run Check" that finds unassigned records offer to open this drawer
-- TD-035, where orphans come from: `ClientDrawer.tsx:165` and `ProjectDrawer.tsx:175` offer a "Default profile" option whose value is `''`, which `:66`/`:76` save as `profileId: undefined`, an unassigned record
+- TD-036, where orphans come from: `ClientDrawer.tsx:165` and `ProjectDrawer.tsx:175` offer a "Default profile" option whose value is `''`, which `:66`/`:76` save as `profileId: undefined`, an unassigned record

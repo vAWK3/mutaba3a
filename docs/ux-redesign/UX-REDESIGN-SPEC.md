@@ -152,6 +152,12 @@ Users should never feel buried under object types. They should feel they are tra
 
 ## 6. Home Page
 
+> **Superseded 2026-10-11 by ADR-036 (MUT-8).** Home is now three blocks:
+> Owed now (per currency, overdue part called out), Needs attention (overdue or
+> due within 7 days, oldest first) and the last 10 payments. Every row opens its
+> client. There is no KPI strip of received / unpaid / expenses / net, no
+> forecast and no expenses. The text below is kept for history.
+
 ### Role
 Home is the cash flow cockpit, not a generic dashboard.
 

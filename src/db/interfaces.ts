@@ -50,6 +50,7 @@ import type {
   PaymentRecord,
   PaymentByClientFilters,
   PaymentByClientRow,
+  RecentPaymentRow,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
 
@@ -315,6 +316,7 @@ export interface IPaymentRecordRepository {
   get(id: string): Promise<PaymentRecord | undefined>;
   listByTransaction(transactionId: string): Promise<PaymentRecord[]>;
   listByClient(clientId: string, filters?: PaymentByClientFilters): Promise<PaymentByClientRow[]>;
+  listRecent(filters?: { profileId?: string; limit?: number }): Promise<RecentPaymentRow[]>;
   create(data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }): Promise<PaymentRecord>;
   update(id: string, data: { amountMinor?: number; paidAt?: string; notes?: string }): Promise<void>;
   delete(id: string): Promise<void>;

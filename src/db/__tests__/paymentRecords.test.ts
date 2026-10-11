@@ -764,4 +764,88 @@ describe('paymentRecordRepo', () => {
       });
     });
   });
+
+  /**
+   * MUT-8: Home's Recent payments -- the same payment rows as a client's
+   * Payments section (ADR-033), across every client, with the client named.
+   */
+  describe('listRecent', () => {
+    const income = (overrides: Partial<Parameters<typeof transactionRepo.create>[0]> = {}) =>
+      transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 100000,
+        currency: 'USD',
+        occurredAt: '2024-01-01',
+        ...overrides,
+      });
+
+    beforeEach(async () => {
+      // The suite's own fixture income has no client; start from nothing.
+      await db.transactions.clear();
+    });
+
+    it('returns an empty list when nothing has been paid', async () => {
+      await income();
+      expect(await paymentRecordRepo.listRecent()).toEqual([]);
+    });
+
+    it('lists payments across clients, newest first, naming the client and what it was for', async () => {
+      const acme = await clientRepo.create({ name: 'Acme' });
+      const beta = await clientRepo.create({ name: 'Beta' });
+      const a = await income({ clientId: acme.id, title: 'Homepage' });
+      await paymentRecordRepo.create({ transactionId: a.id, amountMinor: 2000, paidAt: '2024-02-01', notes: 'wire' });
+      await income({ clientId: beta.id, title: 'Logo', status: 'paid', paidAt: '2024-03-01', currency: 'ILS' });
+
+      const rows = await paymentRecordRepo.listRecent();
+
+      expect(rows.map((r) => [r.clientName, r.transactionTitle, r.amountMinor, r.currency, r.source])).toEqual([
+        ['Beta', 'Logo', 100000, 'ILS', 'entry'],
+        ['Acme', 'Homepage', 2000, 'USD', 'record'],
+      ]);
+      expect(rows[1]).toMatchObject({ clientId: acme.id, paidAt: '2024-02-01', notes: 'wire' });
+    });
+
+    it('keeps income without a client, with no client name', async () => {
+      await income({ title: 'Walk-in', status: 'paid', paidAt: '2024-03-01' });
+
+      const [row] = await paymentRecordRepo.listRecent();
+
+      expect(row).toMatchObject({ transactionTitle: 'Walk-in', clientId: undefined, clientName: undefined });
+    });
+
+    it('returns the last 10 by default, and honours a smaller limit', async () => {
+      for (let day = 1; day <= 12; day++) {
+        await income({ status: 'paid', paidAt: `2024-01-${String(day).padStart(2, '0')}` });
+      }
+
+      const rows = await paymentRecordRepo.listRecent();
+      expect(rows).toHaveLength(10);
+      expect(rows[0].paidAt).toBe('2024-01-12');
+      expect(await paymentRecordRepo.listRecent({ limit: 3 })).toHaveLength(3);
+    });
+
+    it('scopes to the given profile', async () => {
+      await income({ title: 'Mine', status: 'paid', paidAt: '2024-03-01', profileId: 'p1' });
+      await income({ title: 'Theirs', status: 'paid', paidAt: '2024-03-02', profileId: 'p2' });
+
+      const rows = await paymentRecordRepo.listRecent({ profileId: 'p1' });
+
+      expect(rows.map((r) => r.transactionTitle)).toEqual(['Mine']);
+    });
+
+    it('leaves out deleted entries and deleted records, but keeps archived entries\' payments', async () => {
+      const deletedEntry = await income({ status: 'paid', paidAt: '2024-03-01', title: 'Deleted entry' });
+      await transactionRepo.softDelete(deletedEntry.id);
+      const withRecords = await income({ title: 'Records' });
+      const gone = await paymentRecordRepo.create({ transactionId: withRecords.id, amountMinor: 500, paidAt: '2024-03-02' });
+      await paymentRecordRepo.delete(gone.id);
+      const archived = await income({ status: 'paid', paidAt: '2024-03-03', title: 'Archived' });
+      await transactionRepo.archive(archived.id);
+
+      const titles = (await paymentRecordRepo.listRecent()).map((r) => r.transactionTitle);
+
+      expect(titles).toEqual(['Archived']);
+    });
+  });
 });

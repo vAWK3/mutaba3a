@@ -595,6 +595,8 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 **Update (2026-10-11, MUT-7):** the clients index half is resolved. `clientSummaryRepo.list` now returns `owed` from `summarizeOwedByCurrency`, and the index reads only that. What remains: the per-currency `paidIncomeMinor*/unpaidIncomeMinor*` report fields (read by the Insights and Reports client tables) and `transactionRepo.getOverviewTotals*` still count archived income. Home (MUT-8) is next.
 
+**Update (2026-10-11, MUT-8):** the Home half is resolved: Home's Owed now uses `summarizeOwedByCurrency`. What remains is period totals, not "owed now": `getOverviewTotals*` (read by the Income and Expenses ledgers) and the per-client report fields read by Insights and Reports still count archived income. Decide whether period reports should follow the same rule.
+
 **Effort**: Small
 
 ---
@@ -659,7 +661,19 @@ the receipts strings into singular/plural keys with "label: {count}" Arabic.
 
 ---
 
-### TD-034: A locked income entry without a profile can't be assigned one
+### TD-034: The money-event read side has no consumer after MUT-8
+**Status**: Open (ticketed: MUT-58)
+**Priority**: Low
+**Introduced**: MUT-8, 2026-10-11 (ADR-036 §3)
+**Impact**: Home's forecast strip, month actuals and guidance feed were deleted by decision. They were the only readers of `src/hooks/useMoneyEventQueries.ts` (11 read hooks, zero consumers now) and, through them, `src/db/moneyEventRepository.ts` (842 lines). `invalidateMoneyEventQueries` still runs on four write paths and invalidates keys nothing reads, which wastes a little work on every save and misleads readers of those helpers.
+
+**Remediation**: MUT-58. Delete the hooks, the repository, the invalidation helper and its call sites, and their tests. Keep the Dexie tables (ADR-029). Add the paths to a guard test.
+
+**Effort**: Small
+
+---
+
+### TD-035: A locked income entry without a profile can't be assigned one
 **Status**: Open
 **Priority**: Low
 **Introduced**: found 2026-10-11 while building the unassigned-records drawer
@@ -680,7 +694,7 @@ value is empty, with a repo test; the drawer needs no change.
 
 ---
 
-### TD-035: The client and project drawers can save a record without a profile
+### TD-036: The client and project drawers can save a record without a profile
 **Status**: Open
 **Priority**: Medium
 **Introduced**: found 2026-10-11 while tracing where unassigned records come from

@@ -263,6 +263,13 @@ export interface PaymentByClientRow {
   source: PaymentRowSource;
 }
 
+// A payment on Home's Recent payments (MUT-8): a client payment row plus the
+// client it came from (absent for income with no client)
+export interface RecentPaymentRow extends PaymentByClientRow {
+  clientId?: string;
+  clientName?: string;
+}
+
 // Transaction with resolved names for display
 export interface TransactionDisplay extends Transaction {
   clientName?: string;

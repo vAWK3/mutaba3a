@@ -81,8 +81,14 @@ export interface Translations {
     };
     needsAttention: string;
     noAttention: string;
-    recentActivity: string;
-    noRecent: string;
+    recentPayments: string;
+    noPayments: string;
+    noClient: string;
+    empty: {
+      title: string;
+      description: string;
+      action: string;
+    };
   };
   projects: {
     title: string;
