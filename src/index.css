@@ -1872,37 +1872,68 @@ td {
 }
 
 /* =============================================================================
-   Clients Summary Strip
+   Clients index (MUT-7): count + Owed now strip, collection columns
    ============================================================================ */
 
-.clients-summary-strip {
+.clients-index-summary {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   margin-bottom: var(--space-4);
 }
 
 .clients-summary-count {
   font-weight: 600;
   font-size: var(--text-sm);
-  color: var(--foreground);
-  padding-right: var(--space-4);
-  border-right: 1px solid var(--border);
+  color: var(--text);
+  padding-inline-end: var(--space-6);
+  border-inline-end: 1px solid var(--border);
+  white-space: nowrap;
 }
 
-.clients-summary-item {
+/* One line per currency; amount columns stack against the end edge */
+.client-index-lines {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 2px;
 }
 
-.clients-summary-label {
-  font-size: var(--text-sm);
+.amount-cell .client-index-lines {
+  align-items: flex-end;
+}
+
+.client-index-amount {
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.client-index-subline {
+  font-size: var(--text-xs);
   color: var(--muted);
+}
+
+.text-danger .client-index-subline {
+  color: var(--error);
+  opacity: 0.85;
+}
+
+.client-index-settled {
+  font-family: var(--font-en);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--success);
+}
+
+:lang(ar) .client-index-settled {
+  font-family: var(--font-ar);
+}
+
+.client-index-settled-row .client-index-name {
+  color: var(--text-secondary);
+}
+
+.client-index-name {
+  font-weight: var(--weight-medium);
 }
 
 /* =============================================================================

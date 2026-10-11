@@ -1,447 +1,305 @@
 /**
  * @vitest-environment jsdom
+ *
+ * MUT-7: the clients index answers "who owes me, and who is late". Owed now
+ * and overdue per currency (never summed across currencies), default order
+ * owed-now descending by today's rate (ADR-034), last payment with a "never"
+ * state, settled clients labelled, click-to-sort headers, row → profile.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
 import * as useQueries from '../../../hooks/useQueries';
+import { formatDate } from '../../../lib/utils';
+import type { ClientSummary } from '../../../types';
 
-// Mock router
+const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, params }: { children: React.ReactNode; to: string; params?: Record<string, string> }) => (
     <a href={`${to}/${params?.clientId || ''}`}>{children}</a>
   ),
+  useNavigate: () => mockNavigate,
 }));
 
-// Mock i18n
-vi.mock('../../../lib/i18n', () => ({
-  useT: () => (key: string, params?: Record<string, unknown>) => {
-    const translations: Record<string, string> = {
-      'clients.title': 'Clients',
-      'clients.searchPlaceholder': 'Search clients...',
-      'clients.empty': 'No clients found',
-      'clients.emptySearch': 'No matching clients',
-      'clients.emptyHint': 'Add your first client',
-      'clients.addClient': 'Add Client',
-      'clients.columns.client': 'Client',
-      'clients.columns.activeProjects': 'Active Projects',
-      'clients.columns.received': 'Received',
-      'clients.columns.unpaid': 'Unpaid',
-      'clients.columns.lastPayment': 'Last Payment',
-      'clients.columns.lastActivity': 'Last Activity',
-      'clients.summary.clientsCount': `${params?.count || 0} clients`,
-      'clients.summary.clientsCountOne': '1 client',
-      'clients.summary.totalReceived': 'Total Received',
-      'clients.summary.totalUnpaid': 'Total Unpaid',
-    };
-    return translations[key] || key;
-  },
-  useLanguage: () => ({ language: 'en' }),
-  useDirection: () => 'ltr',
-  getLocale: () => 'en-US',
-}));
+vi.mock('../../../lib/i18n', () => {
+  const translations: Record<string, string> = {
+    'clients.title': 'Clients',
+    'clients.searchPlaceholder': 'Search clients...',
+    'clients.empty': 'No clients found',
+    'clients.emptySearch': 'No matching clients',
+    'clients.emptyHint': 'Add your first client',
+    'clients.addClient': 'Add Client',
+    'clients.emptyFiltered': 'No clients match your search',
+    'clients.emptyFilteredCount': '{count} clients in total.',
+    'clients.clearSearch': 'Clear search',
+    'clients.crossProfileTxCount': '{count} entries',
+    'clients.columns.client': 'Client',
+    'clients.columns.owedNow': 'Owed now',
+    'clients.columns.overdue': 'Overdue',
+    'clients.columns.lastPayment': 'Last payment',
+    'clients.columns.lastActivity': 'Last activity',
+    'clients.summary.clientsCount': '{count} clients',
+    'clients.summary.clientsCountOne': '1 client',
+    'clients.index.settled': 'Settled',
+    'clients.index.neverPaid': 'Never paid',
+    'clients.index.oldestOverdue': 'oldest {days}d',
+    'clients.index.owedOrderHint': "Ordered by today's exchange rate",
+    'clients.profile.owedNow': 'Owed now',
+    'clients.profile.nothingOwed': 'Nothing owed',
+    'clients.profile.overdueAmount': '{amount} overdue',
+    'clients.profile.nothingOverdue': 'Nothing overdue',
+  };
+  const t = (key: string, vars?: Record<string, string | number>) =>
+    (translations[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(vars?.[name] ?? ''));
+  return { useT: () => t, useLanguage: () => ({ language: 'en' }), useDirection: () => 'ltr', getLocale: () => 'en-US' };
+});
 
-// Mock drawer store
 const mockOpenClientDrawer = vi.fn();
 vi.mock('../../../lib/stores', () => ({
-  useDrawerStore: () => ({
-    openClientDrawer: mockOpenClientDrawer,
-  }),
+  useDrawerStore: () => ({ openClientDrawer: mockOpenClientDrawer }),
 }));
 
-// Mock clients data
-const mockClients = [
-  {
-    id: 'client-1',
-    name: 'Acme Corp',
-    activeProjectCount: 3,
-    paidIncomeMinor: 500000, // $5000
-    unpaidIncomeMinor: 150000, // $1500
-    paidIncomeMinorUSD: 500000,
-    paidIncomeMinorILS: 0,
-    paidIncomeMinorEUR: 0,
-    unpaidIncomeMinorUSD: 150000,
-    unpaidIncomeMinorILS: 0,
-    unpaidIncomeMinorEUR: 0,
-    lastPaymentAt: '2026-03-01',
-    lastActivityAt: '2026-03-10',
-  },
-  {
-    id: 'client-2',
-    name: 'Beta Inc',
-    activeProjectCount: 1,
-    paidIncomeMinor: 200000, // $2000
-    unpaidIncomeMinor: 0,
-    paidIncomeMinorUSD: 200000,
-    paidIncomeMinorILS: 0,
-    paidIncomeMinorEUR: 0,
-    unpaidIncomeMinorUSD: 0,
-    unpaidIncomeMinorILS: 0,
-    unpaidIncomeMinorEUR: 0,
-    lastPaymentAt: '2026-02-15',
-    lastActivityAt: '2026-02-20',
-  },
-];
+// Today's rates: $1 = ₪3, €1 = ₪4
+const fxRates: Record<string, number | null> = { USD: 3, EUR: 4 };
+vi.mock('../../../hooks/useFxRate', () => ({
+  useFxRate: (base: string) => ({ rate: fxRates[base] ?? null, source: 'live' }),
+}));
 
-function renderWithProviders(component: React.ReactNode) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+const summary = (overrides: Partial<ClientSummary>): ClientSummary => ({
+  id: 'c',
+  name: 'Client',
+  activeProjectCount: 0,
+  paidIncomeMinor: 0,
+  unpaidIncomeMinor: 0,
+  owed: [],
+  ...overrides,
+});
+
+// Gamma ₪12,000 > Acme $1,300 + ₪4,200 (= ₪8,100) > Beta $900 (= ₪2,700) > Delta settled
+const gamma = summary({
+  id: 'gamma',
+  name: 'Gamma',
+  owed: [{ currency: 'ILS', owedMinor: 1_200_000, overdueMinor: 400_000 }],
+  oldestOverdueDays: 31,
+  lastActivityAt: '2026-09-01',
+});
+const acme = summary({
+  id: 'acme',
+  name: 'Acme',
+  owed: [
+    { currency: 'USD', owedMinor: 130_000, overdueMinor: 100_000 },
+    { currency: 'ILS', owedMinor: 420_000, overdueMinor: 0 },
+  ],
+  oldestOverdueDays: 3,
+  lastPayment: { paidAt: '2026-10-05', amountMinor: 20_000, currency: 'USD' },
+  lastPaymentAt: '2026-10-05',
+  lastActivityAt: '2026-10-09',
+});
+const beta = summary({
+  id: 'beta',
+  name: 'Beta',
+  owed: [{ currency: 'USD', owedMinor: 90_000, overdueMinor: 0 }],
+  lastPayment: { paidAt: '2026-09-01', amountMinor: 10_000, currency: 'USD' },
+  lastPaymentAt: '2026-09-01',
+  lastActivityAt: '2026-10-10',
+});
+const delta = summary({
+  id: 'delta',
+  name: 'Delta',
+  lastPayment: { paidAt: '2026-08-15', amountMinor: 50_000, currency: 'ILS' },
+  lastPaymentAt: '2026-08-15',
+  lastActivityAt: '2026-08-15',
+});
+
+function mockSummaries(rows: ClientSummary[], isLoading = false) {
+  vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
+    data: rows,
+    isLoading,
+  } as unknown as ReturnType<typeof useQueries.useClientSummaries>);
+}
+
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      {component}
+      <ClientsPage />
     </QueryClientProvider>
   );
 }
 
+const bodyRows = () => within(screen.getByRole('table')).getAllByRole('row').slice(1);
+const names = () => bodyRows().map((r) => within(r).getByRole('link').textContent);
+const rowFor = (name: string) => screen.getByRole('link', { name }).closest('tr')!;
+const header = (name: string) => screen.getByRole('columnheader', { name: new RegExp(name) });
+
 describe('ClientsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-      data: mockClients,
+    window.history.replaceState({}, '', '/clients');
+    fxRates.USD = 3;
+    fxRates.EUR = 4;
+    mockSummaries([delta, beta, acme, gamma]);
+    vi.spyOn(useQueries, 'useClients').mockReturnValue({
+      data: [delta, beta, acme, gamma].map((c) => ({ id: c.id, name: c.name, profileId: 'p1' })),
       isLoading: false,
-    } as ReturnType<typeof useQueries.useClientSummaries>);
+    } as unknown as ReturnType<typeof useQueries.useClients>);
+    vi.spyOn(useQueries, 'useBusinessProfiles').mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useQueries.useBusinessProfiles>);
   });
 
-  describe('Page rendering', () => {
-    it('renders page title', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Clients')).toBeInTheDocument();
+  describe('columns', () => {
+    it('shows Client, Owed now, Overdue, Last payment and Last activity, nothing else', () => {
+      renderPage();
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent?.replace(/[▲▼]/g, ''));
+      expect(headers).toEqual(['Client', 'Owed now', 'Overdue', 'Last payment', 'Last activity']);
     });
 
-    it('renders search input', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByPlaceholderText('Search clients...')).toBeInTheDocument();
+    it('shows owed now per currency on separate lines, never one combined figure', () => {
+      renderPage();
+      const owedCell = within(rowFor('Acme')).getByTestId('client-owed');
+      expect(within(owedCell).getAllByTestId('client-amount').map((e) => e.textContent)).toEqual(['$1,300', '₪4,200']);
     });
 
-    it('renders client list', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
-      expect(screen.getByText('Beta Inc')).toBeInTheDocument();
-    });
-  });
+    it('shows overdue per currency with the age of the oldest overdue item', () => {
+      renderPage();
+      const overdueCell = within(rowFor('Gamma')).getByTestId('client-overdue');
+      expect(overdueCell).toHaveTextContent('₪4,000');
+      expect(overdueCell).toHaveTextContent('oldest 31d');
 
-  describe('Column display', () => {
-    it('shows client name column', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Client')).toBeInTheDocument();
+      // Acme owes ILS but only its USD is late
+      const acmeOverdue = within(rowFor('Acme')).getByTestId('client-overdue');
+      expect(within(acmeOverdue).getAllByTestId('client-amount').map((e) => e.textContent)).toEqual(['$1,000']);
     });
 
-    it('shows active projects column', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Active Projects')).toBeInTheDocument();
-      expect(screen.getByText('3')).toBeInTheDocument(); // Acme Corp projects
+    it('labels a client who owes nothing as settled, with a dash for overdue rather than blank cells', () => {
+      renderPage();
+      expect(within(rowFor('Delta')).getByTestId('client-owed')).toHaveTextContent('Settled');
+      expect(within(rowFor('Delta')).getByTestId('client-overdue')).toHaveTextContent('—');
     });
 
-    it('shows received column with amounts', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Received')).toBeInTheDocument();
+    it('shows last payment as date and amount, and "Never paid" when there is none', () => {
+      renderPage();
+      const paid = within(rowFor('Acme')).getByTestId('client-last-payment');
+      expect(paid).toHaveTextContent(formatDate('2026-10-05', 'en-US'));
+      expect(paid).toHaveTextContent('$200');
+      expect(within(rowFor('Gamma')).getByTestId('client-last-payment')).toHaveTextContent('Never paid');
     });
 
-    it('shows unpaid column', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Unpaid')).toBeInTheDocument();
-    });
-
-    it('shows last activity column', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('Last Activity')).toBeInTheDocument();
+    it('explains how owed now is ordered on its header', () => {
+      renderPage();
+      expect(within(header('Owed now')).getByRole('button')).toHaveAttribute('title', "Ordered by today's exchange rate");
     });
   });
 
-  describe('Empty state', () => {
-    it('shows empty state when no clients', () => {
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: [],
-        isLoading: false,
-      } as ReturnType<typeof useQueries.useClientSummaries>);
+  describe('order', () => {
+    it('defaults to owed now, descending by today\'s rate, settled clients last', () => {
+      renderPage();
+      expect(names()).toEqual(['Gamma', 'Acme', 'Beta', 'Delta']);
+      expect(header('Owed now')).toHaveAttribute('aria-sort', 'descending');
+    });
 
-      renderWithProviders(<ClientsPage />);
+    it('follows the rate: with a dollar worth ₪10, Acme owes more than Gamma', () => {
+      fxRates.USD = 10;
+      renderPage();
+      // Acme $1,300 × 10 + ₪4,200 = ₪17,200 > Gamma ₪12,000
+      expect(names()).toEqual(['Acme', 'Gamma', 'Beta', 'Delta']);
+    });
+
+    it('toggles direction when the active header is clicked again', () => {
+      renderPage();
+      fireEvent.click(within(header('Owed now')).getByRole('button'));
+      expect(names()).toEqual(['Delta', 'Beta', 'Acme', 'Gamma']);
+      expect(header('Owed now')).toHaveAttribute('aria-sort', 'ascending');
+    });
+
+    it('sorts overdue by how late, newest payment first, latest activity first, and names A–Z', () => {
+      renderPage();
+
+      fireEvent.click(within(header('Overdue')).getByRole('button'));
+      expect(names()).toEqual(['Gamma', 'Acme', 'Beta', 'Delta']);
+
+      fireEvent.click(within(header('Last payment')).getByRole('button'));
+      expect(names()).toEqual(['Acme', 'Beta', 'Delta', 'Gamma']);
+
+      fireEvent.click(within(header('Last activity')).getByRole('button'));
+      expect(names()).toEqual(['Beta', 'Acme', 'Gamma', 'Delta']);
+
+      fireEvent.click(within(header('Client')).getByRole('button'));
+      expect(names()).toEqual(['Acme', 'Beta', 'Delta', 'Gamma']);
+      expect(header('Client')).toHaveAttribute('aria-sort', 'ascending');
+    });
+
+    it('keeps the sort in the URL', () => {
+      renderPage();
+      fireEvent.click(within(header('Last payment')).getByRole('button'));
+      expect(window.location.search).toContain('sort=lastPayment');
+    });
+
+    it('orders ties by name so the list never jumps', () => {
+      mockSummaries([summary({ id: 'z', name: 'Zed' }), summary({ id: 'a', name: 'Abe' }), summary({ id: 'm', name: 'Mia' })]);
+      renderPage();
+      expect(names()).toEqual(['Abe', 'Mia', 'Zed']);
+    });
+  });
+
+  describe('summary strip', () => {
+    it('shows the client count and owed now for everyone listed, per currency', () => {
+      renderPage();
+      expect(screen.getByText('4 clients')).toBeInTheDocument();
+      const strip = screen.getByRole('region', { name: 'Owed now' });
+      // USD 1,300 + 900; ILS 12,000 + 4,200
+      expect(within(strip).getAllByTestId('owed-now-amount').map((e) => e.textContent)).toEqual(['$2,200', '₪16,200']);
+    });
+  });
+
+  describe('navigation', () => {
+    it('opens the client profile when a row is clicked', () => {
+      renderPage();
+      fireEvent.click(rowFor('Beta'));
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/clients/$clientId', params: { clientId: 'beta' } });
+    });
+
+    it('keeps the client name a link', () => {
+      renderPage();
+      expect(screen.getByRole('link', { name: 'Beta' })).toHaveAttribute('href', '/clients/$clientId/beta');
+    });
+  });
+
+  // Archived clients: left out by clientSummaryRepo.list (the clientRepo.list
+  // default), pinned in src/db/__tests__/clientRepo.test.ts "leaves archived
+  // clients out". The page adds no filter of its own.
+
+  describe('empty and loading states', () => {
+    it('shows the add-client empty state when there are no clients', () => {
+      mockSummaries([]);
+      vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+        typeof useQueries.useClients
+      >);
+      renderPage();
+
       expect(screen.getByText('No clients found')).toBeInTheDocument();
-    });
-
-    it('shows add client button in empty state', () => {
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: [],
-        isLoading: false,
-      } as ReturnType<typeof useQueries.useClientSummaries>);
-
-      renderWithProviders(<ClientsPage />);
-      const addButton = screen.getByRole('button', { name: /add client/i });
-      fireEvent.click(addButton);
-
+      fireEvent.click(screen.getByRole('button', { name: 'Add Client' }));
       expect(mockOpenClientDrawer).toHaveBeenCalledWith({ mode: 'create' });
     });
-  });
 
-  describe('Loading state', () => {
-    it('shows loading indicator when fetching', () => {
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: undefined,
-        isLoading: true,
-      } as ReturnType<typeof useQueries.useClientSummaries>);
+    it('says the search matched nothing, with the total and a translated Clear search', async () => {
+      mockSummaries([]);
+      renderPage();
+      fireEvent.change(screen.getByPlaceholderText('Search clients...'), { target: { value: 'zzz' } });
 
-      renderWithProviders(<ClientsPage />);
-      expect(document.querySelector('.spinner')).toBeInTheDocument();
-    });
-  });
-
-  describe('Client navigation', () => {
-    it('renders client names as links', () => {
-      renderWithProviders(<ClientsPage />);
-      const link = screen.getByText('Acme Corp');
-      expect(link.tagName).toBe('A');
-    });
-  });
-
-  describe('Summary strip', () => {
-    it('shows total clients count', () => {
-      renderWithProviders(<ClientsPage />);
-      expect(screen.getByText('2 clients')).toBeInTheDocument();
+      // SearchInput debounces by 200ms
+      expect(await screen.findByText('No clients match your search')).toBeInTheDocument();
+      expect(screen.getByText('4 clients in total.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
     });
 
-    it('shows total received amount', () => {
-      renderWithProviders(<ClientsPage />);
-      // $5000 + $2000 = $7000 total received
-      const summaryStrip = document.querySelector('.clients-summary-strip');
-      expect(summaryStrip).toBeInTheDocument();
-      expect(screen.getByText('Total Received')).toBeInTheDocument();
-    });
-
-    it('shows total unpaid amount', () => {
-      renderWithProviders(<ClientsPage />);
-      // $1500 total unpaid
-      expect(screen.getByText('Total Unpaid')).toBeInTheDocument();
-    });
-
-    it('does not show summary strip when no clients', () => {
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: [],
-        isLoading: false,
-      } as ReturnType<typeof useQueries.useClientSummaries>);
-
-      renderWithProviders(<ClientsPage />);
-      const summaryStrip = document.querySelector('.clients-summary-strip');
-      expect(summaryStrip).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Sorting functionality', () => {
-    it('renders sort dropdown', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-      expect(sortSelect).toBeInTheDocument();
-    });
-
-    it('has default sort by name ascending', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox') as HTMLSelectElement;
-      expect(sortSelect.value).toBe('name-asc');
-    });
-
-    it('can sort by name descending', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-      fireEvent.change(sortSelect, { target: { value: 'name-desc' } });
-
-      expect((sortSelect as HTMLSelectElement).value).toBe('name-desc');
-    });
-
-    it('can sort by value high to low', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-      fireEvent.change(sortSelect, { target: { value: 'value-desc' } });
-
-      expect((sortSelect as HTMLSelectElement).value).toBe('value-desc');
-    });
-
-    it('can sort by unpaid high to low', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-      fireEvent.change(sortSelect, { target: { value: 'unpaid-desc' } });
-
-      expect((sortSelect as HTMLSelectElement).value).toBe('unpaid-desc');
-    });
-
-    it('can sort by activity recent first', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-      fireEvent.change(sortSelect, { target: { value: 'activity-desc' } });
-
-      expect((sortSelect as HTMLSelectElement).value).toBe('activity-desc');
-    });
-  });
-
-  describe('Search functionality', () => {
-    it('shows search empty state description when no results', () => {
-      // This test verifies the empty state shows appropriate description text
-      // based on whether there's an active search query
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: [],
-        isLoading: false,
-      } as ReturnType<typeof useQueries.useClientSummaries>);
-
-      renderWithProviders(<ClientsPage />);
-
-      // Empty state should show hint when no search
-      expect(screen.getByText('Add your first client')).toBeInTheDocument();
-    });
-
-    it('calls search query with search term', () => {
-      const spy = vi.spyOn(useQueries, 'useClientSummaries');
-
-      renderWithProviders(<ClientsPage />);
-
-      const searchInput = screen.getByPlaceholderText('Search clients...');
-      fireEvent.change(searchInput, { target: { value: 'Acme' } });
-
-      // Check that the hook was called with search parameter
-      expect(spy).toHaveBeenCalled();
-    });
-  });
-
-  describe('Client details', () => {
-    it('displays last payment date when available', () => {
-      renderWithProviders(<ClientsPage />);
-      // Dates should be formatted, just check they exist
-      const table = document.querySelector('table');
-      expect(table).toBeInTheDocument();
-    });
-
-    it('shows dash when no last payment', () => {
-      const clientsWithoutPayment = [
-        {
-          ...mockClients[0],
-          lastPaymentAt: null,
-        },
-      ];
-
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: clientsWithoutPayment,
-        isLoading: false,
-      } as unknown);
-
-      renderWithProviders(<ClientsPage />);
-      const cells = document.querySelectorAll('td');
-      const hasDash = Array.from(cells).some(cell => cell.textContent === '-');
-      expect(hasDash).toBe(true);
-    });
-
-    it('shows dash when no last activity', () => {
-      const clientsWithoutActivity = [
-        {
-          ...mockClients[0],
-          lastActivityAt: null,
-        },
-      ];
-
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: clientsWithoutActivity,
-        isLoading: false,
-      } as unknown);
-
-      renderWithProviders(<ClientsPage />);
-      const cells = document.querySelectorAll('td');
-      const hasDash = Array.from(cells).some(cell => cell.textContent === '-');
-      expect(hasDash).toBe(true);
-    });
-  });
-
-  describe('Multi-currency support', () => {
-    it('displays ILS amounts when present', () => {
-      const multiCurrencyClients = [
-        {
-          ...mockClients[0],
-          paidIncomeMinorILS: 1800000, // ₪18000
-          unpaidIncomeMinorILS: 500000, // ₪5000
-        },
-      ];
-
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: multiCurrencyClients,
-        isLoading: false,
-      } as unknown);
-
-      renderWithProviders(<ClientsPage />);
-      // CurrencySummaryPopup components should be rendered
-      const summaryPopups = document.querySelectorAll('.currency-summary-popup, [data-testid="currency-summary"]');
-      expect(summaryPopups.length).toBeGreaterThan(0);
-    });
-
-    it('calculates totals across all currencies', () => {
-      const multiCurrencyClients = [
-        {
-          ...mockClients[0],
-          paidIncomeMinorUSD: 500000,
-          paidIncomeMinorILS: 1800000,
-          paidIncomeMinorEUR: 300000,
-        },
-        {
-          ...mockClients[1],
-          paidIncomeMinorUSD: 200000,
-          paidIncomeMinorILS: 0,
-          paidIncomeMinorEUR: 100000,
-        },
-      ];
-
-      vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-        data: multiCurrencyClients,
-        isLoading: false,
-      } as unknown);
-
-      renderWithProviders(<ClientsPage />);
-
-      // Summary strip should show total received across all currencies
-      expect(screen.getByText('Total Received')).toBeInTheDocument();
-    });
-  });
-
-  describe('Sort options', () => {
-    it('includes all sort options in dropdown', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-      const options = sortSelect.querySelectorAll('option');
-
-      // Should have 8 sort options (name, value, unpaid, activity x asc/desc)
-      expect(options.length).toBe(8);
-    });
-
-    it('sorts clients by value correctly', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-
-      // Change to value-desc (highest first)
-      fireEvent.change(sortSelect, { target: { value: 'value-desc' } });
-
-      // Acme Corp ($5000) should appear before Beta Inc ($2000)
-      const rows = document.querySelectorAll('tbody tr');
-      expect(rows[0].textContent).toContain('Acme Corp');
-      expect(rows[1].textContent).toContain('Beta Inc');
-    });
-
-    it('sorts clients by unpaid correctly', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-
-      // Change to unpaid-desc
-      fireEvent.change(sortSelect, { target: { value: 'unpaid-desc' } });
-
-      // Acme Corp ($1500 unpaid) should appear before Beta Inc ($0 unpaid)
-      const rows = document.querySelectorAll('tbody tr');
-      expect(rows[0].textContent).toContain('Acme Corp');
-    });
-
-    it('sorts clients by activity correctly', () => {
-      renderWithProviders(<ClientsPage />);
-      const sortSelect = screen.getByRole('combobox');
-
-      // Change to activity-desc (most recent first)
-      fireEvent.change(sortSelect, { target: { value: 'activity-desc' } });
-
-      // Acme Corp (2026-03-10) should appear before Beta Inc (2026-02-20)
-      const rows = document.querySelectorAll('tbody tr');
-      expect(rows[0].textContent).toContain('Acme Corp');
+    it('shows a spinner while loading', () => {
+      mockSummaries([], true);
+      const { container } = renderPage();
+      expect(container.querySelector('.spinner')).toBeInTheDocument();
     });
   });
 });
