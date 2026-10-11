@@ -355,8 +355,12 @@ describe('utils', () => {
     it('should return today in ISO date format', () => {
       const result = todayISO();
       expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      // Should match today
-      const today = new Date().toISOString().split('T')[0];
+      // Should match today's *local* calendar date. Comparing with
+      // toISOString() (UTC) failed every night between local midnight and
+      // the UTC rollover (00:00–03:00 in Asia/Jerusalem).
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       expect(result).toBe(today);
     });
   });
