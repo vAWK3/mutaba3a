@@ -9,32 +9,36 @@ import { configure } from '@testing-library/react';
 // test passes and only delays a genuine failure.
 configure({ asyncUtilTimeout: 3000 });
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+// Browser shims, only where there is a browser: a few tests (scripts/, the
+// Vite config) run in the node environment, where `window` doesn't exist.
+if (typeof window !== 'undefined') {
+  // Mock window.matchMedia
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 
-// Mock ResizeObserver
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+  // Mock ResizeObserver
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).ResizeObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
 
-// Mock URL.createObjectURL and URL.revokeObjectURL
-URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-URL.revokeObjectURL = vi.fn();
+  // Mock URL.createObjectURL and URL.revokeObjectURL
+  URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+  URL.revokeObjectURL = vi.fn();
+}
 
 // Clean up after each test
 afterEach(() => {
