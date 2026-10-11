@@ -1072,6 +1072,21 @@ Before adding a new pattern:
 
 ## Hosted API (`server/`) patterns — added 2026-10-08 (Money v1 M2)
 
+### Migrations are append-only once merged (MUT-59)
+Never edit a migration file after it reaches `main`, even when "nothing was
+deployed". Check `DEPLOYMENT.md` §7 (or `gcloud run revisions list`) first:
+`deploy.sh` migrates on every roll, and `prisma migrate deploy` silently keeps
+a recorded migration's original effect.
+- **A wrong schema gets a forward migration.** It must:
+  - be guarded so it is a no-op where the schema is already right;
+  - audit what it changes (`SYSTEM`, metadata with the old values);
+  - `RAISE EXCEPTION` on data it cannot map, all in one `DO $$ … $$` block,
+    so a refusal changes nothing.
+- **Test it on a database built the way production got its schema.** Keep a
+  fixture copy of the old migration (`migration-mut59.test.ts` builds scratch
+  databases with `prisma db execute`), and check for no drift against
+  `schema.prisma`.
+
 ### Plan-then-execute for batch writes
 `src/import/plan.ts` is a pure function `(rows, currentState) → PlanRow[]`;
 `POST /v1/import/preview` returns the plan, `POST /v1/import/commit` recomputes

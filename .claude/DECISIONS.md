@@ -955,11 +955,28 @@ figure that could only mean money not yet approved.
    each customer's open proposals and their total so Malafat renders both from
    one call (D17, ADR-150 on the Malafat side).
 5. Nothing from M1–M7 was deployed, so the M7 migration was edited in place
-   (D20) instead of adding a mapping migration.
+   (D20) instead of adding a mapping migration. **Overridden 2026-10-11
+   (MUT-59)**: see the override log below.
 
 **Replaces**: M7 brief decisions 2 ("approval is a state, not a copy of agree")
 and 3 ("converting is the wizard's job"). The wizard remains for agreements
 without a proposal.
+
+**Override log — decision 5 (MUT-59, 2026-10-11)**:
+- *What:* its premise was false. Production rolled the original M7
+  (`acb1144`, revision `mutaba3a-api-00003-rvr`) on 2026-10-09, and
+  `prisma migrate deploy` never re-runs a recorded migration, so the edit
+  never reached it. Production kept the five-value enum, and approving a
+  proposal failed.
+- *Why it was missed:* the deploy history lived only in Cloud Run.
+  `DEPLOYMENT.md` §7 now records it.
+- *What replaces it:* the forward repair migration
+  `20261011120000_mut59_fee_proposal_enum_repair`. It maps a database that has
+  the original M7 to M8's shape, audits every row it touches, refuses rows it
+  cannot map, and is a no-op on a fresh database. The edited M7 file stays as
+  it is, because fresh databases build from it.
+- *Rule from now on:* never edit a migration that has left its branch.
+  Ship a forward migration (PATTERNS "Migrations are append-only once merged").
 
 **Alternatives Considered**: posting every installment at approval (rejected
 by the owner: Owed would jump by the whole fee on approval day); a second

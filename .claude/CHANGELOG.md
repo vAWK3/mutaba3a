@@ -28,6 +28,33 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-59: repair migration for databases that applied the original M7
+
+**Scope:**
+- `server/prisma/migrations/20261011120000_mut59_fee_proposal_enum_repair/` (new)
+- `server/src/repositories/__tests__/migration-mut59.test.ts` and `fixtures/m7_fee_proposals.acb1144.sql` (new)
+- `server/DEPLOYMENT.md` §7–8, `.claude/{DECISIONS,PATTERNS,TEST_PLAN}.md`, `money-v1-handover.md`
+
+### Fixed
+- **Approving a fee proposal failed in production.** The database had applied the original M7 enum before M8 edited that migration in place. The forward repair migration:
+  - is guarded, and a no-op where the schema already has M8's shape;
+  - audits each touched row as `SYSTEM` `fee_proposal.repaired` with its old values;
+  - maps `CONVERTED` → `APPROVED` (date and amount from M7's fields or the agreement) and `CLIENT_APPROVED`/`AGREED` → `PROPOSED`;
+  - refuses, all or nothing, on a `CONVERTED` row without an agreement or a project with two open proposals;
+  - recreates the enum and drops `agreedOn` and `agreedNote`.
+
+### Changed
+- **ADR-027 decision 5 (D20)** gets an override log: its premise that nothing was deployed was false.
+- **New pattern:** migrations are append-only once merged.
+- **`DEPLOYMENT.md` §7** explains how the repair ships, and the recovery if it refuses.
+
+### Verified
+- **`test:db`:** 5 new cases on scratch databases built as production was: repair, idempotence, two refusals, fresh no-op.
+- **Rehearsal of the real path:** `migrate deploy` of the acb1144 history, then of `main`, plus a refusal and the `migrate resolve --rolled-back` recovery.
+- `npm test` 1056 passed and `test:db` 1122 passed; lint, typecheck, build and `openapi:check` pass.
+
+---
+
 ## [Unreleased] - 2026-10-11 — Deployment record after the hosted-epic deploy; vendored-contract command fixed
 
 **Scope:** `server/DEPLOYMENT.md`, `server/src/scripts/export-openapi.ts`, `.claude/INFRA.md`, `.claude/designs/money-v1-handover.md`.
