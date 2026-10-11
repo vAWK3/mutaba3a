@@ -14,8 +14,8 @@
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader |
-| **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
-| **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
+| **Display** | Card, Badge, StatusBadge, EmptyState |
+| **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
 | **Feedback** | Toast, Modal, ConfirmModal |
@@ -631,150 +631,27 @@ ProjectDetailPage.
 
 ---
 
-### KPICard
-**Location**: `src/components/ui/KPICard.tsx`
-**Purpose**: Key metric display on dashboard.
-
-```tsx
-<KPICard
-  title="Paid Income"
-  value={formatCurrency(paidIncomeMinor, currency)}
-  trend={{ value: 12, direction: 'up' }}
-  icon={<DollarIcon />}
-/>
-```
-
----
-
 ## Home Components
 
-### PredictiveKpiStrip
-**Location**: `src/components/home/PredictiveKpiStrip.tsx`
-**Purpose**: Display predictive KPI cards showing current vs projected values for the month.
+Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone.
+
+### HomeNeedsAttention
+**Location**: `src/components/home/HomeNeedsAttention.tsx`
+**Purpose**: "Who is late?" (MUT-8). It renders `useAttentionReceivables(undefined, profileId)` as is: overdue or due within 7 days (inclusive), every currency, oldest due date first, ties by client name then id. Each row shows the client (or "No client"), what it was for, the remaining amount in its own currency, and "Nd overdue", "Due in Nd" or "Due today". Rows are shaped with `toWorkRow`, so bucketing uses the ADR-010/022 helpers. A row opens the client profile, or the entry's income drawer when there is no client. The empty state reads "No overdue or upcoming receivables".
 
 ```tsx
-<PredictiveKpiStrip
-  className="my-strip"
-/>
+<HomeNeedsAttention profileId={profileId} />
 ```
 
-**Features**:
-- Fetches guidance data for current month (USD and ILS)
-- Shows KPI cards for: Income, Expenses, Net
-- Each card displays current actual amount and projected amount
-- Projected amounts include unpaid income and projected retainers
-- Responsive: stacks on mobile (480px breakpoint)
-- Currency-aware: shows both USD and ILS totals
-
-**Sub-components**:
-- `KpiCardForecast`: Individual KPI card with actual/projected display
+### HomeRecentPayments
+**Location**: `src/components/home/HomeRecentPayments.tsx`
+**Purpose**: "What came in?" (MUT-8). It renders `useRecentPayments(profileId)`, the last 10 payments across clients from `paymentRecordRepo.listRecent`. These are the same payment rows as a client's Payments section (ADR-033), so they include income saved as Received. Each row shows the client, what it was for, the date and the amount in its own currency; nothing is totalled. A row opens the client profile, or the entry when there is no client.
 
 ```tsx
-<KpiCardForecast
-  title="Income"
-  actualMinor={500000}
-  projectedMinor={750000}
-  currency="USD"
-  locale="en-US"
-  type="income"
-/>
+<HomeRecentPayments profileId={profileId} />
 ```
 
-**Props (KpiCardForecast)**:
-| Prop | Type | Description |
-|------|------|-------------|
-| `title` | string | Card title (i18n key result) |
-| `actualMinor` | number | Current actual amount in minor units |
-| `projectedMinor` | number | Projected amount in minor units |
-| `currency` | Currency | 'USD' \| 'ILS' |
-| `locale` | string | Locale for formatting |
-| `type` | 'income' \| 'expense' \| 'net' | Affects color styling |
-
-**Related**: `useGuidance` hook for data fetching
-
----
-
-### AttentionFeed
-**Location**: `src/components/home/AttentionFeed.tsx`
-**Purpose**: Display severity-ordered attention items for unpaid income on the Home page.
-
-```tsx
-<AttentionFeed className="my-feed" />
-```
-
-**Features**:
-- Shows unpaid income needing attention (overdue, due soon, missing due dates)
-- Maximum 5 items shown
-- Critical items always visible
-- Warning/Info items collapse if >3 total
-- "View all" links to Income page with unpaid filter
-- Actions route through canonical IncomeDrawer
-- Accessibility: proper list semantics, ARIA labels
-
-**Severity Levels**:
-- `critical`: Red icon (AlertCircle) - overdue items
-- `warning`: Yellow icon (AlertTriangle) - due soon
-- `info`: Blue icon (InfoCircle) - no due date
-
-**Props**:
-| Prop | Type | Description |
-|------|------|-------------|
-| `className?` | string | Additional CSS class |
-
-**Data Source**: `useGuidance` hook with `includeUnpaidIncome: true`
-
-**Accessibility**:
-- Uses semantic `<ul>` / `<li>` elements
-- `role="list"` and `role="listitem"` for screen readers
-- `aria-label` on list container
-- `aria-hidden="true"` on decorative icons
-- `aria-expanded` on show more/less toggle
-
----
-
-### MonthActualsRow
-**Location**: `src/components/home/MonthActualsRow.tsx`
-**Purpose**: Display actual income and expenses for the current month with currency tabs.
-
-```tsx
-<MonthActualsRow className="my-row" />
-```
-
-**Features**:
-- Shows actuals for current month (not projections)
-- Currency tabs to switch between USD and ILS
-- Grid of KPI cards: Paid Income, Unpaid, Expenses, Net
-- Responsive grid: 2 columns on mobile
-
-**Props**:
-| Prop | Type | Description |
-|------|------|-------------|
-| `className?` | string | Additional CSS class |
-
-**Data Source**: `useGuidance` hook for income/expenses data
-
----
-
-### QuickSummaries
-**Location**: `src/components/home/QuickSummaries.tsx`
-**Purpose**: Display quick summary cards for recent activity and top clients.
-
-```tsx
-<QuickSummaries className="my-summaries" />
-```
-
-**Features**:
-- Recent transactions list
-- Top clients by revenue
-- Quick actions for common operations
-
----
-
-### KpiStrip
-**Location**: `src/components/home/KpiStrip.tsx`
-**Purpose**: Legacy KPI strip component (superseded by PredictiveKpiStrip).
-
-**Note**: Consider using `PredictiveKpiStrip` for new features requiring projected values.
+Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactionRepo.test.ts` ("as Home's Needs attention") and `paymentRecords.test.ts` (`listRecent`).
 
 ---
 
@@ -1006,7 +883,7 @@ const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receiva
 <OwedNowSummary owed={owed} />
 ```
 
-**Use when**: showing what is owed now. Used by the client profile and, as the clients index strip (MUT-7), over `combineOwed(summaries.map((s) => s.owed))`. Home (MUT-8) is next. Not for period totals (paid income, expenses): those are not "now" figures.
+**Use when**: showing what is owed now. Used by the client profile and, as the clients index strip (MUT-7), over `combineOwed(summaries.map((s) => s.owed))`. Home (MUT-8) uses it over every receivable in the active profile. Not for period totals (paid income, expenses): those are not "now" figures.
 **Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
 Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
 

@@ -886,3 +886,31 @@ sit at the end edge.
 **Baseline after MUT-7 (2026-10-11)**: 2,222 unit tests passing, 5 skipped,
 0 failing.
 
+### MUT-8 — Home: owed now, needs attention, recent payments
+
+| Area | File | What is pinned |
+|---|---|---|
+| Needs attention data | `src/db/__tests__/transactionRepo.test.ts` (+5, "as Home's Needs attention") | due today and day 7 in, day 8 out; only before-today is overdue (`daysOverdue` 1 vs undefined); every currency incl. EUR without a filter; oldest first, equal dates by client name; archived entries left out. Dates are relative to the real today via `formatLocalDate` |
+| Recent payments data | `src/db/__tests__/paymentRecords.test.ts` (+6, `listRecent`) | empty → `[]`; across clients, newest first, client and what-for named, record and entry rows; client-less income kept unnamed; default limit 10 and a smaller limit; profile scoping; deleted entries and records out, archived entries' payments in |
+| Refresh | `src/hooks/__tests__/useQueries.test.tsx` (+1, real Dexie) | Mark paid → `useRecentPayments` shows the payment with no manual invalidation (inherits MUT-3's `['paymentRecords']` prefix, so it passed on first run as a regression guard) |
+| Page | `src/pages/overview/__tests__/OverviewPage.test.tsx` (15, new — Home had no test) | block order; Owed now per currency with overdue part; profile-scoped queries; old blocks absent; attention rows in repo order with client, what for, remaining; bucketing (3d overdue, Due today not overdue); day-7 label; row → client or entry drawer; attention empty state; payments rows and navigation; payments empty state; new install → one page action, Add income, no tables; loading → spinner, no onboarding or empty-state flash; onboarding still shown when not skipped |
+| Deletion guard | `src/__tests__/noDeadHomeModules.test.ts` (5) | the four deleted component files stay gone; the home barrel exports only the two MUT-8 sections |
+
+Removed with the deleted components: `PredictiveKpiStrip.test.tsx`,
+`MonthActualsRow.test.tsx`, `AttentionFeed.test.tsx`,
+`AttentionFeed.features.test.tsx` and `src/components/__tests__/KpiCard.test.tsx`
+(59 tests).
+
+Manual (browser, 2026-10-11, seeded data, 1280px English, 1024px Arabic):
+- Owed now read $3,434 and ₪16,200. The $1,234 above the clients index belongs
+  to the archived client (ADR-036 §5), and the archived EUR entry was left out.
+- Needs attention listed Gamma 31d, Acme 3d and Beta due in 5d. The 9- and
+  10-day items were left out.
+- Recent payments listed three rows, newest first.
+- A row opened Gamma's profile. No horizontal scroll, RTL stacked to one
+  column, and amounts stayed LTR.
+- No onboarding flash after the loading fix.
+
+**Baseline after MUT-8 (2026-10-11)**: 2,258 unit tests passing, 5 skipped,
+0 failing.
+
