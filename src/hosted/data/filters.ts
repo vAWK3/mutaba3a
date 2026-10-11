@@ -86,6 +86,30 @@ export const parsePayments = (raw: Raw): PaymentFilters =>
     receivedTo: day(raw.receivedTo),
   });
 
+export interface ExpenseFilters {
+  customerId?: string;
+  categoryId?: string;
+  currency?: Currency;
+  from?: string;
+  to?: string;
+}
+export const parseExpenses = (raw: Raw): ExpenseFilters =>
+  compact({
+    customerId: id(raw.customerId),
+    categoryId: id(raw.categoryId),
+    currency: oneOf(raw.currency, CURRENCIES),
+    from: day(raw.from),
+    to: day(raw.to),
+  });
+
+/** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create. */
+export interface ExpenseDrawerSearch {
+  expense?: string;
+  newExpense?: true;
+}
+export const parseExpenseDrawer = (raw: Raw): ExpenseDrawerSearch =>
+  compact({ expense: id(raw.expense), newExpense: raw.newExpense === '1' || raw.newExpense === true ? true : undefined });
+
 export const DOCUMENT_KINDS = ['INVOICE', 'RECEIPT', 'OTHER'] as const;
 
 export interface DocumentFilters {
