@@ -2,7 +2,7 @@ import { tryGetContext } from 'hono/context-storage';
 import { ApiError } from '../errors.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
-import { mayRead, mayWrite, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
+import { mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * The third layer of the writability matrix (hosted-portal.md §5, ADR-037
@@ -158,7 +158,7 @@ export function storeRefusal(principal: Principal, profileWriter: ProfileWriter,
     return new ApiError('PRINCIPAL_NOT_ACCEPTED', 'This operation does not accept this kind of credential');
   }
   if ('read' in access) return null;
-  return mayWrite(principal, access.write) ? null : writeRefusal(access.write, profileWriter);
+  return mayWriteFor(principal, access.write, profileWriter) ? null : writeRefusal(access.write, profileWriter);
 }
 
 export function principalStoreGuard(principal: Principal, profileWriter: ProfileWriter): StoreGuard {

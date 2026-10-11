@@ -9,7 +9,7 @@ import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { isSameOriginRequest, sessionCookieName, sessionDigest } from './sessions.js';
 import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
-import { domainOfScope, matrixRow, profileWriterOf, sessionScopes, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
+import { domainOfScope, matrixRow, profileWriterOf, sessionScopesFor, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * Two principals on /v1 (ADR-037 decisions 3–6):
@@ -249,7 +249,7 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, stor
   const organization = await namedMemberOrganization(c, identity, store);
   if (!organization) throw new ApiError('NOT_FOUND', 'Profile not found');
   const writerOfRecord = await profileWriterOf(store, organization.id);
-  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopes(), writerOfRecord };
+  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord };
 }
 
 async function namedMemberOrganization(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<Organization | null> {
@@ -350,6 +350,23 @@ export function postingActorOf(c: AuthReader): PostingActor {
   return auth.kind === 'apiKey'
     ? { actorType: 'API_KEY', actorId: auth.apiKey.id, requestId: c.get('requestId') }
     : { actorType: 'SYSTEM', actorId: null, requestId: c.get('requestId') };
+}
+
+/** The real caller behind a request, for an audit row (MUT-65: unlike postingActorOf, never SYSTEM — this is for a write the caller actually asked for, not lazy catch-up). */
+export interface AuditActor {
+  actorType: 'API_KEY' | 'USER';
+  actorId: string;
+}
+
+/**
+ * Who to credit a write to when a route accepts both principals (MUT-65:
+ * `POST /v1/customers`, `POST /v1/projects`, now reachable by a session too).
+ * Mirrors `postingActorOf`'s shape for the two principals that write on
+ * request, rather than the lazy-posting SYSTEM case.
+ */
+export function actorOf(c: AuthReader): AuditActor {
+  const auth = c.get('auth');
+  return auth.kind === 'apiKey' ? { actorType: 'API_KEY', actorId: auth.apiKey.id } : { actorType: 'USER', actorId: auth.user.id };
 }
 
 /**
