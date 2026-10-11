@@ -5,16 +5,16 @@ import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY, useAdoptAccountLocale } fr
 
 /** mut-43-auth-states.md E4: a choice made in this browser wins; otherwise the account's locale applies. */
 
-let adopt: (locale: 'en' | 'ar') => void = () => {};
-
 function Probe() {
   const { language, setLanguage } = useLanguage();
-  adopt = useAdoptAccountLocale();
+  const adopt = useAdoptAccountLocale();
   return (
     <div>
       <span data-testid="lang">{language}</span>
       <span>{useT()('hosted.auth.title')}</span>
       <button onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}>switch</button>
+      <button onClick={() => adopt('ar')}>adopt-ar</button>
+      <button onClick={() => adopt('en')}>adopt-en</button>
     </div>
   );
 }
@@ -40,7 +40,7 @@ describe('HostedLanguageProvider', () => {
 
   it('adopts the account locale when this browser has no stored choice, without persisting it', () => {
     mount();
-    act(() => adopt('ar'));
+    act(() => screen.getByText('adopt-ar').click());
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
     expect(screen.getByText('تسجيل الدخول')).toBeInTheDocument();
     expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
@@ -49,7 +49,7 @@ describe('HostedLanguageProvider', () => {
   it('ignores the account locale once this browser has a stored choice', () => {
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
     mount();
-    act(() => adopt('ar'));
+    act(() => screen.getByText('adopt-ar').click());
     expect(screen.getByTestId('lang')).toHaveTextContent('en');
   });
 
@@ -58,7 +58,7 @@ describe('HostedLanguageProvider', () => {
     expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
     act(() => screen.getByText('switch').click());
     expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBe('ar');
-    act(() => adopt('en'));
+    act(() => screen.getByText('adopt-en').click());
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
   });
 });

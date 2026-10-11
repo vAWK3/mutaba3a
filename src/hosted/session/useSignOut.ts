@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useToast } from '../components/Toast';
 import { useT } from '../../lib/i18n/core';
 import { announceSignedOut } from './channel';
-import { endSession } from './SessionBridge';
+import { endSession } from './endSession';
 
 /**
  * Sign out (mut-43-auth-states.md E2, S13). The cookie is httpOnly, so only the

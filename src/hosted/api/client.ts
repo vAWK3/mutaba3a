@@ -36,16 +36,27 @@ type OkJson<P extends keyof paths, M extends 'get' | 'post'> = paths[P][M] exten
   : never;
 
 export class ApiError extends Error {
+  readonly status: number;
+  readonly code: ApiErrorCode;
+  readonly details: unknown;
+  readonly requestId: string | null;
+  readonly retryAfterSeconds: number | null;
+
   constructor(
-    readonly status: number,
-    readonly code: ApiErrorCode,
+    status: number,
+    code: ApiErrorCode,
     message: string,
-    readonly details: unknown = null,
-    readonly requestId: string | null = null,
-    readonly retryAfterSeconds: number | null = null,
+    details: unknown = null,
+    requestId: string | null = null,
+    retryAfterSeconds: number | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+    this.requestId = requestId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -83,6 +94,8 @@ function withQuery(path: string, query?: Record<string, QueryValue>): string {
 
 function retryAfter(response: Response, details: unknown): number | null {
   const header = response.headers.get('retry-after');
+  // Not an amount: Retry-After is a whole number of seconds, already checked to be digits.
+  // eslint-disable-next-line no-restricted-syntax
   if (header && /^\d+$/.test(header)) return Number.parseInt(header, 10);
   const fromDetails = (details as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
   return typeof fromDetails === 'number' ? fromDetails : null;

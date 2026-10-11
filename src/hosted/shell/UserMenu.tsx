@@ -21,18 +21,18 @@ export function UserMenu() {
   const t = useT();
   const { user } = useMe();
   const { signOut, signingOut } = useSignOut();
-  const popover = usePopover();
+  const { open, toggle, buttonRef, panelRef } = usePopover();
 
   return (
     <div className="hp-usermenu">
       <button
-        ref={popover.buttonRef}
+        ref={buttonRef}
         type="button"
-        className={`hp-usermenu-button ${popover.open ? 'hp-open' : ''}`}
+        className={`hp-usermenu-button ${open ? 'hp-open' : ''}`}
         aria-haspopup="menu"
-        aria-expanded={popover.open}
+        aria-expanded={open}
         aria-label={`${t('hosted.shell.account')}: ${user.displayName}`}
-        onClick={popover.toggle}
+        onClick={toggle}
       >
         <span className="hp-avatar" aria-hidden="true">
           {initialsOf(user.displayName)}
@@ -42,8 +42,8 @@ export function UserMenu() {
           <small dir="ltr">{user.email}</small>
         </span>
       </button>
-      {popover.open && (
-        <div ref={popover.panelRef} className="hp-popover hp-usermenu-panel" role="menu" aria-label={t('hosted.shell.account')}>
+      {open && (
+        <div ref={panelRef} className="hp-popover hp-usermenu-panel" role="menu" aria-label={t('hosted.shell.account')}>
           <div className="hp-menu-row">
             <span>{t('hosted.shell.language')}</span>
             <LanguageSwitch />

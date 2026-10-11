@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useRouter, type AnyRouter } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { setUnauthorisedHandler } from '../api/client';
 import { onSignedOutElsewhere } from './channel';
+import { endSession } from './endSession';
 import { ME_KEY } from './me';
 
 /**
@@ -11,11 +12,6 @@ import { ME_KEY } from './me';
  * on the sign-in route. A 401 while nobody was signed in (first load, or the
  * sign-in page's own check) is left to the route that asked.
  */
-
-export function endSession(queryClient: QueryClient, router: AnyRouter, search: { reason: 'expired' | 'signed_out'; next?: string }) {
-  queryClient.clear();
-  void router.navigate({ to: '/sign-in', search, replace: true });
-}
 
 export function SessionBridge() {
   const queryClient = useQueryClient();

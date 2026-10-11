@@ -13,7 +13,7 @@
     "build:desktop": "tsc -b && vite build --mode desktop",
     "build:hosted": "tsc -b && vite build --mode hosted",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.hosted.json",
     "preview": "vite preview",
     "preview:web": "vite preview --mode web --outDir dist-web",
     "preview:desktop": "vite preview --mode desktop --outDir dist-desktop",

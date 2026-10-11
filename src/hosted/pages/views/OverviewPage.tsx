@@ -79,8 +79,8 @@ interface OverviewBodyProps {
 function OverviewBody({ summary, names, currency, onCurrency }: OverviewBodyProps) {
   const profile = useProfile();
   const { t, language } = useLanguage();
-  const withFigures = summary.currencies.filter(hasFigures);
-  const block = pickCurrency(withFigures, currency, profile.defaultCurrency);
+  const withFigures = useMemo(() => summary.currencies.filter(hasFigures), [summary]);
+  const block = useMemo(() => pickCurrency(withFigures, currency, profile.defaultCurrency), [withFigures, currency, profile.defaultCurrency]);
 
   const rows = useMemo<OverviewRow[]>(() => {
     if (!block) return [];

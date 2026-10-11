@@ -5,11 +5,18 @@
  */
 const HOME = '/';
 const SIGN_IN = '/sign-in';
+const FIRST_PRINTABLE = 0x20;
+const DELETE = 0x7f;
+
+function isControl(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code < FIRST_PRINTABLE || code === DELETE;
+}
 
 export function safeNext(next: string | null | undefined): string {
   if (!next || !next.startsWith('/')) return HOME;
   if (next.startsWith('//') || next.startsWith('/\\')) return HOME;
-  if (/[\u0000-\u001f\u007f]/.test(next)) return HOME;
+  if ([...next].some(isControl)) return HOME;
   const path = next.split(/[?#]/, 1)[0];
   if (path === SIGN_IN || path.startsWith(`${SIGN_IN}/`)) return HOME;
   return next;

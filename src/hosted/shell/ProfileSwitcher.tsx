@@ -13,7 +13,7 @@ import { usePopover } from './usePopover';
 
 const SECTION_SEGMENT = 3; // '' / 'p' / ':id' / section
 
-export function sourceKey(profile: HostedProfile): string {
+function sourceKey(profile: HostedProfile): string {
   return profile.writerOfRecord === 'MALAFAT' ? 'hosted.shell.switcher.sourceMalafat' : 'hosted.shell.switcher.sourceExpensesOnly';
 }
 
@@ -22,10 +22,10 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
   const me = useMe();
   const navigate = useNavigate();
   const location = useLocation();
-  const popover = usePopover();
+  const { open, toggle, close, buttonRef, panelRef } = usePopover();
 
   function choose(profile: HostedProfile) {
-    popover.close();
+    close();
     const section = location.pathname.split('/')[SECTION_SEGMENT];
     void navigate({ to: section ? `/p/${profile.id}/${section}` : `/p/${profile.id}` });
   }
@@ -33,13 +33,13 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
   return (
     <div className="hp-switcher">
       <button
-        ref={popover.buttonRef}
+        ref={buttonRef}
         type="button"
         className="hp-switcher-button"
         aria-haspopup="menu"
-        aria-expanded={popover.open}
+        aria-expanded={open}
         aria-label={active ? `${t('hosted.shell.switcher.label')}: ${active.name}` : t('hosted.shell.switcher.label')}
-        onClick={popover.toggle}
+        onClick={toggle}
       >
         <span className="hp-switcher-name">{active ? active.name : t('hosted.shell.switcher.label')}</span>
         {active && <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>}
@@ -47,8 +47,8 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
           ▾
         </span>
       </button>
-      {popover.open && (
-        <div ref={popover.panelRef} className="hp-popover hp-switcher-panel" role="menu" aria-label={t('hosted.shell.switcher.label')}>
+      {open && (
+        <div ref={panelRef} className="hp-popover hp-switcher-panel" role="menu" aria-label={t('hosted.shell.switcher.label')}>
           {me.profiles.map((profile) => {
             const current = profile.id === active?.id;
             return (

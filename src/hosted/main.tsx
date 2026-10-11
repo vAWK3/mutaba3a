@@ -11,7 +11,8 @@ import '../styles/theme.css';
 import '../index.css';
 import './hosted.css';
 
-import { PortalProviders, createPortalQueryClient } from './HostedApp';
+import { PortalProviders } from './HostedApp';
+import { createPortalQueryClient } from './queryClient';
 import { createPortalRouter } from './router';
 
 /** Entry of the hosted portal build (`vite --mode hosted`, hosted-portal.md §2). */
