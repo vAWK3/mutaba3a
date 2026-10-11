@@ -14,7 +14,7 @@ const PAGE_LIMIT = 50;
 const DIRECTORY_LIMIT = 200;
 const STALE_MS = 30_000;
 
-interface Page<T> {
+export interface Page<T> {
   items: T[];
   nextCursor: string | null;
 }
@@ -78,7 +78,8 @@ export function useProjectDirectory(profileId: string, customerId?: string) {
   });
 }
 
-function useCursorList<T>(key: readonly unknown[], load: (cursor: string | undefined) => Promise<Page<T>>) {
+/** Exported for reuse by src/hosted/hooks/useExpenseQueries.ts (MUT-44) — the shape is generic, not read-only-specific. */
+export function useCursorList<T>(key: readonly unknown[], load: (cursor: string | undefined) => Promise<Page<T>>) {
   return useInfiniteQuery({
     queryKey: key,
     queryFn: ({ pageParam }) => load(pageParam),

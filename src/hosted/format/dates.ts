@@ -11,6 +11,20 @@ import type { Language } from '../../lib/i18n/types';
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MISSING = '—';
 
+/**
+ * The browser's local calendar date, `YYYY-MM-DD` — used only as the expense
+ * drawer's default `occurredOn` (MUT-44). Deliberately not `toISOString()`,
+ * which reads the UTC date: a user in Asia/Jerusalem recording an expense at
+ * 01:00 local time would otherwise get it dated yesterday — the exact bug
+ * `src/lib/dates.ts`'s `todayLocalISO()` was written to fix on the local app.
+ */
+export function todayLocalISO(now: Date = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function formatDay(value: string | null | undefined, language: Language): string {
   if (!value || !CALENDAR_DATE.test(value)) return MISSING;
   return new Intl.DateTimeFormat(getLocale(language), { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));

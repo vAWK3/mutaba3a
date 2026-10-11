@@ -9,9 +9,11 @@ import { UserMenu } from './UserMenu';
 
 /**
  * `HostedShell` (hosted-portal.md §7.1): wordmark, profile switcher, the five
- * read sections, the account menu, and the page. No "+ Add": the portal creates
- * nothing in MUT-43. One DOM for every width; CSS turns the sidebar into a top
- * bar on a phone, so nothing is duplicated for assistive tech.
+ * read sections plus Expenses (MUT-44 — the portal's only write), the account
+ * menu, and the page. There is still no "+ Add" menu: the one create action
+ * in the portal is the expense drawer, opened from the Expenses list itself.
+ * One DOM for every width; CSS turns the sidebar into a top bar on a phone,
+ * so nothing is duplicated for assistive tech.
  */
 
 const SECTIONS = [
@@ -20,6 +22,7 @@ const SECTIONS = [
   { path: '/receivables', key: 'receivables', exact: false },
   { path: '/payments', key: 'payments', exact: false },
   { path: '/documents', key: 'documents', exact: false },
+  { path: '/expenses', key: 'expenses', exact: false },
 ] as const;
 
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {

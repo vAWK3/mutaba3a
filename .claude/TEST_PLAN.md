@@ -1032,6 +1032,24 @@ Also run once by hand against the real API on a scratch database (2026-10-11): w
 
 **Baseline after MUT-43 (2026-10-11)**: root `npx vitest run` 151 files, 2462 passed, 5 skipped; `npm run test:bundles`, `npm run hosted:types:check`, `npm run typecheck` (both programs), `npm run lint` (0 errors) and `npm run build` pass. The server package is unchanged.
 
+### MUT-44: hosted expense capture
+
+Plan: `.claude/designs/mut-44-expense-capture-tests.md`.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Shared schema | `src/components/expenses/__tests__/expenseFormSchema.test.ts` | the base schema's validation matches local's pre-extraction behaviour exactly (no regex on amount); `DECIMAL_AMOUNT` accepted/rejected shapes |
+| Shared form | `src/components/expenses/__tests__/ExpenseFormFields.test.tsx` | field order; currency options given, not hardcoded; `amountInputMode` swaps `type`/`dir`/`inputMode`; required-category error; an omitted `projectField` renders nothing |
+| Local extraction regression | `src/components/__tests__/ExpenseDrawer.projectField.test.tsx` (unmodified), `ExpenseDrawer.oneTimeFields.test.tsx` (new) | the pre-existing test passes byte-for-byte; amount persists as `amountMinor`, currency/date/title/category-required/notes round-trip through the real drawer and Dexie |
+| Hosted client | `src/hosted/api/__tests__/client.test.ts` | `idempotency-key` on create, `if-match: <version>` on update, every expense/category/receipt operation hits the right path/method |
+| Pickers | `src/hosted/components/__tests__/{ClientPicker,ProjectPicker}.test.tsx` | options from the directory query; no "create new" branch ever renders |
+| Error mapping | `src/hosted/components/__tests__/expenseApiErrors.test.ts` | every MUT-42 `VALIDATION_FAILED` reason → its field with `type: 'manual'`; `CONFLICT`/network/non-`ApiError` → toast |
+| Hosted drawer | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` | decimal-text amount input (`dir="ltr"`); Idempotency-Key on create; the loading gate blocks partial data in edit mode; a field error renders and does not close the drawer; Escape and overlay-click close; receipts section only in edit mode |
+| Receipts | `src/hosted/components/__tests__/ReceiptUploader.test.tsx` | start → PUT (with the server's own headers, `credentials: 'omit'`) → complete; type/size rejected client-side before any call; the 10-cap counts only `READY` |
+| Expenses list | `src/hosted/pages/__tests__/ExpensesList.test.tsx` | populated row shape; empty state with a "Record expense" action; row click and the header button open the drawer with the right search params; sidebar nav entry |
+
+**Baseline after MUT-44 (2026-10-11)**: root `npx vitest run` 160 files, 2537 passed, 5 skipped; `npm run test:bundles` (after adding `json-schema.org` to the hosted allowlist), `npm run typecheck` (both programs), `npm run lint` (0 errors, 17 pre-existing warnings unrelated to this ticket) and `npm run build` pass. The server package is unchanged.
+
 **Baseline after MUT-59 (2026-10-11)**: server `npm test` 1056 passed, 11 skipped; `npm run test:db` 1122 passed.
 
 **Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.

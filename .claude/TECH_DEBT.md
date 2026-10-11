@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-045: The expense drawer's default date is the browser's local date, not the organization's timezone
+**Status**: Accepted
+**Added**: 2026-10-11 (MUT-44)
+**Priority**: Low
+**Impact**: `ExpenseDrawer`'s create-mode default `occurredOn` comes from
+`todayLocalISO()` (the browser's calendar date), correctly avoiding the
+UTC-date bug MUT-17 fixed on the local app, but it is still the *device's*
+local date rather than the *organization's* configured timezone
+(`HostedProfile.timezone`). A partner recording an expense while traveling
+outside the firm's timezone could see the wrong default day near midnight —
+always editable before saving, so this only affects the pre-filled value, not
+what can be submitted. Fix: thread `profile.timezone` into the date default
+via `Intl.DateTimeFormat` with that zone, once a second real case needs it
+(none does yet — every other hosted date default is either absent or already
+organization-timezone-correct via the server).
+
 ### TD-044: The portal's Clients view loads the whole directory
 **Status**: Accepted
 **Added**: 2026-10-11 (MUT-43)

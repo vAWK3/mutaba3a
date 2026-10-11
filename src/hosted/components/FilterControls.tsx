@@ -57,6 +57,10 @@ export function MatterFilter(props: Omit<EntitySelectProps<Project>, 'label'>) {
   return <EntitySelect label={useT()('hosted.filters.matter')} {...props} />;
 }
 
+export function CategoryFilter(props: Omit<EntitySelectProps<{ id: string; name: string }>, 'label'>) {
+  return <EntitySelect label={useT()('hosted.filters.category')} {...props} />;
+}
+
 export function CurrencyFilter({ value, onChange }: { value: string | undefined; onChange: (value: (typeof CURRENCIES)[number] | undefined) => void }) {
   const t = useT();
   return (

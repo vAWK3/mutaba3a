@@ -21,9 +21,11 @@ interface HostedTableProps<Row> {
   rowKey: (row: Row) => string;
   label: string;
   detail?: (row: Row) => ReactNode | null;
+  /** Opt-in (MUT-44): makes each row open something (the expense drawer) on click. Every other list is still read-only. */
+  onRowClick?: (row: Row) => void;
 }
 
-export function HostedTable<Row>({ columns, rows, rowKey, label, detail }: HostedTableProps<Row>) {
+export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick }: HostedTableProps<Row>) {
   return (
     <div className="table-wrapper hp-table-wrapper">
       <table className="table" aria-label={label}>
@@ -41,7 +43,7 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail }: Hoste
             const extra = detail?.(row);
             return (
               <Fragment key={rowKey(row)}>
-                <tr>
+                <tr className={onRowClick ? 'clickable' : undefined} onClick={onRowClick ? () => onRowClick(row) : undefined}>
                   {columns.map((column) => (
                     <td key={column.key} className={column.numeric ? 'hp-num' : undefined}>
                       {column.cell(row)}
