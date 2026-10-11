@@ -32,7 +32,17 @@ export function invalidatePaymentRecordLists(queryClient: ReturnType<typeof useQ
  * Invalidates all transaction-related queries.
  * Extracted to avoid repeating 8 invalidation calls in each mutation.
  */
-function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+/**
+ * Everything a transaction write can change. The one list for every write
+ * path: the income hooks (useIncomeQueries) reuse it, and it covers their
+ * keys too, because the income drawer saves through this module while the
+ * client profile and /income read useIncome / useReceivables (MUT-5).
+ */
+export function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['income'] });
+  queryClient.invalidateQueries({ queryKey: ['receivables'] });
+  queryClient.invalidateQueries({ queryKey: ['incomeOverviewTotals'] });
+  queryClient.invalidateQueries({ queryKey: ['incomeAttentionReceivables'] });
   queryClient.invalidateQueries({ queryKey: ['transactions'] });
   queryClient.invalidateQueries({ queryKey: ['transaction'] });
   queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });

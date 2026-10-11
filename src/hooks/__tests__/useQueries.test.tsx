@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
@@ -30,7 +30,10 @@ import {
   useMarkTransactionPaid,
   usePaymentsByClient,
   useRecentPayments,
+  useCreateTransaction,
+  useUpdateTransaction,
 } from '../useQueries';
+import { useIncome, useReceivables } from '../useIncomeQueries';
 import type { BusinessProfile, Document } from '../../types';
 
 // Create a test query client
@@ -647,5 +650,67 @@ describe('By-id hooks resolve null for a missing row', () => {
 
   it('useProjectSummary resolves to null, no console error', async () => {
     await expectResolvesNull(() => useProjectSummary(MISSING_ID));
+  });
+});
+
+// MUT-5: the income drawer saves through useCreateTransaction / useUpdateTransaction,
+// while the client profile and /income read useIncome / useReceivables. A save
+// must refresh both, or the entry the user just logged doesn't appear.
+describe('transaction writes refresh the income lists (MUT-5)', () => {
+  beforeEach(async () => {
+    await db.transactions.clear();
+  });
+
+  afterEach(async () => {
+    await db.transactions.clear();
+  });
+
+  function useIncomeLists() {
+    return {
+      income: useIncome({}),
+      receivables: useReceivables({}),
+      create: useCreateTransaction(),
+      update: useUpdateTransaction(),
+    };
+  }
+
+  it('a create shows up in useIncome and useReceivables', async () => {
+    const { result } = renderHook(useIncomeLists, { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.income.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.receivables.isSuccess).toBe(true));
+    expect(result.current.income.data).toHaveLength(0);
+
+    await act(async () => {
+      await result.current.create.mutateAsync({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 120000,
+        currency: 'USD',
+        occurredAt: '2026-10-11',
+        title: 'Logo redesign',
+      });
+    });
+
+    await waitFor(() => expect(result.current.income.data).toHaveLength(1));
+    await waitFor(() => expect(result.current.receivables.data).toHaveLength(1));
+  });
+
+  it('an update shows up in useIncome', async () => {
+    const tx = await transactionRepo.create({
+      kind: 'income',
+      status: 'unpaid',
+      amountMinor: 120000,
+      currency: 'USD',
+      occurredAt: '2026-10-11',
+      title: 'Before',
+    });
+    const { result } = renderHook(useIncomeLists, { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.income.data?.[0]?.title).toBe('Before'));
+
+    await act(async () => {
+      await result.current.update.mutateAsync({ id: tx.id, data: { title: 'After' } });
+    });
+
+    await waitFor(() => expect(result.current.income.data?.[0]?.title).toBe('After'));
   });
 });
