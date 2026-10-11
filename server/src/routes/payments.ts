@@ -67,6 +67,8 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     if (body.paymentId) {
       const payment = await mustGetPayment(organization.id, body.paymentId);
       if (payment.status !== 'POSTED') throw validationError('PAYMENT_NOT_POSTED', 'Only a POSTED payment can be allocated', { paymentId: payment.id });
+      // A session's clientless "Received" capture (MUT-65) has no customer to allocate against; Malafat's allocation flow never reaches it in practice (session writes are session-only routes), but the type is honest about it.
+      if (!payment.customerId) throw validationError('PAYMENT_HAS_NO_CUSTOMER', 'This payment has no customer to allocate against', { paymentId: payment.id });
       const available = payment.amountMinor - payment.allocatedMinor;
       if (available <= 0n) throw validationError('NO_UNALLOCATED_FUNDS', 'This payment is fully allocated', { paymentId: payment.id });
       return { customerId: payment.customerId, currency: payment.currency as Currency, amountMinor: available, payment };
@@ -88,12 +90,23 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     return raw.map((a, i) => ({ receivableId: a.receivableId, amountMinor: parseAmount(a.amount, currency, `allocations[${i}].amount`) }));
   }
 
+  /**
+   * Allocation ever only concerns a receivable with a project (Malafat's
+   * INSTALLMENT/RETAINER_CHARGE rows always have one). A personal profile's
+   * projectless "Owed" capture (MUT-65) is simply never eligible here — it is
+   * read and settled through /v1/income and /v1/receivables/{id}/settle
+   * instead, never through this allocation engine.
+   */
+  function allocatable(records: readonly ReceivableRecord[]): Array<ReceivableRecord & { projectId: string }> {
+    return records.filter((r): r is ReceivableRecord & { projectId: string } => r.projectId !== null);
+  }
+
   /** The validated set (explicit, suggested, or empty) plus everything the response and the token need. */
   async function plan(organization: Organization, src: { customerId: string; currency: Currency; amountMinor: bigint }, explicit: AllocationRequest[] | undefined, strategy: AllocationStrategy | undefined, today: IsoDate) {
-    const eligible = await store.receivables.listEligible(organization.id, src.customerId, src.currency);
+    const eligible = allocatable(await store.receivables.listEligible(organization.id, src.customerId, src.currency));
     const referenced = explicit ? explicit.map((a) => a.receivableId).filter((id) => !eligible.some((r) => r.id === id)) : [];
-    const extra = referenced.length > 0 ? await store.receivables.getByIds(organization.id, referenced) : [];
-    const pool: ReceivableRecord[] = [...eligible, ...extra];
+    const extra = referenced.length > 0 ? allocatable(await store.receivables.getByIds(organization.id, referenced)) : [];
+    const pool = [...eligible, ...extra];
     const requested = explicit ?? (strategy ? suggestAllocations(strategy, src.amountMinor, eligibleFor(eligible, src.customerId, src.currency)) : []);
     const result = validateAllocations({ customerId: src.customerId, currency: src.currency, amountMinor: src.amountMinor, allocations: requested, receivables: pool });
     if (!result.ok) {
@@ -198,7 +211,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let created;
       try {
         created = await store.payments.create(
-          { organizationId: organization.id, customerId: src.customerId, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, allocations: value.allocations },
+          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, allocations: value.allocations },
           now,
         );
       } catch (err) {

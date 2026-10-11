@@ -221,6 +221,8 @@ model User {
 
   expenses        Expense[]
   expenseReceipts ExpenseReceipt[]
+  /// MUT-65: income captured by this person.
+  payments        Payment[]
 
   @@map("users")
 }
@@ -373,6 +375,8 @@ model Project {
 
   agreements Agreement[]
   expenses   Expense[]
+  /// MUT-65: "Received" captured with a matter.
+  payments   Payment[]
 
   @@index([organizationId, customerId])
   @@index([organizationId, createdAt, id])
@@ -546,7 +550,8 @@ model Receivable {
   organizationId     String              @db.Uuid
   organization       Organization        @relation(fields: [organizationId], references: [id])
   customerId         String              @db.Uuid
-  projectId          String              @db.Uuid
+  /// Null for an "Owed" capture with no matter (MUT-65, origin ADJUSTMENT); always set for INSTALLMENT/RETAINER_CHARGE. No FK here, matching this model's existing customerId/agreementId columns.
+  projectId          String?             @db.Uuid
   agreementId        String?             @db.Uuid
   origin             ReceivableOrigin
   originId           String?             @db.Uuid
@@ -564,6 +569,12 @@ model Receivable {
   postingDate        String              @db.VarChar(10)
   postedAt           DateTime
   status             ReceivableStatus    @default(OPEN)
+  /// "What you did" (MUT-65, ADJUSTMENT origin only); null for INSTALLMENT/RETAINER_CHARGE.
+  title              String?
+  /// Who captured it (MUT-65, ADJUSTMENT origin only); no FK, matching customerId/projectId above.
+  createdByUserId    String?             @db.Uuid
+  /// Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt.
+  deletedAt          DateTime?
   version            Int                 @default(1)
   createdAt          DateTime            @default(now())
   allocations        PaymentAllocation[]
@@ -599,8 +610,13 @@ model Payment {
   id                String        @id @default(uuid()) @db.Uuid
   organizationId    String        @db.Uuid
   organization      Organization  @relation(fields: [organizationId], references: [id])
-  customerId        String        @db.Uuid
-  customer          Customer      @relation(fields: [customerId], references: [id])
+  /// Null for "Received" captured with no client (MUT-65); always set for a Malafat-fed payment.
+  customerId        String?       @db.Uuid
+  /// onDelete: Restrict, unchanged from the M4 migration — the nullability change here is the column, not this constraint's delete behavior.
+  customer          Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// Optional matter the money is for (MUT-65). Never set by a Malafat-fed payment, which carries the link through its allocations instead.
+  projectId         String?       @db.Uuid
+  project           Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   /// PAY-YYYY-NNNN, gap-free per organization and year (payment_counters).
   number            String
   currency          String        @db.VarChar(3)
@@ -616,6 +632,9 @@ model Payment {
   reversalReason    String?
   replacesPaymentId String?       @db.Uuid
   requestId         String?
+  /// Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor.
+  createdByUserId   String?       @db.Uuid
+  createdBy         User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   version           Int           @default(1)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @default(now())
@@ -624,6 +643,7 @@ model Payment {
 
   @@unique([organizationId, number])
   @@index([organizationId, customerId])
+  @@index([organizationId, projectId])
   @@index([organizationId, createdAt, id])
   @@map("payments")
 }

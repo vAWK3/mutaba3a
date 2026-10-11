@@ -44,7 +44,9 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         const recs = receivables.filter((r) => r.currency === currency);
         const pays = payments.filter((p) => p.currency === currency);
         const props = proposals.filter((p) => p.currency === currency);
-        const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId), ...props.map((p) => p.customerId)]);
+        // A session's clientless "Received" capture (MUT-65) has no customer to key a row by; it still counts in this
+        // block's own totals above (`total`/`u`, computed over every receivable/payment regardless of customer).
+        const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId), ...props.map((p) => p.customerId)].filter((id): id is string => id !== null));
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const rows = [...byCustomer].sort().map((customerId) => {
           const b = bucketize(recs.filter((r) => r.customerId === customerId), today);

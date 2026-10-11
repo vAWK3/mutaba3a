@@ -242,6 +242,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     postingDate: r.postingDate,
     postedAt: r.postedAt.toISOString(),
     status: receivableStatus(r, today),
+    title: r.title,
     version: r.version,
   };
 }

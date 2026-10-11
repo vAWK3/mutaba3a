@@ -504,7 +504,8 @@ export interface ReceivableRecord {
   id: string;
   organizationId: string;
   customerId: string;
-  projectId: string;
+  /** Null for an ADJUSTMENT receivable captured with no matter (MUT-65); always set for an INSTALLMENT/RETAINER_CHARGE one. */
+  projectId: string | null;
   agreementId: string | null;
   origin: ReceivableOrigin;
   /** Installment id or charge id. */
@@ -523,6 +524,12 @@ export interface ReceivableRecord {
   postingDate: IsoDate;
   postedAt: Date;
   status: ReceivableStatus;
+  /** "What you did" (MUT-65, ADJUSTMENT origin only); null for INSTALLMENT/RETAINER_CHARGE receivables. */
+  title: string | null;
+  /** Who captured it (MUT-65); null for INSTALLMENT/RETAINER_CHARGE receivables, which have no session actor. */
+  createdByUserId: string | null;
+  /** Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt. Null for every receivable this ticket does not create. */
+  deletedAt: Date | null;
   version: number;
   createdAt: Date;
 }
@@ -654,6 +661,26 @@ export interface ReceivableFilter {
   status?: ReceivableStatus;
 }
 
+/** MUT-65: a bare "Owed" receivable, written directly (not through an Agreement/Installment). */
+export interface CreateAdjustmentReceivableInput {
+  organizationId: string;
+  customerId: string;
+  /** Null when captured with no matter. */
+  projectId: string | null;
+  currency: string;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  vatTreatment: VatTreatment;
+  vatRateBasisPoints: number;
+  title: string | null;
+  dueDate: IsoDate;
+  postingDate: IsoDate;
+  postedAt: Date;
+  createdByUserId: string;
+  requestId: string | null;
+}
+
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
   /** In the order of `ids`; unknown or foreign ids are skipped. */
@@ -666,6 +693,16 @@ export interface ReceivableRepository {
   /** Appends a credit and moves credited_minor / status atomically; throws InsufficientCapacity if it exceeds the outstanding (M4). */
   credit(organizationId: string, receivableId: string, input: CreditInput, at: Date): Promise<{ receivable: ReceivableRecord; credit: CreditRecord } | null>;
   listCredits(organizationId: string, receivableId: string): Promise<CreditRecord[]>;
+  /** MUT-65: "Owed", written directly as origin ADJUSTMENT, agreementId null. */
+  createAdjustment(input: CreateAdjustmentReceivableInput, at: Date): Promise<ReceivableRecord>;
+  /**
+   * MUT-65 undo: a plain soft-delete. The caller (routes/income.ts) restricts
+   * this to `origin === 'ADJUSTMENT' && paidMinor === 0n && creditedMinor === 0n`
+   * before calling it — kept generic here so the guard logic lives in one
+   * visible place, matching MUT-42 D5's shape for expenses. Null for an id the
+   * organization never had; the same record (unchanged) when already deleted.
+   */
+  softDeleteAdjustment(organizationId: string, id: string, at: Date): Promise<ReceivableRecord | null>;
 }
 
 // ---- Milestone 4: payments, allocations, credits ----------------------------
@@ -676,7 +713,10 @@ export type PaymentStatus = 'POSTED' | 'REVERSED';
 export interface PaymentRecord {
   id: string;
   organizationId: string;
-  customerId: string;
+  /** Null for "Received" with no client (MUT-65); always set for a Malafat-fed payment. */
+  customerId: string | null;
+  /** Optional matter the money is for (MUT-65). Never set by a Malafat-fed payment, which carries the link through its allocations instead. */
+  projectId: string | null;
   /** PAY-YYYY-NNNN, gap-free per organization and year. */
   number: string;
   currency: string;
@@ -692,6 +732,8 @@ export interface PaymentRecord {
   reversalReason: string | null;
   replacesPaymentId: string | null;
   requestId: string | null;
+  /** Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor. */
+  createdByUserId: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -713,7 +755,8 @@ export interface AllocationInput {
 
 export interface CreatePaymentInput {
   organizationId: string;
-  customerId: string;
+  customerId: string | null;
+  projectId: string | null;
   currency: string;
   amountMinor: bigint;
   receivedOn: IsoDate;
@@ -722,6 +765,7 @@ export interface CreatePaymentInput {
   notes: string | null;
   replacesPaymentId: string | null;
   requestId: string | null;
+  createdByUserId: string | null;
   allocations: AllocationInput[];
 }
 
@@ -743,7 +787,7 @@ export interface CreditRecord extends CreditInput {
 
 export interface PaymentFilter {
   customerId?: string;
-  /** Payments with at least one allocation on the project. */
+  /** A payment whose own `projectId` names this project (MUT-65), OR one with at least one allocation on it. */
   projectId?: string;
   status?: PaymentStatus;
   receivedBefore?: IsoDate;

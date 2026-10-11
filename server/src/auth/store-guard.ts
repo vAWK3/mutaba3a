@@ -98,6 +98,9 @@ export const STORE_ACCESS: StoreAccess = {
     countOutstandingByProject: 'read',
     credit: { write: 'payments' },
     listCredits: 'read',
+    // MUT-65: "Owed", a bare receivable written outside an Agreement.
+    createAdjustment: { write: 'payments' },
+    softDeleteAdjustment: { write: 'payments' },
   },
   payments: {
     create: { write: 'payments' },
