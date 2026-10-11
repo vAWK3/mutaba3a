@@ -1654,8 +1654,6 @@ holds).
 - *Cross-site cookie with CORS, or a Netlify proxy*: unreliable under
   third-party cookie blocking; a non-`me-west1` edge on firm data (ADR-024
   residency). Rejected.
-- *Sign in with Malafat (OAuth) for the web*: no hosted web client exists, and
-  the owner deferred it. Revisit with MAL-870.
 - *A server `Profile` table*: a second id for the same organization, with
   nothing to hold in v1. Rejected.
 
