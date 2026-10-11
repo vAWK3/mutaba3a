@@ -285,6 +285,28 @@ The build ran on `feature/mut-1-client-core`, from `0972362` to the final commit
 
 ---
 
+## Pre-landing review (`/qa-reconcile` → `/review`, 2026-10-11)
+
+**Reviewers:**
+- six specialists: testing, maintainability, security, performance, design, simplification;
+- a Claude adversarial pass. Three specialists and the adversarial pass were retried after an API outage. The adversarial retry also covered the red team's job: it was given every earlier finding and asked for what they missed.
+
+Codex was unavailable. Basel chose "fix all as recommended".
+
+**What changed against this brief:**
+- **P2 / ADR-039 is now enforced in the repository for every caller.** Payment-state fields are stripped and re-derived on a record-backed entry, and a currency change is rejected. The amount check runs only on a real amount change.
+- **The E1 keyboard contract was tightened.** Enter is held during an async pick and on unresolved typed text, and a prefix match is highlighted, never a substring. The input points `aria-activedescendant` at the highlighted option.
+- **E2 parser:** a currency-token whitelist, space grouping, no leading 0 group, at most 2 decimals in the drawer, safe integers, string math.
+- **The drawer waits for payment records,** locks currency once payments are recorded, and toasts a refused save.
+- **Due date:** a Received save leaves it untouched (the bug existed before MUT-5 and was fixed here).
+
+**Left as is, with reasons:**
+- **Old zero or negative entries can't be saved after edits,** because amounts must be positive. None are expected in the data.
+- **Raising the amount of a drawer-paid entry with no payment records counts the larger amount as received.** These entries become record-backed with MUT-60.
+- **Some simplifications were offered and not taken:** spreading form values, inlining `isBelowRecordedTotal`, dropping the `invalidateIncomeQueries` wrapper, and merging `parseCurrencyInput` into `parseAmountToMinor`.
+
+---
+
 ## Eng review (`/plan-eng-review`, 2026-10-11)
 
 - **Target:** this brief plus `mut-5-income-fast-path-tests.md`, on `feature/mut-1-client-core` at `1f9ae7b`.

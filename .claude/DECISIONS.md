@@ -47,6 +47,7 @@
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
 | ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
 | ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active | 2026-10 |
+| ADR-039 | Payment Records Own an Entry's Payment State; an Edit Never Rewrites It | Active | 2026-10 |
 
 ---
 
@@ -1814,11 +1815,13 @@ Mark paid, Record payment and partial payments all write `PaymentRecord`s, so mo
 1. **An entry with live payment records gets its `status`, `paidAt` and `receivedAmountMinor` from them** (`recalculateReceivedAmount`, ADR-030).
    - The income drawer never writes those three fields for such an entry.
    - Its status switch is read-only, with a hint to manage the payments from the client page.
-2. **`transactionRepo.update` enforces this when the amount changes.** When `amountMinor` really changes, it reads the live records in one Dexie transaction:
-   - a new amount below their total is rejected with `PaymentRecordError` (ADR-030: no overpayment);
-   - otherwise it writes, then recalculates. An unpaid entry cut to exactly the recorded total becomes paid; a paid entry raised above it is owed the difference.
+2. **`transactionRepo.update` enforces this for every caller.** An update that touches the amount, the currency or any of `status` / `paidAt` / `receivedAmountMinor` reads the live records in one Dexie transaction. When the entry has records:
+   - `status`, `paidAt` and `receivedAmountMinor` are stripped from the update and re-derived;
+   - a currency change is rejected with `PaymentRecordError`, so recorded payments can't silently move into another currency;
+   - an amount change below the recorded total is rejected (ADR-030: no overpayment). An unchanged amount is not checked, so a legacy entry with more recorded than its total can still be retitled;
+   - after the write, a changed amount or stripped payment state recalculates. An unpaid entry cut to exactly the recorded total becomes paid; a paid entry raised above it is owed the difference.
 
-   Edits that don't change the amount take the old path, with no extra read.
+   Updates that touch none of these take the old path, with no extra read. *(Amended 2026-10-11 by the pre-landing review: the first version only guarded amount changes, so a form writing status before its records loaded, or a currency edit, slipped past.)*
 3. **For an entry without records, the drawer owns payment state, but only on a real status change** (`buildIncomeUpdate` in `src/lib/incomeEntry.ts`):
 
    | Transition | Write |
@@ -1828,7 +1831,7 @@ Mark paid, Record payment and partial payments all write `PaymentRecord`s, so mo
    | unpaid → paid | paid now, in full |
    | paid → unpaid | clears both |
 
-**Consequences**: editing can no longer move a payment date or erase a received amount, and an amount edit can't leave status disagreeing with the records. The drawer check for a too-low amount exists only to show a translated field message; the repository stays the source of truth.
+**Consequences**: editing can no longer move a payment date or erase a received amount, and an amount edit can't leave status disagreeing with the records. The income drawer mirrors the rules so users get a translated reason, not a refusal: it waits for the records to load, shows status and currency read-only on a record-backed entry, and toasts when the repository still refuses (records changed in another window). Any other caller now gets `PaymentRecordError` for a currency change on a record-backed entry, including the invoice-sync path in `paymentRequestService`, which updates linked unpaid entries from a document. The drawer check for a too-low amount exists only to show a translated field message; the repository stays the source of truth.
 
 When a cut makes the entry fully paid, `paidAt` is the latest record's date, because `recalculateReceivedAmount` derives it from the records (ADR-038, MUT-18).
 

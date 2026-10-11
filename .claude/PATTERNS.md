@@ -1566,9 +1566,9 @@ above only sets the header when `onFound` actually fired for that request.
 
 ### Payment records own payment state (ADR-039)
 An income entry's `status`, `paidAt` and `receivedAmountMinor` are derived from its live `PaymentRecord`s whenever it has any (`recalculateReceivedAmount`).
-- A form never writes those three fields for such an entry, and shows the status read-only.
-- A repository method that changes something they depend on (`transactionRepo.update` changing `amountMinor`) re-derives them inside the same Dexie transaction, and rejects a change that would make the records an overpayment (ADR-030).
-- The UI pre-checks only to show a translated field error.
+- **The repository is the gate.** `transactionRepo.update` strips those three fields from any update of a record-backed entry and re-derives them. It also rejects a currency change, and rejects an amount *change* below the recorded total (ADR-030).
+- **A form waits for the records** (`usePaymentRecords(...).isSuccess`) before it lets the user touch payment state or save. It shows status and currency read-only once records exist, and pre-checks only to give a translated field error.
+- **A refusal is still shown:** map the repository error name (`PaymentRecordError`, `TransactionLockedError`) to a toast, never just `console.error`.
 
 ### Partial updates leave keys out; they never set them to `undefined`
 Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, and `captureUpdateOps` would turn it into an op too. A write that should leave a field alone must not contain the key. Build the change object conditionally (`buildIncomeUpdate`) and assert absence in tests with `expect('paidAt' in write).toBe(false)`, not `toBeUndefined()`.
@@ -1582,6 +1582,19 @@ Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, an
 
 ### Amounts stay left-to-right inside Arabic; set it in CSS, not only with `dir`
 theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks a `dir="ltr"` attribute. An LTR island (an amount with its currency prefix) needs `direction: ltr` from a selector that out-ranks `:lang(ar)` (`div.input-with-prefix`, `.input-with-prefix > .input`; see also `.num-input`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`.
+
+### Typeahead Enter: pick, hold, or submit (MUT-5)
+In `EntityTypeahead`, Enter does one of three things:
+- **Picks** the highlighted option. Typing highlights the first *prefix* match, else the create option, else the only option of a select-only list. A substring match is never highlighted.
+- **Is held** (prevented):
+  - while an async `onSelect` is still running (the input reports `aria-busy`);
+  - while typed text no pick has resolved; the list reopens instead.
+- **Reaches the form** when the field is empty or shows a picked/prefilled value.
+
+A consumer's `onSelect` returns its promise when the pick creates a record. Escape on an open list stays in the list (`stopPropagation`).
+
+### No literal invisible characters in source
+Bidi marks (LRM/RLM/ALM), NBSPs and isolates are written as `\uXXXX` escapes, in regexes and string literals, and in tests too. Literal ones are invisible in review and diffs, and they are a Trojan-Source-style hazard. Check with `perl -CSD -ne 'print "$ARGV:$.\n" if /[\x{200E}\x{200F}\x{061C}\x{00A0}\x{202F}\x{2066}-\x{2069}]/' <files>`.
 
 ### A save that arrives during an async pick waits for it
 When a picker's choice needs an async write first (creating a client), the picker reports it (`onCreatingChange`). The form holds a submit that arrives meanwhile and runs it once the pick has settled. It neither drops the Enter nor saves without the choice.

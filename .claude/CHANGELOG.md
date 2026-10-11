@@ -87,6 +87,39 @@
 - **Follow-ups:** MUT-60 (TD-029 write side + backfill), MUT-61 (Malafat client/matter intake), MUT-62 (title column in `/income`).
 
 ---
+### Fixed (pre-landing review, `/qa-reconcile` → `/review`)
+
+Seven specialist and adversarial reviewers ran. These fixes were all approved by Basel ("fix all as recommended"):
+
+- **Amount parser.** It no longer guesses:
+  - letters other than a currency symbol or code are refused ("2k", "50%", "5 ألف");
+  - spaces group thousands like commas, threes only ("100 50" is refused);
+  - a leading 0 group is refused ("0,500");
+  - the drawer refuses more than 2 decimals, while the lenient wrappers round half-up on the digits;
+  - results must be safe integers.
+  The literal invisible bidi characters in `utils.ts` and its test are now `\u` escapes.
+- **Due date.** A Received save leaves it untouched. It used to delete it, so a reopened entry never went overdue.
+- **Repository invariant (ADR-039 amended).** With live payment records, `transactionRepo.update`:
+  - strips `status` / `paidAt` / `receivedAmountMinor` and re-derives them;
+  - rejects a currency change;
+  - checks the recorded total only when the amount changes, so legacy overpaid entries can still be retitled.
+- **Typeahead Enter safety.** Enter is held while a pick is still being saved (`aria-busy`) and while typed text is unpicked. Typing highlights the first *prefix* match or the create option, never a substring match. The input gains `aria-controls` / `aria-activedescendant`. A failed client create keeps the typed name unpicked.
+- **Drawer.**
+  - Status, currency and Save wait for the payment records.
+  - Currency is locked on record-backed entries, with a hint.
+  - A refused save shows a translated toast.
+  - An edit of a missing entry never creates one.
+  - The recorded amount in the Arabic error is bidi-isolated.
+- **Invalidation.** Each money key is invalidated once per payment save. `['transactionDisplay']`, the payment drawer's remaining balance, now refreshes after edits. TD-021 is resolved.
+- **Styles and copy.** The hint sits with its status selector, the disclosure label never wraps, and the RTL chevron rotates instead of mirroring. One apostrophe is straightened. The unused `drawer.transaction.title` / `titlePlaceholder` keys are removed.
+- **Tests.**
+  - Drawer cases: the queued save and its failure path, the records gate, the currency lock, currency kept on edit and duplicate, the refused save, the legacy retitle and the missing entry.
+  - Typeahead Enter-safety and a11y cases.
+  - Repository invariant cases.
+  - Each-key-once invalidation.
+  - An Arabic Playwright check, which fails without the CSS fix.
+  - The two 30ms sleeps are replaced by settle signals.
+
 ## [Unreleased] - 2026-10-11 — MUT-18/19/20/21: payment dates, and closing out three already-fixed test tickets
 
 **Scope:**

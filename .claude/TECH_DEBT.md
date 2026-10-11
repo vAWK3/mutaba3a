@@ -214,138 +214,6 @@ Found during the MUT-49 review (ADR-031); MUT-51 owns the hard-fail on both
 paths, the file fallback, the deploy.sh test gate and the post-publish
 verification.
 
-### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
-**Status**: Open
-**Added**: 2026-10-10
-**Priority**: Low
-**Impact**: A new money query key has to be added in two places or one of the
-two write paths silently serves stale data -- which is exactly how MUT-6 AC #5
-broke
-
-`invalidateIncomeQueries` (`src/hooks/useIncomeQueries.ts:61`) and
-`invalidateTransactionQueries` + `invalidatePaymentRecordQueries`
-(`src/hooks/useQueries.ts:21,174`) list overlapping sets of the same keys.
-MUT-6 fixed the symptom by adding the four income keys to
-`invalidatePaymentRecordQueries` in place; the eng review chose the smaller
-arrangement deliberately over extracting a shared `invalidateMoneyQueries`,
-and recorded the duplication here instead. Extract it the next time a third
-caller needs the same list.
-
-**Note (2026-10-10, MUT-6 QA):** the money-event keys hit exactly that
-threshold and were extracted — `invalidateMoneyEventQueries` lives in
-`useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
-call it. The *income* key duplication described above is untouched and still
-open; the precedent for fixing it is to put the list in the module that owns
-the keys rather than in a new `src/hooks/invalidation.ts`.
-
-**Note (2026-10-11, MUT-3):** the payment-record list key followed the same
-precedent: `invalidatePaymentRecordLists` lives in `useQueries.ts` beside the
-keys and both `invalidateTransactionQueries` and `invalidateIncomeQueries`
-call it. Before that, Mark paid (which writes a record) left the client
-Payments section stale for the 60s staleTime. The income key list itself is
-still duplicated.
-
-### TD-020: Import State Loads Linked Entities One By One
-**Status**: Open
-**Added**: 2026-10-08
-**Priority**: Low
-**Impact**: `POST /v1/import/{preview,commit}` issue one `getById` per already-linked
-customer/project (≤ 500 per call by the batch cap); fine for M2 volumes,
-wasteful once M3 adds agreements to the same path
-
-`src/routes/import.ts` `loadState` resolves references first (batched) and
-then the entities individually. Add `customers.getByIds` / `projects.getByIds`
-to the store port and use them here. Introduced by Money v1 M2.
-
-### TD-017: Hosted API Rate Limiter Is Per Instance
-**Status**: Open
-**Added**: 2026-10-08
-**Impact**: On Cloud Run with more than one instance, a key's budget is per
-instance, so the effective limit is N × RATE_LIMIT_PER_MINUTE
-
-`server/src/rate-limit.ts` is an in-process sliding window behind a
-`RateLimiter` port. It is honest about what it is and stops a runaway client
-from exhausting one instance, but a shared store (Redis/Upstash, matching
-Malafat's choice) must replace it before the service scales horizontally.
-Routes do not change; only `index.ts` wiring does. Introduced by Money v1 M1.
-
-**Mitigation (2026-10-08)**: `infrastructure/terraform/variables.tf` validates
-`max_instances == 1`, so a deployment cannot scale horizontally by accident.
-Resolving this debt means replacing the limiter port implementation *and*
-loosening that validation in the same change.
-
-### TD-015: OAuth Refresh Tokens Have No Durable, Secure Store
-**Status**: Open
-**Added**: 2026-10-05
-**Impact**: Connecting to a Malafat workspace does not survive an app restart
-
-`InMemoryTokenStore` (`src/services/tokenStore.ts`) holds tokens for the
-process lifetime only, so every restart forces a re-auth. That is the safe
-failure and was chosen deliberately over writing a long-lived credential to
-IndexedDB or a plain file. The fix is the OS keychain (Keychain / Credential
-Manager / libsecret), which in Tauri 2 needs a plugin and a narrow capability.
-The `TokenStore` port exists so this can be swapped without touching the flow.
-Introduced by MUT-28.
-
-### TD-016: CI Does Not Run `cargo test`
-**Status**: Open
-**Added**: 2026-10-05
-**Impact**: 14 Rust tests had never executed once
-
-`src-tauri` had no `[dev-dependencies]` section while
-`src/sync/persistence.rs:279` had referenced `tempfile::tempdir` since it was
-written. The Rust test target therefore failed to compile, and nothing noticed —
-which means CI never ran `cargo test`. MUT-28 declared the dependency and all 14
-pre-existing tests (pairing, persistence, crypto) now pass. The gap to close is
-the CI step, not the dependency.
-
-### TD-014: Remaining UTC Date Derivations Outside Receivables
-**Status**: Open
-**Added**: 2026-10-05
-**Impact**: Three test failures appear only west of UTC; latent off-by-one-day bugs in non-receivable date logic
-
-MUT-17 unified receivable date logic into `src/lib/dates.ts` (ADR-022) but
-deliberately scoped out the rest. `grep -rn "toISOString().split('T')\[0\]" src`
-still reports ~45 occurrences across ~26 files. Most are **correct** — instants
-for HLC timestamps, sync bundles and backup filenames — but these three are
-confirmed broken under `TZ=America/New_York` and pass only on a UTC+n machine:
-
-- `src/lib/aggregations.ts` `getDaysInMonth` — `aggregations.test.ts > Date Utilities > getDaysInMonth > should return all days in March`
-- `src/db/forecastCalculations.ts` — 2 failures in `forecastCalculations.test.ts > generateVirtualExpenses` (end-of-month clamping, endOfYear end mode)
-- `src/features/documents/pdf` — `pdf.test.ts > Date Formatting > should format dates in DD/MM/YYYY format`
-
-**Two private UTC-based `todayISO()` copies remain** (found during QA
-reconciliation of MUT-17). Both are in domains ADR-022 scoped out, so neither
-affects receivable overdue, but both are the same class of defect:
-
-- `src/db/retainerRepository.ts:29` — feeds the `ProjectedIncome` overdue
-  comparison at `:406`, keyed on `expectedDate`
-- `src/services/recurringExpenseService.ts:32` — recurring-expense occurrence
-  states
-
-For the record, MUT-17 found **six** `todayISO`/`getTodayISO` definitions in
-total, not the three its description listed. Four now delegate to
-`todayLocalISO()`; these two do not.
-
-**Note (2026-10-11, MUT-3):** `npm run test:tz` on `main` 0c57247 fails four
-tests, all outside MUT-3 and reproduced on an untouched `main` checkout:
-`aggregations.test.ts > getDaysInMonth` and `pdf.test.ts > Date Formatting`
-(both listed above), plus `utils.test.ts > todayISO` and
-`transactionRepo.test.ts > getDisplay > daysOverdue`. The two
-`forecastCalculations` failures are gone with the MUT-14 expense strip. Same
-class, user-visible: `formatDate(dateOnly)` (`src/lib/utils.ts`) parses
-`YYYY-MM-DD` as UTC midnight, so every date-only value displays one day early
-west of UTC — on every list, including the client profile.
-
-**Resolution**: audit each remaining site, classify it as instant (keep
-`toISOString()`) or calendar date (move to `src/lib/dates.ts`), and fix the
-three confirmed failures. Verify with `npm run test:tz`.
-
-**Effort**: Medium — mechanical, but each site needs classifying rather than
-blanket-replacing.
-
----
-
 ### TD-001: Limited Test Coverage
 **Status**: In Progress
 **Priority**: Medium (reduced from High)
@@ -891,6 +759,141 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
+**Status**: Resolved (2026-10-11, MUT-5)
+**Added**: 2026-10-10
+**Priority**: Low
+**Impact**: A new money query key has to be added in two places or one of the
+two write paths silently serves stale data -- which is exactly how MUT-6 AC #5
+broke
+
+`invalidateIncomeQueries` (`src/hooks/useIncomeQueries.ts:61`) and
+`invalidateTransactionQueries` + `invalidatePaymentRecordQueries`
+(`src/hooks/useQueries.ts:21,174`) list overlapping sets of the same keys.
+MUT-6 fixed the symptom by adding the four income keys to
+`invalidatePaymentRecordQueries` in place; the eng review chose the smaller
+arrangement deliberately over extracting a shared `invalidateMoneyQueries`,
+and recorded the duplication here instead. Extract it the next time a third
+caller needs the same list.
+
+**Note (2026-10-10, MUT-6 QA):** the money-event keys hit exactly that
+threshold and were extracted — `invalidateMoneyEventQueries` lives in
+`useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
+call it. The *income* key duplication described above is untouched and still
+open; the precedent for fixing it is to put the list in the module that owns
+the keys rather than in a new `src/hooks/invalidation.ts`.
+
+**Note (2026-10-11, MUT-3):** the payment-record list key followed the same
+precedent: `invalidatePaymentRecordLists` lives in `useQueries.ts` beside the
+keys and both `invalidateTransactionQueries` and `invalidateIncomeQueries`
+call it. Before that, Mark paid (which writes a record) left the client
+Payments section stale for the 60s staleTime. The income key list itself is
+still duplicated.
+
+### TD-020: Import State Loads Linked Entities One By One
+**Status**: Open
+**Added**: 2026-10-08
+**Priority**: Low
+**Impact**: `POST /v1/import/{preview,commit}` issue one `getById` per already-linked
+customer/project (≤ 500 per call by the batch cap); fine for M2 volumes,
+wasteful once M3 adds agreements to the same path
+
+`src/routes/import.ts` `loadState` resolves references first (batched) and
+then the entities individually. Add `customers.getByIds` / `projects.getByIds`
+to the store port and use them here. Introduced by Money v1 M2.
+
+### TD-017: Hosted API Rate Limiter Is Per Instance
+**Status**: Open
+**Added**: 2026-10-08
+**Impact**: On Cloud Run with more than one instance, a key's budget is per
+instance, so the effective limit is N × RATE_LIMIT_PER_MINUTE
+
+`server/src/rate-limit.ts` is an in-process sliding window behind a
+`RateLimiter` port. It is honest about what it is and stops a runaway client
+from exhausting one instance, but a shared store (Redis/Upstash, matching
+Malafat's choice) must replace it before the service scales horizontally.
+Routes do not change; only `index.ts` wiring does. Introduced by Money v1 M1.
+
+**Mitigation (2026-10-08)**: `infrastructure/terraform/variables.tf` validates
+`max_instances == 1`, so a deployment cannot scale horizontally by accident.
+Resolving this debt means replacing the limiter port implementation *and*
+loosening that validation in the same change.
+
+### TD-015: OAuth Refresh Tokens Have No Durable, Secure Store
+**Status**: Open
+**Added**: 2026-10-05
+**Impact**: Connecting to a Malafat workspace does not survive an app restart
+
+`InMemoryTokenStore` (`src/services/tokenStore.ts`) holds tokens for the
+process lifetime only, so every restart forces a re-auth. That is the safe
+failure and was chosen deliberately over writing a long-lived credential to
+IndexedDB or a plain file. The fix is the OS keychain (Keychain / Credential
+Manager / libsecret), which in Tauri 2 needs a plugin and a narrow capability.
+The `TokenStore` port exists so this can be swapped without touching the flow.
+Introduced by MUT-28.
+
+### TD-016: CI Does Not Run `cargo test`
+**Status**: Open
+**Added**: 2026-10-05
+**Impact**: 14 Rust tests had never executed once
+
+`src-tauri` had no `[dev-dependencies]` section while
+`src/sync/persistence.rs:279` had referenced `tempfile::tempdir` since it was
+written. The Rust test target therefore failed to compile, and nothing noticed —
+which means CI never ran `cargo test`. MUT-28 declared the dependency and all 14
+pre-existing tests (pairing, persistence, crypto) now pass. The gap to close is
+the CI step, not the dependency.
+
+### TD-014: Remaining UTC Date Derivations Outside Receivables
+**Status**: Open
+**Added**: 2026-10-05
+**Impact**: Three test failures appear only west of UTC; latent off-by-one-day bugs in non-receivable date logic
+
+MUT-17 unified receivable date logic into `src/lib/dates.ts` (ADR-022) but
+deliberately scoped out the rest. `grep -rn "toISOString().split('T')\[0\]" src`
+still reports ~45 occurrences across ~26 files. Most are **correct** — instants
+for HLC timestamps, sync bundles and backup filenames — but these three are
+confirmed broken under `TZ=America/New_York` and pass only on a UTC+n machine:
+
+- `src/lib/aggregations.ts` `getDaysInMonth` — `aggregations.test.ts > Date Utilities > getDaysInMonth > should return all days in March`
+- `src/db/forecastCalculations.ts` — 2 failures in `forecastCalculations.test.ts > generateVirtualExpenses` (end-of-month clamping, endOfYear end mode)
+- `src/features/documents/pdf` — `pdf.test.ts > Date Formatting > should format dates in DD/MM/YYYY format`
+
+**Two private UTC-based `todayISO()` copies remain** (found during QA
+reconciliation of MUT-17). Both are in domains ADR-022 scoped out, so neither
+affects receivable overdue, but both are the same class of defect:
+
+- `src/db/retainerRepository.ts:29` — feeds the `ProjectedIncome` overdue
+  comparison at `:406`, keyed on `expectedDate`
+- `src/services/recurringExpenseService.ts:32` — recurring-expense occurrence
+  states
+
+For the record, MUT-17 found **six** `todayISO`/`getTodayISO` definitions in
+total, not the three its description listed. Four now delegate to
+`todayLocalISO()`; these two do not.
+
+**Note (2026-10-11, MUT-3):** `npm run test:tz` on `main` 0c57247 fails four
+tests, all outside MUT-3 and reproduced on an untouched `main` checkout:
+`aggregations.test.ts > getDaysInMonth` and `pdf.test.ts > Date Formatting`
+(both listed above), plus `utils.test.ts > todayISO` and
+`transactionRepo.test.ts > getDisplay > daysOverdue`. The two
+`forecastCalculations` failures are gone with the MUT-14 expense strip. Same
+class, user-visible: `formatDate(dateOnly)` (`src/lib/utils.ts`) parses
+`YYYY-MM-DD` as UTC midnight, so every date-only value displays one day early
+west of UTC — on every list, including the client profile.
+
+**Resolution**: audit each remaining site, classify it as instant (keep
+`toISOString()`) or calendar date (move to `src/lib/dates.ts`), and fix the
+three confirmed failures. Verify with `npm run test:tz`.
+
+**Effort**: Medium — mechanical, but each site needs classifying rather than
+blanket-replacing.
+
+**Resolution (2026-10-11, MUT-5):** `invalidateTransactionQueries` (`src/hooks/useQueries.ts`) is now the one exported list. It covers the income/receivables keys and `['transactionDisplay']`, and reaches every `['paymentRecords', ...]` key through `invalidatePaymentRecordLists`. `useIncomeQueries` calls it, and `invalidatePaymentRecordQueries` only delegates to it. A test counts each money key once per payment save (PATTERNS: "One invalidation list per entity family").
+
+---
+
 
 ### TD-027: Onboarding Showed a Completed "Project" Step While the Projects Area Was Off
 **Status**: Resolved

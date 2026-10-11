@@ -1127,3 +1127,17 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5
 - `npx vitest run`: 162 files, 2,642 passed, 4 skipped. The baseline was 2,539 passed and 5 skipped; the edit-mode drawer test is un-skipped.
 - `npm run test:tz`: only the 3 TD-014 failures, identical on main.
 - `npm run build`: OK. Its `@media` warning comes from the existing `.print-header` rule.
+
+**Pre-landing review fixes (2026-10-11):** each new test was shown failing first, except the regression pins noted.
+
+| File | Added | Covers |
+|---|---|---|
+| `src/lib/__tests__/utils.test.ts` | +22 | Refused: letter suffixes ("2k", "50%", "5 ألف", "10O", "1e3"), "0,500", "100 50", "1 2 3", more than 2 decimals, unsafe integers. Accepted: currency codes either side, NBSP / narrow-NBSP grouping. Half-up string rounding for the lenient wrappers. |
+| `src/lib/__tests__/incomeEntry.test.ts` | +4 | A Received save leaves `dueDate` out of the write on create, paid → paid and record-backed edits; an unpaid save that empties the field still clears it. |
+| `src/db/__tests__/paymentRecords.test.ts` | +4 | `transactionRepo.update` strips and re-derives payment state on a record-backed entry; rejects a currency change with records and allows one without; lets a legacy overpaid entry be retitled. |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +7 (1 rewritten) | Prefix-first highlight; select-only single option; Enter held on unmatched text and after Escape; Enter held with `aria-busy` while an async pick runs; Enter submits after tab-in with nothing typed; `aria-controls` / `aria-activedescendant`. "Selects the only option with nothing typed" was rewritten to "Enter goes through". |
+| `src/components/ui/__tests__/ClientTypeahead.test.tsx` | +1 | A failed create keeps the typed name unpicked, with `onCreatingChange` going true then false. |
+| `src/components/__tests__/IncomeDrawer.test.tsx` | +9 | A queued save during a client create and its failure path (regression pins, green on the typeahead fix); the records-loading gate; the currency lock; currency kept on edit and duplicate (pins); the refused-save toast; the legacy retitle; a missing entry never created. The 30ms sleeps are replaced by settle signals. |
+| `src/hooks/__tests__/useQueries.test.tsx` | +2 | Each money key is invalidated once per payment save; an edit invalidates `['transactionDisplay']`. |
+| `e2e/income-fast-path.spec.ts` | +1 (1 updated) | Arabic: the amount group's computed direction is LTR and the prefix sits left of the input. This fails without the CSS fix. The keyboard spec waits for `aria-busy` to clear before the saving Enter. |
+

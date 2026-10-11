@@ -307,19 +307,21 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 ### Typeaheads (`EntityTypeahead`, `ClientTypeahead`, `ProjectTypeahead`, `VendorTypeahead`)
 **Location**: `src/components/ui/`. The hosted `ClientPicker`/`ProjectPicker` also wrap `EntityTypeahead`.
 
-**Keyboard contract (MUT-5)**:
-- Typing highlights the first option, and Enter picks it.
-- ArrowDown on a closed list opens it.
-- Tab closes the list without picking.
-- Escape on an open list closes only the list (`stopPropagation`, so a drawer stays open).
-- Enter on a closed list, or on an open list with no options, is not swallowed and submits the surrounding form.
-- `aria-expanded` follows what is visible.
-- The optional `onBlur` prop is called before the list closes.
+**Keyboard contract (MUT-5, tightened by the pre-landing review)**:
+- **Typing** highlights the first option whose label starts with the text, else the create option, else the only option of a select-only list. A substring match is never highlighted, so a new "Ann" is never filed under "Joanna".
+- **Enter:**
+  - picks the highlighted option;
+  - is held while an async `onSelect` is still saving (`aria-busy`) or while typed text is unpicked (the list reopens);
+  - reaches the surrounding form when the field is empty or shows a picked/prefilled value.
+- **Other keys:** ArrowDown on a closed list opens it. Tab closes the list without picking. Escape on an open list closes only the list (`stopPropagation`).
+- **ARIA:** `aria-expanded` follows what is visible. `aria-controls` and `aria-activedescendant` point at the listbox and highlighted option.
+- **Props:** `onSelect` may return a promise. The optional `onBlur` is called before the list closes.
 
 **`ClientTypeahead` extras**:
 - Leaving the box with a client's exact name (any case) picks that client.
 - `onPendingTextChange(text)` reports text that isn't a picked client ('' when there is none). A client picked from "create" counts as picked at once.
 - `onCreatingChange(creating)` brackets the creation of a new client.
+- A failed create keeps the typed name in the box, unpicked, so a form refuses to save without it.
 
 **Tests**: `src/components/ui/__tests__/{EntityTypeahead,ClientTypeahead}.test.tsx`.
 
