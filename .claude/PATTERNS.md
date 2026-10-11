@@ -1535,3 +1535,27 @@ MUT-45's CSP (`server/src/app.ts`) adds `https://storage.googleapis.com` to
 `WebSocket` call outside the house HTTP client, and name the host each one
 actually hits. A CSP written from the data-layer's abstraction instead of the
 network tab will miss exactly this class of call.
+
+### `@hono/node-server`'s `serveStatic` `onFound`/`onNotFound` cannot set response headers
+
+**Pitfall** (found during MUT-45's `/qa-reconcile`, by probing actual behavior,
+not assumed): `serveStatic`'s internal flow calls `c.body(...)` to build its
+Response, and only *afterward* calls `onFound`/`onNotFound`. By then, `c.body()`
+has already copied the context's prepared headers into the new `Response`'s own
+`Headers` object; a `c.header()` call inside `onFound` writes to the context's
+headers going forward, which nothing reads again — the already-built `Response`
+silently keeps its old value. Empirically confirmed: setting `Cache-Control`
+inside `onFound` had zero effect on the actual response.
+
+**Fix**: capture the `Response` returned by calling the `serveStatic` middleware
+directly (`const result = await serveStatic(opts)(c, next)`), set a flag inside
+`onFound` instead of a header, then after the call mutate `result.headers` (the
+Web `Headers` API) directly when the flag is set, and `return result`.
+`server/src/app.ts`'s `/assets/*` immutable-caching logic is the instance.
+
+**The bug this caused before the fix**: the original code set `Cache-Control:
+immutable` in a middleware keyed on the URL *prefix* (`/assets/*`), before
+checking whether the file existed. A stale/rotated asset filename (after a
+deploy) fell through to the SPA shell but kept the immutable header — a
+browser or CDN would then cache that broken response for a year. The fix
+above only sets the header when `onFound` actually fired for that request.
