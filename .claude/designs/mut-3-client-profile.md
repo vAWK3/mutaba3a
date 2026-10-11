@@ -4,7 +4,7 @@
 - **Ticket:** MUT-3 (epic MUT-1). Folds in the MUT-4 Payments section UI and MUT-23.
 - **Parent brief:** `.claude/designs/mut-1-client-accounting-core.md` (Phase 2, approved 2026-10-08). This brief records what changed since, and the decisions specific to the page.
 - **Branch / worktree:** `feature/mut-1-client-core` in `.claude/worktrees/mut-1-client-core`
-- **Status:** awaiting approval
+- **Status:** approved by Basel 2026-10-11 (D3 reconcile-on-read; Payments UI included; rest as written)
 
 ---
 
