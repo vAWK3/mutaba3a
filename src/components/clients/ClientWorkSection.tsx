@@ -15,7 +15,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { SearchInput, StatusSegment, DateRangeControl } from '../filters';
 import { RowActionsMenu, PaymentStatusBadge, RecordPaymentButton, AmountWithConversion, EmptyState, type RowAction } from '../ui';
 import { CheckIcon, CopyIcon, DocumentIcon } from '../icons';
-import { useIncome, useMarkIncomePaid, type IncomeFilters } from '../../hooks/useIncomeQueries';
+import { useIncome, type IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDateRangePreset, cn } from '../../lib/utils';
@@ -51,7 +51,6 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
   const { openIncomeDrawer, openProjectDrawer, openPartialPaymentDrawer, openDocumentDrawer } = useDrawerStore();
   const invoicesEnabled = useFeatureEnabled('invoices');
   const projectsEnabled = useFeatureEnabled('projects');
-  const markPaid = useMarkIncomePaid();
 
   // One filter object, so a change is one state update and one query key
   const [filters, setFilters] = useState<WorkFilters>(DEFAULT_FILTERS);
@@ -80,7 +79,8 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
   const rowActions = (row: WorkRow): RowAction[] => {
     const actions: RowAction[] = [];
     if (row.isReceivable && row.paymentStatus !== 'paid') {
-      actions.push({ label: t('common.markPaid'), icon: <CheckIcon size={16} />, onClick: () => markPaid.mutate(row.id) });
+      // Opens the date-aware payment drawer (MUT-18) instead of stamping today silently.
+      actions.push({ label: t('common.markPaid'), icon: <CheckIcon size={16} />, onClick: () => openPartialPaymentDrawer({ transactionId: row.id }) });
     }
     if (invoicesEnabled) {
       const documentId = row.tx.linkedDocumentId;

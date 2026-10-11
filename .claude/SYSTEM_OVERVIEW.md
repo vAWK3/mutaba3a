@@ -130,11 +130,15 @@
 ### Receivable Logic
 - **Receivable** = Transaction with `kind='income'` AND `status='unpaid'`
 - **Overdue** = Receivable AND `dueDate < today`
-- **Mark Paid**: Set `status='paid'`, `paidAt=now()`, keep `occurredAt` as earned date
-- **Record Payment**: a `PaymentRecord` per payment; `receivedAmountMinor`,
-  `status` and `paidAt` are recalculated from the records. Reachable from a
-  primary button on every unsettled income row (`RecordPaymentButton`), not a
-  kebab entry, with the drawer prefilled to the remaining balance
+- **Mark Paid / Record Payment are the same flow (ADR-038)**: both open
+  `PartialPaymentDrawer` (prefilled to the full remaining balance for Mark
+  Paid), the only place that writes a `PaymentRecord`. `receivedAmountMinor`,
+  `status` and `paidAt` are recalculated from the records — `paidAt` is the
+  *latest record's* date, defaulting to today but overridable to record a
+  payment that happened earlier; `occurredAt` always stays the earned date.
+  Future-dated payments are rejected. Reachable from a primary button on every
+  unsettled income row (`RecordPaymentButton`) and from the row kebab's "Mark
+  Paid" entry — both open the same dated drawer, never a dateless shortcut
 - **Overpayment is rejected** — the sum of a transaction's payments can never
   exceed its amount (ADR-030). Payments on a locked (invoiced) transaction are
   allowed: the lock protects the invoice facts, not payment tracking

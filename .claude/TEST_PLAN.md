@@ -1050,6 +1050,32 @@ Plan: `.claude/designs/mut-44-expense-capture-tests.md`.
 
 **Baseline after MUT-44 (2026-10-11)**: root `npx vitest run` 160 files, 2537 passed, 5 skipped; `npm run test:bundles` (after adding `json-schema.org` to the hosted allowlist), `npm run typecheck` (both programs), `npm run lint` (0 errors, 17 pre-existing warnings unrelated to this ticket) and `npm run build` pass. The server package is unchanged.
 
+### MUT-18/19/20/21: payment dates, and closing out three already-fixed test tickets
+
+MUT-19, MUT-20 and most of MUT-21 were found already fixed on `main` before any
+code changed — see ADR-038 and the CHANGELOG entry for what was verified
+rather than rebuilt. Only MUT-18 (payment dates) and MUT-21's missing
+due-tomorrow boundary case needed new code/tests.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Repository | `src/db/__tests__/transactionRepo.test.ts` (`markPaid`) | backdated `paidAt` stored verbatim; defaults to today when omitted; a payment near a month boundary buckets under the month it was received; a future-dated `paidAt` is rejected |
+| Repository | `src/db/__tests__/partialPayment.test.ts` (`recordPartialPayment`) | same four cases for partial payments, plus: a transaction's `paidAt` after two payment records reflects the *later* record's date, not the instant the recalculation ran |
+| Repository | `src/db/__tests__/paymentRecords.test.ts` | `paymentRecordRepo.create`/`.update` reject a future `paidAt`; a same-day timestamp with a time component is accepted (date-only comparison, not a full-timestamp one) |
+| Hook | `src/hooks/__tests__/useIncomeQueries.test.tsx` (`useMarkIncomePaid`) | `{ id, paidAt }` forwards both fields to the repository; omitting `paidAt` forwards `undefined` (repository default applies) |
+| Drawer | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | "Mark fully paid" records under today by default and under a backdated date when the field was changed first; a future-dated "Record Payment" is rejected inline with no mutation call |
+| Client profile | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | the work-section "Mark Paid" row action opens the payment drawer and does **not** call the mark-paid mutation directly |
+| Income page | `src/pages/income/__tests__/IncomePage.test.tsx` | due-tomorrow is asserted not-overdue (the boundary case MUT-21's acceptance criteria named but the existing fix had not added) |
+
+No test file exists for `TransactionsPage` or `ClientWorkSection` as a whole
+(their Mark Paid wiring is exercised only indirectly, via `ClientDetailPage`'s
+test of the shared section and via reading the source for `TransactionsPage`)
+— a pre-existing coverage gap, not introduced by this ticket.
+
+**Baseline after MUT-18/19/20/21 (2026-10-11)**: root `npx vitest run` 160
+files, 2555 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors,
+20 pre-existing warnings unrelated to this ticket) and `npm run build` pass.
+
 ### MUT-45: serve the hosted portal
 
 No separate test-plan artifact — scope is server-only (static serving, SPA fallback, CSP, config), not a new feature surface.

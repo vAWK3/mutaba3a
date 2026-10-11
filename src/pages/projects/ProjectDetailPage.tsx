@@ -7,7 +7,6 @@ import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useProject, useProjectSummary, useTransactions } from '../../hooks/useQueries';
-import { useMarkIncomePaid } from '../../hooks/useIncomeQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
 import { AmountWithConversion } from '../../components/ui';
@@ -18,7 +17,6 @@ export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
   const { openIncomeDrawer, openExpenseDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const expensesEnabled = useFeatureEnabled('expenses');
-  const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -307,7 +305,9 @@ export function ProjectDetailPage() {
                                         {
                                           label: t('common.markPaid'),
                                           icon: <CheckIcon size={16} />,
-                                          onClick: () => markPaidMutation.mutate(tx.id),
+                                          // Opens the date-aware payment drawer (MUT-18)
+                                          // instead of stamping today silently.
+                                          onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
                                         },
                                       ]
                                     : []),

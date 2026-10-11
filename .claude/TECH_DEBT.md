@@ -18,6 +18,23 @@
 
 ## Open Debt
 
+### TD-046: `useTransactionActions.ts` is dead code carrying the same dateless mark-paid bug ADR-038 just fixed
+**Status**: Open
+**Added**: 2026-10-11 (MUT-18)
+**Priority**: Low
+**Impact**: `src/hooks/useTransactionActions.ts` exports `handleMarkPaid`, which
+calls the deprecated `useMarkTransactionPaid()` with no date — the exact
+pattern ADR-038 removed from the four live "Mark Paid" row actions. It has no
+production caller (grep confirms only its own test imports it), so it poses no
+current user-facing risk, but it is a second, unreachable copy of a bug this
+ticket just fixed in the reachable code, and would silently reintroduce it if
+ever wired up.
+**Remediation**: Delete `src/hooks/useTransactionActions.ts` and
+`src/hooks/__tests__/useTransactionActions.test.tsx`, or if a future page
+needs a shared row-actions hook, rebuild it to route "Mark Paid" to
+`openPartialPaymentDrawer` like the four live call sites.
+**Effort**: Small
+
 ### TD-045: The expense drawer's default date is the browser's local date, not the organization's timezone
 **Status**: Accepted
 **Added**: 2026-10-11 (MUT-44)

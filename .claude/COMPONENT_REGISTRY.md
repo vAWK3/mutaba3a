@@ -1152,7 +1152,8 @@ import { getRepositories } from '../db';
 
 // Resolve inside the callback, not at module scope.
 queryFn: () => getRepositories().base.transactions.list(filters)
-mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id)
+mutationFn: ({ id, paidAt }: { id: string; paidAt?: string }) =>
+  getRepositories().synced.transactions.markPaid(id, { paidAt })
 ```
 
 **base vs synced**: `base` is the plain Dexie repository. `synced` additionally

@@ -458,6 +458,8 @@ describe('ClientDetailPage', () => {
       expect(mockOpenIncomeDrawer).not.toHaveBeenCalled();
     });
 
+    // MUT-18: Mark Paid opens the date-aware payment drawer instead of
+    // silently stamping today, so it no longer calls the mark-paid mutation.
     it('offers Mark paid in the row menu of a receivable, not of a paid entry', () => {
       renderPage();
 
@@ -467,7 +469,8 @@ describe('ClientDetailPage', () => {
 
       fireEvent.click(within(rowOf(workSection(), 'Homepage')).getByLabelText('Actions'));
       fireEvent.click(screen.getByText('Mark Paid'));
-      expect(mockMarkPaid).toHaveBeenCalledWith('tx-partial');
+      expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-partial' });
+      expect(mockMarkPaid).not.toHaveBeenCalled();
     });
   });
 
