@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-75: the landing page tells the true story, in chapters
+
+**Scope:**
+- `src/pages/landing/LandingPage.tsx`, `LandingPage.css` (rewritten), `landingCopy.ts`, `sampleData.ts`
+- `src/pages/landing/components/`: `HeroSection` (copy, honest buttons), new `ChapterSection`, `PrivacyBand`, `GetItSection`, `PlatformIcons`, `mocks/{ClientProfileMock,RecordPaymentMock,ProfileSwitcherMock,useMockFormat}`; `FAQSection` rewritten (six questions, `aria-controls` + `hidden`)
+- `src/content/download-config.ts` (`DOWNLOAD_URLS` moved here from `DownloadPage`, `WEB_APP_URL`)
+- `src/lib/i18n/translations/{en,ar}.json` (`landing.*` rebuilt)
+- Tests: `src/pages/landing/__tests__/LandingPage.test.tsx`, `landingCopy.test.ts`
+- Brief `.claude/designs/landing-apple-redesign.md` (L1–L3, L7, L12); test plan `.claude/designs/mut-75-landing-story-tests.md`; ADR-041; TD-048
+
+### Changed
+- **The landing page leads with the product's job and says privacy once.** Hero: "Know who owes you. Keep it to yourself." Then three one-idea chapters with HTML mock-ups built from the app's own labels (a client's page, the payment drawer, the business switcher), one privacy band, Get it, a six-question FAQ. About 3,800px at 1440 wide, down from 7,200.
+- **Honest about price and platforms.** "Free during early access"; no "Buy", "$49", "Universal" or "Intel" anywhere in the page content. The Mac download says Apple Silicon (the build is arm64-only). The Windows download is offered only when the latest release has an installer (`release.hasWindowsBuild`), otherwise the page says the installer isn't in this release — v0.0.65 has none.
+- **The currency answer is built from code**: `CURRENCY_NAME_KEYS: Record<Currency, string>` + `Intl.ListFormat`, so it names USD, ILS and EUR and can't drift from the `Currency` type. The old copy said EUR in one place and USD/ILS in another.
+- The data-loss warning moved from under the pricing cards into the backup FAQ answer.
+- "Open the web app" links go to `/app` (was `/app?demo=1`, the internal demo tool); MUT-78 replaces this with a sample-data entry.
+
+### Removed
+- `TrustBadgesSection`, `ValuePropsSection`, `ProblemSection`, `CapabilitiesSection`, `ProofGallerySection`, `DownloadSection`, `PricingSection`, `FinalCTASection`, and the already-unused `UseCasesSection` and `PrivacySection`, with their CSS and i18n keys. Fourteen unreferenced screenshots in `public/assets/landing/` (`proof-*`, `usecase-*`, `screenshot-answers.png`). `hero-dashboard.png` stays until MUT-76 replaces it.
+
+### Fixed
+- The skip link was hard-coded English; it is now `landing.skipToContent`.
+
 ## [Unreleased] - 2026-10-11 — MUT-18/19/20/21: payment dates, and closing out three already-fixed test tickets
 
 **Scope:**

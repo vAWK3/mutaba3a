@@ -1,12 +1,7 @@
 export { LandingHeader } from './LandingHeader';
 export { HeroSection } from './HeroSection';
-export { TrustBadgesSection } from './TrustBadgesSection';
-export { ValuePropsSection } from './ValuePropsSection';
-export { ProblemSection } from './ProblemSection';
-export { CapabilitiesSection } from './CapabilitiesSection';
-export { ProofGallerySection } from './ProofGallerySection';
-export { DownloadSection } from './DownloadSection';
-export { PricingSection } from './PricingSection';
+export { ChapterSection } from './ChapterSection';
+export { PrivacyBand } from './PrivacyBand';
+export { GetItSection } from './GetItSection';
 export { FAQSection } from './FAQSection';
-export { FinalCTASection } from './FinalCTASection';
 export { LandingFooter } from './LandingFooter';
