@@ -389,6 +389,28 @@ describe('IncomePage', () => {
       });
     });
 
+    it('should not count income due tomorrow as overdue (MUT-21)', async () => {
+      const dueTomorrow: TransactionDisplay = {
+        ...mockIncomeTransactions[1],
+        id: 'tx-due-tomorrow',
+        status: 'unpaid',
+        dueDate: '2026-03-15',
+      };
+
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: [dueTomorrow],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      await waitFor(() => {
+        const overdueTab = screen.getByRole('tab', { name: /Overdue/ });
+        expect(overdueTab.textContent).toContain('0');
+      });
+    });
+
     it('should render search input', async () => {
       const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
       vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({

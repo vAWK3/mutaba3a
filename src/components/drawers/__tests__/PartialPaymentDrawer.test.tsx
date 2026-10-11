@@ -15,7 +15,6 @@ import type { TransactionDisplay } from '../../../types';
 const mockCreate = vi.fn().mockResolvedValue(undefined);
 const mockUpdate = vi.fn().mockResolvedValue(undefined);
 const mockDelete = vi.fn().mockResolvedValue(undefined);
-const mockMarkPaid = vi.fn().mockResolvedValue(undefined);
 const mockOpenPartialPaymentDrawer = vi.fn();
 const mockEditPaymentRecord = vi.fn();
 
@@ -42,6 +41,7 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.partialPayment.amountMustBePositive':
         'Payment amount must be greater than 0',
       'transactions.partialPayment.overpayment': `Payment amount exceeds the remaining balance of ${params?.amount}`,
+      'transactions.partialPayment.futureDate': 'Payment date cannot be in the future',
       'transactions.columns.amount': 'Amount',
       'common.cancel': 'Cancel',
       'common.saving': 'Saving...',
@@ -70,7 +70,6 @@ vi.mock('../../../hooks/useQueries', () => ({
   useCreatePaymentRecord: () => ({ mutateAsync: mockCreate, isPending: false }),
   useUpdatePaymentRecord: () => ({ mutateAsync: mockUpdate, isPending: false }),
   useDeletePaymentRecord: () => ({ mutateAsync: mockDelete, isPending: false }),
-  useMarkTransactionPaid: () => ({ mutateAsync: mockMarkPaid, isPending: false }),
 }));
 
 function amountInput() {
@@ -147,6 +146,53 @@ describe('PartialPaymentDrawer', () => {
         expect.objectContaining({ paidAt: '2026-01-15' })
       );
     });
+  });
+
+  /**
+   * MUT-18: "Mark fully paid" used to call a separate mutation that always
+   * stamped "now", bypassing the date field sitting right next to it. It must
+   * now record through the same date-aware path as "Record Payment".
+   */
+  it('records "Mark fully paid" under today by default', async () => {
+    const user = userEvent.setup();
+    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Mark Fully Paid' }));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionId: 'tx-1', amountMinor: 75000, paidAt: todayISO() })
+      );
+    });
+  });
+
+  it('records "Mark fully paid" under the backdated date the user chose', async () => {
+    const user = userEvent.setup();
+    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+
+    const dateField = screen.getByLabelText('Payment date') as HTMLInputElement;
+    await user.clear(dateField);
+    await user.type(dateField, '2026-01-15');
+    await user.click(screen.getByRole('button', { name: 'Mark Fully Paid' }));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ amountMinor: 75000, paidAt: '2026-01-15' })
+      );
+    });
+  });
+
+  it('rejects a future-dated payment inline without calling the mutation', async () => {
+    const user = userEvent.setup();
+    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+
+    const dateField = screen.getByLabelText('Payment date') as HTMLInputElement;
+    await user.clear(dateField);
+    await user.type(dateField, '2099-01-01');
+    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+
+    expect(await screen.findByText('Payment date cannot be in the future')).toBeInTheDocument();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('rejects an overpayment inline without calling the mutation', async () => {

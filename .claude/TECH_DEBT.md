@@ -18,6 +18,23 @@
 
 ## Open Debt
 
+### TD-046: `useTransactionActions.ts` is dead code carrying the same dateless mark-paid bug ADR-038 just fixed
+**Status**: Open
+**Added**: 2026-10-11 (MUT-18)
+**Priority**: Low
+**Impact**: `src/hooks/useTransactionActions.ts` exports `handleMarkPaid`, which
+calls the deprecated `useMarkTransactionPaid()` with no date — the exact
+pattern ADR-038 removed from the four live "Mark Paid" row actions. It has no
+production caller (grep confirms only its own test imports it), so it poses no
+current user-facing risk, but it is a second, unreachable copy of a bug this
+ticket just fixed in the reachable code, and would silently reintroduce it if
+ever wired up.
+**Remediation**: Delete `src/hooks/useTransactionActions.ts` and
+`src/hooks/__tests__/useTransactionActions.test.tsx`, or if a future page
+needs a shared row-actions hook, rebuild it to route "Mark Paid" to
+`openPartialPaymentDrawer` like the four live call sites.
+**Effort**: Small
+
 ### TD-045: The expense drawer's default date is the browser's local date, not the organization's timezone
 **Status**: Accepted
 **Added**: 2026-10-11 (MUT-44)
@@ -737,7 +754,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 **Effort**: Medium
 
-**Update (2026-10-11, MUT-5):** the edit-path half is resolved by ADR-038. An entry with live records never has its payment fields rewritten by the drawer; its status is read-only; amount changes recalculate. An entry without records keeps its `paidAt` and received amount unless its status really changes. What remains (records on create-as-received, plus the backfill) is ticketed as **MUT-60**.
+**Update (2026-10-11, MUT-5):** the edit-path half is resolved by ADR-039. An entry with live records never has its payment fields rewritten by the drawer; its status is read-only; amount changes recalculate. An entry without records keeps its `paidAt` and received amount unless its status really changes. What remains (records on create-as-received, plus the backfill) is ticketed as **MUT-60**.
 
 ---
 
@@ -862,18 +879,6 @@ profile's lists and shows up in the orphaned-records banner.
 
 **Remediation**: resolve `''` to the default profile's id on save (or drop the
 empty option and list the profiles only), with a drawer test for each.
-
-**Effort**: Small
-
----
-
-### TD-046: Cutting an amount to the recorded total marks the entry paid "today"
-**Status**: Open
-**Priority**: Low
-**Introduced**: MUT-5, 2026-10-11 (ADR-038 §2)
-**Impact**: `transactionRepo.update` recalculates after an amount change through `recalculateReceivedAmount`, which stamps `paidAt` with `tx.paidAt || now` when an entry becomes fully paid. An unpaid entry whose amount is cut to exactly what was already recorded is therefore "paid today", not on the date of its last payment, which shifts Recent payments and Last payment. Recording a final payment has the same behaviour (pre-existing).
-
-**Remediation**: in `recalculateReceivedAmount`, set `paidAt` to the latest live record's `paidAt` when an entry becomes fully paid. Then check the MUT-18 backdating path, which already passes an explicit date.
 
 **Effort**: Small
 

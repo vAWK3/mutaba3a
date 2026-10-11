@@ -281,7 +281,7 @@ The build ran on `feature/mut-1-client-core`, from `0972362` to the final commit
   - **MUT-60:** TD-029 write side, plus a backfill.
   - **MUT-61:** the Malafat client/matter/task intake.
   - **MUT-62:** a title column in the `/income` ledger, which has none. Basel chose a follow-up.
-- **New debt:** TD-046. Cutting an amount to the recorded total stamps `paidAt` with today, not the last payment's date.
+- **Debt at build time, resolved at the merge with main:** the build logged "cutting an amount to the recorded total stamps `paidAt` with today" as TD-046. Main's `84f2622` (MUT-18, its ADR-038) makes `recalculateReceivedAmount` take `paidAt` from the latest record, so the entry was dropped. MUT-5's decision is **ADR-039**, renumbered at the merge.
 
 ---
 

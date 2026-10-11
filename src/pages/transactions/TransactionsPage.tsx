@@ -11,7 +11,6 @@ import { EmptyState, RowActionsMenu, AmountWithConversion } from "../../componen
 import { CheckIcon, CopyIcon, DocumentIcon } from "../../components/icons";
 import { TransactionTypeBadge, TransactionStatusCell } from "../../components/transactions";
 import { useTransactions } from "../../hooks/useQueries";
-import { useMarkIncomePaid } from "../../hooks/useIncomeQueries";
 import { useIsCompactTable } from "../../hooks/useMediaQuery";
 import { useDrawerStore } from "../../lib/stores";
 import {
@@ -34,8 +33,7 @@ interface TransactionsSearchParams {
 }
 
 export function TransactionsPage() {
-  const { openIncomeDrawer, openExpenseDrawer, openDocumentDrawer } = useDrawerStore();
-  const markPaidMutation = useMarkIncomePaid();
+  const { openIncomeDrawer, openExpenseDrawer, openDocumentDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -239,7 +237,9 @@ export function TransactionsPage() {
                                 {
                                   label: t('common.markPaid'),
                                   icon: <CheckIcon size={16} />,
-                                  onClick: () => markPaidMutation.mutate(tx.id),
+                                  // Opens the date-aware payment drawer (MUT-18)
+                                  // instead of stamping today silently.
+                                  onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
                                 },
                               ]
                             : []),

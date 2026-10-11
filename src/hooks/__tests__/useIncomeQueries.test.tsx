@@ -350,10 +350,26 @@ describe('Mutation Hooks', () => {
       );
 
       await act(async () => {
-        await result.current.mutateAsync('tx-1');
+        await result.current.mutateAsync({ id: 'tx-1' });
       });
 
-      expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1');
+      expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: undefined });
+    });
+
+    it('should pass a backdated paidAt through to the repository', async () => {
+      const mockIncome = { id: 'tx-1', status: 'paid' };
+      (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
+
+      const { result } = renderHook(
+        () => useMarkIncomePaid(),
+        { wrapper: createWrapper() }
+      );
+
+      await act(async () => {
+        await result.current.mutateAsync({ id: 'tx-1', paidAt: '2026-09-20' });
+      });
+
+      expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: '2026-09-20' });
     });
 
     /**
@@ -376,7 +392,7 @@ describe('Mutation Hooks', () => {
       });
 
       await act(async () => {
-        await result.current.mutateAsync('tx-1');
+        await result.current.mutateAsync({ id: 'tx-1' });
       });
 
       const invalidated = invalidateQueries.mock.calls.map(
@@ -415,7 +431,7 @@ describe('income writes refresh the payment lists', () => {
     const roots = await invalidatedRoots(async (queryClient) => {
       const { result } = renderHook(() => useMarkIncomePaid(), { wrapper: wrapperFor(queryClient) });
       await act(async () => {
-        await result.current.mutateAsync('tx-1');
+        await result.current.mutateAsync({ id: 'tx-1' });
       });
     });
     expect(roots).toContain('paymentRecords');

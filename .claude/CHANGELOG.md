@@ -39,7 +39,7 @@
 - `src/hooks/useQueries.ts`, `src/hooks/useIncomeQueries.ts`
 - `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`
 - `e2e/income-fast-path.spec.ts` (new)
-- Brief: `.claude/designs/mut-5-income-fast-path.md` (decisions P1–P5, eng-review ledger R1–R8); ADR-038, TD-029 update, TD-046
+- Brief: `.claude/designs/mut-5-income-fast-path.md` (decisions P1–P5, eng-review ledger R1–R8); ADR-039, TD-029 update
 
 ### Added
 - **Fast path.** Title ("What did you do?", autofocused), amount and client are the only fields up front.
@@ -60,7 +60,7 @@
 
 ### Fixed
 - **Editing reset payment data.** Editing a paid entry reset its payment date to today, and editing a part-paid entry wiped what had been received. The drawer now leaves payment fields absent from the write unless the status really changes.
-- **Record-backed entries** (paid through Mark paid / Record payment): their payment state belongs to their records (ADR-038).
+- **Record-backed entries** (paid through Mark paid / Record payment): their payment state belongs to their records (ADR-039).
   - The status is read-only in the drawer.
   - An amount below the recorded total is refused, in the drawer and in `transactionRepo.update`.
   - An amount change recalculates received and status.
@@ -87,6 +87,78 @@
 - **Follow-ups:** MUT-60 (TD-029 write side + backfill), MUT-61 (Malafat client/matter intake), MUT-62 (title column in `/income`).
 
 ---
+## [Unreleased] - 2026-10-11 — MUT-18/19/20/21: payment dates, and closing out three already-fixed test tickets
+
+**Scope:**
+- `src/db/repository.ts` (`recalculateReceivedAmount`, `markPaid`, `paymentRecordRepo.create`/`.update`)
+- `src/hooks/useIncomeQueries.ts` (`useMarkIncomePaid`)
+- `src/components/drawers/PartialPaymentDrawer.tsx` ("Mark fully paid", lifted `dateInput`, future-date validation)
+- `src/pages/income/IncomePage.tsx`, `src/pages/projects/ProjectDetailPage.tsx`, `src/pages/transactions/TransactionsPage.tsx`, `src/components/clients/ClientWorkSection.tsx` (Mark Paid row action)
+- `src/lib/i18n/translations/{en,ar}.json` (`transactions.partialPayment.futureDate`)
+- Tests: `transactionRepo.test.ts`, `partialPayment.test.ts`, `paymentRecords.test.ts`, `useIncomeQueries.test.tsx`, `PartialPaymentDrawer.test.tsx`, `ClientDetailPage.test.tsx`, `IncomePage.test.tsx`
+- ADR-038; TD-046
+
+### Fixed
+- **MUT-18 — "Mark paid" could not record a payment that happened earlier.**
+  `markPaid`/`recordPartialPayment` already had an unused `opts.paidAt`
+  parameter from an earlier partial fix, but nothing threaded a date through
+  it: all four row-menu "Mark Paid" quick actions (Income, Transactions,
+  Project detail, Client work) called the mutation with no date, and
+  `PartialPaymentDrawer`'s own "Mark fully paid" shortcut silently discarded
+  the date field sitting right next to it, calling the deprecated
+  `useMarkTransactionPaid` instead. Separately, `recalculateReceivedAmount`
+  (what every payment write funnels through) stamped a transaction's own
+  `paidAt` with the recalculation instant instead of deriving it from the
+  payment records it had just summed, so even the already-correct
+  `PartialPaymentDrawer` date-entry path produced a wrong transaction-level
+  date the first time a transaction crossed into fully paid.
+  - Fix: `recalculateReceivedAmount` now derives `paidAt` from the latest
+    payment record; the four quick actions open `PartialPaymentDrawer`
+    (prefilled to the full remaining balance) instead of firing the dateless
+    mutation; "Mark fully paid" now submits through the same dated
+    `useCreatePaymentRecord` path as "Record Payment" via a `dateInput` state
+    lifted out of the form; a future-dated payment is rejected with a
+    translated inline error, enforced at the repository layer
+    (`paymentRecordRepo.create`/`.update`) so no path can bypass it.
+  - See ADR-038 for the full decision and alternatives considered.
+- **MUT-21 — overdue-count test hardcoded March 2026 dates with no fake
+  timers.** Confirmed already fixed on `main` (fake clock pinned to
+  2026-03-14, fixture dates documented relative to it, due-today/due-yesterday
+  asserted deliberately). Added the one missing boundary case the ticket's
+  acceptance criteria named explicitly: due-tomorrow is asserted not-overdue.
+  Swept the rest of the suite for the same real-clock-plus-hardcoded-date
+  pattern (grep for `overdue`/`aging`/`dueSoon`/`lastActivity` assertions
+  without `useFakeTimers`): no other production code computes "today"
+  internally without an explicit `today`/fixed-clock parameter, so no further
+  time bombs found.
+- **MUT-19 — IncomeDrawer client dropdown / project filtering / status-reset
+  tests.** Confirmed already fixed on `main`; all three tests pass, and the
+  received→invoiced clear is verified at the repository level as the ticket
+  required. The client field also resolves a concrete `profileId` even in
+  "All Profiles" mode (falls back to the first profile), so clients remain
+  selectable there too.
+- **MUT-20 — ExpensesLedgerPage 18 failing tests.** Confirmed already fixed
+  and merged (`8f7bb7b`), matching its Jira "Done" status. Verified the
+  remaining acceptance criteria not obvious from the fix commit alone: the
+  no-profile branch has its own dedicated test, `expenses.noProfileSelected`
+  exists in both locale files, and there is only one expense test file so the
+  "extract shared fixture" criterion doesn't apply.
+
+### Technical
+- `markPaid`'s already-fully-covered branch (`remaining <= 0`) now delegates
+  to `recalculateReceivedAmount` instead of duplicating its status/paidAt
+  logic inline.
+- New tests: backdated full/partial payments, default-to-today, the
+  month-boundary case the ticket named, future-date rejection at create/update,
+  "Mark fully paid" under both today and a backdated date, and the
+  due-tomorrow boundary.
+- `useMarkTransactionPaid`/`useMarkIncomePaid` remain in place as
+  repository/hook primitives — `synced-repository.ts` and
+  `paymentRequestService` still call `markPaid` directly for reasons outside
+  this ticket's scope — so only the UI call sites moved, not the primitives.
+  `useTransactionActions.ts` carries the same dateless pattern but has no
+  production caller; left alone and logged as TD-046 rather than deleted as a
+  scope expansion of this ticket.
 
 ## [Unreleased] - 2026-10-11 — MUT-45: serve the hosted portal
 

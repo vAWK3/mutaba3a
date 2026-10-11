@@ -3,7 +3,6 @@ import { Drawer } from './Drawer';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import {
   useTransactionDisplay,
-  useMarkTransactionPaid,
   usePaymentRecords,
   useCreatePaymentRecord,
   useUpdatePaymentRecord,
@@ -31,9 +30,11 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
   const createMutation = useCreatePaymentRecord();
   const updateMutation = useUpdatePaymentRecord();
   const deleteMutation = useDeletePaymentRecord();
-  const markPaidMutation = useMarkTransactionPaid();
 
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  // Lifted out of PaymentForm so "Mark fully paid" below records against the
+  // same date the user chose there, instead of silently stamping today (MUT-18).
+  const [dateInput, setDateInput] = useState(() => todayISO());
 
   const editingRecord = useMemo(
     () => editingRecordId ? paymentRecords.find((r) => r.id === editingRecordId) : undefined,
@@ -55,7 +56,11 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
 
   const handleMarkFullyPaid = async () => {
     try {
-      await markPaidMutation.mutateAsync(transactionId);
+      await createMutation.mutateAsync({
+        transactionId,
+        amountMinor: remainingAmountMinor,
+        paidAt: dateInput,
+      });
       onClose();
     } catch {
       // Error handled in form
@@ -75,7 +80,7 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
     useDrawerStore.getState().openPartialPaymentDrawer({ transactionId });
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending || markPaidMutation.isPending || deleteMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
     <Drawer
@@ -201,6 +206,8 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
         createMutation={createMutation}
         updateMutation={updateMutation}
         isPending={isPending}
+        dateInput={dateInput}
+        onDateChange={setDateInput}
         t={t}
       />
     </Drawer>
@@ -217,6 +224,8 @@ function PaymentForm({
   createMutation,
   updateMutation,
   isPending,
+  dateInput,
+  onDateChange,
   t,
 }: {
   transactionId: string;
@@ -227,6 +236,8 @@ function PaymentForm({
   createMutation: ReturnType<typeof useCreatePaymentRecord>;
   updateMutation: ReturnType<typeof useUpdatePaymentRecord>;
   isPending: boolean;
+  dateInput: string;
+  onDateChange: (date: string) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -237,20 +248,22 @@ function PaymentForm({
     if (editingRecord) return formatCurrencyInput(String(editingRecord.amountMinor / 100));
     return remainingAmountMinor > 0 ? formatCurrencyInput(String(remainingAmountMinor / 100)) : '';
   });
-  // todayISO() is the local calendar date (ADR-022). new Date().toISOString()
-  // is the UTC one, which hands a user west of UTC tomorrow's date in the
-  // evening and one east of UTC yesterday's after midnight -- silently wrong
-  // on a field the user is now one confirm away from accepting.
-  const [dateInput, setDateInput] = useState(() =>
-    editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO()
-  );
   const [notesInput, setNotesInput] = useState(() =>
     editingRecord?.notes || ''
   );
   const [error, setError] = useState<string | null>(null);
 
+  // dateInput lives in the parent (PartialPaymentDrawer) so "Mark fully paid"
+  // can read the same chosen date. This component remounts via `key` whenever
+  // editingRecordId changes, so a mount-only effect is enough to (re)seed it.
+  // todayISO() is the local calendar date (ADR-022). new Date().toISOString()
+  // is the UTC one, which hands a user west of UTC tomorrow's date in the
+  // evening and one east of UTC yesterday's after midnight -- silently wrong
+  // on a field the user is now one confirm away from accepting.
   useEffect(() => {
+    onDateChange(editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO());
     inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -261,6 +274,12 @@ function PaymentForm({
 
     if (paymentAmountMinor <= 0) {
       setError(t('transactions.partialPayment.amountMustBePositive'));
+      return;
+    }
+
+    // A payment can't have arrived before it was received (MUT-18).
+    if (dateInput > todayISO()) {
+      setError(t('transactions.partialPayment.futureDate'));
       return;
     }
 
@@ -300,7 +319,7 @@ function PaymentForm({
           notes: notesInput || undefined,
         });
         setPaymentInput('');
-        setDateInput(todayISO());
+        onDateChange(todayISO());
         setNotesInput('');
       }
     } catch (err) {
@@ -343,7 +362,7 @@ function PaymentForm({
           type="date"
           className="input"
           value={dateInput}
-          onChange={(e) => setDateInput(e.target.value)}
+          onChange={(e) => onDateChange(e.target.value)}
           disabled={isPending}
         />
       </div>

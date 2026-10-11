@@ -1564,7 +1564,7 @@ above only sets the header when `onFound` actually fired for that request.
 
 ## App patterns added by MUT-5 (2026-10-11)
 
-### Payment records own payment state (ADR-038)
+### Payment records own payment state (ADR-039)
 An income entry's `status`, `paidAt` and `receivedAmountMinor` are derived from its live `PaymentRecord`s whenever it has any (`recalculateReceivedAmount`).
 - A form never writes those three fields for such an entry, and shows the status read-only.
 - A repository method that changes something they depend on (`transactionRepo.update` changing `amountMinor`) re-derives them inside the same Dexie transaction, and rejects a change that would make the records an overpayment (ADR-030).

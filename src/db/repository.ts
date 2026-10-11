@@ -405,21 +405,16 @@ export const transactionRepo = {
     const remaining = tx.amountMinor - currentReceived;
 
     if (remaining > 0) {
-      // Create a payment record for the remaining amount
+      // Create a payment record for the remaining amount; recalculateReceivedAmount
+      // (called by paymentRecordRepo.create) derives status/paidAt from it.
       await paymentRecordRepo.create({
         transactionId: id,
         amountMinor: remaining,
         paidAt: opts?.paidAt ?? nowISO(),
       });
     } else {
-      // Already fully covered by payment records, just update status
-      const now = nowISO();
-      await db.transactions.update(id, {
-        status: 'paid',
-        paidAt: opts?.paidAt ?? now,
-        receivedAmountMinor: tx.amountMinor,
-        updatedAt: now,
-      });
+      // Already fully covered by existing payment records; just finalize status.
+      await recalculateReceivedAmount(id);
     }
   },
 
@@ -1399,10 +1394,18 @@ async function recalculateReceivedAmount(transactionId: string): Promise<void> {
   const isNowFullyPaid = sum >= tx.amountMinor;
   const now = nowISO();
 
+  // paidAt must reflect when the money actually arrived, not when this
+  // recalculation ran -- fall back to `now` only when no record carries a
+  // date (e.g. legacy data with receivedAmountMinor set with no records).
+  const latestRecordPaidAt = records.reduce<string | undefined>(
+    (latest, r) => (!latest || r.paidAt > latest ? r.paidAt : latest),
+    undefined
+  );
+
   await db.transactions.update(transactionId, {
     receivedAmountMinor: sum,
     status: isNowFullyPaid ? 'paid' : 'unpaid',
-    paidAt: isNowFullyPaid ? (tx.paidAt || now) : undefined,
+    paidAt: isNowFullyPaid ? (latestRecordPaidAt ?? now) : undefined,
     updatedAt: now,
   });
 }
@@ -1456,6 +1459,11 @@ export const paymentRecordRepo = {
     if (data.amountMinor <= 0) {
       throw new PaymentRecordError('Payment amount must be positive', { transactionId: data.transactionId });
     }
+    // A payment can't have arrived before it was received (MUT-18): only the
+    // calendar date matters, so a same-day timestamp from nowISO() is not future.
+    if (data.paidAt.split('T')[0] > todayISO()) {
+      throw new PaymentRecordError('Payment date cannot be in the future', { transactionId: data.transactionId });
+    }
 
     const tx = await db.transactions.get(data.transactionId);
     if (!tx) {
@@ -1499,6 +1507,9 @@ export const paymentRecordRepo = {
     }
     if (data.amountMinor !== undefined && data.amountMinor <= 0) {
       throw new PaymentRecordError('Payment amount must be positive', { paymentRecordId: id, transactionId: record.transactionId });
+    }
+    if (data.paidAt !== undefined && data.paidAt.split('T')[0] > todayISO()) {
+      throw new PaymentRecordError('Payment date cannot be in the future', { paymentRecordId: id, transactionId: record.transactionId });
     }
 
     await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {

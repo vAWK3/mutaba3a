@@ -15,7 +15,7 @@ import { SearchInput, DateRangeControl } from '../../components/filters';
 import { EmptyState, RowActionsMenu, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
-import { useIncome, useMarkIncomePaid } from '../../hooks/useIncomeQueries';
+import { useIncome } from '../../hooks/useIncomeQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import type { IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useIsCompactTable } from '../../hooks/useMediaQuery';
@@ -35,7 +35,6 @@ type IncomeStatusFilter = 'all' | 'unpaid' | 'received' | 'overdue';
 
 export function IncomePage() {
   const { openTransactionDrawer, openPartialPaymentDrawer } = useDrawerStore();
-  const markPaidMutation = useMarkIncomePaid();
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -74,10 +73,6 @@ export function IncomePage() {
 
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
-  };
-
-  const handleMarkPaid = async (id: string) => {
-    await markPaidMutation.mutateAsync(id);
   };
 
   const handleDuplicate = (id: string) => {
@@ -251,7 +246,9 @@ export function IncomePage() {
                                   {
                                     label: t('common.markPaid'),
                                     icon: <CheckIcon size={16} />,
-                                    onClick: () => handleMarkPaid(tx.id),
+                                    // Opens the date-aware payment drawer (MUT-18)
+                                    // instead of stamping today silently.
+                                    onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
                                   },
                                 ]
                               : []),

@@ -180,13 +180,16 @@ export function useUpdateIncome() {
 }
 
 /**
- * Mark an income transaction as paid.
+ * Mark an income transaction as paid. `paidAt` defaults to today when
+ * omitted; pass it to record a payment that happened on an earlier date
+ * (MUT-18).
  */
 export function useMarkIncomePaid() {
   const queryClient = useQueryClient();
 
   return useMutationWithFeedback({
-    mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id),
+    mutationFn: ({ id, paidAt }: { id: string; paidAt?: string }) =>
+      getRepositories().synced.transactions.markPaid(id, { paidAt }),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to mark as paid. Please try again.',
   });

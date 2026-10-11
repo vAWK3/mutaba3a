@@ -458,6 +458,59 @@ describe('transactionRepo', () => {
       expect(updated?.status).toBe('paid');
       expect(updated?.paidAt).toBeDefined();
     });
+
+    /**
+     * MUT-18: markPaid used to hardcode paidAt to the instant you clicked, so
+     * reconciling a payment that arrived earlier recorded the wrong date --
+     * and, for a payment near a month boundary, bucketed it in the wrong
+     * month on any report grouped by paidAt.
+     */
+    it('should record a backdated paidAt when one is given', async () => {
+      const transaction = await transactionRepo.create(
+        createTestTransaction({ kind: 'income', status: 'unpaid' })
+      );
+
+      await transactionRepo.markPaid(transaction.id, { paidAt: '2026-09-20' });
+
+      const updated = await transactionRepo.get(transaction.id);
+      expect(updated?.status).toBe('paid');
+      expect(updated?.paidAt).toBe('2026-09-20');
+    });
+
+    it('should default paidAt to today when none is given', async () => {
+      const transaction = await transactionRepo.create(
+        createTestTransaction({ kind: 'income', status: 'unpaid' })
+      );
+      const before = new Date().toISOString();
+
+      await transactionRepo.markPaid(transaction.id);
+
+      const updated = await transactionRepo.get(transaction.id);
+      expect(updated?.paidAt).toBeDefined();
+      expect(updated!.paidAt! >= before).toBe(true);
+    });
+
+    it('should bucket a backdated payment in the month it was received, not the month it was entered', async () => {
+      const transaction = await transactionRepo.create(
+        createTestTransaction({ kind: 'income', status: 'unpaid' })
+      );
+
+      // Reconciled in October for a payment that actually arrived in September.
+      await transactionRepo.markPaid(transaction.id, { paidAt: '2026-09-30' });
+
+      const updated = await transactionRepo.get(transaction.id);
+      expect(updated?.paidAt?.startsWith('2026-09')).toBe(true);
+    });
+
+    it('should reject a future-dated payment', async () => {
+      const transaction = await transactionRepo.create(
+        createTestTransaction({ kind: 'income', status: 'unpaid' })
+      );
+
+      await expect(
+        transactionRepo.markPaid(transaction.id, { paidAt: '2099-01-01' })
+      ).rejects.toThrow('Payment date cannot be in the future');
+    });
   });
 
   describe('softDelete', () => {

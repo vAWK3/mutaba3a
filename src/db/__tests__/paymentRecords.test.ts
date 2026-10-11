@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { transactionRepo, paymentRecordRepo, clientRepo, PaymentRecordError } from '../repository';
+import { todayLocalISO } from '../../lib/dates';
 
 describe('paymentRecordRepo', () => {
   let incomeId: string;
@@ -137,6 +138,29 @@ describe('paymentRecordRepo', () => {
 
       expect(record.notes).toBe('Check #123');
     });
+
+    // MUT-18: a payment can't have arrived before it was received.
+    it('should reject a future-dated payment', async () => {
+      await expect(
+        paymentRecordRepo.create({
+          transactionId: incomeId,
+          amountMinor: 3000,
+          paidAt: '2099-01-01',
+        })
+      ).rejects.toThrow('Payment date cannot be in the future');
+    });
+
+    it('should accept a paidAt timestamp for today even with a time component', async () => {
+      const todayWithTime = `${todayLocalISO()}T23:59:59.000Z`;
+
+      await expect(
+        paymentRecordRepo.create({
+          transactionId: incomeId,
+          amountMinor: 3000,
+          paidAt: todayWithTime,
+        })
+      ).resolves.toMatchObject({ paidAt: todayWithTime });
+    });
   });
 
   describe('update', () => {
@@ -168,6 +192,18 @@ describe('paymentRecordRepo', () => {
       const updated = await paymentRecordRepo.get(record.id);
       expect(updated?.paidAt).toBe('2024-02-01');
       expect(updated?.amountMinor).toBe(3000);
+    });
+
+    it('should reject updating a payment to a future date', async () => {
+      const record = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 3000,
+        paidAt: '2024-01-20',
+      });
+
+      await expect(
+        paymentRecordRepo.update(record.id, { paidAt: '2099-01-01' })
+      ).rejects.toThrow('Payment date cannot be in the future');
     });
 
     it('should update notes only', async () => {

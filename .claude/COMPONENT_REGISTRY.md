@@ -286,7 +286,7 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 - **More details:** a `.form-disclosure` toggle whose summary line names the defaults. It holds the status switch, due date, currency (USD/ILS/EUR), date, project (only while Projects is on), notes and the profile. The profile moves up front when it can't be resolved.
 
 **Rules**: they live in `src/lib/incomeEntry.ts` and are unit-tested.
-- `buildIncomeCreate`, `buildIncomeUpdate` (ADR-038: payment fields are absent unless the status changes; never written for record-backed entries)
+- `buildIncomeCreate`, `buildIncomeUpdate` (ADR-039: payment fields are absent unless the status changes; never written for record-backed entries)
 - `shouldExpandDetails`
 - `isBelowRecordedTotal`
 - `resolveDefaultCurrency` (profile → settings → USD)
@@ -1208,7 +1208,8 @@ import { getRepositories } from '../db';
 
 // Resolve inside the callback, not at module scope.
 queryFn: () => getRepositories().base.transactions.list(filters)
-mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id)
+mutationFn: ({ id, paidAt }: { id: string; paidAt?: string }) =>
+  getRepositories().synced.transactions.markPaid(id, { paidAt })
 ```
 
 **base vs synced**: `base` is the plain Dexie repository. `synced` additionally

@@ -46,6 +46,7 @@
 | ADR-035 | Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted | Active | 2026-10 |
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
 | ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
+| ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active | 2026-10 |
 
 ---
 
@@ -1720,7 +1721,83 @@ holds).
 
 ---
 
-## ADR-038: Payment Records Own an Entry's Payment State; an Edit Never Rewrites It
+## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-18. `transactionRepo.markPaid` and `recordPartialPayment`
+hardcoded `paidAt` to the instant the user clicked, with no way to say the
+money arrived earlier — reconciling a payment on a different day than it was
+received recorded the wrong date and could bucket it in the wrong month on any
+report grouped by `paidAt`. Separately, `recalculateReceivedAmount` (the
+function every payment write funnels through) stamped the transaction's own
+`paidAt` with `tx.paidAt || now` when a transaction crossed into fully paid —
+wrong even for the already-dated path (`PartialPaymentDrawer`'s date field),
+because it ignored the payment records it had just summed and used the
+recalculation instant instead. A fourth UI entry point, `PartialPaymentDrawer`'s
+"Mark fully paid" shortcut, called a separate dateless mutation
+(`useMarkTransactionPaid`) and silently discarded whatever date the form's own
+date field held.
+
+**Decision**:
+1. **`recalculateReceivedAmount` derives `paidAt` from the payment records it
+   just summed** — the latest (lexicographically greatest, consistent with how
+   records are already sorted) non-deleted record's `paidAt`, falling back to
+   `now` only when no record carries a date. This is the single function every
+   payment-completing write passes through (`paymentRecordRepo.create`,
+   `.update`, `.delete`, and `markPaid`'s already-covered branch), so the fix
+   applies uniformly rather than per call site.
+2. **`markPaid(id, opts?: { paidAt?: string })` and
+   `recordPartialPayment(id, amountMinor, opts?: { paidAt?: string })`** accept
+   an optional date, defaulting to today; `useMarkIncomePaid` takes
+   `{ id, paidAt? }` to match. `markPaid`'s already-fully-covered branch now
+   delegates to `recalculateReceivedAmount` instead of carrying its own copy of
+   the status/paidAt-setting logic.
+3. **A payment cannot be future-dated.** `paymentRecordRepo.create` and
+   `.update` reject `paidAt` (compared by calendar date only — a same-day
+   timestamp from `nowISO()` is not future) later than today, and the
+   `PartialPaymentDrawer` form surfaces this as a translated inline error
+   before the mutation fires. Rejected rather than allowed: a received payment
+   dated in the future does not correspond to anything that happened, and
+   silently accepting one is far more likely to be a typo (wrong year) than a
+   deliberate entry.
+4. **The four "Mark Paid" row-menu quick actions (Income, Transactions,
+   Project detail, Client work section) open `PartialPaymentDrawer` instead of
+   firing `markPaid` directly.** Every one of those surfaces already shows a
+   `RecordPaymentButton` next to the same row's "Mark Paid" menu item doing
+   materially the same thing with no date control — the quick action was a
+   second, inferior way to write the same `PaymentRecord` row. Routing it to
+   the drawer (prefilled with the full remaining balance, so settling in full
+   is still one confirm) removes that duplicate path outright rather than
+   growing a date picker into four more menu items.
+5. **`PartialPaymentDrawer`'s "Mark fully paid" shortcut now submits through
+   `useCreatePaymentRecord` with the form's own `dateInput`**, lifted from
+   `PaymentForm` into the drawer so both the shortcut and the explicit submit
+   button record under the same chosen date. `useMarkTransactionPaid` is no
+   longer called from this component.
+
+**Consequences**: Every UI path that can mark income paid now accepts a
+backdated date, and a transaction's `paidAt` always reflects the payment that
+actually completed it rather than when any write happened to run. `markPaid`
+and `useMarkIncomePaid`/`useMarkTransactionPaid` are kept as repository/hook
+primitives — `synced-repository.ts`'s sync wrapper and `paymentRequestService`
+still have legitimate reasons to flip a transaction to paid without going
+through this drawer — so this decision narrows *where the UI calls them*, not
+the primitives themselves. `src/hooks/useTransactionActions.ts` duplicates the
+same dateless pattern this ADR fixes but has no production caller; left alone
+here and logged as tech debt (TD-046) rather than deleted as a scope expansion
+of a bug-fix ticket.
+
+**Alternatives Considered**: prompting for a date inline on the quick action
+(rejected — grows a form into a menu item on four surfaces instead of reusing
+the drawer that already has one); allowing future dates (rejected, see above);
+deleting `markPaid`/`useMarkTransactionPaid` entirely now that the UI stops
+calling them directly (rejected — both have other live callers outside this
+ticket's scope: sync replay and the payment-request flow).
+
+---
+
+## ADR-039: Payment Records Own an Entry's Payment State; an Edit Never Rewrites It
 
 **Status**: Active
 **Date**: 2026-10-11
@@ -1753,9 +1830,9 @@ Mark paid, Record payment and partial payments all write `PaymentRecord`s, so mo
 
 **Consequences**: editing can no longer move a payment date or erase a received amount, and an amount edit can't leave status disagreeing with the records. The drawer check for a too-low amount exists only to show a translated field message; the repository stays the source of truth.
 
-Two gaps remain, both ticketed:
-- An entry saved as Received in the drawer still has no record (TD-029 → MUT-60). Until it does, it follows rule 3, not rule 1.
-- Cutting an amount to the recorded total stamps `paidAt` with today, not the last payment's date (TD-046).
+When a cut makes the entry fully paid, `paidAt` is the latest record's date, because `recalculateReceivedAmount` derives it from the records (ADR-038, MUT-18).
+
+One gap remains, ticketed: an entry saved as Received in the drawer still has no record (TD-029 → MUT-60). Until it does, it follows rule 3, not rule 1.
 
 **Alternatives Considered**:
 - Fixing only the drawer, the "draft P2" rule (rejected): Received → Invoiced on a Mark-paid entry would still orphan its records, and amount edits would leave status stale.

@@ -76,6 +76,79 @@ describe('transactionRepo.partialPayment', () => {
       expect(updated?.paidAt).toBeDefined();
     });
 
+    /**
+     * MUT-18: recordPartialPayment used to hardcode paidAt to the instant you
+     * clicked. A backdated partial payment should land in payment history
+     * under the date it was received.
+     */
+    it('should record a backdated partial payment under the date given, not today', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-09-01',
+      });
+
+      await transactionRepo.recordPartialPayment(tx.id, 3000, { paidAt: '2026-09-20' });
+
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records).toHaveLength(1);
+      expect(records[0].paidAt).toBe('2026-09-20');
+    });
+
+    it('should default a partial payment to today when no date is given', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-09-01',
+      });
+      const before = new Date().toISOString();
+
+      await transactionRepo.recordPartialPayment(tx.id, 3000);
+
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records[0].paidAt >= before).toBe(true);
+    });
+
+    it('should reject a future-dated partial payment', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-09-01',
+      });
+
+      await expect(
+        transactionRepo.recordPartialPayment(tx.id, 3000, { paidAt: '2099-01-01' })
+      ).rejects.toThrow('Payment date cannot be in the future');
+    });
+
+    /**
+     * recalculateReceivedAmount derives the transaction's paidAt from its
+     * payment records (MUT-18); it must not stamp "now" just because this is
+     * the write that happens to cross the full-amount threshold.
+     */
+    it('should set the transaction paidAt to the latest record date, not the recalculation instant', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-09-01',
+      });
+
+      await transactionRepo.recordPartialPayment(tx.id, 4000, { paidAt: '2026-09-10' });
+      await transactionRepo.recordPartialPayment(tx.id, 6000, { paidAt: '2026-09-15' });
+
+      const updated = await transactionRepo.get(tx.id);
+      expect(updated?.status).toBe('paid');
+      expect(updated?.paidAt).toBe('2026-09-15');
+    });
+
     // ADR-030: overpayment is rejected. recordPartialPayment delegates to
     // paymentRecordRepo.create, so it inherits the single guard rather than
     // carrying its own copy.
