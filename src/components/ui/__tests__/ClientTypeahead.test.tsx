@@ -348,6 +348,42 @@ describe('ClientTypeahead', () => {
       }
     });
 
+    it('keeps the typed name when creating fails over a client picked earlier', async () => {
+      const existing = await clientRepo.create({ name: 'Old Client' });
+      const onPendingTextChange = vi.fn();
+      const onCreatingChange = vi.fn();
+      const createSpy = vi.spyOn(clientRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
+      try {
+        function Controlled() {
+          const [value, setValue] = useState(existing.id);
+          return (
+            <ClientTypeahead
+              value={value}
+              onChange={setValue}
+              onPendingTextChange={onPendingTextChange}
+              onCreatingChange={onCreatingChange}
+            />
+          );
+        }
+        render(
+          <TestWrapper>
+            <Controlled />
+          </TestWrapper>
+        );
+        const input = screen.getByRole('combobox');
+        await waitFor(() => expect(input).toHaveValue('Old Client'));
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Brand New Co' } });
+        fireEvent.click(await screen.findByRole('option', { name: /Brand New Co/ }));
+
+        await waitFor(() => expect(onCreatingChange).toHaveBeenLastCalledWith(false));
+        expect(input).toHaveValue('Brand New Co');
+        expect(onPendingTextChange).toHaveBeenLastCalledWith('Brand New Co');
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
     it('reports no unpicked text once a client is picked, and again after clearing', async () => {
       const client = await clientRepo.create({ name: 'My Client' });
       const onPendingTextChange = vi.fn();

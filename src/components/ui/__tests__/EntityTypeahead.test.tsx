@@ -272,7 +272,8 @@ describe('EntityTypeahead', () => {
   describe('Enter safety (MUT-5 review)', () => {
     function Controlled(props: {
       options: TypeaheadOption[];
-      onSelect?: (option: TypeaheadOption) => void | Promise<void>;
+      onSelect?: (option: TypeaheadOption) => void | Promise<unknown>;
+      autoHighlight?: (options: TypeaheadOption[], typed: string) => number;
     }) {
       const [value, setValue] = useState('');
       return (
@@ -280,6 +281,7 @@ describe('EntityTypeahead', () => {
           options={props.options}
           inputValue={value}
           onInputChange={setValue}
+          autoHighlight={props.autoHighlight}
           onSelect={(option) => {
             setValue(option.label);
             return props.onSelect?.(option);
@@ -349,6 +351,116 @@ describe('EntityTypeahead', () => {
       });
       expect(input).not.toHaveAttribute('aria-busy');
       expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+    });
+
+    it('submits the form once a pick that held Enter has been saved', async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      const createOnly: TypeaheadOption[] = [{ id: 'new', label: 'Newco', isNew: true }];
+      render(
+        <form onSubmit={onSubmit}>
+          <Controlled options={createOnly} onSelect={() => pending} />
+        </form>
+      );
+      const input = screen.getByRole('combobox');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' }); // picks "create Newco"
+      fireEvent.keyDown(input, { key: 'Enter' }); // held while it saves
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await act(async () => {
+        finish();
+        await pending;
+      });
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a held Enter when the user types again before the pick is saved', async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      const createOnly: TypeaheadOption[] = [{ id: 'new', label: 'Newco', isNew: true }];
+      render(
+        <form onSubmit={onSubmit}>
+          <Controlled options={createOnly} onSelect={() => pending} />
+        </form>
+      );
+      const input = screen.getByRole('combobox');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.change(input, { target: { value: 'Newcom' } });
+
+      await act(async () => {
+        finish();
+        await pending;
+      });
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('does not submit a held Enter when the pick fails, and offers the typed text again', async () => {
+      let fail!: () => void;
+      const pending = new Promise<boolean>((resolve) => {
+        fail = () => resolve(false);
+      });
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      const onSelect = vi.fn(() => pending);
+      const createOnly: TypeaheadOption[] = [{ id: 'new', label: 'Newco', isNew: true }];
+      render(
+        <form onSubmit={onSubmit}>
+          <Controlled options={createOnly} onSelect={onSelect} />
+        </form>
+      );
+      const input = screen.getByRole('combobox');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      await act(async () => {
+        fail();
+        await pending;
+      });
+      expect(onSubmit).not.toHaveBeenCalled();
+      // The name is unpicked again: Enter reopens the list on "create Newco", and the next Enter retries
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+      expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledTimes(2);
+    });
+
+    it('picks on the second Enter after Escape closed the list', () => {
+      const onSelect = vi.fn();
+      render(<Controlled options={mockOptions} onSelect={onSelect} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Be' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false); // reopens on the match
+      expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledWith(mockOptions[1]);
+    });
+
+    it('lets the consumer choose which option the typed text highlights', () => {
+      const options: TypeaheadOption[] = [
+        { id: 'v1', label: 'Amazon Web Services', isNew: false },
+        { id: 'v2', label: 'Awsome Designs', isNew: false },
+      ];
+      const onSelect = vi.fn();
+      render(<Controlled options={options} onSelect={onSelect} autoHighlight={() => 0} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'aws' } });
+      expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledWith(options[0]);
     });
 
     it('lets Enter through after tabbing into a field that lists options but has nothing typed', () => {

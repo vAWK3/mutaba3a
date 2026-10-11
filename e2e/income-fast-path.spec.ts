@@ -45,6 +45,29 @@ test.describe('Income fast path (MUT-5)', () => {
     await expect(page.getByText('$1,200').first()).toBeVisible();
   });
 
+  test('Enter, Enter straight away creates the client and saves the entry', async ({ page }) => {
+    await page.goto('/app/income');
+    await page.getByRole('button', { name: /skip for now/i }).click();
+    await page.getByRole('button', { name: 'Add Income' }).click();
+    const drawer = page.getByRole('dialog').filter({ hasText: 'New Income' });
+
+    await drawer.getByLabel('What did you do?').fill('Site audit');
+    await drawer.getByLabel(/^Amount/).fill('300');
+    const client = drawer.getByPlaceholder('Search or create client...');
+    await client.click();
+    await client.pressSequentially('Brand New Ltd');
+
+    // The second Enter lands while the client is still being saved: the field
+    // holds it and submits once the client exists.
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(drawer).toBeHidden();
+
+    await page.goto('/app/clients');
+    await page.getByRole('link', { name: 'Brand New Ltd' }).first().click();
+    await expect(page.getByText('Site audit')).toBeVisible();
+  });
+
   test('Escape in an open client list closes only the list', async ({ page }) => {
     await page.goto('/app/income');
     await page.getByRole('button', { name: /skip for now/i }).click();

@@ -147,7 +147,10 @@ export function ClientTypeahead({
           // without it (onPendingTextChange) instead of saving with no client.
           setInputValue(option.label);
           setPickedName(null);
+          // Clearing a client picked earlier must not clear the box too (prefill effect)
+          prevValue.current = '';
           onChange('');
+          return false;
         } finally {
           setCreating(false);
           onCreatingChange?.(false);

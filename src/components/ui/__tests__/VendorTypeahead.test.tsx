@@ -219,6 +219,26 @@ describe('VendorTypeahead (regression)', () => {
     });
   });
 
+  describe('which vendor Enter picks', () => {
+    it('highlights the vendor an alias matches over a prefix match on another name', async () => {
+      await vendorRepo.create({ profileId: testProfileId, canonicalName: 'Amazon Web Services', aliases: ['AWS'] });
+      await vendorRepo.create({ profileId: testProfileId, canonicalName: 'Awsome Designs', aliases: [] });
+      const onChange = vi.fn();
+      renderVendorTypeahead({ profileId: testProfileId, onChange });
+
+      const input = screen.getByRole('combobox');
+      fireEvent.focus(input);
+      await screen.findByText('Amazon Web Services');
+      fireEvent.change(input, { target: { value: 'aws' } });
+
+      const options = screen.getAllByRole('option');
+      expect(options[0]).toHaveTextContent('Amazon Web Services');
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onChange).toHaveBeenLastCalledWith('Amazon Web Services', expect.any(String));
+    });
+  });
+
   describe('input sync', () => {
     it('updates input when value prop changes', () => {
       const { rerender } = render(

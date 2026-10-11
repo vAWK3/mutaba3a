@@ -346,7 +346,8 @@ export function IncomeDrawer() {
   };
 
   // A client picked from "create" takes a moment to save. A save asked for in
-  // that moment (Enter, Enter) waits for it, so the entry keeps its client.
+  // that moment (the Save button, or the Enter the client field held and
+  // replays) waits for it, so the entry keeps its client.
   const [clientCreating, setClientCreating] = useState(false);
   const saveQueued = useRef(false);
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {

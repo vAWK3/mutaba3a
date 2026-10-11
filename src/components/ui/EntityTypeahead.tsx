@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { cn } from '../../lib/utils';
+import { defaultAutoHighlight } from './typeaheadHighlight';
 import './EntityTypeahead.css';
 
 export interface TypeaheadOption<T = unknown> {
@@ -14,7 +15,11 @@ export interface EntityTypeaheadProps<T = unknown> {
   options: TypeaheadOption<T>[];
   inputValue: string;
   onInputChange: (value: string) => void;
-  /** May return a promise (e.g. creating the record); Enter waits until it settles. */
+  /**
+   * May return a promise (e.g. creating the record); Enter waits until it
+   * settles. Resolving to false means the pick failed and the typed text is
+   * still unpicked.
+   */
   onSelect: (option: TypeaheadOption<T>) => void | Promise<unknown>;
   placeholder?: string;
   disabled?: boolean;
@@ -22,22 +27,8 @@ export interface EntityTypeaheadProps<T = unknown> {
   createLabel?: string;
   /** Called when the input loses focus, before the list closes */
   onBlur?: () => void;
-}
-
-/**
- * The option Enter would pick for typed text: the first existing option whose
- * label starts with it, else the create option, else the only option of a
- * select-only list. Never a mere substring match, so typing a new "Ann" while
- * "Joanna" exists offers to create Ann rather than picking Joanna.
- */
-function autoHighlight<T>(options: TypeaheadOption<T>[], typed: string): number {
-  const query = typed.trim().toLowerCase();
-  if (!query) return -1;
-  const prefix = options.findIndex((o) => !o.isNew && o.label.toLowerCase().startsWith(query));
-  if (prefix >= 0) return prefix;
-  const create = options.findIndex((o) => o.isNew);
-  if (create >= 0) return create;
-  return options.length === 1 ? 0 : -1;
+  /** Which option typed text highlights, when the default rule doesn't fit the options */
+  autoHighlight?: (options: TypeaheadOption<T>[], typed: string) => number;
 }
 
 export function EntityTypeahead<T = unknown>({
@@ -50,6 +41,7 @@ export function EntityTypeahead<T = unknown>({
   className,
   createLabel,
   onBlur,
+  autoHighlight = defaultAutoHighlight,
 }: EntityTypeaheadProps<T>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -64,6 +56,8 @@ export function EntityTypeahead<T = unknown>({
   // A pick whose onSelect is still running (e.g. creating the client); Enter waits
   const [selecting, setSelecting] = useState(false);
   const selectingRef = useRef(false);
+  // Enter pressed while that pick was saving: once it is saved, it submits the form
+  const enterHeldRef = useRef(false);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -89,6 +83,7 @@ export function EntityTypeahead<T = unknown>({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const typed = e.target.value;
+    enterHeldRef.current = false;
     onInputChange(typed);
     setIsOpen(true);
     setTypedText(typed);
@@ -103,25 +98,43 @@ export function EntityTypeahead<T = unknown>({
       setIsOpen(false);
       setHighlight(-1);
       setTypedUnresolved(false);
-      if (result instanceof Promise) {
-        selectingRef.current = true;
-        setSelecting(true);
-        const settle = () => {
-          selectingRef.current = false;
-          setSelecting(false);
-        };
-        result.then(settle, settle);
-      }
+      if (!(result instanceof Promise)) return;
+
+      selectingRef.current = true;
+      setSelecting(true);
+      const settle = (picked: boolean) => {
+        selectingRef.current = false;
+        setSelecting(false);
+        const enterHeld = enterHeldRef.current;
+        enterHeldRef.current = false;
+        if (!picked) {
+          // The text is unpicked again; Enter offers the same option once more
+          setTypedText(option.label);
+          setTypedUnresolved(true);
+          setHighlight('auto');
+          return;
+        }
+        const input = inputRef.current;
+        if (enterHeld && input && document.activeElement === input) {
+          input.form?.requestSubmit();
+        }
+      };
+      result.then(
+        (value) => settle(value !== false),
+        () => settle(false)
+      );
     },
     [onSelect]
   );
 
   // Enter picks the highlighted option. Otherwise it is held while a pick is
-  // still being saved or while typed text is unpicked; with the field empty
-  // or showing a picked value it reaches the surrounding form.
+  // still being saved (and submits once it is) or while typed text is
+  // unpicked; with the field empty or showing a picked value it reaches the
+  // surrounding form.
   const handleEnter = (e: React.KeyboardEvent) => {
     if (selectingRef.current) {
       e.preventDefault();
+      enterHeldRef.current = true;
       return;
     }
     if (isListVisible && highlightedIndex >= 0 && highlightedIndex < options.length) {
@@ -132,6 +145,7 @@ export function EntityTypeahead<T = unknown>({
     if (typedUnresolved && inputValue.trim() !== '') {
       e.preventDefault();
       setIsOpen(true);
+      setHighlight('auto');
       return;
     }
     setIsOpen(false);
@@ -142,6 +156,7 @@ export function EntityTypeahead<T = unknown>({
       handleEnter(e);
       return;
     }
+    enterHeldRef.current = false;
     if (!isListVisible) {
       // Escape is left alone so it reaches the surrounding drawer.
       if (e.key === 'ArrowDown') {

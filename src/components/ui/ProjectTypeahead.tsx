@@ -114,9 +114,11 @@ export function ProjectTypeahead({
           setInputValue(newProject.name);
           onChange(newProject.id);
         } catch {
-          // If creation fails, revert input
-          setInputValue('');
+          // Keep the name in the box, unpicked, so it can be tried again
+          setInputValue(option.label);
+          prevValue.current = '';
           onChange('');
+          return false;
         }
       } else {
         setInputValue(option.label);

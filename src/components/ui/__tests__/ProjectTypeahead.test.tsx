@@ -301,6 +301,26 @@ describe('ProjectTypeahead', () => {
     });
   });
 
+  describe('when creating fails', () => {
+    it('keeps the typed name in the box, unpicked', async () => {
+      const onChange = vi.fn();
+      const createSpy = vi.spyOn(projectRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
+      try {
+        renderProjectTypeahead({ profileId: testProfileId, onChange });
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Rebrand' } });
+        fireEvent.click(await screen.findByRole('option', { name: /Rebrand/ }));
+
+        await waitFor(() => expect(createSpy).toHaveBeenCalled());
+        await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(''));
+        expect(input).toHaveValue('Rebrand');
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+  });
+
   describe('clearing selection', () => {
     it('calls onChange with empty string when input is cleared', async () => {
       const project = await projectRepo.create({ name: 'My Project', profileId: testProfileId });
