@@ -50,22 +50,50 @@ export function formatAmountShort(amountMinor: number, currency: Currency): stri
   return `${symbol}${amount.toFixed(0)}`;
 }
 
+const ARABIC_INDIC_ZERO = 0x0660;
+const EXTENDED_ARABIC_INDIC_ZERO = 0x06f0;
+const ARABIC_DECIMAL_SEPARATOR = /٫/g;
+const ARABIC_THOUSANDS_SEPARATORS = /[٬،]/g;
+// Whitespace (incl. NBSP / narrow NBSP) and the bidi marks an RTL keyboard or a paste can carry
+const AMOUNT_SPACING = /[\s‎‏؜]/g;
+// Digits, optionally grouped by commas in threes, with an optional decimal part.
+// Anything else ("12,5", "1.200,50") is ambiguous and is rejected, never guessed at.
+const AMOUNT_PATTERN = /^-?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/;
+
+/**
+ * Convert Arabic-Indic (U+0660–0669) and Extended Arabic-Indic (U+06F0–06F9)
+ * digits to ASCII, and the Arabic decimal / thousands separators to "." / ",".
+ */
+export function normalizeNumerals(value: string): string {
+  return value
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - ARABIC_INDIC_ZERO))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - EXTENDED_ARABIC_INDIC_ZERO))
+    .replace(ARABIC_DECIMAL_SEPARATOR, '.')
+    .replace(ARABIC_THOUSANDS_SEPARATORS, ',');
+}
+
+/**
+ * Parse a typed amount to minor units, or null when it is not a number we can
+ * read without guessing. Accepts Arabic-Indic digits, thousands separators and
+ * a currency symbol or code before or after the number.
+ */
+export function parseAmountInput(value: string): number | null {
+  const compact = normalizeNumerals(value).replace(AMOUNT_SPACING, '');
+  const bare = compact.replace(/^[^\d.-]+/, '').replace(/[^\d.]+$/, '');
+  if (!AMOUNT_PATTERN.test(bare)) return null;
+  return Math.round(parseFloat(bare.replace(/,/g, '')) * 100);
+}
+
 export function parseAmountToMinor(value: string): number {
-  const num = parseFloat(value.replace(/[^0-9.-]/g, ''));
-  if (isNaN(num)) return 0;
-  return Math.round(num * 100);
+  return parseAmountInput(value) ?? 0;
 }
 
 /**
  * Parse a currency input string to minor units (cents).
- * Handles various formats like "100", "100.50", "$100", etc.
+ * Handles various formats like "100", "100.50", "$100", etc.; 0 when unreadable.
  */
 export function parseCurrencyInput(value: string): number {
-  // Remove currency symbols and non-numeric characters except . and -
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return 0;
-  return Math.round(num * 100);
+  return parseAmountInput(value) ?? 0;
 }
 
 /**
@@ -74,7 +102,7 @@ export function parseCurrencyInput(value: string): number {
  */
 export function formatCurrencyInput(value: string): string {
   // Remove non-numeric characters except . and -
-  const cleaned = value.replace(/[^0-9.-]/g, '');
+  const cleaned = normalizeNumerals(value).replace(/[^0-9.-]/g, '');
 
   // Handle empty or invalid input
   if (!cleaned || cleaned === '-' || cleaned === '.') return cleaned;

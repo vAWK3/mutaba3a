@@ -4,6 +4,7 @@ import {
   formatAmount,
   formatAmountShort,
   parseAmountToMinor,
+  parseAmountInput,
   parseCurrencyInput,
   formatCurrencyInput,
   formatDate,
@@ -105,6 +106,57 @@ describe('utils', () => {
     it('should round fractional cents', () => {
       expect(parseAmountToMinor('100.999')).toBe(10100);
       expect(parseAmountToMinor('100.001')).toBe(10000);
+    });
+  });
+
+  describe('parseAmountInput', () => {
+    it.each([
+      ['1200', 120000],
+      ['1,200.50', 120050],
+      ['0.5', 50],
+      ['.5', 50],
+      ['12,345,678', 1234567800],
+      ['١٢٠٠', 120000],
+      ['١٬٢٠٠٫٥٠', 120050],
+      ['۱۲۰۰', 120000],
+      [' $ 1,200 ', 120000],
+      ['₪100', 10000],
+      ['100 USD', 10000],
+      ['‏١٠٠', 10000],
+      ['1 200', 120000],
+      ['-50', -5000],
+      ['100.999', 10100],
+    ])('parses %j as %i minor units', (input, expected) => {
+      expect(parseAmountInput(input)).toBe(expected);
+    });
+
+    it.each([
+      // ambiguous: a comma that is not a thousands separator is never guessed at
+      '12,5',
+      '1.200,50',
+      '1,2,3',
+      '1.2.3',
+      '12a5',
+      '',
+      '   ',
+      'abc',
+      '-',
+      '.',
+    ])('rejects %j', (input) => {
+      expect(parseAmountInput(input)).toBeNull();
+    });
+  });
+
+  describe('Arabic-Indic digits in the lenient parsers', () => {
+    it('parseAmountToMinor and parseCurrencyInput read Arabic-Indic digits', () => {
+      expect(parseAmountToMinor('١٢٠٠')).toBe(120000);
+      expect(parseCurrencyInput('١٬٢٠٠٫٥٠')).toBe(120050);
+    });
+
+    it('formatCurrencyInput converts Arabic-Indic digits and separators as you type', () => {
+      expect(formatCurrencyInput('١٢.٥')).toBe('12.5');
+      expect(formatCurrencyInput('١٢٫٥')).toBe('12.5');
+      expect(formatCurrencyInput('۱۲۰۰')).toBe('1200');
     });
   });
 
