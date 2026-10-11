@@ -4,7 +4,7 @@
 - **Epic:** MUT-1. The parent brief is `.claude/designs/mut-1-client-accounting-core.md` §4, Phase 3.
 - **Ticket:** https://barmajiyat.atlassian.net/browse/MUT-5
 - **Blocker:** MUT-19 was fixed in code on 2026-10-08 (`9c10354`, MUT-1 Phase 0). On main `b9f0bfc`, `IncomeDrawer.test.tsx` has 16 passing and 1 skipped. Jira still shows MUT-19 as To Do.
-- **Status:** draft. P1–P4 need Basel's approval.
+- **Status:** decisions approved 2026-10-11 (P1–P4 and eng review R1–R8; see the Decision ledger). Awaiting Basel's go-ahead to build.
 - **Test plan:** `.claude/designs/mut-5-income-fast-path-tests.md`
 
 ---
@@ -47,57 +47,67 @@ Acceptance criteria: as written on MUT-5 (nine checkboxes plus the RTL, i18n, ke
 
 **Locked by the ticket and the epic:**
 - No new drawer component.
-- No schema change and no migration.
+- No schema change and no migration. (A repository *code* change is approved under P2; there is still no Dexie version bump.)
 - Project is never required.
 - Every existing field stays reachable.
 
-### P1: where the Earned / Invoiced / Received segment goes
+### P1: the Earned / Invoiced / Received switch lives inside More details (approved: R5 = B)
 
-The ticket doesn't place it.
+- New entries default to Earned, or to the opener's `defaultStatus`. A duplicate defaults to Invoiced, as today.
+- The defaults line names the current status, so AC2's "defaults are visible" still holds: `Earned · USD · 11 Oct 2026 · Studio`.
+- The due date sits next to the switch and hides for Received, as today.
 
-- **Recommended:** keep it visible as the compact segment above the title. "I did X and got paid" (Received) is a first-class way to log work, and hiding it would turn the most common paid log into a detour.
-- **Alternatives:** move it inside More details, or show it as a chip in the defaults line.
+### P2: payment fields on edit; records own payment state (approved: R2 = A)
 
-### P2: payment fields on edit (A5)
-
-**Recommended:** fix A5 in MUT-5. The fix is a small pure write-rule with no migration. The rule, `buildIncomeWrite`:
+**Entries with no live `PaymentRecord`** (`buildIncomeWrite`, pure):
 
 | Transition | Write |
 |---|---|
 | create | as today |
 | paid → paid | keep the existing `paidAt`. `receivedAmountMinor` = the amount. |
-| unpaid → unpaid | omit `paidAt` and `receivedAmountMinor`, so both are preserved. An amount below what was already received is a field error (ADR-030 spirit). |
-| unpaid → paid | as today: `paidAt` = now, received = the amount. Backdating belongs to MUT-18. |
-| paid → unpaid | as today: clear both. The MUT-19 test covers it. |
+| unpaid → unpaid | `paidAt` and `receivedAmountMinor` **absent from the write** (not `undefined`: Dexie deletes `undefined` keys). |
+| unpaid → paid | `paidAt` = now, received = the amount. Backdating is MUT-18. |
+| paid → unpaid | clear both, as today (MUT-19 test). |
 
-TD-029 (write a `PaymentRecord` on create-as-received, plus a backfill) goes to its own ticket: it needs a Dexie upgrade, which MUT-5 scopes out.
+**Entries with live `PaymentRecord`s** (read with `usePaymentRecords(txId)`):
+- The status switch is read-only in edit, with a hint: "Payments are recorded for this entry. Manage them from the client page."
+- The write never carries `status`, `paidAt` or `receivedAmountMinor`.
+- An amount below the recorded total is a field error (`validation.amountBelowRecorded`, showing the total).
+- `transactionRepo.update` also rejects it (ADR-030; the drawer check only turns it into a translated message).
+- When `amountMinor` changes, `transactionRepo.update` runs `recalculateReceivedAmount` in the same Dexie transaction. An unpaid entry cut to exactly its recorded total becomes paid, and a paid entry raised above it becomes unpaid with the difference owed.
 
-**Alternatives:** fold all of TD-029 in, which contradicts the ticket's no-migration scope; or leave A5 to a separate bug.
+TD-029 (write a `PaymentRecord` on create-as-received, plus a backfill) moves to its own ticket.
 
-### P3: when More details opens in edit mode
+### P3: More details in edit mode (approved: R6 = A)
 
-AC7 says "expanded when any of those fields has a value". Date, currency and profile always have one, so read literally, More details would always be open in edit mode.
+`shouldExpandDetails` returns true when any of these holds:
+- a due date, project or notes is set;
+- the currency differs from the profile default;
+- the profile is missing.
 
-- **Recommended:** expand when any of these holds:
-  - due date, project or notes is set;
-  - the currency differs from the profile's default;
-  - the profile couldn't be resolved.
+Status is not part of the rule; the defaults line shows it.
 
-  Otherwise it stays collapsed, and the defaults line shows the date, currency and profile.
-- **Alternative:** always expanded in edit mode.
+### P4: required fields (approved: R7 = amount only)
 
-### P4: required fields
+- Amount only, as today. Title and client stay optional.
+- Basel asked how a Malafat client, matter or task could feed these fields. That is answered separately and proposed as a follow-up under MUT-25; it is not MUT-5 scope.
+- MUT-5 keeps the client field on `EntityTypeahead`, whose option source is swappable (hosted `ClientPicker` already feeds it Malafat-linked customers), and keeps the title as free text. A later suggestion source needs no rework.
 
-- **Recommended:** amount only, as today. Title and client stay optional, so no new required fields, and legacy entries without a title or client remain saveable.
-- **Alternatives:** require a title on create; or require a title and client on create.
+### P5: a client typed but not picked (approved: R8 = A)
+
+- `ClientTypeahead` picks an exact, case-insensitive name match on blur. This applies to every client picker.
+- An optional `onPendingTextChange` callback reports any remaining unpicked text. The income drawer then refuses to save with `validation.clientNotPicked` ("Pick a client from the list, or press Enter to create it").
 
 ### Engineering calls (no decision needed)
 
 - **E1, `EntityTypeahead` keyboard.**
   - Typing highlights the first option, and Enter on an open list picks it.
   - Enter on a closed list is no longer swallowed, so it falls through to form submission. ArrowDown still opens the list.
-  - The change is shared, so all five consumers get it: Client, Project and Vendor typeahead, plus hosted ClientPicker and ProjectPicker.
+  - Escape on an open list closes only the list (`stopPropagation`), so the drawer's document-level Escape no longer discards the form.
+  - The change is shared (approved: R4 = A), so all five consumers get it: Client, Project and Vendor typeahead, plus hosted ClientPicker and ProjectPicker.
+  - Preserved and pinned by tests: click to pick, create-new, ArrowDown opens, Tab closes.
   - The keyboard path is: title, Tab, amount, Tab, type the client, Enter to pick, Enter to save.
+  - It is proven end to end by a Playwright spec (approved: R3 = A), because user-event can't submit through a `form=`-linked button.
 - **E2, one amount parser.**
   - New `parseAmountInput(raw): number | null` in `src/lib/utils.ts`.
   - It normalizes first:
@@ -107,6 +117,7 @@ AC7 says "expanded when any of those fields has a value". Date, currency and pro
     - whitespace, NBSPs, bidi marks and currency symbols are stripped.
   - Grammar: `^-?(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$`. Rounding stays `Math.round(n*100)`, as today.
   - `parseAmountToMinor` and `parseCurrencyInput` become `parseAmountInput(v) ?? 0` wrappers. `formatCurrencyInput` normalizes digits first, so the payment drawer accepts Arabic digits for free.
+  - Review S1 verified that every other wrapper caller feeds `type="number"` input or pre-cleaned input, so no realistic input changes behaviour.
 - **E3, currency follows the profile.** In create mode, currency follows the selected profile's `defaultCurrency` (falling back to settings, then USD) until the user touches the currency field (RHF `dirtyFields`).
 - **E4, profile visibility.**
   - When the profile is unresolved (A7), the profile select moves into the fast path.
@@ -118,22 +129,33 @@ AC7 says "expanded when any of those fields has a value". Date, currency and pro
 ## 4. Proposed solution
 
 ```
-┌ New Income ──────────────────────────────────────┐
-│ [ Earned | Invoiced | Received ]          (P1)   │
-│ What did you do?  [ Logo redesign            ]   │ ← autofocus (create)
-│ Amount            [ USD │ 1,200              ]   │ ← text + inputMode=decimal, dir=ltr
-│ Client            [ Acme…                  ▾ ]   │ ← ClientTypeahead (prefilled from a client profile)
+┌ New Income ───────────────────────────────────────────────┐
+│ What did you do?  [ Logo redesign                     ]   │ ← autofocus (create)
+│ Amount            [ USD │ 1,200                       ]   │ ← text + inputMode=decimal, dir=ltr
+│ Client            [ Acme…                           ▾ ]   │ ← ClientTypeahead (prefilled from a client profile)
 │ Profile           [ select ]   ← only when unresolved (E4)
-│ ▸ More details · USD · 11 Oct 2026 · Studio      │ ← <button aria-expanded>, defaults visible
-│   ┊ Currency [USD | ILS | EUR]   Date [ … ]      │
-│   ┊ Due date (not for Received)                  │
-│   ┊ Project (only while the Projects area is on) │
-│   ┊ Notes                                        │
-│   ┊ Profile (when resolved)                      │
-└────────────────────────────── [Cancel] [Save] ───┘
+│ ▸ More details · Earned · USD · 11 Oct 2026 · Studio      │ ← <button aria-expanded>, defaults visible
+│   ┊ [ Earned | Invoiced | Received ]   (P1; read-only    │
+│   ┊                                     if records, P2)   │
+│   ┊ Due date (not for Received)                           │
+│   ┊ Currency [USD | ILS | EUR]   Date [ … ]               │
+│   ┊ Project (only while the Projects area is on)          │
+│   ┊ Notes                                                 │
+│   ┊ Profile (when resolved)                               │
+└─────────────────────────────────────── [Cancel] [Save] ───┘
 ```
 
 The profile name appears in the defaults line only when more than one profile exists. Locked-entry behaviour (MUT-13) is unchanged.
+
+**Edit flow (P2):**
+
+```
+open edit ─▶ usePaymentRecords(txId)
+              ├─ live records? ── yes ─▶ status read-only; write = {title, client, project, amount, currency, date, due, notes, profile}
+              │                          amount < Σrecords ─▶ field error (and repo rejects)
+              │                          amount changed ─▶ transactionRepo.update ─▶ recalculateReceivedAmount (same Dexie tx)
+              └─ no ─▶ buildIncomeWrite(form, existing)  (P2 table; omitted keys stay untouched)
+```
 
 ```
 IncomeDrawer (same file, restructured)
@@ -149,9 +171,13 @@ IncomeDrawer (same file, restructured)
 
 ```
 parseAmountInput(raw: string) -> number | null      // minor units; null = not a number we will guess at
-buildIncomeWrite(form, existing?) -> Partial<Transaction>   // P2 rules
-shouldExpandDetails(tx, profileDefaultCurrency) -> boolean  // P3
-resolveDefaultCurrency(profile?, settings?) -> Currency     // profile → settings → 'USD'
+buildIncomeWrite(form, existing?, { hasRecords }) -> Partial<Transaction>   // P2 rules; omits keys, never sets undefined
+shouldExpandDetails(tx, profileDefaultCurrency) -> boolean                // P3
+resolveDefaultCurrency(profile?, settings?) -> Currency                     // profile → settings → 'USD'
+
+transactionRepo.update(id, data)
+  + throws PaymentRecordError when data.amountMinor < Σ live records (ADR-030)
+  + when data.amountMinor changes and live records exist: recalculateReceivedAmount(id), same Dexie transaction
 ```
 
 | Input | Error key |
@@ -159,7 +185,8 @@ resolveDefaultCurrency(profile?, settings?) -> Currency     // profile → setti
 | empty | `validation.amountRequired` |
 | unparseable or ambiguous | `validation.amountInvalid` |
 | ≤ 0 | `validation.amountPositive` |
-| edit below the amount already received | `validation.amountBelowReceived` (shows the received amount) |
+| edit below the recorded payments | `validation.amountBelowRecorded` (shows the recorded total) |
+| client text typed but not picked | `validation.clientNotPicked` |
 | missing profile | `validation.profileRequired` (existing key) |
 
 All of these are field-level. Nothing throws. Save failures keep today's behaviour: logged, and the drawer stays open.
@@ -180,13 +207,16 @@ All of these are field-level. Nothing throws. Save failures keep today's behavio
 
 | Area | Change |
 |---|---|
-| `IncomeDrawer.tsx` | Field order, disclosure, defaults line, validation, write rules |
+| `IncomeDrawer.tsx` | Field order, disclosure, defaults line, validation, write rules, record-backed status lock |
 | `EntityTypeahead.tsx` | Keyboard (E1). Five consumers inherit it. |
+| `ClientTypeahead.tsx` | Exact match picked on blur; optional `onPendingTextChange` (P5) |
+| `src/db/repository.ts` | `transactionRepo.update`: rejects an amount below the recorded total, and recalculates on an amount change (P2) |
+| `e2e/income-fast-path.spec.ts` | New Playwright spec for the keyboard path (R3), run through a temporary config |
 | `src/lib/utils.ts` | Parser (E2). Wrapper callers: Expense, PartialPayment, PlanAssumption and Retainer drawers. Only previously silently-wrong inputs ("12,5", "1,2,3") change, to 0 or an error. |
 | `src/lib/incomeEntry.ts` | New pure module |
 | `src/index.css` | `.input-with-prefix`, disclosure row |
 | `en.json` / `ar.json` | New keys (§8) |
-| Repo, schema, sync | **No change** |
+| Schema, sync | **No change.** No Dexie version bump; drawer writes use the raw repo (`provider.ts:123`), not the op-log. |
 
 ## 8. i18n and RTL
 
@@ -195,9 +225,13 @@ New keys, in both locales:
 - `drawer.income.titlePlaceholder`
 - `drawer.income.moreDetails`
 - `drawer.income.lessDetails`
+- `drawer.income.paymentsRecordedHint`
 - `validation.amountInvalid`
 - `validation.amountPositive`
-- `validation.amountBelowReceived`
+- `validation.amountBelowRecorded`
+- `validation.clientNotPicked`
+
+A parity test asserts every new key exists in both locales (review T2).
 
 RTL handling:
 - The amount group is `dir="ltr"`, so the code-then-number order holds in Arabic. That matches the epic rule "amounts LTR inside RTL".
@@ -375,9 +409,9 @@ Pure helpers in new src/lib/incomeEntry.ts with incomeEntry.test.ts; 11 files to
 B) Smaller arrangement
 Helpers stay private inside IncomeDrawer.tsx and are covered only through component tests; 9 files. Every edge case needs a full render and a Dexie round trip.
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: A) Original arrangement (recommended), Basel, AskUserQuestion batch 1, 2026-10-11
+Accepted scope: new src/lib/incomeEntry.ts (pure buildIncomeWrite, shouldExpandDetails, resolveDefaultCurrency) with src/lib/__tests__/incomeEntry.test.ts; feature list unchanged
 History: —
 
 ### R2: payment fields on edit (P2, amended by A1)
@@ -406,9 +440,9 @@ P2 as drafted: keep paidAt and received when the status doesn't change; an amoun
 C) Separate bug ticket
 MUT-5 keeps today's write behaviour; file a bug for the date reset and the wiped received amount.
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: A) Records own payment state (recommended), Basel, AskUserQuestion batch 1, 2026-10-11
+Accepted scope: P2 rules for record-less entries (keys omitted, not undefined); for entries with live PaymentRecords: status segment read-only in edit with hint, amount < recorded total = field error (validation.amountBelowRecorded) and transactionRepo.update rejects it (ADR-030), amount change recalculates receivedAmountMinor/status via recalculateReceivedAmount inside transactionRepo.update; tests in src/db/__tests__/paymentRecords.test.ts + incomeEntry.test.ts + IncomeDrawer.test.tsx; TD-029 split to its own Jira ticket
 History: —
 
 ### R3: keyboard-path verification depth
@@ -432,9 +466,9 @@ Unit test pins the typeahead contract, plus e2e/income-fast-path.spec.ts drives 
 B) Unit contract + one walk
 Unit test pins the contract; I walk the path once in the browser pane and record it on the Jira ticket. Nothing fails later if it breaks.
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: A) Playwright spec (recommended), Basel, AskUserQuestion batch 1, 2026-10-11
+Accepted scope: EntityTypeahead unit contract (Enter on closed list not defaultPrevented) + e2e/income-fast-path.spec.ts run via a temporary Playwright config against the worktree dev server (port 5191)
 History: —
 
 ### R4: EntityTypeahead keyboard contract (regression)
@@ -461,7 +495,226 @@ Every picker gets: first match highlighted while typing, Enter on a closed list 
 B) Opt-in prop, income only
 The same behaviour behind a prop that only the income drawer sets. The other four forms keep today's keys, including Escape closing the whole drawer.
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: A) One contract, all pickers (recommended), Basel, AskUserQuestion batch 1, 2026-10-11
+Accepted scope: EntityTypeahead for all 5 consumers: highlight first option on input, Enter on closed list falls through (no preventDefault), Escape on open list stops propagation; preserved and pinned: click pick, create-new, ArrowDown opens, Tab closes; hosted ClientPicker/ProjectPicker/ExpenseDrawer + VendorTypeahead suites rerun
 History: —
+
+### R5: status segment placement (P1)
+Finding: the ticket leaves the Earned/Invoiced/Received segment unplaced (owner decision; reviewer: Claude).
+Plan baseline: P1 recommendation, visible above the title (unapproved).
+Runtime evidence: the segment is at `IncomeDrawer.tsx:330-355`, second in the form; it defaults to Earned (`:106`).
+
+Comparison grid:
+
+| Choice | Current | A | B | C |
+|---|---|---|---|---|
+| Segment location | 2nd in form | above title, always visible | inside More details | chip in the defaults line, opens a popover |
+
+Question D5:
+D5 — Where the Earned / Invoiced / Received switch goes (P1)
+Header: Status
+Options:
+A) Visible above the title (recommended)
+The three-way switch stays visible as a compact row above the title. Logging a paid job is one click; the fast path shows the switch plus three fields.
+B) Inside More details
+The switch moves into More details; new entries default to Earned. Logging a paid job means opening More details first.
+C) Chip in the defaults line
+A small "Earned ▾" chip in the defaults line that opens the switch. The fast path stays at exactly three fields.
+
+State: approved
+Actual answer: B) Inside More details, Basel, AskUserQuestion batch 2, 2026-10-11 (not the recommendation)
+Accepted scope: the status switch moves into More details; new entries default to Earned (or the opener's defaultStatus); the defaults line shows the current status with currency, date and profile so AC2's 'defaults visible' holds; status is not part of the P3 expansion rule
+History: —
+
+### R6: when More details opens in edit (P3)
+Finding: AC7 read literally (date, currency and profile always have values) means always open (owner decision; reviewer: Claude).
+Plan baseline: P3 recommendation (unapproved).
+Runtime evidence: n/a (new behaviour).
+
+Comparison grid:
+
+| Choice | Current | A | B |
+|---|---|---|---|
+| Edit mode, More details | n/a | open if due date/project/notes is set, the currency isn't the profile default, or there's no profile; otherwise collapsed, with date, currency and profile in the defaults line | always open |
+
+Question D6:
+D6 — When More details opens on an existing entry (P3)
+Header: Edit view
+Options:
+A) Only when it holds extra info (recommended)
+Open when a due date, project or notes is set, the currency isn't the profile default, or the profile is missing. Otherwise collapsed; the defaults line still shows date, currency and profile.
+B) Always open in edit
+Every existing entry opens with More details expanded, so all fields are in view.
+
+State: approved
+Actual answer: A) Only when it holds extra info (recommended), Basel, AskUserQuestion batch 2, 2026-10-11
+Accepted scope: shouldExpandDetails = dueDate || projectId || notes || currency !== profile default || !profileId; status excluded (shown in the defaults line)
+History: —
+
+### R7: required fields (P4)
+Finding: the ticket names only amount validation (owner decision; reviewer: Claude).
+Plan baseline: P4 recommendation, amount only (unapproved).
+Runtime evidence: the schema requires profile, amount, currency and date (`IncomeDrawer.tsx:39-50`); title and client are optional.
+
+Comparison grid:
+
+| Choice | Current | A | B | C |
+|---|---|---|---|---|
+| Required on new entries | amount (+ defaulted profile, currency, date) | same | + title | + title + client |
+| Required on edits | same | same | unchanged (legacy entries stay saveable) | unchanged |
+
+Question D7:
+D7 — Which fields are required on a new entry (P4)
+Header: Required
+Options:
+A) Amount only, as today (recommended)
+Title and client stay optional, exactly as now. Nothing new blocks a save.
+B) Amount and title
+New entries need a title (what you did). Existing entries without one stay saveable.
+C) Amount, title and client
+New entries need a title and a client. Income with no client becomes impossible to create; existing entries stay saveable.
+
+State: approved
+Actual answer: free text, Basel, AskUserQuestion batch 2, 2026-10-11: "amount only is required, client can be chosen from list of malafat clients for example (think of this scenario), and title can be also as 'matter' or 'task' from whatever we got from malafat? how can we connect those?"
+Accepted scope: A) amount only, as today (title and client optional). The Malafat client/matter/task linking question is answered in chat and proposed as a follow-up ticket under MUT-25; it is NOT MUT-5 scope (local profiles have no Malafat link in v1, hosted income is read-only by ADR-037). MUT-5 keeps the client field on EntityTypeahead (option source swappable, as hosted ClientPicker proves) and the title free text, so a later suggestion source needs no rework
+History: —
+
+### R8: client typed but not picked
+Finding: Q1 [P2] (confidence 9/10), ClientTypeahead.tsx:84-112 (reviewer: Claude).
+Plan baseline: not in the plan (new finding).
+Runtime evidence: `inputValue` is local state; `onChange` fires only on a pick or a clear, so typed text is dropped on Save.
+
+Comparison grid:
+
+| Choice | Current | A | B | C |
+|---|---|---|---|---|
+| Exact name typed, not picked | dropped | picked on blur (all client pickers) | picked on blur (all client pickers) | dropped |
+| Other text, not picked | dropped silently | income drawer field error on Save | dropped silently | dropped silently |
+| Follow-up | — | none | Jira ticket for the remainder | Jira ticket |
+
+Question D8:
+D8 — What happens to a client name typed but never picked
+Header: Typed client
+Options:
+A) Auto-pick exact, else error (recommended)
+An exact (case-insensitive) name match is picked when you leave the field, in every client picker. Any other unpicked text makes Save show "Pick a client from the list, or press Enter to create it".
+B) Auto-pick exact match only
+An exact name match is picked when you leave the field; any other unpicked text is still dropped silently. A ticket covers the rest.
+C) Leave as is
+Unpicked text keeps being dropped silently; file a ticket.
+
+State: approved
+Actual answer: A) Auto-pick exact, else error (recommended), Basel, AskUserQuestion batch 2, 2026-10-11
+Accepted scope: ClientTypeahead picks an exact case-insensitive name match on blur (all client pickers); an optional onPendingTextChange callback lets the income drawer show validation.clientNotPicked on Save when unpicked text remains; tests in ClientTypeahead/EntityTypeahead + IncomeDrawer
+History: —
+
+Approval readiness: PASS. Checked R1–R8 against the actual answers in AskUserQuestion batch 1 (R1–R4) and batch 2 (R5–R8), 2026-10-11.
+
+---
+
+## Implementation Tasks
+
+Synthesized from this review's findings. Each task derives from a specific finding above. Tests are written first (TDD).
+
+- [ ] **T1 (P1, human: ~3h / CC: ~10 min).** `utils`: add `parseAmountInput` with digit and separator normalization; route the wrappers and `formatCurrencyInput` through it.
+  - Surfaced by: A1–A3, S1
+  - Files: `src/lib/utils.ts`, `src/lib/__tests__/utils.test.ts`
+  - Verify: `npx vitest run src/lib/__tests__/utils.test.ts`
+- [ ] **T2 (P1, human: ~4h / CC: ~15 min).** `incomeEntry`: add the pure `buildIncomeWrite` (omits keys), `shouldExpandDetails` and `resolveDefaultCurrency`.
+  - Surfaced by: P2/R2, P3/R6, A2, E3
+  - Files: `src/lib/incomeEntry.ts`, `src/lib/__tests__/incomeEntry.test.ts`
+  - Verify: `npx vitest run src/lib/__tests__/incomeEntry.test.ts`
+- [ ] **T3 (P1, human: ~4h / CC: ~15 min).** Repository: `transactionRepo.update` rejects an amount below the recorded total and recalculates on an amount change.
+  - Surfaced by: A1 / R2
+  - Files: `src/db/repository.ts`, `src/db/__tests__/paymentRecords.test.ts`
+  - Verify: `npx vitest run src/db`
+- [ ] **T4 (P1, human: ~3h / CC: ~15 min).** Typeahead: highlight the first match, let Enter through on a closed list, keep Escape inside the list; pin the preserved behaviours.
+  - Surfaced by: A4, Q2 / R4
+  - Files: `src/components/ui/EntityTypeahead.tsx`, `src/components/ui/__tests__/EntityTypeahead.test.tsx`
+  - Verify: `npx vitest run src/components/ui src/hosted/components`
+- [ ] **T5 (P2, human: ~2h / CC: ~10 min).** `ClientTypeahead`: pick an exact match on blur; add the optional `onPendingTextChange`.
+  - Surfaced by: Q1 / R8
+  - Files: `src/components/ui/ClientTypeahead.tsx`, plus tests
+  - Verify: `npx vitest run src/components/ui`
+- [ ] **T6 (P1, human: ~1.5 days / CC: ~45 min).** `IncomeDrawer`: the fast path (title autofocus, amount with prefix, client), More details with the defaults line (status, currency, date, profile), the profile surfacing when unresolved, auto-expand on an invalid hidden field, i18n-keyed errors, the record-backed status lock, EUR. Un-skip the edit test.
+  - Surfaced by: P1–P5, A5–A7, A9, A10, E4, E7
+  - Files: `src/components/drawers/IncomeDrawer.tsx`, `src/components/__tests__/IncomeDrawer.test.tsx`
+  - Verify: `npx vitest run src/components/__tests__/IncomeDrawer.test.tsx`
+- [ ] **T7 (P2, human: ~2h / CC: ~10 min).** Styles and i18n: the `.input-with-prefix` and disclosure styles (logical properties); new keys in both locales; a parity test.
+  - Surfaced by: A8, T2, T3
+  - Files: `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`, a parity test
+  - Verify: `npx vitest run` and the manual RTL pass
+- [ ] **T8 (P2, human: ~3h / CC: ~20 min).** E2E: `e2e/income-fast-path.spec.ts` plus a temporary Playwright config for port 5191.
+  - Surfaced by: T1 / R3
+  - Files: `e2e/income-fast-path.spec.ts`
+  - Verify: `npx playwright test -c <temp config> e2e/income-fast-path.spec.ts`
+- [ ] **T9 (P2, human: ~2h / CC: ~15 min).** Knowledge files:
+  - CHANGELOG
+  - COMPONENT_REGISTRY (an IncomeDrawer entry, the EntityTypeahead keyboard contract)
+  - PATTERNS ("records own payment state")
+  - DECISIONS: a new ADR for the edit rule. Take the next `^## ADR` number on main at build time.
+  - TECH_DEBT: TD-029 now points at its ticket
+  - TEST_PLAN
+
+  Surfaced by: R2, R4, the CLAUDE.md protocol.
+- [ ] **T10 (P3, CC: ~5 min).** Jira: open the TD-029 ticket (a record on create-as-received, plus a backfill); propose the Malafat client/matter linking intake under MUT-25.
+  - Surfaced by: R2, R7
+
+## NOT in scope
+
+- **TD-029 write side** (a `PaymentRecord` on create-as-received, plus a backfill). It needs a Dexie upgrade; it gets its own ticket.
+- **Backdating the payment date when marking Received in the drawer.** That's MUT-18.
+- **Picking Malafat clients, matters or tasks in the drawer.** It's cross-repo, and local profiles have no Malafat link in v1 (ADR-013), while hosted income is read-only (ADR-037). It's proposed under MUT-25.
+- **Profile-aware `+ Add` menus.** That's MUT-57.
+- **The expense drawer layout.** It's a separate optional area (the ticket's scope-out).
+- **`enabledCurrencies` in the currency select.** That setting is read only by the Settings page today, so wiring it into drawers is separate work.
+
+## Worktree parallelization strategy
+
+| Step | Modules touched | Depends on |
+|---|---|---|
+| T1 parser | `src/lib/` | — |
+| T2 helpers | `src/lib/` | T1 |
+| T3 repo | `src/db/` | — |
+| T4, T5 typeahead | `src/components/ui/` | — |
+| T6 drawer | `src/components/drawers/` | T1, T2, T3, T4, T5 |
+| T7 css/i18n | `src/index.css`, `src/lib/i18n/` | — (keys are used by T6) |
+| T8 e2e | `e2e/` | T6 |
+
+Lanes A (T1→T2), B (T3) and C (T4→T5) are independent. Even so, the owner's convention is one worktree per epic, so this runs **sequentially in `.claude/worktrees/mut-1-client-core`**: T1 → T2 → T3 → T4 → T5 → T7 → T6 → T8 → T9.
+
+## Completion summary
+
+- Step 0, Scope Challenge: scope accepted as-is (R1 = original arrangement); 1 finding (S1, factual correction)
+- Architecture Review: 2 issues found (A1 → R2 approved; A2 factual correction)
+- Code Quality Review: 2 issues found (Q1 → R8 approved; Q2 folded into R4)
+- Test Review: diagram produced, 3 gaps identified (T1 → R3 approved; T2 and T3 added as required proof)
+- Performance Review: 0 issues found
+- NOT in scope: written
+- What already exists: written (Scope Challenge)
+- TODOS.md updates: 0 items. The project has no TODOS.md; 2 follow-up Jira tickets are proposed instead (T10).
+- Failure modes: 0 critical gaps flagged
+- Unresolved decisions: 0 in this review
+- Outside voice: codex, unavailable (CLI not installed; the native fallback needs TaskOutput, absent in this session)
+- Parallelization: 3 independent lanes, run sequentially in 1 worktree by owner convention
+- Lake Score: 0/4 answers picked a 10/10 option. The highest offered was 9/10, and all 4 scored answers chose the most complete option.
+
+## Suppressed findings (appendix)
+
+- **(confidence 4/10)** `captureUpdateOps` (`synced-repository.ts:52`) emits ops for `undefined` values. Drawer writes don't pass through it (they use the raw repo), so it has no MUT-5 impact. It is relevant to MUT-55/MUT-46 if sync ever routes transaction updates.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Outside Review | codex via `/plan-eng-review` | Independent 2nd opinion | 1 | unavailable | codex CLI not installed; no native fallback (TaskOutput absent) |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 7 issues, 0 critical gaps (all resolved by approved decisions R1–R8) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **OUTSIDE COVERAGE:** codex, plan-review phase, unavailable. There is no outside coverage, and this is not counted as clean.
+- **VERDICT:** no review is CLEAR. Eng Review closed with issues mapped to approved work (status issues_open, 0 unresolved, 0 critical gaps). The UI layout changed materially (P1 = status inside More details), so a design review is optional before the build.
+
+NO UNRESOLVED DECISIONS
