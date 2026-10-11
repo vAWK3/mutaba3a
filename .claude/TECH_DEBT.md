@@ -619,9 +619,12 @@ they test the menu element itself) and keep only its positioning logic.
 ---
 
 ### TD-032: The two `+ Add` menus share their actions but not their click behaviour
-**Status**: Open
+**Status**: Open (ticketed as MUT-57)
 **Priority**: Low
 **Introduced**: MUT-15, 2026-10-11 (pre-existing; out of the ticket's scope)
+**Decision** (Basel, 2026-10-11): both menus open the drawer **in place** (no
+navigation to the list) and all four actions are profile-aware in both.
+MUT-57 moves them onto one set of handlers.
 **Impact**: both menus offer the same actions in the same order
 (`visibleAddMenuActions`), but the sidebar **New** menu opens the drawer and
 navigates to the list (`/income`, `/clients`, `/expenses`, `/projects`) and
@@ -637,7 +640,28 @@ the handlers next to `visibleAddMenuActions` so both menus call the same one.
 
 ---
 
-### TD-033: The money-event read side has no consumer after MUT-8
+### TD-033: Data Tools still shows some English inside Arabic copy
+**Status**: Open
+**Priority**: Low
+**Introduced**: found 2026-10-11 while translating the Data Tools messages
+**Impact**: A failed restore toasts `settings.data.importFailed` with the raw
+`Error.message` as `{error}`: `restoreFromBackup` throws English developer
+strings ("Invalid backup file: missing version or tables", "Backup is from a
+newer version…"), and a malformed file gives the browser's `JSON.parse`
+message, so Arabic reads "فشل الاستيراد: Invalid backup file…". Separately,
+`settings.exportReceiptsDone` / `exportReceiptsDesc` have one plural form:
+English says "1 receipts exported", and the Arabic "{count} إيصالًا" /
+"{count} ملف إيصال" is only right for 11+.
+
+**Remediation**: have `restoreFromBackup` throw typed errors (invalid file,
+newer version with `{backup}` / `{app}`) that the section maps to keys; split
+the receipts strings into singular/plural keys with "label: {count}" Arabic.
+
+**Effort**: Small
+
+---
+
+### TD-034: The money-event read side has no consumer after MUT-8
 **Status**: Open (ticketed: MUT-58)
 **Priority**: Low
 **Introduced**: MUT-8, 2026-10-11 (ADR-036 §3)

@@ -162,6 +162,18 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ---
 
+### DataToolsSection
+**Location**: `src/pages/settings/DataToolsSection.tsx`
+**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch.
+
+```tsx
+<DataToolsSection />   // rendered by SettingsPage below the main settings
+```
+
+Tests: `src/pages/settings/__tests__/DataToolsSection.test.tsx`.
+
+---
+
 ### ClientRetainersCard
 **Location**: `src/components/clients/ClientRetainersCard.tsx`
 **Purpose**: Retainer status for one client, below Payments on the client profile (MUT-13; the Summary tab it first lived in is gone with MUT-3): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
