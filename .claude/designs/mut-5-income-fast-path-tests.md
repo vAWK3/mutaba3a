@@ -29,7 +29,7 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`. TDD: the tests in each block
 - Every existing `parseCurrencyInput` and `parseAmountToMinor` case still passes.
 - `formatCurrencyInput("١٢.٥")` → `"12.5"`.
 
-## Unit: `src/lib/__tests__/incomeEntry.test.ts` (new; D2, D3, E3)
+## Unit: `src/lib/__tests__/incomeEntry.test.ts` (new; P2, P3, E3)
 
 ### `buildIncomeWrite`
 
@@ -85,7 +85,7 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`. TDD: the tests in each block
 | AC4 | `defaultClientId` → the client name is shown in the client field. With no `defaultClientId` the field is empty. |
 | AC5 | No project → saves with `projectId` undefined. |
 | AC6 | Title with no amount → the `validation.amountRequired` text, no transaction written, nothing thrown. "12,5" → `amountInvalid`. "0" → `amountPositive`. |
-| AC7 | Edit with notes → More details expanded. Edit with only the core fields and the profile's default currency → collapsed (D3). Un-skip and fix "should load existing transaction in edit mode". |
+| AC7 | Edit with notes → More details expanded. Edit with only the core fields and the profile's default currency → collapsed (P3). Un-skip and fix "should load existing transaction in edit mode". |
 | AC8 | Amount "١٬٢٠٠" saves `amountMinor` 120000. |
 | AC9 | The three MUT-19 tests stay green. They may only change to open More details first; their assertions are not weakened. |
 | (E4) | **All Profiles mode** with no `defaultProfileId` and two profiles: the profile select is in the fast path, and saving without it shows `validation.profileRequired`. |
@@ -100,7 +100,7 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`. TDD: the tests in each block
 - Type the client, Enter picks it, Enter saves.
 - **Risk:** `user-event` may not perform implicit submission when the submit button sits outside the `<form>` (via the `form=` attribute; the Drawer footer). If it can't, the unit test asserts the E1 contract (Enter not prevented on a closed list), and the full path moves to a Playwright spec (`e2e/`, with a temporary config pointed at the worktree dev server).
 
-### Payment fields on edit (D2)
+### Payment fields on edit (P2)
 
 - Edit a paid entry's title → `paidAt` unchanged at the repository level.
 - Edit a part-paid unpaid entry's title (with a `PaymentRecord`) → `receivedAmountMinor` unchanged.
