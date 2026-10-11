@@ -28,6 +28,66 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-5: the income entry is the work record
+
+**Scope:**
+- `src/components/drawers/IncomeDrawer.tsx` (restructured, same component)
+- `src/lib/incomeEntry.ts` (new: `buildIncomeCreate`, `buildIncomeUpdate`, `shouldExpandDetails`, `isBelowRecordedTotal`, `recordedTotalMinor`, `resolveDefaultCurrency`)
+- `src/lib/utils.ts` (`parseAmountInput`, `normalizeNumerals`)
+- `src/db/repository.ts` (`transactionRepo.update`)
+- `src/components/ui/EntityTypeahead.tsx`, `src/components/ui/ClientTypeahead.tsx`
+- `src/hooks/useQueries.ts`, `src/hooks/useIncomeQueries.ts`
+- `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`
+- `e2e/income-fast-path.spec.ts` (new)
+- Brief: `.claude/designs/mut-5-income-fast-path.md` (decisions P1–P5, eng-review ledger R1–R8); ADR-038, TD-029 update, TD-046
+
+### Added
+- **Fast path.** Title ("What did you do?", autofocused), amount and client are the only fields up front.
+- **More details.** Status, due date, currency, date, project, notes and the profile sit behind a toggle. Its summary line names the defaults in use: status · currency · date · profile when there are several.
+- **Defaults.** A new entry starts in its profile's `defaultCurrency` and follows a profile change until the user picks a currency. EUR is offered.
+- **Profile.** It is asked up front only when none can be resolved. An invalid field inside More details reopens it.
+- **Edit view.** On edit, More details opens only when the entry has a due date, project, notes, a non-default currency or no profile.
+- **Amount input.** Arabic-Indic and Extended Arabic-Indic digits and the Arabic separators are accepted, through `parseAmountInput`. An ambiguous amount ("12,5", "1.200,50") is a field error, never a guess.
+- **Typed client.** A client name typed but not picked: an exact match is picked on blur, and any other text blocks the save with a message.
+
+### Changed
+- **One keyboard model in every typeahead** (client, project and vendor; hosted client and project pickers):
+  - typing highlights the first match;
+  - Enter on a closed list submits the surrounding form;
+  - Escape closes only the list.
+- **The lenient parsers** (`parseAmountToMinor`, `parseCurrencyInput`) wrap `parseAmountInput`. `formatCurrencyInput` normalizes numerals first, so the payment drawer accepts Arabic digits.
+- **One transaction invalidation list.** `invalidateTransactionQueries` is now exported and covers the `income`, `receivables`, `incomeOverviewTotals` and `incomeAttentionReceivables` keys too; `useIncomeQueries` reuses it.
+
+### Fixed
+- **Editing reset payment data.** Editing a paid entry reset its payment date to today, and editing a part-paid entry wiped what had been received. The drawer now leaves payment fields absent from the write unless the status really changes.
+- **Record-backed entries** (paid through Mark paid / Record payment): their payment state belongs to their records (ADR-038).
+  - The status is read-only in the drawer.
+  - An amount below the recorded total is refused, in the drawer and in `transactionRepo.update`.
+  - An amount change recalculates received and status.
+- **Keyboard path.** Enter after picking a client re-opened the list instead of saving. Pressing Enter twice right after creating a new client now saves with that client: the drawer holds the save until the client exists.
+- **Escape** in an open client list also closed the drawer and discarded the form.
+- **No refresh after save.** A save from the income drawer didn't refresh the client profile or `/income` until you navigated away and back. This was pre-existing and was folded in at the owner's request.
+- **Amount input type.** The amount input was `type="number"`, which rejected "1,200" and Arabic digits.
+- **The payment drawer's currency prefix** (`.input-with-prefix`) had no CSS. It now renders as a joined prefix.
+- **Arabic layout.** The amount stays left-to-right in Arabic: `:lang(ar) { direction: rtl }` in theme.css beat the markup's `dir="ltr"`.
+- **Defaults line in Arabic.** Its parts no longer reorder: each one is a `<bdi>`.
+
+### Technical
+- **TDD:**
+  - 41 drawer tests; 35 of them fail against the old drawer;
+  - 27 `incomeEntry` tests;
+  - `parseAmountInput` tables;
+  - 6 `transactionRepo.update` tests;
+  - 9 typeahead keyboard-contract tests;
+  - 4 `ClientTypeahead` tests;
+  - an i18n parity test;
+  - 2 hook tests proving a drawer save refreshes `useIncome`/`useReceivables`.
+- **E2E:** a Playwright spec for the keyboard-only path and Escape. It passed 10/10 with `--repeat-each=5` against the worktree dev server; the committed config pins port 5173 (TD-004).
+- **Test count:** the skipped edit-mode drawer test is back.
+- **Follow-ups:** MUT-60 (TD-029 write side + backfill), MUT-61 (Malafat client/matter intake), MUT-62 (title column in `/income`).
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-45: serve the hosted portal
 
 **Scope:**

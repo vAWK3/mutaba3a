@@ -1071,3 +1071,33 @@ Verified against the real built artifact, not only the fixture: built `dist-host
 **Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.
 
 **Baseline after MUT-39 (2026-10-11)**: server `npm test` 924 passed, 9 skipped; `npm run test:db` 978 passed (after re-migrating the local test database).
+
+### MUT-5 — the income entry is the work record (2026-10-11)
+
+Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5-income-fast-path-tests.md`. Written test-first, apart from the drawer. Its 41 tests were written after the restructure, then run against the old drawer: 35 failed there and 6, the preserved behaviours, passed.
+
+| File | Type | Tests | Covers |
+|---|---|---|---|
+| `src/lib/__tests__/utils.test.ts` (extended) | Unit | +27 | `parseAmountInput`: ASCII, grouped thousands, decimals, Arabic-Indic and Extended digits, Arabic separators, currency symbol/code, bidi marks, NBSP. Ambiguous input → null. Arabic digits in the lenient wrappers and `formatCurrencyInput` |
+| `src/lib/__tests__/incomeEntry.test.ts` (new) | Unit | 27 | `buildIncomeCreate`/`buildIncomeUpdate` for every status transition, with keys asserted absent rather than undefined, and record-backed edits writing no payment fields; `isBelowRecordedTotal`; `shouldExpandDetails`; `resolveDefaultCurrency` |
+| `src/db/__tests__/paymentRecords.test.ts` (extended) | Integration (Dexie) | +6 | `transactionRepo.update`: an amount below the recorded total is rejected and nothing is written; a cut to the total → paid; raised → unpaid with the difference; an unchanged amount → no recalc; no records → no guard; deleted records ignored |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` (extended) | Component | +9 | Keyboard contract: highlight on typing, clear drops it, Enter picks the first match or a lone create option, Enter on a closed or empty list submits the form, Escape stays inside the list, Tab closes without picking |
+| `src/components/ui/__tests__/ClientTypeahead.test.tsx` (extended) | Component | +4 | Exact name picked on blur; a partial name is reported as pending; a create pick counts as picked at once, with `onCreatingChange` true → false; pending is cleared after a pick and after clearing |
+| `src/lib/i18n/__tests__/incomeDrawerKeys.test.ts` (new) | Unit | 3 | The ten new keys exist and aren't empty in en and ar; `{amount}` survives in both |
+| `src/hooks/__tests__/useQueries.test.tsx` (extended) | Hook (real Dexie) | +2 | A drawer create/update refreshes `useIncome` and `useReceivables` |
+| `src/components/__tests__/IncomeDrawer.test.tsx` (rewritten) | Component | 41 | Every MUT-5 criterion: fast path; More details contents; the 3-field save with defaults; the defaults line; profile currency and following it; EUR; LTR amount group; client prefill or none; amount required/invalid/zero/Arabic digits; unpicked client; Escape; focus order; status inside More details; reopening on an invalid hidden field; profile up front when unresolved; edit load and expansion rules; paid → invoiced; lock regression; payment data on edit, both record-less and record-backed; the MUT-16 project switch |
+| `e2e/income-fast-path.spec.ts` (new) | E2E (Playwright, Chromium) | 2 | title, Tab, amount, Tab, new client, Enter, Enter saves (the entry shows on the client page); Escape keeps the drawer. Passed 10/10 and 6/6 with `--repeat-each` against the worktree dev server |
+
+**Manual (in-app browser, port 5191, English and Arabic):**
+- keyboard-only create, which found the Enter-Enter race (fixed);
+- the RTL amount group and the defaults line, which found the `:lang(ar)` override and a bidi reorder (both fixed);
+- payment-drawer prefix styling, with Arabic digits accepted;
+- a record-backed edit: status read-only, the hint, and the below-recorded error in Arabic;
+- the client page refreshing after a save.
+
+**Gate (2026-10-11):**
+- `npm run lint`: 0 errors, 16 warnings (main has 20).
+- `npx tsc -b`: clean.
+- `npx vitest run`: 162 files, 2,642 passed, 4 skipped. The baseline was 2,539 passed and 5 skipped; the edit-mode drawer test is un-skipped.
+- `npm run test:tz`: only the 3 TD-014 failures, identical on main.
+- `npm run build`: OK. Its `@media` warning comes from the existing `.print-header` rule.

@@ -261,6 +261,30 @@ Browser pass on the worktree dev server (port 5191), in English and Arabic:
 
 ---
 
+## Build notes (`/eng-build`, 2026-10-11)
+
+The build ran on `feature/mut-1-client-core`, from `0972362` to the final commit. These are the differences from the plan, and why.
+
+- **A7 was partly wrong.** "All Profiles" mode no longer exists: `useActiveProfile` is strict (`isAllProfiles = false`) and always resolves the default or first profile. The profile is therefore unresolved only when no profile exists. E4's fast-path profile select stays as that safety net, and its test uses the no-profile case.
+- **`buildIncomeWrite` became `buildIncomeCreate` and `buildIncomeUpdate`.** Each returns a typed write, with no `delete` cast. The rules are unchanged.
+- **The currency-follows-profile rule tracks an explicit pick,** not RHF dirtiness. Re-picking the mount-time default isn't dirty, so the old check could still override it.
+- **A client typed but not picked** is a `clientDraft` form field validated on its own. Zod 4 changed when object-level refinements run.
+- **A race found by the Playwright spec.** Enter-Enter right after "create Acme Studio" submitted while the client was still saving. The typed name counted as unpicked, the save was refused, and the error vanished a moment later. Fix:
+  - `ClientTypeahead` treats a picked label, including one being created, as picked;
+  - it reports `onCreatingChange`;
+  - the drawer holds a save that arrives meanwhile and runs it once the client exists.
+- **Two problems found in the Arabic browser pass:**
+  - theme.css `:lang(ar) { direction: rtl }` beat `dir="ltr"`. The prefix group now sets `direction: ltr` from selectors that out-rank it.
+  - The defaults line reordered under bidi. Each part is now a `<bdi>`.
+- **Folded in at Basel's request (scope guard).** A save from the drawer didn't refresh the client profile or `/income`. This was pre-existing: their `income`/`receivables` keys were missing from `useQueries`' invalidation. `invalidateTransactionQueries` is now exported, covers both key families, and is reused by `useIncomeQueries`.
+- **Follow-ups filed:**
+  - **MUT-60:** TD-029 write side, plus a backfill.
+  - **MUT-61:** the Malafat client/matter/task intake.
+  - **MUT-62:** a title column in the `/income` ledger, which has none. Basel chose a follow-up.
+- **New debt:** TD-046. Cutting an amount to the recorded total stamps `paidAt` with today, not the last payment's date.
+
+---
+
 ## Eng review (`/plan-eng-review`, 2026-10-11)
 
 - **Target:** this brief plus `mut-5-income-fast-path-tests.md`, on `feature/mut-1-client-core` at `1f9ae7b`.

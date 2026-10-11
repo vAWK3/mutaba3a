@@ -1559,3 +1559,33 @@ checking whether the file existed. A stale/rotated asset filename (after a
 deploy) fell through to the SPA shell but kept the immutable header — a
 browser or CDN would then cache that broken response for a year. The fix
 above only sets the header when `onFound` actually fired for that request.
+
+---
+
+## App patterns added by MUT-5 (2026-10-11)
+
+### Payment records own payment state (ADR-038)
+An income entry's `status`, `paidAt` and `receivedAmountMinor` are derived from its live `PaymentRecord`s whenever it has any (`recalculateReceivedAmount`).
+- A form never writes those three fields for such an entry, and shows the status read-only.
+- A repository method that changes something they depend on (`transactionRepo.update` changing `amountMinor`) re-derives them inside the same Dexie transaction, and rejects a change that would make the records an overpayment (ADR-030).
+- The UI pre-checks only to show a translated field error.
+
+### Partial updates leave keys out; they never set them to `undefined`
+Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, and `captureUpdateOps` would turn it into an op too. A write that should leave a field alone must not contain the key. Build the change object conditionally (`buildIncomeUpdate`) and assert absence in tests with `expect('paidAt' in write).toBe(false)`, not `toBeUndefined()`.
+
+### A drawer's Enter-to-save is proven in a browser, not with user-event
+`Drawer` renders Save in its footer, outside the `<form>`, linked by `form="…"`.
+- Browsers submit implicitly through that button.
+- `@testing-library/user-event` (14.6.1, `keypress.js`) only looks for submit buttons inside the form, so a unit test can't press Enter to save.
+- Unit-test the contract instead: Enter is not `defaultPrevented`.
+- Cover the real path with a Playwright spec (`e2e/income-fast-path.spec.ts`).
+
+### Amounts stay left-to-right inside Arabic; set it in CSS, not only with `dir`
+theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks a `dir="ltr"` attribute. An LTR island (an amount with its currency prefix) needs `direction: ltr` from a selector that out-ranks `:lang(ar)` (`div.input-with-prefix`, `.input-with-prefix > .input`; see also `.num-input`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`.
+
+### A save that arrives during an async pick waits for it
+When a picker's choice needs an async write first (creating a client), the picker reports it (`onCreatingChange`). The form holds a submit that arrives meanwhile and runs it once the pick has settled. It neither drops the Enter nor saves without the choice.
+
+### One invalidation list per entity family
+Hooks for one table that live in two modules (`useQueries` and `useIncomeQueries`) share one exported invalidation function (`invalidateTransactionQueries`) covering both modules' keys. Two hand-copied lists drift, and a save from one module then never refreshes screens built on the other.
+

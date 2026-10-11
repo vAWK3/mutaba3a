@@ -1717,3 +1717,48 @@ holds).
   - **Terraform is unchanged.** No new resources, no new variables; `terraform plan` is a no-op for this ticket.
 - *Why*: the domain choice added a reverse proxy and the exact `PORTAL_ORIGIN`/`TRUSTED_PROXY_HOPS` complexity §9 itself flags as conditional on one existing, for no acceptance criterion that needed it. The CSP gap was a concrete, named risk from the MUT-44 amendment above, not a hypothetical.
 - *What it replaces*: §9's "Domain" bullet is resolved (not deferred) in favor of no domain; its "CSP" bullet gains the `connect-src` addition. The ticket text's own citation of "ADR-033" for this architecture is stale — ADR-033 on `main` is an unrelated decision (owed-now definition); this ADR-037 is the correct reference.
+
+---
+
+## ADR-038: Payment Records Own an Entry's Payment State; an Edit Never Rewrites It
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-5 (epic MUT-1). Brief: `.claude/designs/mut-5-income-fast-path.md`, decision P2. Approved by Basel on 2026-10-11 as eng-review choice R2 = A.
+
+Before MUT-5, every income-drawer save rewrote the payment fields:
+- a paid entry was sent `paidAt: now`, so retitling it moved its payment date to today (Home's Recent payments, the client's Last payment);
+- an unpaid entry was sent `receivedAmountMinor: undefined`, which Dexie treats as a delete, so retitling a part-paid entry erased what had been received;
+- `transactionRepo.update` wrote whatever it was given and never recalculated.
+
+Mark paid, Record payment and partial payments all write `PaymentRecord`s, so most paid income is record-backed.
+
+**Decision**:
+1. **An entry with live payment records gets its `status`, `paidAt` and `receivedAmountMinor` from them** (`recalculateReceivedAmount`, ADR-030).
+   - The income drawer never writes those three fields for such an entry.
+   - Its status switch is read-only, with a hint to manage the payments from the client page.
+2. **`transactionRepo.update` enforces this when the amount changes.** When `amountMinor` really changes, it reads the live records in one Dexie transaction:
+   - a new amount below their total is rejected with `PaymentRecordError` (ADR-030: no overpayment);
+   - otherwise it writes, then recalculates. An unpaid entry cut to exactly the recorded total becomes paid; a paid entry raised above it is owed the difference.
+
+   Edits that don't change the amount take the old path, with no extra read.
+3. **For an entry without records, the drawer owns payment state, but only on a real status change** (`buildIncomeUpdate` in `src/lib/incomeEntry.ts`):
+
+   | Transition | Write |
+   |---|---|
+   | paid → paid | keeps the original `paidAt` |
+   | unpaid → unpaid | leaves `paidAt` and `receivedAmountMinor` **absent** from the write (never `undefined`) |
+   | unpaid → paid | paid now, in full |
+   | paid → unpaid | clears both |
+
+**Consequences**: editing can no longer move a payment date or erase a received amount, and an amount edit can't leave status disagreeing with the records. The drawer check for a too-low amount exists only to show a translated field message; the repository stays the source of truth.
+
+Two gaps remain, both ticketed:
+- An entry saved as Received in the drawer still has no record (TD-029 → MUT-60). Until it does, it follows rule 3, not rule 1.
+- Cutting an amount to the recorded total stamps `paidAt` with today, not the last payment's date (TD-046).
+
+**Alternatives Considered**:
+- Fixing only the drawer, the "draft P2" rule (rejected): Received → Invoiced on a Mark-paid entry would still orphan its records, and amount edits would leave status stale.
+- Folding all of TD-029 into MUT-5, records on create plus a backfill (rejected): it needs a Dexie upgrade, which the ticket scopes out.
+- A separate bug ticket (rejected): the edit path is exactly the code MUT-5 restructures.
+

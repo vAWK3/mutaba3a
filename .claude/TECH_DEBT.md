@@ -737,6 +737,8 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 **Effort**: Medium
 
+**Update (2026-10-11, MUT-5):** the edit-path half is resolved by ADR-038. An entry with live records never has its payment fields rewritten by the drawer; its status is read-only; amount changes recalculate. An entry without records keeps its `paidAt` and received amount unless its status really changes. What remains (records on create-as-received, plus the backfill) is ticketed as **MUT-60**.
+
 ---
 
 ### TD-030: Owed Now excludes archived income; client summaries and overview totals include it
@@ -860,6 +862,18 @@ profile's lists and shows up in the orphaned-records banner.
 
 **Remediation**: resolve `''` to the default profile's id on save (or drop the
 empty option and list the profiles only), with a drawer test for each.
+
+**Effort**: Small
+
+---
+
+### TD-046: Cutting an amount to the recorded total marks the entry paid "today"
+**Status**: Open
+**Priority**: Low
+**Introduced**: MUT-5, 2026-10-11 (ADR-038 §2)
+**Impact**: `transactionRepo.update` recalculates after an amount change through `recalculateReceivedAmount`, which stamps `paidAt` with `tx.paidAt || now` when an entry becomes fully paid. An unpaid entry whose amount is cut to exactly what was already recorded is therefore "paid today", not on the date of its last payment, which shifts Recent payments and Last payment. Recording a final payment has the same behaviour (pre-existing).
+
+**Remediation**: in `recalculateReceivedAmount`, set `paidAt` to the latest live record's `paidAt` when an entry becomes fully paid. Then check the MUT-18 backdating path, which already passes an explicit date.
 
 **Effort**: Small
 

@@ -267,6 +267,62 @@ navigate({ search: { newTx: 'income' } });          // Create
 - Due date for unpaid income
 - Linked document reference
 
+> Registry drift: income is created and edited through **IncomeDrawer** (below), opened from `useDrawerStore().openIncomeDrawer`. This TransactionDrawer entry describes the legacy URL-driven design.
+
+---
+
+### IncomeDrawer
+**Location**: `src/components/drawers/IncomeDrawer.tsx`. Mounted in `AppShell` while `incomeDrawer.isOpen`.
+**Purpose**: create and edit income. The entry is the work record (MUT-5).
+
+```tsx
+openIncomeDrawer({ mode: 'create', defaultClientId, defaultProfileId, defaultStatus });
+openIncomeDrawer({ mode: 'edit', transactionId });
+openIncomeDrawer({ mode: 'create', duplicateFromId });
+```
+
+**Layout**:
+- **Fast path:** title ("What did you do?", focused on create), amount (`.input-with-prefix`, text + decimal keypad, LTR in Arabic) and client (`ClientTypeahead`).
+- **More details:** a `.form-disclosure` toggle whose summary line names the defaults. It holds the status switch, due date, currency (USD/ILS/EUR), date, project (only while Projects is on), notes and the profile. The profile moves up front when it can't be resolved.
+
+**Rules**: they live in `src/lib/incomeEntry.ts` and are unit-tested.
+- `buildIncomeCreate`, `buildIncomeUpdate` (ADR-038: payment fields are absent unless the status changes; never written for record-backed entries)
+- `shouldExpandDetails`
+- `isBelowRecordedTotal`
+- `resolveDefaultCurrency` (profile → settings → USD)
+
+**Validation**: Zod messages are i18n keys (`validation.amountRequired/amountInvalid/amountPositive/amountBelowRecorded/clientNotPicked/profileRequired/dateRequired`).
+
+**Behaviour**:
+- **Lock notice:** a locked entry (MUT-13) shows the notice, and Save is disabled.
+- **Queued save:** a save asked for while a new client is still being created is held until the client exists.
+
+**Tests**:
+- `src/components/__tests__/IncomeDrawer.test.tsx`
+- `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx`
+- `e2e/income-fast-path.spec.ts`
+
+---
+
+### Typeaheads (`EntityTypeahead`, `ClientTypeahead`, `ProjectTypeahead`, `VendorTypeahead`)
+**Location**: `src/components/ui/`. The hosted `ClientPicker`/`ProjectPicker` also wrap `EntityTypeahead`.
+
+**Keyboard contract (MUT-5)**:
+- Typing highlights the first option, and Enter picks it.
+- ArrowDown on a closed list opens it.
+- Tab closes the list without picking.
+- Escape on an open list closes only the list (`stopPropagation`, so a drawer stays open).
+- Enter on a closed list, or on an open list with no options, is not swallowed and submits the surrounding form.
+- `aria-expanded` follows what is visible.
+- The optional `onBlur` prop is called before the list closes.
+
+**`ClientTypeahead` extras**:
+- Leaving the box with a client's exact name (any case) picks that client.
+- `onPendingTextChange(text)` reports text that isn't a picked client ('' when there is none). A client picked from "create" counts as picked at once.
+- `onCreatingChange(creating)` brackets the creation of a new client.
+
+**Tests**: `src/components/ui/__tests__/{EntityTypeahead,ClientTypeahead}.test.tsx`.
+
 ---
 
 ### ClientDrawer
