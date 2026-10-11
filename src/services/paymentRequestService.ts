@@ -62,14 +62,12 @@ export async function recordPaymentForRequest(
     throw new Error('Cannot record payment for voided document');
   }
 
-  // Mark all linked transactions as paid
+  // Mark all linked transactions as paid. Payment records own the paid state
+  // (ADR-039), so this records whatever is still owed rather than writing status.
   for (const txId of document.linkedTransactionIds) {
     const tx = await getRepositories().base.transactions.get(txId);
     if (tx && tx.status === 'unpaid') {
-      await getRepositories().base.transactions.update(txId, {
-        status: 'paid',
-        paidAt,
-      });
+      await getRepositories().base.transactions.markPaid(txId, { paidAt });
     }
   }
 
@@ -117,10 +115,8 @@ export async function updatePaymentRequestWithTransaction(
     throw new Error('Cannot update locked payment request');
   }
 
-  // Update document
-  await getRepositories().base.documents.update(documentId, documentData);
-
-  // If amount or dates changed, update linked transactions
+  // Linked transactions go first: one with payment records can refuse a change
+  // (ADR-039), and the document must not move ahead of it.
   if (document.linkedTransactionIds.length > 0) {
     const txUpdates: Partial<Transaction> = {};
 
@@ -154,4 +150,6 @@ export async function updatePaymentRequestWithTransaction(
       }
     }
   }
+
+  await getRepositories().base.documents.update(documentId, documentData);
 }
