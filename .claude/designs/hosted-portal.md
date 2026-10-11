@@ -80,8 +80,11 @@ Admin routes behind the existing `X-Admin-Token`, plus `npm run` wrappers in the
 - `POST /admin/v1/users`: `{ email, displayName, locale }` → `{ user, initialPassword }`. The password is 24 random base64url characters, printed once and delivered over a secure channel like an API-key secret.
 - `POST /admin/v1/users/{id}/memberships`: `{ organizationId }` grants access; `DELETE …/memberships/{organizationId}` removes it.
 - `POST /admin/v1/users/{id}/password`: operator reset; returns a new one-time password and revokes all the user's sessions.
-- `POST /admin/v1/users/{id}/disable`: sets `DISABLED` and revokes all sessions.
-- `POST /admin/v1/users/{id}/sessions/revoke`: revokes all sessions.
+- `POST /admin/v1/users/{id}/disable`: sets `DISABLED` and revokes all sessions. `…/enable` is the idempotent inverse, so a mistaken disable doesn't need database surgery.
+- `GET /admin/v1/users?email=` and `GET /admin/v1/users/{id}`: operator lookups. The CLI resolves `--email` through the first.
+- `POST /admin/v1/users/{id}/sessions/revoke`: revokes all sessions (MUT-38).
+
+As built in MUT-37, the CLI is `src/scripts/users.ts`, exposed as `npm run provision:user`, `grant:user`, `revoke:user`, `rotate:password`, `disable:user` and `enable:user`. The route table and audit actions are in `mut-37-operator-accounts-tests.md`. Session revocation on reset and disable lands with sessions in MUT-38.
 
 **No route anywhere** matches `signup|sign-up|register|invite|forgot|reset` outside `/admin/`. A route-inventory test walks the registered Hono routes and the OpenAPI document and fails on a match. The hosted bundle test (§8) asserts the same strings are absent from `dist-hosted`. A signed-in "change my password" route is out of v1 (§12): operator-generated passwords are stronger than chosen ones, and the reset path is the operator script.
 
