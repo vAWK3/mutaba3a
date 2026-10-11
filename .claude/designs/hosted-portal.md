@@ -338,8 +338,8 @@ ADR-013 is untouched because nothing in this design writes the op-log, reads it,
 
 - **One origin.** The API service serves `PORTAL_DIST_DIR` with `@hono/node-server/serve-static`. `/assets/*` gets immutable caching. The SPA fallback returns `index.html` for any `GET` that isn't `/v1/*`, `/admin/*`, `/health`, `/ready` or `/openapi.json`. API responses keep `Cache-Control: no-store`.
 - **Build.** `server/scripts/deploy.sh` runs `npm run build:hosted` at the repo root and copies `dist-hosted/` into the image (Docker context or a pre-copy step; MUT-45 chooses). The server still imports nothing from `src/` (ADR-024): it serves built files.
-- **Domain.** Cloud Run domain mapping is unavailable in `me-west1` (ADR-026 §8). MUT-45 chooses an external HTTPS load balancer or a Cloudflare proxy in front of the one service. The portal and API stay one origin whichever is chosen. `PORTAL_ORIGIN` is that origin.
-- **CSP** (MUT-45): `default-src 'self'`, `connect-src 'self'`, `img-src 'self' data:`, `frame-ancestors 'none'`, `form-action 'self'`. Downloads are top-level navigations to GCS signed URLs and need no `connect-src` entry.
+- **Domain, as built (MUT-45):** no custom domain, no load balancer, no Cloudflare proxy. Decision 10 only needs the portal and the API to share one origin; the service's own `run.app` URL already is that origin, at zero extra infrastructure. `PORTAL_ORIGIN` and `TRUSTED_PROXY_HOPS` stay at their MUT-38 defaults — a reverse proxy is exactly what would make either one necessary, and nothing here needed one. A branded domain (`api.mutaba3a.app`) is its own follow-up ticket, not required by any MUT-45 acceptance criterion (DEPLOYMENT.md §5 already called it optional).
+- **CSP, as built (MUT-45):** `default-src 'self'`, `connect-src 'self' https://storage.googleapis.com`, `img-src 'self' data:`, `frame-ancestors 'none'`, `form-action 'self'`. The `connect-src` addition over the draft above resolves the gap MUT-44's amendment flagged: receipt uploads `fetch()` a `PUT` straight to a GCS v4 signed URL (`storage.googleapis.com`, the library's path-styled default), which `connect-src` governs. Downloads stay exempt — they are top-level navigations, not `fetch`/XHR.
 - **Instance count** stays 1 (TD-017): the sign-in limiter and lockout counters are in process, like the API-key limiter.
 
 ## 10. Re-cut of the build stories
@@ -355,7 +355,7 @@ These replace the "thin" scope text in Jira once the owner approves the brief.
   - (a) shell, sign-in and switcher once MUT-38's `/v1/me` contract is in `openapi.yaml`;
   - (b) the views, which can be built against the server's in-memory store in dev before MUT-39 lands.
 - **MUT-44 (expense capture):** a portal `ExpenseDrawer` over MUT-42's routes. It may reuse the local expense form's presentational component; it must not import the local expense hooks or `src/db`.
-- **MUT-45 (serving):** §9, `PORTAL_ORIGIN`, the trusted proxy hop count, and the domain/LB choice. *As built:* the `SESSION_TOKEN_PEPPER` secret landed in MUT-38's Terraform, because the service refuses to boot without it.
+- **MUT-45 (serving):** §9. *As built:* the `SESSION_TOKEN_PEPPER` secret landed in MUT-38's Terraform already, because the service refuses to boot without it. No domain/LB, no `PORTAL_ORIGIN`, no `TRUSTED_PROXY_HOPS` change — see §9's "Domain, as built" note and the ADR-037 MUT-45 amendment.
 
 Order is unchanged: 37 → 38 → 39 → {42, 43} → 44, with 45 in parallel after this brief.
 

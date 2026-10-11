@@ -5,6 +5,12 @@
 # it still assembles. Migrations are NOT in this image and never run at
 # container start: the operator runs `prisma migrate deploy` from server/
 # through the Cloud SQL Auth Proxy before each rollout (ADR-025 §9, ADR-026).
+#
+# The hosted-portal bundle (MUT-45, hosted-portal.md §9) is built outside this
+# image — `npm run build:hosted` at the repo root — and copied into this build
+# context as `dist-hosted/` by the caller (scripts/deploy.sh, server-ci.yml)
+# before `docker build` runs. This stage never imports frontend source
+# (ADR-024): it only copies the already-built output.
 
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -25,6 +31,8 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
+COPY dist-hosted ./portal
+ENV PORTAL_DIST_DIR=/app/portal
 USER node
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:${PORT:-8787}/health || exit 1

@@ -1050,6 +1050,22 @@ Plan: `.claude/designs/mut-44-expense-capture-tests.md`.
 
 **Baseline after MUT-44 (2026-10-11)**: root `npx vitest run` 160 files, 2537 passed, 5 skipped; `npm run test:bundles` (after adding `json-schema.org` to the hosted allowlist), `npm run typecheck` (both programs), `npm run lint` (0 errors, 17 pre-existing warnings unrelated to this ticket) and `npm run build` pass. The server package is unchanged.
 
+### MUT-45: serve the hosted portal
+
+No separate test-plan artifact — scope is server-only (static serving, SPA fallback, CSP, config), not a new feature surface.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Portal serving | `server/src/__tests__/portal.test.ts` | `/assets/*` immutable caching **only on an actual hit**; a stale/nonexistent hashed asset falls back to the SPA shell with `no-store`, never a year-long cache of a broken response; a root-level public file (favicon) served as itself, never immutable-cached; client-side routes fall back to `index.html` without immutable caching; `/health`, `/ready`, `/openapi.json`, unknown `/v1/*` and unknown `/admin/*` paths are never caught by the fallback; CSP header on both API and portal responses; disabled (`portal` omitted) leaves every other test file's behavior unchanged |
+| Config | `server/src/__tests__/config.test.ts` | `PORTAL_DIST_DIR` optional, defaults to unset, rejects an empty string |
+| Smoke | `server/src/__tests__/smoke.test.ts` | `GET /` (hosted portal) check: 200, `text/html`, CSP present; fails cleanly (not a crash) when no portal is configured, matching a pre-MUT-45 deployment shape |
+
+Verified against the real built artifact, not only the fixture: built `dist-hosted/` with `npm run build:hosted`, built the Docker image, booted it, and curled `/`, `/assets/<real hashed file>` (immutable), `/assets/<fake-stale-hash>.js` (falls back to the shell, `no-store`), `/favicon.svg` (`no-store`), a client-side route, `/v1/bogus` (401, unauthenticated) and `/admin/bogus` (404, valid token) — all matched the unit-test expectations exactly, both before and after the `/qa-reconcile` fix below.
+
+**Found and fixed during `/qa-reconcile` (2026-10-11)**: the original immutable-caching middleware keyed on the URL prefix (`/assets/*`) alone, before checking the file existed — a stale/rotated hashed asset fell through to the SPA shell but kept the immutable header, so a browser or CDN would cache that broken response for a year. Caught by directly probing the running app (not just reading the fixture tests), confirmed against the real Docker image, fixed, and re-verified both ways. Also surfaced along the way: `serveStatic`'s `onFound` callback fires after it has already built its `Response`, so `c.header()` inside it is silently dropped — see `.claude/PATTERNS.md`.
+
+**Baseline after MUT-45 (2026-10-11)**: server `npm test` 1071 passed, 11 skipped; `npm run typecheck` and `npm run lint` pass. Root `npm run build:hosted` and a local `docker build`/`docker run` round-trip verified by hand twice (see above). No Terraform changes (`terraform validate` passes; `terraform plan` is a no-op for this ticket).
+
 **Baseline after MUT-59 (2026-10-11)**: server `npm test` 1056 passed, 11 skipped; `npm run test:db` 1122 passed.
 
 **Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.

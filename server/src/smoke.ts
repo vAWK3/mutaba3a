@@ -95,6 +95,15 @@ class SmokeContext {
       this.record(health.body.version === this.options.expectVersion, 'SERVICE_VERSION matches the deployed tag', `${String(health.body.version)} vs ${this.options.expectVersion}`);
     }
 
+    const portal = await this.options.fetch(`${this.base}/`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const portalContentType = portal.headers.get('content-type') ?? '';
+    const portalCsp = portal.headers.get('content-security-policy');
+    this.record(
+      portal.status === 200 && portalContentType.includes('text/html') && Boolean(portalCsp),
+      'GET / (hosted portal)',
+      `status ${portal.status}, content-type ${portalContentType}, csp ${portalCsp ? 'present' : 'missing'}`,
+    );
+
     const ready = await this.request('/ready');
     this.record(ready.status === 200 && ready.body.status === 'ready', 'GET /ready (database reachable)', `status ${ready.status}`);
 

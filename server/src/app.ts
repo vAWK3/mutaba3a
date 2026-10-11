@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { contextStorage } from 'hono/context-storage';
+import { serveStatic } from '@hono/node-server/serve-static';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
@@ -55,7 +56,26 @@ export interface AppDependencies {
   signInThrottle?: SignInThrottle;
   /** Per-IP sign-in attempt budget. */
   signInIpLimiter?: RateLimiter;
+  /** Hosted-portal static build (MUT-45). Null or absent = API-only, today's behavior. */
+  portal?: { distDir: string } | null;
 }
+
+/**
+ * Paths the hosted-portal SPA fallback must never catch (hosted-portal.md
+ * §9): everything else GET answers the portal shell for client-side routing.
+ */
+const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/'];
+const PORTAL_EXCLUDED_EXACT = new Set(['/health', '/ready', '/openapi.json']);
+
+function isPortalExcludedPath(path: string): boolean {
+  return PORTAL_EXCLUDED_EXACT.has(path) || PORTAL_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+// connect-src includes the GCS signed-URL host: receipt uploads (MUT-44) PUT
+// bytes directly to it via fetch(), which connect-src governs. Downloads are
+// top-level navigations instead, so they need no entry here.
+const PORTAL_CSP =
+  "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
 
 function defaultSessionSettings(): SessionSettings {
   return { pepper: randomBytes(32).toString('hex'), idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 };
@@ -90,6 +110,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     c.set('now', now);
     c.header('X-Request-Id', requestId);
     c.header('Cache-Control', 'no-store');
+    c.header('Content-Security-Policy', PORTAL_CSP);
     const started = Date.now();
     await next();
     deps.logger.info(
@@ -239,6 +260,45 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });
+
+  // Hosted portal (MUT-45, hosted-portal.md §9): registered after every API
+  // route so a real route always wins; the handler itself still excludes API
+  // prefixes for paths no route matched, so a bad /v1 or /admin path keeps
+  // answering JSON, never the portal shell.
+  if (deps.portal) {
+    const { distDir } = deps.portal;
+
+    // Any real file in the build (hashed assets, favicon, manifest, …); a miss
+    // falls through to the SPA-shell handler below via Hono's own next().
+    // Immutable caching applies only to an actual hit under /assets/* —
+    // onFound fires only when serveStatic found and is serving the file, so a
+    // stale/nonexistent hashed filename (after a deploy rotates them) still
+    // falls through to the SPA shell with the default no-store header,
+    // instead of being cached as a broken response for a year.
+    app.use('*', async (c, next) => {
+      if (isPortalExcludedPath(c.req.path)) return next();
+      let foundUnderAssets = false;
+      const result = await serveStatic({
+        root: distDir,
+        onFound: (_path, c) => {
+          if (c.req.path.startsWith('/assets/')) foundUnderAssets = true;
+        },
+      })(c, next);
+      // c.header() cannot reach this response: serveStatic already built it
+      // with c.body() before onFound ran, which bakes in a header snapshot
+      // decoupled from the context's own headers. Mutate the Response's own
+      // Headers object directly instead.
+      if (foundUnderAssets && result instanceof Response) {
+        result.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+      return result;
+    });
+
+    app.get('*', async (c, next) => {
+      if (isPortalExcludedPath(c.req.path)) return next();
+      return serveStatic({ root: distDir, path: '/index.html' })(c, next);
+    });
+  }
 
   return app;
 }

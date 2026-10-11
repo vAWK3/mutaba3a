@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-45: serve the hosted portal
+
+**Scope:**
+- `server/src/app.ts` (`AppDependencies.portal`, portal static/SPA-fallback serving, CSP header); `server/src/config.ts` (`PORTAL_DIST_DIR`); `server/src/index.ts` (wiring)
+- `server/src/smoke.ts` (`GET / (hosted portal)` check); `server/Dockerfile` (`COPY dist-hosted ./portal`, `ENV PORTAL_DIST_DIR`); `server/scripts/deploy.sh` (builds and copies the portal bundle before the Docker build; widens the uncommitted-changes guard to the whole repo)
+- `.github/workflows/server-ci.yml` (docker job builds the hosted bundle first, so the image CI proves matches what's deployed)
+- `server/src/__tests__/{portal,config,smoke}.test.ts` (new/changed)
+- `server/DEPLOYMENT.md` (§0, new §4c, §5, §8); `.claude/designs/hosted-portal.md` §9/§10; ADR-037 MUT-45 amendment
+
+### Added
+- **The hosted portal is live.** The API serves the built `dist-hosted/` bundle from the same Cloud Run service: `/assets/*` immutable-cached, any other non-API GET falls back to `index.html` for client-side routing, registered after every API route so a real route (or a genuinely missing `/v1`/`/admin` path) always wins over the fallback.
+- **CSP on every response**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'`. The `connect-src` addition resolves the gap the MUT-44 amendment flagged — receipt uploads `fetch()` a `PUT` straight to a GCS signed URL, which `'self'` alone would have silently broken.
+
+### Changed
+- `deploy.sh` now builds the hosted-portal bundle at the repo root and copies it into `server/`'s Docker build context before `docker build`; its uncommitted-changes guard now covers the whole repo, not just `server/`, since the image tag now names the portal source too.
+- `server-ci.yml`'s docker job does the same, so the image CI builds and health-probes is the same shape that gets deployed, portal included.
+
+### Technical
+- **No custom domain.** The design brief's open "Domain" decision (an external HTTPS load balancer or a Cloudflare proxy, since Cloud Run domain mapping is unavailable in `me-west1`) is resolved by not doing either: ADR-037 decision 10 only requires one origin, which the bare `run.app` URL already is. `PORTAL_ORIGIN` and `TRUSTED_PROXY_HOPS` stay at their MUT-38 defaults. A branded domain is deliberately left for its own follow-up ticket.
+- **No Terraform changes.** `terraform plan` is a no-op for this ticket; `terraform validate` passes.
+- Corrected the ticket's stale "ADR-033" citation — that number is now a different, unrelated decision on `main`; ADR-037 is the actual reference.
+
 ## [Unreleased] - 2026-10-11 — MUT-44: hosted expense capture
 
 **Scope:**

@@ -20,6 +20,7 @@ creation is 10–15 minutes of waiting.
 - [4. Provision the first firm](#4-provision-the-first-firm)
   - [4a. Refresh Malafat's vendored contract](#4a-refresh-malafats-vendored-contract)
   - [4b. Give a person access to the hosted portal](#4b-give-a-person-access-to-the-hosted-portal-mut-37)
+  - [4c. Cookies, CORS and CSP](#4c-cookies-cors-and-csp-mut-45--what-is-set-and-why)
 - [5. Wire Malafat to it](#5-wire-malafat-to-it)
 - [6. Day-2 operations](#6-day-2-operations)
 - [7. Production record](#7-production-record)
@@ -38,13 +39,16 @@ creation is 10–15 minutes of waiting.
 | Service account | `mutaba3a-api@<project>.iam` — `cloudsql.client`, accessor on its three secrets, object access on the bucket | same |
 | Artifact Registry | `me-west1-docker.pkg.dev/<project>/mutaba3a/mutaba3a-api:<sha>` | same; image built by `scripts/deploy.sh` on your machine |
 | Uptime check | `GET /health` every 5 min; alert only if you pass notification channels | same |
+| Hosted portal | `dist-hosted/` (MUT-45), baked into the same image at `/app/portal`, served by the same Cloud Run service — no separate domain, load balancer or Terraform resource | `Dockerfile`, `src/app.ts` |
 
 The service issues and accepts **`live`** API keys (`config.API_KEY_ENVIRONMENT`).
 
-`scripts/deploy.sh` is the only command per rollout. It builds the image with
-your Docker daemon, pushes it, runs `prisma migrate deploy` from `server/`
-through the Cloud SQL Auth Proxy, applies Terraform with the new tag, and runs
-`scripts/smoke.ts`. If the migration fails the service is not touched.
+`scripts/deploy.sh` is the only command per rollout. It builds the hosted
+portal (`npm run build:hosted` at the repo root) and copies it into the Docker
+context, builds the image with your Docker daemon, pushes it, runs `prisma
+migrate deploy` from `server/` through the Cloud SQL Auth Proxy, applies
+Terraform with the new tag, and runs `scripts/smoke.ts` against the API and
+the portal both. If the migration fails the service is not touched.
 
 The service runs **one instance** (`max_instances = 1`, validated in
 Terraform) until TD-017 lands a shared rate-limit store. That is deliberate.
@@ -285,9 +289,43 @@ Every account change is audited as `ADMIN` on each firm the person belongs to
 (`user.created`, `membership.granted`, `membership.revoked`,
 `user.password_reset`, `user.disabled`, `user.enabled`).
 
-Until the portal ships (MUT-43 views, MUT-45 serving), a portal user can sign
-in only through the API (`POST /v1/sessions`, `GET /v1/me`; README "Sessions").
-There is no page to send them to yet.
+As of MUT-45, the portal is live at the service's own URL (`$URL/`) — a
+provisioned person can sign in there directly; `POST /v1/sessions` and
+`GET /v1/me` remain available for API-level checks (README "Sessions").
+
+### 4c. Cookies, CORS and CSP (MUT-45) — what is set and why
+
+The portal and the API are **one origin**: the same Cloud Run service serves
+both (`src/app.ts`, hosted-portal.md §9), so there is nothing to configure for
+cookies or CORS beyond what MUT-38 already built:
+
+- **Cookie**: `__Host-mut_session`, `Secure`, `HttpOnly`, `SameSite=Strict`.
+  `__Host-` requires same-origin-only, HTTPS-only delivery — exactly what a
+  single-service deployment gives for free (ADR-037 decision 3).
+- **CORS**: none. A cross-origin page cannot read the session cookie or call
+  `/v1/*` with it; there is no `Access-Control-Allow-Origin` to misconfigure,
+  because there is no second origin to allow.
+- **Same-origin check for non-GET session requests**: `PORTAL_ORIGIN` is
+  intentionally **unset** in production. `isSameOriginRequest()`
+  (`src/auth/sessions.ts`) then compares the request's `Origin` header against
+  the URL it actually arrived on, which is correct and sufficient as long as
+  nothing in front of Cloud Run changes the apparent origin — true today,
+  since there is no custom domain (see the note at the end of §5). Setting
+  `PORTAL_ORIGIN` only becomes necessary if a reverse proxy or load balancer is
+  ever put in front of the service with a different public hostname.
+- **CSP**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com;
+  img-src 'self' data:; frame-ancestors 'none'; form-action 'self'` on every
+  response. `'self'` everywhere else is possible precisely because the portal
+  and the API share an origin; `frame-ancestors 'none'` blocks the portal from
+  being framed anywhere; `form-action 'self'` and no `script-src` relaxations
+  keep the policy as tight as the app allows without inline scripts or
+  third-party calls. The one addition to the design brief's draft policy is
+  `https://storage.googleapis.com` in `connect-src`: receipt uploads (MUT-44)
+  `fetch()` a `PUT` directly to a GCS v4 signed URL — `storage.googleapis.com`
+  is the library's default, path-styled host (`@google-cloud/storage`'s
+  `PATH_STYLED_HOST`, `virtualHostedStyle` not set) — and `connect-src` governs
+  that call. Receipt *downloads* need no entry here: `downloadNavigator.open()`
+  is a top-level navigation, which `connect-src` does not restrict.
 
 ## 5. Wire Malafat to it
 
@@ -308,11 +346,17 @@ creates `money_integrations`), and in the firm's Malafat as a Partner:
 organization name, masked key and scopes, and "Test connection" calls
 `GET /v1/integration` round-trip.
 
-Optional, not required for M1: put `api.mutaba3a.app` in front of the run.app
-URL. Cloud Run domain mappings are not offered in `me-west1`, so this is a
-Cloudflare proxied CNAME (the same approach as `malafat-router`) or an
-external HTTPS load balancer. The run.app URL is stable for the life of the
-service.
+Optional, deliberately deferred past MUT-45: put `api.mutaba3a.app` in front of
+the run.app URL. Cloud Run domain mappings are not offered in `me-west1`, so
+this would be a Cloudflare proxied CNAME (the same approach as
+`malafat-router`) or an external HTTPS load balancer — either one adds a hop
+that changes the origin the browser sees from the one Cloud Run sees, which is
+exactly what `PORTAL_ORIGIN` and `TRUSTED_PROXY_HOPS` exist to handle (§4c).
+MUT-45 intentionally shipped without it: ADR-037 decision 10 only requires the
+portal and the API to share an origin, which the bare run.app URL already
+does, at zero extra cost or infrastructure. The run.app URL is stable for the
+life of the service; add a custom domain as its own follow-up ticket if a
+branded URL becomes a real requirement, not before.
 
 ## 6. Day-2 operations
 
@@ -461,12 +505,11 @@ Also still unconfirmed: the daily `npm run reconcile` schedule
 3. **Walk the pilot runbook** (`money-v1-handover.md` §4.4) on a test
    organization, never on the pilot's books.
 4. **Confirm or create the daily reconcile run.**
-5. **Hosted portal:**
-   - MUT-43 (read views) and MUT-44 (expense capture) build the pages;
-   - MUT-45 serves them from this service, on the same origin as the API
-     (`__Host-` cookies require that), so a custom domain means a proxy or
-     load balancer in front of the one service;
-   - portal users provisioned before then can only use the API.
+5. **Hosted portal:** MUT-43 (read views) and MUT-44 (expense capture) built
+   the pages; MUT-45 serves them live from this service, on the same origin as
+   the API (§4c). Still open: a branded custom domain (`api.mutaba3a.app`),
+   deliberately out of MUT-45's scope — would need a proxy or load balancer in
+   front of the one service and its own ticket (§5).
 6. **Debt that gates scale, not the pilot:**
    - TD-017 (one instance until a shared rate limiter exists);
    - TD-041 (the expense summary aggregates in the service);
