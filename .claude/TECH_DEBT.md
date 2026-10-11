@@ -617,9 +617,12 @@ they test the menu element itself) and keep only its positioning logic.
 ---
 
 ### TD-032: The two `+ Add` menus share their actions but not their click behaviour
-**Status**: Open
+**Status**: Open (ticketed as MUT-57)
 **Priority**: Low
 **Introduced**: MUT-15, 2026-10-11 (pre-existing; out of the ticket's scope)
+**Decision** (Basel, 2026-10-11): both menus open the drawer **in place** (no
+navigation to the list) and all four actions are profile-aware in both.
+MUT-57 moves them onto one set of handlers.
 **Impact**: both menus offer the same actions in the same order
 (`visibleAddMenuActions`), but the sidebar **New** menu opens the drawer and
 navigates to the list (`/income`, `/clients`, `/expenses`, `/projects`) and
