@@ -316,7 +316,6 @@ td {
   transform: rotate(180deg);
 }
 
-
 /* Profile Switcher Area */
 .sidebar-profile {
   padding: 0 var(--space-3);
@@ -3226,9 +3225,10 @@ td {
 }
 
 /* Collapse chevron points toward the edge the sidebar collapses to (MUT-15):
-   right while expanded, left (toward the content) while collapsed */
+   right while expanded, left (toward the content) while collapsed. A rotation,
+   as in LTR, so the toggle animates the same way in both directions */
 [dir="rtl"] .sidebar-collapse-toggle .nav-icon {
-  transform: scaleX(-1);
+  transform: rotate(180deg);
 }
 
 [dir="rtl"] .sidebar-collapse-toggle .nav-icon.rotated {

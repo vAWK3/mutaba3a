@@ -208,7 +208,7 @@ export function SidebarNav() {
   // Render a section
   const renderSection = (section: NavSection) => {
     return (
-      <div key={section.key} className={cn("nav-section", `nav-section-${section.key}`)}>
+      <div key={section.key} className="nav-section">
         {!collapsed && section.labelKey && (
           <div className="nav-section-header">{t(section.labelKey)}</div>
         )}
