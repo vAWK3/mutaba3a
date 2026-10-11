@@ -26,6 +26,7 @@ import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
 import { ALL_CATEGORIES } from '../../db/defaultExpenseCategories';
+import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../expenses/ExpenseFormFields';
 import type { Currency, ExpenseFrequency, RecurringEndMode } from '../../types';
 
 const schema = z.object({
@@ -319,6 +320,21 @@ export function ExpenseDrawer() {
     );
   }
 
+  const expenseFormLabels: ExpenseFormFieldsLabels = {
+    amount: t('drawer.expense.amount'),
+    amountPlaceholder: t('drawer.expense.amountPlaceholder'),
+    currency: t('drawer.expense.currency'),
+    date: t('drawer.expense.date'),
+    title: t('drawer.expense.title'),
+    titlePlaceholder: t('drawer.expense.titlePlaceholder'),
+    category: t('drawer.expense.category'),
+    categoryPlaceholder: t('drawer.expense.categoryPlaceholder'),
+    notes: t('drawer.expense.notes'),
+    notesPlaceholder: t('drawer.expense.notesPlaceholder'),
+    requiredError: t('validation.required'),
+    amountError: t('validation.amountRequired'),
+  };
+
   const getTitle = () => {
     if (mode === 'edit') {
       return recurringRuleId ? t('drawer.expense.editRecurring') : t('drawer.expense.edit');
@@ -411,214 +427,134 @@ export function ExpenseDrawer() {
           )}
         </div>
 
-        {/* Amount & Currency */}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">{t('drawer.expense.amount')} *</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className={cn('input', form.formState.errors.amount && 'input-error')}
-              placeholder={t('drawer.expense.amountPlaceholder')}
-              {...form.register('amount')}
-            />
-            {form.formState.errors.amount && (
-              <p className="form-error">{t('validation.amountRequired')}</p>
-            )}
-          </div>
-          <div className="form-group">
-            <label className="form-label">{t('drawer.expense.currency')} *</label>
-            <Controller
-              name="currency"
-              control={form.control}
-              render={({ field }) => (
-                <select className="select" style={{ width: '100%' }} {...field}>
-                  <option value="USD">USD</option>
-                  <option value="ILS">ILS</option>
-                </select>
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Date (for one-time) or Start Date (for recurring) */}
-        {selectedExpenseType === 'onetime' ? (
-          <div className="form-group">
-            <label className="form-label">{t('drawer.expense.date')} *</label>
-            <input
-              type="date"
-              className={cn('input', form.formState.errors.occurredAt && 'input-error')}
-              {...form.register('occurredAt')}
-            />
-          </div>
-        ) : (
-          <>
-            {/* Frequency */}
-            <div className="form-group">
-              <label className="form-label">{t('drawer.expense.frequency')} *</label>
-              <Controller
-                name="frequency"
-                control={form.control}
-                render={({ field }) => (
-                  <select className="select" style={{ width: '100%' }} {...field}>
-                    <option value="monthly">{t('expenses.recurring.monthly')}</option>
-                    <option value="yearly">{t('expenses.recurring.yearly')}</option>
-                  </select>
-                )}
-              />
-            </div>
-
-            {/* Start Date */}
-            <div className="form-group">
-              <label className="form-label">{t('drawer.expense.startDate')} *</label>
-              <input
-                type="date"
-                className={cn('input', form.formState.errors.startDate && 'input-error')}
-                {...form.register('startDate')}
-              />
-            </div>
-
-            {/* End Mode */}
-            <div className="form-group">
-              <label className="form-label">{t('drawer.expense.endMode')} *</label>
-              <Controller
-                name="endMode"
-                control={form.control}
-                render={({ field }) => (
-                  <select className="select" style={{ width: '100%' }} {...field}>
-                    <option value="endOfYear">{t('expenses.recurring.endOfYear')}</option>
-                    <option value="untilDate">{t('expenses.recurring.untilDate')}</option>
-                    <option value="noEnd">{t('expenses.recurring.noEnd')}</option>
-                  </select>
-                )}
-              />
-            </div>
-
-            {/* End Date (only if endMode === 'untilDate') */}
-            {selectedEndMode === 'untilDate' && (
+        <ExpenseFormFields
+          control={form.control}
+          errors={form.formState.errors}
+          categories={categories}
+          currencyOptions={['USD', 'ILS']}
+          amountInputMode="number"
+          labels={expenseFormLabels}
+          showDate={selectedExpenseType === 'onetime'}
+          showNotes={selectedExpenseType === 'onetime'}
+          titleRequired={selectedExpenseType === 'recurring'}
+          dateSlotOverride={
+            <>
+              {/* Frequency */}
               <div className="form-group">
-                <label className="form-label">{t('drawer.expense.endDate')} *</label>
-                <input
-                  type="date"
-                  className={cn('input', form.formState.errors.endDate && 'input-error')}
-                  {...form.register('endDate')}
+                <label className="form-label">{t('drawer.expense.frequency')} *</label>
+                <Controller
+                  name="frequency"
+                  control={form.control}
+                  render={({ field }) => (
+                    <select className="select" style={{ width: '100%' }} {...field}>
+                      <option value="monthly">{t('expenses.recurring.monthly')}</option>
+                      <option value="yearly">{t('expenses.recurring.yearly')}</option>
+                    </select>
+                  )}
                 />
               </div>
-            )}
-          </>
-        )}
 
-        {/* Title */}
-        <div className="form-group">
-          <label className="form-label">
-            {t('drawer.expense.title')} {selectedExpenseType === 'recurring' && '*'}
-          </label>
-          <input
-            type="text"
-            className={cn('input', form.formState.errors.title && 'input-error')}
-            placeholder={t('drawer.expense.titlePlaceholder')}
-            {...form.register('title')}
-          />
-        </div>
+              {/* Start Date */}
+              <div className="form-group">
+                <label className="form-label">{t('drawer.expense.startDate')} *</label>
+                <input
+                  type="date"
+                  className={cn('input', form.formState.errors.startDate && 'input-error')}
+                  {...form.register('startDate')}
+                />
+              </div>
 
-        {/* Vendor */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.expense.vendor')}</label>
-          <Controller
-            name="vendor"
-            control={form.control}
-            render={({ field }) => (
-              <VendorTypeahead
-                profileId={selectedProfileId}
-                value={field.value || ''}
-                vendorId={watch('vendorId')}
-                onChange={(value, vendorId) => {
-                  field.onChange(value);
-                  setValue('vendorId', vendorId || '');
-                }}
-                disabled={!selectedProfileId}
+              {/* End Mode */}
+              <div className="form-group">
+                <label className="form-label">{t('drawer.expense.endMode')} *</label>
+                <Controller
+                  name="endMode"
+                  control={form.control}
+                  render={({ field }) => (
+                    <select className="select" style={{ width: '100%' }} {...field}>
+                      <option value="endOfYear">{t('expenses.recurring.endOfYear')}</option>
+                      <option value="untilDate">{t('expenses.recurring.untilDate')}</option>
+                      <option value="noEnd">{t('expenses.recurring.noEnd')}</option>
+                    </select>
+                  )}
+                />
+              </div>
+
+              {/* End Date (only if endMode === 'untilDate') */}
+              {selectedEndMode === 'untilDate' && (
+                <div className="form-group">
+                  <label className="form-label">{t('drawer.expense.endDate')} *</label>
+                  <input
+                    type="date"
+                    className={cn('input', form.formState.errors.endDate && 'input-error')}
+                    {...form.register('endDate')}
+                  />
+                </div>
+              )}
+            </>
+          }
+          vendorField={
+            <>
+              <label className="form-label">{t('drawer.expense.vendor')}</label>
+              <Controller
+                name="vendor"
+                control={form.control}
+                render={({ field }) => (
+                  <VendorTypeahead
+                    profileId={selectedProfileId}
+                    value={field.value || ''}
+                    vendorId={watch('vendorId')}
+                    onChange={(value, vendorId) => {
+                      field.onChange(value);
+                      setValue('vendorId', vendorId || '');
+                    }}
+                    disabled={!selectedProfileId}
+                  />
+                )}
               />
-            )}
-          />
-        </div>
-
-        {/* Client (optional) */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.expense.client')}</label>
-          <Controller
-            name="clientId"
-            control={form.control}
-            render={({ field }) => (
-              <ClientTypeahead
-                profileId={selectedProfileId}
-                value={field.value || ''}
-                onChange={field.onChange}
-                placeholder={t('drawer.expense.clientPlaceholder')}
-                disabled={!selectedProfileId}
+            </>
+          }
+          clientField={
+            <>
+              <label className="form-label">{t('drawer.expense.client')}</label>
+              <Controller
+                name="clientId"
+                control={form.control}
+                render={({ field }) => (
+                  <ClientTypeahead
+                    profileId={selectedProfileId}
+                    value={field.value || ''}
+                    onChange={field.onChange}
+                    placeholder={t('drawer.expense.clientPlaceholder')}
+                    disabled={!selectedProfileId}
+                  />
+                )}
               />
-            )}
-          />
-        </div>
-
-        {/* Project (optional) — shown only while the Projects area is on (MUT-16) */}
-        {projectsEnabled && (
-        <div className="form-group">
-          <label className="form-label">{t('drawer.expense.project')}</label>
-          <Controller
-            name="projectId"
-            control={form.control}
-            render={({ field }) => (
-              <ProjectTypeahead
-                profileId={selectedProfileId}
-                clientId={selectedClientId || undefined}
-                value={field.value || ''}
-                onChange={field.onChange}
-                placeholder={t('drawer.expense.projectPlaceholder')}
-                disabled={!selectedProfileId}
-              />
-            )}
-          />
-        </div>
-        )}
-
-        {/* Category */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.expense.category')} *</label>
-          <Controller
-            name="categoryId"
-            control={form.control}
-            render={({ field }) => (
-              <select
-                className={cn('select', form.formState.errors.categoryId && 'input-error')}
-                style={{ width: '100%' }}
-                {...field}
-              >
-                <option value="">{t('drawer.expense.categoryPlaceholder')}</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
-          {form.formState.errors.categoryId && (
-            <p className="form-error">{t('validation.required')}</p>
-          )}
-        </div>
-
-        {/* Notes (only for one-time) */}
-        {selectedExpenseType === 'onetime' && (
-          <div className="form-group">
-            <label className="form-label">{t('drawer.expense.notes')}</label>
-            <textarea
-              className="textarea"
-              placeholder={t('drawer.expense.notesPlaceholder')}
-              {...form.register('notes')}
-            />
-          </div>
-        )}
+            </>
+          }
+          projectField={
+            // shown only while the Projects area is on (MUT-16)
+            projectsEnabled ? (
+              <>
+                <label className="form-label">{t('drawer.expense.project')}</label>
+                <Controller
+                  name="projectId"
+                  control={form.control}
+                  render={({ field }) => (
+                    <ProjectTypeahead
+                      profileId={selectedProfileId}
+                      clientId={selectedClientId || undefined}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      placeholder={t('drawer.expense.projectPlaceholder')}
+                      disabled={!selectedProfileId}
+                    />
+                  )}
+                />
+              </>
+            ) : undefined
+          }
+        />
       </form>
     </Drawer>
   );
