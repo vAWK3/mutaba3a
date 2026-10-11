@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -322,6 +322,24 @@ export function IncomeDrawer() {
     }
   };
 
+  // A client picked from "create" takes a moment to save. A save asked for in
+  // that moment (Enter, Enter) waits for it, so the entry keeps its client.
+  const [clientCreating, setClientCreating] = useState(false);
+  const saveQueued = useRef(false);
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (clientCreating) {
+      event.preventDefault();
+      saveQueued.current = true;
+      return;
+    }
+    void form.handleSubmit(onSubmit, onInvalid)(event);
+  };
+  useEffect(() => {
+    if (clientCreating || !saveQueued.current) return;
+    saveQueued.current = false;
+    void form.handleSubmit(onSubmit, onInvalid)();
+  });
+
   const handleDelete = async () => {
     if (!transactionId) return;
     if (!confirm(t('transactions.confirmDelete'))) return;
@@ -426,7 +444,7 @@ export function IncomeDrawer() {
         </>
       }
     >
-      <form id="income-form" onSubmit={form.handleSubmit(onSubmit, onInvalid)} noValidate>
+      <form id="income-form" onSubmit={handleFormSubmit} noValidate>
         {isLocked && (
           <div className="drawer-notice drawer-notice-locked" role="status" data-testid="income-locked-notice">
             <div className="drawer-notice-title">
@@ -492,6 +510,7 @@ export function IncomeDrawer() {
                 value={field.value || ''}
                 onChange={field.onChange}
                 onPendingTextChange={handleClientDraft}
+                onCreatingChange={setClientCreating}
               />
             )}
           />

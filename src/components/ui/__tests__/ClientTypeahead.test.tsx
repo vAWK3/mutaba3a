@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { db } from '../../../db/database';
 import { clientRepo, businessProfileRepo } from '../../../db/repository';
 import { LanguageProvider } from '../../../lib/i18n';
@@ -266,6 +266,46 @@ describe('ClientTypeahead', () => {
 
       expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/.+/));
       expect(onPendingTextChange).toHaveBeenLastCalledWith('Acm');
+    });
+
+    it('counts a client picked from "create" as picked, and reports the creation', async () => {
+      const onPendingTextChange = vi.fn();
+      const onCreatingChange = vi.fn();
+      const onChange = vi.fn();
+      function Controlled() {
+        const [value, setValue] = useState('');
+        return (
+          <ClientTypeahead
+            value={value}
+            onChange={(id) => {
+              onChange(id);
+              setValue(id);
+            }}
+            onPendingTextChange={onPendingTextChange}
+            onCreatingChange={onCreatingChange}
+          />
+        );
+      }
+      render(
+        <TestWrapper>
+          <Controlled />
+        </TestWrapper>
+      );
+      const input = screen.getByRole('combobox');
+
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: 'Brand New Co' } });
+      const createOption = await screen.findByRole('option', { name: /Brand New Co/ });
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('Brand New Co');
+
+      fireEvent.click(createOption);
+
+      // Picked at once, before the client exists or the list has refetched it
+      expect(onCreatingChange).toHaveBeenNthCalledWith(1, true);
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
+      await waitFor(() => expect(onCreatingChange).toHaveBeenLastCalledWith(false));
+      expect(onChange).toHaveBeenLastCalledWith(expect.stringMatching(/.+/));
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
     });
 
     it('reports no unpicked text once a client is picked, and again after clearing', async () => {
