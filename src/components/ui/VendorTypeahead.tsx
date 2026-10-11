@@ -3,6 +3,7 @@ import { useVendors, useFindOrCreateVendor } from '../../hooks/useExpenseQueries
 import { normalizeVendor, vendorSimilarity } from '../../lib/vendorNormalization';
 import { useT } from '../../lib/i18n';
 import { EntityTypeahead, type TypeaheadOption } from './EntityTypeahead';
+import { defaultAutoHighlight } from './typeaheadHighlight';
 import type { Vendor } from '../../types';
 
 export interface VendorTypeaheadProps {
@@ -39,14 +40,19 @@ export function VendorTypeahead({
   }, [value]);
 
   // Filter and score vendors based on input
-  const options: TypeaheadOption<Vendor>[] = useMemo(() => {
+  const { options, exactMatchId } = useMemo((): {
+    options: TypeaheadOption<Vendor>[];
+    exactMatchId?: string;
+  } => {
     if (!inputValue.trim()) {
-      return vendors.map((v) => ({
-        id: v.id,
-        label: v.canonicalName,
-        isNew: false,
-        item: v,
-      }));
+      return {
+        options: vendors.map((v) => ({
+          id: v.id,
+          label: v.canonicalName,
+          isNew: false,
+          item: v,
+        })),
+      };
     }
 
     const normalizedInput = normalizeVendor(inputValue);
@@ -88,8 +94,18 @@ export function VendorTypeahead({
       });
     }
 
-    return results;
+    return { options: results, exactMatchId: hasExactMatch ? scored[0].vendor.id : undefined };
   }, [inputValue, vendors]);
+
+  // A vendor matched by name or alias at 95%+ is the one Enter picks, even when
+  // another vendor's name merely starts with the typed text.
+  const autoHighlight = useCallback(
+    (opts: TypeaheadOption<Vendor>[], typed: string) => {
+      const exact = exactMatchId ? opts.findIndex((o) => o.id === exactMatchId) : -1;
+      return exact >= 0 ? exact : defaultAutoHighlight(opts, typed);
+    },
+    [exactMatchId]
+  );
 
   const handleInputChange = useCallback(
     (newValue: string) => {
@@ -127,6 +143,7 @@ export function VendorTypeahead({
       inputValue={inputValue}
       onInputChange={handleInputChange}
       onSelect={handleSelect}
+      autoHighlight={autoHighlight}
       placeholder={placeholder || t('drawer.expense.vendorPlaceholder')}
       disabled={disabled}
       className={className}

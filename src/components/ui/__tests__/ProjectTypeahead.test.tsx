@@ -301,6 +301,27 @@ describe('ProjectTypeahead', () => {
     });
   });
 
+  describe('when creating fails', () => {
+    // No form guards unpicked project text, so the box must not show a project that won't be saved
+    it('empties the box, so it never shows a project that is not picked', async () => {
+      const onChange = vi.fn();
+      const createSpy = vi.spyOn(projectRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
+      try {
+        renderProjectTypeahead({ profileId: testProfileId, onChange });
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Rebrand' } });
+        fireEvent.click(await screen.findByRole('option', { name: /Rebrand/ }));
+
+        await waitFor(() => expect(createSpy).toHaveBeenCalled());
+        await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(''));
+        await waitFor(() => expect(input).toHaveValue(''));
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+  });
+
   describe('clearing selection', () => {
     it('calls onChange with empty string when input is cleared', async () => {
       const project = await projectRepo.create({ name: 'My Project', profileId: testProfileId });

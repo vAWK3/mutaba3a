@@ -29,12 +29,20 @@ export function invalidatePaymentRecordLists(queryClient: ReturnType<typeof useQ
 }
 
 /**
- * Invalidates all transaction-related queries.
- * Extracted to avoid repeating 8 invalidation calls in each mutation.
+ * Everything a transaction write can change. The one list for every write
+ * path: the income hooks (useIncomeQueries) reuse it, and it covers their
+ * keys too, because the income drawer saves through this module while the
+ * client profile and /income read useIncome / useReceivables (MUT-5).
  */
-function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+export function invalidateTransactionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['income'] });
+  queryClient.invalidateQueries({ queryKey: ['receivables'] });
+  queryClient.invalidateQueries({ queryKey: ['incomeOverviewTotals'] });
+  queryClient.invalidateQueries({ queryKey: ['incomeAttentionReceivables'] });
   queryClient.invalidateQueries({ queryKey: ['transactions'] });
   queryClient.invalidateQueries({ queryKey: ['transaction'] });
+  // The payment drawer's remaining balance reads this one
+  queryClient.invalidateQueries({ queryKey: ['transactionDisplay'] });
   queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
   queryClient.invalidateQueries({ queryKey: ['overviewTotalsByCurrency'] });
   queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
@@ -192,29 +200,13 @@ export function useRecordPartialPayment() {
 
 /**
  * A payment changes what the user is owed, so every list that answers that
- * question has to refetch -- not just the transaction keys.
- *
- * The income keys are listed explicitly rather than reused from
- * useIncomeQueries' invalidateIncomeQueries: the two helpers overlap and that
- * duplication is recorded in TECH_DEBT.md. Without these four, /income and the
- * client Receivables tab kept a stale status and remaining balance for up to
- * the 60s staleTime after a payment was saved (MUT-6 AC #5). markPaid already
- * invalidates this same set, so this only brings the payment path in line with
- * the path beside it.
- *
- * The bare ['paymentRecords'] key prefix-matches the by-client key too, so the
- * client Payments section (MUT-4) inherits correct refresh when it ships.
+ * question has to refetch. invalidateTransactionQueries is the one list for
+ * that (MUT-5): it covers the income and receivables keys and, through
+ * invalidatePaymentRecordLists, every ['paymentRecords', ...] key, including
+ * this transaction's history and the by-client Payments section. Listing any
+ * of them again here would invalidate (and refetch) them twice per save.
  */
-function invalidatePaymentRecordQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  transactionId: string
-) {
-  invalidatePaymentRecordLists(queryClient);
-  queryClient.invalidateQueries({ queryKey: queryKeys.paymentRecords(transactionId) });
-  queryClient.invalidateQueries({ queryKey: ['income'] });
-  queryClient.invalidateQueries({ queryKey: ['receivables'] });
-  queryClient.invalidateQueries({ queryKey: ['incomeOverviewTotals'] });
-  queryClient.invalidateQueries({ queryKey: ['incomeAttentionReceivables'] });
+function invalidatePaymentRecordQueries(queryClient: ReturnType<typeof useQueryClient>) {
   invalidateTransactionQueries(queryClient);
 }
 
@@ -255,8 +247,7 @@ export function useCreatePaymentRecord() {
   return useMutation({
     mutationFn: (data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }) =>
       getRepositories().synced.paymentRecords.create(data),
-    onSuccess: (_result, variables) =>
-      invalidatePaymentRecordQueries(queryClient, variables.transactionId),
+    onSuccess: () => invalidatePaymentRecordQueries(queryClient),
   });
 }
 
@@ -269,8 +260,7 @@ export function useUpdatePaymentRecord() {
       transactionId: string;
       data: { amountMinor?: number; paidAt?: string; notes?: string };
     }) => getRepositories().synced.paymentRecords.update(vars.id, vars.data),
-    onSuccess: (_result, variables) =>
-      invalidatePaymentRecordQueries(queryClient, variables.transactionId),
+    onSuccess: () => invalidatePaymentRecordQueries(queryClient),
   });
 }
 
@@ -280,8 +270,7 @@ export function useDeletePaymentRecord() {
   return useMutation({
     mutationFn: (vars: { id: string; transactionId: string }) =>
       getRepositories().synced.paymentRecords.delete(vars.id),
-    onSuccess: (_result, variables) =>
-      invalidatePaymentRecordQueries(queryClient, variables.transactionId),
+    onSuccess: () => invalidatePaymentRecordQueries(queryClient),
   });
 }
 

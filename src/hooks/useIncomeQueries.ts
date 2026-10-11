@@ -12,8 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../db';
 import { useMutationWithFeedback } from './useMutationWithFeedback';
 import type { QueryFilters, Transaction, Currency, TxStatus } from '../types';
-import { invalidateMoneyEventQueries } from './useMoneyEventQueries';
-import { invalidatePaymentRecordLists } from './useQueries';
+import { invalidateTransactionQueries } from './useQueries';
 
 // ============================================================================
 // Query Keys
@@ -60,25 +59,11 @@ export interface ReceivablesFilters {
 // Invalidation Helpers
 // ============================================================================
 
+// One invalidation list for every transaction write (useQueries.ts owns it).
+// A function, not an alias: the import is read when a mutation settles, not
+// at module load, so tests that partially mock useQueries keep loading.
 function invalidateIncomeQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: ['income'] });
-  queryClient.invalidateQueries({ queryKey: ['receivables'] });
-  queryClient.invalidateQueries({ queryKey: ['incomeOverviewTotals'] });
-  queryClient.invalidateQueries({ queryKey: ['incomeAttentionReceivables'] });
-  // Also invalidate legacy transaction queries for backwards compatibility
-  queryClient.invalidateQueries({ queryKey: ['transactions'] });
-  queryClient.invalidateQueries({ queryKey: ['transaction'] });
-  queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
-  queryClient.invalidateQueries({ queryKey: ['overviewTotalsByCurrency'] });
-  queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
-  queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
-  queryClient.invalidateQueries({ queryKey: ['projectSummary'] });
-  queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
-  queryClient.invalidateQueries({ queryKey: ['clientSummary'] });
-  invalidatePaymentRecordLists(queryClient);
-  // Money events are derived from this data, so the Overview KPI strip and
-  // attention feed have to refetch with it.
-  invalidateMoneyEventQueries(queryClient);
+  invalidateTransactionQueries(queryClient);
 }
 
 // ============================================================================

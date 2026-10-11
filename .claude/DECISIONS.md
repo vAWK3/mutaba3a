@@ -47,6 +47,8 @@
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
 | ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
 | ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active | 2026-10 |
+| ADR-039 | Payment Records Own an Entry's Payment State; an Edit Never Rewrites It | Active | 2026-10 |
+| ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
 
@@ -1796,6 +1798,78 @@ the drawer that already has one); allowing future dates (rejected, see above);
 deleting `markPaid`/`useMarkTransactionPaid` entirely now that the UI stops
 calling them directly (rejected — both have other live callers outside this
 ticket's scope: sync replay and the payment-request flow).
+
+*(Amended 2026-10-12, MUT-5 final pass.)* "Future" means the payment's calendar day is after today. A date-only `paidAt` is compared as is. A full timestamp is future only when both its UTC date and its local date are after today (`isFuturePaymentDate` in `repository.ts`). Comparing only the UTC date rejected `new Date().toISOString()` in the evening west of UTC, which broke Mark paid and Record Payment there.
+
+---
+
+## ADR-039: Payment Records Own an Entry's Payment State; an Edit Never Rewrites It
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-5 (epic MUT-1). Brief: `.claude/designs/mut-5-income-fast-path.md`, decision P2. Approved by Basel on 2026-10-11 as eng-review choice R2 = A.
+
+Before MUT-5, every income-drawer save rewrote the payment fields:
+- a paid entry was sent `paidAt: now`, so retitling it moved its payment date to today (Home's Recent payments, the client's Last payment);
+- an unpaid entry was sent `receivedAmountMinor: undefined`, which Dexie treats as a delete, so retitling a part-paid entry erased what had been received;
+- `transactionRepo.update` wrote whatever it was given and never recalculated.
+
+Mark paid, Record payment and partial payments all write `PaymentRecord`s, so most paid income is record-backed.
+
+**Decision**:
+1. **An entry with live payment records gets its `status`, `paidAt` and `receivedAmountMinor` from them** (`recalculateReceivedAmount`, ADR-030).
+   - The income drawer never writes those three fields for such an entry.
+   - Its status switch is read-only, with a hint to manage the payments from the client page.
+2. **`transactionRepo.update` enforces this for every caller.** An update that touches the amount, the currency or any of `status` / `paidAt` / `receivedAmountMinor` reads the live records in one Dexie transaction. When the entry has records:
+   - `status`, `paidAt` and `receivedAmountMinor` are stripped from the update and re-derived;
+   - a currency change is rejected with `PaymentRecordError`, so recorded payments can't silently move into another currency;
+   - an amount change below the recorded total is rejected (ADR-030: no overpayment). An unchanged amount is not checked, so a legacy entry with more recorded than its total can still be retitled;
+   - after the write, a changed amount or stripped payment state recalculates. An unpaid entry cut to exactly the recorded total becomes paid; a paid entry raised above it is owed the difference.
+
+   Updates that touch none of these take the old path, with no extra read. *(Amended 2026-10-11 by the pre-landing review: the first version only guarded amount changes, so a form writing status before its records loaded, or a currency edit, slipped past.)*
+3. **For an entry without records, the drawer owns payment state, but only on a real status change** (`buildIncomeUpdate` in `src/lib/incomeEntry.ts`):
+
+   | Transition | Write |
+   |---|---|
+   | paid → paid | keeps the original `paidAt` |
+   | unpaid → unpaid | leaves `paidAt` and `receivedAmountMinor` **absent** from the write (never `undefined`) |
+   | unpaid → paid | paid now, in full |
+   | paid → unpaid | clears both |
+
+**Consequences**: editing can no longer move a payment date or erase a received amount, and an amount edit can't leave status disagreeing with the records. The income drawer mirrors the rules so users get a translated reason, not a refusal: it waits for the records to load, shows status and currency read-only on a record-backed entry, and toasts when the repository still refuses (records changed in another window). Any other caller now gets `PaymentRecordError` for a currency change on a record-backed entry, including the invoice-sync path in `paymentRequestService`, which updates linked unpaid entries from a document. The drawer check for a too-low amount exists only to show a translated field message; the repository stays the source of truth.
+
+When a cut makes the entry fully paid, `paidAt` is the latest record's date, because `recalculateReceivedAmount` derives it from the records (ADR-038, MUT-18).
+
+*(Amended 2026-10-11 by the adversarial re-review.)* Two callers wrote payment state the way rule 2 now refuses, and both follow it:
+- **Record Payment on a payment request** (`recordPaymentForRequest`) wrote `status: 'paid'` through `update`, so a part-paid receivable stayed unpaid while its document showed paid. It calls `markPaid`, which records the balance still owed.
+- **`updatePaymentRequestWithTransaction`** (no callers yet) updates the linked receivable before the document, so a refused currency change leaves both untouched.
+- **The op log** (`syncedTransactionRepo.update`) logs the entry as stored: a payment field only when it really changed (refused or derived), every other requested field with the value written.
+
+One gap remains, ticketed: an entry saved as Received in the drawer still has no record (TD-029 → MUT-60). Until it does, it follows rule 3, not rule 1.
+
+**Alternatives Considered**:
+- Fixing only the drawer, the "draft P2" rule (rejected): Received → Invoiced on a Mark-paid entry would still orphan its records, and amount edits would leave status stale.
+- Folding all of TD-029 into MUT-5, records on create plus a backfill (rejected): it needs a Dexie upgrade, which the ticket scopes out.
+- A separate bug ticket (rejected): the edit path is exactly the code MUT-5 restructures.
+
+---
+
+## ADR-040: Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: Found by the MUT-5 adversarial re-review. TanStack Query's default `networkMode: 'online'` pauses queries and mutations while `navigator.onLine` is false. The app is local-first: every query and mutation in the main app reads or writes IndexedDB (Dexie). Offline, the income drawer's Save, every other save and every list that had not loaded sat paused until the network returned, in a desktop app meant to work without one. Proven with `onlineManager.setOnline(false)`: a local `fetchQuery` and a mutation never settled.
+
+**Decision**:
+1. The main app's `QueryClient` is built by `createAppQueryClient()` (`src/lib/queryClient.ts`) with `networkMode: 'always'` for queries and mutations.
+2. A query that really goes to the network declares `networkMode: 'online'` itself. Today that is only the live FX rate (`useFxRate`), which shows its cached rate (`placeholderData`) while it waits.
+3. The hosted portal keeps its own client (`createPortalQueryClient`) on the default, because every portal query is a server call.
+
+**Consequences**: offline, local reads and saves behave exactly as online. A future network-backed hook in the main app has to opt into `'online'` (or handle its own failures); otherwise it fails fast offline and retries per its `retry` setting.
+
+**Alternatives Considered**:
+- `'offlineFirst'` (rejected): it runs the first attempt but pauses retries offline, so a transient IndexedDB failure would hang instead of retrying.
+- Setting `networkMode` per hook (rejected): dozens of hooks, and a new one would silently get the pausing default.
 
 ---
 

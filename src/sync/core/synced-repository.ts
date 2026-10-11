@@ -18,6 +18,7 @@ import {
   businessProfileRepo,
   documentRepo,
   paymentRecordRepo,
+  PAYMENT_STATE_KEYS,
 } from '../../db/repository';
 import { captureOp } from './ops-engine';
 import type {
@@ -61,6 +62,28 @@ async function captureUpdateOps<T extends object>(
       previousValue: previous ? (previous as Record<string, unknown>)[field] : undefined,
     });
   }
+}
+
+// Helper to capture a transaction write as stored. The repository may refuse
+// payment fields on an entry with payment records, or derive them from those
+// records (ADR-039): payment fields are logged only when they really changed,
+// every other requested field with the value written.
+async function captureTransactionWriteOps(
+  id: string,
+  requested: Partial<Transaction>,
+  previous: Transaction | undefined,
+  written: Transaction | undefined
+) {
+  if (!written) return;
+  const paymentFields: readonly string[] = PAYMENT_STATE_KEYS;
+  const changes: Record<string, unknown> = {};
+  for (const field of Object.keys(requested)) {
+    if (!paymentFields.includes(field)) changes[field] = written[field as keyof Transaction];
+  }
+  for (const field of PAYMENT_STATE_KEYS) {
+    if (written[field] !== previous?.[field]) changes[field] = written[field];
+  }
+  await captureUpdateOps('transaction', id, changes, previous);
 }
 
 // Helper to capture a delete operation
@@ -170,7 +193,7 @@ export const syncedTransactionRepo = {
   async update(id: string, data: Partial<Transaction>): Promise<void> {
     const existing = await transactionRepo.get(id);
     await transactionRepo.update(id, data);
-    await captureUpdateOps('transaction', id, data, existing);
+    await captureTransactionWriteOps(id, data, existing, await transactionRepo.get(id));
   },
 
   async markPaid(id: string, opts?: { paidAt?: string }): Promise<void> {

@@ -28,7 +28,7 @@ import type {
   PaymentByClientFilters,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
-import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
+import { todayLocalISO, formatLocalDate, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
 import {
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
@@ -194,6 +194,9 @@ export const categoryRepo = {
 };
 
 // Transaction Repository
+// Fields an entry's payment records own once it has any (ADR-039)
+export const PAYMENT_STATE_KEYS = ['status', 'paidAt', 'receivedAmountMinor'] as const;
+
 export const transactionRepo = {
   async list(filters: QueryFilters = {}): Promise<TransactionDisplay[]> {
     const transactions = await db.transactions.toArray();
@@ -369,7 +372,48 @@ export const transactionRepo = {
       }
     }
 
-    await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+    const paymentStateSent = PAYMENT_STATE_KEYS.some((key) => key in data);
+    const amountChanged = data.amountMinor !== undefined && data.amountMinor !== existing.amountMinor;
+    const currencyChanged = data.currency !== undefined && data.currency !== existing.currency;
+    if (!paymentStateSent && !amountChanged && !currencyChanged) {
+      await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+      return;
+    }
+
+    // Payment records own received/status/paidAt (ADR-030, ADR-039). With live
+    // records, a caller can't set those three, can't move the payments into
+    // another currency, and can't cut the amount below what they add up to;
+    // the payment state is then re-derived from the records.
+    await db.transaction('rw', [db.transactions, db.paymentRecords], async () => {
+      const records = await db.paymentRecords
+        .where('transactionId')
+        .equals(id)
+        .filter((r) => !r.deletedAt)
+        .toArray();
+      if (records.length === 0) {
+        await db.transactions.update(id, { ...data, updatedAt: nowISO() });
+        return;
+      }
+
+      const recordedMinor = records.reduce((sum, r) => sum + r.amountMinor, 0);
+      if (currencyChanged) {
+        throw new PaymentRecordError(
+          `Payment amount already recorded in ${existing.currency}; the currency can't change`,
+          { transactionId: id }
+        );
+      }
+      if (amountChanged && data.amountMinor! < recordedMinor) {
+        throw new PaymentRecordError(
+          `Payment amount already recorded (${recordedMinor / 100} ${existing.currency}) exceeds the new amount`,
+          { transactionId: id }
+        );
+      }
+
+      const changes: Partial<Transaction> = { ...data };
+      for (const key of PAYMENT_STATE_KEYS) delete changes[key];
+      await db.transactions.update(id, { ...changes, updatedAt: nowISO() });
+      if (amountChanged || paymentStateSent) await recalculateReceivedAmount(id);
+    });
   },
 
   async markPaid(id: string, opts?: { paidAt?: string }): Promise<void> {
@@ -1424,6 +1468,20 @@ async function assertWithinTransactionTotal(
   }
 }
 
+/**
+ * A payment dated after today (MUT-18). Only the calendar day matters. A full
+ * timestamp is future only when both its UTC date and its local date are, so
+ * nowISO() is today in every timezone: in the evening west of UTC its UTC
+ * date is already tomorrow.
+ */
+function isFuturePaymentDate(paidAt: string): boolean {
+  const today = todayLocalISO();
+  if (paidAt.split('T')[0] <= today) return false;
+  if (!paidAt.includes('T')) return true;
+  const instant = new Date(paidAt);
+  return Number.isNaN(instant.getTime()) || formatLocalDate(instant) > today;
+}
+
 export const paymentRecordRepo = {
   async create(data: {
     transactionId: string;
@@ -1434,9 +1492,8 @@ export const paymentRecordRepo = {
     if (data.amountMinor <= 0) {
       throw new PaymentRecordError('Payment amount must be positive', { transactionId: data.transactionId });
     }
-    // A payment can't have arrived before it was received (MUT-18): only the
-    // calendar date matters, so a same-day timestamp from nowISO() is not future.
-    if (data.paidAt.split('T')[0] > todayISO()) {
+    // A payment can't have arrived before it was received (MUT-18)
+    if (isFuturePaymentDate(data.paidAt)) {
       throw new PaymentRecordError('Payment date cannot be in the future', { transactionId: data.transactionId });
     }
 
@@ -1483,7 +1540,7 @@ export const paymentRecordRepo = {
     if (data.amountMinor !== undefined && data.amountMinor <= 0) {
       throw new PaymentRecordError('Payment amount must be positive', { paymentRecordId: id, transactionId: record.transactionId });
     }
-    if (data.paidAt !== undefined && data.paidAt.split('T')[0] > todayISO()) {
+    if (data.paidAt !== undefined && isFuturePaymentDate(data.paidAt)) {
       throw new PaymentRecordError('Payment date cannot be in the future', { paymentRecordId: id, transactionId: record.transactionId });
     }
 

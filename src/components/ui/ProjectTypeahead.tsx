@@ -114,9 +114,11 @@ export function ProjectTypeahead({
           setInputValue(newProject.name);
           onChange(newProject.id);
         } catch {
-          // If creation fails, revert input
+          // Empty the box: no form guards unpicked project text, so a name left
+          // there would look picked and then be saved without its project.
           setInputValue('');
           onChange('');
+          return false;
         }
       } else {
         setInputValue(option.label);

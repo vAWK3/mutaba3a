@@ -4,6 +4,8 @@ import {
   formatAmount,
   formatAmountShort,
   parseAmountToMinor,
+  parseAmountInput,
+  amountInputCurrency,
   parseCurrencyInput,
   formatCurrencyInput,
   formatDate,
@@ -105,6 +107,124 @@ describe('utils', () => {
     it('should round fractional cents', () => {
       expect(parseAmountToMinor('100.999')).toBe(10100);
       expect(parseAmountToMinor('100.001')).toBe(10000);
+    });
+  });
+
+  describe('parseAmountInput', () => {
+    it.each([
+      ['1200', 120000],
+      ['1,200.50', 120050],
+      ['0.5', 50],
+      ['.5', 50],
+      ['5.', 500],
+      ['007', 700],
+      ['12,345,678', 1234567800],
+      ['\u0661\u0662\u0660\u0660', 120000],
+      ['\u0661\u066C\u0662\u0660\u0660\u066B\u0665\u0660', 120050],
+      ['\u06F1\u06F2\u06F0\u06F0', 120000],
+      [' $ 1,200 ', 120000],
+      ['\u20AA100', 10000],
+      ['100 USD', 10000],
+      ['usd 100', 10000],
+      ['US$1,200', 120000],
+      ['\u200F\u0661\u0660\u0660', 10000],
+      ['\u2068100\u2069', 10000],
+      ['\u202B100\u202C', 10000],
+      ['\u20661,200\u2069 USD', 120000],
+      ['1 200', 120000],
+      ['1\u00A0200', 120000],
+      ['1\u202F200.50', 120050],
+      ['-50', -5000],
+      ['0.29', 29],
+      ['1.01', 101],
+    ])('parses %j as %i minor units', (input, expected) => {
+      expect(parseAmountInput(input)).toBe(expected);
+    });
+
+    it.each([
+      // ambiguous: a comma or space that is not a thousands separator is never guessed at
+      '12,5',
+      '1.200,50',
+      '1,2,3',
+      '1.2.3',
+      '0,500',
+      '100 50',
+      '1 2 3',
+      // letters other than a currency code are never stripped
+      '12a5',
+      '2k',
+      '1.5k',
+      '50%',
+      '5 \u0623\u0644\u0641',
+      '10O',
+      '1e3',
+      // more than two decimals is ambiguous for money
+      '1.005',
+      '100.999',
+      // beyond safe integer minor units
+      '9'.repeat(400),
+      '99999999999999999',
+      '',
+      '   ',
+      'abc',
+      '-',
+      '.',
+      '$',
+      // one currency token at most, and only the ones an entry can be in
+      '$100 ILS',
+      '$100 USD',
+      '\u00A3100',
+      '100 GBP',
+      // longer than any amount anyone types
+      '1'.padStart(65, '0'),
+    ])('rejects %j', (input) => {
+      expect(parseAmountInput(input)).toBeNull();
+    });
+
+    it('reads a long run of spaces before stray text in linear time', () => {
+      const pasted = '1' + ' '.repeat(50_000) + 'x';
+      const started = performance.now();
+      expect(parseAmountInput(pasted)).toBeNull();
+      expect(performance.now() - started).toBeLessThan(100);
+    });
+
+    it('rounds extra decimals half-up on the string, never through float math, when asked to', () => {
+      expect(parseAmountInput('100.999', { maxDecimals: Infinity })).toBe(10100);
+      expect(parseAmountInput('1.005', { maxDecimals: Infinity })).toBe(101);
+      expect(parseAmountInput('0.285', { maxDecimals: Infinity })).toBe(29);
+      expect(parseAmountInput('100.001', { maxDecimals: Infinity })).toBe(10000);
+    });
+  });
+
+  describe('amountInputCurrency', () => {
+    it.each([
+      ['$100', 'USD'],
+      ['US$1,200', 'USD'],
+      ['100 usd', 'USD'],
+      ['\u20AA100', 'ILS'],
+      ['100 NIS', 'ILS'],
+      ['ils 5', 'ILS'],
+      ['\u20AC5', 'EUR'],
+      ['5 EUR', 'EUR'],
+    ])('reads the currency %j names as %s', (input, currency) => {
+      expect(amountInputCurrency(input)).toBe(currency);
+    });
+
+    it.each(['100', '1,200.50', '', 'abc', '$100 ILS'])('names no currency in %j', (input) => {
+      expect(amountInputCurrency(input)).toBeUndefined();
+    });
+  });
+
+  describe('Arabic-Indic digits in the lenient parsers', () => {
+    it('parseAmountToMinor and parseCurrencyInput read Arabic-Indic digits', () => {
+      expect(parseAmountToMinor('١٢٠٠')).toBe(120000);
+      expect(parseCurrencyInput('١٬٢٠٠٫٥٠')).toBe(120050);
+    });
+
+    it('formatCurrencyInput converts Arabic-Indic digits and separators as you type', () => {
+      expect(formatCurrencyInput('١٢.٥')).toBe('12.5');
+      expect(formatCurrencyInput('١٢٫٥')).toBe('12.5');
+      expect(formatCurrencyInput('۱۲۰۰')).toBe('1200');
     });
   });
 

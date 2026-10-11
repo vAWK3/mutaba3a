@@ -854,7 +854,18 @@
         "body": "تم تصدير هذا القيد في مستند، لذا لا يمكن تغيير تفاصيله هنا. ما زال بإمكانك تسجيل الدفعات من صفحة العميل.",
         "viewDocument": "عرض المستند",
         "turnOnInvoices": "فعّل الفواتير من الإعدادات › الميزات المتقدمة لفتح المستند."
-      }
+      },
+      "titleLabel": "ماذا أنجزت؟",
+      "titlePlaceholder": "مثال: إعادة تصميم الشعار",
+      "statusLabel": "الحالة",
+      "moreDetails": "تفاصيل إضافية",
+      "lessDetails": "تفاصيل أقل",
+      "paymentsRecordedHint": "تم تسجيل دفعات لهذا البند، لذا تتبع حالته هذه الدفعات. أدِر الدفعات من صفحة العميل.",
+      "currencyLockedHint": "تم تسجيل دفعات بعملة {currency}، لذا لا يمكن تغيير العملة.",
+      "savePaymentsChanged": "تغيّرت دفعات هذا البند أثناء فتحه. أعد فتحه لرؤية آخر التحديثات.",
+      "saveFailed": "تعذّر حفظ هذا البند. حاول مرة أخرى.",
+      "paymentsLoadFailed": "تعذّر تحميل دفعات هذا البند، لذا لا يمكن حفظه بعد.",
+      "paymentsRetry": "حاول مرة أخرى"
     },
     "transaction": {
       "new": "معاملة جديدة",
@@ -878,8 +889,6 @@
       "projectPlaceholder": "اختر مشروع...",
       "category": "الفئة",
       "categoryPlaceholder": "اختر فئة...",
-      "title": "العنوان",
-      "titlePlaceholder": "وصف مختصر...",
       "notes": "ملاحظات",
       "notesPlaceholder": "ملاحظات إضافية..."
     },
@@ -991,7 +1000,12 @@
     "amountRequired": "المبلغ مطلوب",
     "dateRequired": "التاريخ مطلوب",
     "nameRequired": "الاسم مطلوب",
-    "profileRequired": "الملف التجاري مطلوب"
+    "profileRequired": "الملف التجاري مطلوب",
+    "amountInvalid": "أدخل مبلغًا مثل 1200 أو 1,200.50",
+    "amountPositive": "يجب أن يكون المبلغ أكبر من صفر",
+    "amountBelowRecorded": "تم تسجيل {amount} كمبلغ مدفوع، لذا لا يمكن أن يكون المبلغ أقل من ذلك",
+    "clientNotPicked": "اختر عميلًا من القائمة، أو اضغط Enter لإنشائه",
+    "amountCurrencyMismatch": "المبلغ بعملة {typed}، لكن هذا البند بعملة {currency}"
   },
   "time": {
     "today": "اليوم",

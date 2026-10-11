@@ -1,7 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../database';
-import { transactionRepo, paymentRecordRepo, clientRepo } from '../repository';
+import { transactionRepo, paymentRecordRepo, clientRepo, PaymentRecordError } from '../repository';
 import { todayLocalISO } from '../../lib/dates';
+
+/** Runs fn with the clock at instant, in timeZone (Node applies a TZ change at once). */
+async function atInstantIn(timeZone: string, instant: string, fn: () => Promise<void>) {
+  const savedTz = process.env.TZ;
+  process.env.TZ = timeZone;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(instant));
+  try {
+    await fn();
+  } finally {
+    vi.useRealTimers();
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  }
+}
 
 describe('paymentRecordRepo', () => {
   let incomeId: string;
@@ -161,9 +176,33 @@ describe('paymentRecordRepo', () => {
         })
       ).resolves.toMatchObject({ paidAt: todayWithTime });
     });
+
+    // 21:30 on Oct 12 in New York is already Oct 13 in UTC; "now" is not a future payment
+    it('accepts "now" as a UTC timestamp in the evening west of UTC', async () => {
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await expect(
+          paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: new Date().toISOString() })
+        ).resolves.toMatchObject({ amountMinor: 3000 });
+      });
+    });
+
+    it('still rejects a timestamp whose local day is tomorrow', async () => {
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await expect(
+          paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: '2026-10-14T01:30:00.000Z' })
+        ).rejects.toThrow('Payment date cannot be in the future');
+      });
+    });
   });
 
   describe('update', () => {
+    it('accepts moving a payment to "now" in the evening west of UTC', async () => {
+      const record = await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: '2024-01-20' });
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await expect(paymentRecordRepo.update(record.id, { paidAt: new Date().toISOString() })).resolves.toBeUndefined();
+      });
+    });
+
     it('should update amount and recalculate', async () => {
       const record = await paymentRecordRepo.create({
         transactionId: incomeId,
@@ -499,6 +538,116 @@ describe('paymentRecordRepo', () => {
           paidAt: '2024-01-20',
         })
       ).rejects.toThrow('Payment amount');
+    });
+  });
+
+  describe('transactionRepo.update on an entry with payment records (MUT-5)', () => {
+    it('rejects an amount below what is already recorded and leaves the entry unchanged', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+
+      await expect(transactionRepo.update(incomeId, { amountMinor: 4000 })).rejects.toBeInstanceOf(
+        PaymentRecordError
+      );
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.amountMinor).toBe(10000);
+      expect(tx?.receivedAmountMinor).toBe(5000);
+    });
+
+    it('marks the entry paid when the amount is cut to exactly what was recorded', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+
+      await transactionRepo.update(incomeId, { amountMinor: 5000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.amountMinor).toBe(5000);
+      expect(tx?.status).toBe('paid');
+      expect(tx?.receivedAmountMinor).toBe(5000);
+      expect(tx?.paidAt).toBeDefined();
+    });
+
+    it('reopens a paid entry when its amount is raised above what was recorded', async () => {
+      await transactionRepo.markPaid(incomeId, { paidAt: '2024-01-20' });
+      expect((await transactionRepo.get(incomeId))?.status).toBe('paid');
+
+      await transactionRepo.update(incomeId, { amountMinor: 12000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.status).toBe('unpaid');
+      expect(tx?.receivedAmountMinor).toBe(10000);
+      expect(tx?.paidAt).toBeUndefined();
+    });
+
+    it('does not recalculate when the amount is sent unchanged with other edits', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+      // A value only a recalculation would overwrite
+      await db.transactions.update(incomeId, { receivedAmountMinor: 1234 });
+
+      await transactionRepo.update(incomeId, { title: 'Retitled', amountMinor: 10000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.title).toBe('Retitled');
+      expect(tx?.receivedAmountMinor).toBe(1234);
+    });
+
+    it('changes the amount of an entry without records with no guard and no recalculation', async () => {
+      await transactionRepo.update(incomeId, { amountMinor: 1000 });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.amountMinor).toBe(1000);
+      expect(tx?.status).toBe('unpaid');
+      expect(tx?.receivedAmountMinor).toBeUndefined();
+    });
+
+    it('re-derives status, paidAt and received instead of taking them from the caller', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 4000, paidAt: '2024-01-20' });
+
+      // e.g. a form that wrote payment state before the records had loaded
+      await transactionRepo.update(incomeId, {
+        status: 'paid',
+        paidAt: '2024-02-01T00:00:00.000Z',
+        receivedAmountMinor: 10000,
+      });
+
+      const tx = await transactionRepo.get(incomeId);
+      expect(tx?.status).toBe('unpaid');
+      expect(tx?.receivedAmountMinor).toBe(4000);
+      expect(tx?.paidAt).toBeUndefined();
+    });
+
+    it('refuses a currency change once payments are recorded', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 4000, paidAt: '2024-01-20' });
+
+      await expect(transactionRepo.update(incomeId, { currency: 'ILS' })).rejects.toBeInstanceOf(PaymentRecordError);
+      expect((await transactionRepo.get(incomeId))?.currency).toBe('USD');
+    });
+
+    it('allows a currency change while no payment is recorded', async () => {
+      await transactionRepo.update(incomeId, { currency: 'ILS' });
+      expect((await transactionRepo.get(incomeId))?.currency).toBe('ILS');
+    });
+
+    it('still lets a legacy overpaid entry be retitled when its amount is unchanged', async () => {
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 5000, paidAt: '2024-01-20' });
+      // An entry saved before the guard existed, with more recorded than its total
+      await db.transactions.update(incomeId, { amountMinor: 4000 });
+
+      await transactionRepo.update(incomeId, { title: 'Renamed', amountMinor: 4000 });
+
+      expect((await transactionRepo.get(incomeId))?.title).toBe('Renamed');
+    });
+
+    it('ignores deleted records when checking the new amount', async () => {
+      const record = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 5000,
+        paidAt: '2024-01-20',
+      });
+      await paymentRecordRepo.delete(record.id);
+
+      await transactionRepo.update(incomeId, { amountMinor: 1000 });
+
+      expect((await transactionRepo.get(incomeId))?.amountMinor).toBe(1000);
     });
   });
 

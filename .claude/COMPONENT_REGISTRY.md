@@ -319,6 +319,66 @@ navigate({ search: { newTx: 'income' } });          // Create
 - Due date for unpaid income
 - Linked document reference
 
+> Registry drift: income is created and edited through **IncomeDrawer** (below), opened from `useDrawerStore().openIncomeDrawer`. This TransactionDrawer entry describes the legacy URL-driven design.
+
+---
+
+### IncomeDrawer
+**Location**: `src/components/drawers/IncomeDrawer.tsx`. Mounted in `AppShell` while `incomeDrawer.isOpen`.
+**Purpose**: create and edit income. The entry is the work record (MUT-5).
+
+```tsx
+openIncomeDrawer({ mode: 'create', defaultClientId, defaultProfileId, defaultStatus });
+openIncomeDrawer({ mode: 'edit', transactionId });
+openIncomeDrawer({ mode: 'create', duplicateFromId });
+```
+
+**Layout**:
+- **Fast path:** title ("What did you do?", focused on create), amount (`.input-with-prefix`, text + decimal keypad, LTR in Arabic) and client (`ClientTypeahead`).
+- **More details:** a `.form-disclosure` toggle whose summary line names the defaults. It holds the status switch, due date, currency (USD/ILS/EUR), date, project (only while Projects is on), notes and the profile. The profile moves up front when it can't be resolved.
+
+**Rules**: they live in `src/lib/incomeEntry.ts` and are unit-tested.
+- `buildIncomeCreate`, `buildIncomeUpdate` (ADR-039: payment fields are absent unless the status changes; never written for record-backed entries)
+- `shouldExpandDetails`
+- `isBelowRecordedTotal`
+- `resolveDefaultCurrency` (profile → settings → USD)
+
+**Validation**: Zod messages are i18n keys (`validation.amountRequired/amountInvalid/amountPositive/amountBelowRecorded/clientNotPicked/profileRequired/dateRequired`).
+
+**Behaviour**:
+- **Lock notice:** a locked entry (MUT-13) shows the notice, and Save is disabled.
+- **Queued save:** a save asked for while a new client is still being created is held until the client exists.
+
+**Tests**:
+- `src/components/__tests__/IncomeDrawer.test.tsx`
+- `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx`
+- `e2e/income-fast-path.spec.ts`
+
+---
+
+### Typeaheads (`EntityTypeahead`, `ClientTypeahead`, `ProjectTypeahead`, `VendorTypeahead`)
+**Location**: `src/components/ui/`. The hosted `ClientPicker`/`ProjectPicker` also wrap `EntityTypeahead`.
+
+**Keyboard contract (MUT-5, tightened by the pre-landing review)**:
+- **Typing** highlights the first option whose label starts with the text, else the create option, else the only option of a select-only list. A substring match is never highlighted, so a new "Ann" is never filed under "Joanna".
+- **Enter:**
+  - picks the highlighted option;
+  - is held while an async `onSelect` is still saving (`aria-busy`), then submits the form once the pick is saved (unless the user typed in between); is held while typed text is unpicked (the list reopens on the auto highlight);
+  - reaches the surrounding form when the field is empty or shows a picked/prefilled value.
+- **Other keys:** ArrowDown on a closed list opens it. Tab closes the list without picking. Escape on an open list closes only the list (`stopPropagation`).
+- **ARIA:** `aria-expanded` follows what is visible. `aria-controls` and `aria-activedescendant` point at the listbox and highlighted option.
+- **Props:** `onSelect` may return a promise; resolving it to `false` marks the pick failed (the held Enter is dropped, the text is unpicked again). `autoHighlight(options, typed)` overrides which option typing highlights; the default is `defaultAutoHighlight` (`typeaheadHighlight.ts`). The optional `onBlur` is called before the list closes.
+- **`ProjectTypeahead`:** a failed create empties the box and resolves `false` (no form guards unpicked project text, so a name left in the box would look picked). An empty box never shows a highlight.
+- **`VendorTypeahead`:** highlights the vendor matched at 95%+ by name or alias (the one that suppresses "create") ahead of a prefix match; a failed create keeps the raw text as the vendor, as before.
+
+**`ClientTypeahead` extras**:
+- Leaving the box with a client's exact name (any case) picks that client.
+- `onPendingTextChange(text)` reports text that isn't a picked client ('' when there is none). A client picked from "create" counts as picked at once.
+- `onCreatingChange(creating)` brackets the creation of a new client.
+- A failed create keeps the typed name in the box, unpicked, so a form refuses to save without it, even when a client was picked before; it resolves `false`.
+
+**Tests**: `src/components/ui/__tests__/{EntityTypeahead,ClientTypeahead,ProjectTypeahead,VendorTypeahead}.test.tsx`.
+
 ---
 
 ### ClientDrawer

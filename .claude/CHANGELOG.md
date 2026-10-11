@@ -49,6 +49,121 @@
 - The demo seed wrote payments and expenses dated after today (a "Last payment" of Oct 19 on Oct 11), against ADR-038. Both generators cap at today.
 - Seeding next to an existing default profile made two defaults; the sample now becomes the default only when nothing else is.
 
+## [Unreleased] - 2026-10-11 — MUT-5: the income entry is the work record
+
+**Scope:**
+- `src/components/drawers/IncomeDrawer.tsx` (restructured, same component)
+- `src/lib/incomeEntry.ts` (new: `buildIncomeCreate`, `buildIncomeUpdate`, `shouldExpandDetails`, `isBelowRecordedTotal`, `recordedTotalMinor`, `resolveDefaultCurrency`)
+- `src/lib/utils.ts` (`parseAmountInput`, `normalizeNumerals`)
+- `src/db/repository.ts` (`transactionRepo.update`)
+- `src/components/ui/EntityTypeahead.tsx`, `src/components/ui/ClientTypeahead.tsx`
+- `src/hooks/useQueries.ts`, `src/hooks/useIncomeQueries.ts`
+- `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`
+- `e2e/income-fast-path.spec.ts` (new)
+- Brief: `.claude/designs/mut-5-income-fast-path.md` (decisions P1–P5, eng-review ledger R1–R8); ADR-039, TD-029 update
+
+### Added
+- **Fast path.** Title ("What did you do?", autofocused), amount and client are the only fields up front.
+- **More details.** Status, due date, currency, date, project, notes and the profile sit behind a toggle. Its summary line names the defaults in use: status · currency · date · profile when there are several.
+- **Defaults.** A new entry starts in its profile's `defaultCurrency` and follows a profile change until the user picks a currency. EUR is offered.
+- **Profile.** It is asked up front only when none can be resolved. An invalid field inside More details reopens it.
+- **Edit view.** On edit, More details opens only when the entry has a due date, project, notes, a non-default currency or no profile.
+- **Amount input.** Arabic-Indic and Extended Arabic-Indic digits and the Arabic separators are accepted, through `parseAmountInput`. An ambiguous amount ("12,5", "1.200,50") is a field error, never a guess.
+- **Typed client.** A client name typed but not picked: an exact match is picked on blur, and any other text blocks the save with a message.
+
+### Changed
+- **One keyboard model in every typeahead** (client, project and vendor; hosted client and project pickers):
+  - typing highlights the first match;
+  - Enter on a closed list submits the surrounding form;
+  - Escape closes only the list.
+- **The lenient parsers** (`parseAmountToMinor`, `parseCurrencyInput`) wrap `parseAmountInput`. `formatCurrencyInput` normalizes numerals first, so the payment drawer accepts Arabic digits.
+- **One transaction invalidation list.** `invalidateTransactionQueries` is now exported and covers the `income`, `receivables`, `incomeOverviewTotals` and `incomeAttentionReceivables` keys too; `useIncomeQueries` reuses it.
+
+### Fixed
+- **Editing reset payment data.** Editing a paid entry reset its payment date to today, and editing a part-paid entry wiped what had been received. The drawer now leaves payment fields absent from the write unless the status really changes.
+- **Record-backed entries** (paid through Mark paid / Record payment): their payment state belongs to their records (ADR-039).
+  - The status is read-only in the drawer.
+  - An amount below the recorded total is refused, in the drawer and in `transactionRepo.update`.
+  - An amount change recalculates received and status.
+- **Keyboard path.** Enter after picking a client re-opened the list instead of saving. Pressing Enter twice right after creating a new client now saves with that client: the drawer holds the save until the client exists.
+- **Escape** in an open client list also closed the drawer and discarded the form.
+- **No refresh after save.** A save from the income drawer didn't refresh the client profile or `/income` until you navigated away and back. This was pre-existing and was folded in at the owner's request.
+- **Amount input type.** The amount input was `type="number"`, which rejected "1,200" and Arabic digits.
+- **The payment drawer's currency prefix** (`.input-with-prefix`) had no CSS. It now renders as a joined prefix.
+- **Arabic layout.** The amount stays left-to-right in Arabic: `:lang(ar) { direction: rtl }` in theme.css beat the markup's `dir="ltr"`.
+- **Defaults line in Arabic.** Its parts no longer reorder: each one is a `<bdi>`.
+
+### Technical
+- **TDD:**
+  - 41 drawer tests; 35 of them fail against the old drawer;
+  - 27 `incomeEntry` tests;
+  - `parseAmountInput` tables;
+  - 6 `transactionRepo.update` tests;
+  - 9 typeahead keyboard-contract tests;
+  - 4 `ClientTypeahead` tests;
+  - an i18n parity test;
+  - 2 hook tests proving a drawer save refreshes `useIncome`/`useReceivables`.
+- **E2E:** a Playwright spec for the keyboard-only path and Escape. It passed 10/10 with `--repeat-each=5` against the worktree dev server; the committed config pins port 5173 (TD-004).
+- **Test count:** the skipped edit-mode drawer test is back.
+- **Follow-ups:** MUT-60 (TD-029 write side + backfill), MUT-61 (Malafat client/matter intake), MUT-62 (title column in `/income`).
+
+---
+### Fixed (pre-landing review, `/qa-reconcile` → `/review`)
+
+Seven specialist and adversarial reviewers ran. These fixes were all approved by Basel ("fix all as recommended"):
+
+- **Amount parser.** It no longer guesses:
+  - letters other than a currency symbol or code are refused ("2k", "50%", "5 ألف");
+  - spaces group thousands like commas, threes only ("100 50" is refused);
+  - a leading 0 group is refused ("0,500");
+  - the drawer refuses more than 2 decimals, while the lenient wrappers round half-up on the digits;
+  - results must be safe integers.
+  The literal invisible bidi characters in `utils.ts` and its test are now `\u` escapes.
+- **Due date.** A Received save leaves it untouched. It used to delete it, so a reopened entry never went overdue.
+- **Repository invariant (ADR-039 amended).** With live payment records, `transactionRepo.update`:
+  - strips `status` / `paidAt` / `receivedAmountMinor` and re-derives them;
+  - rejects a currency change;
+  - checks the recorded total only when the amount changes, so legacy overpaid entries can still be retitled.
+- **Typeahead Enter safety.** Enter is held while a pick is still being saved (`aria-busy`) and while typed text is unpicked. Typing highlights the first *prefix* match or the create option, never a substring match. The input gains `aria-controls` / `aria-activedescendant`. A failed client create keeps the typed name unpicked.
+- **Drawer.**
+  - Status, currency and Save wait for the payment records.
+  - Currency is locked on record-backed entries, with a hint.
+  - A refused save shows a translated toast.
+  - An edit of a missing entry never creates one.
+  - The recorded amount in the Arabic error is bidi-isolated.
+- **Invalidation.** Each money key is invalidated once per payment save. `['transactionDisplay']`, the payment drawer's remaining balance, now refreshes after edits. TD-021 is resolved.
+- **Styles and copy.** The hint sits with its status selector, the disclosure label never wraps, and the RTL chevron rotates instead of mirroring. One apostrophe is straightened. The unused `drawer.transaction.title` / `titlePlaceholder` keys are removed.
+- **Tests.**
+  - Drawer cases: the queued save and its failure path, the records gate, the currency lock, currency kept on edit and duplicate, the refused save, the legacy retitle and the missing entry.
+  - Typeahead Enter-safety and a11y cases.
+  - Repository invariant cases.
+  - Each-key-once invalidation.
+  - An Arabic Playwright check, which fails without the CSS fix.
+  - The two 30ms sleeps are replaced by settle signals.
+
+### Fixed (adversarial re-review, 2026-10-11)
+
+The re-review verified the pre-landing fixes and found one medium regression and eleven smaller gaps; all are fixed, each test-first:
+
+- **Record Payment on a payment request** (`paymentRequestService.recordPaymentForRequest`) left a part-paid receivable unpaid while the document showed paid: it wrote `status` through `update`, which ADR-039 now strips. It calls `markPaid`. `updatePaymentRequestWithTransaction` updates the receivable before the document (ADR-039 amended).
+- **Enter, Enter.** An Enter held while a new client is saving now submits the form once it exists, so the keyboard path no longer needs a pause. Typing or another key in between drops it.
+- **Failed creates stay retryable.** `onSelect` may resolve to `false`: the held Enter is dropped, the typed name is unpicked again and Enter offers the create option once more. A failed client create over a client picked earlier no longer empties the box. (The project picker empties its box on a failed create, as before: no form guards unpicked project text; see the final pass below.)
+- **Enter after Escape** reopens the list on the auto highlight, so the next Enter picks.
+- **Vendor highlight.** Pickers can supply the highlight rule (`autoHighlight`, default in `typeaheadHighlight.ts`); the vendor picker highlights its 95%+ name or alias match over a vendor whose name merely starts with the text.
+- **Amount parser.** The currency suffix pattern no longer backtracks quadratically (3.4 s on a 50k-space paste, now linear) and inputs over 64 characters are refused first. One currency token at most; £ is no longer stripped. Bidi embeddings, overrides and isolates are stripped.
+- **Typed currency.** "€100" in a USD entry is refused with a field error naming both currencies, and More details opens on the currency. `amountInputCurrency` reads the token.
+- **Payment records that fail to load** show a notice with Try again instead of a silently disabled Save.
+- **FSI, not LRI,** isolates the recorded amount in the below-recorded message.
+- **Op log.** `syncedTransactionRepo.update` logs the entry as stored, not the payment fields the repository refused.
+- **Offline (ADR-040).** Local queries and saves no longer pause while the device is offline (`networkMode: 'always'`, `src/lib/queryClient.ts`); the live FX rate still waits for the network.
+- **New debt:** TD-047 (other drawers still use the lenient parsers).
+
+### Fixed (final verification pass, 2026-10-12)
+- **"Now" was a future payment west of UTC.** `paymentRecordRepo` compared the UTC date of a full timestamp with the local today, so in the evening in the Americas `new Date().toISOString()` was "tomorrow". Record Payment on a payment request (now routed through `markPaid`) and Mark paid failed, with no message. A timestamp is future only when both its UTC and its local date are (`isFuturePaymentDate`); date-only strings are unchanged (ADR-038 amended).
+- **A failed project create** kept the name in the box while `projectId` was empty, and nothing guards unpicked project text, so the entry saved without the project it showed. The box empties again, as before MUT-5.
+- **An empty box highlights nothing,** even when the last typed text would.
+- **New debt:** TD-050 (the document page's payment-request actions fail silently).
+
 ## [Unreleased] - 2026-10-12 — MUT-76: the hero shows who owes you, and offers one next step per device
 
 **Scope:**

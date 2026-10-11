@@ -693,7 +693,18 @@
         "body": "This entry was exported on a document, so its details can't change here. Payments can still be recorded from the client page.",
         "viewDocument": "View document",
         "turnOnInvoices": "Turn on Invoices in Settings › Advanced features to open the document."
-      }
+      },
+      "titleLabel": "What did you do?",
+      "titlePlaceholder": "e.g. Logo redesign",
+      "statusLabel": "Status",
+      "moreDetails": "More details",
+      "lessDetails": "Fewer details",
+      "paymentsRecordedHint": "Payments are recorded for this entry, so its status follows them. Manage payments from the client page.",
+      "currencyLockedHint": "Payments are recorded in {currency}, so the currency can't change.",
+      "savePaymentsChanged": "This entry's payments changed while it was open. Reopen it to see the latest.",
+      "saveFailed": "Couldn't save this entry. Try again.",
+      "paymentsLoadFailed": "Couldn't load this entry's payments, so it can't be saved yet.",
+      "paymentsRetry": "Try again"
     },
     "transaction": {
       "new": "New Transaction",
@@ -717,8 +728,6 @@
       "projectPlaceholder": "Select project...",
       "category": "Category",
       "categoryPlaceholder": "Select category...",
-      "title": "Title",
-      "titlePlaceholder": "Brief description...",
       "notes": "Notes",
       "notesPlaceholder": "Additional notes..."
     },
@@ -830,7 +839,12 @@
     "amountRequired": "Amount is required",
     "dateRequired": "Date is required",
     "nameRequired": "Name is required",
-    "profileRequired": "Profile is required"
+    "profileRequired": "Profile is required",
+    "amountInvalid": "Enter an amount like 1200 or 1,200.50",
+    "amountPositive": "Amount must be more than zero",
+    "amountBelowRecorded": "{amount} is already recorded as paid, so the amount can't be less",
+    "clientNotPicked": "Pick a client from the list, or press Enter to create it",
+    "amountCurrencyMismatch": "The amount is in {typed}, but this entry is in {currency}"
   },
   "time": {
     "today": "Today",

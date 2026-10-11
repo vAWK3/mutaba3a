@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { db } from '../../../db/database';
 import { clientRepo, businessProfileRepo } from '../../../db/repository';
 import { LanguageProvider } from '../../../lib/i18n';
@@ -228,6 +228,181 @@ describe('ClientTypeahead', () => {
 
       fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
       expect(onChange).toHaveBeenCalledWith('');
+    });
+  });
+
+  // MUT-5: a name typed but never picked must not vanish silently
+  describe('leaving the field with typed text', () => {
+    it('picks a client whose name matches exactly, ignoring case', async () => {
+      const client = await clientRepo.create({ name: 'Acme Corp' });
+      const onChange = vi.fn();
+      renderClientTypeahead({ onChange });
+      const input = screen.getByRole('combobox');
+
+      await waitFor(() => {
+        fireEvent.focus(input);
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+      fireEvent.change(input, { target: { value: '  acme corp ' } });
+      fireEvent.blur(input);
+
+      expect(onChange).toHaveBeenCalledWith(client.id);
+      expect(input).toHaveValue('Acme Corp');
+    });
+
+    it('picks nothing for a partial name and reports it as unpicked text', async () => {
+      await clientRepo.create({ name: 'Acme Corp' });
+      const onChange = vi.fn();
+      const onPendingTextChange = vi.fn();
+      renderClientTypeahead({ onChange, onPendingTextChange });
+      const input = screen.getByRole('combobox');
+
+      await waitFor(() => {
+        fireEvent.focus(input);
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+      fireEvent.change(input, { target: { value: 'Acm' } });
+      fireEvent.blur(input);
+
+      expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/.+/));
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('Acm');
+    });
+
+    it('counts a client picked from "create" as picked, and reports the creation', async () => {
+      const onPendingTextChange = vi.fn();
+      const onCreatingChange = vi.fn();
+      const onChange = vi.fn();
+      function Controlled() {
+        const [value, setValue] = useState('');
+        return (
+          <ClientTypeahead
+            value={value}
+            onChange={(id) => {
+              onChange(id);
+              setValue(id);
+            }}
+            onPendingTextChange={onPendingTextChange}
+            onCreatingChange={onCreatingChange}
+          />
+        );
+      }
+      render(
+        <TestWrapper>
+          <Controlled />
+        </TestWrapper>
+      );
+      const input = screen.getByRole('combobox');
+
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: 'Brand New Co' } });
+      const createOption = await screen.findByRole('option', { name: /Brand New Co/ });
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('Brand New Co');
+
+      fireEvent.click(createOption);
+
+      // Picked at once, before the client exists or the list has refetched it
+      expect(onCreatingChange).toHaveBeenNthCalledWith(1, true);
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
+      await waitFor(() => expect(onCreatingChange).toHaveBeenLastCalledWith(false));
+      expect(onChange).toHaveBeenLastCalledWith(expect.stringMatching(/.+/));
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
+    });
+
+    it('keeps the typed name unpicked when creating the client fails', async () => {
+      const onPendingTextChange = vi.fn();
+      const onCreatingChange = vi.fn();
+      const onChange = vi.fn();
+      const createSpy = vi.spyOn(clientRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
+      try {
+        function Controlled() {
+          const [value, setValue] = useState('');
+          return (
+            <ClientTypeahead
+              value={value}
+              onChange={(id) => {
+                onChange(id);
+                setValue(id);
+              }}
+              onPendingTextChange={onPendingTextChange}
+              onCreatingChange={onCreatingChange}
+            />
+          );
+        }
+        render(
+          <TestWrapper>
+            <Controlled />
+          </TestWrapper>
+        );
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Brand New Co' } });
+        fireEvent.click(await screen.findByRole('option', { name: /Brand New Co/ }));
+
+        await waitFor(() => expect(onCreatingChange).toHaveBeenLastCalledWith(false));
+        expect(onChange).toHaveBeenLastCalledWith('');
+        // still visible and still unpicked, so a form refuses to save without it
+        expect(input).toHaveValue('Brand New Co');
+        expect(onPendingTextChange).toHaveBeenLastCalledWith('Brand New Co');
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
+    it('keeps the typed name when creating fails over a client picked earlier', async () => {
+      const existing = await clientRepo.create({ name: 'Old Client' });
+      const onPendingTextChange = vi.fn();
+      const onCreatingChange = vi.fn();
+      const createSpy = vi.spyOn(clientRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
+      try {
+        function Controlled() {
+          const [value, setValue] = useState(existing.id);
+          return (
+            <ClientTypeahead
+              value={value}
+              onChange={setValue}
+              onPendingTextChange={onPendingTextChange}
+              onCreatingChange={onCreatingChange}
+            />
+          );
+        }
+        render(
+          <TestWrapper>
+            <Controlled />
+          </TestWrapper>
+        );
+        const input = screen.getByRole('combobox');
+        await waitFor(() => expect(input).toHaveValue('Old Client'));
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Brand New Co' } });
+        fireEvent.click(await screen.findByRole('option', { name: /Brand New Co/ }));
+
+        await waitFor(() => expect(onCreatingChange).toHaveBeenLastCalledWith(false));
+        expect(input).toHaveValue('Brand New Co');
+        expect(onPendingTextChange).toHaveBeenLastCalledWith('Brand New Co');
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
+    it('reports no unpicked text once a client is picked, and again after clearing', async () => {
+      const client = await clientRepo.create({ name: 'My Client' });
+      const onPendingTextChange = vi.fn();
+      const { rerender } = renderClientTypeahead({ value: client.id, onPendingTextChange });
+      const input = screen.getByRole('combobox');
+
+      await waitFor(() => expect(input).toHaveValue('My Client'));
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
+
+      fireEvent.change(input, { target: { value: 'My Cli' } });
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('My Cli');
+
+      rerender(
+        <TestWrapper>
+          <ClientTypeahead value="" onChange={vi.fn()} onPendingTextChange={onPendingTextChange} />
+        </TestWrapper>
+      );
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
     });
   });
 });

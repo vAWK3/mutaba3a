@@ -1098,6 +1098,73 @@ Verified against the real built artifact, not only the fixture: built `dist-host
 
 **Baseline after MUT-39 (2026-10-11)**: server `npm test` 924 passed, 9 skipped; `npm run test:db` 978 passed (after re-migrating the local test database).
 
+### MUT-5 — the income entry is the work record (2026-10-11)
+
+Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5-income-fast-path-tests.md`. Written test-first, apart from the drawer. Its 41 tests were written after the restructure, then run against the old drawer: 35 failed there and 6, the preserved behaviours, passed.
+
+| File | Type | Tests | Covers |
+|---|---|---|---|
+| `src/lib/__tests__/utils.test.ts` (extended) | Unit | +27 | `parseAmountInput`: ASCII, grouped thousands, decimals, Arabic-Indic and Extended digits, Arabic separators, currency symbol/code, bidi marks, NBSP. Ambiguous input → null. Arabic digits in the lenient wrappers and `formatCurrencyInput` |
+| `src/lib/__tests__/incomeEntry.test.ts` (new) | Unit | 27 | `buildIncomeCreate`/`buildIncomeUpdate` for every status transition, with keys asserted absent rather than undefined, and record-backed edits writing no payment fields; `isBelowRecordedTotal`; `shouldExpandDetails`; `resolveDefaultCurrency` |
+| `src/db/__tests__/paymentRecords.test.ts` (extended) | Integration (Dexie) | +6 | `transactionRepo.update`: an amount below the recorded total is rejected and nothing is written; a cut to the total → paid; raised → unpaid with the difference; an unchanged amount → no recalc; no records → no guard; deleted records ignored |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` (extended) | Component | +9 | Keyboard contract: highlight on typing, clear drops it, Enter picks the first match or a lone create option, Enter on a closed or empty list submits the form, Escape stays inside the list, Tab closes without picking |
+| `src/components/ui/__tests__/ClientTypeahead.test.tsx` (extended) | Component | +4 | Exact name picked on blur; a partial name is reported as pending; a create pick counts as picked at once, with `onCreatingChange` true → false; pending is cleared after a pick and after clearing |
+| `src/lib/i18n/__tests__/incomeDrawerKeys.test.ts` (new) | Unit | 3 | The ten new keys exist and aren't empty in en and ar; `{amount}` survives in both |
+| `src/hooks/__tests__/useQueries.test.tsx` (extended) | Hook (real Dexie) | +2 | A drawer create/update refreshes `useIncome` and `useReceivables` |
+| `src/components/__tests__/IncomeDrawer.test.tsx` (rewritten) | Component | 41 | Every MUT-5 criterion: fast path; More details contents; the 3-field save with defaults; the defaults line; profile currency and following it; EUR; LTR amount group; client prefill or none; amount required/invalid/zero/Arabic digits; unpicked client; Escape; focus order; status inside More details; reopening on an invalid hidden field; profile up front when unresolved; edit load and expansion rules; paid → invoiced; lock regression; payment data on edit, both record-less and record-backed; the MUT-16 project switch |
+| `e2e/income-fast-path.spec.ts` (new) | E2E (Playwright, Chromium) | 2 | title, Tab, amount, Tab, new client, Enter, Enter saves (the entry shows on the client page); Escape keeps the drawer. Passed 10/10 and 6/6 with `--repeat-each` against the worktree dev server |
+
+**Manual (in-app browser, port 5191, English and Arabic):**
+- keyboard-only create, which found the Enter-Enter race (fixed);
+- the RTL amount group and the defaults line, which found the `:lang(ar)` override and a bidi reorder (both fixed);
+- payment-drawer prefix styling, with Arabic digits accepted;
+- a record-backed edit: status read-only, the hint, and the below-recorded error in Arabic;
+- the client page refreshing after a save.
+
+**Gate (2026-10-11):**
+- `npm run lint`: 0 errors, 16 warnings (main has 20).
+- `npx tsc -b`: clean.
+- `npx vitest run`: 162 files, 2,642 passed, 4 skipped. The baseline was 2,539 passed and 5 skipped; the edit-mode drawer test is un-skipped.
+- `npm run test:tz`: only the 3 TD-014 failures, identical on main.
+- `npm run build`: OK. Its `@media` warning comes from the existing `.print-header` rule.
+
+**Pre-landing review fixes (2026-10-11):** each new test was shown failing first, except the regression pins noted.
+
+| File | Added | Covers |
+|---|---|---|
+| `src/lib/__tests__/utils.test.ts` | +22 | Refused: letter suffixes ("2k", "50%", "5 ألف", "10O", "1e3"), "0,500", "100 50", "1 2 3", more than 2 decimals, unsafe integers. Accepted: currency codes either side, NBSP / narrow-NBSP grouping. Half-up string rounding for the lenient wrappers. |
+| `src/lib/__tests__/incomeEntry.test.ts` | +4 | A Received save leaves `dueDate` out of the write on create, paid → paid and record-backed edits; an unpaid save that empties the field still clears it. |
+| `src/db/__tests__/paymentRecords.test.ts` | +4 | `transactionRepo.update` strips and re-derives payment state on a record-backed entry; rejects a currency change with records and allows one without; lets a legacy overpaid entry be retitled. |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +7 (1 rewritten) | Prefix-first highlight; select-only single option; Enter held on unmatched text and after Escape; Enter held with `aria-busy` while an async pick runs; Enter submits after tab-in with nothing typed; `aria-controls` / `aria-activedescendant`. "Selects the only option with nothing typed" was rewritten to "Enter goes through". |
+| `src/components/ui/__tests__/ClientTypeahead.test.tsx` | +1 | A failed create keeps the typed name unpicked, with `onCreatingChange` going true then false. |
+| `src/components/__tests__/IncomeDrawer.test.tsx` | +9 | A queued save during a client create and its failure path (regression pins, green on the typeahead fix); the records-loading gate; the currency lock; currency kept on edit and duplicate (pins); the refused-save toast; the legacy retitle; a missing entry never created. The 30ms sleeps are replaced by settle signals. |
+| `src/hooks/__tests__/useQueries.test.tsx` | +2 | Each money key is invalidated once per payment save; an edit invalidates `['transactionDisplay']`. |
+| `e2e/income-fast-path.spec.ts` | +1 (1 updated) | Arabic: the amount group's computed direction is LTR and the prefix sits left of the input. This fails without the CSS fix. The keyboard spec waits for `aria-busy` to clear before the saving Enter. |
+
+**Adversarial re-review fixes (2026-10-11):** every new test was shown failing first; the `£`/one-token and "types again" cases are guards.
+
+| File | Added | Covers |
+|---|---|---|
+| `src/services/__tests__/paymentRequestService.test.ts` (new) | 4 | Record Payment pays a fresh and a part-paid receivable (status, `paidAt`, received); an update reaches the receivable; a refused currency change leaves the document untouched. |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +5 | A held Enter submits once the pick is saved; typing again drops it; a pick resolving `false` drops it and makes Enter retry; Enter after Escape picks on the next Enter; a consumer `autoHighlight`. |
+| `src/components/ui/__tests__/{Client,Project,Vendor}Typeahead.test.tsx` | +1 each | A failed create over a picked client keeps the typed name; a failed project create empties the box (final pass); the vendor alias match is highlighted over a prefix match. |
+| `src/lib/__tests__/utils.test.ts` | +22 | Bidi embeddings/isolates stripped; two tokens, `£`, `GBP` and over-long input refused; a 50k-space paste parses in linear time (3.4 s before); `amountInputCurrency` for every token form and for no token. |
+| `src/components/__tests__/IncomeDrawer.test.tsx` | +4 (1 updated) | A mismatched currency symbol is refused and opens More details; switching the currency clears it and saves; a matching symbol saves; a failed records load shows the notice and Try again recovers. The recorded-total message now expects FSI. |
+| `src/lib/i18n/__tests__/incomeDrawerKeys.test.ts` | +1 | Three new keys in both locales; `{typed}`/`{currency}` survive. |
+| `src/sync/core/__tests__/synced-transaction-update.test.ts` (new) | 3 | Requested fields logged on a record-less entry; refused payment fields not logged; a derived status change logged. |
+| `src/lib/__tests__/queryClient.test.ts` (new) | 2 | A local query and a mutation settle while `onlineManager` is offline. |
+| `src/hooks/__tests__/useFxRate.test.tsx` | +1 | Offline, the FX query waits instead of fetching or erroring, and loads once online. |
+| `e2e/income-fast-path.spec.ts` | +1 | Enter, Enter straight away creates the client and saves the entry; it fails with the replay disabled. |
+
+**Final verification pass (2026-10-12):** each test was shown failing first, apart from the "still rejects tomorrow" guard.
+
+| File | Added | Covers |
+|---|---|---|
+| `src/db/__tests__/paymentRecords.test.ts` | +3 | In New York at 21:30 (already tomorrow in UTC) `create` and `update` accept `new Date().toISOString()`; a timestamp whose local day is tomorrow is still rejected. The clock and `process.env.TZ` are set per test (`atInstantIn`). |
+| `src/services/__tests__/paymentRequestService.test.ts` | +1 | Record Payment as the document page calls it (`new Date().toISOString()`) pays the receivable in the evening west of UTC. |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +1 | A box a failed pick emptied highlights nothing and lets Enter through. The `renderTypeahead` helper is now controlled, like every real picker. |
+| `src/components/ui/__tests__/ProjectTypeahead.test.tsx` | 1 changed | A failed project create empties the box. |
+
 ### MUT-75 — the landing page story (epic MUT-74)
 
 Test plan: `.claude/designs/mut-75-landing-story-tests.md`.

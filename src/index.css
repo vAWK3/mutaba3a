@@ -1148,6 +1148,102 @@ td {
   gap: var(--space-4);
 }
 
+/* Amount with a currency code in front (income + payment drawers). Amounts
+   stay left-to-right inside RTL, so "USD | 1,200" reads the same in Arabic.
+   The selectors out-rank theme.css's ":lang(ar) { direction: rtl }", which
+   would otherwise beat the markup's dir="ltr". */
+div.input-with-prefix {
+  display: flex;
+  align-items: stretch;
+  direction: ltr;
+}
+
+.input-with-prefix > .input-prefix,
+.input-with-prefix > .input {
+  direction: ltr;
+  text-align: left;
+}
+
+.input-with-prefix .input-prefix {
+  display: flex;
+  align-items: center;
+  padding-inline: var(--space-3);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-inline-end: none;
+  border-start-start-radius: var(--radius-md);
+  border-end-start-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.input-with-prefix .input {
+  flex: 1;
+  min-width: 0;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
+/* "More details" disclosure: a quiet row that names the defaults it hides */
+.form-disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 0;
+  margin-bottom: var(--space-3);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.form-disclosure:hover {
+  color: var(--text);
+}
+
+.form-disclosure-chevron {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.form-disclosure[aria-expanded="true"] .form-disclosure-chevron {
+  transform: rotate(90deg);
+}
+
+/* rotate, not mirror: rotate(180deg) -> rotate(90deg) animates as a clean quarter turn */
+[dir="rtl"] .form-disclosure[aria-expanded="false"] .form-disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.form-disclosure-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+
+.form-disclosure-summary {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-hint {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-top: var(--space-1);
+}
+
+/* A hint under the status selector belongs to it, not to the field below */
+.type-selector + .form-hint {
+  margin-top: calc(var(--space-1) - var(--space-5));
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

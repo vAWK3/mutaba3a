@@ -11,6 +11,16 @@ export interface ClientTypeaheadProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * Reports text left in the box that is not a picked client ('' when there
+   * is none), so a form can refuse to save instead of silently dropping it.
+   */
+  onPendingTextChange?: (text: string) => void;
+  /**
+   * True while a client picked from the "create" option is being saved, false
+   * once it exists (its id has then been passed to onChange).
+   */
+  onCreatingChange?: (creating: boolean) => void;
 }
 
 export function ClientTypeahead({
@@ -20,9 +30,15 @@ export function ClientTypeahead({
   placeholder,
   disabled,
   className,
+  onPendingTextChange,
+  onCreatingChange,
 }: ClientTypeaheadProps) {
   const t = useT();
   const [inputValue, setInputValue] = useState('');
+  // The label last picked: a client created from "create" counts as picked
+  // before the clients list has refetched it.
+  const [pickedName, setPickedName] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { data: allClients = [] } = useClients();
   const createMutation = useCreateClient();
@@ -38,11 +54,9 @@ export function ClientTypeahead({
     if (value) {
       const client = activeClients.find((c) => c.id === value);
       if (client) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync displayed input with the value prop, same pattern as VendorTypeahead
         setInputValue(client.name);
       }
     } else if (prevValue.current) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync displayed input with the value prop, same pattern as VendorTypeahead
       setInputValue('');
     }
     prevValue.current = value;
@@ -82,6 +96,31 @@ export function ClientTypeahead({
     return results;
   }, [inputValue, activeClients]);
 
+  const selectedName = activeClients.find((c) => c.id === value)?.name;
+  const pickedLabel = value || creating ? pickedName : null;
+  const trimmedInput = inputValue.trim();
+  const pendingText =
+    trimmedInput && inputValue !== selectedName && inputValue !== pickedLabel ? trimmedInput : '';
+
+  // Report only real changes, so a parent passing an inline callback can't loop.
+  const reportedPendingText = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (reportedPendingText.current === pendingText) return;
+    reportedPendingText.current = pendingText;
+    onPendingTextChange?.(pendingText);
+  }, [pendingText, onPendingTextChange]);
+
+  // Leaving the box with a client's exact name (any case) picks that client.
+  const handleBlur = useCallback(() => {
+    if (!pendingText) return;
+    const match = activeClients.find((c) => c.name.toLowerCase() === pendingText.toLowerCase());
+    if (match) {
+      setInputValue(match.name);
+      setPickedName(match.name);
+      onChange(match.id);
+    }
+  }, [pendingText, activeClients, onChange]);
+
   const handleInputChange = useCallback((newValue: string) => {
     setInputValue(newValue);
     if (!newValue.trim()) {
@@ -91,24 +130,37 @@ export function ClientTypeahead({
 
   const handleSelect = useCallback(
     async (option: TypeaheadOption<Client>) => {
+      setPickedName(option.label);
       if (option.isNew) {
+        setCreating(true);
+        onCreatingChange?.(true);
         try {
           const newClient = await createMutation.mutateAsync({
             name: option.label,
             profileId: profileId || undefined,
           });
           setInputValue(newClient.name);
+          setPickedName(newClient.name);
           onChange(newClient.id);
         } catch {
-          setInputValue('');
+          // Keep the name in the box, unpicked: a form then refuses to save
+          // without it (onPendingTextChange) instead of saving with no client.
+          setInputValue(option.label);
+          setPickedName(null);
+          // Clearing a client picked earlier must not clear the box too (prefill effect)
+          prevValue.current = '';
           onChange('');
+          return false;
+        } finally {
+          setCreating(false);
+          onCreatingChange?.(false);
         }
       } else {
         setInputValue(option.label);
         onChange(option.id);
       }
     },
-    [createMutation, onChange, profileId]
+    [createMutation, onChange, onCreatingChange, profileId]
   );
 
   return (
@@ -121,6 +173,7 @@ export function ClientTypeahead({
       disabled={disabled}
       className={className}
       createLabel={t('client.createNew')}
+      onBlur={handleBlur}
     />
   );
 }
