@@ -311,6 +311,7 @@ Codex was unavailable. Basel chose "fix all as recommended".
 - **E2 parser:** linear suffix handling plus a 64-character cap; one currency token, USD/ILS/EUR forms only; bidi embeddings and isolates stripped; a typed currency must match the entry's (new field error).
 - **Drawer:** a failed records load says so with Try again; FSI replaces LRI.
 - **Beyond MUT-5:** the op log records transaction writes as stored, and local queries and saves no longer pause offline (ADR-040). TD-047 records the other drawers' lenient parsing.
+- **Final verification pass (2026-10-12):** "now" is no longer a future payment west of UTC (ADR-038 amended; it had broken Record Payment and Mark paid there), and a failed project create empties the box again. TD-050 records that the document page's payment-request actions fail silently.
 
 ---
 

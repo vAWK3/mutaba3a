@@ -360,7 +360,7 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 - **Other keys:** ArrowDown on a closed list opens it. Tab closes the list without picking. Escape on an open list closes only the list (`stopPropagation`).
 - **ARIA:** `aria-expanded` follows what is visible. `aria-controls` and `aria-activedescendant` point at the listbox and highlighted option.
 - **Props:** `onSelect` may return a promise; resolving it to `false` marks the pick failed (the held Enter is dropped, the text is unpicked again). `autoHighlight(options, typed)` overrides which option typing highlights; the default is `defaultAutoHighlight` (`typeaheadHighlight.ts`). The optional `onBlur` is called before the list closes.
-- **`ProjectTypeahead`:** a failed create keeps the typed name in the box, unpicked, and resolves `false`.
+- **`ProjectTypeahead`:** a failed create empties the box and resolves `false` (no form guards unpicked project text, so a name left in the box would look picked). An empty box never shows a highlight.
 - **`VendorTypeahead`:** highlights the vendor matched at 95%+ by name or alias (the one that suppresses "create") ahead of a prefix match; a failed create keeps the raw text as the vendor, as before.
 
 **`ClientTypeahead` extras**:

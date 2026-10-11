@@ -126,7 +126,7 @@ The re-review verified the pre-landing fixes and found one medium regression and
 
 - **Record Payment on a payment request** (`paymentRequestService.recordPaymentForRequest`) left a part-paid receivable unpaid while the document showed paid: it wrote `status` through `update`, which ADR-039 now strips. It calls `markPaid`. `updatePaymentRequestWithTransaction` updates the receivable before the document (ADR-039 amended).
 - **Enter, Enter.** An Enter held while a new client is saving now submits the form once it exists, so the keyboard path no longer needs a pause. Typing or another key in between drops it.
-- **Failed creates stay retryable.** `onSelect` may resolve to `false`: the held Enter is dropped, the typed name is unpicked again and Enter offers the create option once more. The project picker keeps the typed name too; a failed client create over a client picked earlier no longer empties the box.
+- **Failed creates stay retryable.** `onSelect` may resolve to `false`: the held Enter is dropped, the typed name is unpicked again and Enter offers the create option once more. A failed client create over a client picked earlier no longer empties the box. (The project picker empties its box on a failed create, as before: no form guards unpicked project text; see the final pass below.)
 - **Enter after Escape** reopens the list on the auto highlight, so the next Enter picks.
 - **Vendor highlight.** Pickers can supply the highlight rule (`autoHighlight`, default in `typeaheadHighlight.ts`); the vendor picker highlights its 95%+ name or alias match over a vendor whose name merely starts with the text.
 - **Amount parser.** The currency suffix pattern no longer backtracks quadratically (3.4 s on a 50k-space paste, now linear) and inputs over 64 characters are refused first. One currency token at most; £ is no longer stripped. Bidi embeddings, overrides and isolates are stripped.
@@ -136,6 +136,12 @@ The re-review verified the pre-landing fixes and found one medium regression and
 - **Op log.** `syncedTransactionRepo.update` logs the entry as stored, not the payment fields the repository refused.
 - **Offline (ADR-040).** Local queries and saves no longer pause while the device is offline (`networkMode: 'always'`, `src/lib/queryClient.ts`); the live FX rate still waits for the network.
 - **New debt:** TD-047 (other drawers still use the lenient parsers).
+
+### Fixed (final verification pass, 2026-10-12)
+- **"Now" was a future payment west of UTC.** `paymentRecordRepo` compared the UTC date of a full timestamp with the local today, so in the evening in the Americas `new Date().toISOString()` was "tomorrow". Record Payment on a payment request (now routed through `markPaid`) and Mark paid failed, with no message. A timestamp is future only when both its UTC and its local date are (`isFuturePaymentDate`); date-only strings are unchanged (ADR-038 amended).
+- **A failed project create** kept the name in the box while `projectId` was empty, and nothing guards unpicked project text, so the entry saved without the project it showed. The box empties again, as before MUT-5.
+- **An empty box highlights nothing,** even when the last typed text would.
+- **New debt:** TD-050 (the document page's payment-request actions fail silently).
 
 ## [Unreleased] - 2026-10-12 — MUT-76: the hero shows who owes you, and offers one next step per device
 

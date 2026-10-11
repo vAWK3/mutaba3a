@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-050: The document page's payment-request actions fail silently
+**Status**: Open
+**Added**: 2026-10-12 (MUT-5 final pass)
+**Priority**: Low
+**Impact**: `useRecordPaymentForRequest`, `useVoidPaymentRequest` and `useCreatePaymentRequest` (`src/hooks/useQueries.ts`) have no `onError`, `DocumentDetailPage` never reads the mutation error, and the app's `QueryClient` has no global mutation error handler. When the repository refuses (a payment record error, a locked entry, an IndexedDB failure), the click does nothing and the document keeps its status. The final pass fixed the one known trigger (the future-date check west of UTC), not the silence.
+**Remediation**: Toast the mapped error name, as `IncomeDrawer` does (`PaymentRecordError` / `TransactionLockedError` → translated message), or add a `MutationCache` `onError` in `createAppQueryClient` that toasts any unhandled mutation failure.
+**Effort**: Small
+
 ### TD-049: `isMacOS()` is true on an iPad and `isLinux()` is true on Android
 **Status**: Open
 **Added**: 2026-10-12 (MUT-76)

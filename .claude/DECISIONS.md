@@ -1798,6 +1798,8 @@ deleting `markPaid`/`useMarkTransactionPaid` entirely now that the UI stops
 calling them directly (rejected — both have other live callers outside this
 ticket's scope: sync replay and the payment-request flow).
 
+*(Amended 2026-10-12, MUT-5 final pass.)* "Future" means the payment's calendar day is after today. A date-only `paidAt` is compared as is. A full timestamp is future only when both its UTC date and its local date are after today (`isFuturePaymentDate` in `repository.ts`). Comparing only the UTC date rejected `new Date().toISOString()` in the evening west of UTC, which broke Mark paid and Record Payment there.
+
 ---
 
 ## ADR-039: Payment Records Own an Entry's Payment State; an Edit Never Rewrites It

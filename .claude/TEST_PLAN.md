@@ -1147,7 +1147,7 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5
 |---|---|---|
 | `src/services/__tests__/paymentRequestService.test.ts` (new) | 4 | Record Payment pays a fresh and a part-paid receivable (status, `paidAt`, received); an update reaches the receivable; a refused currency change leaves the document untouched. |
 | `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +5 | A held Enter submits once the pick is saved; typing again drops it; a pick resolving `false` drops it and makes Enter retry; Enter after Escape picks on the next Enter; a consumer `autoHighlight`. |
-| `src/components/ui/__tests__/{Client,Project,Vendor}Typeahead.test.tsx` | +1 each | A failed create over a picked client keeps the typed name; a failed project create keeps the typed name; the vendor alias match is highlighted over a prefix match. |
+| `src/components/ui/__tests__/{Client,Project,Vendor}Typeahead.test.tsx` | +1 each | A failed create over a picked client keeps the typed name; a failed project create empties the box (final pass); the vendor alias match is highlighted over a prefix match. |
 | `src/lib/__tests__/utils.test.ts` | +22 | Bidi embeddings/isolates stripped; two tokens, `£`, `GBP` and over-long input refused; a 50k-space paste parses in linear time (3.4 s before); `amountInputCurrency` for every token form and for no token. |
 | `src/components/__tests__/IncomeDrawer.test.tsx` | +4 (1 updated) | A mismatched currency symbol is refused and opens More details; switching the currency clears it and saves; a matching symbol saves; a failed records load shows the notice and Try again recovers. The recorded-total message now expects FSI. |
 | `src/lib/i18n/__tests__/incomeDrawerKeys.test.ts` | +1 | Three new keys in both locales; `{typed}`/`{currency}` survive. |
@@ -1155,6 +1155,15 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5
 | `src/lib/__tests__/queryClient.test.ts` (new) | 2 | A local query and a mutation settle while `onlineManager` is offline. |
 | `src/hooks/__tests__/useFxRate.test.tsx` | +1 | Offline, the FX query waits instead of fetching or erroring, and loads once online. |
 | `e2e/income-fast-path.spec.ts` | +1 | Enter, Enter straight away creates the client and saves the entry; it fails with the replay disabled. |
+
+**Final verification pass (2026-10-12):** each test was shown failing first, apart from the "still rejects tomorrow" guard.
+
+| File | Added | Covers |
+|---|---|---|
+| `src/db/__tests__/paymentRecords.test.ts` | +3 | In New York at 21:30 (already tomorrow in UTC) `create` and `update` accept `new Date().toISOString()`; a timestamp whose local day is tomorrow is still rejected. The clock and `process.env.TZ` are set per test (`atInstantIn`). |
+| `src/services/__tests__/paymentRequestService.test.ts` | +1 | Record Payment as the document page calls it (`new Date().toISOString()`) pays the receivable in the evening west of UTC. |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` | +1 | A box a failed pick emptied highlights nothing and lets Enter through. The `renderTypeahead` helper is now controlled, like every real picker. |
+| `src/components/ui/__tests__/ProjectTypeahead.test.tsx` | 1 changed | A failed project create empties the box. |
 
 ### MUT-75 — the landing page story (epic MUT-74)
 
