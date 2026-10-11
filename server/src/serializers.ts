@@ -17,11 +17,13 @@ import type {
   ExternalReferenceRecord,
   InstallmentRecord,
   IntegrationRecord,
+  MembershipRecord,
   Organization,
   ProjectRecord,
   ReceivableRecord,
   RetainerChargeRecord,
   SupplementRecord,
+  UserRecord,
   VatRateRecord,
 } from './repositories/ports.js';
 
@@ -62,6 +64,24 @@ export function serializeIntegration(i: IntegrationRecord) {
     connectedAt: i.connectedAt.toISOString(),
     disconnectedAt: iso(i.disconnectedAt),
   };
+}
+
+/** Never includes the password hash. */
+export function serializeUser(u: UserRecord) {
+  return {
+    id: u.id,
+    email: u.email,
+    displayName: u.displayName,
+    locale: u.locale,
+    status: u.status,
+    passwordChangedAt: u.passwordChangedAt.toISOString(),
+    lastSignInAt: iso(u.lastSignInAt),
+    createdAt: u.createdAt.toISOString(),
+  };
+}
+
+export function serializeMembership(m: MembershipRecord) {
+  return { organizationId: m.organizationId, createdAt: m.createdAt.toISOString() };
 }
 
 export function serializeAuditEvent(e: AuditEventRecord) {

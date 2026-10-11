@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ARGON2_MINIMUMS } from './auth/users.js';
 
 /**
  * Validated process configuration. Fails fast at boot with a readable list of
@@ -19,6 +20,10 @@ const envSchema = z.object({
   /** Private GCS bucket for attachments (M6). Absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
   ATTACHMENTS_BUCKET: z.string().min(3).optional(),
   ATTACHMENTS_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+  /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
+  ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
+  ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),
+  ARGON2_PARALLELISM: z.coerce.number().int().min(ARGON2_MINIMUMS.parallelism).default(ARGON2_MINIMUMS.parallelism),
 });
 
 export type Config = z.infer<typeof envSchema>;

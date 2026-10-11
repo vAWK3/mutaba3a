@@ -18,6 +18,25 @@
 
 ## Open Debt
 
+### TD-032: Audit Events Written in the Same Millisecond Have No Defined Order
+**Status**: Open
+**Added**: 2026-10-11 (found during MUT-37)
+**Priority**: Low (history readability) — and one flaky test
+**Impact**: `GET /v1/audit` ("oldest first") can list two events of one
+request in the wrong order; `routes-m6` "lists the organization's events by
+entity" fails intermittently under full-suite load
+
+Audit rows are stamped with millisecond precision (`createdAt` in the memory
+store via `new Date()`, `TIMESTAMP(3)` with `DEFAULT CURRENT_TIMESTAMP` in
+Postgres) and keyset-paginated by `(createdAt, id)`. Two events appended in the
+same millisecond — `payment.recorded` then `payment.reversed` in a fast test —
+fall back to comparing random UUIDs, so their order is a coin flip. Seen once
+in three full `npm test` runs during MUT-37; 0 failures in 20 isolated runs.
+
+**Fix**: a monotonic per-organization sequence (or a `bigserial`) as the
+tie-breaker in both stores and in the cursor, with a contract test that
+appends two events in one millisecond and expects insertion order.
+
 ### TD-029: The Sync Op-Log Has No Notion of a Profile
 **Status**: Accepted (recorded by MUT-36; deliberately not built)
 **Added**: 2026-10-11

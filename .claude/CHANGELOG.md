@@ -28,6 +28,43 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-37: operator-only user accounts on the hosted service
+
+**Scope:** `server/` only:
+- `prisma/schema.prisma` and migration `20261011040107_mut37_users_memberships`
+- `src/auth/users.ts`, `src/config.ts`
+- `src/repositories/{ports,memory,prisma}.ts`
+- `src/routes/admin-users.ts`, `src/schemas.ts`, `src/serializers.ts`, `src/app.ts`, `src/index.ts`
+- `src/scripts/users.ts`, `package.json` (+ `@node-rs/argon2` 2.2.1, six npm scripts)
+- `openapi/openapi.yaml`, `README.md`, `DEPLOYMENT.md`
+- tests (new): `src/auth/__tests__/users.test.ts`, `src/__tests__/{config,routes-users,no-self-registration}.test.ts`, `src/repositories/__tests__/store-{contract,memory,prisma}-users*`, `src/scripts/__tests__/users-cli.test.ts`
+- `src/__tests__/routes-m{2,3,4,5,6,8}.test.ts`: version pin only
+
+No `src/` (app) change.
+
+### Added
+- **Users and memberships.** `users` and `memberships` tables via an additive migration. A user isn't organization-scoped: a person can belong to several firms. Creating a user always creates its first membership in the same transaction.
+- **Password hashing.** argon2id via `@node-rs/argon2` behind a `PasswordHasher` port. `ARGON2_MEMORY_KIB`, `ARGON2_TIME_COST` and `ARGON2_PARALLELISM` default to OWASP profile 1, and the service refuses to boot below it.
+- **Admin routes** behind `X-Admin-Token`:
+  - `POST /admin/v1/users` returns a one-time password, shown once.
+  - `GET /admin/v1/users?email=` and `GET /admin/v1/users/{id}`.
+  - Grant and remove memberships.
+  - Operator password reset.
+  - Disable and enable.
+- **Audit.** Every account change is audited as `ADMIN` on each member organization: `user.created` (with email and display name), `membership.granted`, `membership.revoked`, `user.password_reset`, `user.disabled`, `user.enabled`.
+- **Operator CLI** `src/scripts/users.ts`, run as `npm run provision:user`, `grant:user`, `revoke:user`, `rotate:password`, `disable:user` and `enable:user`. It is a function over an injected fetch and is tested against the in-process app.
+- **No self-registration test.** No route or published path outside `/admin/` may match signup, register, invite, forgot or reset.
+- API version `1.8.0-mut37`.
+
+### Changed vs the original MUT-37 ticket (per its MUT-36 re-cut)
+- There is no `organizationId` on the user and no owner/member roles.
+- The audit actor is `ADMIN`, because the admin token carries no person.
+- **Session invalidation on reset and disable moved to MUT-38**, which introduces sessions.
+- `enable` was added as the inverse of `disable`, so a mistaken disable doesn't need database surgery.
+
+### Technical
+- **TD-032 (new):** audit rows written in the same millisecond have no defined order (`(createdAt, id)` with a random UUID tie-breaker in both stores). This causes an intermittent `routes-m6` failure under full-suite load, seen once in three runs and never in 20 isolated runs. It predates MUT-37.
+
 ## [Unreleased] - 2026-10-11 — MUT-36: hosted portal design brief and ADR-033 (approved)
 
 **Scope:** `.claude/designs/hosted-portal.md` (new), `.claude/{DECISIONS,TECH_DEBT,COMPONENT_REGISTRY,CHANGELOG}.md`.

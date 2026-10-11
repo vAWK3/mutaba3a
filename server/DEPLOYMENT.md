@@ -208,7 +208,7 @@ after ~5 minutes.
 
 ## 4. Provision the first firm
 
-Keys are operator-issued until Mutaba3a has accounts (TD-018). The secret is
+Keys are operator-issued (TD-018, Accepted). The secret is
 printed **once**; hand it to the Partner over a secure channel, never by email
 or chat.
 
@@ -223,6 +223,23 @@ Output: `organization sader-law-firm = <uuid>` and the key
 
 To issue a second key later (rotation is also possible from Malafat's settings
 page): `npm run provision -- --url "$URL" --organization-id <uuid> --key-name "Malafat (rotated)"`.
+
+### 4a. Give a person access to the hosted portal (MUT-37)
+
+Portal users are operator-issued exactly like keys (ADR-033, TD-018): there is
+no signup, invite or password-reset route in any environment. The one-time
+password is printed **once**; deliver it like a key secret.
+
+```bash
+npm run provision:user -- --url "$URL" --email nour@firm.ps --name "Nour Haddad" \
+  --organization-id <uuid> --locale ar
+```
+
+A person in two firms gets a second membership:
+`npm run grant:user -- --url "$URL" --email nour@firm.ps --organization-id <uuid>`.
+Every account change is audited as `ADMIN` on each firm the person belongs to
+(`user.created`, `membership.granted`, `membership.revoked`,
+`user.password_reset`, `user.disabled`, `user.enabled`).
 
 ## 5. Wire Malafat to it
 
@@ -260,6 +277,9 @@ service.
 | Rotate the DB password | same with `-replace=random_password.db` (Cloud SQL user and the URL secret update together), then redeploy |
 | Revoke a firm's key | `curl -X POST "$URL/admin/v1/api-keys/<id>/revoke" -H "x-admin-token: $MUTABA3A_ADMIN_TOKEN" -H 'content-type: application/json' -d '{"reason":"…"}'`; key ids are on `GET /admin/v1/organizations/<id>` |
 | Audit trail of a firm | `GET /admin/v1/organizations/<id>/audit` with the admin token |
+| Reset a portal user's password | `npm run rotate:password -- --url "$URL" --email <email>` (prints the new one-time password once) |
+| Disable / re-enable a portal user | `npm run disable:user -- --url "$URL" --email <email>` / `npm run enable:user …` |
+| Remove a person's access to a firm | `npm run revoke:user -- --url "$URL" --email <email> --organization-id <uuid>` |
 | psql against production | `TF_STATE_BUCKET=<bucket> npm run db:psql` (`scripts/db.sh`: proxy up on 127.0.0.1:5440 for the session, down on exit) |
 | Check pending migrations | `TF_STATE_BUCKET=<bucket> npm run db:migrate:status` — read-only; run it before a release to see what `deploy.sh` will apply |
 | Run a migration by hand | `TF_STATE_BUCKET=<bucket> npm run db:migrate` — `prisma migrate deploy` through the proxy, forward-only. `deploy.sh` does the same as its step 2, so this is only for migrating ahead of a roll or after a failed step 4 |
@@ -290,7 +310,7 @@ statuses below are what the code supports, for you to apply.
 | **MUT-33** Frontend CI | Unchanged | `server-ci.yml` covers only `server/`; the desktop/PWA workflow is still MUT-33's. |
 | **TD-019** No CI for `server/` | Resolved | `.github/workflows/server-ci.yml`. |
 | **TD-017** Rate limiter per instance | Open, mitigated | `max_instances = 1` enforced by Terraform validation. |
-| **TD-018** Operator-provisioned keys | Open (product decision) | `npm run provision` is the path; self-serve needs accounts. |
+| **TD-018** Operator-provisioned keys and users | Accepted (product decision, ADR-033) | `npm run provision` and `npm run provision:user` are the only paths; no self-serve flow in any environment. |
 | **MAL-939** Money v1 (epic) | In progress | M1 code merged; deploy wiring (`MUTABA3A_API_URL` secret in the release contract) landed; waiting on steps 2–5 above. |
 | **MAL-870** Add-on entitlement + OAuth money scopes | Open | Still the product owner's call; gate is `roles: ["PARTNER"]` only. |
 | **MAL-869 / MAL-871** CRM-side spikes | Done | Answered by the audit and the implemented client. |

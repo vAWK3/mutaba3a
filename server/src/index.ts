@@ -5,6 +5,7 @@ import { createLogger } from './logger.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 import { PrismaLedgerStore } from './repositories/prisma.js';
 import { GcsAttachmentStorage } from './attachments/storage.js';
+import { createArgon2Hasher } from './auth/users.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -20,6 +21,11 @@ const app = createApp({
   version: config.SERVICE_VERSION,
   attachments: config.ATTACHMENTS_BUCKET ? new GcsAttachmentStorage(config.ATTACHMENTS_BUCKET) : null,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
+  passwordHasher: createArgon2Hasher({
+    memoryKiB: config.ARGON2_MEMORY_KIB,
+    timeCost: config.ARGON2_TIME_COST,
+    parallelism: config.ARGON2_PARALLELISM,
+  }),
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 

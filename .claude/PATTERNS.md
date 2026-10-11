@@ -1234,6 +1234,24 @@ retention test, and user *files* get a plain export before their viewer goes
 
 ---
 
+### Operator CLIs are functions over an injected fetch (MUT-37)
+`smoke.ts` started it; `scripts/users.ts` makes it the rule. The script exports
+`run…(argv, { fetch, url, token, out, err }) → exit code` and only the
+`import.meta.url === argv[1]` guard at the bottom touches `process`. Tests pass
+`app.request` as the fetch, so the CLI is exercised against the real routes
+in-process — argument parsing, error surfacing and "the secret prints exactly
+once" are all asserted, with no server running. Secrets come from the
+environment, never a flag.
+
+### Account changes are audited on every member organization (MUT-37)
+A user is not organization-scoped but `audit_events` is. An account change is
+appended once per organization the user belongs to after the change (a removed
+membership on the organization it removed), actor `ADMIN`, entity `user`. A
+user with no memberships is logged at info with the user id only. Idempotent
+no-ops (a second disable, an existing grant) are not audited.
+
+---
+
 ## Verification patterns — added 2026-10-10 (MUT-49)
 
 ### Contract test over a shipped config artifact

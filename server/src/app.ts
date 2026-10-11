@@ -3,12 +3,14 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { apiKeyAuth, type AppEnv } from './auth/middleware.js';
 import { SCOPES } from './auth/scopes.js';
+import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
 import { ApiError, ERROR_CODES } from './errors.js';
 import type { Logger } from './logger.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
+import { adminUserRoutes } from './routes/admin-users.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
@@ -39,10 +41,12 @@ export interface AppDependencies {
   /** Attachment bytes store (M6); null or absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
   attachments?: AttachmentStorage | null;
   attachmentUrlTtlSeconds?: number;
+  /** argon2id hasher for user passwords (MUT-37). Defaults to the OWASP minimum profile; production passes the configured one. */
+  passwordHasher?: PasswordHasher;
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.7.0-m8';
+export const API_VERSION = '1.8.0-mut37';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -112,6 +116,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', auditRoutes(deps.store));
   app.route('/', attachmentRoutes(deps.store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', adminRoutes({ store: deps.store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
+  app.route('/', adminUserRoutes({ store: deps.store, passwordHasher: deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS), logger: deps.logger }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',
@@ -153,6 +158,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer\'s open proposals and their per-currency total (proposed).',
         '',
+        'Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.',
+        '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),
     },
@@ -169,7 +176,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Retainers', description: 'Recurring agreements and their monthly charges' },
       { name: 'Receivables', description: 'What is owed, and credits against it' },
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
-      { name: 'Admin', description: 'Operator provisioning' },
+      { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });
 

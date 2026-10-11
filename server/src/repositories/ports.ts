@@ -771,9 +771,76 @@ export interface ExternalReferenceRepository {
   findByEntities(organizationId: string, entityType: ExternalEntityType, entityIds: string[]): Promise<ExternalReferenceRecord[]>;
 }
 
+// ---- MUT-37: operator-provisioned users and memberships (ADR-033) -----------
+
+export type UserStatus = 'ACTIVE' | 'DISABLED';
+export type UserLocale = 'en' | 'ar';
+
+/**
+ * A person who may sign in to the hosted portal. Not organization-scoped: one
+ * person can belong to several firms through memberships. `email` is stored
+ * normalised (auth/users.ts `normalizeEmail`); callers normalise before lookup.
+ * `failedSignIns` / `lockedUntil` / `lastSignInAt` are written by sign-in (MUT-38).
+ */
+export interface UserRecord {
+  id: string;
+  email: string;
+  displayName: string;
+  passwordHash: string;
+  locale: UserLocale;
+  status: UserStatus;
+  failedSignIns: number;
+  lockedUntil: Date | null;
+  passwordChangedAt: Date;
+  lastSignInAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A user is always created with its first membership, in one transaction. */
+export interface CreateUserInput {
+  email: string;
+  displayName: string;
+  passwordHash: string;
+  locale: UserLocale;
+  organizationId: string;
+  at: Date;
+}
+
+/** The access join: a user may see an organization's hosted profile. Access/no-access only. */
+export interface MembershipRecord {
+  userId: string;
+  organizationId: string;
+  createdAt: Date;
+}
+
+export interface UserRepository {
+  /** UniqueViolation on email; ForeignKeyViolation (and no user) on an unknown organization. */
+  create(input: CreateUserInput): Promise<{ user: UserRecord; membership: MembershipRecord }>;
+  getById(id: string): Promise<UserRecord | null>;
+  findByEmail(normalizedEmail: string): Promise<UserRecord | null>;
+  /** Replaces the hash, stamps passwordChangedAt and clears failedSignIns / lockedUntil. */
+  setPassword(id: string, passwordHash: string, at: Date): Promise<UserRecord | null>;
+  setStatus(id: string, status: UserStatus, at: Date): Promise<UserRecord | null>;
+}
+
+export interface MembershipRepository {
+  /** Idempotent: an existing membership is returned unchanged with `created: false`. ForeignKeyViolation on an unknown user or organization. */
+  grant(userId: string, organizationId: string, at: Date): Promise<{ membership: MembershipRecord; created: boolean }>;
+  /** True when a membership was removed. */
+  revoke(userId: string, organizationId: string): Promise<boolean>;
+  find(userId: string, organizationId: string): Promise<MembershipRecord | null>;
+  /** Oldest first. */
+  listByUser(userId: string): Promise<MembershipRecord[]>;
+  /** Oldest first. */
+  listByOrganization(organizationId: string): Promise<MembershipRecord[]>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
+  users: UserRepository;
+  memberships: MembershipRepository;
   integrations: IntegrationRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;

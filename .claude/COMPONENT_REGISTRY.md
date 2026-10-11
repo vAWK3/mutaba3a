@@ -1102,6 +1102,9 @@ Before creating a new component:
 | `retainers/schedule.ts` | chargeable months with end/cancel rules | retainers routes, reconcile |
 | `payments/allocate.ts`, `payments/credit.ts`, `payments/numbering.ts`, `payments/preview-token.ts` | allocation validation + strategies + resulting balances; credit VAT split; payment numbers; balance-covering preview token | payments, receivables (credits) routes; M6 summaries will reuse `outstandingOf` and the balance shapes |
 | `routes/operations.ts` | `GET /v1/operations/{key}` over `idempotency.get` | any client reconciling a lost response |
+| `auth/users.ts` (MUT-37) | `normalizeEmail` (trim + NFKC + lower-case), `generateOneTimePassword` (24 base64url chars), `PasswordHasher` port + `createArgon2Hasher`, `ARGON2_MINIMUMS` (OWASP profile 1, enforced by `config.ts`) | admin user routes; MUT-38 sign-in verifies with the same hasher and normalises emails the same way |
+| `routes/admin-users.ts` (MUT-37) | operator user/membership routes; `audit()` appends one ADMIN event per member organization | the only way to create or change a portal user |
+| `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |
 
 ---
 

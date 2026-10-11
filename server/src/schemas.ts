@@ -170,6 +170,80 @@ export const AuditEventSchema = z
 
 export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).openapi('AuditList');
 
+// ---- Admin: operator-provisioned users (MUT-37, ADR-033) --------------------
+
+export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
+
+/** Never includes the password hash. */
+export const UserSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    /** Normalised: trimmed, NFKC, lower-cased. */
+    email: z.string(),
+    displayName: z.string(),
+    locale: UserLocaleSchema,
+    status: z.enum(['ACTIVE', 'DISABLED']),
+    passwordChangedAt: z.string().datetime(),
+    lastSignInAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+  })
+  .openapi('UserSummary');
+
+export const MembershipSchema = z
+  .object({ organizationId: z.string().uuid(), createdAt: z.string().datetime() })
+  .openapi('Membership');
+
+export const CreateUserRequestSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+    displayName: z.string().trim().min(1).max(200),
+    locale: UserLocaleSchema.default('en'),
+    /** The user's first membership. More are granted with POST /admin/v1/users/{userId}/memberships. */
+    organizationId: z.string().uuid(),
+  })
+  .openapi('CreateUserRequest');
+
+export const CreateUserResponseSchema = z
+  .object({
+    user: UserSummarySchema,
+    memberships: z.array(MembershipSchema),
+    /** Shown exactly once; the service stores only its argon2id hash. Deliver it to the person over a secure channel. */
+    initialPassword: z.string(),
+  })
+  .openapi('CreateUserResponse');
+
+export const UserDetailSchema = z
+  .object({ user: UserSummarySchema, memberships: z.array(MembershipSchema) })
+  .openapi('UserDetail');
+
+export const UserListSchema = z.object({ users: z.array(UserSummarySchema) }).openapi('UserList');
+
+export const GrantMembershipRequestSchema = z
+  .object({ organizationId: z.string().uuid() })
+  .openapi('GrantMembershipRequest');
+
+export const GrantMembershipResponseSchema = z
+  .object({
+    membership: MembershipSchema,
+    /** false when the user already had this membership (idempotent grant). */
+    created: z.boolean(),
+  })
+  .openapi('GrantMembershipResponse');
+
+export const RemoveMembershipResponseSchema = z
+  .object({ removed: z.boolean() })
+  .openapi('RemoveMembershipResponse');
+
+export const UserStatusResponseSchema = z.object({ user: UserSummarySchema }).openapi('UserStatusResponse');
+
+export const PasswordResetResponseSchema = z
+  .object({
+    user: UserSummarySchema,
+    /** The new one-time password, shown exactly once. */
+    password: z.string(),
+  })
+  .openapi('PasswordResetResponse');
+
 // ---- Milestone 2: customers, projects, import --------------------------------
 
 export const ProviderSchema = z.enum(['MALAFAT']).openapi('Provider');

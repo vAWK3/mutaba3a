@@ -789,3 +789,21 @@ existing `DocumentDrawer` and document page tests, which still pass.
 **Baseline after TD-028 (2026-10-10)**: 2,149 unit tests passing, 5 skipped,
 0 failing. The 18 `ExpensesLedgerPage` failures noted above no longer exist on
 `main`; the page was removed by the MUT-2 strip.
+
+### MUT-37 — operator-only user accounts (`server/`)
+
+Plan: `.claude/designs/mut-37-operator-accounts-tests.md`. Written red first.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Pure helpers | `src/auth/__tests__/users.test.ts` | email normalisation (trim, NFKC, lower-case, idempotent); 24-char base64url one-time passwords, no repeats in 1,000; argon2id PHC string with the configured m/t/p; verify true/false; salted; malformed stored hash → false |
+| Config | `src/__tests__/config.test.ts` | argon2 defaults = OWASP profile 1; anything below is a `ConfigError` naming the variable |
+| Storage contract (memory + Postgres) | `src/repositories/__tests__/store-contract-users.ts` | user + first membership in one transaction; unique email; unknown organization → `ForeignKeyViolation` and no user; `setPassword` clears lockout counters; `setStatus`; idempotent `grant` keeps `createdAt`; `revoke` once; organization isolation |
+| Routes | `src/__tests__/routes-users.test.ts` | the seven admin routes: 201/200/404/409/422; email normalised on create and lookup; hash never returned; reset invalidates the old password; idempotent disable/enable; audit per member organization; 401 without or with a wrong admin token on all eight route forms; **no password or `$argon2id$` in any log line** at `trace` |
+| No self-registration | `src/__tests__/no-self-registration.test.ts` | router and published contract: no path outside `/admin/` matches signup / register / invite / forgot / reset (non-vacuous: >50 paths inspected) |
+| CLI | `src/scripts/__tests__/users-cli.test.ts` | create / grant / revoke / rotate / disable / enable against the in-process app; password printed exactly once; no token → non-zero, no secret; server error codes surfaced; unknown subcommand → usage |
+
+**Baseline after MUT-37 (2026-10-11)**: server 363 passed, 8 skipped (Postgres
+suites skip without `MUTABA3A_TEST_DATABASE_URL`). One pre-existing flake seen
+under full-suite load: `routes-m6` "lists the organization's events by entity"
+(TD-032), never reproduced in isolation (0/20).

@@ -51,6 +51,11 @@ import type {
   FeeProposalRecord,
   FeeProposalRepository,
   TransitionResult,
+  MembershipRecord,
+  MembershipRepository,
+  UserLocale,
+  UserRecord,
+  UserRepository,
 } from './ports.js';
 
 /**
@@ -97,6 +102,65 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.apiKey.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
       return mapNullable(await this.prisma.apiKey.findUnique({ where: { id } }), toApiKey);
     },
+  };
+
+  readonly users: UserRepository = {
+    create: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const user = await tx.user.create({
+            data: {
+              email: input.email,
+              displayName: input.displayName,
+              passwordHash: input.passwordHash,
+              locale: input.locale,
+              passwordChangedAt: input.at,
+              createdAt: input.at,
+              updatedAt: input.at,
+            },
+          });
+          const membership = await tx.membership.create({ data: { userId: user.id, organizationId: input.organizationId, createdAt: input.at } });
+          return { user: toUser(user), membership: toMembership(membership) };
+        }),
+      ),
+    getById: async (id) => mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser),
+    findByEmail: async (email) => mapNullable(await this.prisma.user.findUnique({ where: { email } }), toUser),
+    setPassword: async (id, passwordHash, at) => {
+      const { count } = await this.prisma.user.updateMany({
+        where: { id },
+        data: { passwordHash, passwordChangedAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at },
+      });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
+    setStatus: async (id, status, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { status, updatedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
+  };
+
+  readonly memberships: MembershipRepository = {
+    grant: async (userId, organizationId, at) => {
+      const where = { userId_organizationId: { userId, organizationId } };
+      const existing = await this.prisma.membership.findUnique({ where });
+      if (existing) return { membership: toMembership(existing), created: false };
+      try {
+        const membership = await translate(() => this.prisma.membership.create({ data: { userId, organizationId, createdAt: at } }));
+        return { membership: toMembership(membership), created: true };
+      } catch (err) {
+        // Two concurrent grants: the loser reads the winner's row.
+        if (!(err instanceof UniqueViolation)) throw err;
+        const winner = await this.prisma.membership.findUniqueOrThrow({ where });
+        return { membership: toMembership(winner), created: false };
+      }
+    },
+    revoke: async (userId, organizationId) =>
+      (await this.prisma.membership.deleteMany({ where: { userId, organizationId } })).count > 0,
+    find: async (userId, organizationId) =>
+      mapNullable(await this.prisma.membership.findUnique({ where: { userId_organizationId: { userId, organizationId } } }), toMembership),
+    listByUser: async (userId) =>
+      (await this.prisma.membership.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { organizationId: 'asc' }] })).map(toMembership),
+    listByOrganization: async (organizationId) =>
+      (await this.prisma.membership.findMany({ where: { organizationId }, orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }] })).map(toMembership),
   };
 
   readonly integrations: IntegrationRepository = {
@@ -834,6 +898,27 @@ function toApiKey(row: PrismaApiKey): ApiKeyRecord {
     revokedAt: row.revokedAt,
     revokedReason: row.revokedReason,
   };
+}
+
+function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
+    passwordHash: row.passwordHash,
+    locale: row.locale as UserLocale,
+    status: row.status,
+    failedSignIns: row.failedSignIns,
+    lockedUntil: row.lockedUntil,
+    passwordChangedAt: row.passwordChangedAt,
+    lastSignInAt: row.lastSignInAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toMembership(row: Prisma.MembershipGetPayload<object>): MembershipRecord {
+  return { userId: row.userId, organizationId: row.organizationId, createdAt: row.createdAt };
 }
 
 function mapNullable<A, B>(value: A | null, fn: (a: A) => B): B | null {

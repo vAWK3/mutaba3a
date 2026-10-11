@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.7.0-m8
+  version: 1.8.0-mut37
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -24,6 +24,8 @@ info:
     Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page's nextCursor.
 
     Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
+
+    Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.
 
     Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
@@ -52,7 +54,7 @@ tags:
   - name: Payments
     description: Money received, its allocations, reversals, and the operations lookup
   - name: Admin
-    description: Operator provisioning
+    description: "Operator provisioning: organizations, API keys, users and memberships"
 components:
   securitySchemes:
     apiKey:
@@ -3437,6 +3439,157 @@ components:
             $ref: "#/components/schemas/AuditEvent"
       required:
         - events
+    CreateUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserSummary"
+        memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/Membership"
+        initialPassword:
+          type: string
+      required:
+        - user
+        - memberships
+        - initialPassword
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        locale:
+          $ref: "#/components/schemas/UserLocale"
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - DISABLED
+        passwordChangedAt:
+          type: string
+          format: date-time
+        lastSignInAt:
+          type: string
+          nullable: true
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - displayName
+        - locale
+        - status
+        - passwordChangedAt
+        - lastSignInAt
+        - createdAt
+    UserLocale:
+      type: string
+      enum:
+        - en
+        - ar
+    Membership:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - organizationId
+        - createdAt
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          format: email
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        locale:
+          $ref: "#/components/schemas/UserLocale"
+        organizationId:
+          type: string
+          format: uuid
+      required:
+        - email
+        - displayName
+        - organizationId
+    UserList:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+      required:
+        - users
+    UserDetail:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserSummary"
+        memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/Membership"
+      required:
+        - user
+        - memberships
+    GrantMembershipResponse:
+      type: object
+      properties:
+        membership:
+          $ref: "#/components/schemas/Membership"
+        created:
+          type: boolean
+      required:
+        - membership
+        - created
+    GrantMembershipRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+      required:
+        - organizationId
+    RemoveMembershipResponse:
+      type: object
+      properties:
+        removed:
+          type: boolean
+      required:
+        - removed
+    PasswordResetResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserSummary"
+        password:
+          type: string
+      required:
+        - user
+        - password
+    UserStatusResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserSummary"
+      required:
+        - user
   parameters: {}
 paths:
   /health:
@@ -7219,6 +7372,299 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users:
+    post:
+      tags:
+        - Admin
+      summary: Create a user with its first membership (one-time password returned once)
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateUserResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Admin
+      summary: Find a user by email (normalised before lookup)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 320
+          required: true
+          name: email
+          in: query
+      responses:
+        "200":
+          description: Zero or one user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}:
+    get:
+      tags:
+        - Admin
+      summary: Inspect a user and their memberships
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/memberships:
+    post:
+      tags:
+        - Admin
+      summary: Grant a user access to an organization (idempotent)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantMembershipRequest"
+      responses:
+        "200":
+          description: Already granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantMembershipResponse"
+        "201":
+          description: Granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantMembershipResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/memberships/{organizationId}:
+    delete:
+      tags:
+        - Admin
+      summary: Remove a user’s access to an organization (idempotent)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      responses:
+        "200":
+          description: Removed, or there was nothing to remove
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveMembershipResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/password:
+    post:
+      tags:
+        - Admin
+      summary: "Operator password reset: issue a new one-time password (returned once)"
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: New password issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/disable:
+    post:
+      tags:
+        - Admin
+      summary: Disable a user (idempotent); they can no longer sign in
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: User DISABLED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStatusResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/enable:
+    post:
+      tags:
+        - Admin
+      summary: Re-enable a disabled user (idempotent)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: User ACTIVE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStatusResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
           content:
             application/json:
               schema:
