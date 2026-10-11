@@ -31,7 +31,7 @@ Everything else keeps working: overview, clients, agreements, payments, allocati
 
 ### 2a. Check which M7 migration production ran (before or right after the M8 deploy)
 
-> **2026-10-11:** the deploy history answers half of this. Revision `mutaba3a-api-00003-rvr` rolled `acb1144` on 2026-10-09, and `deploy.sh` migrates before it rolls, so production recorded the **original** M7. Run the query below to confirm, since a hand repair is the only way it could differ. Until the repair migration ships, nobody approves a proposal, and Malafat `web@2.2.4` now offers that button. The current record is in `server/DEPLOYMENT.md` §7.
+> **2026-10-11:** the deploy history answers half of this. Revision `mutaba3a-api-00003-rvr` rolled `acb1144` on 2026-10-09, and `deploy.sh` migrates before it rolls, so production recorded the **original** M7. Run the query below to confirm, since a hand repair is the only way it could differ. Until the repair migration ships, nobody approves a proposal, and Malafat `web@2.2.4` now offers that button. The current record is in `server/DEPLOYMENT.md` §7. **The repair is written (MUT-59):** `20261011120000_mut59_fee_proposal_enum_repair` ships with the next `deploy.sh`.
 
 M8 **edited the M7 migration in place** (D20, on the premise that nothing was deployed). The original M7 (`acb1144`) was on `main` from 2026-10-09 04:46 UTC until `227c005` on 2026-10-10 14:31 +03. A database that applied the original keeps it: `prisma migrate deploy` skips migrations it has already recorded and does not re-run an edited one.
 

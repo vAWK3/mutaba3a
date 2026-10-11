@@ -377,7 +377,7 @@ Firms:
   of the repository; the firm's audit trail (`GET /admin/v1/organizations/<id>/audit`)
   is the record.
 
-### Open: production probably has the original M7 enum (action required)
+### Open: production probably has the original M7 enum (MUT-59, fix ready)
 
 M8 edited the M7 migration in place (D20). `acb1144` created
 `FeeProposalStatus` as `('PROPOSED', 'CLIENT_APPROVED', 'AGREED', 'CONVERTED', 'WITHDRAWN')`
@@ -386,18 +386,38 @@ and the columns `agreedOn` and `agreedNote`. `main` now creates
 
 Revision `00003` rolled `acb1144`, and `deploy.sh` migrates before it rolls, so
 production recorded the original M7. `prisma migrate deploy` never re-runs a
-recorded migration. Unless someone repaired it by hand, the database still has
-the old enum while `ced04f7` writes `APPROVED`.
+recorded migration. The database therefore still has the old enum while the
+service writes `APPROVED`.
 
 What breaks:
 
-- **Approving a fee proposal** (`POST /v1/fee-proposals/{id}/approve`) fails
-  with a Postgres enum error, which reaches Partners as a 500. Malafat
-  `web@2.2.4` offers that button, so the break is reachable now.
-- **Any read that loads a proposal in a removed status** (`CLIENT_APPROVED`,
-  `AGREED`, `CONVERTED`) fails too, e.g. that project's summary.
+- **Approving a fee proposal** fails with a Postgres enum error, which
+  reaches Partners as a 500. Malafat `web@2.2.4` offers the button.
+- **Reading a proposal in a removed status** fails too.
 
-Check (read-only):
+**Until the fix is deployed, nobody approves a proposal.**
+
+**The fix** is the migration `20261011120000_mut59_fee_proposal_enum_repair`
+(MUT-59). It ships with the next `./scripts/deploy.sh` from `main`, in step 4,
+before the service rolls. It runs as one statement, so it either does all of
+the following or nothing:
+
+- **Refuses** if a `CONVERTED` proposal has no agreement, or if a project would
+  be left with two open proposals. The error names the rows.
+- **Audits first:** every touched row gets a `SYSTEM` audit event
+  `fee_proposal.repaired` holding its previous values. That covers status,
+  approval date and note, agreed amount, `agreedOn` and `agreedNote`.
+- **Maps the statuses:**
+  - `CONVERTED` → `APPROVED`, with the approval date and amount taken from
+    M7's fields or else the agreement;
+  - `CLIENT_APPROVED` and `AGREED` → `PROPOSED`, i.e. still open, and the
+    Partner approves them again in M8, which creates the agreement.
+- **Reshapes the schema:** recreates the enum with three values and drops
+  `agreedOn` and `agreedNote`.
+
+On a database that already has M8's shape it does nothing.
+
+Optional read-only look before deploying:
 
 ```bash
 cd server && TF_STATE_BUCKET=<bucket> npm run db:psql
@@ -408,25 +428,32 @@ SELECT enum_range(NULL::"FeeProposalStatus");
 SELECT status, count(*) FROM fee_proposals GROUP BY 1;
 ```
 
-- **`{PROPOSED,APPROVED,WITHDRAWN}`:** the database has M8's shape. Delete
-  this subsection.
-- **The five-value enum:** nobody should approve a proposal until a forward
-  repair migration ships. It is not written yet. It must:
-  - add `APPROVED`;
-  - map or refuse rows in the removed statuses;
-  - recreate the enum without them;
-  - drop `agreedOn` and `agreedNote`.
+If step 4 stops with `MUT-59 repair refused: …`:
 
-  It must also be a no-op on a database that already has M8's shape, such as
-  every fresh one.
+1. The service was not rolled, and nothing was changed.
+2. Fix the named rows in `npm run db:psql`. For example, withdraw a
+   `CONVERTED` proposal that has no agreement:
+   `UPDATE fee_proposals SET status = 'WITHDRAWN', "withdrawnReason" = '…' WHERE id = '…'`.
+3. Mark the migration rolled back:
+   1. start the proxy with `TF_STATE_BUCKET=<bucket> npm run db:proxy`, which
+      prints the local database URL and waits;
+   2. in another shell, run
+      `DATABASE_URL=<that URL> npx prisma migrate resolve --rolled-back 20261011120000_mut59_fee_proposal_enum_repair`.
+4. Re-run `./scripts/deploy.sh`.
+
+This path was rehearsed on 2026-10-11 against a scratch database built as
+production was: the original M7, then `migrate deploy` of `main`.
+
+After the deploy, check that the enum reads `{PROPOSED,APPROVED,WITHDRAWN}`,
+update the revision table above, and delete this subsection.
 
 Also still unconfirmed: the daily `npm run reconcile` schedule
 (`money-v1-handover.md` §3.4).
 
 ## 8. Where to go from here
 
-1. **The M7 enum check above,** then the repair migration if needed. This
-   blocks proposal approval in production.
+1. **Deploy MUT-59** (above). Until then, proposal approval is broken in
+   production.
 2. **Malafat:**
    - run the Money contract test against the refreshed contract;
    - add `"USER"` to `actorType`;

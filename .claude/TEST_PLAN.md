@@ -1002,6 +1002,19 @@ Plan: `.claude/designs/mut-42-hosted-expenses-tests.md`. The tests were written 
 | Invisible to Malafat | `expenses-invisible.test.ts` | canary sweep over every key-readable operation × every canary id; `/v1/audit` excludes expense types; idempotency namespaced (lookup 404, no collision, digest ≤ 128) |
 | Inventory | `route-security.test.ts`, `writability-routes.test.ts` | 13 expense operations session-only; 25 session GETs; the category list is the one read that writes (seed) |
 
+### MUT-59 — repair of a database that applied the original M7 (`server/`)
+
+`src/repositories/__tests__/migration-mut59.test.ts`, Postgres only (`npm run test:db`), on scratch databases built with `prisma db execute` from every migration, with M7 replaced by its original (`fixtures/m7_fee_proposals.acb1144.sql`):
+
+- **Repair:** every M7 status mapped (`CONVERTED` dated and priced from its agreement); version bumped; one `SYSTEM` `fee_proposal.repaired` row per touched proposal, with the exact old values; columns dropped; no drift against `schema.prisma`; the M8 store lists every row and approves a formerly client-approved one.
+- **Idempotent:** a second run changes nothing.
+- **Refusals:** both cases abort with `MUT-59 repair refused`, leaving the enum, columns, rows and audit untouched.
+- **Fresh database:** a no-op.
+
+Rehearsed once by hand, the way production deploys: `migrate deploy` of the acb1144 history, then of `main`. That included a refusal and the `migrate resolve --rolled-back` recovery.
+
+**Baseline after MUT-59 (2026-10-11)**: server `npm test` 1056 passed, 11 skipped; `npm run test:db` 1122 passed.
+
 **Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.
 
 **Baseline after MUT-39 (2026-10-11)**: server `npm test` 924 passed, 9 skipped; `npm run test:db` 978 passed (after re-migrating the local test database).
