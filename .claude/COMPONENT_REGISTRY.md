@@ -1078,27 +1078,34 @@ Before creating a new component:
 
 ---
 
-## Hosted portal (`src/hosted`) — MUT-43
+## Hosted portal (`src/hosted`) — MUT-43, expenses MUT-44
 
-The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTabs`, `SearchInput`, `Table.css`, `ThemeProvider` and the i18n core. It may not import the local data layer, hooks, shell, drawers or stores (lint-enforced). Everything below is portal-only unless marked shared.
+The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTabs`, `SearchInput`, `Table.css`, `ThemeProvider` and the i18n core. It may not import the local data layer, hooks, shell, drawers or stores (lint-enforced) — the "hooks" ban is on the path segment, not on whose hooks they are, so the portal's own mutation hooks live under `data/`, not a `hooks/` dir (MUT-44). It also reuses the app's `src/index.css` directly (both builds already import it), which is how `components/Drawer.tsx` gets the local drawer's exact chrome without importing the local drawer component.
 
 | Module | Exports | Used by |
 |---|---|---|
 | `src/lib/i18n/core.tsx` (**shared**, MUT-43) | `I18nProvider` (controlled: `translations`, `language`, `setLanguage`), `createTranslator` (`t` with `.has`), `useLanguage`, `useT`, `useDirection`, `getLocale`, `getDirection`, `detectSystemLanguage` | the app's `LanguageProvider` (context.tsx), `HostedLanguageProvider`, every `useT()` caller |
 | `src/lib/i18n/plural.ts` (**shared**) | `tp` via `useTp()`, `createPluralTranslator`, `pluralKey` (CLDR forms through `Intl.PluralRules`) | portal (`hosted.auth.rateLimited`); available to the app |
-| `api/client.ts` | `api.*` (one function per operation), `request`, `ApiError` (`status`, `code`, `details`, `retryAfterSeconds`), `setUnauthorisedHandler`, schema type aliases | every portal hook and page |
+| `src/components/expenses/` (**shared**, MUT-44) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
+| `api/client.ts` | `api.*` (one function per operation, now incl. expense CRUD + categories + summary + receipt start/complete/download/delete), `request` (GET/POST/PATCH/DELETE, `idempotencyKey`/`ifMatchVersion` options), `ApiError` (`status`, `code`, `details`, `retryAfterSeconds`), `setUnauthorisedHandler`, schema type aliases | every portal hook and page |
 | `format/DecimalAmount.tsx` | `DecimalAmount` (`<bdi dir="ltr">`), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
-| `format/dates.ts` | `formatDay` (calendar date, never shifted), `formatInstant` (in the organization's zone), `formatSize` | views |
-| `components/QueryView.tsx` | `QueryView` (loading / empty / error / populated; a view in error renders no data; a 404 re-checks `/v1/me`), `Unreachable`, `Skeleton`, `Empty` | every view |
-| `components/HostedTable.tsx` | `HostedTable<Row>` (`columns`, pre-shaped `rows`, `rowKey`, `label`, optional `detail` row) on `Table.css` | every list |
-| `components/FilterControls.tsx` | `ClientFilter`, `MatterFilter`, `CurrencyFilter`, `SelectFilter`, `DateFilter`, `FilterBar` (labelled) | list views |
+| `format/dates.ts` | `formatDay` (calendar date, never shifted), `formatInstant` (in the organization's zone), `formatSize`, `todayLocalISO` (MUT-44, browser-local calendar date — the expense drawer's default `occurredOn`) | views |
+| `components/QueryView.tsx` | `QueryView` (loading / empty / error / populated; a view in error renders no data; a 404 re-checks `/v1/me`), `Unreachable`, `Skeleton`, `Empty` (now takes `action`) | every view |
+| `components/HostedTable.tsx` | `HostedTable<Row>` (`columns`, pre-shaped `rows`, `rowKey`, `label`, optional `detail` row, optional `onRowClick` — MUT-44, opt-in, reuses `Table.css`'s `.clickable`) | every list |
+| `components/FilterControls.tsx` | `ClientFilter`, `MatterFilter`, `CategoryFilter` (MUT-44), `CurrencyFilter`, `SelectFilter`, `DateFilter`, `FilterBar` (labelled) | list views |
 | `components/ReadOnlyNotice.tsx` | `ReadOnlyNotice` (reads `profile.access` and `writerOfRecord`, `role="note"`) | income views |
-| `components/Toast.tsx` | `ToastProvider`, `useToast` (one `role="alert"` message) | sign-out failure, download failure |
+| `components/Toast.tsx` | `ToastProvider`, `useToast` (one `role="alert"` message) | sign-out failure, download failure, expense save conflicts/network errors (MUT-44) |
+| `components/Drawer.tsx` (MUT-44) | `Drawer` (title/onClose/children/footer/closeLabel; Escape + overlay-click close) on the app's `.drawer`/`.drawer-overlay` classes from shared `src/index.css` — not an import of `src/components/drawers/Drawer.tsx` | `ExpenseDrawer` |
+| `components/ExpenseDrawer.tsx` (MUT-44) | `ExpenseDrawer` (create/edit, `ExpenseFormFields` + pickers + vendor text + `ReceiptUploader`, MUT-42 error-code → field/toast mapping) | `ExpensesList` |
+| `components/ClientPicker.tsx`, `ProjectPicker.tsx` (MUT-44) | `EntityTypeahead` fed by the read-only `useCustomerDirectory`/`useProjectDirectory`; no create-new branch (MUT-42 D6: existing org records only) | `ExpenseDrawer` |
+| `components/ReceiptUploader.tsx` (MUT-44) | `ReceiptUploader` (start → PUT the signed URL → complete; PDF/JPEG/PNG, 10 MB, 10-receipt cap counting only READY) | `ExpenseDrawer` (edit mode only) |
+| `components/expenseApiErrors.ts` (MUT-44) | `applyExpenseApiError` (MUT-42's `VALIDATION_FAILED`/`CONFLICT` reasons → `setError(..., {type:'manual'})` or a toast) | `ExpenseDrawer` |
 | `components/Brand.tsx`, `Icons.tsx` | `Wordmark`, `LanguageSwitch` (explicit, persisted), `InfoIcon`, `AlertIcon`, `LockIcon` | sign-in, shell |
-| `shell/` | `HostedShell`, `ProfileSwitcher`, `UserMenu`, `usePopover` (the portal's twin of `useMenuButton`, which it may not import) | `ProfileLayout` |
+| `shell/` | `HostedShell` (nav now incl. Expenses, MUT-44), `ProfileSwitcher`, `UserMenu`, `usePopover` (the portal's twin of `useMenuButton`, which it may not import) | `ProfileLayout` |
 | `session/` | `meQuery`, `profileKey(id, …)`, `useMe`, `useProfile`, `AuthGate`, `HomeRedirect`, `ProfileLayout`, `SessionBridge`, `endSession`, `useSignOut`, `safeNext`, `announceSignedOut` / `onSignedOutElsewhere` | router |
-| `data/` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), filter models and parsers, `downloadNavigator` | views, router |
-| `pages/views/` | `OverviewPage`, `ClientsPage`, `ClientDetailPage`, `ReceivablesList`/`Page`, `PaymentsList`/`Page`, `DocumentsList`/`Page` (lists take `fixedCustomerId` for client tabs), `StatusBadge`, `ShowMore`, `PageHeader`, `NoMatch` | router |
+| `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers, `downloadNavigator` | views, router, `data/expenseQueries.ts` |
+| `data/expenseQueries.ts` (MUT-44) | `useExpenses`, `useExpense`, `useExpenseCategories`, `useCreateExpense`/`useUpdateExpense`/`useDeleteExpense`, `useAddReceipt`/`useDeleteReceipt` — the portal's only mutations | `ExpensesList`, `ExpenseDrawer`, `ReceiptUploader` |
+| `pages/views/` | `OverviewPage`, `ClientsPage`, `ClientDetailPage`, `ReceivablesList`/`Page`, `PaymentsList`/`Page`, `DocumentsList`/`Page` (lists take `fixedCustomerId` for client tabs), `ExpensesList`/`Page` (MUT-44), `StatusBadge`, `ShowMore`, `PageHeader`, `NoMatch` | router |
 
 ## Hosted API modules (`server/src`) — reusable across milestones
 

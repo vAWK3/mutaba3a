@@ -28,6 +28,35 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-44: hosted expense capture
+
+**Scope:**
+- `src/components/expenses/` (new, shared): `ExpenseFormFields`, `expenseFormSchema`; `src/components/drawers/ExpenseDrawer.tsx` (changed to use it, no behaviour change); new `src/components/__tests__/ExpenseDrawer.oneTimeFields.test.tsx`
+- `src/hosted/api/client.ts` (`request()` gains PATCH + `idempotencyKey`/`ifMatchVersion`; expense/category/receipt operations); `src/hosted/data/expenseQueries.ts` (new), `queries.ts` (`useCursorList`, `Page` exported), `filters.ts` (`ExpenseFilters`, `ExpenseDrawerSearch`, `ExpensesPageSearch`)
+- `src/hosted/components/`: `Drawer.tsx`, `ExpenseDrawer.tsx`, `ClientPicker.tsx`, `ProjectPicker.tsx`, `ReceiptUploader.tsx`, `expenseApiErrors.ts` (all new); `HostedTable.tsx` (`onRowClick`), `FilterControls.tsx` (`CategoryFilter`)
+- `src/hosted/pages/views/ExpensesList.tsx` (new); `router.tsx` (`/expenses` route); `shell/HostedShell.tsx` (nav entry); `format/dates.ts` (`todayLocalISO`)
+- `src/hosted/i18n/{en,ar}.json` (`hosted.expenses.*`, `hosted.filters.category`, `hosted.shell.nav.expenses`, `common.{save,cancel,delete,close,loading,saving}`)
+- `scripts/bundle-origins.json` (`json-schema.org` added to `hosted`)
+- `.claude/designs/mut-44-expense-capture.md` + `-tests.md` (new); ADR-037 MUT-44 amendment
+
+### Added
+- **Expense capture on the hosted portal** — the only write a hosted (Malafat-fed) tenant has. A drawer records or edits an expense (amount, currency, date, title, vendor, client, matter, category, notes) against MUT-42's API, deep-linkable via `?newExpense=`/`?expense=<id>` on the new `/expenses` route.
+- **Receipt attachment** on an existing expense: PDF/JPEG/PNG up to 10 MB, a 10-receipt cap (counting only `READY`), start → signed-URL PUT → complete, matching the M6 attachment flow.
+- **Shared expense form.** `ExpenseFormFields` (amount/currency/date/title/category/notes) now renders inside both the local `ExpenseDrawer` and the new hosted one; vendor/client/project stay host-specific slots (local's are Dexie-backed and create-capable; hosted's are read-only directory lookups with no server-side vendor concept at all).
+- **Field-level error mapping.** MUT-42's `VALIDATION_FAILED`/`CONFLICT` reasons land on the owning form field or a toast, per `expenseApiErrors.ts`.
+
+### Changed
+- `HostedTable` takes an opt-in `onRowClick` (every other list is unaffected); `QueryView`'s `Empty` already supported an `action`, now used for "Record expense".
+- The local `ExpenseDrawer`'s one-time-expense JSX is now `ExpenseFormFields` under the hood; its recurring mode, Dexie hooks and existing test are untouched.
+
+### Technical
+- `request()` (hosted API client) gains `PATCH` and `Idempotency-Key`/`If-Match` header support — the portal's first write ever needed either.
+- The portal's mutation hooks live in `src/hosted/data/expenseQueries.ts`, not a `hooks/` dir: the lint ban on `(^|/)(db|sync|hooks)(/|$)` matches the path segment literally, regardless of whose hooks they are.
+- `src/hosted/components/Drawer.tsx` renders the app's own `.drawer`/`.drawer-overlay` classes from the shared `src/index.css` (both builds already import it) rather than new CSS — same interaction and pixels as the local drawer.
+- Receipt upload is a bare cross-origin `fetch` (`credentials: 'omit'`) to the storage bucket's signed URL, bypassing `request()`'s same-origin/`/v1/*` assumptions. Flagged on MUT-45 (comment 10956): its CSP needs the bucket origin in `connect-src`.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-43: the hosted portal — sign-in and the money views
 
 **Scope:**

@@ -207,3 +207,12 @@ Recommend (1) — the AC explicitly wants receipts, and today's absence of CSP m
 ## Business / product impact
 
 Expenses are the *only* write a hosted (Malafat-fed) tenant gets in v1 — without this ticket, MUT-34's hosted portal is read-only and the "hosted profile" story (ADR-037) has no action a signed-in partner can actually take beyond looking at numbers Malafat already shows them elsewhere. This is also the one remaining story under epic MUT-34 (MUT-35–43 all shipped); landing it closes the epic's build work, leaving only MUT-45 (serving/infra) before the portal can go live for a real tenant.
+
+## Result (2026-10-11)
+
+Built as approved, with two corrections found during implementation (both recorded as the ADR-037 MUT-44 amendment in `.claude/DECISIONS.md`, both resolving §9's open decisions):
+
+- **No new CSS.** `src/index.css` (with the local `.drawer`/`.drawer-overlay` classes §6a point 5 assumed were app-only) is in fact imported by both builds — confirmed by checking `src/hosted/main.tsx`. `src/hosted/components/Drawer.tsx` renders those exact classes instead of inventing `.hp-drawer`/`.hp-drawer-overlay`, which is simpler and keeps the two drawers visually identical by construction rather than by manual upkeep.
+- **`data/`, not `hooks/`.** The lint rule banning `(^|/)(db|sync|hooks)(/|$)` matches the literal path segment anywhere under `src/hosted/**`, not specifically the local app's hooks — `src/hosted/hooks/useExpenseQueries.ts` failed lint on contact. Moved to `src/hosted/data/expenseQueries.ts`, resolving §9 decision 2 in favor of `data/`.
+
+Gates: `npx vitest run` 160 files / 2537 passed / 5 skipped; `npm run lint` 0 errors (17 pre-existing warnings, unrelated); `npm run typecheck` both programs clean; `npm run test:bundles` passed after adding `json-schema.org` (an inert zod string literal, already allowlisted for local/desktop) to the hosted allowlist. Posted a CSP `connect-src` note on MUT-45 (comment 10956) for the receipt-upload origin per §6a's cross-ticket risk.

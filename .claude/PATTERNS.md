@@ -1435,6 +1435,30 @@ membership on the organization it removed), actor `ADMIN`, entity `user`. A
 user with no memberships is logged at info with the user id only. Idempotent
 no-ops (a second disable, an existing grant) are not audited.
 
+### A shared form takes field-identical props and host-specific slots (MUT-44)
+`ExpenseFormFields` holds the fields genuinely identical between the local app
+and the portal (amount/currency/date/title/category/notes); client/project/
+vendor are `ReactNode` props the host fills in, because those three differ in
+kind, not just styling, between hosts (Dexie-backed and create-capable locally;
+a read-only directory lookup on the portal, with no server-side vendor concept
+at all there). Where one *attribute* differs for a real reason — the amount
+input's `type`/`dir` (local keeps `type="number"`; the portal's lint bans
+`Number()`/`parseFloat` outright, so it needs a `dir="ltr"` text input) — that
+becomes an explicit mode prop (`amountInputMode`), not two components. A
+manually-set error (`setError(field, {type: 'manual', message})`) is
+distinguished from the component's own generic validation text by `.type`, so
+a host can hand back a server-specific message without the component having to
+know what produced it.
+
+### A cross-origin write bypasses the house HTTP client on purpose (MUT-44)
+`api/client.ts`'s `request()` assumes same-origin credentials and a `/v1/*`
+path — correct for every other call, wrong for a signed-URL upload to a
+storage bucket on a different origin entirely. `putToSignedUrl` is a separate,
+small `fetch` with `credentials: 'omit'` instead of forcing the shared
+client to grow an escape hatch for one caller. The CSP implication (the
+bucket origin must be in `connect-src`) is the kind of cross-cutting
+consequence that belongs on the ticket that owns CSP, not solved locally.
+
 ---
 
 ## Verification patterns — added 2026-10-10 (MUT-49)
