@@ -238,13 +238,22 @@ model Membership {
   @@map("memberships")
 }
 
-/// A server-side browser session (MUT-38, ADR-037). The cookie carries an
-/// opaque token; only its HMAC-SHA256 digest (SESSION_TOKEN_PEPPER) is stored.
+/// cookie: the browser portal session (MUT-38); device: a native app's bearer
+/// token (MUT-64). Same table, same revocation paths either way.
+enum SessionKind {
+  cookie
+  device
+}
+
+/// A server-side session (MUT-38 cookie, MUT-64 device). Only the
+/// HMAC-SHA256 digest (SESSION_TOKEN_PEPPER) of the token is stored, whether
+/// it travels as a cookie or a bearer token.
 model Session {
-  id                String    @id @default(uuid()) @db.Uuid
-  userId            String    @db.Uuid
-  user              User      @relation(fields: [userId], references: [id])
-  tokenDigest       String    @unique @db.VarChar(64)
+  id                String      @id @default(uuid()) @db.Uuid
+  userId            String      @db.Uuid
+  user              User        @relation(fields: [userId], references: [id])
+  tokenDigest       String      @unique @db.VarChar(64)
+  kind              SessionKind @default(cookie)
   createdAt         DateTime
   lastSeenAt        DateTime
   idleExpiresAt     DateTime
@@ -252,7 +261,7 @@ model Session {
   revokedAt         DateTime?
   revokedReason     String?
   /// Truncated to 200 characters; for the operator's eyes only.
-  userAgent         String?   @db.VarChar(200)
+  userAgent         String?     @db.VarChar(200)
 
   @@index([userId])
   @@map("sessions")

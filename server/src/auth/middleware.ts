@@ -7,7 +7,7 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
-import { isSameOriginRequest, sessionCookieName, sessionDigest } from './sessions.js';
+import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSameOriginRequest, sessionCookieName, sessionDigest } from './sessions.js';
 import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
 import { domainOfScope, matrixRow, profileWriterOf, sessionScopes, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
 
@@ -101,6 +101,8 @@ export function buildRouteAccessIndex(definitions: readonly RouteDefinition[], h
     for (const requirement of security) {
       if ('apiKey' in requirement) principals.add('apiKey');
       if ('session' in requirement) principals.add('session');
+      // A device session (MUT-64) is the 'session' Principal too — same writability, different transport.
+      if ('deviceSession' in requirement) principals.add('session');
     }
     const key = `${def.route.method.toUpperCase()} ${def.route.path.replace(/\{([^}]+)\}/g, ':$1')}`;
     index.set(key, { public: Array.isArray(def.route.security) && security.length === 0, principals, scopes: scopes.get(key) ?? [] });
@@ -116,6 +118,9 @@ export interface SessionSettings {
   secureCookie: boolean;
   portalOrigin?: string;
   trustedProxyHops: number;
+  /** MUT-64 device-session lifetime (native app bearer tokens). Defaults to 30/180 days when absent. */
+  deviceIdleDays?: number;
+  deviceAbsoluteDays?: number;
 }
 
 export interface AuthenticateOptions {
@@ -147,6 +152,12 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
     }
 
     if (bearer) {
+      if (isDeviceSessionToken(bearer)) {
+        const identity = await authenticateDeviceSessionToken(c, bearer, options);
+        if (access && !access.principals.has('session')) throw await keyOnlyRefusal(c, identity, access, options.store);
+        await finishSessionAuth(c, identity, endpoint, options);
+        return next();
+      }
       const auth = await authenticateApiKey(c, bearer, options);
       if (access && !access.principals.has('apiKey')) throw principalNotAccepted();
       c.set('auth', auth);
@@ -160,19 +171,31 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
       if (!SAFE_METHODS.has(c.req.method) && !isSameOriginRequest(c.req, options.sessions.portalOrigin)) {
         throw new ApiError('CROSS_SITE_REQUEST', 'This request must come from the Mutaba3a portal itself');
       }
-      c.set('identity', identity);
-      let profileWriter: ProfileWriter = null;
-      if (endpoint && !options.organizationIndependent.has(endpoint)) {
-        const auth = await selectProfile(c, identity, options.store);
-        c.set('auth', auth);
-        profileWriter = auth.writerOfRecord;
-      }
-      c.set('storeGuard', principalStoreGuard('session', profileWriter));
+      await finishSessionAuth(c, identity, endpoint, options);
       return next();
     }
 
     throw new ApiError('UNAUTHENTICATED', 'Missing credentials: an API key (Authorization: Bearer) or a session cookie');
   };
+}
+
+/**
+ * The tail shared by a cookie session and a device-session bearer token once
+ * the credential itself has verified (MUT-64): name the signed-in person,
+ * select the organization a profile-scoped route needs, and set the store
+ * guard. CSRF/same-origin enforcement is NOT here — it's cookie-only and stays
+ * inline in the cookie branch above, since a device bearer has no comparable
+ * signal to check.
+ */
+async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, endpoint: string | null, options: AuthenticateOptions): Promise<void> {
+  c.set('identity', identity);
+  let profileWriter: ProfileWriter = null;
+  if (endpoint && !options.organizationIndependent.has(endpoint)) {
+    const auth = await selectProfile(c, identity, options.store);
+    c.set('auth', auth);
+    profileWriter = auth.writerOfRecord;
+  }
+  c.set('storeGuard', principalStoreGuard('session', profileWriter));
 }
 
 /**
@@ -214,8 +237,34 @@ async function authenticateApiKey(c: Context<AppEnv>, presented: string, options
 /** A session is valid while unrevoked, inside both deadlines, and its user is ACTIVE with no password change since it began. */
 async function authenticateSession(c: Context<AppEnv>, token: string, options: AuthenticateOptions): Promise<SessionIdentity> {
   const { store, sessions: settings } = options;
-  const now = c.get('now')();
   const digest = sessionDigest(settings.pepper, token);
+  return validateSessionRecord(c, store, digest, options.rateLimiter, 'session', settings.idleMinutes * 60_000);
+}
+
+/** The device-session bearer equivalent of authenticateSession (MUT-64): same validity rule, device-length idle window. */
+async function authenticateDeviceSessionToken(c: Context<AppEnv>, token: string, options: AuthenticateOptions): Promise<SessionIdentity> {
+  const { store, sessions: settings } = options;
+  const digest = sessionDigest(settings.pepper, token);
+  const idleMs = (settings.deviceIdleDays ?? DEFAULT_DEVICE_IDLE_DAYS) * 86_400_000;
+  return validateSessionRecord(c, store, digest, options.rateLimiter, 'device-session', idleMs);
+}
+
+/**
+ * Shared by a cookie session and a device-session token: valid while
+ * unrevoked, inside both deadlines, and its user is ACTIVE with no password
+ * change since the session began. `rateLimitPrefix` keeps the two kinds'
+ * per-session rate-limit buckets separate; `idleMs` is the caller's idle
+ * window (cookie minutes vs. device days) for the touch recompute.
+ */
+async function validateSessionRecord(
+  c: Context<AppEnv>,
+  store: LedgerStore,
+  digest: string,
+  rateLimiter: RateLimiter,
+  rateLimitPrefix: string,
+  idleMs: number,
+): Promise<SessionIdentity> {
+  const now = c.get('now')();
   const session = await store.sessions.findByDigest(digest);
   if (
     !session ||
@@ -233,9 +282,9 @@ async function authenticateSession(c: Context<AppEnv>, token: string, options: A
     throw sessionExpired();
   }
 
-  await enforceRateLimit(c, options.rateLimiter, `session:${session.id}`, now, 'Too many requests for this session');
+  await enforceRateLimit(c, rateLimiter, `${rateLimitPrefix}:${session.id}`, now, 'Too many requests for this session');
   if (now.getTime() - session.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) {
-    const idleExpiresAt = new Date(Math.min(now.getTime() + settings.idleMinutes * 60_000, session.absoluteExpiresAt.getTime()));
+    const idleExpiresAt = new Date(Math.min(now.getTime() + idleMs, session.absoluteExpiresAt.getTime()));
     await store.sessions.touch(session.id, now, idleExpiresAt);
   }
   return { user, session };

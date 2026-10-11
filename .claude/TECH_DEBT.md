@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-052: Malafat's vendored OpenAPI contract not re-verified against the new deviceSession scheme
+**Status**: Open
+**Added**: 2026-10-12 (MUT-64)
+**Priority**: Low
+**Impact**: MUT-64 adds a `deviceSession` bearer security scheme to the published OpenAPI contract (pure addition — no existing scheme changes shape, Malafat only ever uses `apiKey`). ADR-037 decision 9 set the precedent that a contract change gets Malafat's vendored parser refreshed and confirmed tolerant before it ships; that verification lives in the Malafat repo, outside this one's reach, and wasn't run as part of this ticket.
+**Remediation**: before the next deploy that includes this change, refresh Malafat's vendored envelope from `server/openapi/openapi.yaml` and confirm its parser doesn't choke on the unrecognized scheme name. Very likely a non-event given the addition is purely additive.
+
 ### TD-051: A first run stacks two first-run surfaces
 **Status**: Open
 **Added**: 2026-10-12 (MUT-78)

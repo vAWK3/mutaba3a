@@ -1362,6 +1362,34 @@ post due items with `const posting = lazyPostingOf(c, store)` →
 for a session; MUT-39). Never read `auth.apiKey` directly, and never call
 `unguarded()` anywhere else — a test pins its one caller.
 
+### Two bearer-token kinds are told apart by a distinct prefix, never by trying one then the other (MUT-64)
+An API key (`mut_<env>_<prefix>_<secret>`) and a device session
+(`mds_<secret>`) both arrive as `Authorization: Bearer <token>`.
+`authenticate()` branches on `isDeviceSessionToken(token)` (a prefix check)
+*before* attempting either verifier — never "try as a key, fall back to a
+session" — so a malformed or wrong-kind token gets the right error without a
+second, wasted lookup, and the two verifiers can't be confused with each
+other (a pinned test runs each token shape through the other's parser).
+Once verified, a device session is the exact same `'session'` `Principal` a
+cookie session is (same `writability.ts`/`store-guard.ts`, no new literal) —
+only the *transport* is new, not the authorization model. The two share a
+`validateSessionRecord` core in `middleware.ts` (digest lookup, expiry, user
+validity, touch) parameterized by idle window and rate-limit key prefix, and
+a `finishSessionAuth` tail (identity, profile selection, store guard) that
+both the cookie and device-bearer paths call — only the cookie-specific CSRF
+check sits outside it, since a device bearer has no comparable signal.
+
+### A shared credential-verification core beats two copies (MUT-64)
+The portal's cookie sign-in and the native app's device-session sign-in need
+the *identical* throttle/lockout/dummy-hash-timing/audit flow — the kind of
+"common behavior, not just similar-looking code" worth extracting on its own,
+let alone being the highest-risk logic in the ticket. `auth/sign-in.ts`'s
+`signIn()` takes the one real difference (`SessionKind`, and the lifetime to
+stamp) as parameters; both route files call it and do only their own
+transport-specific finish (set a cookie vs. return a token in the body). The
+existing route's test suite passing unmodified after the extraction is the
+regression proof it didn't change behavior.
+
 ### Store access is classified once; the guard lives in the store (MUT-39)
 Every `LedgerStore` repository method has an entry in `STORE_ACCESS`
 (`auth/store-guard.ts`): `read`, `control` (bookkeeping any request needs —

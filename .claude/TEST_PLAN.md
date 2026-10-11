@@ -1213,3 +1213,22 @@ Checked by hand in the browser (2026-10-12) from a cleared origin: landing → "
 
 **Baseline after MUT-78 (2026-10-12)**: root `npx vitest run` 171 files, 2630 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass.
 
+### MUT-64 — device sessions, native app sign-in for hosted accounts (`server/`, epic MUT-63)
+
+Plan: `.claude/designs/mut-64-device-sessions-tests.md`. Written red first per file; each new file confirmed failing for the right reason (missing export/route) before implementation.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Token shape | `src/auth/__tests__/sessions.test.ts` | `mds_` + 43 base64url chars, no repeats; same `sessionDigest` under the same pepper as a cookie token; `isDeviceSessionToken` true/false table incl. an API-key-shaped string |
+| Shared sign-in core | `src/auth/__tests__/sign-in.test.ts` | success threads `sessionKind`/lifetime into the session row; wrong password / unknown email / disabled user all `INVALID_CREDENTIALS`; lockout refuses the right password without a verify; throttle clears and `recordSignIn` fires on success; audit row carries `metadata.sessionKind` |
+| Middleware dispatch | `src/auth/__tests__/middleware.test.ts` (new) | a device bearer reaches `GET /v1/me` with full session access; refused on an apiKey-only route (`/v1/audit`); unknown/expired/revoked device session → `SESSION_EXPIRED`; device bearer + cookie together → ambiguous; a device token never parses as an API key and vice versa; missing/non-member `X-Mutaba3a-Profile` with a device bearer → 422/404, same as a cookie session |
+| Device-session routes | `src/__tests__/routes-device-sessions.test.ts` (new) | sign-in returns a token with no `Set-Cookie`; succeeds with no `Origin` header at all (the CSRF exemption is real, not accidentally-passing); unknown email / wrong password identical; lockout matches the portal's window; per-IP 429; validation 422; sign-out revokes, reuse afterward refused; no credential / an API key on sign-out → `UNAUTHENTICATED` / `PRINCIPAL_NOT_ACCEPTED` |
+| Route security (extended) | `src/__tests__/route-security.test.ts` | `deviceSession` accepts exactly the cookie-session surface minus cookie sign-out plus device sign-out; a device bearer is refused on every key-only operation (READ_ONLY_PROFILE / PRINCIPAL_NOT_ACCEPTED, same as a cookie session); an API key is refused on every device-session-only operation; a device bearer is let through on every operation that declares it |
+| Expense CRUD via device token | `src/__tests__/routes-expenses.test.ts` | one focused case: create, edit (`PATCH`) and delete an expense authenticated with a device bearer instead of a cookie — the ticket's named acceptance example |
+| Admin revocation | `src/__tests__/routes-sessions.test.ts` (extended) | password reset, disable, and explicit "revoke all" each hold a cookie session and a device session for the same user and prove both are revoked; the explicit revoke-all count reflects both (`2`, not `1`) |
+| Storage contract (memory + Postgres) | `store-contract-sessions.ts` (extended) | `kind` round-trips through `create`/`findByDigest`; `revokeAllForUser` revokes a cookie and a device session together in one call |
+| Config | `src/__tests__/config.test.ts` (extended) | `DEVICE_SESSION_IDLE_DAYS`/`DEVICE_SESSION_ABSOLUTE_DAYS` default to 30/180, bounds enforced |
+| ADR-037 invariant (regression) | `src/__tests__/no-self-registration.test.ts` | unchanged; confirmed the new route names don't trip the forbidden-word regex |
+
+**Baseline after MUT-64 (2026-10-12)**: server `npm test` 1110 passed, 11 skipped; server `npm run typecheck`/`npm run lint` clean; `store-contract-sessions.ts` also run against a local Postgres (`mutaba3a_dev_mut64`) via the Prisma-backed store; root `npm run typecheck` (app + hosted programs), `npm run openapi:check` and `npm run hosted:types:check` all clean.
+

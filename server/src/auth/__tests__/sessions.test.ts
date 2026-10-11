@@ -3,7 +3,9 @@ import {
   SIGN_IN_POLICY,
   SignInThrottle,
   clientIp,
+  generateDeviceSessionToken,
   generateSessionToken,
+  isDeviceSessionToken,
   isSameOriginRequest,
   sessionCookieName,
   sessionDigest,
@@ -25,6 +27,31 @@ describe('session tokens', () => {
     expect(sessionDigest(PEPPER, token)).toBe(a);
     expect(sessionDigest('q'.repeat(32), token)).not.toBe(a);
     expect(a).not.toBe(token);
+  });
+});
+
+describe('device session tokens (MUT-64)', () => {
+  it('are prefixed mds_ and do not repeat', () => {
+    const tokens = Array.from({ length: 1000 }, () => generateDeviceSessionToken());
+    for (const t of tokens.slice(0, 5)) expect(t).toMatch(/^mds_[A-Za-z0-9_-]{43}$/);
+    expect(new Set(tokens).size).toBe(1000);
+  });
+
+  it('digests identically to a cookie session token under the same pepper', () => {
+    const device = generateDeviceSessionToken();
+    const cookie = generateSessionToken();
+    expect(sessionDigest(PEPPER, device)).toMatch(/^[0-9a-f]{64}$/);
+    expect(sessionDigest(PEPPER, device)).toBe(sessionDigest(PEPPER, device));
+    expect(sessionDigest(PEPPER, device)).not.toBe(sessionDigest(PEPPER, cookie));
+  });
+
+  it('isDeviceSessionToken recognises only the mds_ prefix', () => {
+    expect(isDeviceSessionToken(generateDeviceSessionToken())).toBe(true);
+    expect(isDeviceSessionToken('mut_live_abcd1234_' + 'x'.repeat(43))).toBe(false);
+    expect(isDeviceSessionToken('mut_test_abcd1234_' + 'x'.repeat(43))).toBe(false);
+    expect(isDeviceSessionToken('')).toBe(false);
+    expect(isDeviceSessionToken('mds')).toBe(false);
+    expect(isDeviceSessionToken('mdsabc')).toBe(false);
   });
 });
 
