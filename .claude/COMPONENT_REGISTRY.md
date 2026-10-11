@@ -222,6 +222,28 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 ---
 
+## Landing Components (web build only)
+
+### ChapterSection
+**Location**: `src/pages/landing/components/ChapterSection.tsx`
+**Purpose**: One landing chapter — a big line, a short paragraph and one visual, with `flip` to put the visual first. Renders `<section data-part aria-labelledby>`; the page-structure test reads `data-part`.
+
+```tsx
+<ChapterSection part="chapter-clients" title={t('…title')} body={t('…body')} visual={<ClientProfileMock />} />
+```
+
+### Landing mock-ups (`ClientProfileMock`, `RecordPaymentMock`, `ProfileSwitcherMock`)
+**Location**: `src/pages/landing/components/mocks/`
+**Purpose**: Static HTML pictures of the product for the landing page. Data comes from `src/pages/landing/sampleData.ts` (fixed dates, i18n-keyed names, never the visitor's database); labels are the app's own i18n keys; money and dates format through `useMockFormat` (`formatAmount` / `formatDateShort` in the active locale). Keep them in step with the real screens when those change.
+
+### GetItSection / PrivacyBand / PlatformIcons
+**Location**: `src/pages/landing/components/`
+**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`), shared with `DownloadPage`.
+
+Tests: `src/pages/landing/__tests__/`.
+
+---
+
 ## Drawer Components
 
 ### Base Drawer Pattern

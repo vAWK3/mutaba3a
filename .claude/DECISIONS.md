@@ -47,6 +47,7 @@
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
 | ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
 | ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active | 2026-10 |
+| ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 
 ---
 
@@ -1794,3 +1795,23 @@ the drawer that already has one); allowing future dates (rejected, see above);
 deleting `markPaid`/`useMarkTransactionPaid` entirely now that the UI stops
 calling them directly (rejected — both have other live callers outside this
 ticket's scope: sync replay and the payment-request flow).
+
+---
+
+## ADR-041: The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code
+
+**Status**: Active
+**Date**: 2026-10-11
+**Numbering**: ADR-039 and ADR-040 are taken on `feature/mut-1-client-core` (MUT-5), which is not merged yet; this ADR skips them so the merges don't collide.
+**Context**: MUT-75 (epic MUT-74), brief `.claude/designs/landing-apple-redesign.md` L1–L3, L7, L12, approved by Basel 2026-10-11. The landing page offered "Buy for Mac — $49" and "Buy Desktop App" while every buy button linked to the free GitHub download (no purchase flow exists), promised a "Universal (Intel + Apple Silicon)" Mac build when `deploy.sh` builds arm64 only, linked Windows downloads to a release (v0.0.65) with no Windows installer, and named EUR in one place and USD/ILS in another.
+
+**Decision**:
+1. **The story**: the page leads with the job and privacy together — "Know who owes you. Keep it to yourself." — then one idea per chapter (client page, two-tap payment, many businesses), privacy said once, Get it, a six-question FAQ.
+2. **Price**: free during early access, and the price is announced before it changes. No "Buy" or price on the page until a purchase flow exists.
+3. **Platform claims follow the release**: the Mac download says Apple Silicon. A download is offered only when the latest release carries it (`ReleaseInfo.hasWindowsBuild`); otherwise the page says the installer isn't in this release. While the release is unknown the stable redirect is offered.
+4. **Capability copy is built from code where code is the source of truth**: the currency answer comes from an exhaustive `Record<Currency, string>`, and the mock-ups use the app's own i18n labels (`clients.profile.owedNow`, `transactions.partialPayment.recordPayment`, …) so a renamed button renames the landing page too.
+
+**Consequences**: Adding a currency without naming it on the landing page fails to compile. A release without a platform's installer changes the page by itself. Adding pricing later is a new decision, not a copy edit.
+
+**Alternatives Considered**: keep $49 and build checkout (rejected for now: a separate ticket, and the page would stay false meanwhile); no price talk at all (rejected: "free during early access" sets the expectation honestly).
+

@@ -1559,3 +1559,15 @@ checking whether the file existed. A stale/rotated asset filename (after a
 deploy) fell through to the SPA shell but kept the immutable header — a
 browser or CDN would then cache that broken response for a year. The fix
 above only sets the header when `onFound` actually fired for that request.
+
+## Marketing-copy patterns — added 2026-10-11 (MUT-75)
+
+### A claim the page makes about the product is derived from the code that makes it true
+
+**Purpose**: the old landing page drifted from the product (a price with no checkout, a "Universal" build that was arm64-only, two different currency lists). Where code is the source of truth, the copy reads from it:
+- an exhaustive `Record<Currency, string>` of name keys, joined with `Intl.ListFormat`, for "which currencies" — adding a currency without naming it fails to compile;
+- downloads gated on `useLatestRelease()` (`hasWindowsBuild`), with a plain note instead of a dead link;
+- product mock-ups built from the app's own i18n keys, so renaming a button renames the picture of it.
+
+Copy that isn't backed by code (the story, the FAQ prose) stays in i18n, and a test pins the claims that must never appear (`LandingPage.test.tsx`, "honesty").
+

@@ -1097,3 +1097,20 @@ Verified against the real built artifact, not only the fixture: built `dist-host
 **Baseline after MUT-42 (2026-10-11)**: server `npm test` 1056 passed, 10 skipped; `npm run test:db` 1117 passed; the migration applies from an empty database with no drift.
 
 **Baseline after MUT-39 (2026-10-11)**: server `npm test` 924 passed, 9 skipped; `npm run test:db` 978 passed (after re-migrating the local test database).
+
+### MUT-75 — the landing page story (epic MUT-74)
+
+Test plan: `.claude/designs/mut-75-landing-story-tests.md`.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Structure | `src/pages/landing/__tests__/LandingPage.test.tsx` | `main` holds exactly hero, three chapters, privacy, get-it, faq in order, then the footer; the two-beat h1; each chapter's h2 |
+| Honesty | same | no Buy / $49 / Universal / Intel in `main` (EN), no شراء / 49 (AR); "Free during early access"; Windows link only when `hasWindowsBuild`, otherwise a plain "isn't in this release" note; Mac says Apple Silicon; downloads still offered while the release is unknown |
+| FAQ | same | exactly six disclosure buttons with `aria-expanded`/`aria-controls`/`hidden`; the data-loss warning appears once, inside the backup answer; the currency answer names all three currencies |
+| Language | same | Arabic sets `dir="rtl"` and renders the Arabic h1; no raw `landing.` key in EN or AR; the payment chapter shows the app's own Record Payment label |
+| Copy | `src/pages/landing/__tests__/landingCopy.test.ts` | `landing.*` key sets identical in en/ar; `CURRENCY_NAME_KEYS` covers USD/ILS/EUR (and `Record<Currency, …>` makes a missing one a compile error) |
+
+Checked by hand in the browser pane (2026-10-11): 1440/1024/375 widths in EN and AR, live release v0.0.65 (no Windows build) showing the unavailable note, no horizontal scroll at 375.
+
+**Baseline after MUT-75 (2026-10-11)**: root `npx vitest run` 162 files, 2574 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings in untouched files) and `npm run test:bundles` (web, desktop, hosted builds + bundle check) pass.
+
