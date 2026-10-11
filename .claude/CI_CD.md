@@ -304,12 +304,18 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 ### Desktop Release (Manual)
 
-1. **Trigger**: Manual workflow dispatch in GitHub
-2. **Input**: Version number (e.g., 0.0.49)
-3. **Process**:
-   - Build macOS (.dmg) on macos-latest
-   - Build Windows (.msi, .exe) on windows-latest
-   - Create GitHub release with artifacts
+1. **Trigger**: `npm run release` on the operator's Mac (`scripts/release.ts`,
+   which sources `./deploy.sh` and calls `build_and_release_mac`).
+2. **Process**: bump the version → build, sign and notarize macOS locally →
+   commit, tag and push → publish the GitHub release. Publishing triggers
+   `.github/workflows/build-windows.yml`, which checks out the **tag** and
+   builds the Windows installers.
+3. **Release commit**: exactly `RELEASE_COMMIT_FILES` in
+   `scripts/release-files.ts` (package.json, package-lock.json,
+   tauri.conf.json, Cargo.toml, Cargo.lock), enforced against deploy.sh by
+   `scripts/__tests__/release-files.test.ts`. The lockfiles must be in it: the
+   mac build rewrites `Cargo.lock`, and the Windows build fails Tauri's
+   npm-vs-crate version check on a stale one (v0.0.65).
 4. **Auto-update**: Tauri apps check for updates on launch
 
 ### Hosted API Deployment (operator, manual)

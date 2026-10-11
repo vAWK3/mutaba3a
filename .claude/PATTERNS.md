@@ -9,10 +9,10 @@
 
 | Category | Patterns |
 |----------|----------|
-| **Data Access** | Repository Pattern, Query Hooks, Mutations |
+| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
 | **State** | URL State, Zustand Stores, Form State |
 | **Components** | Drawer Pattern, Filter Pattern, Table Pattern |
-| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n |
+| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
 
@@ -1261,6 +1261,36 @@ retention test, and user *files* get a plain export before their viewer goes
 (ADR-029 addendum).
 
 ---
+
+### Reconcile on read when a write path skips a derived record (MUT-3, ADR-033)
+When one write path leaves out a row other readers depend on — income saved as
+Received writes no `PaymentRecord` — and fixing the write needs its own design,
+the **reader** derives the missing rows from the source of truth instead of a
+backfill migration. `paymentRecordRepo.listByClient` adds one `source: 'entry'`
+row for the amount an income says was received but its records do not cover;
+real rows carry `source: 'record'`. Rules: the derived row is computed from the
+gap (`effectiveReceived − Σrecords`), never in addition to records, so the day
+the write path is fixed the derived rows vanish with no reader change; give it
+a distinct, stable id (`entry:<txId>`) and a `source` so the UI can route a
+click to whatever owns it; record the write-side fix as debt (TD-029). Do not
+use this to paper over a write path you are already touching.
+
+### One definition per money question (MUT-3)
+A figure that more than one screen shows — Owed Now today — is one pure
+function over rows (`summarizeOwedByCurrency(transactions, today)` in
+`src/db/aggregations.ts`) that every screen calls, not a per-page reduce or a
+second repository method. It takes `today` explicitly (ADR-022), returns one
+entry per currency in a fixed order and never converts. The overdue counts that
+disagreed across five screens before MUT-17 are the reason.
+
+### Amounts stay LTR inside RTL text (MUT-3)
+A standalone amount renders in `<bdi dir="ltr">` (or a cell the RTL rules
+already isolate, like `.amount-cell`). An amount *inside a translated sentence*
+("{amount} overdue") is passed to `t()` wrapped in U+2066 … U+2069 (LEFT-TO-RIGHT
+ISOLATE … POP DIRECTIONAL ISOLATE), so translators keep control of word order
+and the number still reads left to right in Arabic. Tests that assert the
+sentence strip `[\u2066-\u2069]` first. Phone numbers and e-mail addresses in
+an RTL header get the same `<bdi dir="ltr">`.
 
 ## Verification patterns — added 2026-10-10 (MUT-49)
 

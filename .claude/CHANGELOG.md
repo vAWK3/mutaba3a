@@ -90,6 +90,145 @@
   134 files, 2,207 passed, 5 skipped, 0 failed (baseline 130 / 2,149);
   `npm run build` succeeds.
 
+---
+
+## [Unreleased] - 2026-10-11 — Orphaned-records banner shows text, not i18n keys
+
+**Scope:** `src/components/layout/OrphanedRecordsBanner.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` (new),
+`.claude/{CHANGELOG,TEST_PLAN}.md`.
+
+### Fixed
+- With records saved without a `profileId`, the banner read
+  "8 integrity.orphanedRecordPlural" and its link "integrity.reviewNow", in
+  both languages (seen 2026-10-11 on a dev build). Neither locale file had an
+  `integrity` section. The `|| 'fallback'` strings in the banner never ran,
+  because `t()` returns the key itself when one is missing.
+- Added `integrity.orphanedRecordSingular`, `orphanedRecordPlural`,
+  `reviewNow` and `dismiss` to en.json and ar.json, and the section to the
+  `Translations` type, so `tsc -b` fails if either file drops it.
+
+### Changed
+- The banner passes `{ count }` to `t()` instead of printing the number before
+  the translated phrase, so each language places the number itself. The
+  Arabic plural is a "count: N" label ("عدد السجلات غير المرتبطة بأي ملف
+  تجاري: {count}"). It reads correctly for 2, 3–10 and 11+, which a fixed
+  "{count} سجلات" does not.
+- The dismiss button's `aria-label` is translated (was hardcoded "Dismiss").
+  The dead fallback strings are gone.
+
+---
+
+## [Unreleased] - 2026-10-11 — Release commit carries both lockfiles (v0.0.65 Windows build failure)
+
+**Scope:** `deploy.sh`, `scripts/release.ts`, `scripts/release-files.ts` (new),
+`scripts/__tests__/release-files.test.ts` (new), `vitest.config.ts`,
+`.claude/{CHANGELOG,TEST_PLAN,CI_CD}.md`.
+
+### Fixed
+- The v0.0.65 Windows build ([run 38106560692](https://github.com/vAWK3/mutaba3a/actions/runs/38106560692))
+  failed the Tauri CLI's npm-vs-crate version check: `tauri (v2.11.2) :
+  @tauri-apps/api (v2.12.1)` and `tauri-plugin-opener (v2.5.5) :
+  @tauri-apps/plugin-opener (v2.7.0)`. The tag held a `Cargo.toml` requiring
+  tauri 2.12.1 (an uncommitted dependency bump the release commit swept in)
+  beside a `Cargo.lock` still pinning 2.11.2. `build_mac` had rewritten the
+  lock on disk, but `tag_and_push` only staged `package.json`,
+  `tauri.conf.json` and `Cargo.toml`. Every tag back to at least v0.0.58 held
+  a `Cargo.lock` at least one app version behind, fixed up by hand later (`0c57247 misc`).
+- `tag_and_push` now stages `package-lock.json` and `src-tauri/Cargo.lock`
+  with their manifests, so the tag holds the lock the mac build used.
+- Both version writers (`update_version` in deploy.sh, `writeVersionFiles` in
+  release.ts) use `npm version --no-git-tag-version`, which also bumps
+  `package-lock.json`'s own version. That version was stuck at 0.0.63.
+
+### Changed
+- `npm run release` now warns when a file that goes into the release commit is
+  already modified before the bump, and prints the `git diff` to review. This
+  is the change that let v0.0.65's tauri bump ride in without notice. The
+  "left out" warning now lists the files from the shared list.
+- The release-commit file list lives in `scripts/release-files.ts`
+  (`RELEASE_COMMIT_FILES`). A test asserts it equals the paths deploy.sh's
+  `git add` stages, so the two cannot drift.
+
+### Considered and dropped
+- A `cargo metadata --locked` preflight. It would not have caught this
+  failure: `cargo update --workspace` makes the lock satisfy `Cargo.toml`
+  while leaving `tauri-plugin-opener` at 2.5.5 against npm's 2.7.0. Once the
+  lock is committed, `tauri build` on the mac already runs the same version
+  check against exactly the files that get tagged.
+
+### Not done here
+- v0.0.65 still has no Windows installers. Either cut v0.0.66 (pushes
+  `0c57247` with the fixed lock) or move the `v0.0.65` tag to `0c57247` and
+  re-run `build-windows.yml`. Both need a push by the operator.
+
+---
+
+## [Unreleased] - 2026-10-11 — MUT-3: the client profile is one page answering the three questions (with the MUT-4 Payments UI)
+
+**Scope:** `src/pages/clients/ClientDetailPage.tsx`,
+`src/components/clients/{OwedNowSummary,ClientWorkSection,ClientPaymentsSection}.tsx` (new),
+`src/components/clients/clientProfileRows.ts` (new), `src/db/{aggregations,repository,database}.ts`,
+`src/types/index.ts`, `src/hooks/{useQueries,useIncomeQueries}.ts`, `src/index.css`,
+`src/lib/i18n/{types.ts,translations/en.json,translations/ar.json}`, tests beside each,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`,
+`.claude/designs/mut-3-client-profile{,-tests}.md`. Branch `feature/mut-1-client-core`.
+
+### Changed
+- `/clients/:id` loses its four tabs. One page now shows, top to bottom: the
+  contact details and **Owed now** (the largest figure on the page, one amount
+  per currency, overdue part called out or "Nothing overdue", "Nothing owed"
+  when settled); **Work and billing** (every income entry: date, title,
+  project tag, amount, status, remaining balance on partial rows, due/overdue
+  line; date range + status + search as one filter object; Record payment,
+  Mark paid, invoice actions, duplicate); **Payments** (full history newest
+  first: date, amount, what it was for, notes). Retainers card unchanged
+  below, while Retainers is on.
+- A client with no work shows one primary action, **Add income**, which opens
+  the income drawer for that client; filters that match nothing say so and
+  offer **Clear filters** instead.
+- The project is a tag inside the "What" cell — a link while Projects is on,
+  text while off (MUT-16), absent when unset.
+- Removed from the page: the stats strip (active projects, paid income,
+  unpaid, expenses), Recent activity, the Projects table, expense rows.
+
+### Fixed
+- **Owed now was always zero on the client page.** The old strip read
+  `unpaidIncomeMinorUSD/ILS/EUR`, which `clientSummaryRepo.get` never returns,
+  and showed them through `CurrencySummaryPopup`, which converts to one ILS
+  sum. `summarizeOwedByCurrency` (ADR-033) replaces both.
+- **Payment history missed income saved as Received.** Such entries are
+  marked paid with no `PaymentRecord`; `listByClient` now adds one `entry`
+  row per uncovered amount (ADR-033 §3, TD-029 for the write-side fix).
+- **Payment lists went stale after Mark paid**, retitling or deleting an
+  entry, for the 60s staleTime: transaction and income writes now invalidate
+  `['paymentRecords']` too (also refreshes the payment drawer's history).
+- `listByClient` date bounds compare the calendar date of `paidAt`, so a
+  payment stored as a timestamp on the `dateTo` day is included.
+- The v18 migration's English note ("Migrated from accumulated total") shows
+  as the existing `transactions.partialPayment.migratedNote` translation.
+- MUT-23: the discarded `useProjects(clientId)` call is gone.
+
+### Technical
+- New: `summarizeOwedByCurrency`, `OwedByCurrency` (`aggregations.ts`);
+  `PaymentByClientRow.source: 'record' | 'entry'`; `invalidatePaymentRecordLists`;
+  `MIGRATED_PAYMENT_NOTE` (`database.ts`, value-identical, v18 upgrade
+  unchanged); `toWorkRow` / `WorkRow` (`clientProfileRows.ts`).
+- i18n: `clients.profile.*` added in en + ar; dead `clients.tabs`,
+  `clients.receivables` and ten `clients.detail.*` keys pruned from both files
+  and from `Translations`.
+- Tests: +45 (8 owed-now, 8 `listByClient`, 4 invalidation incl. a real-Dexie
+  Mark paid → Payments refresh, 7 row shaping, 5 `OwedNowSummary`, page suite
+  rewritten to 34). Full suite 2,194 passed, 5 skipped, 0 failed; lint 0
+  errors; typecheck and build clean. `npm run test:tz` has 4 failures, all
+  pre-existing on `main` (TD-014 note).
+- Browser check at 1024 and 1280 px, English and Arabic: no horizontal
+  scroll, Owed now is the largest text (30px), amounts stay LTR in Arabic,
+  Mark paid updates Owed now and Payments without a reload.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 handover refreshed for M8 and the pilot
 
 **Scope:** `.claude/designs/money-v1-handover.md`, `.claude/CHANGELOG.md`. Docs only; no code.

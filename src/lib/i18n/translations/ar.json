@@ -314,25 +314,9 @@
       "totalReceived": "إجمالي المحصّل",
       "totalUnpaid": "إجمالي غير المحصّل"
     },
-    "tabs": {
-      "summary": "ملخص",
-      "projects": "المشاريع",
-      "receivables": "المستحقات",
-      "transactions": "المعاملات"
-    },
     "detail": {
-      "clientDetails": "تفاصيل العميل",
-      "email": "البريد الإلكتروني",
-      "phone": "الهاتف",
-      "recentActivity": "النشاط الأخير",
-      "noRecentActivity": "لا يوجد نشاط حديث",
-      "viewAllTransactions": "عرض كل المعاملات",
-      "noProjects": "لا توجد مشاريع",
-      "noProjectsHint": "أضف أول مشروع لهذا العميل.",
       "noReceivables": "لا توجد مستحقات",
       "noReceivablesHint": "تم تحصيل جميع المستحقات.",
-      "noTransactions": "لا توجد معاملات",
-      "noTransactionsHint": "أضف أول معاملة لهذا العميل.",
       "retainers": {
         "title": "العقود الشهرية",
         "empty": "لا توجد عقود شهرية لهذا العميل بعد.",
@@ -342,10 +326,27 @@
         "dueNow": "مستحق الآن"
       }
     },
-    "receivables": {
-      "dueDate": "تاريخ الاستحقاق",
-      "daysOverdue": "أيام التأخير",
-      "action": "إجراء"
+    "profile": {
+      "owedNow": "المستحق الآن",
+      "nothingOwed": "لا توجد مستحقات",
+      "overdueAmount": "{amount} متأخر",
+      "nothingOverdue": "لا شيء متأخر",
+      "work": {
+        "title": "العمل والفوترة",
+        "add": "إضافة إيراد",
+        "what": "العمل",
+        "untitled": "بدون عنوان",
+        "emptyTitle": "لم يُسجَّل أي عمل لهذا العميل بعد",
+        "emptyHint": "أضف ما أنجزته وقيمته. هذا كل ما يلزم.",
+        "noMatches": "لا توجد إدخالات تطابق عوامل التصفية",
+        "clearFilters": "مسح عوامل التصفية"
+      },
+      "payments": {
+        "title": "الدفعات",
+        "for": "مقابل",
+        "recordedOnEntry": "مسجّلة في الإدخال",
+        "openEntry": "فتح إدخال الإيراد"
+      }
     }
   },
   "insights": {
@@ -1516,5 +1517,11 @@
     "assignAllToDefault": "تعيين الكل للملف الافتراضي",
     "assignIndividually": "تعيين فردياً",
     "or": "أو"
+  },
+  "integrity": {
+    "orphanedRecordSingular": "سجل واحد غير مرتبط بأي ملف تجاري.",
+    "orphanedRecordPlural": "عدد السجلات غير المرتبطة بأي ملف تجاري: {count}",
+    "reviewNow": "مراجعة الآن",
+    "dismiss": "إغلاق"
   }
 }

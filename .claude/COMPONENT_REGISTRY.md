@@ -9,7 +9,7 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard |
+| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
@@ -18,7 +18,7 @@
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateBanner, CurrencyBadge |
+| **Money** | OwedNowSummary, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateBanner, CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -163,13 +163,37 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ### ClientRetainersCard
 **Location**: `src/components/clients/ClientRetainersCard.tsx`
-**Purpose**: Retainer status for one client on the client profile's Summary tab (MUT-13): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
+**Purpose**: Retainer status for one client, below Payments on the client profile (MUT-13; the Summary tab it first lived in is gone with MUT-3): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
 
 ```tsx
 {retainersEnabled && <ClientRetainersCard clientId={client.id} />}
 ```
 
 Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Advanced-feature entry points").
+
+---
+
+### ClientWorkSection
+**Location**: `src/components/clients/ClientWorkSection.tsx`
+**Purpose**: "What have I worked on for this client?" on the client profile (MUT-3): the client's income entries as one table — date, title with project tag, amount, status with due/overdue line, remaining balance on partial rows — with its own filter row (date range, status, search held as one object) and the row actions (Record payment via `RecordPaymentButton`, Mark paid, invoice actions while Invoices is on, duplicate). No work at all → `EmptyState` with one action, Add income, prefilled with the client; filters that hide every row → "No entries match" + Clear filters. Rows are shaped by `toWorkRow` (`clientProfileRows.ts`) in a `useMemo`.
+
+```tsx
+<ClientWorkSection clientId={clientId} />
+```
+
+Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Work and billing"), `src/components/clients/__tests__/clientProfileRows.test.ts`.
+
+---
+
+### ClientPaymentsSection
+**Location**: `src/components/clients/ClientPaymentsSection.tsx`
+**Purpose**: "When did they pay, and for what?" on the client profile (MUT-3, the MUT-4 UI): `usePaymentsByClient(clientId)` unfiltered, newest first — date, amount, the entry it paid for, notes. A `record` row opens `editPaymentRecord` (the payment drawer's edit mode, which also deletes); an `entry` row (money saved on the income entry itself, ADR-033) opens the income drawer and reads "Recorded on the entry". Never totals across currencies.
+
+```tsx
+<ClientPaymentsSection clientId={clientId} />
+```
+
+Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Payments").
 
 ---
 
@@ -523,7 +547,7 @@ new column, so it cannot push the amount column off-screen.
 </td>
 ```
 
-**Used by**: ClientDetailPage (receivables + transactions tabs), IncomePage,
+**Used by**: ClientWorkSection (client profile work list, MUT-3), IncomePage,
 ProjectDetailPage.
 **Tests**: `src/components/ui/__tests__/RecordPaymentButton.test.tsx`
 
@@ -956,6 +980,21 @@ toast.info('Syncing...');
 ---
 
 ## Money Components
+
+### OwedNowSummary
+**Location**: `src/components/clients/OwedNowSummary.tsx`
+**Purpose**: Owed Now as the dominant figure (MUT-3): one large amount per currency — never converted, never combined — with the overdue part beneath it ("$500 overdue" in the error colour, or "Nothing overdue"), and "Nothing owed" when the list is empty. Presentational: compute the input with `summarizeOwedByCurrency(transactions, today)` (`src/db/aggregations.ts`, ADR-033) so every screen that shows Owed Now agrees. Amounts are `<bdi dir="ltr">`; the amount inside the translated overdue sentence is wrapped in U+2066/U+2069.
+
+```tsx
+const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receivables, today]);
+<OwedNowSummary owed={owed} />
+```
+
+**Use when**: showing what is owed now — the client profile today; the clients index (MUT-7) and home (MUT-8) next. Not for period totals (paid income, expenses): those are not "now" figures.
+**Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
+Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
+
+---
 
 ### UnifiedAmount
 **Location**: `src/components/ui/UnifiedAmount.tsx`

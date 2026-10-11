@@ -41,6 +41,7 @@
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
+| ADR-033 | Owed Now Has One Definition; a Client's Payment History Is Reconciled on Read | Active | 2026-10 |
 | ADR-034 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
 
 ---
@@ -1297,6 +1298,66 @@ with onboarding (client → project → income), the `+ Add → Project` entry a
 the income drawer's project field; those become flag-aware in MUT-15/16 (see
 brief §12). `clearDatabase()` clearing only five tables is pre-existing debt
 the reconcile now makes visible (TD-023).
+
+---
+
+## ADR-033: Owed Now Has One Definition; a Client's Payment History Is Reconciled on Read
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-3 (epic MUT-1), which also delivers the MUT-4 Payments UI.
+Brief: `.claude/designs/mut-3-client-profile.md` (approved by Basel
+2026-10-11). The client profile answers "how much do they owe me?" and "when
+did they pay, and for what?". The audit found both answers wrong before any
+UI work: the old header's per-currency figures were always zero
+(`clientSummaryRepo.get` never returns them) and converted everything to one
+ILS sum, and `paymentRecordRepo.listByClient` omitted every income saved as
+**Received** in the income drawer, which writes `status: 'paid'` and
+`receivedAmountMinor` but no `PaymentRecord`.
+
+**Decision**:
+1. **Owed Now is `summarizeOwedByCurrency(transactions, today)`**
+   (`src/db/aggregations.ts`): the remaining balance (`amount − received`,
+   clamped at 0) of every unpaid, non-deleted, **non-archived** income, one
+   entry per currency with a non-zero balance, in fixed USD → ILS → EUR order,
+   with the overdue part split out by `isOverdueReceivable` (ADR-010 /
+   ADR-022). Currencies are never combined. The client profile, the clients
+   index (MUT-7) and home (MUT-8) use this one helper.
+2. **Archived income does not count toward Owed Now**, because the lists
+   beneath the figure hide archived rows and a hero number must add up to what
+   is listed. `clientSummaryRepo` and the overview totals still count archived
+   rows; aligning them is TD-030, for MUT-7/MUT-8.
+3. **`listByClient` returns payments, not just payment records**: every
+   non-deleted `PaymentRecord` of the client's live income, plus one row per
+   income whose effective received amount (`amount` when paid, else
+   `receivedAmountMinor`) exceeds what its records cover. That row carries
+   the uncovered amount, is dated `paidAt ?? occurredAt`, has id
+   `entry:<transactionId>` and `source: 'entry'`; record rows carry
+   `source: 'record'`. No Dexie version bump, no migration.
+4. **A payment row opens what owns it**: a record opens the payment drawer in
+   edit mode (`editPaymentRecord`, which also offers delete); an entry row
+   opens the income entry.
+5. **Any income or transaction write invalidates the payment lists**
+   (`invalidatePaymentRecordLists`, in `useQueries.ts` beside the keys it
+   owns), because Mark paid writes a record and a retitled, re-dated or deleted
+   entry changes its rows.
+
+**Consequences**: Question 3 includes the most common way people log a paid
+job, for every write path past and future, with no data rewrite. The cost is
+that "payments" and "payment records" differ: code that needs only records
+(the payment drawer's history) keeps `listByTransaction`. The write-side fix
+(record a payment when income is saved as Received, plus a backfill) is
+TD-029; once it lands, entry rows simply stop appearing and this read path
+needs no change.
+
+**Alternatives Considered**: writing a `PaymentRecord` on create-as-received
+plus a v21 backfill (rejected for this ticket — it touches the income drawer's
+save path, MUT-5's area, and its received→invoiced edit path clears
+`receivedAmountMinor` while records would survive, so it needs its own
+design); showing records only, as MUT-4 specified literally (rejected —
+silently wrong for question 3); fixing `clientSummaryRepo.get` to return
+per-currency fields for the hero (rejected — no overdue split, and it counts
+archived rows the page hides).
 
 ---
 

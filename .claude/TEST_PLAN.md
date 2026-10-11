@@ -117,6 +117,27 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
 
+#### Orphaned-records banner copy (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` | Component | 5 | en + ar × 1 and 8 records: message from `integrity.*` with `{count}` filled, no raw key or `{count}` left, translated link and dismiss label, no "Translation missing" warning; exact English sentences for 1 and 8 |
+
+`tsc -b` also guards the section: `integrity` is required in `Translations`, so
+removing it from either locale file fails the `as Translations` cast in
+`context.tsx`. Not run on this change: the full `npx vitest run` (stopped on
+request; only this file was run). Still manual: the banner in RTL.
+
+#### Release tooling (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `scripts/__tests__/release-files.test.ts` | Unit + contract | 7 | **Full** - each manifest staged with its lockfile; `RELEASE_COMMIT_FILES` equals deploy.sh `tag_and_push`'s `git add` (parsed from the script); porcelain partition: unstaged/staged/both columns, untracked, rename destination, leading-space first line, clean tree |
+
+`vitest.config.ts` includes `scripts/**/*.{test,spec}.ts` for this. Still manual
+(no unit seam): `update_version` / `writeVersionFiles` bumping
+`package-lock.json`, and the release commit's contents. Both were dry-run on
+2026-10-11 in a local clone with `origin` removed, so `tag_and_push` committed
+and then failed at the push.
+
 #### Expenses collapse (MUT-14, added 2026-10-10)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
@@ -177,7 +198,7 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
 | `src/pages/clients/__tests__/ClientsPage.test.tsx` | Page | 33 | **70.08%** - Sorting, search, multi-currency |
-| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Page | 10 | Partial - Detail view |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Page | 34 | Rewritten for MUT-3: three sections, empty states, MUT-6/13/16 gates |
 | `src/pages/projects/__tests__/ProjectsPage.test.tsx` | Page | ~40 | **73.03%** - Projects list |
 | `src/pages/projects/__tests__/ProjectDetailPage.test.tsx` | Page | ~30 | Partial - Project detail |
 | `src/pages/income/__tests__/IncomePage.test.tsx` | Page | 30 | **~90%** - Income ledger, filters, interactions |
@@ -789,6 +810,31 @@ existing `DocumentDrawer` and document page tests, which still pass.
 **Baseline after TD-028 (2026-10-10)**: 2,149 unit tests passing, 5 skipped,
 0 failing. The 18 `ExpensesLedgerPage` failures noted above no longer exist on
 `main`; the page was removed by the MUT-2 strip.
+
+### MUT-3 — one-page client profile (with the MUT-4 Payments UI)
+
+| Area | File | What is pinned |
+|---|---|---|
+| Owed Now definition (ADR-033 §1–2) | `src/db/__tests__/aggregations.test.ts` (8) | empty → `[]`; unpaid in full; partial counts remaining only; paid, expense, soft-deleted and archived ignored; overdue = due before today only (due today is not); currencies apart in USD → ILS → EUR order; fully covered currency omitted; over-received clamps to 0 |
+| Payment history (ADR-033 §3) | `src/db/__tests__/paymentRecords.test.ts` (+8) | record rows carry `source: 'record'`; income saved as paid with no records → one `entry` row (`entry:<id>`, full amount, `paidAt`); `occurredAt` fallback; no double count when records cover it; partial cover → only the gap; unpaid with nothing received → no row; soft-deleted entry → nothing; currency/date/limit apply to entry rows and sort with records; a timestamped `paidAt` on the `dateTo` day is included |
+| Refresh after any income write | `useQueries.test.tsx` (real Dexie), `useIncomeQueries.test.tsx` (3) | Mark paid → `usePaymentsByClient` refetches and shows the new record with no manual invalidation; `useMarkIncomePaid`, `useUpdateIncome`, `useDeleteIncome` invalidate `['paymentRecords']` |
+| Row shaping | `src/components/clients/__tests__/clientProfileRows.test.ts` (7) | fields copied; remaining only when partial; overdue vs due-in vs due-today; paid has neither; missing title stays undefined; status derived when absent |
+| Hero | `src/components/clients/__tests__/OwedNowSummary.test.tsx` (5) | one amount per currency; overdue line in the overdue style; "Nothing overdue"; "Nothing owed"; `dir="ltr"` and U+2066/U+2069 around the sentence amount |
+| Page | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (34, rewritten) | no tab buttons, three regions at once, contact details; Owed Now per currency from unfiltered receivables and unchanged by work filters; row content incl. remaining and due lines; project tag link/text/absent; untitled label; row click → income drawer; filters as one object; no-work empty state with exactly one Add income → `openIncomeDrawer({ mode: 'create', defaultClientId })`; filtered-empty with Clear filters; Record payment gate and remaining amount (MUT-6); Mark paid only on receivables; Payments rows, record → `editPaymentRecord`, entry → income drawer, row menu "Open income entry", migrated note translated, empty text; invoice actions off/on, retainers card off/on, + Project on/off (MUT-13/16); `useProjects` never called (MUT-23) |
+
+Dates are pinned with `vi.useFakeTimers({ shouldAdvanceTime: true })` at
+2026-10-11 and date strings are asserted through `formatDate` itself, so the
+page suite also passes under `npm run test:tz`.
+
+Manual (browser, 2026-10-11, seeded data, 1024 px and 1280 px, English and
+Arabic): no horizontal scroll on page or either table; Owed Now is the largest
+text (30px vs an 18px title); amounts stay LTR in Arabic; Mark paid from the
+row menu updates Owed Now, the row and Payments without a reload; the no-work
+client shows one Add income that opens the drawer with the client filled in;
+a payment row opens the drawer in edit mode on the right record.
+
+**Baseline after MUT-3 (2026-10-11)**: 2,194 unit tests passing, 5 skipped,
+0 failing. `npm run test:tz`: 4 failures, all pre-existing on `main` (TD-014).
 
 ### MUT-15 — the sidebar is Home / Clients / Income / Settings
 
