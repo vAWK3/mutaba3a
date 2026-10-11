@@ -224,6 +224,23 @@ Output: `organization sader-law-firm = <uuid>` and the key
 To issue a second key later (rotation is also possible from Malafat's settings
 page): `npm run provision -- --url "$URL" --organization-id <uuid> --key-name "Malafat (rotated)"`.
 
+### 4a. Before the first deploy that contains MUT-38 (blocking)
+
+Sessions add the audit actor `USER` (ADR-033 decision 9). Malafat reads
+`GET /v1/audit`; its client does no runtime validation and its history view
+only tests `actorType === "SYSTEM"`, so a `USER` row cannot break it (checked
+2026-10-11). Still, refresh Malafat's vendored contract in the same release
+train so its types match what the server can send:
+
+```bash
+npm run openapi:json > ../../path/to/crm-platform/apps/web/src/features/money/contract/mutaba3a-openapi.json
+```
+
+and add `"USER"` to the `actorType` union in Malafat's
+`apps/web/src/features/money/domain/types.ts`. Do it from the merged `main`
+commit, never from a feature branch, so the vendored file names a commit that
+exists.
+
 ### 4a. Give a person access to the hosted portal (MUT-37)
 
 The service reads `SESSION_TOKEN_PEPPER` from the Secret Manager secret
