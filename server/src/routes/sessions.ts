@@ -108,6 +108,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       await store.sessions.create({
         userId: user.id,
         tokenDigest: sessionDigest(settings.pepper, token),
+        kind: 'cookie',
         at: now,
         idleExpiresAt: new Date(Math.min(now.getTime() + settings.idleMinutes * 60_000, absoluteExpiresAt.getTime())),
         absoluteExpiresAt,

@@ -32,6 +32,7 @@ export function describeLedgerStoreSessionsContract(name: string, makeStore: () 
     idleExpiresAt: at(120),
     absoluteExpiresAt: at(720),
     userAgent: 'Mozilla/5.0',
+    kind: 'cookie',
     ...overrides,
   });
 
@@ -91,6 +92,21 @@ export function describeLedgerStoreSessionsContract(name: string, makeStore: () 
       expect((await store.sessions.findByDigest(a1.tokenDigest))?.revokedReason).toBe('password_reset');
       expect((await store.sessions.findByDigest(a2.tokenDigest))?.revokedReason).toBe('signed_out');
       expect((await store.sessions.findByDigest(b1.tokenDigest))?.revokedAt).toBeNull();
+    });
+
+    it('round-trips kind, and revokeAllForUser revokes a cookie and a device session together (MUT-64)', async () => {
+      const store = await makeStore();
+      const u = await user(store);
+      const cookie = await store.sessions.create(input(u.id, { kind: 'cookie' }));
+      const device = await store.sessions.create(input(u.id, { kind: 'device' }));
+      expect(cookie.kind).toBe('cookie');
+      expect(device.kind).toBe('device');
+      expect((await store.sessions.findByDigest(cookie.tokenDigest))?.kind).toBe('cookie');
+      expect((await store.sessions.findByDigest(device.tokenDigest))?.kind).toBe('device');
+
+      expect(await store.sessions.revokeAllForUser(u.id, 'operator', at(10))).toBe(2);
+      expect((await store.sessions.findByDigest(cookie.tokenDigest))?.revokedReason).toBe('operator');
+      expect((await store.sessions.findByDigest(device.tokenDigest))?.revokedReason).toBe('operator');
     });
 
     it('records failed sign-ins and a lock, then a successful sign-in clears them', async () => {

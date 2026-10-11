@@ -243,6 +243,7 @@ export class MemoryLedgerStore implements LedgerStore {
         id: randomUUID(),
         userId: input.userId,
         tokenDigest: input.tokenDigest,
+        kind: input.kind,
         createdAt: input.at,
         lastSeenAt: input.at,
         idleExpiresAt: input.idleExpiresAt,
