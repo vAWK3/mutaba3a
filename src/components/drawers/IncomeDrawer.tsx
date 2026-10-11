@@ -401,14 +401,16 @@ export function IncomeDrawer() {
     </div>
   );
 
+  // Each part is its own <bdi> so an LTR code ("USD") and an RTL date can't
+  // be reordered into one another in Arabic.
   const defaultsSummary = [
     t(STATUS_LABEL_KEYS[selectedStatus]),
     watchedCurrency,
     watchedOccurredAt ? formatDate(`${watchedOccurredAt}T00:00:00`, locale) : null,
     businessProfiles.length > 1 ? selectedProfile?.name : null,
   ]
-    .filter(Boolean)
-    .join(' · ');
+    .filter((part): part is string => !!part)
+    .flatMap((part, index) => [index > 0 ? ' · ' : null, <bdi key={`part-${index}`}>{part}</bdi>]);
 
   return (
     <Drawer
