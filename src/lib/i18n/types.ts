@@ -142,27 +142,31 @@ export interface Translations {
       lastPayment: string;
       lastActivity: string;
     };
-    tabs: {
-      summary: string;
-      projects: string;
-      receivables: string;
-      transactions: string;
-    };
     detail: {
-      clientDetails: string;
-      email: string;
-      phone: string;
-      noProjects: string;
-      noProjectsHint: string;
       noReceivables: string;
       noReceivablesHint: string;
-      noTransactions: string;
-      noTransactionsHint: string;
     };
-    receivables: {
-      dueDate: string;
-      daysOverdue: string;
-      action: string;
+    profile: {
+      owedNow: string;
+      nothingOwed: string;
+      overdueAmount: string;
+      nothingOverdue: string;
+      work: {
+        title: string;
+        add: string;
+        what: string;
+        untitled: string;
+        emptyTitle: string;
+        emptyHint: string;
+        noMatches: string;
+        clearFilters: string;
+      };
+      payments: {
+        title: string;
+        for: string;
+        recordedOnEntry: string;
+        openEntry: string;
+      };
     };
   };
   reports: {

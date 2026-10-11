@@ -11,6 +11,7 @@ import {
   createNameMap,
   getLastActivityDate,
   sortByLastActivity,
+  summarizeOwedByCurrency,
 } from '../aggregations';
 import type { Transaction, Client, Project, Category } from '../../types';
 
@@ -437,5 +438,105 @@ describe('sortByLastActivity', () => {
     const result = sortByLastActivity(items);
 
     expect(result).toHaveLength(2);
+  });
+});
+
+/**
+ * MUT-3: Owed Now on the client profile, and later the clients index and home
+ * (MUT-7, MUT-8). One definition so the three screens cannot disagree the way
+ * the overdue counts did before MUT-17.
+ */
+describe('summarizeOwedByCurrency', () => {
+  const today = '2026-10-11';
+  const receivable = (overrides: Partial<Transaction> = {}) =>
+    createTransaction({ kind: 'income', status: 'unpaid', ...overrides });
+
+  it('returns an empty list when nothing is owed', () => {
+    expect(summarizeOwedByCurrency([], today)).toEqual([]);
+  });
+
+  it('counts an unpaid entry in full and nothing overdue without a due date', () => {
+    const result = summarizeOwedByCurrency([receivable({ amountMinor: 50000 })], today);
+
+    expect(result).toEqual([{ currency: 'USD', owedMinor: 50000, overdueMinor: 0 }]);
+  });
+
+  it('counts only the remaining balance of a partially paid entry', () => {
+    const result = summarizeOwedByCurrency(
+      [receivable({ amountMinor: 50000, receivedAmountMinor: 20000 })],
+      today
+    );
+
+    expect(result[0].owedMinor).toBe(30000);
+  });
+
+  it('ignores paid income, expenses, soft-deleted and archived entries', () => {
+    const result = summarizeOwedByCurrency(
+      [
+        createTransaction({ status: 'paid', amountMinor: 10000 }),
+        createTransaction({ kind: 'expense', status: 'unpaid', amountMinor: 10000 }),
+        receivable({ amountMinor: 10000, deletedAt: '2026-10-01T00:00:00.000Z' }),
+        receivable({ amountMinor: 10000, archivedAt: '2026-10-01T00:00:00.000Z' }),
+      ],
+      today
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it('splits out the overdue portion: due before today only (ADR-010)', () => {
+    const result = summarizeOwedByCurrency(
+      [
+        receivable({ amountMinor: 10000, dueDate: '2026-10-10' }), // overdue
+        receivable({ amountMinor: 20000, receivedAmountMinor: 5000, dueDate: '2026-09-01' }), // overdue, partial
+        receivable({ amountMinor: 40000, dueDate: today }), // due today: not overdue
+        receivable({ amountMinor: 80000, dueDate: '2026-10-20' }), // future
+      ],
+      today
+    );
+
+    expect(result).toEqual([{ currency: 'USD', owedMinor: 145000, overdueMinor: 25000 }]);
+  });
+
+  it('keeps currencies apart and orders them USD, ILS, EUR whatever the input order', () => {
+    const result = summarizeOwedByCurrency(
+      [
+        receivable({ currency: 'EUR', amountMinor: 3000 }),
+        receivable({ currency: 'ILS', amountMinor: 2000, dueDate: '2026-10-01' }),
+        receivable({ currency: 'USD', amountMinor: 1000 }),
+        receivable({ currency: 'ILS', amountMinor: 500 }),
+      ],
+      today
+    );
+
+    expect(result).toEqual([
+      { currency: 'USD', owedMinor: 1000, overdueMinor: 0 },
+      { currency: 'ILS', owedMinor: 2500, overdueMinor: 2000 },
+      { currency: 'EUR', owedMinor: 3000, overdueMinor: 0 },
+    ]);
+  });
+
+  it('omits a currency whose entries are fully covered', () => {
+    const result = summarizeOwedByCurrency(
+      [
+        receivable({ currency: 'ILS', amountMinor: 2000, receivedAmountMinor: 2000 }),
+        receivable({ currency: 'USD', amountMinor: 1000 }),
+      ],
+      today
+    );
+
+    expect(result.map((r) => r.currency)).toEqual(['USD']);
+  });
+
+  it('never goes negative when more was received than the entry total', () => {
+    const result = summarizeOwedByCurrency(
+      [
+        receivable({ amountMinor: 1000, receivedAmountMinor: 1500, dueDate: '2026-10-01' }),
+        receivable({ amountMinor: 1000 }),
+      ],
+      today
+    );
+
+    expect(result).toEqual([{ currency: 'USD', owedMinor: 1000, overdueMinor: 0 }]);
   });
 });

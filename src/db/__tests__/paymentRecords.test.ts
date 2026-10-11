@@ -545,6 +545,7 @@ describe('paymentRecordRepo', () => {
         currency: 'USD',
         paidAt: '2024-03-05',
         notes: 'wire',
+        source: 'record',
       });
       expect(rows[1].transactionTitle).toBe('Logo work');
     });
@@ -623,6 +624,144 @@ describe('paymentRecordRepo', () => {
       const rows = await paymentRecordRepo.listByClient(client.id, { limit: 2 });
 
       expect(rows.map((r) => r.paidAt)).toEqual(['2024-02-01', '2024-01-15']);
+    });
+
+    it('includes a timestamped payment made on the dateTo day', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await createClientTx(client.id);
+      await paymentRecordRepo.create({
+        transactionId: tx.id,
+        amountMinor: 1000,
+        paidAt: '2024-02-01T09:30:00.000Z',
+      });
+
+      const rows = await paymentRecordRepo.listByClient(client.id, {
+        dateFrom: '2024-02-01',
+        dateTo: '2024-02-01',
+      });
+
+      expect(rows).toHaveLength(1);
+    });
+
+    /**
+     * MUT-3 / D3: income saved as Received in the income drawer is marked paid
+     * with no PaymentRecord. Without these rows the client's payment history
+     * would leave out every job the user logged as already paid.
+     */
+    describe('income received without payment records', () => {
+      it('returns one entry row for income saved as already paid', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        const tx = await createClientTx(client.id, {
+          title: 'Logo',
+          status: 'paid',
+          amountMinor: 20000,
+          currency: 'ILS',
+          receivedAmountMinor: 20000,
+          paidAt: '2024-01-14T08:00:00.000Z',
+        });
+
+        const rows = await paymentRecordRepo.listByClient(client.id);
+
+        expect(rows).toEqual([
+          {
+            id: `entry:${tx.id}`,
+            transactionId: tx.id,
+            transactionTitle: 'Logo',
+            amountMinor: 20000,
+            currency: 'ILS',
+            paidAt: '2024-01-14T08:00:00.000Z',
+            notes: undefined,
+            source: 'entry',
+          },
+        ]);
+      });
+
+      it('dates the entry row by occurredAt when the entry has no paidAt', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        await createClientTx(client.id, { status: 'paid', occurredAt: '2024-01-03' });
+
+        const rows = await paymentRecordRepo.listByClient(client.id);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ paidAt: '2024-01-03', amountMinor: 100000, source: 'entry' });
+      });
+
+      it('adds no entry row when payment records already cover the entry', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        const tx = await createClientTx(client.id);
+        await transactionRepo.markPaid(tx.id, { paidAt: '2024-01-20' });
+
+        const rows = await paymentRecordRepo.listByClient(client.id);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ source: 'record', amountMinor: 100000 });
+      });
+
+      it('adds an entry row only for the part the records do not cover', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        const tx = await createClientTx(client.id, {
+          status: 'paid',
+          receivedAmountMinor: 100000,
+          paidAt: '2024-01-30',
+        });
+        // A record written straight to the table, as a pre-v18 import or a
+        // sync bundle could leave it, alongside the entry's own received total.
+        await db.paymentRecords.add({
+          id: 'rec-1',
+          transactionId: tx.id,
+          amountMinor: 40000,
+          paidAt: '2024-01-10',
+          createdAt: '2024-01-10T00:00:00.000Z',
+          updatedAt: '2024-01-10T00:00:00.000Z',
+        });
+
+        const rows = await paymentRecordRepo.listByClient(client.id);
+
+        expect(rows.map((r) => [r.source, r.amountMinor])).toEqual([
+          ['entry', 60000],
+          ['record', 40000],
+        ]);
+      });
+
+      it('adds no row for an unpaid entry with nothing received', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        await createClientTx(client.id);
+
+        expect(await paymentRecordRepo.listByClient(client.id)).toEqual([]);
+      });
+
+      it('leaves out a soft-deleted entry and its payments entirely', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        const paid = await createClientTx(client.id, { status: 'paid' });
+        const partial = await createClientTx(client.id);
+        await paymentRecordRepo.create({ transactionId: partial.id, amountMinor: 1000, paidAt: '2024-01-05' });
+        await transactionRepo.softDelete(paid.id);
+        await transactionRepo.softDelete(partial.id);
+
+        expect(await paymentRecordRepo.listByClient(client.id)).toEqual([]);
+      });
+
+      it('applies currency, date range and limit to entry rows and sorts them with records', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        const recorded = await createClientTx(client.id);
+        await paymentRecordRepo.create({ transactionId: recorded.id, amountMinor: 1000, paidAt: '2024-02-10' });
+        await createClientTx(client.id, { status: 'paid', paidAt: '2024-02-20' });
+        await createClientTx(client.id, { status: 'paid', paidAt: '2024-01-05' });
+        await createClientTx(client.id, { status: 'paid', paidAt: '2024-02-15', currency: 'ILS' });
+
+        const usdFebruary = await paymentRecordRepo.listByClient(client.id, {
+          currency: 'USD',
+          dateFrom: '2024-02-01',
+          dateTo: '2024-02-29',
+        });
+        expect(usdFebruary.map((r) => [r.source, r.paidAt])).toEqual([
+          ['entry', '2024-02-20'],
+          ['record', '2024-02-10'],
+        ]);
+
+        const newestTwo = await paymentRecordRepo.listByClient(client.id, { limit: 2 });
+        expect(newestTwo.map((r) => r.paidAt)).toEqual(['2024-02-20', '2024-02-15']);
+      });
     });
   });
 });

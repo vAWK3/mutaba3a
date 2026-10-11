@@ -2798,6 +2798,165 @@ td {
   font-weight: var(--weight-semibold);
 }
 
+/* Client profile (MUT-3): Owed Now header, Work and billing, Payments */
+.client-profile-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.client-profile-contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+}
+
+.client-profile-notes {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.owed-now-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-1);
+}
+
+.owed-now-currencies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-8);
+}
+
+.owed-now-currency {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The largest figure on the page; stays LTR inside Arabic text */
+.owed-now-amount {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--text);
+  unicode-bidi: isolate;
+}
+
+.owed-now-overdue {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--error);
+}
+
+.owed-now-on-time {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.owed-now-settled {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--success);
+}
+
+.client-section {
+  margin-bottom: var(--space-8);
+}
+
+.client-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.client-section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.client-section-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.client-work-date {
+  white-space: nowrap;
+}
+
+/* The "What" and "For" cells take the spare width and truncate, so the
+   tables never scroll sideways */
+.client-work-table .client-work-what,
+.client-payments-table .client-payment-for,
+.client-payments-table .client-payment-notes {
+  width: 50%;
+  max-width: 0;
+}
+
+.client-work-what-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.client-work-title,
+.client-payment-for,
+.client-payment-notes {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A narrow cell truncates the title first; the tag keeps its natural width
+   up to 60% of the cell, so a short project name is never cut */
+.client-work-title {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.project-tag {
+  flex: 0 0 auto;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  text-decoration: none;
+}
+
+a.project-tag:hover {
+  color: var(--accent);
+}
+
+.client-work-subline {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.client-work-subline.text-danger {
+  color: var(--error);
+}
+
 /* Empty State */
 .empty-state {
   display: flex;
