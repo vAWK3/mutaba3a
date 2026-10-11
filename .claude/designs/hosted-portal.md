@@ -240,6 +240,8 @@ Tests generated from the table (MUT-39):
 
 ## 7. The portal (MUT-43, MUT-44)
 
+> **As built (MUT-43, 2026-10-11).** Auth states follow `mut-43-auth-states.md` (approved). The portal's strings live in `src/hosted/i18n/{en,ar}.json`, not in the app's files. It is its own TypeScript program (`tsconfig.hosted.json`). Cursor lists use "Show more" instead of `Pagination`. See the ADR-037 MUT-43 amendment.
+
 ### 7.1 Shell, routes, state
 
 - **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), the profile switcher, the user menu (name, language, sign out), and the page. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.

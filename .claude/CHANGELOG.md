@@ -28,6 +28,50 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-43: the hosted portal — sign-in and the money views
+
+**Scope:**
+- `hosted.html`, `src/hosted/**` (new): the portal build, its shell, sign-in, session handling, the six read views, typed client (`api/schema.d.ts` generated from `server/openapi/openapi.yaml`), `hosted.css`, en/ar dictionaries
+- `src/lib/i18n/core.tsx`, `plural.ts` (new); `context.tsx` reduced to the app's state + persistence over the core
+- `vite.config.ts` (a `hosted` branch; web/desktop unchanged and snapshot-pinned), `tsconfig.hosted.json` (new), `tsconfig.app.json` (excludes `src/hosted`), `tsconfig.json`, `eslint.config.js`, `package.json`, `.gitignore`
+- `scripts/check-bundles.ts`, `bundle-rules.ts`, `bundle-origins.json`, `check-hosted-types.ts` (new); `scripts/__tests__/*` (new); `src/test/setup.ts` (browser shims guarded for node-environment tests)
+- `.claude/designs/mut-43-auth-states.md` + wireframe, `mut-43-hosted-portal-tests.md` (new); `hosted-portal.md` and ADR-037 (Malafat sign-in removed; MUT-43 amendment)
+
+### Added
+- **Hosted portal** (`npm run dev:hosted`, `build:hosted` → `dist-hosted/index.html`). Email + password sign-in on MUT-38's session API, with no signup, reset, invite or third-party door. Every auth state in the approved addendum (`mut-43-auth-states.md`):
+  - boot check and the boot-unreachable card;
+  - the one 401 banner with the lockout hint, and `Retry-After` plurals;
+  - a safe `next`, and the expired vs signed-out notes;
+  - no profiles, and profile unavailable;
+  - a sign-out failure that keeps the person signed in;
+  - cross-tab sign-out, and account-locale precedence.
+- **Shell and switcher.** Hosted profiles only; each has a "Hosted" chip and its source sentence, and a footer says local profiles stay on the device. Switching keeps the section and never shows the other profile's figures.
+- **Views:** Overview (strip + clients, overdue first, a currency switch only when more than one currency has figures), Clients (search), Client detail (summary + matters; receivables / payments / documents tabs), Receivables, Payments (with allocations), Documents (signed-URL download, no preview).
+  - Each view has four states, and **a view in error renders no data**.
+  - Income views explain why they are read-only.
+  - Filters are one URL object, updated with `replace`.
+- **`DecimalAmount`** formats wire decimal strings with `Intl.NumberFormat`, never `Number()`.
+- **`tp()`** plurals over `Intl.PluralRules` (ADR-019, no ICU parser).
+- **`npm run test:bundles`** proves the separation on the built output:
+  - web and desktop carry no portal endpoint, cookie or header;
+  - the portal carries no IndexedDB, Dexie, service worker or self-service copy (en/ar);
+  - neither carries an origin outside `scripts/bundle-origins.json`.
+- **`npm run hosted:types:check`** fails when the typed client drifts from the contract.
+
+### Changed
+- `npm run typecheck` checks two programs: `tsconfig.app.json` (which no longer sees portal code) and `tsconfig.hosted.json`.
+- The app's i18n is split into a translation-free core and the app provider; the provider's behaviour is unchanged (tested).
+
+### Fixed (found by running the portal against the real API on a scratch database)
+- Sign-out: the signing-out tab heard its own cross-tab announcement and cleared the cache under the mounted sign-in check, leaving an endless spinner. One channel per tab now sends and listens.
+- `vite --mode hosted` served the local app at `/` in dev.
+
+### Technical
+- Lint guards for `src/hosted/**`: no local data layer, sync, hooks, shell, drawers, stores or app i18n provider; no `Number()`/`parseFloat`/`parseInt`/unary `+`. Proven by `scripts/__tests__/hosted-lint.test.ts`.
+- Root suite: 151 files, 2462 passed, 5 skipped. MUT-43's own tests: 163.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-59: repair migration for databases that applied the original M7
 
 **Scope:**
