@@ -19,11 +19,63 @@ export interface SampleWorkRow {
   daysOverdue?: number;
 }
 
+export interface SampleOwed {
+  currency: Currency;
+  owedMinor: number;
+  overdueMinor: number;
+  oldestOverdueDays?: number;
+}
+
+export interface SampleClient {
+  id: string;
+  nameKey: string;
+  owed: SampleOwed[];
+}
+
+/** The hero's Clients list: ranked by what each client owes, most first. */
+export const SAMPLE_CLIENTS: SampleClient[] = [
+  {
+    id: 'c1',
+    nameKey: 'landing.sample.clientName',
+    owed: [{ currency: 'ILS', owedMinor: 1853441, overdueMinor: 1498441, oldestOverdueDays: 227 }],
+  },
+  {
+    id: 'c2',
+    nameKey: 'landing.sample.client2',
+    owed: [
+      { currency: 'USD', owedMinor: 90000, overdueMinor: 0 },
+      { currency: 'ILS', owedMinor: 1425000, overdueMinor: 1425000, oldestOverdueDays: 3 },
+    ],
+  },
+  {
+    id: 'c3',
+    nameKey: 'landing.sample.client3',
+    owed: [{ currency: 'ILS', owedMinor: 1405000, overdueMinor: 1405000, oldestOverdueDays: 158 }],
+  },
+];
+
+/** Currencies in the order the app's Owed now strip shows them. */
+const CURRENCY_ORDER: Currency[] = ['USD', 'ILS', 'EUR'];
+
+/** Owed now per currency, summed from the rows so the mock-up always adds up. */
+export function sampleOwedTotals(clients: SampleClient[]): SampleOwed[] {
+  return CURRENCY_ORDER.map((currency) => {
+    const rows = clients.flatMap((client) => client.owed).filter((o) => o.currency === currency);
+    return {
+      currency,
+      owedMinor: rows.reduce((sum, o) => sum + o.owedMinor, 0),
+      overdueMinor: rows.reduce((sum, o) => sum + o.overdueMinor, 0),
+    };
+  }).filter((total) => total.owedMinor > 0);
+}
+
+/** The client whose page the first chapter shows: the top of the list. */
+const FIRST = SAMPLE_CLIENTS[0];
 export const SAMPLE_CLIENT = {
-  nameKey: 'landing.sample.clientName',
-  currency: 'ILS' as Currency,
-  owedMinor: 1853441,
-  overdueMinor: 1498441,
+  nameKey: FIRST.nameKey,
+  currency: FIRST.owed[0].currency,
+  owedMinor: FIRST.owed[0].owedMinor,
+  overdueMinor: FIRST.owed[0].overdueMinor,
 };
 
 export const SAMPLE_WORK: SampleWorkRow[] = [

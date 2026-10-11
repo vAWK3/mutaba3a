@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isTauri, isWeb, isMacOS, isWindows, isLinux, handleVersionChange } from '../platform';
+import { isTauri, isWeb, isMacOS, isWindows, isLinux, handleVersionChange, detectDevice } from '../platform';
 
 describe('platform detection', () => {
   // Store original window state for potential future use
@@ -218,5 +218,33 @@ describe('handleVersionChange', () => {
     expect(() => handleVersionChange('1.0.0')).not.toThrow();
 
     localStorage.setItem = originalSetItem;
+  });
+});
+
+describe('detectDevice', () => {
+  const MAC_SAFARI =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+  const WIN_CHROME =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+  const IPHONE =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+  const ANDROID =
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36';
+  const LINUX = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+  const CHROME_OS =
+    'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+  it.each([
+    ['a Mac', { userAgent: MAC_SAFARI, platform: 'MacIntel', maxTouchPoints: 0 }, 'mac'],
+    ['Windows', { userAgent: WIN_CHROME, platform: 'Win32', maxTouchPoints: 0 }, 'windows'],
+    ['an iPhone', { userAgent: IPHONE, platform: 'iPhone', maxTouchPoints: 5 }, 'ios'],
+    // iPadOS 13+ reports itself as a Mac; only touch support gives it away
+    ['an iPad asking for the desktop site', { userAgent: MAC_SAFARI, platform: 'MacIntel', maxTouchPoints: 5 }, 'ios'],
+    ['Android, whose UA also says Linux', { userAgent: ANDROID, platform: 'Linux armv81', maxTouchPoints: 5 }, 'android'],
+    ['desktop Linux', { userAgent: LINUX, platform: 'Linux x86_64', maxTouchPoints: 0 }, 'linux'],
+    ['ChromeOS', { userAgent: CHROME_OS, platform: 'Linux x86_64', maxTouchPoints: 0 }, 'linux'],
+    ['nothing at all', { userAgent: '', platform: '', maxTouchPoints: 0 }, 'unknown'],
+  ] as const)('recognises %s', (_name, signals, expected) => {
+    expect(detectDevice(signals)).toBe(expected);
   });
 });

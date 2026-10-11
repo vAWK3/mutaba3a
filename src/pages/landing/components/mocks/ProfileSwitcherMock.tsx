@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react';
 import { useT } from '../../../../lib/i18n';
-import { SAMPLE_BUSINESSES, SAMPLE_CLIENT } from '../../sampleData';
+import { SAMPLE_BUSINESSES, SAMPLE_CLIENTS, sampleOwedTotals } from '../../sampleData';
 import { useMockFormat } from './useMockFormat';
 
-const SAMPLE_USD_OWED_MINOR = 90000;
+const TOTALS = sampleOwedTotals(SAMPLE_CLIENTS);
 
 /** The business switcher, with the current business's totals kept per currency. */
 export function ProfileSwitcherMock() {
@@ -34,10 +34,11 @@ export function ProfileSwitcherMock() {
       <div className="landing-mock-owed landing-mock-owed--split">
         <span className="landing-mock-label">{t('clients.profile.owedNow')}</span>
         <span className="landing-mock-totals">
-          <span className="landing-mock-amount">{money(SAMPLE_USD_OWED_MINOR, 'USD')}</span>
-          <span className="landing-mock-amount">
-            {money(SAMPLE_CLIENT.owedMinor, SAMPLE_CLIENT.currency)}
-          </span>
+          {TOTALS.map((total) => (
+            <span key={total.currency} className="landing-mock-amount">
+              {money(total.owedMinor, total.currency)}
+            </span>
+          ))}
         </span>
       </div>
     </div>

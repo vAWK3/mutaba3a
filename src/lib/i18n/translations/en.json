@@ -1064,11 +1064,14 @@
       "headlineLine1": "Know who owes you.",
       "headlineLine2": "Keep it to yourself.",
       "subheadline": "Every client, every job, every payment — what's owed and what's paid, in dollars, shekels and euros. Stored on your device. No account. No tracking.",
-      "downloadMac": "Download for Mac",
-      "downloadWindows": "Download for Windows",
-      "appleSilicon": "Apple Silicon",
-      "webAppLink": "Or open the web app in your browser",
-      "previewAlt": "Mutaba3a showing who owes you"
+      "ctaMac": "Download for Mac",
+      "ctaMacHint": "Apple Silicon (M1 or later)",
+      "ctaWindows": "Download for Windows",
+      "ctaWindowsHint": "Windows 10 or later",
+      "ctaWeb": "Open the web app",
+      "ctaWebHint": "Works offline after your first visit",
+      "altWeb": "Or use it in your browser",
+      "altDesktop": "Desktop apps for Mac and Windows"
     },
     "chapters": {
       "clients": {
@@ -1086,6 +1089,8 @@
     },
     "sample": {
       "clientName": "Furniture Co.",
+      "client2": "Digital Agency",
+      "client3": "Travel Agency",
       "work1": "Showroom photography",
       "work2": "Final payment",
       "work3": "Technical support",
