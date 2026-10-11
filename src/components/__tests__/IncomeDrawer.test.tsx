@@ -4,10 +4,18 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
-import { transactionRepo, clientRepo, projectRepo, businessProfileRepo, settingsRepo } from '../../db/repository';
+import {
+  transactionRepo,
+  clientRepo,
+  projectRepo,
+  businessProfileRepo,
+  settingsRepo,
+  paymentRecordRepo,
+} from '../../db/repository';
 import { useDrawerStore } from '../../lib/stores';
 import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
+import { formatAmount, formatDate, todayISO } from '../../lib/utils';
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -27,11 +35,42 @@ function TestWrapper({ children }: { children: ReactNode }) {
   );
 }
 
+function renderDrawer() {
+  return render(
+    <TestWrapper>
+      <IncomeDrawer />
+    </TestWrapper>
+  );
+}
+
+const CLIENT_PLACEHOLDER = 'Search or create client...';
+const PROJECT_PLACEHOLDER = 'Select project...';
+
+const amountInput = () => screen.getByLabelText(/^Amount/) as HTMLInputElement;
+const titleInput = () => screen.getByLabelText('What did you do?') as HTMLInputElement;
+const moreDetailsToggle = () => screen.getByRole('button', { name: /More details|Fewer details/ });
+const saveButton = () => screen.getByRole('button', { name: /save/i });
+const statusButton = (name: 'Earned' | 'Invoiced' | 'Received') =>
+  screen.getByRole('button', { name: new RegExp(`^${name}`) });
+
+async function openMoreDetails(user: ReturnType<typeof userEvent.setup>) {
+  const toggle = await screen.findByRole('button', { name: /More details/ });
+  await user.click(toggle);
+  await waitFor(() => expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'true'));
+}
+
+async function openEdit(id: string) {
+  useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'edit', transactionId: id } });
+  renderDrawer();
+  await screen.findByText('Edit Income');
+}
+
 describe('IncomeDrawer', () => {
   let testProfileId: string;
 
   beforeEach(async () => {
     await db.transactions.clear();
+    await db.paymentRecords.clear();
     await db.clients.clear();
     await db.projects.clear();
     await db.businessProfiles.clear();
@@ -55,6 +94,7 @@ describe('IncomeDrawer', () => {
 
   afterEach(async () => {
     await db.transactions.clear();
+    await db.paymentRecords.clear();
     await db.clients.clear();
     await db.projects.clear();
     await db.businessProfiles.clear();
@@ -64,250 +104,373 @@ describe('IncomeDrawer', () => {
     });
   });
 
-  it('should render create mode form correctly', async () => {
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+  describe('fast path (MUT-5)', () => {
+    it('shows title, amount and client up front, and everything else behind More details', async () => {
+      renderDrawer();
 
-    await waitFor(() => {
-      expect(screen.getByText('New Income')).toBeInTheDocument();
+      await screen.findByText('New Income');
+      expect(titleInput()).toBeInTheDocument();
+      expect(amountInput()).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(CLIENT_PLACEHOLDER)).toBeInTheDocument();
+
+      const toggle = await screen.findByRole('button', { name: /More details/ });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('group', { name: 'Status' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Currency')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Date')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Due Date')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Business Profile/)).not.toBeInTheDocument();
     });
 
-    // Should show the three status options
-    expect(screen.getByText('Earned')).toBeInTheDocument();
-    expect(screen.getByText('Invoiced')).toBeInTheDocument();
-    expect(screen.getByText('Received')).toBeInTheDocument();
-  });
+    it('reveals status, due date, currency, date, project, notes and profile under More details', async () => {
+      const user = userEvent.setup();
+      await settingsRepo.update({ features: { projects: true } });
+      renderDrawer();
 
-  it('should have amount input field', async () => {
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+      await openMoreDetails(user);
 
-    await waitFor(() => {
-      const amountInput = screen.getByPlaceholderText('0.00');
-      expect(amountInput).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Status' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+      expect(screen.getByLabelText('Currency')).toBeInTheDocument();
+      expect(screen.getByLabelText('Date')).toBeInTheDocument();
+      expect(await screen.findByPlaceholderText(PROJECT_PLACEHOLDER)).toBeInTheDocument();
+      expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Business Profile/)).toBeInTheDocument();
+    });
+
+    it('saves with exactly title, amount and client, filling the rest from defaults', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Acme' });
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText('What did you do?'), 'Logo redesign');
+      await user.type(amountInput(), '1,200');
+      const clientInput = screen.getByPlaceholderText(CLIENT_PLACEHOLDER);
+      await user.click(clientInput);
+      await user.type(clientInput, 'Acm');
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(clientInput).toHaveValue('Acme'));
+
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const transactions = await transactionRepo.list({});
+        expect(transactions).toHaveLength(1);
+        const [tx] = transactions;
+        expect(tx).toMatchObject({
+          kind: 'income',
+          status: 'unpaid',
+          title: 'Logo redesign',
+          amountMinor: 120000,
+          currency: 'USD',
+          clientId: client.id,
+          profileId: testProfileId,
+        });
+        expect(tx.occurredAt.slice(0, 10)).toBe(new Date(todayISO()).toISOString().slice(0, 10));
+        expect(tx.projectId).toBeUndefined();
+      });
+      expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
+    });
+
+    it('names the defaults it applies: status, currency and today', async () => {
+      renderDrawer();
+
+      const summary = await screen.findByTestId('income-defaults');
+      await waitFor(() => {
+        expect(summary).toHaveTextContent('Earned');
+        expect(summary).toHaveTextContent('USD');
+        expect(summary).toHaveTextContent(formatDate(`${todayISO()}T00:00:00`, 'en-US'));
+      });
+    });
+
+    it('names the profile in the defaults when there is more than one', async () => {
+      await businessProfileRepo.create({ name: 'Second Studio', defaultCurrency: 'ILS' });
+      renderDrawer();
+
+      await waitFor(() => expect(screen.getByTestId('income-defaults')).toHaveTextContent('Test Profile'));
+    });
+
+    it('starts in the profile currency and saves it', async () => {
+      const user = userEvent.setup();
+      const ilsProfile = await businessProfileRepo.create({ name: 'Shekel Studio', defaultCurrency: 'ILS' });
+      useDrawerStore.setState({
+        incomeDrawer: { isOpen: true, mode: 'create', defaultProfileId: ilsProfile.id },
+      });
+      renderDrawer();
+
+      await waitFor(() => expect(screen.getByTestId('income-amount-group')).toHaveTextContent('ILS'));
+      await user.type(amountInput(), '500');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        expect(tx?.currency).toBe('ILS');
+        expect(tx?.profileId).toBe(ilsProfile.id);
+      });
+    });
+
+    it('moves an untouched currency with the profile, but never a currency the user picked', async () => {
+      const user = userEvent.setup();
+      const ilsProfile = await businessProfileRepo.create({ name: 'Shekel Studio', defaultCurrency: 'ILS' });
+      renderDrawer();
+      await openMoreDetails(user);
+      const prefix = screen.getByTestId('income-amount-group');
+
+      await waitFor(() => expect(screen.getByRole('option', { name: 'Shekel Studio' })).toBeInTheDocument());
+      await user.selectOptions(screen.getByLabelText(/Business Profile/), ilsProfile.id);
+      await waitFor(() => expect(prefix).toHaveTextContent('ILS'));
+
+      await user.selectOptions(screen.getByLabelText('Currency'), 'EUR');
+      await user.selectOptions(screen.getByLabelText(/Business Profile/), testProfileId);
+      await waitFor(() => expect(prefix).toHaveTextContent('EUR'));
+    });
+
+    it('offers EUR and saves it', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+      await openMoreDetails(user);
+
+      await user.selectOptions(screen.getByLabelText('Currency'), 'EUR');
+      await user.type(amountInput(), '75');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        expect(tx?.currency).toBe('EUR');
+      });
+    });
+
+    it('keeps the amount left-to-right with the currency in front, in any language', async () => {
+      renderDrawer();
+      const group = await screen.findByTestId('income-amount-group');
+      expect(group).toHaveAttribute('dir', 'ltr');
+      expect(group.firstElementChild).toHaveTextContent('USD');
+    });
+
+    it('prefills the client when opened from a client profile', async () => {
+      const client = await clientRepo.create({ name: 'Prefilled Client' });
+      useDrawerStore.setState({
+        incomeDrawer: { isOpen: true, mode: 'create', defaultProfileId: testProfileId, defaultClientId: client.id },
+      });
+      renderDrawer();
+
+      await waitFor(() => expect(screen.getByPlaceholderText(CLIENT_PLACEHOLDER)).toHaveValue('Prefilled Client'));
+    });
+
+    it('leaves the client empty when opened without one (sidebar, + Add)', async () => {
+      await clientRepo.create({ name: 'Some Client' });
+      renderDrawer();
+
+      const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(clientInput).toHaveValue('');
     });
   });
 
-  it('should have currency options', async () => {
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+  describe('amount validation', () => {
+    it('shows a field error, not an exception, for a title with no amount', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
 
-    await waitFor(() => {
-      expect(screen.getByText('USD')).toBeInTheDocument();
-      expect(screen.getByText('ILS')).toBeInTheDocument();
+      await user.type(await screen.findByLabelText('What did you do?'), 'Logo redesign');
+      await user.click(saveButton());
+
+      expect(await screen.findByText('Amount is required')).toBeInTheDocument();
+      expect(await transactionRepo.list({})).toHaveLength(0);
+      expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(true);
+    });
+
+    it('refuses an ambiguous amount instead of guessing', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '12,5');
+      await user.click(saveButton());
+
+      expect(await screen.findByText('Enter an amount like 1200 or 1,200.50')).toBeInTheDocument();
+      expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+
+    it('refuses a zero amount', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '0');
+      await user.click(saveButton());
+
+      expect(await screen.findByText('Amount must be more than zero')).toBeInTheDocument();
+    });
+
+    it('reads Arabic-Indic digits and separators', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '١٬٢٠٠٫٥٠');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        expect(tx?.amountMinor).toBe(120050);
+      });
     });
   });
 
-  it('should show due date field when Earned or Invoiced is selected', async () => {
+  describe('client typed but not picked (MUT-5)', () => {
+    it('refuses to save while unpicked text sits in the client box', async () => {
+      const user = userEvent.setup();
+      await clientRepo.create({ name: 'Acme Corp' });
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '100');
+      await user.type(screen.getByPlaceholderText(CLIENT_PLACEHOLDER), 'Acm');
+      await user.click(saveButton());
+
+      expect(
+        await screen.findByText('Pick a client from the list, or press Enter to create it')
+      ).toBeInTheDocument();
+      expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+
+    it('picks a client whose exact name was typed when the box is left', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Acme Corp' });
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '100');
+      await user.type(screen.getByPlaceholderText(CLIENT_PLACEHOLDER), 'acme corp');
+      await user.tab();
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        expect(tx?.clientId).toBe(client.id);
+      });
+    });
+
+    it('closes only the client list on Escape, not the drawer', async () => {
+      const user = userEvent.setup();
+      await clientRepo.create({ name: 'Acme Corp' });
+      renderDrawer();
+
+      const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
+      await user.type(clientInput, 'Ac');
+      expect(await screen.findByRole('listbox')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(true);
+    });
+  });
+
+  describe('keyboard', () => {
+    it('starts in the title, then tabs to amount and client', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await waitFor(() => expect(titleInput()).toHaveFocus());
+      await user.tab();
+      expect(amountInput()).toHaveFocus();
+      await user.tab();
+      expect(screen.getByPlaceholderText(CLIENT_PLACEHOLDER)).toHaveFocus();
+    });
+  });
+
+  describe('status inside More details', () => {
+    it('shows the due date for Earned and Invoiced, and hides it for Received', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+      await openMoreDetails(user);
+
+      await user.click(statusButton('Invoiced'));
+      expect(screen.getByLabelText('Due Date')).toBeInTheDocument();
+
+      await user.click(statusButton('Received'));
+      await waitFor(() => expect(screen.queryByLabelText('Due Date')).not.toBeInTheDocument());
+    });
+
+    it('creates a paid entry when Received is chosen', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+      await openMoreDetails(user);
+
+      await user.click(statusButton('Received'));
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const transactions = await transactionRepo.list({});
+        expect(transactions).toHaveLength(1);
+        expect(transactions[0].amountMinor).toBe(10000);
+        expect(transactions[0].status).toBe('paid');
+        expect(transactions[0].paidAt).toBeDefined();
+        expect(transactions[0].receivedAmountMinor).toBe(10000);
+      });
+    });
+
+    it.each(['Earned', 'Invoiced'] as const)('creates an unpaid entry when %s is chosen', async (status) => {
+      const user = userEvent.setup();
+      renderDrawer();
+      await openMoreDetails(user);
+
+      await user.click(statusButton(status));
+      await user.type(amountInput(), '200');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const transactions = await transactionRepo.list({});
+        expect(transactions).toHaveLength(1);
+        expect(transactions[0].status).toBe('unpaid');
+      });
+    });
+
+    it('reopens More details when a field inside it is invalid', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+      await openMoreDetails(user);
+
+      await user.clear(screen.getByLabelText('Date'));
+      await user.click(moreDetailsToggle()); // collapse again
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+
+      await waitFor(() => expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'true'));
+      expect(screen.getByText('Date is required')).toBeInTheDocument();
+      expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+  });
+
+  it('asks for the profile up front when none can be worked out', async () => {
     const user = userEvent.setup();
+    await db.businessProfiles.clear();
+    useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+    renderDrawer();
 
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+    const profileSelect = await screen.findByLabelText(/Business Profile/);
+    expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(profileSelect).toBeInTheDocument();
 
-    // Click on Invoiced status
-    await waitFor(() => {
-      expect(screen.getByText('Invoiced')).toBeInTheDocument();
-    });
-
-    const invoicedButton = screen.getByText('Invoiced');
-    await user.click(invoicedButton);
-
-    // Due date field should appear
-    await waitFor(() => {
-      expect(screen.getByText('Due Date')).toBeInTheDocument();
-    });
-  });
-
-  it('should hide due date field when Received is selected', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    // Click on Received status
-    await waitFor(() => {
-      expect(screen.getByText('Received')).toBeInTheDocument();
-    });
-
-    const receivedButton = screen.getByText('Received');
-    await user.click(receivedButton);
-
-    // Due date field should NOT appear
-    await waitFor(() => {
-      expect(screen.queryByText('Due Date')).not.toBeInTheDocument();
-    });
-  });
-
-  it('should create a paid income transaction when Received is selected', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    // Wait for form to load
-    await waitFor(() => {
-      expect(screen.getByText('Received')).toBeInTheDocument();
-    });
-
-    // Select Received status
-    const receivedButton = screen.getByText('Received');
-    await user.click(receivedButton);
-
-    // Fill in amount
-    const amountInput = screen.getByPlaceholderText('0.00');
-    await user.type(amountInput, '100');
-
-    // Submit
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await user.click(saveButton);
-
-    // Wait for transaction to be created
-    await waitFor(async () => {
-      const transactions = await transactionRepo.list({});
-      expect(transactions).toHaveLength(1);
-      expect(transactions[0].amountMinor).toBe(10000); // $100.00 = 10000 minor
-      expect(transactions[0].kind).toBe('income');
-      expect(transactions[0].status).toBe('paid');
-    });
-  });
-
-  it('should create an unpaid income transaction when Earned is selected', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    // Wait for form to load - Earned is the default
-    await waitFor(() => {
-      expect(screen.getByText('Earned')).toBeInTheDocument();
-    });
-
-    // Fill in amount
-    const amountInput = screen.getByPlaceholderText('0.00');
-    await user.type(amountInput, '200');
-
-    // Submit
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await user.click(saveButton);
-
-    await waitFor(async () => {
-      const transactions = await transactionRepo.list({});
-      expect(transactions).toHaveLength(1);
-      expect(transactions[0].kind).toBe('income');
-      expect(transactions[0].status).toBe('unpaid');
-    });
-  });
-
-  it('should create an unpaid income transaction when Invoiced is selected', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    // Wait for form to load
-    await waitFor(() => {
-      expect(screen.getByText('Invoiced')).toBeInTheDocument();
-    });
-
-    // Select Invoiced status
-    const invoicedButton = screen.getByText('Invoiced');
-    await user.click(invoicedButton);
-
-    // Fill in amount
-    const amountInput = screen.getByPlaceholderText('0.00');
-    await user.type(amountInput, '300');
-
-    // Submit
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await user.click(saveButton);
-
-    await waitFor(async () => {
-      const transactions = await transactionRepo.list({});
-      expect(transactions).toHaveLength(1);
-      expect(transactions[0].kind).toBe('income');
-      expect(transactions[0].status).toBe('unpaid');
-    });
-  });
-
-  it('should show validation error when amount is empty', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    // Wait for form to load
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument();
-    });
-
-    // Submit without filling amount
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await user.click(saveButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Amount is required')).toBeInTheDocument();
-    });
+    await user.type(amountInput(), '100');
+    await user.click(saveButton());
+    expect(await screen.findByText('Profile is required')).toBeInTheDocument();
   });
 
   it('should close drawer when cancel is clicked', async () => {
     const user = userEvent.setup();
+    renderDrawer();
 
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
-    });
-
-    const cancelButton = screen.getByRole('button', { name: /cancel/i });
-    await user.click(cancelButton);
+    await user.click(await screen.findByRole('button', { name: /cancel/i }));
 
     expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
   });
 
   it('should show clients in dropdown when available', async () => {
     const user = userEvent.setup();
-    // Create a client
     await clientRepo.create({ name: 'Test Client Inc' });
+    renderDrawer();
 
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
-
-    // The typeahead only renders its options while open (EntityTypeahead:143)
-    const clientInput = await screen.findByPlaceholderText('Search or create client...');
+    // The typeahead only renders its options while open (EntityTypeahead)
+    const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
     await user.click(clientInput);
 
     await waitFor(() => {
@@ -321,32 +484,18 @@ describe('IncomeDrawer', () => {
     await settingsRepo.update({ features: { projects: true } });
     const clientA = await clientRepo.create({ name: 'Client A' });
     const clientB = await clientRepo.create({ name: 'Client B' });
-    await projectRepo.create({
-      name: 'Project for A',
-      clientId: clientA.id,
-      profileId: testProfileId,
-    });
-    await projectRepo.create({
-      name: 'Project for B',
-      clientId: clientB.id,
-      profileId: testProfileId,
-    });
-
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+    await projectRepo.create({ name: 'Project for A', clientId: clientA.id, profileId: testProfileId });
+    await projectRepo.create({ name: 'Project for B', clientId: clientB.id, profileId: testProfileId });
+    renderDrawer();
 
     // Select Client A in the client typeahead
-    const clientInput = await screen.findByPlaceholderText('Search or create client...');
+    const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
     await user.click(clientInput);
-    const optionA = await screen.findByRole('option', { name: 'Client A' });
-    await user.click(optionA);
+    await user.click(await screen.findByRole('option', { name: 'Client A' }));
 
-    // Open the project typeahead: only Client A's project should be listed
-    const projectInput = screen.getByPlaceholderText('Select project...');
-    await user.click(projectInput);
+    // Open the project typeahead under More details: only Client A's project is listed
+    await openMoreDetails(user);
+    await user.click(await screen.findByPlaceholderText(PROJECT_PLACEHOLDER));
 
     await waitFor(() => {
       expect(screen.getByRole('option', { name: 'Project for A' })).toBeInTheDocument();
@@ -354,136 +503,245 @@ describe('IncomeDrawer', () => {
     });
   });
 
-  // Edit mode tests
-  it.skip('should load existing transaction in edit mode', async () => {
-    // Create a transaction first
-    const tx = await transactionRepo.create({
-      kind: 'income',
-      status: 'paid',
-      profileId: testProfileId,
-      amountMinor: 25000, // $250
-      currency: 'USD',
-      occurredAt: '2024-03-15',
-      title: 'Test payment',
+  describe('edit mode', () => {
+    it('loads an existing entry', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'paid',
+        profileId: testProfileId,
+        amountMinor: 25000, // $250
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Test payment',
+      });
+
+      await openEdit(tx.id);
+
+      await waitFor(() => {
+        expect(amountInput().value).toBe('250');
+        expect(titleInput().value).toBe('Test payment');
+      });
     });
 
-    // Set drawer to edit mode
-    useDrawerStore.setState({
-      incomeDrawer: { isOpen: true, mode: 'edit', transactionId: tx.id },
+    it('opens More details when the entry has notes', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 25000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        notes: 'Phase one of three',
+      });
+
+      await openEdit(tx.id);
+
+      await waitFor(() => expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'true'));
+      expect(screen.getByLabelText('Notes')).toHaveValue('Phase one of three');
     });
 
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+    it('keeps More details collapsed for an entry with only the core fields', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 25000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Plain entry',
+      });
 
-    await waitFor(() => {
-      expect(screen.getByText('Edit Income')).toBeInTheDocument();
-    }, { timeout: 3000 });
+      await openEdit(tx.id);
 
-    await waitFor(() => {
-      const amountInput = screen.getByPlaceholderText('0.00') as HTMLInputElement;
-      expect(amountInput.value).toBe('250');
-    }, { timeout: 3000 });
+      await waitFor(() => expect(titleInput().value).toBe('Plain entry'));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('should clear paidAt and receivedAmountMinor when changing from received to invoiced', async () => {
+      const user = userEvent.setup();
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'paid',
+        profileId: testProfileId,
+        amountMinor: 50000, // $500
+        currency: 'USD',
+        occurredAt: '2024-03-15T10:00:00Z',
+        paidAt: '2024-03-15T10:00:00Z',
+        receivedAmountMinor: 50000,
+        title: 'Paid invoice',
+      });
+
+      await openEdit(tx.id);
+      await openMoreDetails(user);
+
+      // Should show "Received" as active since status is 'paid'
+      await waitFor(() => expect(statusButton('Received')).toHaveClass('active'));
+
+      await user.click(statusButton('Invoiced'));
+      await waitFor(() => expect(statusButton('Invoiced')).toHaveClass('active'));
+
+      await user.click(saveButton());
+
+      // The drawer writes `undefined`, and Dexie deletes keys whose value is undefined,
+      // so the fields are absent - not null - after the update.
+      await waitFor(async () => {
+        const updatedTx = await transactionRepo.get(tx.id);
+        expect(updatedTx?.status).toBe('unpaid');
+        expect(updatedTx?.paidAt).toBeUndefined();
+        expect(updatedTx?.receivedAmountMinor).toBeUndefined();
+      });
+    });
+
+    it('still shows the lock notice and disables Save on a locked entry', async () => {
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 25000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        lockedAt: '2024-03-20T00:00:00.000Z',
+        lockedByDocumentId: 'doc-1',
+      });
+
+      await openEdit(tx.id);
+
+      expect(await screen.findByTestId('income-locked-notice')).toBeInTheDocument();
+      expect(saveButton()).toBeDisabled();
+    });
   });
 
-  it('should clear paidAt and receivedAmountMinor when changing from received to invoiced', async () => {
-    const user = userEvent.setup();
+  describe('payment data on edit (MUT-5)', () => {
+    it('keeps the payment date when a paid entry is retitled', async () => {
+      const user = userEvent.setup();
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'paid',
+        profileId: testProfileId,
+        amountMinor: 50000,
+        currency: 'USD',
+        occurredAt: '2024-03-15T10:00:00Z',
+        paidAt: '2024-03-15T10:00:00Z',
+        receivedAmountMinor: 50000,
+        title: 'Paid invoice',
+      });
 
-    // Create a paid transaction
-    const tx = await transactionRepo.create({
-      kind: 'income',
-      status: 'paid',
-      profileId: testProfileId,
-      amountMinor: 50000, // $500
-      currency: 'USD',
-      occurredAt: '2024-03-15T10:00:00Z',
-      paidAt: '2024-03-15T10:00:00Z',
-      receivedAmountMinor: 50000,
-      title: 'Paid invoice',
+      await openEdit(tx.id);
+      await waitFor(() => expect(titleInput().value).toBe('Paid invoice'));
+      await user.clear(titleInput());
+      await user.type(titleInput(), 'Paid invoice, renamed');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const updated = await transactionRepo.get(tx.id);
+        expect(updated?.title).toBe('Paid invoice, renamed');
+        expect(updated?.paidAt).toBe('2024-03-15T10:00:00Z');
+        expect(updated?.status).toBe('paid');
+      });
     });
 
-    // Verify initial state
-    const initialTx = await transactionRepo.get(tx.id);
-    expect(initialTx?.status).toBe('paid');
-    expect(initialTx?.paidAt).toBe('2024-03-15T10:00:00Z');
-    expect(initialTx?.receivedAmountMinor).toBe(50000);
+    describe('an entry with recorded payments', () => {
+      let txId: string;
 
-    // Set drawer to edit mode
-    useDrawerStore.setState({
-      incomeDrawer: { isOpen: true, mode: 'edit', transactionId: tx.id },
-    });
+      beforeEach(async () => {
+        const tx = await transactionRepo.create({
+          kind: 'income',
+          status: 'unpaid',
+          profileId: testProfileId,
+          amountMinor: 10000, // $100
+          currency: 'USD',
+          occurredAt: '2024-03-15',
+          title: 'Part-paid job',
+        });
+        txId = tx.id;
+        await paymentRecordRepo.create({ transactionId: txId, amountMinor: 5000, paidAt: '2024-03-20' });
+      });
 
-    render(
-      <TestWrapper>
-        <IncomeDrawer />
-      </TestWrapper>
-    );
+      it('keeps what was received when the entry is retitled', async () => {
+        const user = userEvent.setup();
+        await openEdit(txId);
+        await waitFor(() => expect(titleInput().value).toBe('Part-paid job'));
 
-    // Wait for form to load
-    await waitFor(() => {
-      expect(screen.getByText('Edit Income')).toBeInTheDocument();
-    });
+        await user.type(titleInput(), ' (phase 1)');
+        await user.click(saveButton());
 
-    // Should show "Received" as active since status is 'paid'
-    await waitFor(() => {
-      const receivedButton = screen.getByText('Received');
-      expect(receivedButton.closest('button')).toHaveClass('active');
-    });
+        await waitFor(async () => {
+          const updated = await transactionRepo.get(txId);
+          expect(updated?.title).toBe('Part-paid job (phase 1)');
+          expect(updated?.receivedAmountMinor).toBe(5000);
+          expect(updated?.status).toBe('unpaid');
+        });
+      });
 
-    // Click on Invoiced status
-    const invoicedButton = screen.getByText('Invoiced');
-    await user.click(invoicedButton);
+      it('shows the status read-only, with a hint about the payments', async () => {
+        const user = userEvent.setup();
+        await openEdit(txId);
+        await openMoreDetails(user);
 
-    // Wait for the status to change in the UI
-    await waitFor(() => {
-      expect(invoicedButton.closest('button')).toHaveClass('active');
-    });
+        await waitFor(() => expect(statusButton('Received')).toBeDisabled());
+        expect(statusButton('Earned')).toBeDisabled();
+        expect(statusButton('Invoiced')).toBeDisabled();
+        expect(
+          screen.getByText(
+            'Payments are recorded for this entry, so its status follows them. Manage payments from the client page.'
+          )
+        ).toBeInTheDocument();
+      });
 
-    // Submit the form
-    const saveButton = screen.getByRole('button', { name: /save/i });
-    await user.click(saveButton);
+      it('refuses an amount below what is recorded, and writes nothing', async () => {
+        const user = userEvent.setup();
+        await openEdit(txId);
+        await waitFor(() => expect(amountInput().value).toBe('100'));
 
-    // Wait for update to complete and verify paidAt and receivedAmountMinor are cleared.
-    // The drawer writes `undefined`, and Dexie deletes keys whose value is undefined,
-    // so the fields are absent - not null - after the update.
-    await waitFor(async () => {
-      const updatedTx = await transactionRepo.get(tx.id);
-      expect(updatedTx?.status).toBe('unpaid');
-      expect(updatedTx?.paidAt).toBeUndefined();
-      expect(updatedTx?.receivedAmountMinor).toBeUndefined();
+        await user.clear(amountInput());
+        await user.type(amountInput(), '40');
+        await user.click(saveButton());
+
+        const recorded = formatAmount(5000, 'USD', 'en-US');
+        expect(
+          await screen.findByText(`${recorded} is already recorded as paid, so the amount can’t be less`)
+        ).toBeInTheDocument();
+        expect((await transactionRepo.get(txId))?.amountMinor).toBe(10000);
+      });
+
+      it('owes the difference when the amount is raised', async () => {
+        const user = userEvent.setup();
+        await openEdit(txId);
+        await waitFor(() => expect(amountInput().value).toBe('100'));
+
+        await user.clear(amountInput());
+        await user.type(amountInput(), '120');
+        await user.click(saveButton());
+
+        await waitFor(async () => {
+          const updated = await transactionRepo.get(txId);
+          expect(updated?.amountMinor).toBe(12000);
+          expect(updated?.receivedAmountMinor).toBe(5000);
+          expect(updated?.status).toBe('unpaid');
+        });
+      });
     });
   });
 
   describe('Projects area switch (MUT-16)', () => {
-    const PROJECT_PLACEHOLDER = 'Select project...';
-
     it('renders no project field in create mode while projects is off', async () => {
-      render(
-        <TestWrapper>
-          <IncomeDrawer />
-        </TestWrapper>
-      );
+      const user = userEvent.setup();
+      renderDrawer();
 
-      await screen.findByText('New Income');
-      await waitFor(() => expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument());
-      // An ungated field would already be in the form at this point (the client field is);
+      await openMoreDetails(user);
       // settle the settings query too, so a field that appears only after the read is caught
-      await waitFor(() => expect(screen.getByPlaceholderText('Search or create client...')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByLabelText('Notes')).toBeInTheDocument());
       await new Promise((resolve) => setTimeout(resolve, 30));
       expect(screen.queryByPlaceholderText(PROJECT_PLACEHOLDER)).not.toBeInTheDocument();
     });
 
     it('renders the project field in create mode while projects is on', async () => {
+      const user = userEvent.setup();
       await settingsRepo.update({ features: { projects: true } });
+      renderDrawer();
 
-      render(
-        <TestWrapper>
-          <IncomeDrawer />
-        </TestWrapper>
-      );
-
+      await openMoreDetails(user);
       expect(await screen.findByPlaceholderText(PROJECT_PLACEHOLDER)).toBeInTheDocument();
     });
 
@@ -507,23 +765,11 @@ describe('IncomeDrawer', () => {
         title: 'Grouped entry',
       });
 
-      useDrawerStore.setState({
-        incomeDrawer: { isOpen: true, mode: 'edit', transactionId: tx.id },
-      });
-
-      render(
-        <TestWrapper>
-          <IncomeDrawer />
-        </TestWrapper>
-      );
-
-      await screen.findByText('Edit Income');
-      await waitFor(() => {
-        expect((screen.getByPlaceholderText('0.00') as HTMLInputElement).value).toBe('120');
-      });
+      await openEdit(tx.id);
+      await waitFor(() => expect(amountInput().value).toBe('120'));
       expect(screen.queryByPlaceholderText(PROJECT_PLACEHOLDER)).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: /save/i }));
+      await user.click(saveButton());
 
       await waitFor(async () => {
         const updated = await transactionRepo.get(tx.id);

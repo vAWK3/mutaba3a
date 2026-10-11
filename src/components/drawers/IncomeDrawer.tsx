@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
@@ -12,37 +12,67 @@ import {
   useProjects,
   useBusinessProfiles,
   useDocument,
+  usePaymentRecords,
+  useSettings,
 } from '../../hooks/useQueries';
 import { useNavigate } from '@tanstack/react-router';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
-import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
-import { useT } from '../../lib/i18n';
+import {
+  cn,
+  formatAmount,
+  formatDate,
+  getLocaleFromLanguage,
+  nowISO,
+  parseAmountInput,
+  todayISO,
+} from '../../lib/utils';
+import {
+  buildIncomeCreate,
+  buildIncomeUpdate,
+  isBelowRecordedTotal,
+  recordedTotalMinor,
+  resolveDefaultCurrency,
+  shouldExpandDetails,
+  type IncomeEntryValues,
+} from '../../lib/incomeEntry';
+import { useLanguage, useT } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
 import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
-import type { TxStatus, Currency } from '../../types';
+import type { TxStatus } from '../../types';
 
 /**
  * IncomeDrawer
  *
- * Drawer for creating and editing income entries.
- * Implements the Earned → Invoiced → Received lifecycle.
+ * Creating and editing income. The entry is the work record (MUT-5): what you
+ * did, for how much, for whom. Those three fields are the fast path; status,
+ * currency, dates, project, notes and (when it is already known) the profile
+ * sit behind "More details", whose summary line names the defaults in use.
  *
- * Key changes from old TransactionDrawer:
- * - Status selector: Earned / Invoiced / Received (not type-based)
- * - Profile is required context, shown as chip (not form field)
- * - No "Expense" option (use ExpenseDrawer)
+ * Payment state (status, paidAt, received) belongs to payment records when an
+ * entry has them (ADR-030): the drawer then shows the status read-only and
+ * never writes those fields. Write rules live in lib/incomeEntry.ts.
  */
 
 const schema = z.object({
   incomeStatus: z.enum(['earned', 'invoiced', 'received']),
-  profileId: z.string().min(1, 'Profile is required'),
-  amount: z.string().min(1, 'Amount is required'),
+  profileId: z.string().min(1, 'validation.profileRequired'),
+  amount: z
+    .string()
+    .trim()
+    .min(1, 'validation.amountRequired')
+    .refine((value) => !value || parseAmountInput(value) !== null, 'validation.amountInvalid')
+    .refine((value) => (parseAmountInput(value) ?? 1) > 0, 'validation.amountPositive'),
   currency: z.enum(['USD', 'ILS', 'EUR']),
-  occurredAt: z.string().min(1, 'Date is required'),
+  occurredAt: z.string().min(1, 'validation.dateRequired'),
   clientId: z.string().optional(),
+  /** Text left in the client box without picking a client (MUT-5) */
+  clientDraft: z
+    .string()
+    .optional()
+    .refine((value) => !value, 'validation.clientNotPicked'),
   projectId: z.string().optional(),
   dueDate: z.string().optional(),
   title: z.string().optional(),
@@ -51,17 +81,49 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+/** Fields rendered inside "More details"; an error in one of them opens it. */
+const DETAIL_FIELDS = ['incomeStatus', 'dueDate', 'currency', 'occurredAt', 'projectId', 'notes'] as const;
+
+/** setError type for the recorded-payments guard, rendered with the recorded total */
+const BELOW_RECORDED = 'belowRecorded';
+
+const STATUS_LABEL_KEYS: Record<IncomeStatus, string> = {
+  earned: 'drawer.income.statusEarned',
+  invoiced: 'drawer.income.statusInvoiced',
+  received: 'drawer.income.statusReceived',
+};
+
+const STATUS_HINT_KEYS: Record<IncomeStatus, string> = {
+  earned: 'drawer.income.statusEarnedHint',
+  invoiced: 'drawer.income.statusInvoicedHint',
+  received: 'drawer.income.statusReceivedHint',
+};
+
+const INCOME_STATUSES: IncomeStatus[] = ['earned', 'invoiced', 'received'];
+
+const CURRENCIES = ['USD', 'ILS', 'EUR'] as const;
+
+// Map stored status to the drawer's three-step status: paid → received,
+// unpaid → invoiced (the storage does not keep earned vs invoiced apart).
+function getIncomeStatusFromTx(status: TxStatus): IncomeStatus {
+  return status === 'paid' ? 'received' : 'invoiced';
+}
+
 export function IncomeDrawer() {
   const { incomeDrawer, closeIncomeDrawer } = useDrawerStore();
   const { mode, transactionId, defaultStatus, defaultClientId, defaultProjectId, defaultProfileId, duplicateFromId } = incomeDrawer;
   const t = useT();
+  const { language } = useLanguage();
+  const locale = getLocaleFromLanguage(language);
   const { showToast } = useToast();
-  const { profiles, activeProfileId, isAllProfiles } = useActiveProfile();
+  const { profiles, activeProfileId, isAllProfiles, isLoading: profilesLoading } = useActiveProfile();
 
   const { data: existingTx, isLoading: txLoading } = useTransaction(transactionId || '');
   const { data: sourceTx } = useTransaction(duplicateFromId || '');
   const { data: projectsData = [] } = useProjects();
   const { data: businessProfiles = [] } = useBusinessProfiles();
+  const { data: settings } = useSettings();
+  const { data: paymentRecords = [] } = usePaymentRecords(mode === 'edit' ? transactionId : undefined);
 
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
@@ -82,6 +144,10 @@ export function IncomeDrawer() {
     navigate({ to: '/documents/$documentId', params: { documentId } });
   };
 
+  // Payment records own this entry's payment state (ADR-030, MUT-5)
+  const hasRecords = mode === 'edit' && paymentRecords.length > 0;
+  const recordedMinor = recordedTotalMinor(paymentRecords);
+
   // Determine initial profile
   const initialProfileId = useMemo(() => {
     if (existingTx?.profileId) return existingTx.profileId;
@@ -91,30 +157,19 @@ export function IncomeDrawer() {
     return '';
   }, [existingTx, defaultProfileId, isAllProfiles, activeProfileId, profiles]);
 
-  // Map existing transaction status to income status
-  // For now, we infer: paid → received, unpaid → invoiced (most common)
-  const getIncomeStatusFromTx = (status: TxStatus): IncomeStatus => {
-    if (status === 'paid') return 'received';
-    // Default unpaid income to 'invoiced' as that's the most common case
-    return 'invoiced';
-  };
-
-  const getDefaultStatus = (): IncomeStatus => {
-    if (existingTx) {
-      return getIncomeStatusFromTx(existingTx.status);
-    }
-    return defaultStatus || 'earned';
-  };
+  // A profile the drawer could not work out is asked for up front, never hidden.
+  const profileInFastPath = !profilesLoading && !initialProfileId;
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      incomeStatus: getDefaultStatus(),
+      incomeStatus: existingTx ? getIncomeStatusFromTx(existingTx.status) : defaultStatus || 'earned',
       profileId: initialProfileId,
       amount: '',
-      currency: 'USD',
+      currency: resolveDefaultCurrency(undefined, settings),
       occurredAt: todayISO(),
       clientId: defaultClientId || '',
+      clientDraft: '',
       projectId: defaultProjectId || '',
       dueDate: '',
       title: '',
@@ -126,6 +181,10 @@ export function IncomeDrawer() {
   const selectedStatus = watch('incomeStatus');
   const selectedClientId = watch('clientId');
   const watchedProfileId = watch('profileId');
+  const watchedCurrency = watch('currency');
+  const watchedOccurredAt = watch('occurredAt');
+  // Set when the user picks a currency; from then on a profile change leaves it alone.
+  const [currencyChosen, setCurrencyChosen] = useState(false);
 
   // Update profileId when initialProfileId changes
   useEffect(() => {
@@ -134,18 +193,26 @@ export function IncomeDrawer() {
     }
   }, [initialProfileId, watchedProfileId, setValue]);
 
+  // A new entry starts in its profile's currency, and follows a profile change
+  // until the user picks a currency themselves.
+  const selectedProfile = businessProfiles.find((p) => p.id === watchedProfileId);
+  const profileCurrency = resolveDefaultCurrency(selectedProfile, settings);
+  useEffect(() => {
+    if (mode !== 'create' || duplicateFromId || currencyChosen) return;
+    setValue('currency', profileCurrency);
+  }, [mode, duplicateFromId, currencyChosen, profileCurrency, setValue]);
+
   // Reset form when existing transaction loads
   useEffect(() => {
     if (existingTx) {
-      const incomeStatus = getIncomeStatusFromTx(existingTx.status);
-
       reset({
-        incomeStatus,
+        incomeStatus: getIncomeStatusFromTx(existingTx.status),
         profileId: existingTx.profileId || initialProfileId,
         amount: (existingTx.amountMinor / 100).toString(),
         currency: existingTx.currency,
         occurredAt: existingTx.occurredAt.split('T')[0],
         clientId: existingTx.clientId || '',
+        clientDraft: '',
         projectId: existingTx.projectId || '',
         dueDate: existingTx.dueDate || '',
         title: existingTx.title || '',
@@ -165,6 +232,7 @@ export function IncomeDrawer() {
         currency: sourceTx.currency,
         occurredAt: todayISO(),
         clientId: sourceTx.clientId || '',
+        clientDraft: '',
         projectId: sourceTx.projectId || '',
         dueDate: '',
         title: sourceTx.title || '',
@@ -173,38 +241,68 @@ export function IncomeDrawer() {
     }
   }, [duplicateFromId, sourceTx, mode, reset, initialProfileId]);
 
+  // The title is the work record: a new entry starts there.
+  useEffect(() => {
+    if (mode === 'create') form.setFocus('title');
+  }, [mode, form]);
+
   // Bi-directional cascade between client and project fields
   useClientProjectCascade({ form, projectsData });
 
+  const handleClientDraft = useCallback(
+    (text: string) => setValue('clientDraft', text, { shouldValidate: !!form.formState.errors.clientDraft }),
+    [setValue, form.formState.errors.clientDraft]
+  );
+
+  // "More details": an edit opens it when the entry holds something it would
+  // hide; the user's own toggle (or an error inside it) wins after that.
+  const [detailsToggled, setDetailsToggled] = useState<boolean | null>(null);
+  const existingProfileCurrency = resolveDefaultCurrency(
+    businessProfiles.find((p) => p.id === existingTx?.profileId),
+    settings
+  );
+  const autoExpand =
+    mode === 'edit' && !!existingTx && !profilesLoading && shouldExpandDetails(existingTx, existingProfileCurrency);
+  const detailsOpen = detailsToggled ?? autoExpand;
+
+  const onInvalid = (errors: FieldErrors<FormData>) => {
+    const hiddenFields: (keyof FormData)[] = profileInFastPath ? [...DETAIL_FIELDS] : [...DETAIL_FIELDS, 'profileId'];
+    if (hiddenFields.some((field) => field in errors)) setDetailsToggled(true);
+  };
+
   const onSubmit = async (data: FormData) => {
     if (isLocked) return; // the notice explains; the repository would refuse anyway
-    // Map income status to database status
-    // Note: For phase 1, we don't store earned/invoiced distinction - just paid/unpaid
-    // The UI shows Earned/Invoiced/Received, but storage is simplified
-    const status: TxStatus = data.incomeStatus === 'received' ? 'paid' : 'unpaid';
+    const amountMinor = parseAmountInput(data.amount);
+    if (amountMinor === null) return; // the schema already reported it
 
-    const amountMinor = parseAmountToMinor(data.amount);
-    const txData = {
-      kind: 'income' as const,
-      status,
+    // The repository rejects this too (ADR-030); checking here turns it into
+    // a translated field message instead of a thrown error.
+    if (hasRecords && isBelowRecordedTotal(amountMinor, paymentRecords)) {
+      form.setError('amount', { type: BELOW_RECORDED, message: 'validation.amountBelowRecorded' });
+      return;
+    }
+
+    const values: IncomeEntryValues = {
+      incomeStatus: data.incomeStatus,
       profileId: data.profileId,
-      title: data.title || undefined,
-      clientId: data.clientId || undefined,
-      projectId: data.projectId || undefined,
       amountMinor,
-      currency: data.currency as Currency,
-      occurredAt: new Date(data.occurredAt).toISOString(),
-      dueDate: (data.incomeStatus !== 'received' && data.dueDate) ? data.dueDate : undefined,
-      paidAt: status === 'paid' ? new Date().toISOString() : undefined,
-      receivedAmountMinor: status === 'paid' ? amountMinor : undefined,
-      notes: data.notes || undefined,
+      currency: data.currency,
+      occurredAt: data.occurredAt,
+      clientId: data.clientId,
+      projectId: data.projectId,
+      dueDate: data.dueDate,
+      title: data.title,
+      notes: data.notes,
     };
 
     try {
-      if (mode === 'edit' && transactionId) {
-        await updateMutation.mutateAsync({ id: transactionId, data: txData });
+      if (mode === 'edit' && transactionId && existingTx) {
+        await updateMutation.mutateAsync({
+          id: transactionId,
+          data: buildIncomeUpdate(values, { now: nowISO(), existing: existingTx, hasRecords }),
+        });
       } else {
-        const newTx = await createMutation.mutateAsync(txData);
+        const newTx = await createMutation.mutateAsync(buildIncomeCreate(values, nowISO()));
         // Show toast with undo for duplicated transactions
         if (duplicateFromId && newTx) {
           showToast(t('toast.transactionDuplicated'), {
@@ -236,6 +334,15 @@ export function IncomeDrawer() {
     }
   };
 
+  const errorText = (field: keyof FormData): string | null => {
+    const error = form.formState.errors[field];
+    if (!error?.message) return null;
+    if (error.type === BELOW_RECORDED) {
+      return t(error.message, { amount: formatAmount(recordedMinor, watchedCurrency, locale) });
+    }
+    return t(error.message);
+  };
+
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   if (mode === 'edit' && txLoading) {
@@ -247,6 +354,43 @@ export function IncomeDrawer() {
       </Drawer>
     );
   }
+
+  const profileField = (
+    <div className="form-group">
+      <label className="form-label" htmlFor="income-profile">
+        {t('drawer.transaction.profile')} *
+      </label>
+      <Controller
+        name="profileId"
+        control={form.control}
+        render={({ field }) => (
+          <select
+            id="income-profile"
+            className={cn('select', form.formState.errors.profileId && 'input-error')}
+            style={{ width: '100%' }}
+            {...field}
+          >
+            <option value="">{t('drawer.transaction.profilePlaceholder')}</option>
+            {businessProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorText('profileId') && <p className="form-error">{errorText('profileId')}</p>}
+    </div>
+  );
+
+  const defaultsSummary = [
+    t(STATUS_LABEL_KEYS[selectedStatus]),
+    watchedCurrency,
+    watchedOccurredAt ? formatDate(`${watchedOccurredAt}T00:00:00`, locale) : null,
+    businessProfiles.length > 1 ? selectedProfile?.name : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Drawer
@@ -282,7 +426,7 @@ export function IncomeDrawer() {
         </>
       }
     >
-      <form id="income-form" onSubmit={form.handleSubmit(onSubmit)}>
+      <form id="income-form" onSubmit={form.handleSubmit(onSubmit, onInvalid)} noValidate>
         {isLocked && (
           <div className="drawer-notice drawer-notice-locked" role="status" data-testid="income-locked-notice">
             <div className="drawer-notice-title">
@@ -300,112 +444,45 @@ export function IncomeDrawer() {
             )}
           </div>
         )}
-        {/* Profile Selector */}
+
+        {/* Fast path: what you did, for how much, for whom */}
         <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.profile')} *</label>
-          <Controller
-            name="profileId"
-            control={form.control}
-            render={({ field }) => (
-              <select
-                className={cn('select', form.formState.errors.profileId && 'input-error')}
-                style={{ width: '100%' }}
-                {...field}
-              >
-                <option value="">{t('drawer.transaction.profilePlaceholder')}</option>
-                {businessProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </select>
-            )}
+          <label className="form-label" htmlFor="income-title">
+            {t('drawer.income.titleLabel')}
+          </label>
+          <input
+            id="income-title"
+            type="text"
+            className="input"
+            placeholder={t('drawer.income.titlePlaceholder')}
+            {...form.register('title')}
           />
-          {form.formState.errors.profileId && (
-            <p className="form-error">{t('validation.profileRequired')}</p>
-          )}
         </div>
 
-        {/* Status Selector: Earned / Invoiced / Received */}
-        <div className="type-selector">
-          <button
-            type="button"
-            className={cn('type-selector-btn', selectedStatus === 'earned' && 'active')}
-            onClick={() => setValue('incomeStatus', 'earned')}
-          >
-            <span className="type-selector-label">{t('drawer.income.statusEarned')}</span>
-            <span className="type-selector-hint">{t('drawer.income.statusEarnedHint')}</span>
-          </button>
-          <button
-            type="button"
-            className={cn('type-selector-btn', selectedStatus === 'invoiced' && 'active')}
-            onClick={() => setValue('incomeStatus', 'invoiced')}
-          >
-            <span className="type-selector-label">{t('drawer.income.statusInvoiced')}</span>
-            <span className="type-selector-hint">{t('drawer.income.statusInvoicedHint')}</span>
-          </button>
-          <button
-            type="button"
-            className={cn('type-selector-btn', selectedStatus === 'received' && 'active')}
-            onClick={() => setValue('incomeStatus', 'received')}
-          >
-            <span className="type-selector-label">{t('drawer.income.statusReceived')}</span>
-            <span className="type-selector-hint">{t('drawer.income.statusReceivedHint')}</span>
-          </button>
-        </div>
-
-        {/* Amount & Currency */}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">{t('drawer.transaction.amount')} *</label>
+        <div className="form-group">
+          <label className="form-label" htmlFor="income-amount">
+            {t('drawer.transaction.amount')} *
+          </label>
+          <div className="input-with-prefix" dir="ltr" data-testid="income-amount-group">
+            <span className="input-prefix">{watchedCurrency}</span>
             <input
-              type="number"
-              step="0.01"
-              min="0"
+              id="income-amount"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
               className={cn('input', form.formState.errors.amount && 'input-error')}
               placeholder={t('drawer.transaction.amountPlaceholder')}
+              aria-invalid={!!form.formState.errors.amount}
               {...form.register('amount')}
             />
-            {form.formState.errors.amount && (
-              <p className="form-error">{t('validation.amountRequired')}</p>
-            )}
           </div>
-          <div className="form-group">
-            <label className="form-label">{t('drawer.transaction.currency')} *</label>
-            <Controller
-              name="currency"
-              control={form.control}
-              render={({ field }) => (
-                <select className="select" style={{ width: '100%' }} {...field}>
-                  <option value="USD">USD</option>
-                  <option value="ILS">ILS</option>
-                </select>
-              )}
-            />
-          </div>
+          {errorText('amount') && <p className="form-error">{errorText('amount')}</p>}
         </div>
 
-        {/* Date */}
         <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.date')} *</label>
-          <input
-            type="date"
-            className={cn('input', form.formState.errors.occurredAt && 'input-error')}
-            {...form.register('occurredAt')}
-          />
-        </div>
-
-        {/* Due Date (only for Earned/Invoiced - unpaid income) */}
-        {selectedStatus !== 'received' && (
-          <div className="form-group">
-            <label className="form-label">{t('drawer.income.dueDate')}</label>
-            <input type="date" className="input" {...form.register('dueDate')} />
-          </div>
-        )}
-
-        {/* Client */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.client')}</label>
+          <label className="form-label">
+            {t('drawer.transaction.client')}
+          </label>
           <Controller
             name="clientId"
             control={form.control}
@@ -414,46 +491,144 @@ export function IncomeDrawer() {
                 profileId={watchedProfileId}
                 value={field.value || ''}
                 onChange={field.onChange}
+                onPendingTextChange={handleClientDraft}
               />
             )}
           />
+          {errorText('clientDraft') && <p className="form-error">{errorText('clientDraft')}</p>}
         </div>
 
-        {/* Project — optional grouping tag, shown only while the Projects area is on (MUT-16) */}
-        {projectsEnabled && (
-        <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.project')}</label>
-          <Controller
-            name="projectId"
-            control={form.control}
-            render={({ field }) => (
-              <ProjectTypeahead
-                profileId={watchedProfileId}
-                clientId={selectedClientId || undefined}
-                value={field.value || ''}
-                onChange={field.onChange}
-              />
+        {profileInFastPath && profileField}
+
+        <button
+          type="button"
+          className="form-disclosure"
+          aria-expanded={detailsOpen}
+          aria-controls="income-more-details"
+          onClick={() => setDetailsToggled(!detailsOpen)}
+        >
+          <svg className="form-disclosure-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+          </svg>
+          <span className="form-disclosure-label">
+            {detailsOpen ? t('drawer.income.lessDetails') : t('drawer.income.moreDetails')}
+          </span>
+          {!detailsOpen && <span className="form-disclosure-summary" data-testid="income-defaults">{defaultsSummary}</span>}
+        </button>
+
+        {detailsOpen && (
+          <div id="income-more-details">
+            {/* Status: Earned / Invoiced / Received. Read-only once payments are recorded. */}
+            <div className="form-group">
+              <span className="form-label" id="income-status-label">
+                {t('drawer.income.statusLabel')}
+              </span>
+              <div className="type-selector" role="group" aria-labelledby="income-status-label">
+                {INCOME_STATUSES.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className={cn('type-selector-btn', selectedStatus === status && 'active')}
+                    aria-pressed={selectedStatus === status}
+                    disabled={hasRecords}
+                    onClick={() => setValue('incomeStatus', status)}
+                  >
+                    <span className="type-selector-label">{t(STATUS_LABEL_KEYS[status])}</span>
+                    <span className="type-selector-hint">{t(STATUS_HINT_KEYS[status])}</span>
+                  </button>
+                ))}
+              </div>
+              {hasRecords && <p className="form-hint">{t('drawer.income.paymentsRecordedHint')}</p>}
+            </div>
+
+            {/* Due Date (only for Earned/Invoiced - unpaid income) */}
+            {selectedStatus !== 'received' && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="income-due-date">
+                  {t('drawer.income.dueDate')}
+                </label>
+                <input id="income-due-date" type="date" className="input" {...form.register('dueDate')} />
+              </div>
             )}
-          />
-        </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="income-currency">
+                  {t('drawer.transaction.currency')}
+                </label>
+                <Controller
+                  name="currency"
+                  control={form.control}
+                  render={({ field }) => (
+                    <select
+                      id="income-currency"
+                      className="select"
+                      style={{ width: '100%' }}
+                      {...field}
+                      onChange={(event) => {
+                        setCurrencyChosen(true);
+                        field.onChange(event);
+                      }}
+                    >
+                      {CURRENCIES.map((currency) => (
+                        <option key={currency} value={currency}>
+                          {currency}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="income-date">
+                  {t('drawer.transaction.date')}
+                </label>
+                <input
+                  id="income-date"
+                  type="date"
+                  className={cn('input', form.formState.errors.occurredAt && 'input-error')}
+                  {...form.register('occurredAt')}
+                />
+                {errorText('occurredAt') && <p className="form-error">{errorText('occurredAt')}</p>}
+              </div>
+            </div>
+
+            {/* Project — optional grouping tag, shown only while the Projects area is on (MUT-16) */}
+            {projectsEnabled && (
+              <div className="form-group">
+                <label className="form-label">
+                  {t('drawer.transaction.project')}
+                </label>
+                <Controller
+                  name="projectId"
+                  control={form.control}
+                  render={({ field }) => (
+                    <ProjectTypeahead
+                      profileId={watchedProfileId}
+                      clientId={selectedClientId || undefined}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="income-notes">
+                {t('drawer.transaction.notes')}
+              </label>
+              <textarea
+                id="income-notes"
+                className="textarea"
+                placeholder={t('drawer.transaction.notesPlaceholder')}
+                {...form.register('notes')}
+              />
+            </div>
+
+            {!profileInFastPath && profileField}
+          </div>
         )}
-
-        {/* Title */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.title')}</label>
-          <input
-            type="text"
-            className="input"
-            placeholder={t('drawer.transaction.titlePlaceholder')}
-            {...form.register('title')}
-          />
-        </div>
-
-        {/* Notes */}
-        <div className="form-group">
-          <label className="form-label">{t('drawer.transaction.notes')}</label>
-          <textarea className="textarea" placeholder={t('drawer.transaction.notesPlaceholder')} {...form.register('notes')} />
-        </div>
       </form>
     </Drawer>
   );
