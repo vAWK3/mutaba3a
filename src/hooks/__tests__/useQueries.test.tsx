@@ -714,3 +714,75 @@ describe('transaction writes refresh the income lists (MUT-5)', () => {
     await waitFor(() => expect(result.current.income.data?.[0]?.title).toBe('After'));
   });
 });
+
+// MUT-5 review: one invalidation list, each key once per write
+describe('invalidation covers each money key exactly once (MUT-5 review)', () => {
+  beforeAll(async () => {
+    const device = await getOrCreateLocalDevice();
+    initializeClock(device.id);
+  });
+
+  beforeEach(async () => {
+    await db.transactions.clear();
+    await db.paymentRecords.clear();
+  });
+
+  afterEach(async () => {
+    await db.transactions.clear();
+    await db.paymentRecords.clear();
+  });
+
+  const MONEY_KEYS = [
+    'income',
+    'receivables',
+    'incomeOverviewTotals',
+    'incomeAttentionReceivables',
+    'paymentRecords',
+    'transactionDisplay',
+  ];
+
+  function invalidatedKeys(spy: { mock: { calls: unknown[][] } }): string[] {
+    return spy.mock.calls.map(([filters]) => JSON.stringify((filters as { queryKey?: unknown })?.queryKey));
+  }
+
+  it('a payment save invalidates each money key once, including the payment drawer display', async () => {
+    const queryClient = createTestQueryClient();
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    const tx = await transactionRepo.create({
+      kind: 'income',
+      status: 'unpaid',
+      amountMinor: 10000,
+      currency: 'USD',
+      occurredAt: '2026-10-01',
+    });
+    const { result } = renderHook(() => useCreatePaymentRecord(), { wrapper: createWrapper(queryClient) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ transactionId: tx.id, amountMinor: 1000, paidAt: '2026-10-02' });
+    });
+
+    const keys = invalidatedKeys(spy);
+    for (const key of MONEY_KEYS) {
+      expect(keys.filter((k) => k === JSON.stringify([key])), key).toHaveLength(1);
+    }
+  });
+
+  it("an income edit refreshes the payment drawer's remaining balance", async () => {
+    const queryClient = createTestQueryClient();
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    const tx = await transactionRepo.create({
+      kind: 'income',
+      status: 'unpaid',
+      amountMinor: 10000,
+      currency: 'USD',
+      occurredAt: '2026-10-01',
+    });
+    const { result } = renderHook(() => useUpdateTransaction(), { wrapper: createWrapper(queryClient) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: tx.id, data: { amountMinor: 15000 } });
+    });
+
+    expect(invalidatedKeys(spy)).toContain(JSON.stringify(['transactionDisplay']));
+  });
+});
