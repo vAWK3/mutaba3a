@@ -1,0 +1,122 @@
+import type { Currency } from '../api/client';
+
+/**
+ * One filters object per list view, kept in the URL's search params and updated
+ * with `replace` (house rule: no history entry per keystroke, no rerender
+ * storms). Each `parse*` turns whatever is in the URL into a valid model,
+ * dropping values the server would refuse.
+ */
+
+type Raw = Record<string, unknown>;
+
+const CURRENCIES = ['ILS', 'USD', 'EUR'] as const;
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function text(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (typeof value === 'number') return String(value);
+  return undefined;
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+}
+
+function id(value: unknown): string | undefined {
+  const v = text(value);
+  return v && UUID.test(v) ? v : undefined;
+}
+
+function day(value: unknown): string | undefined {
+  const v = text(value);
+  return v && CALENDAR_DATE.test(v) ? v : undefined;
+}
+
+function compact<T extends object>(model: T): T {
+  return Object.fromEntries(Object.entries(model).filter(([, v]) => v !== undefined)) as T;
+}
+
+export interface OverviewFilters {
+  currency?: Currency;
+}
+export const parseOverview = (raw: Raw): OverviewFilters => compact({ currency: oneOf(raw.currency, CURRENCIES) });
+
+export interface ClientsFilters {
+  q?: string;
+}
+export const parseClients = (raw: Raw): ClientsFilters => compact({ q: text(raw.q) });
+
+export const RECEIVABLE_STATUSES = ['OPEN', 'SETTLED', 'ALL'] as const;
+export type ReceivableStatusFilter = (typeof RECEIVABLE_STATUSES)[number];
+export const DEFAULT_RECEIVABLE_STATUS: ReceivableStatusFilter = 'OPEN';
+
+export interface ReceivableFilters {
+  customerId?: string;
+  projectId?: string;
+  currency?: Currency;
+  status?: ReceivableStatusFilter;
+  dueFrom?: string;
+  dueTo?: string;
+}
+export const parseReceivables = (raw: Raw): ReceivableFilters =>
+  compact({
+    customerId: id(raw.customerId),
+    projectId: id(raw.projectId),
+    currency: oneOf(raw.currency, CURRENCIES),
+    status: oneOf(raw.status, RECEIVABLE_STATUSES),
+    dueFrom: day(raw.dueFrom),
+    dueTo: day(raw.dueTo),
+  });
+
+export const PAYMENT_STATUSES = ['ALL', 'POSTED', 'REVERSED'] as const;
+export type PaymentStatusFilter = (typeof PAYMENT_STATUSES)[number];
+
+export interface PaymentFilters {
+  customerId?: string;
+  status?: PaymentStatusFilter;
+  receivedFrom?: string;
+  receivedTo?: string;
+}
+export const parsePayments = (raw: Raw): PaymentFilters =>
+  compact({
+    customerId: id(raw.customerId),
+    status: oneOf(raw.status, PAYMENT_STATUSES),
+    receivedFrom: day(raw.receivedFrom),
+    receivedTo: day(raw.receivedTo),
+  });
+
+export const DOCUMENT_KINDS = ['INVOICE', 'RECEIPT', 'OTHER'] as const;
+
+export interface DocumentFilters {
+  customerId?: string;
+  kind?: (typeof DOCUMENT_KINDS)[number];
+}
+export const parseDocuments = (raw: Raw): DocumentFilters => compact({ customerId: id(raw.customerId), kind: oneOf(raw.kind, DOCUMENT_KINDS) });
+
+export const CLIENT_TABS = ['summary', 'receivables', 'payments', 'documents'] as const;
+export type ClientTab = (typeof CLIENT_TABS)[number];
+
+/** Client detail: the tab, plus the filters of whichever list it shows (the client itself is fixed). */
+export type ClientDetailSearch = { tab?: ClientTab } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
+    paymentStatus?: PaymentStatusFilter;
+    kind?: DocumentFilters['kind'];
+  };
+export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
+  compact({
+    tab: oneOf(raw.tab, CLIENT_TABS),
+    projectId: id(raw.projectId),
+    currency: oneOf(raw.currency, CURRENCIES),
+    status: oneOf(raw.status, RECEIVABLE_STATUSES),
+    dueFrom: day(raw.dueFrom),
+    dueTo: day(raw.dueTo),
+    receivedFrom: day(raw.receivedFrom),
+    receivedTo: day(raw.receivedTo),
+    paymentStatus: oneOf(raw.paymentStatus, PAYMENT_STATUSES),
+    kind: oneOf(raw.kind, DOCUMENT_KINDS),
+  });
+
+/** Whether any filter narrows the list (so an empty result means "nothing matches", not "nothing yet"). */
+export function isNarrowed(filters: object, defaults: object = {}): boolean {
+  return Object.entries(filters).some(([key, value]) => value !== undefined && (defaults as Raw)[key] !== value);
+}
