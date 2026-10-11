@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { clientRepo, projectRepo, transactionRepo, clientSummaryRepo } from '../repository';
+import { clientRepo, projectRepo, transactionRepo, clientSummaryRepo, paymentRecordRepo } from '../repository';
+import { formatLocalDate } from '../../lib/dates';
 import type { Client } from '../../types';
+
+/** A local calendar date n days before today (negative = after). */
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return formatLocalDate(d);
+};
 
 describe('clientRepo', () => {
   beforeEach(async () => {
@@ -158,12 +166,14 @@ describe('clientSummaryRepo', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.transactions.clear();
+    await db.paymentRecords.clear();
   });
 
   afterEach(async () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.transactions.clear();
+    await db.paymentRecords.clear();
   });
 
   describe('list', () => {
@@ -270,7 +280,7 @@ describe('clientSummaryRepo', () => {
       expect(summaries[0].name).toBe('Acme Corp');
     });
 
-    it('should include per-currency breakdown when no currency filter', async () => {
+    it('should include per-currency report totals when no currency filter', async () => {
       const client = await clientRepo.create({ name: 'Test Client' });
 
       await transactionRepo.create({
@@ -322,6 +332,124 @@ describe('clientSummaryRepo', () => {
       // Most recent activity first
       expect(summaries[0].name).toBe('Client 2');
       expect(summaries[1].name).toBe('Client 1');
+    });
+  });
+
+  /**
+   * MUT-7: the clients index answers "who owes me, and who is late". Owed now
+   * uses the MUT-3 helper (archived income excluded), and last payment uses
+   * the same payment rows as the profile's Payments section (ADR-033).
+   */
+  describe('collection fields (MUT-7)', () => {
+    const income = (clientId: string, overrides: Parameters<typeof transactionRepo.create>[0] | object = {}) =>
+      transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: daysAgo(60),
+        clientId,
+        ...overrides,
+      });
+
+    it('reports owed now per currency, leaving out paid and archived income', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await income(client.id, { amountMinor: 10000, dueDate: daysAgo(3) });
+      await income(client.id, { amountMinor: 50000, currency: 'ILS', receivedAmountMinor: 20000 });
+      await income(client.id, { status: 'paid', amountMinor: 99900 });
+      const archived = await income(client.id, { amountMinor: 77700, currency: 'EUR' });
+      await transactionRepo.archive(archived.id);
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.owed).toEqual([
+        { currency: 'USD', owedMinor: 10000, overdueMinor: 10000 },
+        { currency: 'ILS', owedMinor: 30000, overdueMinor: 0 },
+      ]);
+    });
+
+    it('reports a settled client as owing nothing', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await income(client.id, { status: 'paid' });
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.owed).toEqual([]);
+      expect(summary.oldestOverdueDays).toBeUndefined();
+    });
+
+    it('reports the age of the oldest overdue item; due today is not overdue', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await income(client.id, { dueDate: daysAgo(4) });
+      await income(client.id, { dueDate: daysAgo(31), currency: 'ILS' });
+      await income(client.id, { dueDate: daysAgo(0) });
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.oldestOverdueDays).toBe(31);
+    });
+
+    it('takes the last payment from payment records, so a partial payment counts', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await income(client.id, { currency: 'ILS' });
+      await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 2500, paidAt: '2024-03-01' });
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.lastPayment).toEqual({ paidAt: '2024-03-01', amountMinor: 2500, currency: 'ILS' });
+      expect(summary.lastPaymentAt).toBe('2024-03-01');
+    });
+
+    it('takes a backdated record over an older fully paid entry, and ignores deleted records', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await income(client.id, { status: 'paid', amountMinor: 7000, paidAt: '2024-02-01' });
+      const tx = await income(client.id);
+      await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 3000, paidAt: '2024-02-20' });
+      const deleted = await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 1000, paidAt: '2024-04-01' });
+      await paymentRecordRepo.delete(deleted.id);
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.lastPayment).toEqual({ paidAt: '2024-02-20', amountMinor: 3000, currency: 'USD' });
+    });
+
+    it('counts income saved as already paid (no payment record) as a payment', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await income(client.id, { status: 'paid', amountMinor: 7000, receivedAmountMinor: 7000, paidAt: '2024-02-01' });
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.lastPayment).toEqual({ paidAt: '2024-02-01', amountMinor: 7000, currency: 'USD' });
+    });
+
+    it('leaves last payment empty for a client who never paid', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      await income(client.id);
+
+      const [summary] = await clientSummaryRepo.list();
+
+      expect(summary.lastPayment).toBeUndefined();
+      expect(summary.lastPaymentAt).toBeUndefined();
+    });
+
+    it('leaves archived clients out', async () => {
+      await clientRepo.create({ name: 'Active' });
+      const gone = await clientRepo.create({ name: 'Gone' });
+      await clientRepo.archive(gone.id);
+
+      const summaries = await clientSummaryRepo.list();
+
+      expect(summaries.map((s) => s.name)).toEqual(['Active']);
+    });
+
+    it('get() takes its last payment from payment records too', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await income(client.id);
+      await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 2500, paidAt: '2024-03-01' });
+
+      const summary = await clientSummaryRepo.get(client.id);
+
+      expect(summary?.lastPaymentAt).toBe('2024-03-01');
     });
   });
 

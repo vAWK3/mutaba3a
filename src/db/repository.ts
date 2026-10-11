@@ -29,7 +29,6 @@ import type {
 import { excludeDeleted, scopeToProfile } from './baseQuery';
 import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
 import {
-  accumulateIncomeAmount,
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
   aggregateTransactionTotalsWithActivity,
@@ -38,6 +37,9 @@ import {
   filterTransactionsByEntityAndDate,
   createNameMap,
   sortByLastActivity,
+  paymentRowsForIncome,
+  summarizeClientCollection,
+  groupBy,
   type TransactionTotalsByCurrency,
 } from './aggregations';
 
@@ -611,51 +613,36 @@ export const projectSummaryRepo = {
 
 // Client Summary Repository
 export const clientSummaryRepo = {
+  /**
+   * One row per non-archived client: totals, activity and the MUT-7 collection
+   * fields (owed now, oldest overdue age, last payment). Transactions and
+   * payment records are each read and grouped once, so a few hundred clients
+   * cost one pass, not one scan per client.
+   */
   async list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]> {
     const clients = await clientRepo.list({ profileId: filters?.profileId });
-    const projects = await db.projects.toArray();
-    const transactions = await db.transactions.toArray();
+    const [projects, transactions, records] = await Promise.all([
+      db.projects.toArray(),
+      db.transactions.toArray(),
+      db.paymentRecords.filter((r) => !r.deletedAt).toArray(),
+    ]);
+
+    const liveTxs = transactions.filter((tx) => !tx.deletedAt && tx.clientId);
+    const txsByClient = groupBy(liveTxs, (tx) => tx.clientId!);
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const activeProjects = groupBy(projects.filter((p) => p.clientId && !p.archivedAt), (p) => p.clientId!);
+    const today = todayLocalISO();
+    const searchLower = filters?.search?.toLowerCase();
 
     const summaries = clients
-      .filter((c) => {
-        if (filters?.search) {
-          const searchLower = filters.search.toLowerCase();
-          if (!c.name.toLowerCase().includes(searchLower)) {
-            return false;
-          }
-        }
-        return true;
-      })
+      .filter((c) => !searchLower || c.name.toLowerCase().includes(searchLower))
       .map((c) => {
-        const clientProjects = projects.filter((p) => p.clientId === c.id && !p.archivedAt);
-        const clientTxs = filterTransactionsByEntity(transactions, 'client', c.id, filters?.currency);
-        const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
-
-        // When no currency filter, also compute per-currency breakdowns
-        let perCurrencyData = {};
-        if (!filters?.currency) {
-          const allClientTxs = filterTransactionsByEntity(transactions, 'client', c.id);
-          const byCurrency = aggregateTransactionTotalsByCurrency(allClientTxs);
-          perCurrencyData = {
-            paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
-            paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
-            paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
-            unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
-            unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
-            unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
-          };
-        }
-
-        return {
-          id: c.id,
-          name: c.name,
-          activeProjectCount: clientProjects.length,
-          paidIncomeMinor: totals.paidIncomeMinor,
-          unpaidIncomeMinor: totals.unpaidIncomeMinor,
-          lastPaymentAt: totals.lastPaymentAt,
-          lastActivityAt: totals.lastActivityAt,
-          ...perCurrencyData,
-        };
+        const allClientTxs = txsByClient.get(c.id) ?? [];
+        const clientTxs = filters?.currency
+          ? allClientTxs.filter((tx) => tx.currency === filters.currency)
+          : allClientTxs;
+        const summary = buildClientSummary(c, clientTxs, activeProjects.get(c.id)?.length ?? 0, recordsByTx, today);
+        return filters?.currency ? summary : { ...summary, ...perCurrencyReportTotals(allClientTxs) };
       });
 
     return sortByLastActivity(summaries);
@@ -667,22 +654,51 @@ export const clientSummaryRepo = {
 
     const projects = await db.projects.toArray();
     const transactions = await db.transactions.toArray();
-
-    const clientProjects = projects.filter((p) => p.clientId === clientId && !p.archivedAt);
     const clientTxs = filterTransactionsByEntityAndDate(transactions, 'client', clientId, filters || {});
-    const totals = aggregateTransactionTotalsWithActivity(clientTxs, { trackPayments: true });
+    const records = await db.paymentRecords
+      .where('transactionId')
+      .anyOf(clientTxs.map((tx) => tx.id))
+      .filter((r) => !r.deletedAt)
+      .toArray();
+    const activeProjectCount = projects.filter((p) => p.clientId === clientId && !p.archivedAt).length;
 
-    return {
-      id: client.id,
-      name: client.name,
-      activeProjectCount: clientProjects.length,
-      paidIncomeMinor: totals.paidIncomeMinor,
-      unpaidIncomeMinor: totals.unpaidIncomeMinor,
-      lastPaymentAt: totals.lastPaymentAt,
-      lastActivityAt: totals.lastActivityAt,
-    };
+    return buildClientSummary(client, clientTxs, activeProjectCount, groupBy(records, (r) => r.transactionId), todayLocalISO());
   },
 };
+
+/** The Insights and Reports client tables' paid/unpaid columns, per currency. */
+function perCurrencyReportTotals(clientTxs: Transaction[]) {
+  const byCurrency = aggregateTransactionTotalsByCurrency(clientTxs);
+  return {
+    paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
+    paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
+    paidIncomeMinorEUR: byCurrency.EUR.paidIncomeMinor,
+    unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
+    unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
+    unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
+  };
+}
+
+function buildClientSummary(
+  client: Client,
+  clientTxs: Transaction[],
+  activeProjectCount: number,
+  recordsByTx: Map<string, PaymentRecord[]>,
+  today: string
+): ClientSummary {
+  const totals = aggregateTransactionTotalsWithActivity(clientTxs);
+  const collection = summarizeClientCollection(clientTxs, recordsByTx, today);
+  return {
+    id: client.id,
+    name: client.name,
+    activeProjectCount,
+    paidIncomeMinor: totals.paidIncomeMinor,
+    unpaidIncomeMinor: totals.unpaidIncomeMinor,
+    ...collection,
+    lastPaymentAt: collection.lastPayment?.paidAt,
+    lastActivityAt: totals.lastActivityAt,
+  };
+}
 
 // FX Rate Repository
 export const fxRateRepo = {
@@ -1524,44 +1540,8 @@ export const paymentRecordRepo = {
       .filter((r) => !r.deletedAt)
       .toArray();
 
-    const recordsByTx = new Map<string, PaymentRecord[]>();
-    for (const record of records) {
-      const list = recordsByTx.get(record.transactionId) ?? [];
-      list.push(record);
-      recordsByTx.set(record.transactionId, list);
-    }
-    const rows: PaymentByClientRow[] = [];
-
-    for (const tx of incomes) {
-      const txRecords = recordsByTx.get(tx.id) ?? [];
-      for (const record of txRecords) {
-        rows.push({
-          id: record.id,
-          transactionId: tx.id,
-          transactionTitle: tx.title,
-          amountMinor: record.amountMinor,
-          currency: tx.currency,
-          paidAt: record.paidAt,
-          notes: record.notes,
-          source: 'record',
-        });
-      }
-
-      const recordedMinor = txRecords.reduce((sum, r) => sum + r.amountMinor, 0);
-      const uncoveredMinor = accumulateIncomeAmount(tx).paid - recordedMinor;
-      if (uncoveredMinor > 0) {
-        rows.push({
-          id: `entry:${tx.id}`,
-          transactionId: tx.id,
-          transactionTitle: tx.title,
-          amountMinor: uncoveredMinor,
-          currency: tx.currency,
-          paidAt: tx.paidAt ?? tx.occurredAt,
-          notes: undefined,
-          source: 'entry',
-        });
-      }
-    }
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const rows = incomes.flatMap((tx) => paymentRowsForIncome(tx, recordsByTx.get(tx.id) ?? []));
 
     const matching = rows.filter((row) => {
       const paidOn = row.paidAt.slice(0, 10);

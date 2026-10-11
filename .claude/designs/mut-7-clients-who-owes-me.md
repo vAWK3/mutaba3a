@@ -4,7 +4,7 @@
 - **Ticket:** MUT-7 (epic MUT-1). Closes parent-brief D6 (`lastPaymentAt` ignores partial/backdated payments) and the index half of TD-030.
 - **Parent brief:** `.claude/designs/mut-1-client-accounting-core.md` Phase 4. Builds on MUT-3 / ADR-033.
 - **Branch / worktree:** `feature/mut-1-client-core` in `.claude/worktrees/mut-1-client-core`, from `main` c122543
-- **Status:** awaiting approval
+- **Status:** approved by Basel 2026-10-11 — D8 = A (rank by today's rate, nothing converted on screen), D9 = 1 (Owed-now strip for all listed clients), rest as written
 
 ---
 
@@ -45,12 +45,12 @@ Audit findings beyond the ticket:
 | D1 | **`clientSummaryRepo.list` adds three fields.** `owed: OwedByCurrency[]` comes from `summarizeOwedByCurrency`, so it excludes archived income. `oldestOverdueDays?: number` is the age of the client's oldest overdue item. `lastPayment?: { paidAt, amountMinor, currency }` is the newest of the client's payments. `lastPaymentAt` becomes `lastPayment.paidAt` in both `list` and `get` | One definition of owed now (ADR-033). It closes D6 and the index half of TD-030 |
 | D2 | **"Payments" means the MUT-3 definition.** The record-plus-entry derivation in `listByClient` moves into a pure `paymentRowsForIncome(tx, records)` in `aggregations.ts`. Both `listByClient` and the summary call it | The index's last payment then always matches the profile's Payments section, including income saved as Received |
 | D3 | **One pass, no per-client scans.** Transactions are grouped by `clientId` and non-deleted payment records by `transactionId` once per `list()` call | F8; a few hundred clients stays linear |
-| D4 | **The per-currency paid/unpaid fields leave `ClientSummary`.** After this page, nothing reads them | Two "unpaid" definitions (with and without archived income) must not coexist |
+| D4 | ~~The per-currency paid/unpaid fields leave `ClientSummary`~~ **Reverted during the build (2026-10-11):** the Insights and Reports client tables read them too, which the audit missed. They stay, computed as before; `owed` is the collection figure, and the remaining difference (report totals count archived income) stays under TD-030 | Removing them would break a live optional area for no gain on this ticket |
 | D5 | **Columns:** Client · Owed now · Overdue · Last payment · Last activity. Owed now lists each currency on its own line, or shows **Settled** (muted success) when the client owes nothing. Overdue lists each overdue currency in the error colour with **"oldest Nd"** beneath, or a muted "—". Last payment shows the date over the amount, or **Never paid**. The overdue portion is "distinguished" by its own column beside Owed now rather than repeated inside it | Exactly the ticket's column set; no blank cells |
 | D6 | **Sort by clicking a column header** (button inside `th`, `aria-sort`, the existing `.data-table th.sortable` style). This replaces the sort dropdown and stays URL-persisted through `useSortState` (`sort` / `dir`). Default: `owed` / `desc`. Ties always fall back to name, then id, so the order is stable | "Sorting by each column works"; one way to sort, not two. A small `SortableHeader` component is registered for reuse (ProjectsPage can adopt it later) |
 | D7 | **Non-owed sorts never touch currency.** Overdue sorts by `oldestOverdueDays` (days late), Last payment and Last activity by date, Client by name | Currency-free comparisons need no rule |
-| D8 | **Owed-now ordering across currencies** — **open, see §5** | — |
-| D9 | **Summary strip** — **open, see §5** | — |
+| D8 | **Owed-now ordering ranks by today's rate; nothing converted is ever shown** (§5 option A, chosen by Basel). Rank key: ILS-converted total over currencies with a rate, then the unrated amounts in USD → ILS → EUR order. The header tooltip says so. ADR-034 | A ranking is not a displayed total; only a conversion makes "owes most" true across currencies |
+| D9 | **Summary strip = client count + `OwedNowSummary` over the listed clients** (§5 option 1, chosen by Basel); per-currency sums of each client's `owed`, via a pure `combineOwed` | The page's question is "who owes me"; the old converted Received/Unpaid totals go |
 | D10 | **Whole row navigates to the profile** (`navigate({ to: '/clients/$clientId' })`). The name stays a `Link` for keyboard and middle-click | AC "row click opens the profile" |
 | D11 | **Rows are shaped by `toClientIndexRow(summary)`, and the comparator is `compareClientRows(field, dir, rank)`**, both pure in `src/components/clients/clientIndexRows.ts` and both tested. The page wraps them in `useMemo`, and the column list is `useMemo(..., [t])` | AC memoisation; per-cell work becomes formatting only |
 | D12 | **F6/F7 fixed:** add the three missing `clients.*` keys and `clients.crossProfileTxCount` in en and ar | The rewritten page must have no raw keys or literals |
