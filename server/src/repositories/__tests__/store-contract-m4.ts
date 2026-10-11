@@ -293,6 +293,8 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
 
       // Undone: absent from every list/get surface, and no longer counted as outstanding or eligible (eng-review mutation check, design doc §2.1/§9).
       expect(await store.receivables.getById(a.id, r.id)).toBeNull();
+      // ... but still reachable for the undo route's own idempotency re-check (DELETE /v1/income/{id} on an already-voided row).
+      expect(await store.receivables.getByIdIncludingDeleted(a.id, r.id)).toMatchObject({ id: r.id, deletedAt: at(3) });
       expect(await store.receivables.getByIds(a.id, [r.id])).toEqual([]);
       expect((await store.receivables.list(a.id, { customerId: c.id }, { limit: 10, cursor: null })).items).toEqual([]);
       expect(await store.receivables.countOutstandingByProject(a.id, p.id)).toBe(0);
@@ -306,6 +308,7 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       const other = await org(store, 'B');
       expect(await store.receivables.softDeleteAdjustment(a.id, '00000000-0000-4000-8000-000000000000', at(5))).toBeNull();
       expect(await store.receivables.softDeleteAdjustment(other.id, r.id, at(5))).toBeNull();
+      expect(await store.receivables.getByIdIncludingDeleted(other.id, r.id)).toBeNull();
     });
 
     it('Received can stand alone with no client, and optionally carries a matter', async () => {

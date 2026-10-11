@@ -740,6 +740,7 @@ export class PrismaLedgerStore implements LedgerStore {
 
   readonly receivables: ReceivableRepository = {
     getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    getByIdIncludingDeleted: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId } }),
     getByIds: async (organizationId, ids) => {
       const rows = await this.prisma.receivable.findMany({ where: { organizationId, id: { in: [...ids] }, deletedAt: null } });
       const order = new Map(ids.map((id, i) => [id, i]));

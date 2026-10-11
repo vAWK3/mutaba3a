@@ -92,6 +92,7 @@ export const STORE_ACCESS: StoreAccess = {
   },
   receivables: {
     getById: 'read',
+    getByIdIncludingDeleted: 'read',
     getByIds: 'read',
     list: 'read',
     listEligible: 'read',

@@ -21,6 +21,7 @@ import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
 import { expenseCategoryRoutes } from './routes/expense-categories.js';
 import { expenseRoutes } from './routes/expenses.js';
+import { incomeRoutes } from './routes/income.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { customerRoutes } from './routes/customers.js';
 import { feeProposalRoutes } from './routes/fee-proposals.js';
@@ -82,7 +83,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.11.0-mut42';
+export const API_VERSION = '1.12.0-mut65';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -182,6 +183,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', attachmentRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', expenseCategoryRoutes(store));
+  app.route('/', incomeRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
 
@@ -239,6 +241,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.',
         '',
+        'Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session\'s own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today\'s read-only behaviour on all of it: 403 READ_ONLY_PROFILE.',
+        '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),
     },
@@ -257,6 +261,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
+      { name: 'Income', description: 'Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });

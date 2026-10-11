@@ -685,6 +685,14 @@ export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
   /** In the order of `ids`; unknown or foreign ids are skipped. */
   getByIds(organizationId: string, ids: readonly string[]): Promise<ReceivableRecord[]>;
+  /**
+   * Like `getById`, but a soft-deleted row is still returned (MUT-65). Exists
+   * solely so `DELETE /v1/income/{id}` can re-check its ownership/origin
+   * guard on a repeat call against an already-voided row and answer 204
+   * again, rather than 404 — every other reader keeps using `getById`/`list`,
+   * which rightly hide a deleted row.
+   */
+  getByIdIncludingDeleted(organizationId: string, id: string): Promise<ReceivableRecord | null>;
   list(organizationId: string, filter: ReceivableFilter, page: PageRequest): Promise<Page<ReceivableRecord>>;
   /** OPEN receivables of the customer in the currency with outstanding > 0 — what a payment may be allocated to (M4). */
   listEligible(organizationId: string, customerId: string, currency: string): Promise<ReceivableRecord[]>;

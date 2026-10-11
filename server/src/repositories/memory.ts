@@ -808,6 +808,10 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.recs.get(id);
       return r && r.organizationId === organizationId && !r.deletedAt ? { ...r } : null;
     },
+    getByIdIncludingDeleted: async (organizationId, id) => {
+      const r = this.recs.get(id);
+      return r && r.organizationId === organizationId ? { ...r } : null;
+    },
     getByIds: async (organizationId, ids) =>
       ids.map((id) => this.recs.get(id)).filter((r): r is ReceivableRecord => !!r && r.organizationId === organizationId && !r.deletedAt).map((r) => ({ ...r })),
     listEligible: async (organizationId, customerId, currency) =>
