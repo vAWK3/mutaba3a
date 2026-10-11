@@ -46,11 +46,12 @@ if (process.argv.includes('--json')) {
       source: 'vAWK3/mutaba3a server/openapi/openapi.yaml',
       commit,
       sha256: createHash('sha256').update(yaml).digest('hex'),
-      note: "Vendored copy of Mutaba3a's committed contract. Regenerate: in the Mutaba3a repo run `cd server && npm run openapi:json > /path/to/this/file` (prints this envelope), then run the Money contract test. The test fails when the client calls a path, method or field that is not in this file.",
+      note: "Vendored copy of Mutaba3a's committed contract. Regenerate: in the Mutaba3a repo run `cd server && npm run -s openapi:json > /path/to/this/file` (-s keeps npm's banner out of the JSON; DEPLOYMENT.md §4a), then run the Money contract test. The test fails when the client calls a path, method or field that is not in this file.",
     },
     ...runtime,
   };
-  process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
+  // Exit only once stdout has taken the whole document: on a pipe the write is asynchronous, and exiting early cuts it at ~64 KB.
+  await new Promise<void>((resolve) => process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`, () => resolve()));
   process.exit(0);
 }
 

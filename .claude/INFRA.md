@@ -18,15 +18,20 @@ ADR-013). See `.claude/CI_CD.md`.
 
 ## 2. Hosted API (`server/`) — Money v1
 
-Status (2026-10-08): **first production apply in progress.** Project
-`malafat-production`, region `me-west1`. The 2026-10-08 run created Cloud SQL
-(`mutaba3a-pg`, migrated through M3), both secrets, the service account and
-IAM, then Cloud Run rejected the template over the reserved `PORT` env
-(fixed the same day; `DEPLOYMENT.md` §2.1). The service exists once
-`scripts/deploy.sh` is re-run. Infrastructure is Terraform (ADR-026).
-Production only; no staging for now. Nothing builds or migrates inside GCP:
-the image is built and pushed from the operator's machine and migrations run
-from `server/` through the Cloud SQL Auth Proxy.
+Status (2026-10-11): **in production.** Project `malafat-production`, region
+`me-west1`. The service runs `ced04f7` (API `1.11.0-mut42`): Money M1–M8 plus
+the hosted epic's server side, i.e. users and sessions, server-enforced
+writability, and expenses. Database migrations are applied through
+`mut42_expenses`.
+
+One known defect: production applied the **original** M7 migration, so the
+fee-proposal enum probably predates M8. The check and the fix are in
+`server/DEPLOYMENT.md` §7. The revision history is there too.
+
+Infrastructure is Terraform (ADR-026). Production only; no staging. Nothing
+builds or migrates inside GCP: the image is built and pushed from the
+operator's machine, and migrations run from `server/` through the Cloud SQL
+Auth Proxy.
 
 ### Topology
 
@@ -36,7 +41,8 @@ Operator machine                      GCP project (me-west1)
 docker build + push ───────────────▶  Artifact Registry  <region>-docker.pkg.dev/<project>/mutaba3a/mutaba3a-api:<sha>
 prisma migrate deploy ──(proxy)────▶  Cloud SQL Postgres 16  mutaba3a-pg   db mutaba3a, user mutaba3a_api
 terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api  (min 1, max 1)  ◀── Malafat, Bearer mut_live_…
-                                      Secret Manager  mutaba3a-api-database-url, mutaba3a-api-admin-token
+                                      Secret Manager  mutaba3a-api-database-url, mutaba3a-api-admin-token, mutaba3a-api-session-pepper
+                                      Cloud Storage  <project>-mutaba3a-attachments (private; attachments + expense receipts)
                                       Cloud Monitoring  uptime check GET /health (alert optional)
 ```
 
@@ -70,9 +76,12 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 
 | Project | Service URL | Deployed tag | Date |
 |---|---|---|---|
-| `malafat-production` | — (Cloud Run service not created yet; re-run pending) | `88f0b0d` migrated to the database (M1–M3), image pushed | 2026-10-08 partial, see §2.1 of the runbook |
+| `malafat-production` | the `run.app` URL (`terraform output -raw service_url`; also in Malafat's `malafat-web-mutaba3a-api-url` secret) | `ced04f7` (revision `mutaba3a-api-00005-6wq`) | 2026-10-11 06:00 UTC |
 
-Update this table after each `deploy.sh` run.
+Earlier revisions (`dd626ec`, `f1a558c`, `acb1144`, `4dd53b8`) are listed in
+`server/DEPLOYMENT.md` §7. Update both after each `deploy.sh` run. Malafat
+production is `web@2.2.4` (`8cd8fea19`, 2026-10-11 06:03 UTC), which carries
+Money M8.
 
 ## 3. Costs (estimate, hosted API only)
 

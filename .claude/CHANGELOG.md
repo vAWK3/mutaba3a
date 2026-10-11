@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — Deployment record after the hosted-epic deploy; vendored-contract command fixed
+
+**Scope:** `server/DEPLOYMENT.md`, `server/src/scripts/export-openapi.ts`, `.claude/INFRA.md`, `.claude/designs/money-v1-handover.md`.
+
+### Fixed
+- **The vendored-contract command (`DEPLOYMENT.md` §4a)** failed three ways for the operator on 2026-10-11, all now documented, with a `node -e` validity check after the redirect:
+  - run from the repository root it is `Missing script` (the script lives in `server/`);
+  - the shell's `>` had already emptied Malafat's file to 0 bytes;
+  - without `-s`, npm's banner made the file invalid JSON.
+
+  The note `export-openapi.ts` writes into every generated file now says `-s` too.
+- **Piped `openapi:json` output was cut at about 64 KB.** `export-openapi.ts --json` called `process.exit` before stdout drained, so `| jq` and the like got truncated JSON (a file redirect was unaffected). It now waits for the write.
+- **Two sections were numbered §4a.** The portal-access section is now §4b.
+
+### Changed
+- **`DEPLOYMENT.md`:**
+  - §0 lists the session-pepper secret and the attachments bucket;
+  - the stale M1-era "Tickets to close" becomes **§7 Production record**: every Cloud Run revision with its commit and time (read from Cloud Run, Artifact Registry and Secret Manager), Malafat's production release, and the firms;
+  - §8 lists the current next steps.
+- **`INFRA.md`** now shows the service in production at `ced04f7` and its URL.
+- **The M8 handover** records that Malafat `web@2.2.4` shipped M8 (so §2's mismatch is closed) and that §2a is now reachable.
+
+### Found
+- **Production probably still has the original M7 fee-proposal enum.**
+  - Revision `00003` rolled `acb1144` on 2026-10-09; M8 later edited that migration in place; `prisma migrate deploy` never re-runs a recorded migration.
+  - Approving a proposal (offered by Malafat `web@2.2.4`) would fail with an enum error.
+  - The read-only check and the repair migration's requirements are in `DEPLOYMENT.md` §7. The repair is not written yet.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-42: expenses on the hosted ledger
 
 **Scope:** `server/` only.

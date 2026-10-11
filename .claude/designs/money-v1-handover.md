@@ -2,9 +2,12 @@
 
 - **Updated:** 2026-10-10 (first written 2026-10-08 for M1–M6).
 - **Code:** Milestones 1–8 are merged to `main` and pushed in both repositories: Mutaba3a `e7754f3` (API `1.7.0-m8`), Malafat `1477e55f5` (vendored contract `1.7.0-m8`). The `claude/stoic-ritchie-d6yiog` and `feature/money-v1-m8` branches and worktrees are gone.
-- **Deployed:**
-  - **Mutaba3a server:** deployed by the owner; a redeploy from `main` (M8) was under way on 2026-10-10.
-  - **Malafat production:** `web@2.2.2` (`f21fabada`, 2026-10-10 10:51 +03) carries **M1–M7** (contract `1.6.0-m7`) but **not M8**.
+- **Deployed (updated 2026-10-11):**
+  - **Mutaba3a server:**
+    - `4dd53b8` (M8) rolled on 2026-10-11 at 02:53 UTC;
+    - `ced04f7` (M8 plus the hosted epic, API `1.11.0-mut42`) at 06:00 UTC.
+  - **Malafat production:** `web@2.2.4` (`8cd8fea19`) at 06:03 UTC carries M8, so §2's mismatch is closed.
+  - **§2a is still open and now reachable:** production ran the original M7 (`acb1144`, revision `00003` on 2026-10-09). The full record is in `server/DEPLOYMENT.md` §7.
 - **Pilot:** the pilot firm was onboarded on 2026-10-10. Its organization and API key are provisioned, it is connected in Malafat, its clients and matters are linked, and real payments are recorded. The manual runbook (§4) has **not** been walked yet.
 
 ## 1. Review and merge — done
@@ -24,7 +27,11 @@ Everything else keeps working: overview, clients, agreements, payments, allocati
 
 **Rule:** run the Malafat release that carries `1477e55f5` right after the Mutaba3a M8 deploy. Until it lands, Partners should not act on fee proposals.
 
+**Done 2026-10-11:** Malafat `web@2.2.4` went out three minutes after Mutaba3a `ced04f7`.
+
 ### 2a. Check which M7 migration production ran (before or right after the M8 deploy)
+
+> **2026-10-11:** the deploy history answers half of this. Revision `mutaba3a-api-00003-rvr` rolled `acb1144` on 2026-10-09, and `deploy.sh` migrates before it rolls, so production recorded the **original** M7. Run the query below to confirm, since a hand repair is the only way it could differ. Until the repair migration ships, nobody approves a proposal, and Malafat `web@2.2.4` now offers that button. The current record is in `server/DEPLOYMENT.md` §7.
 
 M8 **edited the M7 migration in place** (D20, on the premise that nothing was deployed). The original M7 (`acb1144`) was on `main` from 2026-10-09 04:46 UTC until `227c005` on 2026-10-10 14:31 +03. A database that applied the original keeps it: `prisma migrate deploy` skips migrations it has already recorded and does not re-run an edited one.
 
