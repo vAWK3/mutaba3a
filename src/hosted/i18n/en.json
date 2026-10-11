@@ -302,7 +302,20 @@
         "notes": "Notes",
         "notesPlaceholder": "Optional notes",
         "amountError": "Enter a valid amount",
-        "requiredError": "Required"
+        "requiredError": "Required",
+        "receipts": {
+          "title": "Receipts",
+          "add": "Add receipt",
+          "uploading": "Uploading…",
+          "atCap": "This expense already has 10 receipts, the most allowed.",
+          "download": "Download",
+          "preparing": "Preparing…",
+          "invalidType": "Receipts must be a PDF, JPEG or PNG file.",
+          "tooLarge": "Receipts can be at most 10 MB.",
+          "uploadFailed": "Couldn't upload the receipt. Try again.",
+          "downloadFailed": "Couldn't prepare the download. Try again.",
+          "deleteFailed": "Couldn't remove the receipt. Try again."
+        }
       },
       "errors": {
         "categoryArchived": "This category is no longer available — pick another",

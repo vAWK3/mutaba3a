@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
+import { ApiError, api, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
 import { useCursorList } from './queries';
 import { profileKey } from '../session/me';
 import type { ExpenseFilters } from './filters';
@@ -81,5 +81,51 @@ export function useDeleteExpense(profileId: string) {
   return useMutation({
     mutationFn: (expenseId: string) => api.deleteExpense(profileId, expenseId),
     onSuccess: () => invalidateExpenses(queryClient, profileId),
+  });
+}
+
+/**
+ * The storage bucket's signed URL is a different origin from the API, so this
+ * bypasses `api/client.ts`'s `request()` (same-origin credentials, `/v1/*`
+ * only) for a bare `fetch`. `credentials: 'omit'` makes explicit that no
+ * cookie ever reaches the bucket, regardless of browser defaults. See
+ * mut-44-expense-capture.md's CSP note: this PUT needs the bucket's origin in
+ * the portal's eventual `connect-src` (MUT-45, not yet drafted).
+ */
+async function putToSignedUrl(url: string, headers: Record<string, string>, file: File): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'PUT', headers, body: file, credentials: 'omit' });
+  } catch {
+    throw new ApiError(0, 'NETWORK', 'The upload did not reach the storage server');
+  }
+  if (!response.ok) throw new ApiError(response.status, 'UNKNOWN', `Upload failed with HTTP ${response.status}`);
+}
+
+export function useAddReceipt(profileId: string, expenseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const { receipt, upload } = await api.startReceipt(profileId, expenseId, {
+        filename: file.name,
+        mimeType: file.type as 'application/pdf' | 'image/jpeg' | 'image/png',
+        sizeBytes: file.size,
+      });
+      await putToSignedUrl(upload.url, upload.headers, file);
+      return api.completeReceipt(profileId, expenseId, receipt.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expense', expenseId) });
+    },
+  });
+}
+
+export function useDeleteReceipt(profileId: string, expenseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (receiptId: string) => api.deleteReceipt(profileId, expenseId, receiptId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expense', expenseId) });
+    },
   });
 }

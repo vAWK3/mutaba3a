@@ -123,6 +123,13 @@ describe('ExpenseDrawer (hosted)', () => {
 
     expect(await screen.findByDisplayValue('99.99')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Hosting')).toBeInTheDocument();
+    expect(screen.getByText('Receipts')).toBeInTheDocument();
+  });
+
+  it('shows the receipts section only in edit mode, not while creating', async () => {
+    renderDrawer({ mode: 'create' });
+    await screen.findByText('Record expense');
+    expect(screen.queryByText('Receipts')).not.toBeInTheDocument();
   });
 
   it('shows a field-level error for an archived category and does not close the drawer', async () => {

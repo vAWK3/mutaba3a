@@ -10,6 +10,7 @@ import { useCreateExpense, useDeleteExpense, useExpense, useExpenseCategories, u
 import { useToast } from './Toast';
 import { ClientPicker } from './ClientPicker';
 import { ProjectPicker } from './ProjectPicker';
+import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
 import { todayLocalISO } from '../format/dates';
@@ -260,6 +261,9 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose }: ExpenseDr
           }
         />
       </form>
+      {mode === 'edit' && existingExpense && (
+        <ReceiptUploader profileId={profileId} expenseId={existingExpense.id} receipts={existingExpense.receipts} />
+      )}
     </Drawer>
   );
 }
