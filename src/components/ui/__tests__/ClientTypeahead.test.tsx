@@ -308,6 +308,46 @@ describe('ClientTypeahead', () => {
       expect(onPendingTextChange).toHaveBeenLastCalledWith('');
     });
 
+    it('keeps the typed name unpicked when creating the client fails', async () => {
+      const onPendingTextChange = vi.fn();
+      const onCreatingChange = vi.fn();
+      const onChange = vi.fn();
+      const createSpy = vi.spyOn(clientRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
+      try {
+        function Controlled() {
+          const [value, setValue] = useState('');
+          return (
+            <ClientTypeahead
+              value={value}
+              onChange={(id) => {
+                onChange(id);
+                setValue(id);
+              }}
+              onPendingTextChange={onPendingTextChange}
+              onCreatingChange={onCreatingChange}
+            />
+          );
+        }
+        render(
+          <TestWrapper>
+            <Controlled />
+          </TestWrapper>
+        );
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Brand New Co' } });
+        fireEvent.click(await screen.findByRole('option', { name: /Brand New Co/ }));
+
+        await waitFor(() => expect(onCreatingChange).toHaveBeenLastCalledWith(false));
+        expect(onChange).toHaveBeenLastCalledWith('');
+        // still visible and still unpicked, so a form refuses to save without it
+        expect(input).toHaveValue('Brand New Co');
+        expect(onPendingTextChange).toHaveBeenLastCalledWith('Brand New Co');
+      } finally {
+        createSpy.mockRestore();
+      }
+    });
+
     it('reports no unpicked text once a client is picked, and again after clearing', async () => {
       const client = await clientRepo.create({ name: 'My Client' });
       const onPendingTextChange = vi.fn();

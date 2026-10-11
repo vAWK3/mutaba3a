@@ -143,7 +143,10 @@ export function ClientTypeahead({
           setPickedName(newClient.name);
           onChange(newClient.id);
         } catch {
-          setInputValue('');
+          // Keep the name in the box, unpicked: a form then refuses to save
+          // without it (onPendingTextChange) instead of saving with no client.
+          setInputValue(option.label);
+          setPickedName(null);
           onChange('');
         } finally {
           setCreating(false);

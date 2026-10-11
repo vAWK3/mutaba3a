@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EntityTypeahead, type TypeaheadOption } from '../EntityTypeahead';
 
@@ -138,14 +138,16 @@ describe('EntityTypeahead', () => {
       expect(onSelect).toHaveBeenCalledWith(mockOptions[0]);
     });
 
-    it('selects only option on Enter when single option and none highlighted', () => {
+    // MUT-5 review: with nothing typed the field is empty or shows a picked
+    // value, so Enter belongs to the form even while the list is showing.
+    it('lets Enter through when nothing was typed, even with one option listed', () => {
       const onSelect = vi.fn();
       const singleOption = [mockOptions[0]];
       renderTypeahead({ options: singleOption, onSelect });
       const input = screen.getByRole('combobox');
       fireEvent.focus(input);
-      fireEvent.keyDown(input, { key: 'Enter' });
-      expect(onSelect).toHaveBeenCalledWith(singleOption[0]);
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+      expect(onSelect).not.toHaveBeenCalled();
     });
 
     it('opens dropdown on ArrowDown when closed', () => {
@@ -263,6 +265,109 @@ describe('EntityTypeahead', () => {
       } finally {
         document.removeEventListener('keydown', documentKeydown);
       }
+    });
+  });
+
+  // MUT-5 review: Enter never submits a form past something unresolved
+  describe('Enter safety (MUT-5 review)', () => {
+    function Controlled(props: {
+      options: TypeaheadOption[];
+      onSelect?: (option: TypeaheadOption) => void | Promise<void>;
+    }) {
+      const [value, setValue] = useState('');
+      return (
+        <EntityTypeahead
+          options={props.options}
+          inputValue={value}
+          onInputChange={setValue}
+          onSelect={(option) => {
+            setValue(option.label);
+            return props.onSelect?.(option);
+          }}
+        />
+      );
+    }
+
+    it('highlights a prefix match, not the first substring match', () => {
+      const options: TypeaheadOption[] = [
+        { id: 'c1', label: 'Joanna', isNew: false },
+        { id: 'new', label: 'Ann', isNew: true },
+      ];
+      const onSelect = vi.fn();
+      render(<Controlled options={options} onSelect={onSelect} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Ann' } });
+      expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledWith(options[1]);
+    });
+
+    it('highlights the only option of a select-only list even as a substring match', () => {
+      const options: TypeaheadOption[] = [{ id: 'c1', label: 'Acme', isNew: false }];
+      render(<Controlled options={options} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'cme' } });
+      expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('holds Enter while typed text matches nothing, instead of submitting it away', () => {
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <Controlled options={[]} />
+        </form>
+      );
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Nobody' } });
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+    });
+
+    it('holds Enter after Escape while the typed text is still unpicked', () => {
+      render(<Controlled options={mockOptions} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'zz' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+    });
+
+    it('holds Enter and reports busy while a pick is still being saved', async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const createOnly: TypeaheadOption[] = [{ id: 'new', label: 'Newco', isNew: true }];
+      render(<Controlled options={createOnly} onSelect={() => pending} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' }); // picks "create Newco"
+      expect(input).toHaveAttribute('aria-busy', 'true');
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+
+      await act(async () => {
+        finish();
+        await pending;
+      });
+      expect(input).not.toHaveAttribute('aria-busy');
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+    });
+
+    it('lets Enter through after tabbing into a field that lists options but has nothing typed', () => {
+      render(<Controlled options={mockOptions} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.focus(input);
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+    });
+
+    it('tells assistive tech which option Enter will pick', () => {
+      render(<Controlled options={mockOptions} />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Be' } });
+      const listbox = screen.getByRole('listbox');
+      const highlighted = screen.getAllByRole('option')[1];
+      expect(input).toHaveAttribute('aria-controls', listbox.id);
+      expect(highlighted.id).toBeTruthy();
+      expect(input).toHaveAttribute('aria-activedescendant', highlighted.id);
     });
   });
 
