@@ -138,6 +138,12 @@
 - **Overpayment is rejected** — the sum of a transaction's payments can never
   exceed its amount (ADR-030). Payments on a locked (invoiced) transaction are
   allowed: the lock protects the invoice facts, not payment tracking
+- **Owed Now** = remaining balance of unpaid, non-deleted, non-archived income,
+  per currency, overdue part split out — one helper, `summarizeOwedByCurrency`
+  (ADR-033), for every screen that shows it
+- **A client's payment history** = its `PaymentRecord`s plus one derived
+  `entry` row per income whose received amount no record covers (income saved
+  as Received writes none; ADR-033, TD-029)
 
 ---
 
@@ -145,6 +151,7 @@
 
 ### Implemented (v0.0.48)
 
+- **Client profile (MUT-3 / ADR-033)** — `/clients/:id` is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, invoice actions while Invoices is on, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). The retainers card follows while Retainers is on.
 - **Optional areas (Advanced features, MUT-12 / ADR-032)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo, sync) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/documents*` and `/retainers` redirect home while off; the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Data tools). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). A fresh install's sidebar is Home, Income, Clients, Settings. The sidebar's final shape is MUT-15.
 
 | Feature | Status | Notes |

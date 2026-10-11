@@ -28,6 +28,70 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-3: the client profile is one page answering the three questions (with the MUT-4 Payments UI)
+
+**Scope:** `src/pages/clients/ClientDetailPage.tsx`,
+`src/components/clients/{OwedNowSummary,ClientWorkSection,ClientPaymentsSection}.tsx` (new),
+`src/components/clients/clientProfileRows.ts` (new), `src/db/{aggregations,repository,database}.ts`,
+`src/types/index.ts`, `src/hooks/{useQueries,useIncomeQueries}.ts`, `src/index.css`,
+`src/lib/i18n/{types.ts,translations/en.json,translations/ar.json}`, tests beside each,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`,
+`.claude/designs/mut-3-client-profile{,-tests}.md`. Branch `feature/mut-1-client-core`.
+
+### Changed
+- `/clients/:id` loses its four tabs. One page now shows, top to bottom: the
+  contact details and **Owed now** (the largest figure on the page, one amount
+  per currency, overdue part called out or "Nothing overdue", "Nothing owed"
+  when settled); **Work and billing** (every income entry: date, title,
+  project tag, amount, status, remaining balance on partial rows, due/overdue
+  line; date range + status + search as one filter object; Record payment,
+  Mark paid, invoice actions, duplicate); **Payments** (full history newest
+  first: date, amount, what it was for, notes). Retainers card unchanged
+  below, while Retainers is on.
+- A client with no work shows one primary action, **Add income**, which opens
+  the income drawer for that client; filters that match nothing say so and
+  offer **Clear filters** instead.
+- The project is a tag inside the "What" cell — a link while Projects is on,
+  text while off (MUT-16), absent when unset.
+- Removed from the page: the stats strip (active projects, paid income,
+  unpaid, expenses), Recent activity, the Projects table, expense rows.
+
+### Fixed
+- **Owed now was always zero on the client page.** The old strip read
+  `unpaidIncomeMinorUSD/ILS/EUR`, which `clientSummaryRepo.get` never returns,
+  and showed them through `CurrencySummaryPopup`, which converts to one ILS
+  sum. `summarizeOwedByCurrency` (ADR-033) replaces both.
+- **Payment history missed income saved as Received.** Such entries are
+  marked paid with no `PaymentRecord`; `listByClient` now adds one `entry`
+  row per uncovered amount (ADR-033 §3, TD-029 for the write-side fix).
+- **Payment lists went stale after Mark paid**, retitling or deleting an
+  entry, for the 60s staleTime: transaction and income writes now invalidate
+  `['paymentRecords']` too (also refreshes the payment drawer's history).
+- `listByClient` date bounds compare the calendar date of `paidAt`, so a
+  payment stored as a timestamp on the `dateTo` day is included.
+- The v18 migration's English note ("Migrated from accumulated total") shows
+  as the existing `transactions.partialPayment.migratedNote` translation.
+- MUT-23: the discarded `useProjects(clientId)` call is gone.
+
+### Technical
+- New: `summarizeOwedByCurrency`, `OwedByCurrency` (`aggregations.ts`);
+  `PaymentByClientRow.source: 'record' | 'entry'`; `invalidatePaymentRecordLists`;
+  `MIGRATED_PAYMENT_NOTE` (`database.ts`, value-identical, v18 upgrade
+  unchanged); `toWorkRow` / `WorkRow` (`clientProfileRows.ts`).
+- i18n: `clients.profile.*` added in en + ar; dead `clients.tabs`,
+  `clients.receivables` and ten `clients.detail.*` keys pruned from both files
+  and from `Translations`.
+- Tests: +45 (8 owed-now, 8 `listByClient`, 4 invalidation incl. a real-Dexie
+  Mark paid → Payments refresh, 7 row shaping, 5 `OwedNowSummary`, page suite
+  rewritten to 34). Full suite 2,194 passed, 5 skipped, 0 failed; lint 0
+  errors; typecheck and build clean. `npm run test:tz` has 4 failures, all
+  pre-existing on `main` (TD-014 note).
+- Browser check at 1024 and 1280 px, English and Arabic: no horizontal
+  scroll, Owed now is the largest text (30px), amounts stay LTR in Arabic,
+  Mark paid updates Owed now and Payments without a reload.
+
+---
+
 ## [Unreleased] - 2026-10-10 — Money v1 handover refreshed for M8 and the pilot
 
 **Scope:** `.claude/designs/money-v1-handover.md`, `.claude/CHANGELOG.md`. Docs only; no code.
