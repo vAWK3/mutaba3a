@@ -33,6 +33,10 @@ export function isDeviceSessionToken(token: string): boolean {
   return token.startsWith(DEVICE_SESSION_PREFIX) && token.length === DEVICE_SESSION_PREFIX.length + 43;
 }
 
+/** Longer than a browser session (SIGN_IN_POLICY's cookie lifetime lives in SessionSettings): capture happens days apart. */
+export const DEFAULT_DEVICE_IDLE_DAYS = 30;
+export const DEFAULT_DEVICE_ABSOLUTE_DAYS = 180;
+
 /**
  * HMAC-SHA256 under SESSION_TOKEN_PEPPER, hex. Random 256-bit tokens need no
  * pepper for secrecy; it exists so that rotating it signs everyone out at once.

@@ -28,6 +28,9 @@ const envSchema = z.object({
   SESSION_TOKEN_PEPPER: z.string().min(32, 'SESSION_TOKEN_PEPPER must be at least 32 characters'),
   SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(1440).default(120),
   SESSION_ABSOLUTE_HOURS: z.coerce.number().int().min(1).max(168).default(12),
+  /** Device-session (MUT-64) lifetime: longer than a browser session because capture happens days apart. */
+  DEVICE_SESSION_IDLE_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  DEVICE_SESSION_ABSOLUTE_DAYS: z.coerce.number().int().min(1).max(730).default(180),
   /** The portal's public origin; non-GET session requests must come from it. Unset = compare with the request's own origin. */
   PORTAL_ORIGIN: z.string().url().optional(),
   /** How many proxies in front of the service append to X-Forwarded-For (Cloud Run front end = 1; a load balancer adds one). */

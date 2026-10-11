@@ -4,7 +4,7 @@ import { contextStorage } from 'hono/context-storage';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
-import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
+import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
@@ -78,7 +78,15 @@ const PORTAL_CSP =
   "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
 
 function defaultSessionSettings(): SessionSettings {
-  return { pepper: randomBytes(32).toString('hex'), idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 };
+  return {
+    pepper: randomBytes(32).toString('hex'),
+    idleMinutes: 120,
+    absoluteHours: 12,
+    secureCookie: true,
+    trustedProxyHops: 1,
+    deviceIdleDays: DEFAULT_DEVICE_IDLE_DAYS,
+    deviceAbsoluteDays: DEFAULT_DEVICE_ABSOLUTE_DAYS,
+  };
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
