@@ -1113,11 +1113,14 @@
       "headlineLine1": "اعرف من يدين لك.",
       "headlineLine2": "وأبقِ ذلك لك وحدك.",
       "subheadline": "كل عميل، كل عمل، كل دفعة — ما هو مستحق وما تم دفعه، بالدولار والشيكل واليورو. محفوظ على جهازك. بلا حساب. بلا تتبّع.",
-      "downloadMac": "تحميل لـ Mac",
-      "downloadWindows": "تحميل لـ Windows",
-      "appleSilicon": "Apple Silicon",
-      "webAppLink": "أو افتح تطبيق الويب في متصفحك",
-      "previewAlt": "متابعة تعرض من يدين لك"
+      "ctaMac": "تحميل لـ Mac",
+      "ctaMacHint": "Apple Silicon (M1 أو أحدث)",
+      "ctaWindows": "تحميل لـ Windows",
+      "ctaWindowsHint": "Windows 10 أو أحدث",
+      "ctaWeb": "افتح تطبيق الويب",
+      "ctaWebHint": "يعمل دون اتصال بعد زيارتك الأولى",
+      "altWeb": "أو استخدمه في متصفحك",
+      "altDesktop": "تطبيقات سطح المكتب لـ Mac وWindows"
     },
     "chapters": {
       "clients": {
@@ -1135,6 +1138,8 @@
     },
     "sample": {
       "clientName": "مصنع الأثاث",
+      "client2": "وكالة التسويق الرقمي",
+      "client3": "وكالة السفر",
       "work1": "تصوير صالة العرض",
       "work2": "دفعة نهائية",
       "work3": "دعم فني",

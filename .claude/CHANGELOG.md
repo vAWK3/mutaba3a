@@ -137,6 +137,28 @@ The re-review verified the pre-landing fixes and found one medium regression and
 - **Offline (ADR-040).** Local queries and saves no longer pause while the device is offline (`networkMode: 'always'`, `src/lib/queryClient.ts`); the live FX rate still waits for the network.
 - **New debt:** TD-047 (other drawers still use the lenient parsers).
 
+## [Unreleased] - 2026-10-12 — MUT-76: the hero shows who owes you, and offers one next step per device
+
+**Scope:**
+- `src/pages/landing/components/HeroSection.tsx` + `.css` (rebuilt), `components/mocks/{ClientsListMock,CountUpAmount}.tsx`, `heroCta.ts`, `useCountUp.ts`, `sampleData.ts` (`SAMPLE_CLIENTS`, `sampleOwedTotals`), `GetItSection` (`id="get-it"`)
+- `src/lib/platform.ts` (`detectDevice`, `currentDevice`, `DeviceKind`); `src/pages/download/DownloadPage.tsx` uses it
+- `src/hooks/usePrefersReducedMotion.ts` (new, shared)
+- `src/lib/i18n/translations/{en,ar}.json` (`landing.hero.cta*`, `alt*`, `landing.sample.client2/3`)
+- `public/assets/landing/hero-dashboard.png` deleted (the folder is now empty)
+- Tests: `HeroSection.test.tsx`, `heroCta.test.ts`, `useCountUp.test.ts`, `usePrefersReducedMotion.test.ts`, `platform.test.ts` (+`detectDevice`)
+- Test plan `.claude/designs/mut-76-landing-hero-tests.md`; TD-049
+
+### Changed
+- **The hero image is the Clients list, built in HTML** (brief L5, L6): Owed now per currency ($900 · ₪46,834.41, overdue in red), then three clients ranked by what they owe, with each one's overdue amount and oldest overdue age. App labels, app tokens, light/dark and RTL for free. The strip's totals are computed from the rows (`sampleOwedTotals`), so the picture always adds up.
+- **One filled button per visitor** (L4): a Mac gets "Download for Mac · Apple Silicon (M1 or later)", a Windows PC "Download for Windows" (only if the release has an installer), everything else — phones, tablets, Linux, ChromeOS — "Open the web app". One text link offers the alternative: the browser for a download, "Desktop apps for Mac and Windows" (→ `#get-it`) for the web app.
+- **The owed totals count up once on load** (600 ms, ease-out), skipped under reduced motion. The final value is laid out invisibly underneath so the width never changes, and screen readers get only the final value.
+- The hero button no longer swaps to a white background on hover — the old light-mode hover made its label disappear (F10). It dims slightly and presses in on pointer-down.
+- The headline is capped at 56px and the copy column widened so each beat sits on one line at desktop widths; headings use `text-wrap: balance`.
+
+### Fixed
+- `detectDevice` tells an iPad from a Mac (iPadOS 13+ reports `MacIntel`; touch gives it away) and Android from Linux. `DownloadPage` now uses it, so an iPad no longer gets the Mac card first. The older `isMacOS`/`isLinux` keep their behaviour (TD-049).
+- `utils.test.ts` › `todayISO` compared the local date with a UTC date and failed every night from local midnight to the UTC rollover; it now compares local with local.
+
 ## [Unreleased] - 2026-10-11 — MUT-75: the landing page tells the true story, in chapters
 
 **Scope:**

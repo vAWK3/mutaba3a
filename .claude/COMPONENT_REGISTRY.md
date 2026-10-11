@@ -106,6 +106,20 @@ Core actions first, optional appended, so a switch never moves a core entry. Eac
 
 ---
 
+### usePrefersReducedMotion
+**Location**: `src/hooks/usePrefersReducedMotion.ts`
+**Purpose**: `true` when the OS asks for reduced motion, kept in step via `useSyncExternalStore` over `matchMedia('(prefers-reduced-motion: reduce)')`; `false` where `matchMedia` doesn't exist. Use it in JS-driven motion (springs, count-ups) to skip or cross-fade; CSS should use the media query directly.
+
+```ts
+const reduced = usePrefersReducedMotion();
+```
+
+Tests: `src/hooks/__tests__/usePrefersReducedMotion.test.ts`.
+
+### detectDevice / currentDevice
+**Location**: `src/lib/platform.ts`
+**Purpose**: Pure `detectDevice({ userAgent, platform, maxTouchPoints })` → `'mac' | 'windows' | 'ios' | 'android' | 'linux' | 'unknown'`, telling an iPad from a Mac and Android from Linux; `currentDevice()` reads `navigator`. Used by the landing hero and `DownloadPage`. Cannot tell Intel from Apple Silicon.
+
 ### useMenuButton
 **Location**: `src/hooks/useMenuButton.ts`
 **Purpose**: A button that opens a menu of actions with WAI-ARIA menu-button keyboard behaviour (MUT-15).
@@ -235,6 +249,14 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 ### Landing mock-ups (`ClientProfileMock`, `RecordPaymentMock`, `ProfileSwitcherMock`)
 **Location**: `src/pages/landing/components/mocks/`
 **Purpose**: Static HTML pictures of the product for the landing page. Data comes from `src/pages/landing/sampleData.ts` (fixed dates, i18n-keyed names, never the visitor's database); labels are the app's own i18n keys; money and dates format through `useMockFormat` (`formatAmount` / `formatDateShort` in the active locale). Keep them in step with the real screens when those change.
+
+### ClientsListMock + CountUpAmount (hero)
+**Location**: `src/pages/landing/components/mocks/ClientsListMock.tsx`, `CountUpAmount.tsx`
+**Purpose**: The hero's picture of the Clients list (brief L5/L6). Totals come from `sampleOwedTotals(SAMPLE_CLIENTS)` so they always equal the rows. `CountUpAmount` counts an amount up once via `useCountUp` (skipped under reduced motion), lays the final value out invisibly so the width never changes, and gives screen readers the final value only.
+
+### heroCta (`chooseHeroCta`, `secondaryHeroLink`)
+**Location**: `src/pages/landing/heroCta.ts`
+**Purpose**: Pure rule for the hero's one filled button: mac → Mac download, windows → Windows download only when the release has it, anything else → web app; the text link is the browser for a download and the desktop apps for the web app.
 
 ### GetItSection / PrivacyBand / PlatformIcons
 **Location**: `src/pages/landing/components/`

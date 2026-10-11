@@ -1172,3 +1172,19 @@ Checked by hand in the browser pane (2026-10-11): 1440/1024/375 widths in EN and
 
 **Baseline after MUT-75 (2026-10-11)**: root `npx vitest run` 162 files, 2574 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings in untouched files) and `npm run test:bundles` (web, desktop, hosted builds + bundle check) pass.
 
+### MUT-76 — the landing hero (epic MUT-74)
+
+Test plan: `.claude/designs/mut-76-landing-hero-tests.md`.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Device | `src/lib/__tests__/platform.test.ts` › `detectDevice` | Mac, Windows, iPhone, iPad-as-Mac (touch), Android-with-Linux-UA, desktop Linux, ChromeOS, empty signals |
+| CTA rule | `src/pages/landing/__tests__/heroCta.test.ts` | mac/windows(+build)/everything-else → web; the alternative link; the sample list adds up per currency and is ranked |
+| Hero | `src/pages/landing/__tests__/HeroSection.test.tsx` | exactly one `.hero-cta-primary` per device with the right href/label; Windows without an installer → web app; no `<img>`; Owed Now + sample clients present; animating digits `aria-hidden` with an `.sr-only` final value each |
+| Count-up | `src/pages/landing/__tests__/useCountUp.test.ts` | reduced motion → target immediately; 0 → target over the duration with a stepped frame clock; a re-render doesn't restart it |
+| Motion pref | `src/hooks/__tests__/usePrefersReducedMotion.test.ts` | reads the query, follows change events, unsubscribes on unmount, false without `matchMedia` |
+
+Checked by hand (2026-10-12): Mac pane → Mac button; mobile emulation (Android UA) → web app + desktop link; 1280 EN/AR light/dark; 375 no horizontal scroll.
+
+**Baseline after MUT-76 (2026-10-12)**: root `npx vitest run` 166 files, 2607 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass. Incidental: `utils.test.ts` › `todayISO` no longer fails between local midnight and the UTC rollover.
+
