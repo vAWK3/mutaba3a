@@ -1,6 +1,12 @@
 {
   "common": {
-    "search": "بحث..."
+    "search": "بحث...",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "close": "إغلاق",
+    "loading": "جارٍ التحميل...",
+    "saving": "جارٍ الحفظ..."
   },
   "hosted": {
     "brand": "متابعة",
@@ -53,7 +59,8 @@
         "clients": "العملاء",
         "receivables": "المستحقات",
         "payments": "الدفعات",
-        "documents": "المستندات"
+        "documents": "المستندات",
+        "expenses": "المصاريف"
       },
       "switcher": {
         "label": "تبديل الملف",
@@ -262,6 +269,53 @@
       "empty": {
         "title": "لا مستندات على هذا الملف بعد",
         "body": "تظهر هنا الفواتير والإيصالات المسجّلة لهذا الملف."
+      }
+    },
+    "expenses": {
+      "title": "المصاريف",
+      "record": "تسجيل مصروف",
+      "columns": {
+        "date": "التاريخ",
+        "title": "الوصف",
+        "category": "الفئة",
+        "client": "العميل",
+        "amount": "المبلغ"
+      },
+      "empty": {
+        "title": "لا مصاريف مسجّلة على هذا الملف بعد",
+        "body": "تظهر هنا المصاريف المسجّلة لهذا الملف."
+      },
+      "drawer": {
+        "newTitle": "تسجيل مصروف",
+        "editTitle": "تعديل مصروف",
+        "amount": "المبلغ",
+        "amountPlaceholder": "0.00",
+        "currency": "العملة",
+        "date": "التاريخ",
+        "title": "العنوان",
+        "titlePlaceholder": "ما كان الغرض منه؟",
+        "vendor": "المورّد",
+        "vendorPlaceholder": "اسم الجهة أو المورّد",
+        "client": "العميل",
+        "clientPlaceholder": "ابحث عن عميل",
+        "matter": "القضية",
+        "matterPlaceholder": "ابحث عن قضية",
+        "category": "الفئة",
+        "categoryPlaceholder": "اختر فئة",
+        "notes": "ملاحظات",
+        "notesPlaceholder": "ملاحظات اختيارية",
+        "amountError": "أدخل مبلغاً صالحاً",
+        "requiredError": "مطلوب"
+      },
+      "errors": {
+        "categoryArchived": "هذه الفئة لم تعد متاحة — اختر فئة أخرى",
+        "customerNotFound": "هذا العميل لم يعد متاحاً",
+        "projectNotFound": "هذه القضية لم تعد متاحة",
+        "projectCustomerMismatch": "هذه القضية تابعة لعميل آخر",
+        "amountInvalid": "أدخل مبلغاً صالحاً",
+        "dateInvalid": "أدخل تاريخاً صالحاً",
+        "conflict": "تغيّر هذا المصروف في مكان آخر — يُعرض الآن أحدث إصدار",
+        "network": "تعذّر الوصول إلى الخادم. حاول مجدداً."
       }
     }
   }

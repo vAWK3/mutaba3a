@@ -116,7 +116,9 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
               )
             }
           />
-          {errors.amount && <p className="form-error">{labels.amountError}</p>}
+          {errors.amount && (
+            <p className="form-error">{errors.amount.type === 'manual' ? String(errors.amount.message ?? '') : labels.amountError}</p>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor="expense-currency">
@@ -156,6 +158,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
               />
             )}
           />
+          {errors.occurredAt && <p className="form-error">{String(errors.occurredAt.message ?? '')}</p>}
         </div>
       ) : (
         dateSlotOverride
@@ -203,7 +206,9 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
             </select>
           )}
         />
-        {errors.categoryId && <p className="form-error">{labels.requiredError}</p>}
+        {errors.categoryId && (
+          <p className="form-error">{errors.categoryId.type === 'manual' ? String(errors.categoryId.message ?? '') : labels.requiredError}</p>
+        )}
       </div>
 
       {showNotes && (

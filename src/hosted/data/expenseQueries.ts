@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
-import { useCursorList } from '../data/queries';
+import { useCursorList } from './queries';
 import { profileKey } from '../session/me';
-import type { ExpenseFilters } from '../data/filters';
+import type { ExpenseFilters } from './filters';
 
 /**
- * The portal's expense query and mutation hooks (MUT-44). A sibling of
- * `src/hosted/data/queries.ts`, not an addition to it: that file's own
- * comment says nothing in it mutates or is placed in the cache ahead of the
- * server — true of every hook there today. Expenses are the portal's first
- * write, so they get their own home rather than quietly changing what
- * `data/` means. `useCursorList` is reused from that file (exported for
- * exactly this) rather than duplicated.
+ * The portal's expense query and mutation hooks (MUT-44), in their own file
+ * rather than queries.ts: that file's own comment says nothing in it mutates
+ * or is placed in the cache ahead of the server — true of every hook there
+ * until now. Expenses are the portal's first write. Lives under `data/`, not
+ * a `hooks/` directory — that path segment is lint-banned from `src/hosted/**`
+ * (it means the *local app's* hooks, hosted-portal.md §8, but the rule
+ * matches on the literal segment name, not which hooks they are).
+ * `useCursorList` is reused from queries.ts (exported for exactly this)
+ * rather than duplicated.
  */
 
 const PAGE_LIMIT = 50;
