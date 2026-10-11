@@ -117,6 +117,16 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 Still manual: RTL check of the `Switch` knob direction and the banner layout at 375px; the real upgrade on a long-lived database (v16 → v20 chain).
 
+#### Orphaned-records banner copy (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` | Component | 5 | en + ar × 1 and 8 records: message from `integrity.*` with `{count}` filled, no raw key or `{count}` left, translated link and dismiss label, no "Translation missing" warning; exact English sentences for 1 and 8 |
+
+`tsc -b` also guards the section: `integrity` is required in `Translations`, so
+removing it from either locale file fails the `as Translations` cast in
+`context.tsx`. Not run on this change: the full `npx vitest run` (stopped on
+request; only this file was run). Still manual: the banner in RTL.
+
 #### Release tooling (added 2026-10-11)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
