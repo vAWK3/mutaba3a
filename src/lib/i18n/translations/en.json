@@ -1335,5 +1335,19 @@
     "toastClean": "Data integrity check passed",
     "toastIssuesSingular": "{count} data integrity issue found",
     "toastIssuesPlural": "{count} data integrity issues found"
+  },
+  "sample": {
+    "bar": {
+      "label": "Sample data",
+      "message": "You're looking at sample data.",
+      "start": "Start with your own",
+      "confirm": {
+        "one": "This also removes the {count} thing you added while looking around.",
+        "other": "This also removes the {count} things you added while looking around."
+      },
+      "confirmYes": "Start fresh",
+      "keep": "Keep looking"
+    },
+    "preparing": "Setting up the sample…"
   }
 }

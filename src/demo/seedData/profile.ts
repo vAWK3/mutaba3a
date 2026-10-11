@@ -72,7 +72,12 @@ const DEMO_PROFILES = [
   },
 ] as const;
 
-export function createDemoProfiles(): BusinessProfile[] {
+interface CreateDemoProfilesOptions {
+  /** A non-sample profile is already the default; the sample must not add a second. */
+  existingDefault?: boolean;
+}
+
+export function createDemoProfiles({ existingDefault = false }: CreateDemoProfilesOptions = {}): BusinessProfile[] {
   const now = new Date().toISOString();
 
   return DEMO_PROFILES.map((profile, index) => ({
@@ -93,7 +98,7 @@ export function createDemoProfiles(): BusinessProfile[] {
     primaryColor: profile.primaryColor,
     defaultCurrency: profile.defaultCurrency,
     defaultLanguage: 'ar' as const,
-    isDefault: index === 0, // First profile is default
+    isDefault: !existingDefault && index === 0, // First profile is default unless one already is
     website: profile.website,
     defaultTemplateId: 'template1',
     defaultTaxRate: 0.17,

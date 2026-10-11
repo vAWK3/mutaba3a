@@ -10,6 +10,7 @@
  */
 
 import type { Transaction, Currency, TxKind, TxStatus } from '../../types';
+import { notAfter } from './dates';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES, DEMO_CONFIG } from '../constants';
 import { getDemoClientIds } from './clients';
@@ -148,12 +149,12 @@ export function createDemoTransactions(): Transaction[] {
           payDateObj.setDate(
             payDateObj.getDate() + rng.int(1, Math.max(1, (dueDateObj.getTime() - occurredDate.getTime()) / (1000 * 60 * 60 * 24) + 5))
           );
-          paidAt = payDateObj.toISOString();
+          paidAt = notAfter(payDateObj, referenceDate).toISOString();
         }
       } else {
         // Expenses are always paid
         const occurredDate = new Date(occurredAt);
-        paidAt = occurredDate.toISOString();
+        paidAt = notAfter(occurredDate, referenceDate).toISOString();
       }
 
       // Pick title and category

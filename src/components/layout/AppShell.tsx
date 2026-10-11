@@ -16,6 +16,10 @@ import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { FxRateBanner } from "../ui/FxRateBanner";
 import { DemoBanner } from "../ui/DemoBanner";
+import { SampleDataBar } from "../ui/SampleDataBar";
+import { useT } from "../../lib/i18n";
+import { useVisitorSampleEntry } from "../../demo/useVisitorSample";
+import { useSampleSessionStore } from "../../demo/sampleSessionStore";
 import { InlineErrorBoundary } from "../ui/ErrorBoundary";
 import { UpdateBanner } from '../ui/UpdateBanner';
 import {
@@ -54,6 +58,11 @@ export function AppShell({ children }: AppShellProps) {
 
   // A page whose optional area is switched off sends the user home (MUT-15)
   useLeaveDisabledArea();
+
+  // The landing page's "Open the web app" opens a sample business (MUT-78)
+  const t = useT();
+  useVisitorSampleEntry();
+  const isPreparingSample = useSampleSessionStore((s) => s.status === "preparing");
 
   // Initialize sync system on app load
   useEffect(() => {
@@ -94,10 +103,17 @@ export function AppShell({ children }: AppShellProps) {
       <DemoBanner />
       <SidebarNav />
       <main className="main-content">
+        <SampleDataBar />
         <ConflictBanner />
         <OrphanedRecordsBanner />
         <FeatureNoticeBanner />
-        {children}
+        {isPreparingSample ? (
+          <div className="sample-preparing" role="status" aria-busy="true">
+            {t("sample.preparing")}
+          </div>
+        ) : (
+          children
+        )}
       </main>
 
       {incomeDrawer.isOpen && (

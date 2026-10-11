@@ -24,5 +24,9 @@ export const DOWNLOAD_URLS = {
   allReleases: 'https://github.com/vAWK3/mutaba3a/releases',
 } as const;
 
-/** Where the landing page sends visitors who want to use the app in the browser. */
-export const WEB_APP_URL = '/app';
+/**
+ * Where the landing page sends visitors who want to use the app in the browser:
+ * straight onto the Clients list of a sample business (MUT-78, ADR-042). A
+ * browser that already holds the person's own data just opens on it.
+ */
+export const WEB_APP_URL = '/app/clients?sample=1';

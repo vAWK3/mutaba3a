@@ -1,0 +1,86 @@
+/* The visitor sample's one line (MUT-78). In the content flow, never fixed. */
+.sample-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.sample-bar-text {
+  flex: 1;
+}
+
+.sample-bar-action,
+.sample-bar-secondary {
+  background: none;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease-out;
+}
+
+.sample-bar-action {
+  color: var(--accent);
+}
+
+.sample-bar-action::after {
+  content: ' ›';
+}
+
+[dir='rtl'] .sample-bar-action::after {
+  content: ' ‹';
+}
+
+.sample-bar-secondary {
+  color: var(--text-secondary);
+}
+
+.sample-bar-action:hover,
+.sample-bar-secondary:hover {
+  background: var(--surface-hover);
+}
+
+.sample-bar-action:active,
+.sample-bar-secondary:active {
+  transform: scale(0.97);
+}
+
+.sample-bar-action:focus-visible,
+.sample-bar-secondary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.sample-bar-action:disabled,
+.sample-bar-secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sample-preparing {
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sample-bar-action,
+  .sample-bar-secondary {
+    transition: background-color 0.15s ease;
+  }
+
+  .sample-bar-action:active,
+  .sample-bar-secondary:active {
+    transform: none;
+  }
+}

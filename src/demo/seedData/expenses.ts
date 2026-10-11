@@ -6,6 +6,7 @@
  */
 
 import type { Expense, RecurringRule } from '../../types';
+import { notAfter } from './dates';
 import { SeededRandom } from '../prng';
 import { DEMO_SEED, DEMO_PREFIXES } from '../constants';
 import { getDemoProfileIds, getDemoProfileCount } from './profile';
@@ -105,6 +106,7 @@ export function createDemoExpenses(): Expense[] {
 
       const occurredAt = new Date(monthDate);
       occurredAt.setDate(rng.int(1, 15));
+      const occurredOn = notAfter(occurredAt, referenceDate);
 
       const now = new Date().toISOString();
 
@@ -116,7 +118,7 @@ export function createDemoExpenses(): Expense[] {
         categoryId: rule.categoryId,
         amountMinor: rule.amountMinor,
         currency: rule.currency,
-        occurredAt: occurredAt.toISOString().split('T')[0],
+        occurredAt: occurredOn.toISOString().split('T')[0],
         recurringRuleId: rule.id,
         createdAt: now,
         updatedAt: now,
@@ -130,6 +132,7 @@ export function createDemoExpenses(): Expense[] {
     selectedExpenses.forEach((template, idx) => {
       const occurredAt = new Date(monthDate);
       occurredAt.setDate(rng.int(1, 28));
+      const occurredOn = notAfter(occurredAt, referenceDate);
 
       // Distribute one-time expenses across profiles
       const profileIdx = (monthOffset + 12 + idx) % profileCount;
@@ -152,7 +155,7 @@ export function createDemoExpenses(): Expense[] {
         categoryId: categoryIds[template.categoryIndex % categoryIds.length],
         amountMinor,
         currency,
-        occurredAt: occurredAt.toISOString().split('T')[0],
+        occurredAt: occurredOn.toISOString().split('T')[0],
         createdAt: now,
         updatedAt: now,
       });
