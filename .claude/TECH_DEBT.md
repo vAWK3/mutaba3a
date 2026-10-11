@@ -663,8 +663,8 @@ keeps no account system (ADR-023). Malafat's side records the same decision in
 its ADR-150 addendum (MAL-870). Revisit only if a customer other than Malafat
 needs keys without an operator.
 
-> **Correction (2026-10-11, ADR-033 — Proposed).** "Mutaba3a keeps no account
-> system" stops being true when ADR-033 is accepted: the hosted service gains
+> **Correction (2026-10-11, ADR-033).** "Mutaba3a keeps no account system" is
+> no longer true: the hosted service gains
 > users, memberships and sessions for the hosted portal. The *decision* this
 > entry records is unchanged and extends to users — they are operator-issued
 > through `/admin/v1/users*` exactly like keys, with no self-serve signup,

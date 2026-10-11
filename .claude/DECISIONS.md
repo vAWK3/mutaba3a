@@ -41,7 +41,7 @@
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
-| ADR-033 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Proposed | 2026-10 |
+| ADR-033 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
 
 ---
 
@@ -703,10 +703,9 @@ Sync) remain Active and in conflict with cloud sync. Overriding them is MUT-30's
 job and must happen before any cloud sync ships. This ADR covers only how a
 client authenticates when that work is approved.
 
-> **Override note (2026-10-11, ADR-033 — Proposed until the owner approves
-> MUT-36).** The clause "builds no account system, no password storage, and no
-> session of its own" stops describing the hosted service once ADR-033 is
-> accepted: it gives `server/` operator-provisioned users,
+> **Override note (2026-10-11, ADR-033).** The clause "builds no account
+> system, no password storage, and no session of its own" no longer describes
+> the hosted service: ADR-033 gives `server/` operator-provisioned users,
 > argon2id password hashes and server-side sessions for the hosted portal.
 > The rest of this ADR stands — it still governs how the *desktop* app
 > authenticates to a Malafat tenant (MUT-28), and no part of ADR-033 touches
@@ -1311,9 +1310,9 @@ the reconcile now makes visible (TD-023).
 
 ## ADR-033: Hosted Users and Sessions — A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix
 
-**Status**: Proposed (extends ADR-025; partial override of ADR-023 for the
-hosted service; ADR-013 untouched) — becomes Active when the owner approves
-`.claude/designs/hosted-portal.md` (MUT-36)
+**Status**: Active (extends ADR-025; partial override of ADR-023 for the
+hosted service; ADR-013 untouched) — approved by the owner with
+`.claude/designs/hosted-portal.md` on 2026-10-11 (MUT-36)
 **Date**: 2026-10-11
 **Context**: Epic MUT-34. Money v1's only principal is Malafat's organization
 API key (ADR-025 §2–3); a firm partner has no way to see the firm's money on

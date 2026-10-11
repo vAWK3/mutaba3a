@@ -1,6 +1,6 @@
 # Hosted Mutaba3a — portal architecture, profile source model, writability matrix (design brief)
 
-- **Date:** 2026-10-11 · **Status:** draft for owner review — gates MUT-37, MUT-38, MUT-39, MUT-42, MUT-43, MUT-44, MUT-45
+- **Date:** 2026-10-11 · **Status:** approved by the owner as written (2026-10-11) — gates MUT-37, MUT-38, MUT-39, MUT-42, MUT-43, MUT-44, MUT-45
 - **Tickets:** MUT-36 (this brief + ADR-033) under epic MUT-34 · **Builds on:** ADR-024, ADR-025, ADR-026, MUT-35 (repository seam), M6 summaries, M8 overview IA (`money-v1-m8-overview-ia.md`, wireframe state 5)
 - **Repo side:** Mutaba3a only. `server/` gains a user principal, sessions, an access join and one enforced matrix; the root package gains a third build target (`hosted`) beside `web` and `desktop`. **Malafat unchanged** except a vendored-contract refresh (§4.6).
 - **Owner decisions this brief assumes (2026-10-10, epic MUT-34):** a profile has a source, `local` or `hosted`; neither syncs to the other; on a hosted profile income/receivables/payments are read-only and expenses are writable server-side; accounts are operator-issued only, no signup/invite/reset route in any environment; "sign in with Malafat" is not v1.
