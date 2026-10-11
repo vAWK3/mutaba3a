@@ -29,6 +29,7 @@ import {
   useCreatePaymentRecord,
   useMarkTransactionPaid,
   usePaymentsByClient,
+  useRecentPayments,
 } from '../useQueries';
 import type { BusinessProfile, Document } from '../../types';
 
@@ -566,6 +567,33 @@ describe('Payment Record Hooks', () => {
         amountMinor: 10000,
         source: 'record',
       });
+    });
+  });
+
+  /** MUT-8: Home's Recent payments shares the ['paymentRecords'] prefix. */
+  describe('useRecentPayments', () => {
+    it('shows a payment as soon as Mark paid records it', async () => {
+      const client = await clientRepo.create({ name: 'Acme' });
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        title: 'Logo',
+        amountMinor: 5000,
+        currency: 'ILS',
+        occurredAt: '2026-03-01',
+        clientId: client.id,
+      });
+
+      const { result } = renderHook(
+        () => ({ recent: useRecentPayments(), markPaid: useMarkTransactionPaid() }),
+        { wrapper: createWrapper(createTestQueryClient()) }
+      );
+      await waitFor(() => expect(result.current.recent.data).toEqual([]));
+
+      await result.current.markPaid.mutateAsync(tx.id);
+
+      await waitFor(() => expect(result.current.recent.data).toHaveLength(1));
+      expect(result.current.recent.data?.[0]).toMatchObject({ clientName: 'Acme', transactionTitle: 'Logo', currency: 'ILS' });
     });
   });
 });

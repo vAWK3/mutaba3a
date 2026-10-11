@@ -24,6 +24,7 @@ import type {
   PaymentStatus,
   PaymentRecord,
   PaymentByClientRow,
+  RecentPaymentRow,
   PaymentByClientFilters,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
@@ -502,10 +503,13 @@ export const transactionRepo = {
       // derived its 7-day bound via toISOString(), i.e. the UTC date, so the
       // window was a day off west of UTC.
       return isOverdueReceivable(tx, today) || isDueSoon(tx, today);
-    }).sort((a, b) => {
-      // Sort by due date ascending (most urgent first)
-      return (a.dueDate || '').localeCompare(b.dueDate || '');
-    });
+    }).sort((a, b) =>
+      // Oldest due date first; equal dates by client name, then id, so Home's
+      // Needs attention (MUT-8) never reshuffles between renders
+      (a.dueDate || '').localeCompare(b.dueDate || '') ||
+      (a.clientName ?? '').localeCompare(b.clientName ?? '') ||
+      a.id.localeCompare(b.id)
+    );
   },
 };
 
@@ -1506,6 +1510,41 @@ export const paymentRecordRepo = {
       .toArray();
 
     return records.sort((a, b) => a.paidAt.localeCompare(b.paidAt));
+  },
+
+  /**
+   * The newest payments across every client (MUT-8, Home's Recent payments):
+   * the same rows as a client's Payments section (ADR-033), each naming its
+   * client. Deleted entries and records are left out; archived entries'
+   * payments stay -- they happened.
+   */
+  async listRecent(filters: { profileId?: string; limit?: number } = {}): Promise<RecentPaymentRow[]> {
+    const incomes = await db.transactions
+      .filter((tx) => tx.kind === 'income' && !tx.deletedAt && scopeToProfile(tx, filters.profileId))
+      .toArray();
+    if (incomes.length === 0) return [];
+
+    const [records, clients] = await Promise.all([
+      db.paymentRecords
+        .where('transactionId')
+        .anyOf(incomes.map((tx) => tx.id))
+        .filter((r) => !r.deletedAt)
+        .toArray(),
+      db.clients.toArray(),
+    ]);
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const clientNames = createNameMap(clients);
+
+    const rows: RecentPaymentRow[] = incomes.flatMap((tx) =>
+      paymentRowsForIncome(tx, recordsByTx.get(tx.id) ?? []).map((row) => ({
+        ...row,
+        clientId: tx.clientId,
+        clientName: tx.clientId ? clientNames.get(tx.clientId) : undefined,
+      }))
+    );
+
+    rows.sort((a, b) => b.paidAt.localeCompare(a.paidAt) || a.id.localeCompare(b.id));
+    return rows.slice(0, filters.limit ?? 10);
   },
 
   /**

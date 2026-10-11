@@ -4,7 +4,7 @@
 - **Ticket:** MUT-8 (epic MUT-1). Settles parent-brief D10 and the overview half of TD-030.
 - **Parent brief:** `.claude/designs/mut-1-client-accounting-core.md` Phase 4. Builds on MUT-3 (ADR-033) and MUT-7 (ADR-035).
 - **Branch / worktree:** `feature/mut-1-client-core` in `.claude/worktrees/mut-1-client-core`, from `main` 2151315
-- **Status:** awaiting approval
+- **Status:** approved by Basel 2026-10-11 — D10 = B (delete the three components now; follow-up ticket prunes the money-event read side), rest as written
 
 ---
 
@@ -49,7 +49,7 @@ Audit findings:
 | D7 | **Removed from Home:** the forecast strip, the month-actuals row, the guidance attention feed, and "Recent activity" (transactions this month, expenses included). What happens to those components is D10 (§5) | Ticket: "remove anything that does not serve those three"; expenses are not core |
 | D8 | **i18n:** new `home.owed.*`, `home.attention.*` (reused where they fit), `home.payments.*`, `home.empty.*` keys in en and ar; amounts in `<bdi dir="ltr">` | Guardrails |
 | D9 | **Load:** Home goes from roughly six queries (two guidance, month KPIs, actuals, two transaction lists, clients) to four (clients, receivables, attention, recent payments), and the eager chunk no longer imports the forecast components | AC "does not regress initial load" |
-| D10 | **The forecast strip, month actuals and guidance feed:** open, see §5 | — |
+| D10 | **Delete `PredictiveKpiStrip`, `MonthActualsRow` and `AttentionFeed` (and `KpiCard`/`KpiStrip` if nothing else uses them) with their tests, CSS and i18n keys** (§5 option B, chosen by Basel). The money-event read side they leave without a screen (`useGuidance`, `useMonthKPIsBothCurrencies`, `moneyEventRepository`, the `invalidateMoneyEventQueries` calls) is pruned in a follow-up ticket and recorded as debt until then | Leanest Home; forecasting leaves the product by decision |
 
 ## 4. API contracts
 
@@ -66,7 +66,7 @@ listRecent(filters?: { profileId?: string; limit?: number }): Promise<RecentPaym
 useRecentPayments(profileId?: string, limit = 10)   // key ['paymentRecords', 'recent', { profileId, limit }]
 ```
 
-## 5. Open decision (needs Basel)
+## 5. Open decision (resolved 2026-10-11: B)
 
 **D10 — what happens to the forecast strip ("Will I make it?", cash on hand, coming/leaving), the month-actuals row and the guidance attention feed once they leave Home?** All three are used only there.
 
