@@ -70,10 +70,6 @@
     "collapse": "طي الشريط الجانبي",
     "expand": "توسيع الشريط الجانبي",
     "sections": {
-      "main": "الرئيسية",
-      "workspace": "مساحة العمل",
-      "work": "العمل",
-      "money": "المالية",
       "system": "النظام",
       "optional": "المزيد"
     },
@@ -1528,5 +1524,11 @@
     "assignAllToDefault": "تعيين الكل للملف الافتراضي",
     "assignIndividually": "تعيين فردياً",
     "or": "أو"
+  },
+  "integrity": {
+    "orphanedRecordSingular": "سجل واحد غير مرتبط بأي ملف تجاري.",
+    "orphanedRecordPlural": "عدد السجلات غير المرتبطة بأي ملف تجاري: {count}",
+    "reviewNow": "مراجعة الآن",
+    "dismiss": "إغلاق"
   }
 }

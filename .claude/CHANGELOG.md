@@ -46,7 +46,7 @@
   - **Last Payment:** the date over the amount, or **Never paid**.
   - Active projects and received are gone.
 - **Default order is owed now, descending**, ranked by today's exchange rate
-  with nothing converted on screen (ADR-034). The header tooltip says so. The
+  with nothing converted on screen (ADR-035). The header tooltip says so. The
   Overdue column sorts by days late, Last Payment and Last Activity by date,
   Client by name. Ties fall back to name, then id.
 - **Click a column header to sort** (`SortableHeader`, with `aria-sort`). It
@@ -94,6 +94,98 @@
   as received and a backdated Mark paid. The row opened a profile that agrees
   with its index row. No horizontal scroll, and amount columns align to the
   end edge in RTL.
+
+---
+
+## [Unreleased] - 2026-10-11 — MUT-15: the sidebar is Home / Clients / Income / Settings
+
+**Scope:** `src/components/layout/{SidebarNav,TopBar,AppShell}.tsx`, `src/components/layout/addMenuActions.ts` (new),
+`src/hooks/useMenuButton.ts` (new), `src/lib/features/{features,routeGuard}.ts`,
+`src/components/onboarding/{OnboardingOverlay,OnboardingStepIndicator}.tsx`, `src/index.css`,
+`src/lib/i18n/translations/{en,ar}.json`, `e2e/navigation.spec.ts`; tests
+`src/components/layout/__tests__/{SidebarNav.features,TopBar.addMenu,addMenuActions}.test.*`,
+`src/hooks/__tests__/useMenuButton.test.tsx`, `src/lib/features/__tests__/{features,leaveDisabledArea}.test.*`,
+`src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`, `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (mock);
+`.claude/{DECISIONS,SYSTEM_OVERVIEW,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN}.md`; brief
+`.claude/designs/mut-15-sidebar-core-four{,-tests}.md`. Branch `feature/mut-2-strip-core`. ADR-034.
+
+### Changed
+- **Sidebar core.** One header-less group, Home → Clients → Income, that no
+  switch can move (a constant rendered above "More"). The "Main" and
+  "Workspace" headers are gone; "More" and "System" stay. Fresh install: exactly
+  Home, Clients, Income, Settings.
+- **`+ Add` menus.** The sidebar **New** menu and the top bar **Add** menu read
+  one list (`visibleAddMenuActions`) and now offer the same order: Income,
+  Client, then Expense / Project while those areas are on (the top bar used to
+  list Income, Expense, Project, Client).
+- **Keyboard.** Both menus follow the menu-button pattern (`useMenuButton`):
+  opening focuses the first item, ArrowUp/Down/Home/End move, Escape closes and
+  returns focus to the button, Tab and outside clicks close. Before, the
+  sidebar menu declared `role="menu"` but ignored arrows and the top bar menu
+  had no roles and did not return focus.
+- **Onboarding (TD-027).** The step indicator takes its step list from the
+  overlay: with projects off a fresh install sees steps 1–2, not a pre-ticked
+  "Project" step 2.
+
+### Added
+- **Leaving a switched-off area.** `useLeaveDisabledArea` (mounted in
+  `AppShell`) re-runs the route guards (`router.invalidate()`) when any area
+  goes from on to off, so a page whose area was switched off, for example in
+  another window of the web build, lands on Home with `replace`. Verified in
+  the browser with two tabs.
+
+### Fixed
+- **Collapsed sidebar.** The collapse chevron and the expand button were
+  absolutely positioned with no containing block in the sidebar, so they
+  floated at the window's top-right (beside `+ Add`) and bottom-centre (behind
+  the download banner). Both are in flow now: chevron under the brand, expand
+  button under Settings. A hairline separates the core group from "More"
+  while headers are hidden.
+- **RTL.** The collapse chevron pointed the wrong way in Arabic; it now points
+  toward the edge the sidebar collapses to in all four direction × state
+  combinations (checked in the browser).
+
+### Removed
+- `nav.sections.main | workspace | work | money` (en, ar): unused.
+- `SidebarNav`'s `/download` external-link branch and a commented-out icon.
+
+### Technical
+- `e2e/navigation.spec.ts` rewritten for the core four (it walked Overview →
+  Projects → Transactions → Reports from the landing page). Run locally: 2/2
+  pass. The other 13 e2e cases fail for reasons that predate this change
+  (TD-004 updated).
+- Verification: `npm run lint` 0 errors (17 pre-existing warnings, none in
+  changed files); `npm run typecheck` and `npx tsc -b` clean; full suite
+  134 files, 2,207 passed, 5 skipped, 0 failed (baseline 130 / 2,149);
+  `npm run build` succeeds.
+
+---
+
+## [Unreleased] - 2026-10-11 — Orphaned-records banner shows text, not i18n keys
+
+**Scope:** `src/components/layout/OrphanedRecordsBanner.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/components/layout/__tests__/OrphanedRecordsBanner.test.tsx` (new),
+`.claude/{CHANGELOG,TEST_PLAN}.md`.
+
+### Fixed
+- With records saved without a `profileId`, the banner read
+  "8 integrity.orphanedRecordPlural" and its link "integrity.reviewNow", in
+  both languages (seen 2026-10-11 on a dev build). Neither locale file had an
+  `integrity` section. The `|| 'fallback'` strings in the banner never ran,
+  because `t()` returns the key itself when one is missing.
+- Added `integrity.orphanedRecordSingular`, `orphanedRecordPlural`,
+  `reviewNow` and `dismiss` to en.json and ar.json, and the section to the
+  `Translations` type, so `tsc -b` fails if either file drops it.
+
+### Changed
+- The banner passes `{ count }` to `t()` instead of printing the number before
+  the translated phrase, so each language places the number itself. The
+  Arabic plural is a "count: N" label ("عدد السجلات غير المرتبطة بأي ملف
+  تجاري: {count}"). It reads correctly for 2, 3–10 and 11+, which a fixed
+  "{count} سجلات" does not.
+- The dismiss button's `aria-label` is translated (was hardcoded "Dismiss").
+  The dead fallback strings are gone.
 
 ---
 

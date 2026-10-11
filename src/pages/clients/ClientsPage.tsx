@@ -37,7 +37,7 @@ const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
 /**
  * The clients index (MUT-7): who owes me, and who is late. Owed now and
  * overdue are per currency and never combined; owed now is ordered by today's
- * exchange rate without showing anything converted (ADR-034).
+ * exchange rate without showing anything converted (ADR-035).
  */
 export function ClientsPage() {
   const { openClientDrawer } = useDrawerStore();
@@ -80,7 +80,7 @@ export function ClientsPage() {
     enabled: hasMultipleProfiles,
   });
 
-  // Today's rates, used only to order owed now across currencies (ADR-034)
+  // Today's rates, used only to order owed now across currencies (ADR-035)
   const { rate: usdRate } = useFxRate('USD', 'ILS');
   const { rate: eurRate } = useFxRate('EUR', 'ILS');
   const rates = useMemo((): RatesToIls => ({ USD: usdRate ?? undefined, EUR: eurRate ?? undefined }), [usdRate, eurRate]);

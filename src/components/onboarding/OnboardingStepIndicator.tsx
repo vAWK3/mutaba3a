@@ -3,26 +3,23 @@ import type { OnboardingStep } from '../../lib/onboardingStore';
 import './OnboardingStepIndicator.css';
 
 interface OnboardingStepIndicatorProps {
+  /** The steps this user walks, in order; numbered from 1 (TD-027) */
+  steps: readonly OnboardingStep[];
   currentStep: OnboardingStep;
   completedSteps: OnboardingStep[];
 }
 
-const STEPS: { step: OnboardingStep; number: number }[] = [
-  { step: 'client', number: 1 },
-  { step: 'project', number: 2 },
-  { step: 'income', number: 3 },
-];
-
 export function OnboardingStepIndicator({
+  steps,
   currentStep,
   completedSteps,
 }: OnboardingStepIndicatorProps) {
   return (
     <div className="onboarding-step-indicator">
-      {STEPS.map(({ step, number }, index) => {
+      {steps.map((step, index) => {
         const isComplete = completedSteps.includes(step);
         const isCurrent = currentStep === step;
-        const isLast = index === STEPS.length - 1;
+        const isLast = index === steps.length - 1;
 
         return (
           <div key={step} className="step-item">
@@ -33,7 +30,7 @@ export function OnboardingStepIndicator({
                 isCurrent && !isComplete && 'current'
               )}
             >
-              {isComplete ? <CheckIcon /> : number}
+              {isComplete ? <CheckIcon /> : index + 1}
             </div>
             {!isLast && (
               <div className={cn('step-line', isComplete && 'completed')} />

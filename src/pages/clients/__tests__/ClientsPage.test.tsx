@@ -3,7 +3,7 @@
  *
  * MUT-7: the clients index answers "who owes me, and who is late". Owed now
  * and overdue per currency (never summed across currencies), default order
- * owed-now descending by today's rate (ADR-034), last payment with a "never"
+ * owed-now descending by today's rate (ADR-035), last payment with a "never"
  * state, settled clients labelled, click-to-sort headers, row → profile.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

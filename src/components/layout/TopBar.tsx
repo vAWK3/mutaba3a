@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useProfileAwareAction } from '../../hooks/useProfileAwareAction';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
@@ -6,7 +6,9 @@ import { ProfileQuickPicker } from '../ui/ProfileQuickPicker';
 import { ProfileBadge } from '../ui/ProfileBadge';
 import { useDrawerStore } from '../../lib/stores';
 import { useT, useDirection } from '../../lib/i18n';
-import { useFeatureEnabled } from '../../lib/features/useFeatures';
+import { useFeatureFlags } from '../../lib/features/useFeatures';
+import { useMenuButton } from '../../hooks/useMenuButton';
+import { visibleAddMenuActions, type AddMenuAction } from './addMenuActions';
 
 interface Breadcrumb {
   label: string;
@@ -61,9 +63,18 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot, hideAddMenu 
   );
 }
 
+// How the Add menu shows each action; which actions, and their order, come
+// from `visibleAddMenuActions` (shared with the sidebar's New menu, MUT-15).
+const addMenuEntries: Record<AddMenuAction, { labelKey: string; icon: React.ComponentType<{ className?: string }> }> = {
+  income: { labelKey: 'addMenu.income', icon: DollarIcon },
+  client: { labelKey: 'addMenu.client', icon: UserPlusIcon },
+  expense: { labelKey: 'addMenu.expense', icon: MinusIcon },
+  project: { labelKey: 'addMenu.project', icon: FolderPlusIcon },
+};
+
 function AddMenu() {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const menu = useMenuButton();
+  const actions = visibleAddMenuActions(useFeatureFlags());
   const { openIncomeDrawer, openExpenseDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
   const t = useT();
 
@@ -79,10 +90,6 @@ function AddMenu() {
       openExpenseDrawer({ mode: 'create', defaultProfileId: profileId });
     },
   });
-  // New expense / New project are offered only while their areas are on (MUT-14, MUT-16)
-  const expensesEnabled = useFeatureEnabled('expenses');
-  const projectsEnabled = useFeatureEnabled('projects');
-
   const clientAction = useProfileAwareAction({
     onExecute: (profileId) => {
       openClientDrawer({ mode: 'create', defaultProfileId: profileId });
@@ -95,40 +102,8 @@ function AddMenu() {
     },
   });
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
-
-  const handleAction = (action: 'income' | 'expense' | 'client' | 'project', event: React.MouseEvent<HTMLElement>) => {
-    setIsOpen(false);
+  const handleAction = (action: AddMenuAction, event: React.MouseEvent<HTMLElement>) => {
+    menu.close();
     switch (action) {
       case 'income':
         incomeAction.trigger(event);
@@ -147,45 +122,29 @@ function AddMenu() {
 
   return (
     <>
-      <div className="add-menu-container" ref={containerRef}>
-        <button className="btn btn-primary" onClick={() => setIsOpen(!isOpen)}>
+      <div className="add-menu-container">
+        <button {...menu.buttonProps} type="button" className="btn btn-primary">
           <PlusIcon />
           {t('common.add')}
         </button>
-        {isOpen && (
-          <div className="add-menu">
-            <button
-              className="add-menu-item"
-              onClick={(e) => handleAction('income', e)}
-            >
-              <DollarIcon className="nav-icon" />
-              {t('addMenu.income')}
-            </button>
-            {expensesEnabled && (
-              <button
-                className="add-menu-item"
-                onClick={(e) => handleAction('expense', e)}
-              >
-                <MinusIcon className="nav-icon" />
-                {t('addMenu.expense')}
-              </button>
-            )}
-            {projectsEnabled && (
-              <button
-                className="add-menu-item"
-                onClick={(e) => handleAction('project', e)}
-              >
-                <FolderPlusIcon className="nav-icon" />
-                {t('addMenu.project')}
-              </button>
-            )}
-            <button
-              className="add-menu-item"
-              onClick={(e) => handleAction('client', e)}
-            >
-              <UserPlusIcon className="nav-icon" />
-              {t('addMenu.client')}
-            </button>
+        {menu.isOpen && (
+          <div {...menu.menuProps} className="add-menu">
+            {actions.map((action) => {
+              const { labelKey, icon: Icon } = addMenuEntries[action];
+              return (
+                <button
+                  key={action}
+                  type="button"
+                  className="add-menu-item"
+                  role="menuitem"
+                  tabIndex={-1}
+                  onClick={(e) => handleAction(action, e)}
+                >
+                  <Icon className="nav-icon" />
+                  {t(labelKey)}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

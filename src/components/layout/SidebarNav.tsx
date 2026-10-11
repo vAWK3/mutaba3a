@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { cn } from "../../lib/utils";
 import { useT } from "../../lib/i18n";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
@@ -8,8 +8,10 @@ import { useDrawerStore } from "../../lib/stores";
 import { useProfileAwareAction } from "../../hooks/useProfileAwareAction";
 import { ProfileQuickPicker } from "../ui/ProfileQuickPicker";
 import { useFeatureFlags } from "../../lib/features/useFeatures";
+import { useMenuButton } from "../../hooks/useMenuButton";
 import { DocumentIcon as SharedDocumentIcon } from "../icons";
 import type { FeatureKey } from "../../types";
+import { visibleAddMenuActions, type AddMenuAction } from "./addMenuActions";
 
 // Storage key for collapsed state
 const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
@@ -47,34 +49,23 @@ interface NavItem {
   badge?: "hasUpdate";
 }
 
-// Navigation section type
+// Navigation section type; a section without a header renders its items bare
 interface NavSection {
   key: string;
-  labelKey: string;
+  labelKey?: string;
   items: NavItem[];
 }
 
-// Define navigation sections (question-first UX redesign)
-const navSections: NavSection[] = [
-  {
-    key: "main",
-    labelKey: "nav.sections.main",
-    items: [
-      { path: "/", labelKey: "nav.home", icon: HomeIcon, exact: true },
-      { path: "/income", labelKey: "nav.income", icon: IncomeIcon },
-    ],
-  },
-  {
-    key: "workspace",
-    labelKey: "nav.sections.workspace",
-    items: [
-      { path: "/clients", labelKey: "nav.clients", icon: UsersIcon },
-    ],
-  },
+// The core of the product (MUT-15, ADR-034): a constant, rendered first and
+// without a header, so no switch can move or reorder it.
+const coreItems: NavItem[] = [
+  { path: "/", labelKey: "nav.home", icon: HomeIcon, exact: true },
+  { path: "/clients", labelKey: "nav.clients", icon: UsersIcon },
+  { path: "/income", labelKey: "nav.income", icon: IncomeIcon },
 ];
 
-// Optional areas (MUT-13; MUT-16 appends): each entry shows only while its
-// Advanced-features switch is on. MUT-15 decides the final grouping.
+// Optional areas (MUT-13/14/16): each entry shows only while its
+// Advanced-features switch is on, in the "More" section below the core.
 const optionalItems: (NavItem & { feature: FeatureKey })[] = [
   { path: "/expenses", labelKey: "nav.expenses", icon: ExpensesIcon, feature: "expenses" },
   { path: "/documents", labelKey: "nav.documents", icon: DocumentIcon, feature: "invoices" },
@@ -94,21 +85,17 @@ const systemItems: NavItem[] = [
   },
 ];
 
-// New action menu items (simplified for question-first UX)
-type NewMenuAction = "income" | "expense" | "client" | "project";
-
-const newMenuItems: {
-  key: NewMenuAction;
-  labelKey: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /** Shown only while this optional area is on (MUT-14; MUT-15 revisits the menu) */
-  feature?: FeatureKey;
-}[] = [
-  { key: "income", labelKey: "nav.newMenu.income", icon: IncomeIcon },
-  { key: "expense", labelKey: "nav.newMenu.expense", icon: ExpensesIcon, feature: "expenses" },
-  { key: "client", labelKey: "nav.newMenu.client", icon: UsersIcon },
-  { key: "project", labelKey: "nav.newMenu.project", icon: FolderIcon, feature: "projects" },
-];
+// How the New menu shows each action; which actions, and their order, come
+// from `visibleAddMenuActions` (shared with the top bar's Add menu, MUT-15).
+const newMenuEntries: Record<
+  AddMenuAction,
+  { labelKey: string; icon: React.ComponentType<{ className?: string }> }
+> = {
+  income: { labelKey: "nav.newMenu.income", icon: IncomeIcon },
+  client: { labelKey: "nav.newMenu.client", icon: UsersIcon },
+  expense: { labelKey: "nav.newMenu.expense", icon: ExpensesIcon },
+  project: { labelKey: "nav.newMenu.project", icon: FolderIcon },
+};
 
 export function SidebarNav() {
   const location = useLocation();
@@ -117,11 +104,9 @@ export function SidebarNav() {
   const { hasUpdate } = useCheckForUpdates();
   const features = useFeatureFlags();
   const enabledOptionalItems = optionalItems.filter((item) => features[item.feature]);
-  const visibleNewMenuItems = newMenuItems.filter((item) => !item.feature || features[item.feature]);
+  const newMenuActions = visibleAddMenuActions(features);
   const [collapsed, toggleCollapsed] = useCollapsedState();
-  const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const newMenuRef = useRef<HTMLDivElement>(null);
-  const newButtonRef = useRef<HTMLButtonElement>(null);
+  const newMenu = useMenuButton();
 
   // Global drawer state from stores
   const openIncomeDrawer = useDrawerStore((s) => s.openIncomeDrawer);
@@ -148,36 +133,6 @@ export function SidebarNav() {
     },
   });
 
-  // Close menu on outside click
-  useEffect(() => {
-    if (!newMenuOpen) return;
-
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        newMenuRef.current &&
-        !newMenuRef.current.contains(e.target as Node) &&
-        newButtonRef.current &&
-        !newButtonRef.current.contains(e.target as Node)
-      ) {
-        setNewMenuOpen(false);
-      }
-    }
-
-    function handleEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setNewMenuOpen(false);
-        newButtonRef.current?.focus();
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [newMenuOpen]);
-
   // Check if a nav item is active
   const isItemActive = (item: NavItem): boolean => {
     if (item.exact) {
@@ -191,10 +146,10 @@ export function SidebarNav() {
 
   // Handle new menu action
   const handleNewAction = (
-    action: NewMenuAction,
+    action: AddMenuAction,
     event: React.MouseEvent<HTMLElement>,
   ) => {
-    setNewMenuOpen(false);
+    newMenu.close();
     switch (action) {
       case "income":
         // Use profile-aware action - will show picker if in "All Profiles" mode
@@ -222,11 +177,14 @@ export function SidebarNav() {
     const showUpdateBadge =
       showBadge && item.badge === "hasUpdate" && hasUpdate;
 
-    // Use <a> for download link (outside router scope, avoids basepath)
-    const isExternalPath = item.path === "/download";
-
-    const content = (
-      <>
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        className={cn("nav-item", isActive && "active")}
+        aria-current={isActive ? "page" : undefined}
+        title={collapsed ? t(item.labelKey) : undefined}
+      >
         {isActive && <span className="nav-item-rail" aria-hidden="true" />}
         <span className="nav-item-icon-wrapper">
           <Icon className="nav-icon" />
@@ -243,32 +201,6 @@ export function SidebarNav() {
             {showUpdateBadge && <span className="update-indicator" />}
           </>
         )}
-      </>
-    );
-
-    if (isExternalPath) {
-      return (
-        <a
-          key={item.path}
-          href={item.path}
-          className={cn("nav-item", isActive && "active")}
-          aria-current={isActive ? "page" : undefined}
-          title={collapsed ? t(item.labelKey) : undefined}
-        >
-          {content}
-        </a>
-      );
-    }
-
-    return (
-      <Link
-        key={item.path}
-        to={item.path}
-        className={cn("nav-item", isActive && "active")}
-        aria-current={isActive ? "page" : undefined}
-        title={collapsed ? t(item.labelKey) : undefined}
-      >
-        {content}
       </Link>
     );
   };
@@ -277,7 +209,7 @@ export function SidebarNav() {
   const renderSection = (section: NavSection) => {
     return (
       <div key={section.key} className="nav-section">
-        {!collapsed && (
+        {!collapsed && section.labelKey && (
           <div className="nav-section-header">{t(section.labelKey)}</div>
         )}
         <div className="nav-section-items">
@@ -327,13 +259,10 @@ export function SidebarNav() {
       {/* New Action Button */}
       <div className="new-action-section">
         <button
-          ref={newButtonRef}
+          {...newMenu.buttonProps}
           type="button"
-          className={cn("new-action-btn", newMenuOpen && "active")}
-          onClick={() => setNewMenuOpen(!newMenuOpen)}
+          className={cn("new-action-btn", newMenu.isOpen && "active")}
           title={collapsed ? t("nav.new") : undefined}
-          aria-expanded={newMenuOpen}
-          aria-haspopup="menu"
         >
           <PlusIcon className="nav-icon" />
           {!collapsed && (
@@ -341,24 +270,24 @@ export function SidebarNav() {
           )}
         </button>
 
-        {newMenuOpen && (
+        {newMenu.isOpen && (
           <div
-            ref={newMenuRef}
+            {...newMenu.menuProps}
             className={cn("new-action-menu", collapsed && "collapsed-menu")}
-            role="menu"
           >
-            {visibleNewMenuItems.map((item) => {
-              const Icon = item.icon;
+            {newMenuActions.map((action) => {
+              const { labelKey, icon: Icon } = newMenuEntries[action];
               return (
                 <button
-                  key={item.key}
+                  key={action}
                   type="button"
                   className="new-action-menu-item"
                   role="menuitem"
-                  onClick={(e) => handleNewAction(item.key, e)}
+                  tabIndex={-1}
+                  onClick={(e) => handleNewAction(action, e)}
                 >
                   <Icon className="nav-icon" />
-                  <span>{t(item.labelKey)}</span>
+                  <span>{t(labelKey)}</span>
                 </button>
               );
             })}
@@ -372,7 +301,7 @@ export function SidebarNav() {
 
       {/* Main Navigation */}
       <nav className="sidebar-nav">
-        {navSections.map(renderSection)}
+        {renderSection({ key: "core", items: coreItems })}
         {enabledOptionalItems.length > 0 &&
           renderSection({ key: "optional", labelKey: "nav.sections.optional", items: enabledOptionalItems })}
       </nav>
@@ -469,24 +398,6 @@ function UsersIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
-// function ChartIcon({ className }: { className?: string }) {
-//   return (
-//     <svg
-//       className={className}
-//       fill="none"
-//       viewBox="0 0 24 24"
-//       stroke="currentColor"
-//       strokeWidth={1.5}
-//     >
-//       <path
-//         strokeLinecap="round"
-//         strokeLinejoin="round"
-//         d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"
-//       />
-//     </svg>
-//   );
-// }
 
 function ExpensesIcon({ className }: { className?: string }) {
   return (

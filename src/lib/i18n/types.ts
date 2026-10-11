@@ -333,4 +333,10 @@ export interface Translations {
     daysOverdue: string;
     dueInDays: string;
   };
+  integrity: {
+    orphanedRecordSingular: string;
+    orphanedRecordPlural: string;
+    reviewNow: string;
+    dismiss: string;
+  };
 }

@@ -3,7 +3,7 @@
  *
  * Rows carry everything a cell shows, so cells only format. Ordering never
  * adds amounts of different currencies: owed now ranks by today's exchange
- * rate (ADR-034) -- a ranking only, nothing converted is ever displayed --
+ * rate (ADR-035) -- a ranking only, nothing converted is ever displayed --
  * and every other column compares something currency-free (days, dates,
  * names). Ties always fall back to name A–Z, then id, so the order is stable.
  */
