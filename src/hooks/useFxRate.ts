@@ -48,6 +48,9 @@ export function useFxRate(
     refetchOnMount: true,
     retry: 2,
     retryDelay: 1000,
+    // The one query that goes to the network: offline it waits (showing the
+    // cached rate below) instead of failing, unlike the app's local queries.
+    networkMode: 'online',
     // Use cached data as placeholder while fetching
     placeholderData: () => {
       const cached = getCachedFxRate(base, quote);
