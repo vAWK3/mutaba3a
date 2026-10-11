@@ -1,6 +1,6 @@
 # MUT-43 — Portal auth states (design addendum)
 
-- **Date:** 2026-10-11 · **Status:** draft, awaiting owner approval
+- **Date:** 2026-10-11 · **Status:** approved by the owner as drafted (2026-10-11), with the help line kept as "the person who set up your account"
 - **Ticket:** MUT-43 under epic MUT-34 · **Extends:** `hosted-portal.md` §7.1, §7.5, §7.6 (approved). Where this file and the brief differ, this file wins once approved; the deltas are listed in §5.
 - **Wireframe:** `mut-43-auth-states-wireframe.html` (every state below, en/ar, desktop/phone, light/dark from the OS)
 - **Server side:** unchanged. Everything here consumes MUT-38's `POST /v1/sessions`, `DELETE /v1/sessions/current` and `GET /v1/me` as built.
@@ -47,7 +47,7 @@ The brief specifies the sign-in form, one failure sentence, the 429 sentence and
 - Layout: a centred 360 px card on the page background, the wordmark above it, the help line below it, the language switch in the top inline-end corner. At phone width the card fills the width inside 16 px gutters.
 - Built from the existing tokens (`theme.css`) and the reusable `Button`, `Input` and `Card`. No new component except the sign-in page itself.
 
-## 5. Deltas from the approved brief (each needs owner approval)
+## 5. Deltas from the approved brief (all approved 2026-10-11)
 
 1. **S6 adds a second sentence** about the 15-minute pause. The brief has one sentence. After a lockout, the *correct* password also gets "don't match"; without the hint a person keeps trying, or concludes the account is broken. It is safe: the lockout keys on any email string, so the hint reveals nothing about which accounts exist.
 2. **A help line under the form** ("Can't sign in? Ask the person who set up your account for a new password."). The brief has none, which leaves someone who has lost their password with no next step. The copy avoids every string the bundle check bans.
