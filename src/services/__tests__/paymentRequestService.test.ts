@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../db/database';
 import { businessProfileRepo, clientRepo, paymentRecordRepo, transactionRepo } from '../../db/repository';
 import {
@@ -7,6 +7,21 @@ import {
   updatePaymentRequestWithTransaction,
 } from '../paymentRequestService';
 import type { Document } from '../../types';
+
+/** Runs fn with the clock at instant, in timeZone (Node applies a TZ change at once). */
+async function atInstantIn(timeZone: string, instant: string, fn: () => Promise<void>) {
+  const savedTz = process.env.TZ;
+  process.env.TZ = timeZone;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(instant));
+  try {
+    await fn();
+  } finally {
+    vi.useRealTimers();
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  }
+}
 
 type DocumentInput = Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt' | 'linkedTransactionIds'>;
 
@@ -84,6 +99,18 @@ describe('paymentRequestService', () => {
       expect(tx?.receivedAmountMinor).toBe(10000);
       const doc = await db.documents.get(document.id);
       expect(doc?.status).toBe('paid');
+    });
+  });
+
+  describe('recordPaymentForRequest as the document page calls it', () => {
+    it('records "now" in the evening west of UTC', async () => {
+      const { document, transaction } = await createPaymentRequestWithReceivable({ documentData });
+
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await recordPaymentForRequest(document.id, new Date().toISOString());
+      });
+
+      expect((await transactionRepo.get(transaction.id))?.status).toBe('paid');
     });
   });
 

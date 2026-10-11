@@ -302,7 +302,8 @@ describe('ProjectTypeahead', () => {
   });
 
   describe('when creating fails', () => {
-    it('keeps the typed name in the box, unpicked', async () => {
+    // No form guards unpicked project text, so the box must not show a project that won't be saved
+    it('empties the box, so it never shows a project that is not picked', async () => {
       const onChange = vi.fn();
       const createSpy = vi.spyOn(projectRepo, 'create').mockRejectedValueOnce(new Error('QuotaExceededError'));
       try {
@@ -314,7 +315,7 @@ describe('ProjectTypeahead', () => {
 
         await waitFor(() => expect(createSpy).toHaveBeenCalled());
         await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(''));
-        expect(input).toHaveValue('Rebrand');
+        await waitFor(() => expect(input).toHaveValue(''));
       } finally {
         createSpy.mockRestore();
       }

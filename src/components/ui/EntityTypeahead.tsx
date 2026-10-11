@@ -78,7 +78,9 @@ export function EntityTypeahead<T = unknown>({
 
   // The list is only "open" for the keyboard when something is actually shown.
   const isListVisible = isOpen && options.length > 0;
-  const highlightedIndex = highlight === 'auto' ? autoHighlight(options, typedText) : highlight;
+  // An empty box highlights nothing, even if the last typed text would (a failed pick may have emptied it)
+  const autoIndex = inputValue.trim() ? autoHighlight(options, typedText) : -1;
+  const highlightedIndex = highlight === 'auto' ? autoIndex : highlight;
   const optionId = (index: number) => `${listboxId}-option-${index}`;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

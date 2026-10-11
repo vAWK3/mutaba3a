@@ -15,16 +15,32 @@ const mockOptionsWithNew: TypeaheadOption[] = [
   { id: 'new', label: 'New Item', isNew: true },
 ];
 
+// Controlled like every real picker: the parent keeps the typed text and passes it back
 function renderTypeahead(props: Partial<React.ComponentProps<typeof EntityTypeahead>> = {}) {
-  const defaultProps = {
-    options: mockOptions,
-    inputValue: '',
-    onInputChange: vi.fn(),
-    onSelect: vi.fn(),
-    placeholder: 'Search...',
-    createLabel: 'Create new',
-  };
-  return render(<EntityTypeahead {...defaultProps} {...props} />);
+  const { inputValue: initialValue = '', onInputChange = vi.fn(), ...rest } = props;
+  function Harness() {
+    const [value, setValue] = useState(initialValue);
+    return (
+      <EntityTypeahead
+        options={mockOptions}
+        onSelect={vi.fn()}
+        placeholder="Search..."
+        createLabel="Create new"
+        {...rest}
+        inputValue={value}
+        onInputChange={(next) => {
+          setValue(next);
+          onInputChange(next);
+        }}
+      />
+    );
+  }
+  return render(<Harness />);
+}
+
+function ControlledInForm({ onSelect }: { onSelect: (option: TypeaheadOption) => void }) {
+  const [value, setValue] = useState('');
+  return <EntityTypeahead options={mockOptions} inputValue={value} onInputChange={setValue} onSelect={onSelect} />;
 }
 
 describe('EntityTypeahead', () => {
@@ -216,7 +232,7 @@ describe('EntityTypeahead', () => {
       const onSelect = vi.fn();
       render(
         <form onSubmit={onSubmit}>
-          <EntityTypeahead options={mockOptions} inputValue="" onInputChange={vi.fn()} onSelect={onSelect} />
+          <ControlledInForm onSelect={onSelect} />
           <button type="submit">Save</button>
         </form>
       );
@@ -434,6 +450,36 @@ describe('EntityTypeahead', () => {
       expect(screen.getByRole('option')).toHaveAttribute('aria-selected', 'true');
       fireEvent.keyDown(input, { key: 'Enter' });
       expect(onSelect).toHaveBeenCalledTimes(2);
+    });
+
+    it('highlights nothing in a box a failed pick emptied', async () => {
+      const options: TypeaheadOption[] = [
+        { id: 'p1', label: 'Website redesign', isNew: false },
+        { id: 'new', label: 'Website', isNew: true },
+      ];
+      function EmptiesOnFailure() {
+        const [value, setValue] = useState('');
+        return (
+          <EntityTypeahead
+            options={options}
+            inputValue={value}
+            onInputChange={setValue}
+            onSelect={async () => {
+              setValue('');
+              return false;
+            }}
+          />
+        );
+      }
+      render(<EmptiesOnFailure />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Website' } });
+      fireEvent.click(screen.getAllByRole('option')[1]); // "create Website", which fails
+      await act(async () => {});
+
+      fireEvent.focus(input);
+      expect(screen.getAllByRole('option').some((o) => o.getAttribute('aria-selected') === 'true')).toBe(false);
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
     });
 
     it('picks on the second Enter after Escape closed the list', () => {

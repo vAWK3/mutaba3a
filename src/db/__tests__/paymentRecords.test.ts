@@ -1,7 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../database';
 import { transactionRepo, paymentRecordRepo, clientRepo, PaymentRecordError } from '../repository';
 import { todayLocalISO } from '../../lib/dates';
+
+/** Runs fn with the clock at instant, in timeZone (Node applies a TZ change at once). */
+async function atInstantIn(timeZone: string, instant: string, fn: () => Promise<void>) {
+  const savedTz = process.env.TZ;
+  process.env.TZ = timeZone;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(instant));
+  try {
+    await fn();
+  } finally {
+    vi.useRealTimers();
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  }
+}
 
 describe('paymentRecordRepo', () => {
   let incomeId: string;
@@ -161,9 +176,33 @@ describe('paymentRecordRepo', () => {
         })
       ).resolves.toMatchObject({ paidAt: todayWithTime });
     });
+
+    // 21:30 on Oct 12 in New York is already Oct 13 in UTC; "now" is not a future payment
+    it('accepts "now" as a UTC timestamp in the evening west of UTC', async () => {
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await expect(
+          paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: new Date().toISOString() })
+        ).resolves.toMatchObject({ amountMinor: 3000 });
+      });
+    });
+
+    it('still rejects a timestamp whose local day is tomorrow', async () => {
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await expect(
+          paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: '2026-10-14T01:30:00.000Z' })
+        ).rejects.toThrow('Payment date cannot be in the future');
+      });
+    });
   });
 
   describe('update', () => {
+    it('accepts moving a payment to "now" in the evening west of UTC', async () => {
+      const record = await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: '2024-01-20' });
+      await atInstantIn('America/New_York', '2026-10-13T01:30:00.000Z', async () => {
+        await expect(paymentRecordRepo.update(record.id, { paidAt: new Date().toISOString() })).resolves.toBeUndefined();
+      });
+    });
+
     it('should update amount and recalculate', async () => {
       const record = await paymentRecordRepo.create({
         transactionId: incomeId,
