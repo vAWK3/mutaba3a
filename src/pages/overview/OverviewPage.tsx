@@ -30,10 +30,13 @@ export function OverviewPage() {
   // Active profile only (strict mode)
   const profileId = useProfileFilter();
 
-  // A new user has no clients and no entries yet
-  const { data: allClients = [] } = useClients(profileId);
-  const { data: anyTransaction = [] } = useTransactions({ limit: 1, profileId });
-  const isNewUser = allClients.length === 0 && anyTransaction.length === 0;
+  // A new user has no clients and no entries yet. Decided only once both
+  // queries have answered, or the empty state and onboarding flash on every
+  // load while Dexie is still reading.
+  const { data: allClients = [], isLoading: clientsLoading } = useClients(profileId);
+  const { data: anyTransaction = [], isLoading: entriesLoading } = useTransactions({ limit: 1, profileId });
+  const isDeciding = clientsLoading || entriesLoading;
+  const isNewUser = !isDeciding && allClients.length === 0 && anyTransaction.length === 0;
   const showOnboarding = isNewUser && !skipped && !isOnboardingComplete() && !onboardingDismissed;
 
   // Owed now: every receivable in the profile, one helper for every screen (ADR-033)
@@ -56,7 +59,11 @@ export function OverviewPage() {
     <>
       <TopBar title={t('overview.title')} />
       <div className="page-content">
-        {isNewUser ? (
+        {isDeciding ? (
+          <div className="loading">
+            <div className="spinner" />
+          </div>
+        ) : isNewUser ? (
           <EmptyState
             title={t('overview.empty.title')}
             description={t('overview.empty.description')}

@@ -286,6 +286,20 @@ describe('OverviewPage (Home)', () => {
       expect(mockOpenIncomeDrawer).toHaveBeenCalledWith({ mode: 'create' });
     });
 
+    it('decides nothing while the profile is still loading: no empty state, no onboarding flash', () => {
+      onboarding.skipped = false;
+      mockData({ clients: [], anyTransaction: false, receivables: [], attention: [], recent: [] });
+      vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<
+        typeof useQueries.useClients
+      >);
+      const { container } = renderPage();
+
+      expect(screen.queryByTestId('onboarding-overlay')).toBeNull();
+      expect(screen.queryByText('Nothing to track yet')).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Owed now' })).toBeNull();
+      expect(container.querySelector('.spinner')).toBeInTheDocument();
+    });
+
     it('still shows onboarding to a new user who has not skipped it', () => {
       onboarding.skipped = false;
       mockData({ clients: [], anyTransaction: false, receivables: [], attention: [], recent: [] });

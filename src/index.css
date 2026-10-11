@@ -1253,6 +1253,10 @@ td {
   border: none;
 }
 
+.home-table .amount-cell {
+  white-space: nowrap;
+}
+
 .home-row-main {
   width: 100%;
   max-width: 0;
