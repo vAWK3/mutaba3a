@@ -60,7 +60,11 @@ export interface ReceivablesFilters {
 // ============================================================================
 
 // One invalidation list for every transaction write (useQueries.ts owns it).
-const invalidateIncomeQueries = invalidateTransactionQueries;
+// A function, not an alias: the import is read when a mutation settles, not
+// at module load, so tests that partially mock useQueries keep loading.
+function invalidateIncomeQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  invalidateTransactionQueries(queryClient);
+}
 
 // ============================================================================
 // Income Query Hooks
