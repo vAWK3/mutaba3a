@@ -56,13 +56,27 @@ const ARABIC_INDIC_DIGITS = /[\u0660-\u0669]/g;
 const EXTENDED_ARABIC_INDIC_DIGITS = /[\u06F0-\u06F9]/g;
 const ARABIC_DECIMAL_SEPARATOR = /\u066B/g;
 const ARABIC_THOUSANDS_SEPARATORS = /[\u066C\u060C]/g;
-// Bidi marks an RTL keyboard or a paste can carry: LRM, RLM, ALM
-const BIDI_MARKS = /[\u200E\u200F\u061C]/g;
+// Bidi controls an RTL keyboard or a paste can carry: LRM, RLM, ALM, the
+// embeddings and overrides (LRE..RLO) and the isolates (LRI..PDI)
+const BIDI_MARKS = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g;
 // Spaces that may group thousands: space, NBSP, thin space, narrow NBSP
 const GROUP_SPACES = /[ \u00A0\u2009\u202F]+/g;
-// The only words an amount may carry: a currency symbol or code, before or after it
-const CURRENCY_PREFIX = /^(?:US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC\u00A3])\s*/i;
-const CURRENCY_SUFFIX = /\s*(?:US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC\u00A3])$/i;
+// The only words an amount may carry: one currency symbol or code, before or after it.
+// The suffix has no leading \s* (trimmed after instead), so a long run of spaces can't backtrack.
+const CURRENCY_PREFIX = /^(US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC])\s*/i;
+const CURRENCY_SUFFIX = /(US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC])$/i;
+const CURRENCY_TOKENS: Record<string, Currency> = {
+  $: 'USD',
+  US$: 'USD',
+  USD: 'USD',
+  '\u20AA': 'ILS',
+  ILS: 'ILS',
+  NIS: 'ILS',
+  '\u20AC': 'EUR',
+  EUR: 'EUR',
+};
+// No amount anyone types is longer; anything longer is refused before any pattern runs
+const MAX_AMOUNT_INPUT_LENGTH = 64;
 // Whole digits, or digits grouped by commas in threes (no leading 0 group), then decimals.
 // Anything else ("12,5", "1.200,50", "0,500", "2k") is ambiguous and is rejected, never guessed at.
 const AMOUNT_PATTERN = /^(-?)(\d+|[1-9]\d{0,2}(?:,\d{3})+)?(?:\.(\d*))?$/;
@@ -88,22 +102,45 @@ export interface ParseAmountOptions {
   maxDecimals?: number;
 }
 
+interface TypedAmount {
+  /** The number as typed, currency token and bidi controls removed */
+  number: string;
+  /** The currency the token named, if one was typed */
+  currency?: Currency;
+}
+
+/** Split typed text into the number and its currency; null for a second token or an over-long input. */
+function splitCurrencyToken(value: string): TypedAmount | null {
+  if (value.length > MAX_AMOUNT_INPUT_LENGTH) return null;
+  let text = normalizeNumerals(value).replace(BIDI_MARKS, '').trim();
+  let token: string | undefined;
+  const prefix = CURRENCY_PREFIX.exec(text);
+  if (prefix) {
+    token = prefix[1];
+    text = text.slice(prefix[0].length);
+  }
+  const suffix = CURRENCY_SUFFIX.exec(text);
+  if (suffix) {
+    if (token) return null;
+    token = suffix[1];
+    text = text.slice(0, suffix.index).trimEnd();
+  }
+  return { number: text, currency: token ? CURRENCY_TOKENS[token.toUpperCase()] : undefined };
+}
+
 /**
  * Parse a typed amount to minor units, or null when it is not a number we can
  * read without guessing. Accepts Arabic-Indic digits, comma- or space-grouped
- * thousands and one currency symbol or code before or after the number. The
- * conversion runs on the digits, so no float rounding creeps in.
+ * thousands and one currency symbol or code before or after the number (see
+ * amountInputCurrency for which). The conversion runs on the digits, so no
+ * float rounding creeps in.
  */
 export function parseAmountInput(value: string, options: ParseAmountOptions = {}): number | null {
   const { maxDecimals = MINOR_DIGITS } = options;
-  const bare = normalizeNumerals(value)
-    .replace(BIDI_MARKS, '')
-    .trim()
-    .replace(CURRENCY_PREFIX, '')
-    .replace(CURRENCY_SUFFIX, '')
-    .replace(GROUP_SPACES, ',');
+  const typed = splitCurrencyToken(value);
+  if (!typed) return null;
 
-  const match = AMOUNT_PATTERN.exec(bare);
+  const match = AMOUNT_PATTERN.exec(typed.number.replace(GROUP_SPACES, ','));
   if (!match) return null;
   const [, sign, wholePart = '', fraction = ''] = match;
   if (!wholePart && !fraction) return null;
@@ -115,6 +152,16 @@ export function parseAmountInput(value: string, options: ParseAmountOptions = {}
   const minor = whole * 100 + cents + roundUp;
   if (!Number.isSafeInteger(minor)) return null;
   return sign ? -minor : minor;
+}
+
+/**
+ * The currency a typed amount names with its symbol or code ("$100", "100 NIS"),
+ * or undefined when it names none or is not an amount at all. A form compares
+ * it with the entry's currency rather than silently dropping the symbol.
+ */
+export function amountInputCurrency(value: string): Currency | undefined {
+  if (parseAmountInput(value, { maxDecimals: Infinity }) === null) return undefined;
+  return splitCurrencyToken(value)?.currency;
 }
 
 export function parseAmountToMinor(value: string): number {

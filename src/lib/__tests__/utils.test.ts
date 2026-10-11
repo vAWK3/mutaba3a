@@ -5,6 +5,7 @@ import {
   formatAmountShort,
   parseAmountToMinor,
   parseAmountInput,
+  amountInputCurrency,
   parseCurrencyInput,
   formatCurrencyInput,
   formatDate,
@@ -127,6 +128,9 @@ describe('utils', () => {
       ['usd 100', 10000],
       ['US$1,200', 120000],
       ['\u200F\u0661\u0660\u0660', 10000],
+      ['\u2068100\u2069', 10000],
+      ['\u202B100\u202C', 10000],
+      ['\u20661,200\u2069 USD', 120000],
       ['1 200', 120000],
       ['1\u00A0200', 120000],
       ['1\u202F200.50', 120050],
@@ -166,8 +170,22 @@ describe('utils', () => {
       '-',
       '.',
       '$',
+      // one currency token at most, and only the ones an entry can be in
+      '$100 ILS',
+      '$100 USD',
+      '\u00A3100',
+      '100 GBP',
+      // longer than any amount anyone types
+      '1'.padStart(65, '0'),
     ])('rejects %j', (input) => {
       expect(parseAmountInput(input)).toBeNull();
+    });
+
+    it('reads a long run of spaces before stray text in linear time', () => {
+      const pasted = '1' + ' '.repeat(50_000) + 'x';
+      const started = performance.now();
+      expect(parseAmountInput(pasted)).toBeNull();
+      expect(performance.now() - started).toBeLessThan(100);
     });
 
     it('rounds extra decimals half-up on the string, never through float math, when asked to', () => {
@@ -175,6 +193,25 @@ describe('utils', () => {
       expect(parseAmountInput('1.005', { maxDecimals: Infinity })).toBe(101);
       expect(parseAmountInput('0.285', { maxDecimals: Infinity })).toBe(29);
       expect(parseAmountInput('100.001', { maxDecimals: Infinity })).toBe(10000);
+    });
+  });
+
+  describe('amountInputCurrency', () => {
+    it.each([
+      ['$100', 'USD'],
+      ['US$1,200', 'USD'],
+      ['100 usd', 'USD'],
+      ['\u20AA100', 'ILS'],
+      ['100 NIS', 'ILS'],
+      ['ils 5', 'ILS'],
+      ['\u20AC5', 'EUR'],
+      ['5 EUR', 'EUR'],
+    ])('reads the currency %j names as %s', (input, currency) => {
+      expect(amountInputCurrency(input)).toBe(currency);
+    });
+
+    it.each(['100', '1,200.50', '', 'abc', '$100 ILS'])('names no currency in %j', (input) => {
+      expect(amountInputCurrency(input)).toBeUndefined();
     });
   });
 

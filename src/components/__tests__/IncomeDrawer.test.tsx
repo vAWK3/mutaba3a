@@ -306,6 +306,51 @@ describe('IncomeDrawer', () => {
       expect(await screen.findByText('Amount must be more than zero')).toBeInTheDocument();
     });
 
+    it('refuses an amount whose symbol names another currency, and shows the currency', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '\u20AC100');
+      await user.click(saveButton());
+
+      expect(await screen.findByText('The amount is in EUR, but this entry is in USD')).toBeInTheDocument();
+      expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'true');
+      expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+
+    it('saves once the currency is switched to the one the amount names', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '\u20AC100');
+      await user.click(saveButton());
+      await screen.findByText('The amount is in EUR, but this entry is in USD');
+
+      await user.selectOptions(screen.getByLabelText('Currency'), 'EUR');
+      expect(screen.queryByText('The amount is in EUR, but this entry is in USD')).not.toBeInTheDocument();
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        expect(tx?.amountMinor).toBe(10000);
+        expect(tx?.currency).toBe('EUR');
+      });
+    });
+
+    it('accepts a symbol or code that matches the entry currency', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText(/^Amount/), '$1,200');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        expect(tx?.amountMinor).toBe(120000);
+        expect(tx?.currency).toBe('USD');
+      });
+    });
+
     it('reads Arabic-Indic digits and separators', async () => {
       const user = userEvent.setup();
       renderDrawer();
@@ -708,7 +753,7 @@ describe('IncomeDrawer', () => {
         const recorded = formatAmount(5000, 'USD', 'en-US');
         // the amount is bidi-isolated so it stays whole inside the Arabic sentence too
         expect(
-          await screen.findByText(`\u2066${recorded}\u2069 is already recorded as paid, so the amount can't be less`)
+          await screen.findByText(`\u2068${recorded}\u2069 is already recorded as paid, so the amount can't be less`)
         ).toBeInTheDocument();
         expect((await transactionRepo.get(txId))?.amountMinor).toBe(10000);
       });
@@ -815,6 +860,34 @@ describe('IncomeDrawer', () => {
         expect(statusButton('Received')).toBeDisabled();
         expect(screen.getByLabelText('Currency')).toBeDisabled();
         expect(saveButton()).toBeDisabled();
+      } finally {
+        recordsSpy.mockRestore();
+      }
+    });
+
+    it('says when the payment records fail to load, and Try again loads them', async () => {
+      const user = userEvent.setup();
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Records failed',
+      });
+      const recordsSpy = vi
+        .spyOn(paymentRecordRepo, 'listByTransaction')
+        .mockRejectedValueOnce(new Error('DatabaseClosedError'));
+      try {
+        await openEdit(tx.id);
+        const notice = await screen.findByText("Couldn't load this entry's payments, so it can't be saved yet.");
+        expect(notice).toBeInTheDocument();
+        expect(saveButton()).toBeDisabled();
+
+        await user.click(screen.getByRole('button', { name: 'Try again' }));
+        await waitFor(() => expect(saveButton()).toBeEnabled());
+        expect(screen.queryByText("Couldn't load this entry's payments, so it can't be saved yet.")).not.toBeInTheDocument();
       } finally {
         recordsSpy.mockRestore();
       }

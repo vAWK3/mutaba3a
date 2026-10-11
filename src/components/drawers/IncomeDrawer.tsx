@@ -19,6 +19,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
 import {
+  amountInputCurrency,
   cn,
   formatAmount,
   formatDate,
@@ -89,6 +90,8 @@ const DETAIL_FIELDS = ['incomeStatus', 'dueDate', 'currency', 'occurredAt', 'pro
 
 /** setError type for the recorded-payments guard, rendered with the recorded total */
 const BELOW_RECORDED = 'belowRecorded';
+/** setError type for an amount whose symbol or code names another currency */
+const CURRENCY_MISMATCH = 'currencyMismatch';
 
 const STATUS_LABEL_KEYS: Record<IncomeStatus, string> = {
   earned: 'drawer.income.statusEarned',
@@ -102,8 +105,8 @@ const STATUS_HINT_KEYS: Record<IncomeStatus, string> = {
   received: 'drawer.income.statusReceivedHint',
 };
 
-// Bidi isolates: keep an LTR amount whole inside an Arabic sentence
-const LTR_ISOLATE = '\u2066';
+// Bidi isolates: keep an amount whole inside a sentence of either direction
+const FIRST_STRONG_ISOLATE = '\u2068';
 const POP_ISOLATE = '\u2069';
 
 // Map stored status to the drawer's three-step status: paid → received,
@@ -151,6 +154,7 @@ export function IncomeDrawer() {
   // Payment records own this entry's payment state (ADR-030, ADR-039). Until
   // they have loaded the drawer can't know, so status, currency and Save wait.
   const recordsPending = mode === 'edit' && !!transactionId && !paymentRecordsQuery.isSuccess;
+  const recordsFailed = recordsPending && paymentRecordsQuery.isError;
   const hasRecords = mode === 'edit' && paymentRecords.length > 0;
   const paymentStateLocked = hasRecords || recordsPending;
   const recordedMinor = recordedTotalMinor(paymentRecords);
@@ -282,6 +286,14 @@ export function IncomeDrawer() {
     const amountMinor = parseAmountInput(data.amount);
     if (amountMinor === null) return; // the schema already reported it
 
+    // "€100" in a USD entry is never quietly saved as $100; the currency sits under More details
+    const typedCurrency = amountInputCurrency(data.amount);
+    if (typedCurrency && typedCurrency !== data.currency) {
+      form.setError('amount', { type: CURRENCY_MISMATCH, message: 'validation.amountCurrencyMismatch' });
+      setDetailsToggled(true);
+      return;
+    }
+
     // The repository rejects this too (ADR-030); checking here turns it into
     // a translated field message instead of a thrown error.
     // Only an amount change is checked, as in the repository, so a legacy entry
@@ -381,7 +393,10 @@ export function IncomeDrawer() {
     if (!error?.message) return null;
     if (error.type === BELOW_RECORDED) {
       const amount = formatAmount(recordedMinor, existingTx?.currency ?? watchedCurrency, locale);
-      return t(error.message, { amount: `${LTR_ISOLATE}${amount}${POP_ISOLATE}` });
+      return t(error.message, { amount: `${FIRST_STRONG_ISOLATE}${amount}${POP_ISOLATE}` });
+    }
+    if (error.type === CURRENCY_MISMATCH) {
+      return t(error.message, { typed: amountInputCurrency(form.getValues('amount')) ?? '', currency: watchedCurrency });
     }
     return t(error.message);
   };
@@ -487,6 +502,15 @@ export function IncomeDrawer() {
             ) : (
               <div className="drawer-notice-body text-muted">{t('drawer.income.locked.turnOnInvoices')}</div>
             )}
+          </div>
+        )}
+
+        {recordsFailed && (
+          <div className="drawer-notice" role="alert" data-testid="income-records-failed">
+            <div className="drawer-notice-body">{t('drawer.income.paymentsLoadFailed')}</div>
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => void paymentRecordsQuery.refetch()}>
+              {t('drawer.income.paymentsRetry')}
+            </button>
           </div>
         )}
 
@@ -615,6 +639,7 @@ export function IncomeDrawer() {
                       onChange={(event) => {
                         setCurrencyChosen(true);
                         field.onChange(event);
+                        if (form.formState.errors.amount?.type === CURRENCY_MISMATCH) form.clearErrors('amount');
                       }}
                     >
                       {CURRENCIES.map((currency) => (

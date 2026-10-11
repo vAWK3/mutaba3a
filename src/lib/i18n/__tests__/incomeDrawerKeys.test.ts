@@ -13,10 +13,13 @@ const KEYS = [
   'drawer.income.currencyLockedHint',
   'drawer.income.savePaymentsChanged',
   'drawer.income.saveFailed',
+  'drawer.income.paymentsLoadFailed',
+  'drawer.income.paymentsRetry',
   'validation.amountInvalid',
   'validation.amountPositive',
   'validation.amountBelowRecorded',
   'validation.clientNotPicked',
+  'validation.amountCurrencyMismatch',
 ] as const;
 
 function lookup(dict: unknown, path: string): unknown {
@@ -38,5 +41,12 @@ describe('income drawer i18n keys', () => {
   it('keeps the {amount} placeholder in both locales', () => {
     expect(lookup(en, 'validation.amountBelowRecorded')).toContain('{amount}');
     expect(lookup(ar, 'validation.amountBelowRecorded')).toContain('{amount}');
+  });
+
+  it('keeps the {typed} and {currency} placeholders in both locales', () => {
+    for (const dict of [en, ar]) {
+      expect(lookup(dict, 'validation.amountCurrencyMismatch')).toContain('{typed}');
+      expect(lookup(dict, 'validation.amountCurrencyMismatch')).toContain('{currency}');
+    }
   });
 });
