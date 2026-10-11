@@ -230,4 +230,63 @@ describe('ClientTypeahead', () => {
       expect(onChange).toHaveBeenCalledWith('');
     });
   });
+
+  // MUT-5: a name typed but never picked must not vanish silently
+  describe('leaving the field with typed text', () => {
+    it('picks a client whose name matches exactly, ignoring case', async () => {
+      const client = await clientRepo.create({ name: 'Acme Corp' });
+      const onChange = vi.fn();
+      renderClientTypeahead({ onChange });
+      const input = screen.getByRole('combobox');
+
+      await waitFor(() => {
+        fireEvent.focus(input);
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+      fireEvent.change(input, { target: { value: '  acme corp ' } });
+      fireEvent.blur(input);
+
+      expect(onChange).toHaveBeenCalledWith(client.id);
+      expect(input).toHaveValue('Acme Corp');
+    });
+
+    it('picks nothing for a partial name and reports it as unpicked text', async () => {
+      await clientRepo.create({ name: 'Acme Corp' });
+      const onChange = vi.fn();
+      const onPendingTextChange = vi.fn();
+      renderClientTypeahead({ onChange, onPendingTextChange });
+      const input = screen.getByRole('combobox');
+
+      await waitFor(() => {
+        fireEvent.focus(input);
+        expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      });
+      fireEvent.change(input, { target: { value: 'Acm' } });
+      fireEvent.blur(input);
+
+      expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/.+/));
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('Acm');
+    });
+
+    it('reports no unpicked text once a client is picked, and again after clearing', async () => {
+      const client = await clientRepo.create({ name: 'My Client' });
+      const onPendingTextChange = vi.fn();
+      const { rerender } = renderClientTypeahead({ value: client.id, onPendingTextChange });
+      const input = screen.getByRole('combobox');
+
+      await waitFor(() => expect(input).toHaveValue('My Client'));
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
+
+      fireEvent.change(input, { target: { value: 'My Cli' } });
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('My Cli');
+
+      rerender(
+        <TestWrapper>
+          <ClientTypeahead value="" onChange={vi.fn()} onPendingTextChange={onPendingTextChange} />
+        </TestWrapper>
+      );
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
+      expect(onPendingTextChange).toHaveBeenLastCalledWith('');
+    });
+  });
 });

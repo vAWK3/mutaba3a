@@ -19,6 +19,8 @@ export interface EntityTypeaheadProps<T = unknown> {
   disabled?: boolean;
   className?: string;
   createLabel?: string;
+  /** Called when the input loses focus, before the list closes */
+  onBlur?: () => void;
 }
 
 export function EntityTypeahead<T = unknown>({
@@ -30,6 +32,7 @@ export function EntityTypeahead<T = unknown>({
   disabled,
   className,
   createLabel,
+  onBlur,
 }: EntityTypeaheadProps<T>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -119,6 +122,7 @@ export function EntityTypeahead<T = unknown>({
   };
 
   const handleBlur = () => {
+    onBlur?.();
     // Delay to allow click on dropdown option
     setTimeout(() => {
       if (!dropdownRef.current?.contains(document.activeElement)) {

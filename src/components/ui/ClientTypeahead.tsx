@@ -11,6 +11,11 @@ export interface ClientTypeaheadProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * Reports text left in the box that is not a picked client ('' when there
+   * is none), so a form can refuse to save instead of silently dropping it.
+   */
+  onPendingTextChange?: (text: string) => void;
 }
 
 export function ClientTypeahead({
@@ -20,6 +25,7 @@ export function ClientTypeahead({
   placeholder,
   disabled,
   className,
+  onPendingTextChange,
 }: ClientTypeaheadProps) {
   const t = useT();
   const [inputValue, setInputValue] = useState('');
@@ -82,6 +88,28 @@ export function ClientTypeahead({
     return results;
   }, [inputValue, activeClients]);
 
+  const selectedName = activeClients.find((c) => c.id === value)?.name;
+  const trimmedInput = inputValue.trim();
+  const pendingText = trimmedInput && inputValue !== selectedName ? trimmedInput : '';
+
+  // Report only real changes, so a parent passing an inline callback can't loop.
+  const reportedPendingText = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (reportedPendingText.current === pendingText) return;
+    reportedPendingText.current = pendingText;
+    onPendingTextChange?.(pendingText);
+  }, [pendingText, onPendingTextChange]);
+
+  // Leaving the box with a client's exact name (any case) picks that client.
+  const handleBlur = useCallback(() => {
+    if (!pendingText) return;
+    const match = activeClients.find((c) => c.name.toLowerCase() === pendingText.toLowerCase());
+    if (match) {
+      setInputValue(match.name);
+      onChange(match.id);
+    }
+  }, [pendingText, activeClients, onChange]);
+
   const handleInputChange = useCallback((newValue: string) => {
     setInputValue(newValue);
     if (!newValue.trim()) {
@@ -121,6 +149,7 @@ export function ClientTypeahead({
       disabled={disabled}
       className={className}
       createLabel={t('client.createNew')}
+      onBlur={handleBlur}
     />
   );
 }
