@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { EntityTypeahead, type TypeaheadOption } from '../EntityTypeahead';
 
 const mockOptions: TypeaheadOption[] = [
@@ -151,6 +153,116 @@ describe('EntityTypeahead', () => {
       const input = screen.getByRole('combobox');
       fireEvent.keyDown(input, { key: 'ArrowDown' });
       expect(screen.getByRole('listbox')).toBeInTheDocument();
+    });
+
+    it('closes on Tab without picking anything', () => {
+      const onSelect = vi.fn();
+      renderTypeahead({ onSelect });
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'a' } });
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+  });
+
+  // MUT-5: one keyboard model for every picker (Client, Project, Vendor, hosted pickers)
+  describe('keyboard contract (MUT-5)', () => {
+    it('highlights the first option as soon as the user types', () => {
+      renderTypeahead();
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'a' } });
+      expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('drops the highlight when the input is cleared', () => {
+      function Controlled() {
+        const [value, setValue] = useState('');
+        return <EntityTypeahead options={mockOptions} inputValue={value} onInputChange={setValue} onSelect={vi.fn()} />;
+      }
+      render(<Controlled />);
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'a' } });
+      fireEvent.change(input, { target: { value: '' } });
+      for (const option of screen.getAllByRole('option')) {
+        expect(option).toHaveAttribute('aria-selected', 'false');
+      }
+    });
+
+    it('picks the first match on Enter right after typing', () => {
+      const onSelect = vi.fn();
+      renderTypeahead({ onSelect });
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'a' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledWith(mockOptions[0]);
+    });
+
+    it('picks the create option on Enter when it is the only one', () => {
+      const onSelect = vi.fn();
+      const createOnly: TypeaheadOption[] = [{ id: 'new', label: 'Newco', isNew: true }];
+      renderTypeahead({ options: createOnly, onSelect });
+      const input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledWith(createOnly[0]);
+    });
+
+    it('lets Enter through on a closed list, so the surrounding form submits', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      const onSelect = vi.fn();
+      render(
+        <form onSubmit={onSubmit}>
+          <EntityTypeahead options={mockOptions} inputValue="" onInputChange={vi.fn()} onSelect={onSelect} />
+          <button type="submit">Save</button>
+        </form>
+      );
+      const input = screen.getByRole('combobox');
+      await user.click(input);
+      await user.keyboard('A');
+      await user.keyboard('{Enter}'); // picks the highlighted match and closes the list
+      expect(onSelect).toHaveBeenCalledWith(mockOptions[0]);
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await user.keyboard('{Enter}'); // list closed: Enter belongs to the form
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('does not swallow Enter on a closed list', () => {
+      renderTypeahead();
+      const input = screen.getByRole('combobox');
+      // fireEvent returns false when a handler called preventDefault()
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('treats an open list with no options as closed', () => {
+      renderTypeahead({ options: [] });
+      const input = screen.getByRole('combobox');
+      fireEvent.focus(input);
+      expect(input).toHaveAttribute('aria-expanded', 'false');
+      expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+    });
+
+    it('keeps Escape inside an open list so a surrounding drawer stays open', () => {
+      const documentKeydown = vi.fn();
+      document.addEventListener('keydown', documentKeydown);
+      try {
+        renderTypeahead();
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(documentKeydown).not.toHaveBeenCalled();
+
+        // Closed list: Escape is the drawer's again
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(documentKeydown).toHaveBeenCalledTimes(1);
+      } finally {
+        document.removeEventListener('keydown', documentKeydown);
+      }
     });
   });
 

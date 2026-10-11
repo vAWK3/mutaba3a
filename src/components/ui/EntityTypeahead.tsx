@@ -54,10 +54,14 @@ export function EntityTypeahead<T = unknown>({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // The list is only "open" for the keyboard when something is actually shown.
+  const isListVisible = isOpen && options.length > 0;
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onInputChange(e.target.value);
     setIsOpen(true);
-    setHighlightedIndex(-1);
+    // Typing highlights the first match so Enter picks it; clearing drops the highlight.
+    setHighlightedIndex(e.target.value.trim() ? 0 : -1);
   };
 
   const handleSelectOption = useCallback(
@@ -70,8 +74,9 @@ export function EntityTypeahead<T = unknown>({
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+    if (!isListVisible) {
+      // Enter and Escape are left alone so they reach the surrounding form or drawer.
+      if (e.key === 'ArrowDown') {
         setIsOpen(true);
         e.preventDefault();
       }
@@ -98,6 +103,8 @@ export function EntityTypeahead<T = unknown>({
         }
         break;
       case 'Escape':
+        // Close the list only; without this a drawer's Escape handler also fires and discards the form.
+        e.stopPropagation();
         setIsOpen(false);
         setHighlightedIndex(-1);
         break;
@@ -135,12 +142,12 @@ export function EntityTypeahead<T = unknown>({
         disabled={disabled}
         autoComplete="off"
         role="combobox"
-        aria-expanded={isOpen}
+        aria-expanded={isListVisible}
         aria-haspopup="listbox"
         aria-autocomplete="list"
       />
 
-      {isOpen && options.length > 0 && (
+      {isListVisible && (
         <div
           ref={dropdownRef}
           className="entity-typeahead-dropdown"
