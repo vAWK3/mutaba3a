@@ -222,7 +222,12 @@ export interface PaymentByClientFilters {
   limit?: number;
 }
 
-// A payment record joined to its parent income transaction, for display
+// A payment joined to its parent income transaction, for display.
+// 'record' rows are PaymentRecords. 'entry' rows stand for money an income
+// entry says was received but no record covers -- income saved as Received in
+// the income drawer writes none (MUT-3). An entry row's id is `entry:<txId>`.
+export type PaymentRowSource = 'record' | 'entry';
+
 export interface PaymentByClientRow {
   id: string;
   transactionId: string;
@@ -231,6 +236,7 @@ export interface PaymentByClientRow {
   currency: Currency;
   paidAt: string;
   notes?: string;
+  source: PaymentRowSource;
 }
 
 // Transaction with resolved names for display
