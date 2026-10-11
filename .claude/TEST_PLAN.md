@@ -1130,3 +1130,19 @@ Checked by hand (2026-10-12): Mac pane → Mac button; mobile emulation (Android
 
 **Baseline after MUT-76 (2026-10-12)**: root `npx vitest run` 166 files, 2607 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass. Incidental: `utils.test.ts` › `todayISO` no longer fails between local midnight and the UTC rollover.
 
+### MUT-78 — the visitor sample entry (epic MUT-74)
+
+Test plan: `.claude/designs/mut-78-sample-entry-tests.md`.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Entry and exit (fake-indexeddb) | `src/demo/__tests__/visitorSample.test.ts` | empty database → sample on the business with clients owing, session recorded; second entry doesn't re-seed; own data → nothing written; areas switched on quietly (no notice) and remembered; a session without its rows re-seeds; leaving removes `demo_` rows and session additions (client, entry, payment record), switches the areas off, clears the session; older (restored) rows survive; `countSessionAdditions` counts only session rows |
+| Seed | `src/demo/__tests__/seedDates.test.ts` | `notAfter`; no payment after now, no expense after today; one default, never a second next to an existing one |
+| Hook | `src/demo/__tests__/useVisitorSample.test.tsx` | under `<StrictMode>`: enters once, ends `active`, selects the sample business, strips `?sample=1`; no parameter → nothing |
+| Bar | `src/components/ui/__tests__/SampleDataBar.test.tsx` | message; hidden outside a session; leaves at once with no additions and navigates home; asks with the count when there are additions; "Keep looking" cancels; confirming leaves |
+| Welcome | `src/components/modals/__tests__/WelcomeModal.sample.test.tsx` | opens on a first run; stays closed while the sample is prepared |
+
+Checked by hand in the browser (2026-10-12) from a cleared origin: landing → "Or use it in your browser" → Clients of the sample business, no dialog, only the sample bar; "Start with your own" → Home with the Welcome dialog, database empty, all six areas off, session cleared. The StrictMode bug (stuck on "Setting up the sample…") was found this way and is now pinned.
+
+**Baseline after MUT-78 (2026-10-12)**: root `npx vitest run` 171 files, 2630 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass.
+
