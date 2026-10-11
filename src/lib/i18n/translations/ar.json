@@ -1526,12 +1526,12 @@
     "groups": {
       "clients": "العملاء ({count})",
       "projects": "المشاريع ({count})",
-      "transactions": "الدخل ({count})",
+      "transactions": "الإيرادات ({count})",
       "expenses": "المصروفات ({count})"
     },
     "assignAllTo": "تعيين الكل إلى {profile}",
     "profileFor": "الملف التجاري لـ {record}",
-    "untitledIncome": "قيد دخل",
+    "untitledIncome": "إيراد",
     "untitledExpense": "مصروف",
     "noProfiles": "أضف ملفاً تجارياً أولاً، ثم عيّن هذه السجلات له.",
     "allAssigned": "كل السجلات مرتبطة بملف تجاري.",
