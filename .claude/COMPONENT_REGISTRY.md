@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader |
@@ -343,6 +343,22 @@ navigate({ search: { newProject: true, clientId } }); // Create
 - Tax settings
 - Bank details
 - Default currency/language
+
+---
+
+### OrphanedRecordsDrawer
+**Location**: `src/components/drawers/OrphanedRecordsDrawer.tsx`
+**Purpose**: Lists every record without a business profile (the ones `OrphanedRecordsBanner` counts) grouped Clients / Projects / Income / Expenses, and assigns them. One profile: no pickers, one "Assign all to ‹profile›" action. Several: "Assign all to ‹default›" plus a picker per row and Save. Each row starts on its linked client's profile, then its project's, then the default (`startingProfileId`). A row that fails (TD-035) stays listed with an inline message. Replaced `OrphanedRecordsModal` (deleted 2026-10-11).
+
+```tsx
+// Opened from the banner's "Review now"; mounted by AppShell
+useDrawerStore.getState().openOrphanedRecordsDrawer();
+{orphanedRecordsDrawer.isOpen && <OrphanedRecordsDrawer />}
+```
+
+Data: `useOrphanedRecords()` → `findOrphanedRecords()` and `useAssignOrphanedRecords()` (`src/hooks/useOrphanedRecords.ts`); "unassigned" is defined once by `isOrphaned` in `src/db/orphanedRecords.ts`, which `runIntegrityCheck` also uses.
+
+Tests: `src/components/drawers/__tests__/OrphanedRecordsDrawer.test.tsx`, `src/db/__tests__/orphanedRecords.test.ts`.
 
 ---
 

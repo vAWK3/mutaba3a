@@ -673,6 +673,44 @@ the receipts strings into singular/plural keys with "label: {count}" Arabic.
 
 ---
 
+### TD-035: A locked income entry without a profile can't be assigned one
+**Status**: Open
+**Priority**: Low
+**Introduced**: found 2026-10-11 while building the unassigned-records drawer
+**Location**: `src/db/repository.ts` `transactionRepo.update` (lock guard), `src/components/drawers/OrphanedRecordsDrawer.tsx`
+**Impact**: `transactionRepo.update` rejects every field but `archivedAt` on
+a transaction locked by an exported document (ADR-014). An income entry that
+is both locked and missing its `profileId` (an old import, an older sync peer)
+fails in the drawer, stays listed with "couldn't be assigned", and keeps the
+banner up until dismissed. Normal flows can't produce one: creating a document
+needs a profile.
+
+**Remediation**: decide (ADR) whether filling a *missing* `profileId` on a
+locked entry is allowed, like ADR-030 lets locked entries take payments. If
+so, add `profileId` to the lock guard's allow-list only when the existing
+value is empty, with a repo test; the drawer needs no change.
+
+**Effort**: Small (decision first)
+
+---
+
+### TD-036: The client and project drawers can save a record without a profile
+**Status**: Open
+**Priority**: Medium
+**Introduced**: found 2026-10-11 while tracing where unassigned records come from
+**Location**: `src/components/drawers/ClientDrawer.tsx:165` and `:66`, `src/components/drawers/ProjectDrawer.tsx:175` and `:76`
+**Impact**: With more than one profile, the profile picker's first option is
+"Default profile" with value `''`, and `onSubmit` saves `profileId: data.profileId || undefined`.
+Picking it creates an unassigned client or project, which drops out of every
+profile's lists and shows up in the orphaned-records banner.
+
+**Remediation**: resolve `''` to the default profile's id on save (or drop the
+empty option and list the profiles only), with a drawer test for each.
+
+**Effort**: Small
+
+---
+
 ## In Progress
 
 *No items currently in progress.*

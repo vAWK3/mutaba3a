@@ -10,6 +10,7 @@ import { RetainerDrawer } from "../drawers/RetainerDrawer";
 import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
 import { PartialPaymentDrawer } from "../drawers/PartialPaymentDrawer";
 import { PlanAssumptionDrawer } from "../drawers/PlanAssumptionDrawer";
+import { OrphanedRecordsDrawer } from "../drawers/OrphanedRecordsDrawer";
 import { WelcomeModal, DemoSeedModal, MigrationWizard } from "../modals";
 import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
@@ -46,6 +47,7 @@ export function AppShell({ children }: AppShellProps) {
     partialPaymentDrawer,
     closePartialPaymentDrawer,
     planAssumptionDrawer,
+    orphanedRecordsDrawer,
   } = useDrawerStore();
 
   const { showConfirmModal, setShowConfirmModal, isActive } = useDemoStore();
@@ -149,6 +151,11 @@ export function AppShell({ children }: AppShellProps) {
       {planAssumptionDrawer.isOpen && (
         <InlineErrorBoundary>
           <PlanAssumptionDrawer />
+        </InlineErrorBoundary>
+      )}
+      {orphanedRecordsDrawer.isOpen && (
+        <InlineErrorBoundary>
+          <OrphanedRecordsDrawer />
         </InlineErrorBoundary>
       )}
 

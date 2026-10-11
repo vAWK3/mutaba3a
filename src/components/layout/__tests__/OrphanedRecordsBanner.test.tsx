@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderWithProviders, screen } from '../../../test/utils';
+import { renderWithProviders, screen, userEvent } from '../../../test/utils';
 import type { IntegrityResult } from '../../../db/integrityCheck';
+import { useDrawerStore } from '../../../lib/stores';
 import en from '../../../lib/i18n/translations/en.json';
 import ar from '../../../lib/i18n/translations/ar.json';
 import { OrphanedRecordsBanner } from '../OrphanedRecordsBanner';
@@ -31,6 +32,7 @@ function orphans(count: number): IntegrityResult {
 
 beforeEach(() => {
   localStorage.clear();
+  useDrawerStore.getState().closeOrphanedRecordsDrawer();
 });
 
 afterEach(() => {
@@ -53,7 +55,7 @@ describe('OrphanedRecordsBanner', () => {
       expect(banner).toHaveTextContent(message.replace('{count}', String(count)));
       expect(banner.textContent).not.toMatch(/integrity\.|\{count\}/);
       if (count > 1) expect(banner).toHaveTextContent(String(count));
-      expect(screen.getByRole('link', { name: copy.reviewNow })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: copy.reviewNow })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: copy.dismiss })).toBeInTheDocument();
       expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('Translation missing'));
     });
@@ -70,5 +72,34 @@ describe('OrphanedRecordsBanner', () => {
     runIntegrityCheck.mockResolvedValue(orphans(1));
     renderWithProviders(<OrphanedRecordsBanner />);
     expect(await screen.findByRole('alert')).toHaveTextContent("1 record isn't assigned to any profile.");
+  });
+
+  describe('Review now', () => {
+    beforeEach(() => {
+      localStorage.setItem(LANGUAGE_KEY, 'en');
+    });
+
+    it('is a button, and the banner has no link to navigate away with', async () => {
+      runIntegrityCheck.mockResolvedValue(orphans(3));
+
+      renderWithProviders(<OrphanedRecordsBanner />);
+
+      const banner = await screen.findByRole('alert');
+      expect(screen.getByRole('button', { name: 'Review now' })).toHaveAttribute('type', 'button');
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+      expect(banner.querySelector('a[href]')).toBeNull();
+    });
+
+    it('opens the unassigned-records drawer in place, without changing the URL', async () => {
+      runIntegrityCheck.mockResolvedValue(orphans(3));
+      const before = window.location.href;
+      const user = userEvent.setup();
+
+      renderWithProviders(<OrphanedRecordsBanner />);
+      await user.click(await screen.findByRole('button', { name: 'Review now' }));
+
+      expect(useDrawerStore.getState().orphanedRecordsDrawer.isOpen).toBe(true);
+      expect(window.location.href).toBe(before);
+    });
   });
 });

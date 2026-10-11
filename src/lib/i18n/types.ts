@@ -374,4 +374,25 @@ export interface Translations {
     toastIssuesSingular: string;
     toastIssuesPlural: string;
   };
+  orphanedRecords: {
+    title: string;
+    description: string;
+    descriptionSingleProfile: string;
+    groups: {
+      clients: string;
+      projects: string;
+      transactions: string;
+      expenses: string;
+    };
+    assignAllTo: string;
+    profileFor: string;
+    untitledIncome: string;
+    untitledExpense: string;
+    noProfiles: string;
+    allAssigned: string;
+    assignedSingular: string;
+    assignedPlural: string;
+    partialFailureSingular: string;
+    partialFailurePlural: string;
+  };
 }

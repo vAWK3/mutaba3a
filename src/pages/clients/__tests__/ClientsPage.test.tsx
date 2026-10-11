@@ -6,7 +6,7 @@
  * owed-now descending by today's rate (ADR-035), last payment with a "never"
  * state, settled clients labelled, click-to-sort headers, row → profile.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
@@ -300,6 +300,24 @@ describe('ClientsPage', () => {
       mockSummaries([], true);
       const { container } = renderPage();
       expect(container.querySelector('.spinner')).toBeInTheDocument();
+    });
+  });
+
+  describe('unassigned clients', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('does not open a modal on its own; the app-wide banner handles them', () => {
+      vi.spyOn(useQueries, 'useClients').mockReturnValue({
+        data: [{ id: 'client-orphan', name: 'Unassigned client', createdAt: '', updatedAt: '' }],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useClients>);
+
+      renderPage();
+
+      expect(screen.getByRole('link', { name: 'Acme' })).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 });

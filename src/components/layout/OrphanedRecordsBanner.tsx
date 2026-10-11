@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { runIntegrityCheck } from '../../db/integrityCheck';
+import { useDrawerStore } from '../../lib/stores';
 import { useT } from '../../lib/i18n';
 
 const DISMISSED_KEY = 'banner-dismissed-orphans';
 
 export function OrphanedRecordsBanner() {
   const t = useT();
+  const openOrphanedRecordsDrawer = useDrawerStore((s) => s.openOrphanedRecordsDrawer);
   const [dismissed, setDismissed] = useState(() =>
     localStorage.getItem(DISMISSED_KEY) === 'true'
   );
@@ -57,10 +59,10 @@ export function OrphanedRecordsBanner() {
       <span className="orphaned-banner-text">
         {t(count === 1 ? 'integrity.orphanedRecordSingular' : 'integrity.orphanedRecordPlural', { count })}
       </span>
-      <a href="/settings" className="orphaned-banner-action">
+      <button type="button" className="orphaned-banner-action" onClick={openOrphanedRecordsDrawer}>
         {t('integrity.reviewNow')}
-      </a>
-      <button className="orphaned-banner-dismiss" onClick={handleDismiss} aria-label={t('integrity.dismiss')}>
+      </button>
+      <button type="button" className="orphaned-banner-dismiss" onClick={handleDismiss} aria-label={t('integrity.dismiss')}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>

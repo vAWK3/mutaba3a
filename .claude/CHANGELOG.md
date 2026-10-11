@@ -28,6 +28,65 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — "Review now" fixes unassigned records in place
+
+**Scope:** `src/components/drawers/OrphanedRecordsDrawer.tsx` (new),
+`src/db/orphanedRecords.ts` (new), `src/hooks/useOrphanedRecords.ts` (new),
+`src/components/layout/{OrphanedRecordsBanner,AppShell}.tsx`,
+`src/db/integrityCheck.ts`, `src/lib/stores.ts`, `src/index.css`,
+`src/pages/{clients/ClientsPage,projects/ProjectsPage}.tsx`,
+`src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`,
+`src/components/modals/{OrphanedRecordsModal.tsx,OrphanedRecordsModal.css,index.ts}`
+(deleted / export removed), tests below,
+`.claude/designs/orphan-banner-review{,-tests}.md`,
+`.claude/{CHANGELOG,TEST_PLAN,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,SYSTEM_OVERVIEW}.md`.
+
+### Fixed
+- The orphaned-records banner's **Review now** was `<a href="/settings">`.
+  On the web build (router `basepath: '/app'`) it did a full page load to
+  `/settings`, outside the PWA scope and the service worker's offline
+  fallback (verified in the dev build). On desktop it reloaded the app.
+  Settings could only count the records anyway. It's now a button that opens
+  the new **Unassigned records** drawer over the current page.
+- Clients and Projects opened the assign modal by themselves whenever an
+  unassigned client/project existed, and **Cancel couldn't close it**: the
+  page set it open again during render. The pages no longer open anything;
+  the banner is the one entry point.
+- Unassigned income entries and expenses, which the banner counts, couldn't
+  be fixed anywhere. The drawer covers all four kinds.
+
+### Added
+- `OrphanedRecordsDrawer`: clients, projects, income and expenses grouped
+  with counts. With one profile it offers "Assign all to ‹profile›"; with
+  several, "Assign all to ‹default›" plus a picker per row and Save. A row
+  starts on its linked client's profile, then its project's, then the
+  default. Rows that fail stay listed with a message; the rest are saved.
+- `src/db/orphanedRecords.ts`: `isOrphaned` (the one definition of
+  "unassigned", now also used by `runIntegrityCheck`), `findOrphanedRecords`,
+  `startingProfileId`.
+- `useOrphanedRecords` / `useAssignOrphanedRecords`: row-by-row writes through
+  the `base` repositories, then every query refetches.
+
+### Removed
+- `OrphanedRecordsModal` (+ CSS, 10 tests, barrel export); the
+  `orphanedRecords.description.*`, `assignIndividually`, `assignAllToDefault`
+  and `or` keys.
+
+### Debt
+- TD-035 (locked unassigned income can't be assigned: lock rule unchanged,
+  ADR needed) and TD-036 (client/project drawers save `profileId: undefined`
+  for the "Default profile" option).
+
+### Verified
+- `npx tsc -b` clean; `npm run lint` 0 errors (17 warnings, all in files
+  this change doesn't touch); `npx vitest run` after merging main (with
+  MUT-8, f210b31): 139 files, 2,306 passed, 5 skipped, 0 failed.
+- Browser pane, web dev build: Review now opens the drawer with the URL still
+  `/app/` and no document reload; Arabic/RTL layout; Save assigned 6 records
+  as suggested, the banner disappeared and the toast showed the count.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-8: Home is owed now, needs attention and recent payments
 
 **Scope:** `src/pages/overview/OverviewPage.tsx`, `src/components/home/{HomeNeedsAttention,HomeRecentPayments}.tsx` (new),

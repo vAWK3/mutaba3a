@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { EmptyState, SortableHeader } from '../../components/ui';
-import { OrphanedRecordsModal } from '../../components/modals';
 import { OwedNowSummary } from '../../components/clients/OwedNowSummary';
 import {
   toClientIndexRow,
@@ -46,7 +45,6 @@ export function ClientsPage() {
   const { language } = useLanguage();
   const locale = getLocale(language);
   const [search, setSearch] = useState('');
-  const [showOrphanedModal, setShowOrphanedModal] = useState(false);
 
   const { sortField, sortDir, setSort } = useSortState<ClientSortField>({
     defaultField: 'owed',
@@ -62,12 +60,8 @@ export function ClientsPage() {
   // Active profile only (strict mode)
   const profileId = useProfileFilter();
 
-  // All clients, to spot orphaned records and to count the total behind a search
+  // All clients (every profile), to count the total behind a search
   const { data: allClients = [] } = useClients(undefined);
-  const hasOrphanedClients = allClients.some((c) => !c.profileId && !c.archivedAt);
-  if (hasOrphanedClients && !showOrphanedModal) {
-    setShowOrphanedModal(true);
-  }
 
   const { data: summaries = [], isLoading } = useClientSummaries(profileId, undefined, search);
 
@@ -177,7 +171,6 @@ export function ClientsPage() {
 
   return (
     <>
-      <OrphanedRecordsModal isOpen={showOrphanedModal} onClose={() => setShowOrphanedModal(false)} type="clients" />
       <TopBar title={t('clients.title')} />
       <div className="page-content">
         <div className="filters-row">
