@@ -83,7 +83,7 @@ Clients and Projects are treated as supporting structures, not the main attracti
 
 ## 4. Sidebar Structure
 
-> **Superseded 2026-10-11 by ADR-033 (MUT-15).** The sidebar is now a fixed,
+> **Superseded 2026-10-11 by ADR-034 (MUT-15).** The sidebar is now a fixed,
 > header-less core of Home, Clients, Income; optional areas (Expenses,
 > Documents, Retainers, Insights, Planning, Projects) appear under "More" only
 > while their Advanced-features switch is on; Settings stays pinned in the

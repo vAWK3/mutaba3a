@@ -56,7 +56,7 @@ interface NavSection {
   items: NavItem[];
 }
 
-// The core of the product (MUT-15, ADR-033): a constant, rendered first and
+// The core of the product (MUT-15, ADR-034): a constant, rendered first and
 // without a header, so no switch can move or reorder it.
 const coreItems: NavItem[] = [
   { path: "/", labelKey: "nav.home", icon: HomeIcon, exact: true },

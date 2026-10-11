@@ -38,7 +38,7 @@
 `src/hooks/__tests__/useMenuButton.test.tsx`, `src/lib/features/__tests__/{features,leaveDisabledArea}.test.*`,
 `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`, `src/pages/clients/__tests__/ClientDetailPage.test.tsx` (mock);
 `.claude/{DECISIONS,SYSTEM_OVERVIEW,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN}.md`; brief
-`.claude/designs/mut-15-sidebar-core-four{,-tests}.md`. Branch `feature/mut-2-strip-core`. ADR-033.
+`.claude/designs/mut-15-sidebar-core-four{,-tests}.md`. Branch `feature/mut-2-strip-core`. ADR-034.
 
 ### Changed
 - **Sidebar core.** One header-less group, Home → Clients → Income, that no

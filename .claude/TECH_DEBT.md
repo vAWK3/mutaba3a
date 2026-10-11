@@ -556,7 +556,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-029: `RowActionsMenu` keeps its own menu listeners and has no arrow-key support
+### TD-031: `RowActionsMenu` keeps its own menu listeners and has no arrow-key support
 **Status**: Open
 **Priority**: Low
 **Introduced**: MUT-15, 2026-10-11 (pre-existing; made visible by the new hook)
@@ -573,7 +573,7 @@ they test the menu element itself) and keep only its positioning logic.
 
 ---
 
-### TD-030: The two `+ Add` menus share their actions but not their click behaviour
+### TD-032: The two `+ Add` menus share their actions but not their click behaviour
 **Status**: Open
 **Priority**: Low
 **Introduced**: MUT-15, 2026-10-11 (pre-existing; out of the ticket's scope)

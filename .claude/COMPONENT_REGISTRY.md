@@ -65,7 +65,7 @@
 - Keyboard navigation (links in DOM order; the New menu via `useMenuButton`)
 - RTL support (logical rail and menu offsets; the collapse chevron points toward the collapsing edge)
 - Collapsible to a 64px rail (choice kept in `localStorage.sidebarCollapsed`); toggles in normal flow; a hairline separates core from "More"
-- **Shape (MUT-15, ADR-033):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
+- **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
 - New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
 
 ---
@@ -119,7 +119,7 @@ const menu = useMenuButton();
 )}
 ```
 
-Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; arrows wrap; Home/End jump; Escape closes and refocuses the button; Tab and a mousedown outside close. Used by `SidebarNav` and `TopBar`. `RowActionsMenu` still has its own listeners (TD-029). Tests: `hooks/__tests__/useMenuButton.test.tsx`.
+Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; arrows wrap; Home/End jump; Escape closes and refocuses the button; Tab and a mousedown outside close. Used by `SidebarNav` and `TopBar`. `RowActionsMenu` still has its own listeners (TD-031). Tests: `hooks/__tests__/useMenuButton.test.tsx`.
 
 ---
 

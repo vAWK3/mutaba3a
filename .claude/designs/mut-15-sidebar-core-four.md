@@ -47,7 +47,7 @@ Acceptance criteria (ticket):
 | In collapsed mode section headers are hidden, so the core and "More" groups run together with only a margin between them | `index.css:352-354` | A hairline divider stands in for the hidden header |
 | Dead code in `SidebarNav.tsx`: the `/download` external-link branch (no item uses that path) and a commented-out `ChartIcon`; i18n keys `nav.sections.main`, `.workspace`, `.work`, `.money` become unused (the last two already are) | `SidebarNav.tsx:225-261`, `:473-489`; grep for `nav.sections` | Remove with this change |
 | `e2e/navigation.spec.ts` still walks Overview → Projects → Transactions → Reports | file, lines 4-35 | Stale since MUT-16; rewrite its first case to the four-item shape |
-| ADR-021 §1 fixes the nav as "Home, Income, Expenses, Insights \| Clients, Projects \| Settings" and says Clients/Projects become supporting context | `DECISIONS.md:570` | Overridden explicitly by ADR-033 (§6) |
+| ADR-021 §1 fixes the nav as "Home, Income, Expenses, Insights \| Clients, Projects \| Settings" and says Clients/Projects become supporting context | `DECISIONS.md:570` | Overridden explicitly by ADR-034 (§6) |
 
 ## 3. Proposed solution
 
@@ -170,9 +170,9 @@ export function useLeaveDisabledArea(): void {
 - **i18n:** no new strings. **Cost/infra:** none.
 - **Out of scope (ticket):** deleting any gated page; the sidebar's visual style, collapse behaviour or profile switcher; the differing click behaviour of the two menus (sidebar navigates to the list, top bar stays in place).
 
-## 6. ADR-033 (to be written on build)
+## 6. ADR-034 (to be written on build)
 
-**The sidebar is four fixed core entries; optional areas append below; switching an area off re-runs the route guards.** It overrides **ADR-021 §1** (navigation "Home, Income, Expenses, Insights | Clients, Projects | Settings") and ADR-021's consequence "Clients/Projects become supporting context, not primary navigation". The reason is the 2026-10-05 intake: the product answers three questions per client, so Clients is primary and Projects is an optional tag. The replacement is Home, Clients, Income (core, constant), "More" (optional, below), Settings (footer). The rest of ADR-021 (renames, question-first framing) stays. ADR-021's status becomes "Active; §1 superseded by ADR-033".
+**The sidebar is four fixed core entries; optional areas append below; switching an area off re-runs the route guards.** It overrides **ADR-021 §1** (navigation "Home, Income, Expenses, Insights | Clients, Projects | Settings") and ADR-021's consequence "Clients/Projects become supporting context, not primary navigation". The reason is the 2026-10-05 intake: the product answers three questions per client, so Clients is primary and Projects is an optional tag. The replacement is Home, Clients, Income (core, constant), "More" (optional, below), Settings (footer). The rest of ADR-021 (renames, question-first framing) stays. ADR-021's status becomes "Active; §1 superseded by ADR-034".
 
 ## 7. Risks
 
@@ -188,7 +188,7 @@ export function useLeaveDisabledArea(): void {
 4. D5 keyboard hook + tests (if approved). Commit.
 5. D4 onboarding indicator + test (if approved). Commit.
 6. e2e navigation spec; browser check in English and Arabic, expanded and collapsed, all areas off and all on, plus disable-under-open-page.
-7. Knowledge files (ADR-033, CHANGELOG, SYSTEM_OVERVIEW, COMPONENT_REGISTRY, PATTERNS, TECH_DEBT, TEST_PLAN); `npm run lint`, `npm run typecheck`, `npx tsc -b`, full suite, `npm run build`.
+7. Knowledge files (ADR-034, CHANGELOG, SYSTEM_OVERVIEW, COMPONENT_REGISTRY, PATTERNS, TECH_DEBT, TEST_PLAN); `npm run lint`, `npm run typecheck`, `npx tsc -b`, full suite, `npm run build`.
 
 ## Business / product impact
 
@@ -211,8 +211,11 @@ export function useLeaveDisabledArea(): void {
   combinations.
 - **e2e:** the navigation spec passes; the remaining 13 e2e cases fail for
   pre-existing reasons, recorded on TD-004.
-- New debt: TD-029 (`RowActionsMenu` listeners), TD-030 (the two menus' click
+- New debt: TD-031 (`RowActionsMenu` listeners), TD-032 (the two menus' click
   behaviour differs). TD-027 resolved.
 - Verification: lint 0 errors, typecheck and `tsc -b` clean, 134 files /
   2,207 tests passing (5 skipped), build succeeds.
 
+- **Renumbered at merge (2026-10-11):** MUT-3 reached `main` first and took
+  ADR-033 and TD-029/030, so this ticket's ADR is **ADR-034** and its debts
+  are **TD-031** (`RowActionsMenu`) and **TD-032** (menu click behaviour).

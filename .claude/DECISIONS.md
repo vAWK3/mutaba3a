@@ -29,7 +29,7 @@
 | ADR-018 | CSS Variables for Theming | Active | 2024-03 |
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
-| ADR-021 | Question-First UX Redesign | Active; §1 (navigation) superseded by ADR-033 | 2026-03 |
+| ADR-021 | Question-First UX Redesign | Active; §1 (navigation) superseded by ADR-034 | 2026-03 |
 | ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
 | ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth | Active | 2026-10 |
 | ADR-024 | Override of ADR-005: A Hosted Mutaba3a Service Exists Beside the Local-First App | Active | 2026-10 |
@@ -41,7 +41,7 @@
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
-| ADR-033 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
+| ADR-034 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
 
 ---
 
@@ -570,7 +570,7 @@ formatCurrency(1999, 'USD')      // → "$19.99" or "١٩٫٩٩ $"
 
 ## ADR-021: Question-First UX Redesign
 
-**Status**: Active; Key Change 1 (navigation) and the consequence "Clients/Projects become supporting context, not primary navigation" are superseded by ADR-033 (2026-10-11)
+**Status**: Active; Key Change 1 (navigation) and the consequence "Clients/Projects become supporting context, not primary navigation" are superseded by ADR-034 (2026-10-11)
 **Date**: 2026-03
 **Context**: The app evolved into an entity-first mini CRM (clients/projects/transactions/documents) but the core user need is simpler: fast answers about cash flow. Users need to know what they received, what's unpaid, and what they spent, not manage a pipeline or document system.
 
@@ -1300,7 +1300,7 @@ the reconcile now makes visible (TD-023).
 
 ---
 
-## ADR-033: The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1)
+## ADR-034: The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1)
 
 **Status**: Active
 **Date**: 2026-10-11
@@ -1331,7 +1331,7 @@ rest of ADR-021 (the renames, the question-first framing, deprecations) stands.
    menu and the top bar **Add** menu offer and in which order: Income, Client,
    then Expense (expenses on) and Project (projects on). Same rule as the nav:
    core first, optional appended. Each menu keeps its own labels and click
-   behaviour (TD-030 records that they differ).
+   behaviour (TD-032 records that they differ).
 3. **Switching an area off re-runs the route guards.** `useLeaveDisabledArea()`
    (in `AppShell`) calls `router.invalidate()` on any on→off transition after
    the first load; the open route's `requireFeature` gate then redirects home
