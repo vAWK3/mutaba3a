@@ -115,35 +115,66 @@ describe('utils', () => {
       ['1,200.50', 120050],
       ['0.5', 50],
       ['.5', 50],
+      ['5.', 500],
+      ['007', 700],
       ['12,345,678', 1234567800],
-      ['١٢٠٠', 120000],
-      ['١٬٢٠٠٫٥٠', 120050],
-      ['۱۲۰۰', 120000],
+      ['\u0661\u0662\u0660\u0660', 120000],
+      ['\u0661\u066C\u0662\u0660\u0660\u066B\u0665\u0660', 120050],
+      ['\u06F1\u06F2\u06F0\u06F0', 120000],
       [' $ 1,200 ', 120000],
-      ['₪100', 10000],
+      ['\u20AA100', 10000],
       ['100 USD', 10000],
-      ['‏١٠٠', 10000],
-      ['1 200', 120000],
+      ['usd 100', 10000],
+      ['US$1,200', 120000],
+      ['\u200F\u0661\u0660\u0660', 10000],
+      ['1 200', 120000],
+      ['1\u00A0200', 120000],
+      ['1\u202F200.50', 120050],
       ['-50', -5000],
-      ['100.999', 10100],
+      ['0.29', 29],
+      ['1.01', 101],
     ])('parses %j as %i minor units', (input, expected) => {
       expect(parseAmountInput(input)).toBe(expected);
     });
 
     it.each([
-      // ambiguous: a comma that is not a thousands separator is never guessed at
+      // ambiguous: a comma or space that is not a thousands separator is never guessed at
       '12,5',
       '1.200,50',
       '1,2,3',
       '1.2.3',
+      '0,500',
+      '100 50',
+      '1 2 3',
+      // letters other than a currency code are never stripped
       '12a5',
+      '2k',
+      '1.5k',
+      '50%',
+      '5 \u0623\u0644\u0641',
+      '10O',
+      '1e3',
+      // more than two decimals is ambiguous for money
+      '1.005',
+      '100.999',
+      // beyond safe integer minor units
+      '9'.repeat(400),
+      '99999999999999999',
       '',
       '   ',
       'abc',
       '-',
       '.',
+      '$',
     ])('rejects %j', (input) => {
       expect(parseAmountInput(input)).toBeNull();
+    });
+
+    it('rounds extra decimals half-up on the string, never through float math, when asked to', () => {
+      expect(parseAmountInput('100.999', { maxDecimals: Infinity })).toBe(10100);
+      expect(parseAmountInput('1.005', { maxDecimals: Infinity })).toBe(101);
+      expect(parseAmountInput('0.285', { maxDecimals: Infinity })).toBe(29);
+      expect(parseAmountInput('100.001', { maxDecimals: Infinity })).toBe(10000);
     });
   });
 

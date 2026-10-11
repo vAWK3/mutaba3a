@@ -52,13 +52,21 @@ export function formatAmountShort(amountMinor: number, currency: Currency): stri
 
 const ARABIC_INDIC_ZERO = 0x0660;
 const EXTENDED_ARABIC_INDIC_ZERO = 0x06f0;
-const ARABIC_DECIMAL_SEPARATOR = /٫/g;
-const ARABIC_THOUSANDS_SEPARATORS = /[٬،]/g;
-// Whitespace (incl. NBSP / narrow NBSP) and the bidi marks an RTL keyboard or a paste can carry
-const AMOUNT_SPACING = /[\s‎‏؜]/g;
-// Digits, optionally grouped by commas in threes, with an optional decimal part.
-// Anything else ("12,5", "1.200,50") is ambiguous and is rejected, never guessed at.
-const AMOUNT_PATTERN = /^-?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/;
+const ARABIC_INDIC_DIGITS = /[\u0660-\u0669]/g;
+const EXTENDED_ARABIC_INDIC_DIGITS = /[\u06F0-\u06F9]/g;
+const ARABIC_DECIMAL_SEPARATOR = /\u066B/g;
+const ARABIC_THOUSANDS_SEPARATORS = /[\u066C\u060C]/g;
+// Bidi marks an RTL keyboard or a paste can carry: LRM, RLM, ALM
+const BIDI_MARKS = /[\u200E\u200F\u061C]/g;
+// Spaces that may group thousands: space, NBSP, thin space, narrow NBSP
+const GROUP_SPACES = /[ \u00A0\u2009\u202F]+/g;
+// The only words an amount may carry: a currency symbol or code, before or after it
+const CURRENCY_PREFIX = /^(?:US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC\u00A3])\s*/i;
+const CURRENCY_SUFFIX = /\s*(?:US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC\u00A3])$/i;
+// Whole digits, or digits grouped by commas in threes (no leading 0 group), then decimals.
+// Anything else ("12,5", "1.200,50", "0,500", "2k") is ambiguous and is rejected, never guessed at.
+const AMOUNT_PATTERN = /^(-?)(\d+|[1-9]\d{0,2}(?:,\d{3})+)?(?:\.(\d*))?$/;
+const MINOR_DIGITS = 2;
 
 /**
  * Convert Arabic-Indic (U+0660–0669) and Extended Arabic-Indic (U+06F0–06F9)
@@ -66,26 +74,51 @@ const AMOUNT_PATTERN = /^-?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/;
  */
 export function normalizeNumerals(value: string): string {
   return value
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - ARABIC_INDIC_ZERO))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - EXTENDED_ARABIC_INDIC_ZERO))
+    .replace(ARABIC_INDIC_DIGITS, (d) => String(d.charCodeAt(0) - ARABIC_INDIC_ZERO))
+    .replace(EXTENDED_ARABIC_INDIC_DIGITS, (d) => String(d.charCodeAt(0) - EXTENDED_ARABIC_INDIC_ZERO))
     .replace(ARABIC_DECIMAL_SEPARATOR, '.')
     .replace(ARABIC_THOUSANDS_SEPARATORS, ',');
 }
 
+export interface ParseAmountOptions {
+  /**
+   * Most decimals accepted (default 2). Pass Infinity to round extra decimals
+   * half-up instead of rejecting them (the lenient wrappers below).
+   */
+  maxDecimals?: number;
+}
+
 /**
  * Parse a typed amount to minor units, or null when it is not a number we can
- * read without guessing. Accepts Arabic-Indic digits, thousands separators and
- * a currency symbol or code before or after the number.
+ * read without guessing. Accepts Arabic-Indic digits, comma- or space-grouped
+ * thousands and one currency symbol or code before or after the number. The
+ * conversion runs on the digits, so no float rounding creeps in.
  */
-export function parseAmountInput(value: string): number | null {
-  const compact = normalizeNumerals(value).replace(AMOUNT_SPACING, '');
-  const bare = compact.replace(/^[^\d.-]+/, '').replace(/[^\d.]+$/, '');
-  if (!AMOUNT_PATTERN.test(bare)) return null;
-  return Math.round(parseFloat(bare.replace(/,/g, '')) * 100);
+export function parseAmountInput(value: string, options: ParseAmountOptions = {}): number | null {
+  const { maxDecimals = MINOR_DIGITS } = options;
+  const bare = normalizeNumerals(value)
+    .replace(BIDI_MARKS, '')
+    .trim()
+    .replace(CURRENCY_PREFIX, '')
+    .replace(CURRENCY_SUFFIX, '')
+    .replace(GROUP_SPACES, ',');
+
+  const match = AMOUNT_PATTERN.exec(bare);
+  if (!match) return null;
+  const [, sign, wholePart = '', fraction = ''] = match;
+  if (!wholePart && !fraction) return null;
+  if (fraction.length > maxDecimals) return null;
+
+  const whole = Number(wholePart.replace(/,/g, '') || '0');
+  const cents = Number(fraction.slice(0, MINOR_DIGITS).padEnd(MINOR_DIGITS, '0'));
+  const roundUp = fraction.length > MINOR_DIGITS && Number(fraction[MINOR_DIGITS]) >= 5 ? 1 : 0;
+  const minor = whole * 100 + cents + roundUp;
+  if (!Number.isSafeInteger(minor)) return null;
+  return sign ? -minor : minor;
 }
 
 export function parseAmountToMinor(value: string): number {
-  return parseAmountInput(value) ?? 0;
+  return parseAmountInput(value, { maxDecimals: Infinity }) ?? 0;
 }
 
 /**
@@ -93,7 +126,7 @@ export function parseAmountToMinor(value: string): number {
  * Handles various formats like "100", "100.50", "$100", etc.; 0 when unreadable.
  */
 export function parseCurrencyInput(value: string): number {
-  return parseAmountInput(value) ?? 0;
+  return parseAmountInput(value, { maxDecimals: Infinity }) ?? 0;
 }
 
 /**
