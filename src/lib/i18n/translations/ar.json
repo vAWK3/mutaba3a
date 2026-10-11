@@ -33,8 +33,6 @@
     "sort": {
       "nameAZ": "الاسم (أ-ي)",
       "nameZA": "الاسم (ي-أ)",
-      "valueHigh": "القيمة (الأعلى أولاً)",
-      "valueLow": "القيمة (الأقل أولاً)",
       "unpaidHigh": "المستحق (الأعلى أولاً)",
       "unpaidLow": "المستحق (الأقل أولاً)",
       "activityRecent": "النشاط الأحدث",
@@ -301,18 +299,17 @@
     "columns": {
       "client": "العميل",
       "activeProjects": "المشاريع النشطة",
-      "received": "المحصّل",
       "paidIncome": "الإيرادات المحصّلة",
       "unpaid": "غير المحصّل",
       "expenses": "المصروفات",
       "lastPayment": "آخر دفعة",
-      "lastActivity": "آخر نشاط"
+      "lastActivity": "آخر نشاط",
+      "owedNow": "المستحق الآن",
+      "overdue": "المتأخر"
     },
     "summary": {
       "clientsCount": "{count} عملاء",
-      "clientsCountOne": "عميل واحد",
-      "totalReceived": "إجمالي المحصّل",
-      "totalUnpaid": "إجمالي غير المحصّل"
+      "clientsCountOne": "عميل واحد"
     },
     "detail": {
       "noReceivables": "لا توجد مستحقات",
@@ -347,6 +344,16 @@
         "recordedOnEntry": "مسجّلة في الإدخال",
         "openEntry": "فتح إدخال الإيراد"
       }
+    },
+    "emptyFiltered": "لا يوجد عملاء مطابقون للبحث",
+    "emptyFilteredCount": "{count} عميل إجمالاً.",
+    "clearSearch": "مسح البحث",
+    "crossProfileTxCount": "{count} إدخال",
+    "index": {
+      "settled": "مسدَّد",
+      "neverPaid": "لم يدفع بعد",
+      "oldestOverdue": "الأقدم {days} يوم",
+      "owedOrderHint": "مرتّبة حسب سعر الصرف اليوم. لا تُحوَّل المبالغ أبداً."
     }
   },
   "insights": {

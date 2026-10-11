@@ -1283,6 +1283,17 @@ second repository method. It takes `today` explicitly (ADR-022), returns one
 entry per currency in a fixed order and never converts. The overdue counts that
 disagreed across five screens before MUT-17 are the reason.
 
+### Ordering across currencies (MUT-7, ADR-035)
+Never compare or add raw minor units of different currencies. To order a list
+by money owed in several currencies, rank by a tuple: [the ILS-converted
+total over the currencies that have a rate today, then each unrated
+currency's raw amount, in USD → ILS → EUR order] (`owedRank`). Compute it once
+per row while shaping, not inside the comparator. Show every amount in its
+own currency, and say on the header that the order uses today's rate. Columns
+that can compare something currency-free (days late, dates, names) do that
+instead. Every comparator ends with a name-then-id tie-break so equal rows
+never reshuffle.
+
 ### Amounts stay LTR inside RTL text (MUT-3)
 A standalone amount renders in `<bdi dir="ltr">` (or a cell the RTL rules
 already isolate, like `.amount-cell`). An amount *inside a translated sentence*

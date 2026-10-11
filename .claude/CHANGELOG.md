@@ -28,6 +28,75 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-7: the clients index answers "who owes me, and who is late"
+
+**Scope:** `src/pages/clients/ClientsPage.tsx`, `src/components/clients/clientIndexRows.ts` (new),
+`src/components/ui/SortableHeader.{tsx,css}` (new), `src/db/{aggregations,repository}.ts`,
+`src/types/index.ts`, `src/lib/utils.ts`, `src/index.css`,
+`src/lib/i18n/{types.ts,translations/en.json,translations/ar.json}`, tests beside each,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`,
+`.claude/designs/mut-7-clients-who-owes-me.md`. Branch `feature/mut-1-client-core`.
+
+### Changed
+- `/clients` columns are now **Client · Owed Now · Overdue · Last Payment ·
+  Last Activity**:
+  - **Owed Now:** one line per currency, or **Settled** when nothing is owed.
+  - **Overdue:** each late currency in the error colour with "oldest Nd", or a
+    dash.
+  - **Last Payment:** the date over the amount, or **Never paid**.
+  - Active projects and received are gone.
+- **Default order is owed now, descending**, ranked by today's exchange rate
+  with nothing converted on screen (ADR-035). The header tooltip says so. The
+  Overdue column sorts by days late, Last Payment and Last Activity by date,
+  Client by name. Ties fall back to name, then id.
+- **Click a column header to sort** (`SortableHeader`, with `aria-sort`). It
+  replaces the sort dropdown and stays in the URL (`?sort=&dir=`).
+- **The whole row opens the client profile**; the name is still a link.
+- **The strip** shows the client count plus `OwedNowSummary` for everyone
+  listed, per currency. It replaces the "Total received" and "Total unpaid"
+  figures, which were converted to ILS.
+
+### Fixed
+- **Last payment ignored partial, backdated and received-at-creation
+  payments.** `lastPaymentAt` was read only from fully paid entries'
+  `tx.paidAt`. It now comes from the same payment rows as the profile's
+  Payments section (parent-brief D6).
+- **Sorting by value or unpaid added raw minor units across USD, ILS and EUR.**
+- **Unpaid on the index counted archived income.** The index now reads
+  `owed` (TD-030, index half).
+- **The search-empty state showed raw keys** (`clients.emptyFiltered`,
+  `clients.emptyFilteredCount`, `clients.clearSearch`), and the cross-profile
+  badge showed a literal "txns". Both are translated in en and ar now.
+
+### Technical
+- `clientSummaryRepo.list/get` return `owed`, `oldestOverdueDays` and
+  `lastPayment`. `list()` reads transactions and payment records once and
+  groups them, instead of scanning every transaction once per client.
+- New pure helpers in `aggregations.ts`: `paymentRowsForIncome` (the
+  ADR-033 derivation, moved out of `listByClient`), `latestPayment`,
+  `combineOwed`, `summarizeClientCollection` and `groupBy`.
+  `OwedByCurrency` and `LastPayment` move to `src/types`.
+- **Brief D4 reverted mid-build:** the per-currency paid/unpaid report fields
+  stay, because Insights and Reports read them.
+- `formatAmount` reuses one `Intl.NumberFormat` per locale + currency.
+- Pruned: the `.clients-summary-strip/item/label` CSS,
+  `clients.columns.received`, `clients.summary.totalReceived/totalUnpaid` and
+  `common.sort.valueHigh/valueLow`.
+- **Tests:** 21 more in total. Added: aggregations +9, client summary +9,
+  `clientIndexRows` 14, `SortableHeader` 4. The page suite was rewritten from
+  33 to 18. The old suite asserted the name-ascending default and
+  cross-currency sums.
+- **Verification:** full suite 2,222 passed, 5 skipped, 0 failed. Lint 0
+  errors (17 pre-existing warnings), typecheck clean.
+- **Browser check** on seeded data at 1280px and 1024px, in English and
+  Arabic. Order matched the ranking by rate. Archived client and archived
+  income were excluded. Last payment covered a partial payment, income saved
+  as received and a backdated Mark paid. The row opened a profile that agrees
+  with its index row. No horizontal scroll, and amount columns align to the
+  end edge in RTL.
+
+---
+
 ## [Unreleased] - 2026-10-11 — MUT-15: the sidebar is Home / Clients / Income / Settings
 
 **Scope:** `src/components/layout/{SidebarNav,TopBar,AppShell}.tsx`, `src/components/layout/addMenuActions.ts` (new),

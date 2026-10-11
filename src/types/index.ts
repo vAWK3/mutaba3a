@@ -197,15 +197,39 @@ export interface ProjectSummary {
 }
 
 // Client summary for list view
+/** What a client (or everyone) owes in one currency, right now (ADR-033). */
+export interface OwedByCurrency {
+  currency: Currency;
+  owedMinor: number;
+  /** The part of owedMinor whose due date has passed (ADR-010) */
+  overdueMinor: number;
+}
+
+/** A client's most recent payment, in its own currency (MUT-7). */
+export interface LastPayment {
+  paidAt: string;
+  amountMinor: number;
+  currency: Currency;
+}
+
 export interface ClientSummary {
   id: string;
   name: string;
   activeProjectCount: number;
   paidIncomeMinor: number;
   unpaidIncomeMinor: number;
+  /** Owed now per currency; [] when settled. Archived income excluded (ADR-033) */
+  owed: OwedByCurrency[];
+  /** Whole days the client's oldest overdue item is late; undefined when none is */
+  oldestOverdueDays?: number;
+  /** Newest payment: records plus income saved as received (ADR-033) */
+  lastPayment?: LastPayment;
+  /** lastPayment.paidAt */
   lastPaymentAt?: string;
   lastActivityAt?: string;
-  // Per-currency breakdown (present when currency filter is undefined)
+  // Per-currency report totals (present when list() has no currency filter).
+  // Read by the Insights and Reports client tables. Unlike `owed`, unpaid here
+  // still counts archived income (TD-030).
   paidIncomeMinorUSD?: number;
   paidIncomeMinorILS?: number;
   paidIncomeMinorEUR?: number;

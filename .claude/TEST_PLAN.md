@@ -859,3 +859,30 @@ tab A's settings query refetches → More loses Expenses and the tab lands on
 
 **Baseline after MUT-15 (2026-10-11)**: 134 files, 2,207 passed, 5 skipped,
 0 failed (was 130 / 2,149).
+
+### MUT-7 — clients index: who owes me, and who is late
+
+| Area | File | What is pinned |
+|---|---|---|
+| Payment derivation, extracted (ADR-033) | `src/db/__tests__/aggregations.test.ts` (+9) | `paymentRowsForIncome`: record rows; one entry row for the uncovered received amount; `occurredAt` fallback; nothing for unpaid. `latestPayment`: none → undefined; newest wins; same-day tie → larger amount, then id, whatever the input order. `combineOwed`: sums within a currency only, `[]` when settled. `listByClient`'s 15 existing tests guard the refactor |
+| Summary collection fields | `src/db/__tests__/clientRepo.test.ts` (+9) | owed per currency without paid or archived income; settled → `[]` and no overdue age; oldest overdue age, with due-today not overdue; last payment from a partial record; a backdated record beats an older paid entry; deleted records ignored; income saved as paid counts; never paid → undefined; archived clients excluded; `get()` follows payments too. Dates are relative to the real today (no fake timers around Dexie) |
+| Row shaping and ordering | `src/components/clients/__tests__/clientIndexRows.test.ts` (14) | settled flag; overdue lists only late currencies; `owedRank` converts rated currencies, keeps unrated ones in their own slot, all zeros when settled; owed desc/asc by rate with settled last; unrated amounts rank after rated; overdue by days; last payment newest first with never-paid last; activity; name; ties name then id in both directions |
+| Header | `src/components/ui/__tests__/SortableHeader.test.tsx` (4) | `aria-sort` none, descending, ascending; click reports the field; end alignment and title |
+| Page | `src/pages/clients/__tests__/ClientsPage.test.tsx` (18, rewritten from 33) | exact column set; per-currency lines in Owed Now; Overdue amounts plus "oldest Nd"; Settled and dash; last payment date and amount, or Never paid; order hint on the header; default order and `aria-sort`; order flips when the USD rate changes; toggle; each column's order; sort in the URL; ties by name; strip count and per-currency total owed; row click → profile; name is a link; empty, search-empty (translated keys, debounce awaited) and loading states |
+
+The old page suite asserted the name-ascending default and cross-currency
+sums, both of which this ticket removes. Its search and empty-state cases were
+kept in spirit. Archived-client exclusion is pinned at the repository, where
+it happens.
+
+Manual (browser, 2026-10-11, seeded data, 1280px and 1024px, English and
+Arabic): order Gamma ₪12,000 > Acme $1,300 + ₪4,200 > Beta $900 > the
+settled clients, at a live rate of ₪3.06/$. The strip read $2,200 and
+₪16,200 with the overdue parts. The archived client and archived-only debt
+were left out. Header clicks and the URL matched. A row opened a profile
+that agrees with its index row. No horizontal scroll, and RTL amount columns
+sit at the end edge.
+
+**Baseline after MUT-7 (2026-10-11)**: 2,222 unit tests passing, 5 skipped,
+0 failing.
+

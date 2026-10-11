@@ -134,8 +134,14 @@ export interface Translations {
     notFound: string;
     notFoundHint: string;
     confirmArchive: string;
+    emptyFiltered: string;
+    emptyFilteredCount: string;
+    clearSearch: string;
+    crossProfileTxCount: string;
     columns: {
       client: string;
+      owedNow: string;
+      overdue: string;
       activeProjects: string;
       paidIncome: string;
       unpaid: string;
@@ -145,6 +151,12 @@ export interface Translations {
     detail: {
       noReceivables: string;
       noReceivablesHint: string;
+    };
+    index: {
+      settled: string;
+      neverPaid: string;
+      oldestOverdue: string;
+      owedOrderHint: string;
     };
     profile: {
       owedNow: string;

@@ -13,6 +13,7 @@
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
+| **Table headers** | SortableHeader |
 | **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
 | **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
@@ -553,6 +554,21 @@ ProjectDetailPage.
 
 ---
 
+### SortableHeader
+**Location**: `src/components/ui/SortableHeader.tsx` (+ `.css`)
+**Purpose**: A `<th>` whose label is a button that sorts its column (MUT-7). It sets `aria-sort` (`ascending` / `descending` / `none`) and shows an arrow on the active column. It optionally aligns to the end edge for numeric columns, and its `title` can explain the ordering. Props-in: the caller owns the state (usually `useSortState`) and decides what a click does. The clients index toggles the active column, or switches to the clicked one in its natural direction.
+
+```tsx
+<SortableHeader field="owed" label={t('clients.columns.owedNow')} align="end"
+  title={t('clients.index.owedOrderHint')}
+  sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+```
+
+**Used by**: ClientsPage. ProjectsPage still uses a sort dropdown and can adopt this.
+**Tests**: `src/components/ui/__tests__/SortableHeader.test.tsx`
+
+---
+
 ## Display Components
 
 ### Card
@@ -990,7 +1006,7 @@ const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receiva
 <OwedNowSummary owed={owed} />
 ```
 
-**Use when**: showing what is owed now — the client profile today; the clients index (MUT-7) and home (MUT-8) next. Not for period totals (paid income, expenses): those are not "now" figures.
+**Use when**: showing what is owed now. Used by the client profile and, as the clients index strip (MUT-7), over `combineOwed(summaries.map((s) => s.owed))`. Home (MUT-8) is next. Not for period totals (paid income, expenses): those are not "now" figures.
 **Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
 Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
 
