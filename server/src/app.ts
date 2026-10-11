@@ -268,16 +268,30 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   if (deps.portal) {
     const { distDir } = deps.portal;
 
-    app.use('/assets/*', async (c, next) => {
-      c.header('Cache-Control', 'public, max-age=31536000, immutable');
-      await next();
-    });
-
     // Any real file in the build (hashed assets, favicon, manifest, …); a miss
     // falls through to the SPA-shell handler below via Hono's own next().
+    // Immutable caching applies only to an actual hit under /assets/* —
+    // onFound fires only when serveStatic found and is serving the file, so a
+    // stale/nonexistent hashed filename (after a deploy rotates them) still
+    // falls through to the SPA shell with the default no-store header,
+    // instead of being cached as a broken response for a year.
     app.use('*', async (c, next) => {
       if (isPortalExcludedPath(c.req.path)) return next();
-      return serveStatic({ root: distDir })(c, next);
+      let foundUnderAssets = false;
+      const result = await serveStatic({
+        root: distDir,
+        onFound: (_path, c) => {
+          if (c.req.path.startsWith('/assets/')) foundUnderAssets = true;
+        },
+      })(c, next);
+      // c.header() cannot reach this response: serveStatic already built it
+      // with c.body() before onFound ran, which bakes in a header snapshot
+      // decoupled from the context's own headers. Mutate the Response's own
+      // Headers object directly instead.
+      if (foundUnderAssets && result instanceof Response) {
+        result.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+      return result;
     });
 
     app.get('*', async (c, next) => {

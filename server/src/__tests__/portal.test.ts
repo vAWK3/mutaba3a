@@ -70,10 +70,23 @@ describe('portal serving — enabled', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   });
 
-  it('serves a root-level public file (favicon) as itself, not the SPA shell', async () => {
+  it('serves a root-level public file (favicon) as itself, not the SPA shell, and never immutable-caches it', async () => {
     const res = await app.request('/favicon.svg');
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('<svg></svg>');
+    expect(res.headers.get('cache-control')).not.toContain('immutable');
+  });
+
+  it('a stale/nonexistent hashed asset falls back to the SPA shell, not a permanently-cached broken response', async () => {
+    // Regression: a deploy rotates asset hashes; a client with an old cached
+    // page may still request the old filename. That must 404-equivalent into
+    // the SPA shell with the default no-store header, never get immutably
+    // cached as if it were a real, unchanging asset.
+    const res = await app.request('/assets/stale-nonexistent-hash.js');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(await res.text()).toContain('portal shell');
+    expect(res.headers.get('cache-control')).not.toContain('immutable');
   });
 
   it('falls back to index.html for a client-side route, without immutable caching', async () => {
