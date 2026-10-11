@@ -16,6 +16,7 @@ import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
+import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
@@ -147,6 +148,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
+  // Shared by the cookie and device-session sign-in routes (MUT-64): one throttle/IP-budget per email or address, whichever surface it comes from.
+  const signInThrottle = deps.signInThrottle ?? new SignInThrottle();
+  const signInIpLimiter = deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
   let routeAccess: RouteAccessIndex | undefined;
   app.use(
     '/v1/*',
@@ -157,7 +161,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: ORGANIZATION_INDEPENDENT_ROUTES,
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -169,8 +173,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       store,
       passwordHasher,
       settings: sessions,
-      throttle: deps.signInThrottle ?? new SignInThrottle(),
-      ipLimiter: deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute),
+      throttle: signInThrottle,
+      ipLimiter: signInIpLimiter,
+    }),
+  );
+  app.route(
+    '/',
+    deviceSessionRoutes({
+      store,
+      passwordHasher,
+      settings: sessions,
+      throttle: signInThrottle,
+      ipLimiter: signInIpLimiter,
     }),
   );
   app.route('/', integrationRoutes(store, deps.version));
@@ -203,6 +217,14 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     in: 'cookie',
     name: '__Host-mut_session',
     description: 'Hosted-portal session (MUT-38). Set by POST /v1/sessions; httpOnly, SameSite=Strict, same origin only. Organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user\'s memberships.',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'deviceSession', {
+    type: 'http',
+    scheme: 'bearer',
+    description:
+      'Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. ' +
+      'Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — ' +
+      'organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user\'s memberships.',
   });
   app.openAPIRegistry.registerComponent('securitySchemes', 'adminToken', {
     type: 'apiKey',

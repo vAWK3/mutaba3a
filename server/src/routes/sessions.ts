@@ -117,7 +117,8 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
   return app;
 }
 
-async function buildMe(store: LedgerStore, user: UserRecord) {
+/** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */
+export async function buildMe(store: LedgerStore, user: UserRecord) {
   const access = sessionAccess();
   const profiles = [];
   for (const membership of await store.memberships.listByUser(user.id)) {

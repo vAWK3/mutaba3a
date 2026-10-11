@@ -270,6 +270,12 @@ export const MeSchema = z
   })
   .openapi('Me');
 
+/** POST /v1/device-sessions response (MUT-64): the bearer token a native app stores, plus the same Me payload the portal gets from its cookie. */
+export const DeviceSessionSchema = MeSchema.extend({
+  /** Authorization: Bearer <token> on every subsequent request. Shown once; the server keeps only its digest. */
+  token: z.string(),
+}).openapi('DeviceSession');
+
 export const RevokeSessionsResponseSchema = z.object({ revoked: z.number().int().min(0) }).openapi('RevokeSessionsResponse');
 
 export const PasswordResetResponseSchema = z
