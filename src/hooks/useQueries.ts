@@ -85,6 +85,7 @@ export const queryKeys = {
   paymentRecords: (transactionId: string) => ['paymentRecords', transactionId] as const,
   paymentRecordsByClient: (clientId: string, filters: PaymentByClientFilters) =>
     ['paymentRecords', 'client', clientId, filters] as const,
+  recentPayments: (profileId?: string, limit?: number) => ['paymentRecords', 'recent', { profileId, limit }] as const,
 };
 
 // Transaction hooks
@@ -233,6 +234,18 @@ export function usePaymentsByClient(
     queryKey: queryKeys.paymentRecordsByClient(clientId!, filters),
     queryFn: () => getRepositories().base.paymentRecords.listByClient(clientId!, filters),
     enabled: !!clientId,
+  });
+}
+
+/**
+ * The newest payments across every client (MUT-8, Home). Keyed under
+ * ['paymentRecords'], so invalidatePaymentRecordLists refreshes it after any
+ * payment or income write.
+ */
+export function useRecentPayments(profileId?: string, limit = 10) {
+  return useQuery({
+    queryKey: queryKeys.recentPayments(profileId, limit),
+    queryFn: () => getRepositories().base.paymentRecords.listRecent({ profileId, limit }),
   });
 }
 

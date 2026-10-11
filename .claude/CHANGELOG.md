@@ -28,6 +28,64 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-8: Home is owed now, needs attention and recent payments
+
+**Scope:** `src/pages/overview/OverviewPage.tsx`, `src/components/home/{HomeNeedsAttention,HomeRecentPayments}.tsx` (new),
+`src/components/home/{PredictiveKpiStrip,MonthActualsRow,AttentionFeed,KpiCard}.tsx` (deleted) and their tests,
+`src/db/{repository,interfaces}.ts`, `src/sync/core/synced-repository.ts`, `src/hooks/useQueries.ts`,
+`src/types/index.ts`, `src/index.css`, `src/lib/i18n/*`, `src/__tests__/noDeadHomeModules.test.ts` (new),
+`docs/ux-redesign/UX-REDESIGN-SPEC.md`, `.claude/designs/{insights-reintegration,mut-1-client-accounting-core,mut-8-home-owed-attention-payments}.md`,
+`.claude/{CHANGELOG,DECISIONS,COMPONENT_REGISTRY,PATTERNS,TECH_DEBT,TEST_PLAN,SYSTEM_OVERVIEW}.md`.
+Branch `feature/mut-1-client-core`.
+
+### Changed
+- **Home is three blocks** (ADR-036):
+  - **Owed now:** the largest figure on the page, per currency, with the
+    overdue part called out, over every receivable in the active profile.
+  - **Needs attention:** every overdue item and every item due within 7 days,
+    in all currencies, oldest due date first. Each row shows the client, what
+    it was for, the remaining amount and "Nd overdue", "Due in Nd" or "Due
+    today".
+  - **Recent payments:** the last 10, with date, amount, client and what each
+    was for. Income saved as Received is included.
+- **Every row opens its client profile**, or the entry when it has no client.
+- **A new install that skipped onboarding** now sees one action, **Add
+  income**, instead of zeroes.
+
+### Removed
+- The forecast strip ("Will I make it?", cash on hand, coming/leaving), the
+  month-actuals row, the guidance attention feed (which never showed EUR) and
+  "Recent activity", by Basel's decision (D10 = B). That covers
+  `PredictiveKpiStrip`, `MonthActualsRow`, `AttentionFeed` and
+  `KpiCard`/`KpiStrip`.
+- Their five test files, about 600 lines of `.kpi-*`, `.attention-*` and
+  `.actuals-*` CSS, and the `home.*`, `overview.recentActivity` and
+  `overview.noRecent` keys.
+- A guard test keeps the deleted files gone. MUT-58 prunes the money-event
+  read side they leave unused (TD-034).
+
+### Fixed
+- **Onboarding, and the new empty state, flashed on every Home load.** The
+  clients and entries queries looked empty while Dexie was still reading.
+  Home now shows a spinner until both have answered.
+
+### Technical
+- `paymentRecordRepo.listRecent({ profileId, limit = 10 })`, plus
+  `useRecentPayments`, keyed under `['paymentRecords']` so every write
+  refreshes it.
+- `getAttentionReceivables` breaks equal due dates by client name, then id.
+  Its 7-day window, every-currency coverage and archived exclusion are now
+  pinned by tests.
+- **Tests:** +32 new: OverviewPage 15, attention 5, `listRecent` 6, refresh 1,
+  guard 5. 59 tests left with the deleted components. Full suite 2,258
+  passed, 5 skipped, 0 failed. Lint 0 errors, typecheck clean.
+- **Browser check:** 1280px in English and 1024px in Arabic on seeded data.
+  Values matched expectations, rows opened their clients, there was no
+  horizontal scroll, and no onboarding flashed. The brand-new-install empty
+  state is covered by tests only.
+
+---
+
 ## [Unreleased] - 2026-10-11 — Settings › Data Tools messages follow the app language
 
 **Scope:** `src/pages/settings/DataToolsSection.tsx` (new, moved out of

@@ -27,6 +27,10 @@ The deprecated `/money-answers` page contained predictive and actionable financi
 
 ## 2. Page Contracts (Sharp Boundaries)
 
+> **Superseded for Home 2026-10-11 by ADR-036 (MUT-8).** Home answers "who owes
+> me, who is late, what came in", not "Am I okay?". `PredictiveKpiStrip` and
+> `AttentionFeed`, built from this brief, were deleted by decision.
+
 Each page has one job. This prevents scope creep.
 
 | Page | Contract | Primary Question |
