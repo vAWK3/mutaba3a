@@ -1478,14 +1478,25 @@
     }
   },
   "orphanedRecords": {
-    "title": "Assign Profiles",
-    "description": {
-      "clients": "The following clients don't have a profile assigned. Please assign them to a profile to continue.",
-      "projects": "The following projects don't have a profile assigned. Please assign them to a profile to continue."
+    "title": "Unassigned records",
+    "description": "These records don't belong to any business profile, so no profile's lists show them. Choose where each one belongs.",
+    "descriptionSingleProfile": "These records don't belong to any business profile, so no profile's lists show them.",
+    "groups": {
+      "clients": "Clients ({count})",
+      "projects": "Projects ({count})",
+      "transactions": "Income ({count})",
+      "expenses": "Expenses ({count})"
     },
-    "assignAllToDefault": "Assign All to Default Profile",
-    "assignIndividually": "Assign Individually",
-    "or": "or"
+    "assignAllTo": "Assign all to {profile}",
+    "profileFor": "Profile for {record}",
+    "untitledIncome": "Income entry",
+    "untitledExpense": "Expense",
+    "noProfiles": "Add a business profile first, then assign these records to it.",
+    "allAssigned": "Every record belongs to a profile.",
+    "assignedSingular": "{count} record assigned.",
+    "assignedPlural": "{count} records assigned.",
+    "partialFailureSingular": "{count} record couldn't be assigned. It's still listed below.",
+    "partialFailurePlural": "{count} records couldn't be assigned. They're still listed below."
   },
   "integrity": {
     "orphanedRecordSingular": "{count} record isn't assigned to any profile.",

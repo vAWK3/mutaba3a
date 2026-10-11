@@ -198,6 +198,13 @@ interface DrawerState {
     defaultProfileId?: string;
   }) => void;
   closePlanAssumptionDrawer: () => void;
+
+  // Unassigned-records drawer (opened from the orphaned-records banner)
+  orphanedRecordsDrawer: {
+    isOpen: boolean;
+  };
+  openOrphanedRecordsDrawer: () => void;
+  closeOrphanedRecordsDrawer: () => void;
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
@@ -520,6 +527,12 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         mode: 'create',
       },
     }),
+
+  orphanedRecordsDrawer: {
+    isOpen: false,
+  },
+  openOrphanedRecordsDrawer: () => set({ orphanedRecordsDrawer: { isOpen: true } }),
+  closeOrphanedRecordsDrawer: () => set({ orphanedRecordsDrawer: { isOpen: false } }),
 }));
 
 // Global filters state (for pages that share filter state)

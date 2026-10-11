@@ -4,7 +4,6 @@ import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { EmptyState } from '../../components/ui';
-import { OrphanedRecordsModal } from '../../components/modals';
 import { useClientSummaries, useClients, useBusinessProfiles } from '../../hooks/useQueries';
 import { useQuery } from '@tanstack/react-query';
 import { getCrossProfileClientStats } from '../../db/crossProfileStats';
@@ -22,7 +21,6 @@ export function ClientsPage() {
   const { language } = useLanguage();
   const locale = getLocale(language);
   const [search, setSearch] = useState('');
-  const [showOrphanedModal, setShowOrphanedModal] = useState(false);
 
   // URL-persisted sorting
   const { sortField, sortDir, setSort } = useSortState<SortField>({
@@ -34,14 +32,8 @@ export function ClientsPage() {
   // Get active profile - STRICT MODE: always operates on active profile only
   const profileId = useProfileFilter();
 
-  // Fetch all clients to check for orphaned records
+  // Fetch all clients (every profile) for the filtered-empty copy
   const { data: allClients = [] } = useClients(undefined);
-
-  // Check for orphaned clients and show modal
-  const hasOrphanedClients = allClients.some((c) => !c.profileId && !c.archivedAt);
-  if (hasOrphanedClients && !showOrphanedModal) {
-    setShowOrphanedModal(true);
-  }
 
   // Always fetch all currencies - no currency filter
   const { data: rawClients = [], isLoading } = useClientSummaries(profileId, undefined, search);
@@ -105,11 +97,6 @@ export function ClientsPage() {
 
   return (
     <>
-      <OrphanedRecordsModal
-        isOpen={showOrphanedModal}
-        onClose={() => setShowOrphanedModal(false)}
-        type="clients"
-      />
       <TopBar title={t('clients.title')} />
       <div className="page-content">
         <div className="filters-row">

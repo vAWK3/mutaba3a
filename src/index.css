@@ -734,6 +734,11 @@ td {
 }
 
 .orphaned-banner-action {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
   color: var(--accent);
   font-weight: var(--weight-medium);
   text-decoration: none;
@@ -756,6 +761,86 @@ td {
 
 .orphaned-banner-dismiss:hover {
   background: var(--surface-hover);
+}
+
+/* Unassigned-records drawer (opened from the orphaned-records banner) */
+.orphaned-records-intro {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.orphaned-records-notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.orphaned-records-notice-error {
+  background: color-mix(in srgb, var(--error) 10%, var(--surface));
+}
+
+.orphaned-records-assign-all {
+  width: 100%;
+  margin-bottom: var(--space-5);
+}
+
+.orphaned-records-group + .orphaned-records-group {
+  margin-top: var(--space-5);
+}
+
+.orphaned-records-group-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.orphaned-records-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.orphaned-records-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.orphaned-records-row + .orphaned-records-row {
+  border-top: 1px solid var(--border);
+}
+
+.orphaned-records-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.orphaned-records-row-label {
+  font-size: var(--text-sm);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orphaned-records-row-detail {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.orphaned-records-row-select {
+  flex-shrink: 0;
+  max-width: 50%;
 }
 
 /* Cross-profile badges on client cards */

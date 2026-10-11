@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
@@ -442,6 +442,24 @@ describe('ClientsPage', () => {
       // Acme Corp (2026-03-10) should appear before Beta Inc (2026-02-20)
       const rows = document.querySelectorAll('tbody tr');
       expect(rows[0].textContent).toContain('Acme Corp');
+    });
+  });
+
+  describe('Unassigned clients', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('does not open a modal on its own; the app-wide banner handles them', () => {
+      vi.spyOn(useQueries, 'useClients').mockReturnValue({
+        data: [{ id: 'client-orphan', name: 'Unassigned client', createdAt: '', updatedAt: '' }],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useClients>);
+
+      renderWithProviders(<ClientsPage />);
+
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 });
