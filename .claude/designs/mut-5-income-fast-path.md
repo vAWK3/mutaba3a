@@ -305,6 +305,13 @@ Codex was unavailable. Basel chose "fix all as recommended".
 - **Raising the amount of a drawer-paid entry with no payment records counts the larger amount as received.** These entries become record-backed with MUT-60.
 - **Some simplifications were offered and not taken:** spreading form values, inlining `isBelowRecordedTotal`, dropping the `invalidateIncomeQueries` wrapper, and merging `parseCurrencyInput` into `parseAmountToMinor`.
 
+**Adversarial re-review (2026-10-11).** A focused pass verified the fixes and found one medium regression and eleven smaller gaps. Basel's standing instruction was to keep going until everything is clean, so all twelve were fixed test-first:
+- **Medium:** Record Payment on a payment request wrote `status` through `update`, which the new repository rule strips; it now calls `markPaid` (ADR-039 amended).
+- **E1 keyboard contract, completed.** A held Enter submits once the pick is saved, so Enter, Enter works without a pause. A pick may resolve `false` (failed create): the Enter is dropped and the name stays unpicked and retryable. Enter after Escape picks on the next Enter. Pickers may supply the highlight rule (vendors: the 95%+ match).
+- **E2 parser:** linear suffix handling plus a 64-character cap; one currency token, USD/ILS/EUR forms only; bidi embeddings and isolates stripped; a typed currency must match the entry's (new field error).
+- **Drawer:** a failed records load says so with Try again; FSI replaces LRI.
+- **Beyond MUT-5:** the op log records transaction writes as stored, and local queries and saves no longer pause offline (ADR-040). TD-047 records the other drawers' lenient parsing.
+
 ---
 
 ## Eng review (`/plan-eng-review`, 2026-10-11)

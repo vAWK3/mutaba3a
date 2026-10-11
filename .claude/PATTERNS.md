@@ -1587,17 +1587,26 @@ theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks 
 In `EntityTypeahead`, Enter does one of three things:
 - **Picks** the highlighted option. Typing highlights the first *prefix* match, else the create option, else the only option of a select-only list. A substring match is never highlighted.
 - **Is held** (prevented):
-  - while an async `onSelect` is still running (the input reports `aria-busy`);
-  - while typed text no pick has resolved; the list reopens instead.
+  - while an async `onSelect` is still running (the input reports `aria-busy`). Once the pick is saved, the held Enter submits the form (`input.form.requestSubmit()`), if the field still has focus and nothing was typed in between;
+  - while typed text no pick has resolved; the list reopens on the auto highlight instead.
 - **Reaches the form** when the field is empty or shows a picked/prefilled value.
 
-A consumer's `onSelect` returns its promise when the pick creates a record. Escape on an open list stays in the list (`stopPropagation`).
+A consumer's `onSelect` returns its promise when the pick creates a record, and resolves it to `false` when the pick failed: the held Enter is dropped and the typed text is unpicked again, so Enter retries. A failed create keeps the typed name in the box. A consumer whose options are scored passes `autoHighlight` (default rule: `defaultAutoHighlight` in `typeaheadHighlight.ts`). Escape on an open list stays in the list (`stopPropagation`).
 
 ### No literal invisible characters in source
-Bidi marks (LRM/RLM/ALM), NBSPs and isolates are written as `\uXXXX` escapes, in regexes and string literals, and in tests too. Literal ones are invisible in review and diffs, and they are a Trojan-Source-style hazard. Check with `perl -CSD -ne 'print "$ARGV:$.\n" if /[\x{200E}\x{200F}\x{061C}\x{00A0}\x{202F}\x{2066}-\x{2069}]/' <files>`.
+Bidi marks (LRM/RLM/ALM), NBSPs and isolates are written as `\uXXXX` escapes, in regexes and string literals, and in tests too. Literal ones are invisible in review and diffs, and they are a Trojan-Source-style hazard. Check with `perl -CSD -ne 'print "$ARGV:$.\n" if /[\x{200E}\x{200F}\x{061C}\x{00A0}\x{202F}\x{202A}-\x{202E}\x{2066}-\x{2069}]/' <files>`. Isolate an interpolated amount with FSI (U+2068) … PDI (U+2069), which takes the direction of the amount itself.
 
 ### A save that arrives during an async pick waits for it
 When a picker's choice needs an async write first (creating a client), the picker reports it (`onCreatingChange`). The form holds a submit that arrives meanwhile and runs it once the pick has settled. It neither drops the Enter nor saves without the choice.
+
+### A typed currency must match the entry's currency
+`parseAmountInput` accepts one currency symbol or code (USD/ILS/EUR forms only) before or after the number; `amountInputCurrency` says which currency it named. A form compares that with its currency field and refuses a mismatch with a field error naming both, rather than dropping the symbol and saving "€100" as $100. Parsing refuses inputs over 64 characters before any pattern runs, and no pattern may start with an unanchored `\s*` (trim instead).
+
+### Local work runs offline; network work opts in (ADR-040)
+The main app's `QueryClient` (`createAppQueryClient`) uses `networkMode: 'always'`, because its queries and mutations hit IndexedDB. A hook that calls the network sets `networkMode: 'online'` itself and gives the user something meanwhile (the FX rate's cached `placeholderData`). Test offline behaviour with `onlineManager.setOnline(false)` and a settle timeout: a paused query never settles.
+
+### A synced write logs what was stored
+When a repository may refuse or derive fields (transactions with payment records, ADR-039), the synced wrapper re-reads the entity after the write and logs the stored values: refused fields are not logged, derived changes are. Logging the request instead puts state in the op log that the local database never had.
 
 ### One invalidation list per entity family
 Hooks for one table that live in two modules (`useQueries` and `useIncomeQueries`) share one exported invalidation function (`invalidateTransactionQueries`) covering both modules' keys. Two hand-copied lists drift, and a save from one module then never refreshes screens built on the other.

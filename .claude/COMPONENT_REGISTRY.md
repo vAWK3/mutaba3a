@@ -311,19 +311,21 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 - **Typing** highlights the first option whose label starts with the text, else the create option, else the only option of a select-only list. A substring match is never highlighted, so a new "Ann" is never filed under "Joanna".
 - **Enter:**
   - picks the highlighted option;
-  - is held while an async `onSelect` is still saving (`aria-busy`) or while typed text is unpicked (the list reopens);
+  - is held while an async `onSelect` is still saving (`aria-busy`), then submits the form once the pick is saved (unless the user typed in between); is held while typed text is unpicked (the list reopens on the auto highlight);
   - reaches the surrounding form when the field is empty or shows a picked/prefilled value.
 - **Other keys:** ArrowDown on a closed list opens it. Tab closes the list without picking. Escape on an open list closes only the list (`stopPropagation`).
 - **ARIA:** `aria-expanded` follows what is visible. `aria-controls` and `aria-activedescendant` point at the listbox and highlighted option.
-- **Props:** `onSelect` may return a promise. The optional `onBlur` is called before the list closes.
+- **Props:** `onSelect` may return a promise; resolving it to `false` marks the pick failed (the held Enter is dropped, the text is unpicked again). `autoHighlight(options, typed)` overrides which option typing highlights; the default is `defaultAutoHighlight` (`typeaheadHighlight.ts`). The optional `onBlur` is called before the list closes.
+- **`ProjectTypeahead`:** a failed create keeps the typed name in the box, unpicked, and resolves `false`.
+- **`VendorTypeahead`:** highlights the vendor matched at 95%+ by name or alias (the one that suppresses "create") ahead of a prefix match; a failed create keeps the raw text as the vendor, as before.
 
 **`ClientTypeahead` extras**:
 - Leaving the box with a client's exact name (any case) picks that client.
 - `onPendingTextChange(text)` reports text that isn't a picked client ('' when there is none). A client picked from "create" counts as picked at once.
 - `onCreatingChange(creating)` brackets the creation of a new client.
-- A failed create keeps the typed name in the box, unpicked, so a form refuses to save without it.
+- A failed create keeps the typed name in the box, unpicked, so a form refuses to save without it, even when a client was picked before; it resolves `false`.
 
-**Tests**: `src/components/ui/__tests__/{EntityTypeahead,ClientTypeahead}.test.tsx`.
+**Tests**: `src/components/ui/__tests__/{EntityTypeahead,ClientTypeahead,ProjectTypeahead,VendorTypeahead}.test.tsx`.
 
 ---
 

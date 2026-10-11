@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-047: The expense, retainer and plan drawers read amounts with the lenient parsers
+**Status**: Open
+**Added**: 2026-10-11 (MUT-5 re-review)
+**Priority**: Low
+**Impact**: `ExpenseDrawer`, `RetainerDrawer` and `PlanAssumptionDrawer` save `parseAmountToMinor(data.amount)`, which returns 0 for text it can't read and ignores a typed currency token. The income drawer refuses both: an ambiguous amount is a field error, and "€100" in a USD entry is refused (`amountInputCurrency`). In the other drawers "€100" is saved as 100 in the drawer's currency, and an unreadable amount relies on each schema's own checks.
+**Remediation**: Validate with `parseAmountInput` (null → field error) and compare `amountInputCurrency` with the selected currency, as `IncomeDrawer` does; keep the lenient wrappers for display-only paths.
+**Effort**: Small per drawer
+
 ### TD-046: `useTransactionActions.ts` is dead code carrying the same dateless mark-paid bug ADR-038 just fixed
 **Status**: Open
 **Added**: 2026-10-11 (MUT-18)

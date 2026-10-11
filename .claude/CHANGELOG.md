@@ -120,6 +120,23 @@ Seven specialist and adversarial reviewers ran. These fixes were all approved by
   - An Arabic Playwright check, which fails without the CSS fix.
   - The two 30ms sleeps are replaced by settle signals.
 
+### Fixed (adversarial re-review, 2026-10-11)
+
+The re-review verified the pre-landing fixes and found one medium regression and eleven smaller gaps; all are fixed, each test-first:
+
+- **Record Payment on a payment request** (`paymentRequestService.recordPaymentForRequest`) left a part-paid receivable unpaid while the document showed paid: it wrote `status` through `update`, which ADR-039 now strips. It calls `markPaid`. `updatePaymentRequestWithTransaction` updates the receivable before the document (ADR-039 amended).
+- **Enter, Enter.** An Enter held while a new client is saving now submits the form once it exists, so the keyboard path no longer needs a pause. Typing or another key in between drops it.
+- **Failed creates stay retryable.** `onSelect` may resolve to `false`: the held Enter is dropped, the typed name is unpicked again and Enter offers the create option once more. The project picker keeps the typed name too; a failed client create over a client picked earlier no longer empties the box.
+- **Enter after Escape** reopens the list on the auto highlight, so the next Enter picks.
+- **Vendor highlight.** Pickers can supply the highlight rule (`autoHighlight`, default in `typeaheadHighlight.ts`); the vendor picker highlights its 95%+ name or alias match over a vendor whose name merely starts with the text.
+- **Amount parser.** The currency suffix pattern no longer backtracks quadratically (3.4 s on a 50k-space paste, now linear) and inputs over 64 characters are refused first. One currency token at most; £ is no longer stripped. Bidi embeddings, overrides and isolates are stripped.
+- **Typed currency.** "€100" in a USD entry is refused with a field error naming both currencies, and More details opens on the currency. `amountInputCurrency` reads the token.
+- **Payment records that fail to load** show a notice with Try again instead of a silently disabled Save.
+- **FSI, not LRI,** isolates the recorded amount in the below-recorded message.
+- **Op log.** `syncedTransactionRepo.update` logs the entry as stored, not the payment fields the repository refused.
+- **Offline (ADR-040).** Local queries and saves no longer pause while the device is offline (`networkMode: 'always'`, `src/lib/queryClient.ts`); the live FX rate still waits for the network.
+- **New debt:** TD-047 (other drawers still use the lenient parsers).
+
 ## [Unreleased] - 2026-10-11 — MUT-18/19/20/21: payment dates, and closing out three already-fixed test tickets
 
 **Scope:**
