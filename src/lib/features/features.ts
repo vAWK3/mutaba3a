@@ -59,6 +59,14 @@ export function withFeature(flags: FeatureFlags, key: FeatureKey, enabled: boole
   return Object.freeze({ ...flags, [key]: enabled });
 }
 
+/**
+ * The areas that are on in `before` and off in `after`, in `FEATURE_KEYS`
+ * order. Switching an area on is never a reason to move the user (MUT-15).
+ */
+export function featuresTurnedOff(before: FeatureFlags, after: FeatureFlags): FeatureKey[] {
+  return FEATURE_KEYS.filter((key) => before[key] && !after[key]);
+}
+
 // ---------------------------------------------------------------------------
 // Data presence probes (auto-enable on upgrade / after restore or import)
 // ---------------------------------------------------------------------------

@@ -28,6 +28,7 @@ import { useDrawerStore } from "../../lib/stores";
 import { initializeSync } from "../../sync";
 import { useDemoStore, DEMO_QUERY_PARAM } from "../../demo";
 import { FeatureNoticeBanner } from "./FeatureNoticeBanner";
+import { useLeaveDisabledArea } from "../../lib/features/routeGuard";
 
 interface AppShellProps {
   children: ReactNode;
@@ -51,6 +52,8 @@ export function AppShell({ children }: AppShellProps) {
 
   const { showConfirmModal, setShowConfirmModal, isActive } = useDemoStore();
 
+  // A page whose optional area is switched off sends the user home (MUT-15)
+  useLeaveDisabledArea();
 
   // Initialize sync system on app load
   useEffect(() => {

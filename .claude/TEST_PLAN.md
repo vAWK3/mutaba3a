@@ -127,6 +127,20 @@ removing it from either locale file fails the `as Translations` cast in
 `context.tsx`. Not run on this change: the full `npx vitest run` (stopped on
 request; only this file was run). Still manual: the banner in RTL.
 
+#### Settings › Data Tools copy (added 2026-10-11)
+| File | Type | Tests | Coverage |
+|------|------|-------|----------|
+| `src/pages/settings/__tests__/DataToolsSection.test.tsx` | Component | 24 | en + ar: heading, row and button labels; clean run (result line + success toast); 1, 3 and 12 issues mixing orphaned and broken references (singular/plural line + toast); a failed check, both returned `error` and thrown, shows the failure toast, not "0 issues"; backup toast, success and failure; restore toast for 1 and 57 records with the backup version; failed restore wrapped in `settings.data.importFailed`. Each test also checks for no raw key or `{placeholder}` left and no "Translation missing" warning. Plus exact English sentences, and a check that Arabic plural templates are "label: {count}" |
+
+`tsc -b` guards the keys (`integrity.*` and the Data Tools keys under
+`settings` are required in `Translations`). The full suite passed on the
+branch as first written on `d2a050d` (135 files, 2230 passed, 5 skipped). It
+was not re-run, on request, after an `eslint-disable-next-line` comment was
+added to the new test or after the rebase onto main with MUT-7 and MUT-15
+(no overlap in `src/pages/settings` or the i18n keys; lint and `tsc -b` pass). The restore tests print jsdom's
+"Not implemented: navigation" because `Location.reload` can't be stubbed.
+Still manual: the Data Tools row in RTL.
+
 #### Release tooling (added 2026-10-11)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
@@ -835,4 +849,54 @@ a payment row opens the drawer in edit mode on the right record.
 
 **Baseline after MUT-3 (2026-10-11)**: 2,194 unit tests passing, 5 skipped,
 0 failing. `npm run test:tz`: 4 failures, all pre-existing on `main` (TD-014).
+
+### MUT-15 — the sidebar is Home / Clients / Income / Settings
+
+| Area | File | What is pinned |
+|---|---|---|
+| Core shape (AC 1, 2, 8) | `src/components/layout/__tests__/SidebarNav.features.test.tsx` | fresh install: exactly Home, Clients, Income, Settings in DOM (Tab) order, no Main/Workspace/More header; every area on: the core three first, More holds the six in order, Settings last; switching an area on then off adds and removes it below the core with the core link **nodes** identical throughout; Settings is inside `.sidebar-footer`, never `.sidebar-nav`, with all areas off and on |
+| Active state (AC 6) | same file | parametrised over `/`, `/clients`, `/clients/c1`, `/income`, `/expenses`, `/documents/d1/edit`, `/retainers`, `/insights`, `/planning`, `/projects/p1`, `/settings/profiles/p1`, `/settings/import`: exactly one link has `active` + `aria-current="page"` and it is the expected entry; nothing active on `/theme-demo` |
+| Collapsed mode (AC 7) | same file | four icon links titled with their labels, no labels or headers rendered; the toggle collapses/expands and writes `localStorage.sidebarCollapsed` |
+| `+ Add` actions (AC 5) | `layout/__tests__/addMenuActions.test.ts`, `SidebarNav.features.test.tsx`, `TopBar.addMenu.test.tsx` | Income, Client always; Expense / Project appended only while on; all 64 flag combinations keep Income, Client first; both menus render the same order |
+| Menu keyboard (D5) | `src/hooks/__tests__/useMenuButton.test.tsx` (11), plus one case in each menu's test | `aria-haspopup`/`aria-expanded`/`aria-controls`; opening focuses the first item (ArrowUp on the button: last); arrows wrap; Home/End; Escape closes and refocuses the button (also when the button has focus); Tab and outside mousedown close, inside mousedown does not; a picked item runs and the menu closes without pulling focus back |
+| Redirect on disable (AC 4) | `src/lib/features/__tests__/leaveDisabledArea.test.tsx` (6), `features.test.ts` (`featuresTurnedOff`, 5) | real memory-history router + real `requireFeature`: switching the open page's area off lands on `/` with history length 1 (replace); a core page stays; another area off re-runs the guard and stays; switching on, a non-feature settings change and the first load never call `router.invalidate` (spied before the first render) |
+| Onboarding (TD-027) | `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx` (+3) | projects off: two circles numbered 1, 2, none ticked, first current; after the client step, 1 ticked and 2 current; projects on: three circles |
+| E2E | `e2e/navigation.spec.ts` (run locally against a worktree dev server) | `/app/` shows the four links in order with no optional or legacy link; each navigates and gets `aria-current="page"` |
+
+Browser check (2026-10-11, dev server): English and Arabic × expanded and
+collapsed × no areas and two areas on — core order, More below, Settings in
+the footer, active rail on the inline-start edge, collapse chevron direction
+in all four direction × state combinations, collapsed toggles in flow with no
+overlap. Two-tab check: tab A on `/app/expenses`, tab B switches Expenses off,
+tab A's settings query refetches → More loses Expenses and the tab lands on
+`/app/` with history length unchanged.
+
+**Baseline after MUT-15 (2026-10-11)**: 134 files, 2,207 passed, 5 skipped,
+0 failed (was 130 / 2,149).
+
+### MUT-7 — clients index: who owes me, and who is late
+
+| Area | File | What is pinned |
+|---|---|---|
+| Payment derivation, extracted (ADR-033) | `src/db/__tests__/aggregations.test.ts` (+9) | `paymentRowsForIncome`: record rows; one entry row for the uncovered received amount; `occurredAt` fallback; nothing for unpaid. `latestPayment`: none → undefined; newest wins; same-day tie → larger amount, then id, whatever the input order. `combineOwed`: sums within a currency only, `[]` when settled. `listByClient`'s 15 existing tests guard the refactor |
+| Summary collection fields | `src/db/__tests__/clientRepo.test.ts` (+9) | owed per currency without paid or archived income; settled → `[]` and no overdue age; oldest overdue age, with due-today not overdue; last payment from a partial record; a backdated record beats an older paid entry; deleted records ignored; income saved as paid counts; never paid → undefined; archived clients excluded; `get()` follows payments too. Dates are relative to the real today (no fake timers around Dexie) |
+| Row shaping and ordering | `src/components/clients/__tests__/clientIndexRows.test.ts` (14) | settled flag; overdue lists only late currencies; `owedRank` converts rated currencies, keeps unrated ones in their own slot, all zeros when settled; owed desc/asc by rate with settled last; unrated amounts rank after rated; overdue by days; last payment newest first with never-paid last; activity; name; ties name then id in both directions |
+| Header | `src/components/ui/__tests__/SortableHeader.test.tsx` (4) | `aria-sort` none, descending, ascending; click reports the field; end alignment and title |
+| Page | `src/pages/clients/__tests__/ClientsPage.test.tsx` (18, rewritten from 33) | exact column set; per-currency lines in Owed Now; Overdue amounts plus "oldest Nd"; Settled and dash; last payment date and amount, or Never paid; order hint on the header; default order and `aria-sort`; order flips when the USD rate changes; toggle; each column's order; sort in the URL; ties by name; strip count and per-currency total owed; row click → profile; name is a link; empty, search-empty (translated keys, debounce awaited) and loading states |
+
+The old page suite asserted the name-ascending default and cross-currency
+sums, both of which this ticket removes. Its search and empty-state cases were
+kept in spirit. Archived-client exclusion is pinned at the repository, where
+it happens.
+
+Manual (browser, 2026-10-11, seeded data, 1280px and 1024px, English and
+Arabic): order Gamma ₪12,000 > Acme $1,300 + ₪4,200 > Beta $900 > the
+settled clients, at a live rate of ₪3.06/$. The strip read $2,200 and
+₪16,200 with the overdue parts. The archived client and archived-only debt
+were left out. Header clicks and the URL matched. A row opened a profile
+that agrees with its index row. No horizontal scroll, and RTL amount columns
+sit at the end edge.
+
+**Baseline after MUT-7 (2026-10-11)**: 2,222 unit tests passing, 5 skipped,
+0 failing.
 

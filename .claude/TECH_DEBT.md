@@ -372,13 +372,23 @@ No end-to-end tests exist. Critical user journeys are only tested manually.
   - `e2e/settings.spec.ts` - Settings page tests
 - npm scripts added: `test:e2e`, `test:e2e:ui`
 
+**State on 2026-10-11 (MUT-15)**: `navigation.spec.ts` was rewritten for the
+core four and passes (2/2) against a dev server. The other 13 cases fail and
+have for some time: they open paths without the `/app` basepath (in dev `/`
+is the landing page) and look for pages and headings that no longer exist
+(Overview, Transactions, Reports, Projects with projects off). The config's
+`webServer`/`baseURL` also hard-code port 5173, which concurrent worktrees
+contend for.
+
 **Remaining**:
-1. Add more E2E tests for:
+1. Port `accessibility`, `settings` and `transaction` specs to `/app/*` and the
+   current pages; make the port configurable (`E2E_BASE_URL`)
+2. Add more E2E tests for:
    - Generate invoice
    - Export data
    - Demo mode toggle
-2. Add to CI pipeline (GitHub Actions)
-3. Expand browser coverage (Firefox, Safari)
+3. Add to CI pipeline (GitHub Actions)
+4. Expand browser coverage (Firefox, Safari)
 
 **Effort**: Medium (reduced from initial)
 
@@ -563,18 +573,6 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 ---
 
-### TD-027: Onboarding shows a completed "Project" step while the Projects area is off
-**Status**: Open
-**Priority**: Low
-**Introduced**: MUT-16, 2026-10-10
-**Impact**: D4 auto-completes the project step in `OnboardingOverlay` while projects is off, so a fresh install's `OnboardingStepIndicator` still renders three steps with step 2 ticked before the user did anything. Harmless functionally (the flow is client → income) but reads as odd on the first launch.
-
-**Remediation**: make `OnboardingStepIndicator` take the step list from the overlay and omit `project` while the area is off; or let `onboardingStore` carry a step list set at `startOnboarding()` from the flags (needs a persisted-state migration). Decide alongside MUT-15's sidebar/add-menu shape.
-
-**Effort**: Small
-
----
-
 ### TD-029: Income saved as "Received" writes no PaymentRecord
 **Status**: Open
 **Priority**: Medium
@@ -595,6 +593,68 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 
 **Remediation**: MUT-7 and MUT-8 compute owed now with `summarizeOwedByCurrency`; then decide whether the remaining aggregate helpers should skip archived rows too.
 
+**Update (2026-10-11, MUT-7):** the clients index half is resolved. `clientSummaryRepo.list` now returns `owed` from `summarizeOwedByCurrency`, and the index reads only that. What remains: the per-currency `paidIncomeMinor*/unpaidIncomeMinor*` report fields (read by the Insights and Reports client tables) and `transactionRepo.getOverviewTotals*` still count archived income. Home (MUT-8) is next.
+
+**Effort**: Small
+
+---
+
+### TD-031: `RowActionsMenu` keeps its own menu listeners and has no arrow-key support
+**Status**: Open
+**Priority**: Low
+**Introduced**: MUT-15, 2026-10-11 (pre-existing; made visible by the new hook)
+**Impact**: `src/components/ui/RowActionsMenu.tsx` duplicates the outside-click
+and Escape listeners that `useMenuButton` now owns for the two `+ Add` menus,
+and its items cannot be reached with the arrow keys or get focus on open. It
+also positions itself in a portal, which the hook does not do.
+
+**Remediation**: have `RowActionsMenu` take `buttonProps` / `menuProps` from
+`useMenuButton()` (the hook's `contains` checks work across a portal because
+they test the menu element itself) and keep only its positioning logic.
+
+**Effort**: Small
+
+---
+
+### TD-032: The two `+ Add` menus share their actions but not their click behaviour
+**Status**: Open (ticketed as MUT-57)
+**Priority**: Low
+**Introduced**: MUT-15, 2026-10-11 (pre-existing; out of the ticket's scope)
+**Decision** (Basel, 2026-10-11): both menus open the drawer **in place** (no
+navigation to the list) and all four actions are profile-aware in both.
+MUT-57 moves them onto one set of handlers.
+**Impact**: both menus offer the same actions in the same order
+(`visibleAddMenuActions`), but the sidebar **New** menu opens the drawer and
+navigates to the list (`/income`, `/clients`, `/expenses`, `/projects`) and
+creates clients and projects without the profile picker, while the top bar
+**Add** menu opens every drawer in place and is profile-aware for all four.
+A user gets a different result from the same label depending on which button
+they used.
+
+**Remediation**: decide one behaviour (drawer-first says in place) and move
+the handlers next to `visibleAddMenuActions` so both menus call the same one.
+
+**Effort**: Small (decision first)
+
+---
+
+### TD-033: Data Tools still shows some English inside Arabic copy
+**Status**: Open
+**Priority**: Low
+**Introduced**: found 2026-10-11 while translating the Data Tools messages
+**Impact**: A failed restore toasts `settings.data.importFailed` with the raw
+`Error.message` as `{error}`: `restoreFromBackup` throws English developer
+strings ("Invalid backup file: missing version or tables", "Backup is from a
+newer version…"), and a malformed file gives the browser's `JSON.parse`
+message, so Arabic reads "فشل الاستيراد: Invalid backup file…". Separately,
+`settings.exportReceiptsDone` / `exportReceiptsDesc` have one plural form:
+English says "1 receipts exported", and the Arabic "{count} إيصالًا" /
+"{count} ملف إيصال" is only right for 11+.
+
+**Remediation**: have `restoreFromBackup` throw typed errors (invalid file,
+newer version with `{backup}` / `{app}`) that the section maps to keys; split
+the receipts strings into singular/plural keys with "label: {count}" Arabic.
+
 **Effort**: Small
 
 ---
@@ -606,6 +666,18 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ## Resolved Debt
+
+### TD-027: Onboarding Showed a Completed "Project" Step While the Projects Area Was Off
+**Status**: Resolved
+**Resolved**: 2026-10-11 (MUT-15)
+**Original Priority**: Low
+
+`OnboardingStepIndicator` now takes a `steps` list from `OnboardingOverlay`,
+which passes `client, income` while projects is off and `client, project,
+income` while on; steps are numbered by position. A fresh install sees steps
+1–2 with nothing ticked. The store's order and completion rule are unchanged
+(ADR-032 MUT-16 addendum), so no persisted-state migration. Tests in
+`OnboardingOverlay.projects.test.tsx`.
 
 ### TD-028: By-Id Query Hooks Resolved `undefined` for Missing Rows
 **Status**: Resolved

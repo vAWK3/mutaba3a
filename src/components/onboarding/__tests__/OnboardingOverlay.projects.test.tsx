@@ -110,3 +110,49 @@ describe('OnboardingOverlay — Projects area switch (MUT-16)', () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * TD-027 (MUT-15): the step indicator shows the steps the user will actually
+ * walk, so a fresh install (projects off) sees two numbered steps and no
+ * ticked "Project" step it never took.
+ */
+describe('OnboardingOverlay step indicator (TD-027, MUT-15)', () => {
+  const circles = (container: HTMLElement) => Array.from(container.querySelectorAll('.step-circle'));
+
+  beforeEach(() => {
+    resetStore();
+    featureFlags.projects = false;
+    flagsLoaded = true;
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('shows two steps numbered 1 and 2, none ticked, at the start while projects is off', () => {
+    const { container } = render(<OnboardingOverlay onComplete={vi.fn()} />);
+
+    expect(circles(container).map((circle) => circle.textContent)).toEqual(['1', '2']);
+    expect(container.querySelectorAll('.step-circle.completed')).toHaveLength(0);
+    expect(circles(container)[0]).toHaveClass('current');
+  });
+
+  it('ticks step 1 and makes step 2 current once the client step is done while projects is off', async () => {
+    const { container } = render(<OnboardingOverlay onComplete={vi.fn()} />);
+    useOnboardingStore.getState().completeStep('client', 'client-1');
+
+    await waitFor(() => expect(useOnboardingStore.getState().currentStep).toBe('income'));
+    const [first, second] = circles(container);
+    expect(circles(container)).toHaveLength(2);
+    expect(first).toHaveClass('completed');
+    expect(second).toHaveClass('current');
+    expect(second).toHaveTextContent('2');
+  });
+
+  it('shows the three steps while projects is on', () => {
+    featureFlags.projects = true;
+    const { container } = render(<OnboardingOverlay onComplete={vi.fn()} />);
+
+    expect(circles(container).map((circle) => circle.textContent)).toEqual(['1', '2', '3']);
+  });
+});

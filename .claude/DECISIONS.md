@@ -29,7 +29,7 @@
 | ADR-018 | CSS Variables for Theming | Active | 2024-03 |
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
-| ADR-021 | Question-First UX Redesign | Active | 2026-03 |
+| ADR-021 | Question-First UX Redesign | Active; §1 (navigation) superseded by ADR-034 | 2026-03 |
 | ADR-022 | Local Calendar Date as the Basis for Overdue | Active | 2026-10 |
 | ADR-023 | Reuse Malafat's OAuth 2.1 Server for Workspace Auth | Active | 2026-10 |
 | ADR-024 | Override of ADR-005: A Hosted Mutaba3a Service Exists Beside the Local-First App | Active | 2026-10 |
@@ -42,6 +42,8 @@
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
 | ADR-033 | Owed Now Has One Definition; a Client's Payment History Is Reconciled on Read | Active | 2026-10 |
+| ADR-034 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
+| ADR-035 | Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted | Active | 2026-10 |
 
 ---
 
@@ -570,7 +572,7 @@ formatCurrency(1999, 'USD')      // → "$19.99" or "١٩٫٩٩ $"
 
 ## ADR-021: Question-First UX Redesign
 
-**Status**: Active
+**Status**: Active; Key Change 1 (navigation) and the consequence "Clients/Projects become supporting context, not primary navigation" are superseded by ADR-034 (2026-10-11)
 **Date**: 2026-03
 **Context**: The app evolved into an entity-first mini CRM (clients/projects/transactions/documents) but the core user need is simpler: fast answers about cash flow. Users need to know what they received, what's unpaid, and what they spent, not manage a pipeline or document system.
 
@@ -1357,4 +1359,111 @@ design); showing records only, as MUT-4 specified literally (rejected —
 silently wrong for question 3); fixing `clientSummaryRepo.get` to return
 per-currency fields for the hero (rejected — no overdue split, and it counts
 archived rows the page hides).
+
+---
+
+## ADR-034: The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1)
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-15, the last ticket of epic MUT-2. MUT-13/14/16 had already moved
+every optional area into a conditional "More" section, leaving the core as
+Home, Income | Clients under two headers. The 2026-10-05 intake made Clients
+the primary workspace (the product answers three questions per client) and
+Projects an optional tag. ADR-021 §1 still fixed the navigation as "Home,
+Income, Expenses, Insights | Clients, Projects | Settings" with Clients and
+Projects as "supporting context". Brief:
+`.claude/designs/mut-15-sidebar-core-four.md` (owner-approved, D1–D5).
+
+**Override log**: replaces ADR-021 Key Change 1 and its consequence "Clients/
+Projects become supporting context, not primary navigation". Why: the intake
+re-centred the product on clients; what replaces it: decision 1 below. The
+rest of ADR-021 (the renames, the question-first framing, deprecations) stands.
+
+**Decision**:
+1. **The core is a constant.** `SidebarNav` renders Home, Clients, Income first,
+   in that order, in one group with **no header**, and nothing about it
+   depends on a flag. Optional areas render below it in "More" (only while at
+   least one is on, order Expenses, Documents, Retainers, Insights, Planning,
+   Projects); Settings stays pinned in the footer and is never gated. Because
+   flags read `false` while settings load and optional rows only ever appear
+   below the core, toggling or loading cannot move a core entry.
+2. **Both `+ Add` menus share one action list.** `visibleAddMenuActions(flags)`
+   (`components/layout/addMenuActions.ts`) decides what the sidebar **New**
+   menu and the top bar **Add** menu offer and in which order: Income, Client,
+   then Expense (expenses on) and Project (projects on). Same rule as the nav:
+   core first, optional appended. Each menu keeps its own labels and click
+   behaviour (TD-032 records that they differ).
+3. **Switching an area off re-runs the route guards.** `useLeaveDisabledArea()`
+   (in `AppShell`) calls `router.invalidate()` on any on→off transition after
+   the first load; the open route's `requireFeature` gate then redirects home
+   with `replace`, exactly as a deep link to a disabled area does (ADR-032 §4).
+   There is no second route-to-area table. Switching on, the first load, and
+   unrelated settings writes leave the router alone. No toast.
+4. **Menu buttons follow the WAI-ARIA menu-button pattern** through one hook,
+   `useMenuButton` (focus the first item on open, arrows/Home/End, Escape
+   returns focus, Tab and outside clicks close).
+
+**Alternatives Considered**: keeping a "Main" header over the core (rejected,
+D1: a header over the only core group labels nothing); a route-prefix → area
+table in the sidebar that navigates by itself (rejected, D3: a second source
+of truth beside the router guards); only re-ordering each menu (rejected, D2:
+leaves the gating duplicated); keeping both menus' keyboard handling as it
+was (rejected, D5: the sidebar menu declared `role="menu"` and ignored arrows).
+
+**Consequences**: a fresh install shows exactly Home, Clients, Income, Settings.
+A gated page left open in a second window lands on Home when that window's
+settings query refetches. `docs/ux-redesign/UX-REDESIGN-SPEC.md` §4 is
+historical. The collapsed rail's toggles are in normal flow (they were
+absolutely positioned without a containing block and floated at the window's
+edges). Onboarding's indicator lists only the steps the user walks (TD-027).
+
+---
+
+## ADR-035: Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted
+
+**Status**: Active
+**Date**: 2026-10-11
+**Context**: MUT-7 (epic MUT-1). The clients index's default order is "owed
+now, descending", and clients owe in different currencies. A client owing
+$5,000 cannot be ranked against one owing ₪12,000 without either a conversion
+or an arbitrary rule. The old comparator added raw minor units across USD, ILS
+and EUR, which is wrong on both counts. ADR-004 forbids *silent* conversions
+"that could mislead users". Basel chose this option over "main currency first"
+and "rank by lateness" (brief `.claude/designs/mut-7-clients-who-owes-me.md`
+§5, 2026-10-11).
+
+**Decision**:
+1. **A list may be *ordered* by an amount converted at today's rate**, using
+   the same `useFxRate` rates `AmountWithConversion` already uses for its
+   tooltips. No converted figure is displayed. Every amount on screen stays in
+   its own currency, one line per currency.
+2. **The ordering is disclosed**: the column header's tooltip reads "Ordered
+   by today's exchange rate. Amounts are never converted."
+3. **No rate, no guess.** The rank key is a tuple: [ILS-converted total over
+   the currencies that have a rate, then the raw amount of each currency that
+   has none, in USD → ILS → EUR order]. An amount without a rate ranks after
+   every amount with one (`owedRank`, `src/components/clients/clientIndexRows.ts`).
+4. **Only owed-now ordering needs this.** The overdue column orders by days
+   late, and payment and activity columns order by date. Each of those
+   comparisons is currency-free.
+5. Ties fall back to name A–Z, then id, so a re-render never reshuffles equal
+   rows.
+
+**Relation to ADR-004**: this refines it rather than overriding it. ADR-004's
+rules are about *displayed* totals (per-currency by default; a converted view
+must show its rates). A ranking displays no total, and its basis is disclosed
+on the header.
+
+**Consequences**: the order can change when the rate moves, which is the
+honest answer to "who owes me most" across currencies. Tests pin the order
+at fixed rates and show it flipping when the dollar's rate changes. Any future
+list that needs a cross-currency order reuses `owedRank`'s tuple rule, not a
+new one.
+
+**Alternatives Considered**: rank by the profile's default currency, then the
+others (rejected — a client owing only ₪ always sorts below anyone owing $);
+rank by lateness instead of size (rejected — it departs from the ticket and
+answers a different question, which the Overdue column's own sort already
+answers); a hidden sum of raw minor units (the old behaviour; wrong).
 

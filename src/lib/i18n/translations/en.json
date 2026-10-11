@@ -33,8 +33,6 @@
     "sort": {
       "nameAZ": "Name (A-Z)",
       "nameZA": "Name (Z-A)",
-      "valueHigh": "Value (High to Low)",
-      "valueLow": "Value (Low to High)",
       "unpaidHigh": "Unpaid (High to Low)",
       "unpaidLow": "Unpaid (Low to High)",
       "activityRecent": "Recent Activity",
@@ -72,10 +70,6 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "sections": {
-      "main": "Main",
-      "workspace": "Workspace",
-      "work": "Work",
-      "money": "Money",
       "system": "System",
       "optional": "More"
     },
@@ -305,18 +299,17 @@
     "columns": {
       "client": "Client",
       "activeProjects": "Active Projects",
-      "received": "Received",
       "paidIncome": "Paid Income",
       "unpaid": "Unpaid",
       "expenses": "Expenses",
       "lastPayment": "Last Payment",
-      "lastActivity": "Last Activity"
+      "lastActivity": "Last Activity",
+      "owedNow": "Owed Now",
+      "overdue": "Overdue"
     },
     "summary": {
       "clientsCount": "{count} clients",
-      "clientsCountOne": "1 client",
-      "totalReceived": "Total Received",
-      "totalUnpaid": "Total Unpaid"
+      "clientsCountOne": "1 client"
     },
     "detail": {
       "noReceivables": "No receivables",
@@ -351,6 +344,16 @@
         "recordedOnEntry": "Recorded on the entry",
         "openEntry": "Open income entry"
       }
+    },
+    "emptyFiltered": "No clients match your search",
+    "emptyFilteredCount": "{count} clients in total.",
+    "clearSearch": "Clear search",
+    "crossProfileTxCount": "{count} entries",
+    "index": {
+      "settled": "Settled",
+      "neverPaid": "Never paid",
+      "oldestOverdue": "oldest {days}d",
+      "owedOrderHint": "Ordered by today's exchange rate. Amounts are never converted."
     }
   },
   "insights": {
@@ -610,9 +613,13 @@
     "backup": "Export Backup",
     "backupDesc": "Download a full backup of all your data as JSON.",
     "backupExport": "Export Backup",
+    "backupDone": "Backup downloaded",
+    "backupFailed": "Backup failed",
     "importBackup": "Import Backup",
     "importBackupDesc": "Restore from a previously exported backup file.",
     "importBackupBtn": "Import Backup",
+    "importBackupDoneSingular": "Restored {count} record from backup (v{version})",
+    "importBackupDonePlural": "Restored {count} records from backup (v{version})",
     "exportReceipts": "Export receipts",
     "exportReceiptsDesc": "{count} uploaded receipt files, as a ZIP with one folder per profile and month",
     "exportReceiptsNone": "No uploaded receipts in this database",
@@ -1502,6 +1509,13 @@
     "orphanedRecordSingular": "{count} record isn't assigned to any profile.",
     "orphanedRecordPlural": "{count} records aren't assigned to any profile.",
     "reviewNow": "Review now",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "checkClean": "No issues found. Records checked: {total}.",
+    "checkIssuesSingular": "Found {count} issue. Records checked: {total}.",
+    "checkIssuesPlural": "Found {count} issues. Records checked: {total}.",
+    "checkFailed": "Integrity check failed",
+    "toastClean": "Data integrity check passed",
+    "toastIssuesSingular": "{count} data integrity issue found",
+    "toastIssuesPlural": "{count} data integrity issues found"
   }
 }

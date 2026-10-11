@@ -134,8 +134,14 @@ export interface Translations {
     notFound: string;
     notFoundHint: string;
     confirmArchive: string;
+    emptyFiltered: string;
+    emptyFilteredCount: string;
+    clearSearch: string;
+    crossProfileTxCount: string;
     columns: {
       client: string;
+      owedNow: string;
+      overdue: string;
       activeProjects: string;
       paidIncome: string;
       unpaid: string;
@@ -145,6 +151,12 @@ export interface Translations {
     detail: {
       noReceivables: string;
       noReceivablesHint: string;
+    };
+    index: {
+      settled: string;
+      neverPaid: string;
+      oldestOverdue: string;
+      owedOrderHint: string;
     };
     profile: {
       owedNow: string;
@@ -233,6 +245,28 @@ export interface Translations {
       name: string;
       description: string;
     };
+    // Data Tools (DataToolsSection)
+    dataTools: string;
+    integrityCheck: string;
+    integrityCheckDesc: string;
+    integrityCheckRun: string;
+    integrityCheckRunning: string;
+    backup: string;
+    backupDesc: string;
+    backupExport: string;
+    backupDone: string;
+    backupFailed: string;
+    importBackup: string;
+    importBackupDesc: string;
+    importBackupBtn: string;
+    importBackupDoneSingular: string;
+    importBackupDonePlural: string;
+    exportReceipts: string;
+    exportReceiptsDesc: string;
+    exportReceiptsNone: string;
+    exportReceiptsBtn: string;
+    exportReceiptsDone: string;
+    exportReceiptsFailed: string;
   };
   drawer: {
     transaction: {
@@ -326,6 +360,13 @@ export interface Translations {
     orphanedRecordPlural: string;
     reviewNow: string;
     dismiss: string;
+    checkClean: string;
+    checkIssuesSingular: string;
+    checkIssuesPlural: string;
+    checkFailed: string;
+    toastClean: string;
+    toastIssuesSingular: string;
+    toastIssuesPlural: string;
   };
   orphanedRecords: {
     title: string;

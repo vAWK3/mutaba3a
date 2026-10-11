@@ -13,3 +13,4 @@ export { AmountWithConversion, type AmountWithConversionProps } from './AmountWi
 export { RecurringOccurrenceCard, RecurringOccurrenceList } from './RecurringOccurrenceCard';
 export { PaymentStatusBadge } from './PaymentStatusBadge';
 export { RecordPaymentButton, type RecordPaymentButtonProps } from './RecordPaymentButton';
+export { SortableHeader, type SortableHeaderProps } from './SortableHeader';

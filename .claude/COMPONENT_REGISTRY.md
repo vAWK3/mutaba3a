@@ -13,6 +13,7 @@
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
+| **Table headers** | SortableHeader |
 | **Display** | Card, Badge, StatusBadge, EmptyState, KPICard |
 | **Home** | PredictiveKpiStrip, AttentionFeed, MonthActualsRow, KpiStrip, QuickSummaries |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
@@ -61,11 +62,12 @@
 ```
 
 **Features**:
-- Active state highlighting
-- Keyboard navigation
-- RTL support
-- Collapsible (future)
-- Optional areas (MUT-13/14/16): `optionalItems` renders the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `newMenuItems` entries with a `feature` key (expense, project) follow the same switches. Main is Home + Income, workspace is Clients; final grouping is MUT-15's.
+- Active state highlighting (prefix match, Home exact; one entry active per route, pinned by tests for every route)
+- Keyboard navigation (links in DOM order; the New menu via `useMenuButton`)
+- RTL support (logical rail and menu offsets; the collapse chevron points toward the collapsing edge)
+- Collapsible to a 64px rail (choice kept in `localStorage.sidebarCollapsed`); toggles in normal flow; a hairline separates core from "More"
+- **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
+- New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
 
 ---
 
@@ -88,7 +90,37 @@
 | `breadcrumbs?` | BreadcrumbItem[] | Navigation trail |
 | `actions?` | ReactNode | Right-side action buttons |
 
-The `+ Add` menu's New expense and New project items render only while their areas are on (`useFeatureEnabled`, MUT-14/16).
+The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon.
+
+---
+
+### addMenuActions
+**Location**: `src/components/layout/addMenuActions.ts`
+**Purpose**: The single list of `+ Add` actions, their area gates and their order, shared by the sidebar New menu and the top bar Add menu (MUT-15).
+
+```ts
+visibleAddMenuActions(flags); // ['income', 'client'] with every area off
+```
+
+Core actions first, optional appended, so a switch never moves a core entry. Each menu maps an `AddMenuAction` to its own label, icon and click behaviour. Tests: `layout/__tests__/addMenuActions.test.ts` (all 64 flag combinations keep Income, Client first).
+
+---
+
+### useMenuButton
+**Location**: `src/hooks/useMenuButton.ts`
+**Purpose**: A button that opens a menu of actions with WAI-ARIA menu-button keyboard behaviour (MUT-15).
+
+```tsx
+const menu = useMenuButton();
+<button {...menu.buttonProps} type="button">Add</button>
+{menu.isOpen && (
+  <div {...menu.menuProps}>
+    <button role="menuitem" tabIndex={-1} onClick={() => { menu.close(); run(); }}>Income</button>
+  </div>
+)}
+```
+
+Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; arrows wrap; Home/End jump; Escape closes and refocuses the button; Tab and a mousedown outside close. Used by `SidebarNav` and `TopBar`. `RowActionsMenu` still has its own listeners (TD-031). Tests: `hooks/__tests__/useMenuButton.test.tsx`.
 
 ---
 
@@ -127,6 +159,18 @@ Tests: `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx`.
 ```
 
 Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
+
+---
+
+### DataToolsSection
+**Location**: `src/pages/settings/DataToolsSection.tsx`
+**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch.
+
+```tsx
+<DataToolsSection />   // rendered by SettingsPage below the main settings
+```
+
+Tests: `src/pages/settings/__tests__/DataToolsSection.test.tsx`.
 
 ---
 
@@ -519,6 +563,21 @@ new column, so it cannot push the amount column off-screen.
 **Used by**: ClientWorkSection (client profile work list, MUT-3), IncomePage,
 ProjectDetailPage.
 **Tests**: `src/components/ui/__tests__/RecordPaymentButton.test.tsx`
+
+---
+
+### SortableHeader
+**Location**: `src/components/ui/SortableHeader.tsx` (+ `.css`)
+**Purpose**: A `<th>` whose label is a button that sorts its column (MUT-7). It sets `aria-sort` (`ascending` / `descending` / `none`) and shows an arrow on the active column. It optionally aligns to the end edge for numeric columns, and its `title` can explain the ordering. Props-in: the caller owns the state (usually `useSortState`) and decides what a click does. The clients index toggles the active column, or switches to the clicked one in its natural direction.
+
+```tsx
+<SortableHeader field="owed" label={t('clients.columns.owedNow')} align="end"
+  title={t('clients.index.owedOrderHint')}
+  sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+```
+
+**Used by**: ClientsPage. ProjectsPage still uses a sort dropdown and can adopt this.
+**Tests**: `src/components/ui/__tests__/SortableHeader.test.tsx`
 
 ---
 
@@ -959,7 +1018,7 @@ const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receiva
 <OwedNowSummary owed={owed} />
 ```
 
-**Use when**: showing what is owed now — the client profile today; the clients index (MUT-7) and home (MUT-8) next. Not for period totals (paid income, expenses): those are not "now" figures.
+**Use when**: showing what is owed now. Used by the client profile and, as the clients index strip (MUT-7), over `combineOwed(summaries.map((s) => s.owed))`. Home (MUT-8) is next. Not for period totals (paid income, expenses): those are not "now" figures.
 **Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
 Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
 
