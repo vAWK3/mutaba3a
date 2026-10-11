@@ -114,7 +114,7 @@ Rejected:
 - **Unknown email and wrong password are indistinguishable:** both answer `401 INVALID_CREDENTIALS`, with a body that names neither. An unknown email still runs one argon2 verify against a fixed dummy hash, so timing matches. A route test asserts equal status and body, and median-time parity within tolerance.
 - **Throttle and lockout key on the normalised email string, whether or not an account exists.** Keying on the string means a locked unknown address behaves exactly like a locked real one, so lockout cannot enumerate accounts.
   - After 5 failures in 15 minutes, the address is refused for 15 minutes with the same `401 INVALID_CREDENTIALS`.
-  - A per-IP window (20 per minute) answers `429 RATE_LIMITED`.
+  - A per-IP window (20 per minute) answers `429 RATE_LIMITED`. The client IP is the hop the front proxy appends to `X-Forwarded-For`, never the leftmost value a client can forge. MUT-45 fixes the trusted hop count for the load balancer or proxy it chooses.
   - Both use the existing `SlidingWindowRateLimiter`, in process, which is valid at one instance (TD-017).
   - For a real account, the lock is also written to `User.lockedUntil`, so it survives a restart.
   - The audit event `user.locked_out` (actor `SYSTEM`) is appended to each organization the user is a member of. Partners see it in their audit, and AC "lockout observable in the audit log" is met.
@@ -198,7 +198,8 @@ How the table is enforced. Each layer reads the same `const`:
    - `writerOfRecord` is `'MALAFAT'` when the organization has a `CONNECTED` Malafat integration, otherwise `null`. This is the personal-profile case, where the UI says income isn't recorded on hosted profiles yet.
    - The error never names another organization.
 2. **Principal declaration (§4.4).** Ledger write routes declare `security: [{ apiKey: [] }]`.
-   - A session reaching one is mapped through the matrix to the same `READ_ONLY_PROFILE`.
+   - A session reaching a key-only route whose scope is `<domain>:write` on a `MALAFAT` row is mapped through the matrix to the same `READ_ONLY_PROFILE`.
+   - Any other key-only route answers `PRINCIPAL_NOT_ACCEPTED`. That covers the POST previews, `/v1/operations/*` and `/v1/integration*`, so no one is told "read-only" about a route they could never use.
    - Expense routes declare `[{ session: [] }]`, so Malafat's key cannot reach them with any scope set. That covers MUT-39's AC "Malafat's API key cannot see, read or write hosted-profile expenses", and it holds independently of scopes.
 3. **Store guard: below the routes, so no route can opt out.**
    - Handlers today close over one `LedgerStore` singleton. They move to a per-request `c.var.store`. For a session principal, that store is `guardStore(store, matrix, principal)`.
@@ -224,7 +225,7 @@ Tests generated from the table (MUT-39):
 | `POST /v1/sessions` | public | `{ email, password }` → `201 Me` + cookie; `401 INVALID_CREDENTIALS`; `429 RATE_LIMITED` |
 | `DELETE /v1/sessions/current` | session | `204`; revokes server-side, clears cookie. Not organization-scoped (no profile header) |
 | `GET /v1/me` | session | `Me = { user: { id, email, displayName, locale }, profiles: HostedProfile[] }`. Not organization-scoped |
-| every `read` row of §5 | apiKey + session | unchanged paths; sessions add `X-Mutaba3a-Profile` |
+| the `GET` routes of every `read` row of §5 | apiKey + session | unchanged paths; sessions add `X-Mutaba3a-Profile`. POST previews (`/v1/agreements/preview`, `/v1/retainers/preview`, `/v1/retainers/{id}/changes/preview`, `/v1/retainers/{id}/cancel/preview`, `/v1/allocations/preview`, `/v1/import/preview`) and `/v1/operations/*` stay key-only; the portal needs none of them |
 
 `HostedProfile = { id, name, source: 'hosted', defaultCurrency, timezone, writerOfRecord: 'MALAFAT' | null, access: Record<Domain, 'read' | 'read-write' | 'none'> }`. `id` is the organization id. `access` is the session column of §5, resolved for this organization, so the UI never hard-codes which views are read-only. `source` has one value on the wire; it exists so the client's `ProfileSource` union is explicit, and a test pins that the server never emits `local`.
 

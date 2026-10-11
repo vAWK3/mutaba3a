@@ -722,6 +722,14 @@ ProjectDetailPage.
 
 ## Table Components
 
+> **Correction (2026-10-11, found during MUT-36).** `DataTable` and
+> `CellAmount` below describe files that do not exist —
+> `src/components/tables/` is absent. Tables are page-local `<table>` markup
+> styled by `src/components/ui/Table.css`. Before building a table, read an
+> existing page (`ClientsPage`, `OverviewPage`) instead of these entries. The
+> hosted portal (MUT-43) adds a `DecimalAmount` and a small table wrapper and
+> registers them when built.
+
 ### DataTable
 **Location**: `src/components/tables/DataTable.tsx`
 **Purpose**: Generic data table with sorting and row click.

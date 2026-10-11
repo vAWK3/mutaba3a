@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-11 — MUT-36: hosted portal design brief and ADR-033 (proposed)
+
+**Scope:** `.claude/designs/hosted-portal.md` (new), `.claude/{DECISIONS,TECH_DEBT,COMPONENT_REGISTRY,CHANGELOG}.md`.
+Docs only; no code. Gates MUT-37/38/39/42/43/44/45 (epic MUT-34).
+
+### Added
+- **Design brief** deciding the four forks that block the hosted build stories:
+  - the portal is a hosted-only Vite build target served same-origin by the API, not the existing app repointed through the MUT-35 registry;
+  - a hosted profile is `Membership × Organization`, with `ProfileSource = 'local' | 'hosted'` as a client-side union;
+  - one parseable writability matrix, enforced as effective scopes, principal declarations and a compiler-exhaustive store guard;
+  - httpOnly `__Host-` cookie sessions beside API keys, with routes declaring principals in the OpenAPI `security` field.
+
+  It also re-cuts MUT-37/38/39/42/43/44/45.
+- **ADR-033** (Proposed until the owner approves the brief). It extends ADR-025 with a user principal and amends ADR-025 §2 for sessions only (`X-Mutaba3a-Profile` header, non-member → 404). It states that ADR-013 is untouched and that hosted profile data is a separate dataset from local profile data.
+- **TD-029:** the sync op-log has no `profileId` concept. Recorded, deliberately not built.
+- **TD-030:** en/ar translation drift (30 `retainers.*` keys missing in en); parity is tested for `settings.features` only.
+- **TD-031:** server log redaction is untested and pino's `*.x` wildcards are one level deep. MUT-38 resolves it; the MUT-38 AC that assumed an existing redaction test is corrected in the brief.
+
+### Changed
+- **ADR-023:** override note. Its "no account system, no password storage, no session" clause stops describing the hosted service once ADR-033 is accepted. The rest of the ADR still governs the desktop's Malafat connection.
+- **TD-018:** correction. Users are operator-issued like keys, with no self-serve signup, invite or reset; "Mutaba3a keeps no account system" no longer holds.
+- **TD-013:** the synced-decorator upgrade no longer waits on MUT-43, because the portal doesn't inject into the registry. It now waits on the SQLite swap.
+- **COMPONENT_REGISTRY:** `DataTable` and `CellAmount` are listed but don't exist (`src/components/tables/` is absent); a correction note points at the real page-local tables.
+
 ## [Unreleased] - 2026-10-10 — Money v1 handover refreshed for M8 and the pilot
 
 **Scope:** `.claude/designs/money-v1-handover.md`, `.claude/CHANGELOG.md`. Docs only; no code.
