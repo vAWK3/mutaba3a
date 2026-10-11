@@ -1342,8 +1342,25 @@ and enforces it, so the published contract and the behaviour cannot drift.
 `route-security.test.ts` sweeps every operation both ways. Handlers of
 key-only routes read `keyAuth(c)` (narrows the union and refuses a session a
 second time); session-reachable handlers read `c.get('auth').organization` and
-attribute lazy posting with `postingActorOf(c)` (SYSTEM for a session). Never
-read `auth.apiKey` directly.
+post due items with `const posting = lazyPostingOf(c, store)` →
+`postDueItems(posting.store, …, posting.actor)` (SYSTEM on the unguarded store
+for a session; MUT-39). Never read `auth.apiKey` directly, and never call
+`unguarded()` anywhere else — a test pins its one caller.
+
+### Store access is classified once; the guard lives in the store (MUT-39)
+Every `LedgerStore` repository method has an entry in `STORE_ACCESS`
+(`auth/store-guard.ts`): `read`, `control` (bookkeeping any request needs —
+audit, idempotency, last-used), `operator` (provisioning; refused under any
+guard) or `{ write: Domain }` (a writability-matrix row). The map is typed over
+`LedgerStore`, so **adding a store method means classifying it here** or the
+build fails. Route factories receive `requestScopedStore(store)`; the guard is
+per request (Hono `contextStorage`), set by `authenticate()` from the matrix
+column of the principal. Code outside a request (scripts, reconcile) and
+`/admin` run unguarded by construction. A refused write is `writeRefusal()` —
+READ_ONLY_PROFILE on a Malafat row, PRINCIPAL_NOT_ACCEPTED elsewhere — never a
+bare 403. Route scopes are read from tagged `requireScope` middleware, so tests
+and `authenticate()` derive expectations from `route × matrix` rather than a
+hand-kept list.
 
 ### Log redaction is spelled out per depth (MUT-38, TD-039)
 pino's `*.x` matches one level only. `logger.ts` generates every sensitive key

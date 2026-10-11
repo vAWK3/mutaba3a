@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
+import { lazyPostingOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { todayFor } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
@@ -32,7 +32,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, today, now, posting.actor);
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor }));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED' }, { limit: 200, cursor }));
       // M8 (D17): open proposals ride the summary, so the overview's figure and its pills share one source; a currency with proposals only still gets a block.
@@ -85,7 +86,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const customerId = c.req.valid('param').customerId;
       const customer = await store.customers.getById(organization.id, customerId);
       if (!customer) throw new ApiError('NOT_FOUND', 'No such customer');
-      await postDueItems(store, organization, today, now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, today, now, posting.actor);
       const projects = await listAll((cursor) => store.projects.list(organization.id, { customerId }, { limit: 200, cursor }));
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { customerId }, { limit: 200, cursor }));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { customerId, status: 'POSTED' }, { limit: 200, cursor }));
@@ -120,7 +122,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const today = todayFor(organization, now);
       const project = await store.projects.getById(organization.id, c.req.valid('param').projectId);
       if (!project) throw new ApiError('NOT_FOUND', 'No such project');
-      await postDueItems(store, organization, today, now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, today, now, posting.actor);
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
       const figures = await projectSummary(organization, project, receivables, today);
       return c.json({ ...projectWire(project, figures), asOf: today }, 200);

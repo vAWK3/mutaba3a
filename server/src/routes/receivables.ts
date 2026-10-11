@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
+import { keyAuth, lazyPostingOf, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
@@ -35,7 +35,8 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const q = c.req.valid('query');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, postingActorOf(c));
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, today, now, posting.actor);
       const page = await store.receivables.list(
         organization.id,
         {

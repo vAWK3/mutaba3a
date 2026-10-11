@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.9.0-mut38
+  version: 1.10.0-mut39
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.
 
@@ -26,6 +26,8 @@ info:
     Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
 
     Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.
+
+    Writability (MUT-39): a session may read a hosted profile's ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile's Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.
 
     Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.
 
@@ -208,6 +210,7 @@ components:
                 - SESSION_EXPIRED
                 - INSUFFICIENT_SCOPE
                 - PRINCIPAL_NOT_ACCEPTED
+                - READ_ONLY_PROFILE
                 - CROSS_SITE_REQUEST
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH

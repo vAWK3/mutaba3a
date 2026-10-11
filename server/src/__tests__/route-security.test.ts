@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
+import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
+import { domainOfScope, matrixRow } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
@@ -60,6 +62,7 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 
 let app: ReturnType<typeof createApp>;
 let operations: Operation[];
+let routeAccess: RouteAccessIndex;
 let sessionCookie: string;
 let orgId: string;
 let fullKey: string;
@@ -80,6 +83,7 @@ beforeAll(async () => {
     .flatMap(([path, item]) =>
       METHODS.filter((m) => item[m]).map((m) => ({ key: `${m.toUpperCase()} ${path}`, method: m.toUpperCase(), path, security: item[m].security })),
     );
+  routeAccess = buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes);
 
   const org = await (await app.request('/admin/v1/organizations', json({ name: 'Firm', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin))).json() as { id: string };
   orgId = org.id;
@@ -94,6 +98,13 @@ beforeAll(async () => {
 });
 
 const accepts = (op: Operation, scheme: 'apiKey' | 'session') => (op.security ?? []).some((req) => scheme in req);
+const scopesOf = (op: Operation) => routeAccess.get(`${op.method} ${op.path.replace(/\{([^}]+)\}/g, ':$1')}`)?.scopes ?? [];
+/** hosted-portal.md §5 layer 2: writes in a domain Malafat owns are read-only to a session; everything else key-only is not its business. */
+const malafatWriteDomain = (op: Operation) =>
+  scopesOf(op)
+    .filter((s) => s.endsWith(':write'))
+    .map(domainOfScope)
+    .find((d) => d !== undefined && matrixRow(d).writerOfRecord === 'MALAFAT');
 const concrete = (path: string) => path.replace(/\{[^}]+\}/g, PLACEHOLDER);
 const request = (op: Operation, headers: Record<string, string>) =>
   app.request(concrete(op.path), {
@@ -119,14 +130,28 @@ describe('route security declarations', () => {
 });
 
 describe('authenticate() enforces each declaration', () => {
-  it('a session is refused on every key-only operation', async () => {
+  it('reads every key-reachable operation’s scopes from its middleware', () => {
+    const unscoped = operations.filter((o) => accepts(o, 'apiKey') && scopesOf(o).length === 0).map((o) => o.key);
+    expect(unscoped).toEqual([]);
+  });
+
+  it('a session is refused on every key-only operation: READ_ONLY_PROFILE on Malafat’s writes, PRINCIPAL_NOT_ACCEPTED elsewhere', async () => {
     const wrong: string[] = [];
+    const readOnly: string[] = [];
     for (const op of operations.filter((o) => accepts(o, 'apiKey') && !accepts(o, 'session'))) {
       const res = await request(op, { cookie: sessionCookie, 'x-mutaba3a-profile': orgId, origin: 'http://localhost' });
       const body = (await res.json()) as Loose;
-      if (res.status !== 403 || body.error?.code !== 'PRINCIPAL_NOT_ACCEPTED') wrong.push(`${op.key} → ${res.status} ${body.error?.code}`);
+      const domain = malafatWriteDomain(op);
+      const want = domain ? 'READ_ONLY_PROFILE' : 'PRINCIPAL_NOT_ACCEPTED';
+      if (res.status !== 403 || body.error?.code !== want) wrong.push(`${op.key} → ${res.status} ${body.error?.code}, want ${want}`);
+      if (domain) {
+        readOnly.push(op.key);
+        // This organization has no Malafat integration: the refusal says so, and names nobody.
+        expect(body.error.details, op.key).toEqual({ domain, writerOfRecord: null });
+      }
     }
     expect(wrong).toEqual([]);
+    expect(readOnly.length).toBeGreaterThan(20);
   });
 
   it('an API key is refused on every session-only operation', async () => {

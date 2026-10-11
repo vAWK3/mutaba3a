@@ -977,3 +977,16 @@ Plan: `.claude/designs/mut-38-session-auth-tests.md`. Written red first (57 fail
 | Logger | `src/__tests__/logger.test.ts` | 10 sensitive keys × depths 0–3, request cookie, response Set-Cookie |
 
 **Baseline after MUT-38 (2026-10-11)**: server `npm test` 466 passed, 9 skipped; `npm run test:db` 520 passed.
+
+### MUT-39 — server-enforced writability (`server/`)
+
+Plan: `.claude/designs/mut-39-writability-tests.md`. The guard and drift tests were written red first (in the WIP commit); the route tests are derived from the matrix and mutation-checked.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Store guard | `src/auth/__tests__/store-guard.test.ts` | `STORE_ACCESS` = the runtime store's methods exactly; every write names a matrix row; the operator set by name; each method × {session/Malafat, session/personal, key} decided from the matrix; expenses: session yes, key no; the proxy refuses before the store, `unguarded` reaches the base, provisioning refused under a guard, pass-through without a guard or outside a request |
+| Matrix drift | `src/__tests__/writability-drift.test.ts` | brief §5 block ↔ `WRITABILITY_MATRIX`, cell by cell, 10 rows, local column `device` |
+| Routes from the matrix | `src/__tests__/writability-routes.test.ts` | every scoped operation: scopes are matrix rows, granted by each declared principal's column; every key-only operation × session naming a Malafat-fed / personal / non-member profile → READ_ONLY_PROFILE `{domain, MALAFAT \| null}` or PRINCIPAL_NOT_ACCEPTED, nothing written; session list reads 200; AC writes (agreement, installment trigger, credit, payment, customer); `unguarded(`/`lazyPostingOf(` call sites; 7 lazy-posting reads post once as SYSTEM, no other read writes; no cross-profile id reaches any store call |
+| Route security | `src/__tests__/route-security.test.ts` | key-only operations: READ_ONLY_PROFILE on Malafat writes (>20), PRINCIPAL_NOT_ACCEPTED elsewhere; every key-reachable operation has tagged scopes |
+
+**Baseline after MUT-39 (2026-10-11)**: server `npm test` 924 passed, 9 skipped; `npm run test:db` 978 passed (after re-migrating the local test database).

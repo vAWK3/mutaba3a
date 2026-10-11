@@ -214,6 +214,10 @@ How the table is enforced. Each layer reads the same `const`:
      ```
    - A new store method therefore cannot compile until it is classified. A `write` call whose domain the session column doesn't grant throws `READ_ONLY_PROFILE`, even if a future route forgot layers 1 and 2.
    - The map is a mechanical, one-time edit (route factories stop taking `store`).
+   - **As built (MUT-39, 2026-10-11), three deviations from the text above:**
+     - *No `c.var.store`.* Every route factory receives `requestScopedStore(store)`, a proxy that consults the guard `authenticate()` put on the current request (Hono `contextStorage`). The check lives in the store, not the handler, so it also reaches helpers that are handed the store, and the 58 handlers did not change. An API key gets a guard from its own column, too.
+     - *A fourth class, `operator`,* next to read, control (audit rows, idempotency claims, last-used stamps) and write. Organizations, keys, users and memberships are created, reset or revoked only by `/admin` and the scripts, which carry no guard. Under any guard those methods answer `PRINCIPAL_NOT_ACCEPTED`, which keeps decision 1 true below the routes as well.
+     - *Lazy posting goes through `lazyPostingOf(c, store)`.* It returns the actor and the store together: the key and the guarded store, or `SYSTEM` and `unguarded(store)`. A test pins `unguarded(` to that one function, and `lazyPostingOf(` to the seven session-reachable reads that post.
 
 **Lazy posting is a system act.** `GET /v1/summaries/*`, `GET /v1/receivables`, `GET /v1/agreements*` and `GET /v1/retainers/{id}/charges` post due installments and charges before reading (`postDueItems` / `generateCharges`). For an API key, nothing changes: the posting is still audited under the caller's key. For a session, the posting runs against the **unguarded system store, with actor `SYSTEM`**. It is the same deterministic catch-up `npm run reconcile` performs, so a session read must not be refused for it, and must not be recorded as the user writing the ledger. Without it, the portal would show figures behind Malafat's by up to a day.
 
