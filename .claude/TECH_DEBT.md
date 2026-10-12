@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-104: A payment allocation or reversal that loses a deadlock answers 500
+**Status**: Open
+**Added**: 2026-10-13 (MUT-100 re-review; payments code unchanged, newly reachable)
+**Priority**: Low
+**Impact**: since MUT-100 the outcome writes lock upfront receivables (id order) and allocations/reversals lock receivables in request order, so the two can deadlock. The outcome side already maps it to 409 (`isLockConflict` → stale); the payments side surfaces Prisma `P2010 / 40P01` as a 500. Nothing is written (rolled back) and the idempotency key is released, so a retry succeeds.
+**Fix**: lock receivables in sorted id order in `applyAllocations` / `payments.reverse`, and map `isLockConflict` to a retryable 409 in the payments store methods.
+
 ### TD-100: No upper bound on money amounts — an oversized award is a 500, not a 422
 **Status**: Open
 **Added**: 2026-10-13 (MUT-100 review; pre-existing for every amount)
