@@ -6,6 +6,7 @@ export { Numeric, Amount, type NumericProps, type AmountProps } from './Numeric'
 export { EmptyState } from './EmptyState';
 export { InlineStats } from './InlineStats';
 export { RowActionsMenu, type RowAction } from './RowActionsMenu';
+export { RowActionsHeader } from './RowActionsHeader';
 export { Pagination } from './Pagination';
 export { ProfileQuickPicker } from './ProfileQuickPicker';
 export { ProfileContextChip } from './ProfileContextChip';

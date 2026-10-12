@@ -51,6 +51,7 @@
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
+| ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active | 2026-10 |
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 
 ---
@@ -1738,6 +1739,17 @@ holds).
 - *Why*: MUT-63 (Mutaba3a Capture) needs native sign-in and this reuses ADR-037's already-shipped investment (users, passwords, sessions, writability) rather than opening a second account system — considered and rejected opening a Firebase-Auth spike instead, since ADR-037 decision 1's "no signup/invite/reset route" invariant and ADR-024's data-residency stance would both have to be re-litigated for no corresponding gain at this user scale (owner decision, 2026-10-12).
 - *What it replaces*: nothing in decisions 1–10 changes; this is a new transport for decision 3's "a human principal... carried as a bearer token instead of a cookie" (previously only described for the hypothetical, now built).
 
+**Amendment (MUT-65, 2026-10-12)**: decision 7's writability matrix gains a per-profile dimension on three rows, so a personal hosted profile can write its own ledger instead of staying permanently read-only. Approved by the owner with `.claude/designs/mut-65-personal-profile-income.md`.
+- *What changed*:
+  - **`customers`, `projects` and `payments`' session column is now a function of the profile, not a matrix constant.** `sessionAccessFor(domain, profileWriter)` returns `'read-write'` when `profileWriter === null` (a personal profile) and the matrix's static `'read'` when it is `'MALAFAT'`; `PROFILE_DEPENDENT_DOMAINS` names exactly these three. Every other row, and the API-key column on every row, is unchanged — a Malafat-fed profile is exactly as read-only on these three as before.
+  - **`sessionScopesFor(profileWriter)` and `mayWriteFor(principal, domain, profileWriter)`** replace the static `sessionScopes()`/`mayWrite()` at the two points that compute a session's actual access: `selectProfile()` (the scopes a session's token carries for the request) and `store-guard.ts`'s `storeRefusal` (the layer below the routes). The static functions are kept, unmodified, because nothing else depended on per-profile awareness.
+  - **Two routes gain a second principal.** `POST /v1/customers` and `POST /v1/projects` declare `security: [{ apiKey: [] }, { session: [] }]`; a session's `externalReference` is refused (a session has no external system to reference). `PATCH`/`archive` on both stay apiKey-only — the ticket's AC only asked for create. Two new, wholly session-only routes land alongside: `POST /v1/income` (Received or Owed, written directly — no agreement, no allocation preview) and `POST /v1/receivables/{id}/settle` (one payment, one allocation, no preview token).
+  - **`GET /v1/me`'s `access` map is now computed per organization** (`sessionAccessFor` over each membership's own `writerOfRecord`) instead of once from a static `sessionAccess()`.
+  - **hosted-portal.md §5's matrix cell for these three rows** gets the literal, fixed suffix `` `read; read-write on a personal profile` `` (not a parser/grammar — an explicit, reviewed choice); the drift test asserts the literal string plus `sessionAccessFor(domain, null) === 'read-write'` directly.
+- *Why*: MUT-34/this ADR built the hosted service and portal but left every personal (non-Malafat) profile permanently read-only — the exact freelancer-with-no-firm-behind-them user the "personal profile" concept (hosted-portal.md §3.1) was named for, but never wired to a write path. MUT-63 (phone capture) cannot ship for that user without it.
+- *What it replaces*: nothing structural — the three-layer enforcement shape (scopes, route `security`, store guard) is exactly decision 7's, now parameterized by profile on three rows instead of being uniform across all ten.
+- **Deviation found during implementation, not anticipated by the brief**: `Receivable.getById`/`list`/etc. now exclude a soft-deleted (`ADJUSTMENT`, voided) row — correct for every normal reader, but it meant the new `DELETE /v1/income/{id}` undo route could not re-confirm ownership on a *repeat* call against an already-voided row (its own idempotency check needs to see what every other reader must not). `ReceivableRepository.getByIdIncludingDeleted` was added for that one caller; every other reader is untouched.
+
 ---
 
 ## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer
@@ -1815,6 +1827,8 @@ calling them directly (rejected — both have other live callers outside this
 ticket's scope: sync replay and the payment-request flow).
 
 *(Amended 2026-10-12, MUT-5 final pass.)* "Future" means the payment's calendar day is after today. A date-only `paidAt` is compared as is. A full timestamp is future only when both its UTC date and its local date are after today (`isFuturePaymentDate` in `repository.ts`). Comparing only the UTC date rejected `new Date().toISOString()` in the evening west of UTC, which broke Mark paid and Record Payment there.
+
+**Addendum (2026-10-12, MUT-65).** The same rule — a payment date is never later than today; backdating is accepted — is now also enforced server-side, on `server/`'s `POST /v1/income` (`occurredOn`) and `POST /v1/receivables/{id}/settle` (`paidAt`): `income/compose.ts`'s `assertNotFuture`. This is the same rule applied to a second surface, not a new decision. It is a genuinely new check, not a reuse of an existing one: `server/`'s own `POST /v1/payments` (Malafat's apiKey-only route) applies `assertNotAbsurdDate` to `receivedOn`, which only rejects a date more than ten years ahead (a typo-sized sanity ceiling) — it does not reject a merely-future date. The design brief for MUT-65 assumed otherwise and cited it as the reused check; verified against the actual code during implementation and corrected here rather than silently shipping a check that doesn't do what the brief said it does. `payments.ts`'s own `receivedOn` validation is unchanged by this correction.
 
 ---
 
@@ -1923,6 +1937,25 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 **Consequences**: The sample can never mix with real data on entry, and leaving restores a first-run database. A visitor who types real data into the sample and then chooses "Start with your own" is warned that it goes too. Importing a backup during a session keeps the backup's rows on leaving.
 
 **Alternatives Considered**: start empty with the sample optional (rejected by Basel: an empty app doesn't show the value the page just promised); keep the demo flow and fix its bugs (rejected: an internal tool's confirm dialog as a visitor's first sight); delete only `demo_` rows on leaving (rejected: rows the visitor added to a sample business would be orphaned on a profile that no longer exists).
+
+---
+
+## ADR-043: Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: Requested by Basel. The two rollouts had no common front door. The web deploy lived in `deploy.sh`'s interactive menu as `deploy_web`, which ran `git add .` — committing whatever happened to be dirty under a "Release vX (web)" message — and always incremented the patch. The server deploy was `server/scripts/deploy.sh`, correct but only reachable by remembering to export `GCP_PROJECT_ID` and `TF_STATE_BUCKET` first. Nothing checked that the branch was `main`, that parked worktrees and unmerged branches were not quietly excluded from the release, or that `node_modules` matched the lockfile. The project habitually keeps one worktree per epic and several unpushed commits on local `main`, so "what is actually in this release" is a real question, not a theoretical one.
+
+**Decision**:
+1. **`make release web`** and **`make release server`** are the two entry points. A root `Makefile` owns the ordering; it does not reimplement any rollout. `server/scripts/deploy.sh` still performs the server rollout, and the app-version write still comes from `deploy.sh`'s `update_version`, sourced rather than copied.
+2. **`scripts/preflight.sh <web|server>` runs first and is the gate.** It fails the release — before anything is built, committed, pushed or rolled — on: a merge/rebase in progress or conflicted files; not on the release branch; an unclean working tree; a local branch not merged into it; an extra worktree still checked out; being behind `origin`; a `node` major other than 22 (TD-054); `node_modules` staler than `package-lock.json`. Per target it also checks the deploy mechanism and credentials: `netlify.toml` and push access for web; gcloud + ADC, docker daemon, terraform, cloud-sql-proxy, the state bucket's readability and the tfvars file for server. Every escape hatch is a named variable (`ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE`), so overriding a check is a deliberate, visible act.
+3. **The version is asked for, never assumed.** `scripts/bump-version.sh` prompts patch / minor / major / custom / keep, showing the resulting number for each. The app bump moves `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml` and `Cargo.lock` together — the lock included, because the web release never builds Rust and a drifting lock is what broke v0.0.65's Windows build.
+4. **Where the server deploy points is derived, then verified.** `GCP_PROJECT_ID` defaults to `project_id` in `<environment>.tfvars` and `TF_STATE_BUCKET` to the backend of the last `terraform init`; preflight re-derives both and fails on a project mismatch. `deploy.env` (git-ignored, template committed) is for overriding, not for first-time setup.
+5. **The release commit names only the release.** `git add` lists the version files explicitly; it is never `git add .`. The gates (lint, typecheck, tests, openapi/API-type contracts, build, bundle guard) run before the irreversible step, and a single confirmation — which fails closed when there is no terminal — stands in front of the push or the roll.
+
+**Consequences**: A release cannot be cut from a tree that does not describe itself, and both deploys answer the same questions in the same order. Parked epic worktrees now block a release until removed or explicitly allowed, which is the point — their work is not in it. `make release web` immediately exposed TD-057. Desktop (DMG, notarization, GitHub release) stays with `npm run release`; folding it in is a later decision.
+
+**Alternatives Considered**: npm scripts instead of a Makefile (rejected: `package.json` is the frontend's, and the server deploy is not a frontend concern); extend `deploy.sh`'s menu (rejected: its `git add .` and fixed patch bump are the behaviour being replaced, and the file already carries the desktop pipeline); checks inside each `deploy.sh` (rejected: the two would drift, and the checks are most useful before `make` even starts a build).
 
 ---
 

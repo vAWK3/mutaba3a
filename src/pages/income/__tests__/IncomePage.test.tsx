@@ -30,6 +30,8 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.columns.status': 'Status',
       'transactions.columns.amount': 'Amount',
       'common.loading': 'Loading...',
+      'common.actions': 'Actions',
+      'filters.period': 'Period',
       'common.noClient': 'No Client',
       'common.markPaid': 'Mark as Paid',
       'common.duplicate': 'Duplicate',
@@ -461,6 +463,20 @@ describe('IncomePage', () => {
         expect(screen.getByText('Status')).toBeInTheDocument();
         expect(screen.getByText('Amount')).toBeInTheDocument();
       });
+    });
+
+    // TD-009: axe's empty-table-header and select-name fired on Income
+    it('names the row-actions column and the period filter', async () => {
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+        data: mockIncomeTransactions,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+      renderWithProviders(<IncomePage />);
+
+      expect(await screen.findByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Period' })).toBeInTheDocument();
     });
 
     it('should show loading state', async () => {

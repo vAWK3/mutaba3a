@@ -59,6 +59,53 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Release: one front door for both deploys (`make release web` / `make release server`)
+
+**Scope:**
+- `Makefile` (new): `release web`, `release server`, plus `doctor`, `preflight-web`, `preflight-server`, `check-web`, `check-server`, `check`, `bump-web`, `bump-server`, `migrate-status`, `clean-dist`, `help`
+- `scripts/preflight.sh` (new): the release gate, per target
+- `scripts/bump-version.sh` (new): the patch/minor/major/custom/keep prompt
+- `scripts/confirm.sh` (new): the yes/no gate in front of an irreversible step
+- `deploy.env.example` (new) + `.gitignore` (`deploy.env`)
+
+### Added
+- **`make release web`** — preflight → lint, typecheck, unit tests, hosted API types → version prompt → the three builds and the bundle guard → confirm → a commit holding only the version files → `git push origin main`, which is what Netlify builds.
+- **`make release server`** — preflight → server lint, typecheck, tests, `openapi:check`, build → version prompt → confirm → the version commit → push so the deployed sha is reachable → `server/scripts/deploy.sh` (image, `prisma migrate deploy`, `terraform apply`, smoke), unchanged.
+- **`scripts/preflight.sh`** — refuses to release from a tree that does not describe itself: merge/rebase in progress, conflicted files, wrong branch, dirty tree, a branch not merged into `main`, an extra worktree, behind `origin`, the wrong `node` major (TD-054), `node_modules` staler than the lockfile. Then per target: `netlify.toml` and push access; or gcloud + ADC, docker daemon, terraform, cloud-sql-proxy, tfvars, and a readable state bucket. Each override is a named variable (`ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE`).
+- **`make doctor`** — the same checks for both targets, read-only, non-fatal.
+- The server deploy now points itself: `GCP_PROJECT_ID` comes from `project_id` in `production.tfvars` and `TF_STATE_BUCKET` from the last `terraform init`, and preflight fails if the two disagree. `deploy.env` is for overriding, not for setup.
+
+### Changed
+- The version is asked for, not assumed. `deploy.sh`'s `deploy_web` always incremented the patch and ran `git add .`; the new path prompts patch/minor/major/custom/keep and stages only `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`. `Cargo.lock` moves with the others so it cannot drift (the v0.0.65 Windows failure).
+
+### Technical
+- Nothing about either rollout is reimplemented: the server roll stays `server/scripts/deploy.sh`, and the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied.
+- ADR-043. Desktop (DMG, notarization, GitHub release) is untouched and still `npm run release`.
+- Found by the first full run and left for its owner: **TD-058** — `src/hosted/api/schema.d.ts` is stale against `server/openapi/openapi.yaml` on `main`, and regenerating it fails `typecheck` in `ReceivablesList.tsx` and `PaymentsList.tsx` because MUT-65 made `Receivable.projectId` and `Payment.customerId` nullable. `make release web` is blocked until that lands.
+
+---
+
+## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
+
+**Scope:**
+- `src/components/drawers/Drawer.tsx` and the hosted `src/hosted/components/Drawer.tsx` (`aria-labelledby` on the title)
+- `src/components/filters/DateRangeControl.tsx` (named select and custom-range inputs)
+- `src/components/ui/RowActionsHeader.tsx` + `.css` (new); used by `IncomePage`, `ClientWorkSection`, `ClientPaymentsSection`, `ProjectDetailPage`; the `.row-actions-header` rule moved out of `RecordPaymentButton.css`
+- `src/pages/settings/SettingsPage.tsx`, `AdvancedFeaturesSection.tsx`; `src/index.css` (`.settings-label` is `display: block`)
+- `src/lib/i18n/translations/{en,ar}.json`; `e2e/support/axe.ts`
+- Test plan: `.claude/designs/td-009-axe-structural-tests.md`
+
+### Fixed
+- **Every drawer is a named dialog.** `Drawer` points `aria-labelledby` at its title, using an id from `useId()`. Its close button reads `common.close` ("إغلاق" in Arabic), not a fixed "Close". The portal's own drawer gets the same `aria-labelledby`. (axe `aria-dialog-name`)
+- **The period filter has a name.** It is "Period" / "الفترة" on Income, the client profile and every other page that uses `DateRangeControl`. With Custom chosen, its two date inputs are "From" and "To". (axe `select-name`)
+- **Settings' default-currency select is named by its visible label.** The label is now a real `<label for>`. `aria-labelledby` was tried first. It satisfied `select-name`, but axe's best-practice `label-title-only` then fired: it treats a labelledby target as hidden once it is scrolled below the fold, because `.main-content` and `.app-shell` are `overflow: hidden`. The row's description is its `aria-describedby`. (axe `select-name`)
+- **The business profile's ⋯ button says what it is**: "Actions for <profile name>", with `aria-expanded`. (axe `button-name`)
+- **The row-actions column has a header.** `RowActionsHeader` carries a visually hidden "Actions" in Income, in the client profile's work and payments tables, and in project detail. (axe `empty-table-header`)
+- **Settings' headings are in order.** The section titles are `h2` under the page's `h1`, as Data Tools already was. They look the same: the class sets the size, and the reset zeroes the margins. (axe `heading-order`)
+
+### Changed
+- `KNOWN_AXE_VIOLATIONS` is down to `color-contrast` on every surface, which is left for MUT-74's palette work. MUT-79 had already removed `landmark-no-duplicate-banner`; the only `role="banner"` left is the demo-mode bar, which renders alone.
+
 ## [Unreleased] - 2026-10-12 — MUT-79: App frame — nothing floats over content
 
 **Scope:**
@@ -148,6 +195,47 @@
 - `npm test` (server): 1110 passed, 11 skipped. Root `npm run typecheck` (app + hosted programs): clean.
 - `store-contract-sessions.ts` run against both `MemoryLedgerStore` and the Prisma-backed store (local Postgres).
 
+## [Unreleased] - 2026-10-12 — MUT-65: personal hosted profiles accept income, clients and matters from the user
+
+**Scope:** `server/` only.
+- `prisma/schema.prisma` and migration `20261012090000_mut65_personal_income` (column-altering: `payments.customerId` and `receivables.projectId` drop `NOT NULL`; new `payments.{projectId,createdByUserId}` and `receivables.{title,createdByUserId,deletedAt}`)
+- `src/income/{compose,__tests__/compose}.ts` (new); `src/routes/income.ts` (new); `src/routes/receivables.ts` (+settle)
+- `src/auth/{writability,middleware,store-guard}.ts`, `src/routes/{sessions,customers,projects,payments,expenses,summaries}.ts`, `src/repositories/{ports,memory,prisma}.ts`, `src/{schemas,serializers}.ts`, `src/app.ts`
+- `openapi/openapi.yaml`
+- tests: `src/income/__tests__/compose.test.ts`, `src/__tests__/{income-routes,receivables-settle}.test.ts` (new); `src/auth/__tests__/writability.test.ts` (new); extensions to `src/auth/__tests__/store-guard.test.ts`, `src/__tests__/{writability-drift,writability-routes,routes-sessions,route-security,routes-m2..m8}.test.ts`, `src/repositories/__tests__/store-contract-m4.ts`, `src/retainers/__tests__/proration.test.ts`, `src/summaries/__tests__/compute.test.ts`
+- records: the approved brief `mut-65-personal-profile-income.md` and its test plan; ADR-037 amendment; ADR-038 addendum
+
+### Added
+- **`POST /v1/income`** (session-only, `payments:write`): Received (optionally with no client at all, optionally carrying a matter) or Owed (a client is required — explicit or resolved from a matter, else `422 CUSTOMER_REQUIRED_FOR_OWED`). Received is an ordinary `Payment`, created through the existing M4 transaction unmodified; Owed is a new, agreement-less `Receivable` (`origin: ADJUSTMENT`), always `OUT_OF_SCOPE` VAT at a zero rate, due `EOM_15` of the occurred date by default (the existing `dueDateFor` helper, no new date math). `occurredOn` may not be later than today; a capture source (`app|siri|widget|quick_action|share`) lands on the audit row only, never persisted on the entity.
+- **`DELETE /v1/income/{id}`** (undo): voids an unsettled Owed entry of the caller's own, or reverses an unallocated Received payment of the caller's own (the existing M4 `reverse()`), each idempotent on repeat calls. Never reveals another user's or another profile's row (404, not 403).
+- **`POST /v1/receivables/{id}/settle`**: one payment + one allocation against a session's own receivable, no preview/allocation dance; `amount` defaults to the full outstanding, `paidAt` to today (and may not be later).
+- **A personal hosted profile can now write customers, projects and payments through its own session** (hosted-portal.md §5a amendment): `sessionAccessFor`/`sessionScopesFor`/`mayWriteFor` make the session column of exactly these three matrix rows a function of the profile (`profileWriter === null` → read-write) rather than a constant; a Malafat-fed profile is unchanged (still read-only there). `POST /v1/customers` and `POST /v1/projects` now accept a session as well as an API key; a session's `externalReference` is refused (`EXTERNAL_REFERENCE_NOT_ALLOWED`); the audit actor is `actorOf(c)` (USER for a session) instead of always API_KEY.
+- `receivables.createAdjustment` / `softDeleteAdjustment` and an internal `createPaymentTx`/`createAdjustmentTx` split on the Prisma repository (the `settleReceivable(tx, …)` idiom), so MUT-66 can compose a payment or adjustment inside its own transaction without re-touching this code.
+- `receivables.getByIdIncludingDeleted`: the undo route's own idempotency re-check needs to see an already-voided row; every other reader keeps using the deletedAt-filtered `getById`/`list`.
+
+### Changed
+- **`GET /v1/me`'s `access` map is now computed per organization** (`sessionAccessFor`), not once from a static table — a personal profile's `access` actually reflects what it can write.
+- **`Receivable.projectId` and `Payment.customerId` are now nullable**, rippling into `routes/payments.ts`'s allocation engine (a projectless receivable is never eligible there — Owed is read/settled through `/v1/income`/`/v1/receivables/{id}/settle` instead), the organization summary's per-customer breakdown (a clientless payment contributes to the currency block's own totals but keys no row), and the `ReceivableSchema`/`PaymentSchema` wire contracts.
+- `expenses.ts`'s create route threads an optional `captureSource` into its audit metadata, the one existing write path the ticket names.
+- Contract: new reasons `CUSTOMER_REQUIRED_FOR_OWED`, `EXTERNAL_REFERENCE_NOT_ALLOWED`, `PAYMENT_HAS_NO_CUSTOMER` (422) and `ALREADY_SETTLED`, `ALREADY_ALLOCATED` (409); an "Income" tag and description paragraph; API `1.12.0-mut65`.
+
+### Deviation from the plan (verified against ground truth)
+- The design doc's §4.1/§4.6 assumed `occurredOn`'s future-date rejection could reuse `assertNotAbsurdDate` (agreements/compose.ts), the same call `POST /v1/payments` makes on `receivedOn`. Read against the real code, that function only rejects a date **more than ten years ahead** — Malafat's `receivedOn` is not rejected for being merely tomorrow. Ticket AC 7 requires a real "not later than today" rule, so `income/compose.ts` adds `assertNotFuture` (reusing the existing `DATE_INVALID` reason, not a new one) instead. `payments.ts`'s own `receivedOn` check is untouched — out of scope for this ticket.
+
+### Fixed — post-review pass (2026-10-12, four approved fixes, one commit each, each test-first)
+- **`POST /v1/receivables/{id}/settle` only ever touches an app-captured entry** (`routes/receivables.ts`). It looked a receivable up by `organizationId` alone. On a Malafat organization whose integration is `DISCONNECTED`, `profileWriterOf` returns `null`, so a session holds `payments:write` over that firm's whole historical ledger and could settle a real `INSTALLMENT`/`RETAINER_CHARGE` directly, bypassing the allocation engine. `origin !== 'ADJUSTMENT'` is now a 404 — not a 403 — mirroring `DELETE /v1/income/{id}`'s non-leaking discipline. Pinned by `receivables-settle.test.ts` ("a non-ADJUSTMENT receivable … → 404, nothing written"), which seeds a real installment-origin receivable straight into the store.
+- **Settle maps `InsufficientCapacity` to 409, not 500** (`routes/receivables.ts`). `store.payments.create` throws it when `applyAllocations`' `FOR UPDATE` re-read finds the capacity gone — the concurrent-settle race. It escaped to `app.onError` as a generic 500, which `idempotency.ts` then treats as a 5xx and releases the key for. Converted the way both pre-existing call sites do, reusing the registered `VERSION_MISMATCH` reason (the credit route's shape, same file, same situation). No contract change: the route already declared `conflictResponse`. Pinned by a store stub that arms the next `payments.create` to throw.
+- **Undo can no longer void a receivable a settle just paid** (`routes/income.ts`, `repositories/{prisma,memory,ports}.ts`). The route checked `paidMinor`/`creditedMinor` and then called `softDeleteAdjustment`, whose `updateMany` neither locked the row nor re-asserted the guard — a settle landing in between left a POSTED payment allocated to a receivable every read path hides, and answered 204 as if nothing was owed. The guard now lives in the `WHERE` clause (`paidMinor: 0n, creditedMinor: 0n`) in both stores, the same shape as `payments.reverse` re-asserting `status: 'POSTED'` inside its own `updateMany`. A refusal surfaces as a record that comes back still undeleted, so no signature change was needed; the route answers the same 409 `ALREADY_SETTLED` as its pre-check. Pinned in `store-contract-m4.ts` (both stores) and by a route-level test that stages the race deterministically with a one-shot store interleave hook.
+- **`GET /v1/summaries/customers/{id}` counts matterless Owed entries** (`routes/summaries.ts`). It consumed its receivables only through a per-project filter, so a `projectId === null` row — MUT-65's **default** capture shape — reached no bucket, and when it was the client's only row in a currency that whole currency block was missing. `GET /v1/summaries/organization` does count them, so the two endpoints disagreed about what one client owes; AC 3 names the client-detail surface. Matterless rows now fold into the client's currency block through `bucketize`, the same helper the organization summary uses (ADR-033: one definition of a bucket), and their currencies join the block set; they stay out of `projects[]`. The test title that had baked the gap in as expected behaviour is fixed, and the figure is now pinned against the organization summary's.
+- **Out of scope by instruction** (reported, not fixed): the review's P2 list — memory-store org-blind FK checks, the dead `requestId` field, `GET /v1/me` advertising write on PATCH-less domains, the organization-independent-route guard's permissiveness, unbounded `dueDate`, the non-discriminated income schema, dead `sessionAccess()`/`sessionScopes()` exports. Recorded as TD-055.
+- **Verified after the pass**: server `npm test` 1171 passed, 11 skipped (72 files, 11 skipped — the Prisma suites, no database here); `npm run lint`, `npm run typecheck`, `npm run build` and `npm run openapi:check` all pass. `openapi.yaml` regenerated once, for fix 1's description sentence.
+
+### Verified
+- **Mutation checks** (temporarily applied, confirmed failing, reverted): the undo route's ownership check; the `paidMinor`/`creditedMinor` guard before voiding an Owed entry; the `sessionScopesFor` wiring in `selectProfile`; the `mayWriteFor` change in `store-guard.ts`'s `storeRefusal`. Each genuinely breaks the relevant test when removed. The `deletedAt` exclusion from `listEligible`/`countOutstandingByProject` is pinned permanently in `store-contract-m4.ts`.
+- `npm test`: 1159 passed, 11 skipped. lint, typecheck, build and `openapi:check` pass. `npm run test:db` and the migration against a live Postgres could not be run in this environment (no `DATABASE_URL`/`MUTABA3A_TEST_DATABASE_URL`) — flagged, not claimed.
+- openapi.yaml diff on `/v1/customers`/`/v1/projects` is exactly a second `security` entry plus description text, confirmed by hand — no schema or operation shape Malafat's vendored contract pins changes. No vendored-contract test exists in this repo to run automatically (Malafat owns that file, in its own repository).
+
+---
 ## [Unreleased] - 2026-10-12 — MUT-78: "Open the web app" lands straight in sample data, with no dialogs
 
 **Scope:**

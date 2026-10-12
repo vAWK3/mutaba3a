@@ -185,10 +185,10 @@ An API key still implies its organization, and no API-key request accepts an org
 | Domain | Scopes | Routes covered | Malafat API key | User session · hosted profile | Writer of record | Local profile |
 |---|---|---|---|---|---|---|
 | integration | integration:read, integration:write | /v1/integration*, /v1/api-keys/self/revoke | read-write | none | — | device |
-| customers | customers:read, customers:write | /v1/customers*, /v1/import/* | read-write | read | MALAFAT | device |
-| projects | projects:read, projects:write | /v1/projects*, /v1/import/* | read-write | read | MALAFAT | device |
+| customers | customers:read, customers:write | /v1/customers*, /v1/import/* | read-write | read; read-write on a personal profile | MALAFAT | device |
+| projects | projects:read, projects:write | /v1/projects*, /v1/import/* | read-write | read; read-write on a personal profile | MALAFAT | device |
 | agreements | agreements:read, agreements:write | /v1/agreements*, /v1/installments/*, /v1/retainers* (except charges), /v1/fee-proposals*, /v1/vat-rates, /v1/settings/vat | read-write | read | MALAFAT | device |
-| payments | payments:read, payments:write | /v1/receivables*, /v1/payments*, /v1/allocations/*, /v1/retainers/{id}/charges, /v1/operations/* | read-write | read | MALAFAT | device |
+| payments | payments:read, payments:write | /v1/receivables*, /v1/payments*, /v1/allocations/*, /v1/retainers/{id}/charges, /v1/operations/* | read-write | read; read-write on a personal profile | MALAFAT | device |
 | attachments | attachments:read, attachments:write | /v1/attachments* | read-write | read | MALAFAT | device |
 | summaries | summaries:read | /v1/summaries/* (except expenses) | read | read | — | device |
 | audit | audit:read | /v1/audit | read | none | — | device |

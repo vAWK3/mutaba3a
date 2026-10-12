@@ -1301,3 +1301,92 @@ The 13 cases that failed on main (stale paths without `/app`, pages that no long
 **How it was run:** the committed `playwright.config.ts` pins 5173 (TD-004). The runs used a throwaway config with `webServer: npx vite --port 5193 --strictPort` and `reuseExistingServer`, deleted afterwards along with `test-results/`.
 
 **Gate (2026-10-12, on main 89a0adb plus this branch):** `npm run lint` shows 0 errors and 16 warnings, none in `e2e/`. `npm run typecheck` is clean. `npx vitest run`: 176 files, 2,832 passed, 4 skipped. `npm run build` is OK.
+
+### MUT-65 — personal hosted profiles accept income, clients and matters (`server/`)
+
+Plan: `.claude/designs/mut-65-personal-profile-income-tests.md`. Four mutation checks were manually applied, confirmed failing, and reverted (noted inline below); the `deletedAt` exclusion check is pinned permanently.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Per-profile writability (unit) | `auth/__tests__/writability.test.ts` (new) | `sessionAccessFor`/`sessionScopesFor`/`mayWriteFor` on the three profile-dependent domains; non-regression guards that `agreements`/`attachments`/`expenses` are unaffected; `PROFILE_DEPENDENT_DOMAINS` is exactly the three named |
+| Drift | `__tests__/writability-drift.test.ts` | the brief's literal `read; read-write on a personal profile` suffix on exactly the three rows, backed directly by `sessionAccessFor` |
+| Store guard | `auth/__tests__/store-guard.test.ts` | the generic per-method `describe.each` corrected for per-profile reality (mutation-checked: reverting `mayWriteFor` to the static `mayWrite` fails 15 of its cases); a real proxy positive-path test (`session`, `writer: null` now allowed where `MALAFAT` is refused); the two new receivables methods classified `{ write: 'payments' }` |
+| Sessions | `__tests__/routes-sessions.test.ts` | `GET /v1/me`'s `access` map differs by organization (a personal profile's three rows read `read-write`, a Malafat-fed one's read `read`) |
+| Pure compose | `income/__tests__/compose.test.ts` (new) | `resolveIncomeLinks` (Owed requires a customer; a project resolves/validates its customer; archived links allowed); `dueDateForOwed` (EOM_15 default incl. last-day-of-month and leap-February boundaries); `owedVatFields` (always OUT_OF_SCOPE/zero, regardless of any configured rate); `assertNotFuture` (same day accepted, backdated accepted, future rejected) |
+| Repository contract | `repositories/__tests__/store-contract-m4.ts` (extended) | `createAdjustment` (with/without a matter, FK violations); `softDeleteAdjustment` (idempotent, excluded from every read, cross-organization null) **and the deletedAt mutation check**: a voided Owed entry is absent from `listEligible` and doesn't count in `countOutstandingByProject`; a clientless/matter-carrying Received payment; `getByIdIncludingDeleted` (sees a voided row, still organization-scoped) |
+| Routes: income | `__tests__/income-routes.test.ts` (new) | Received (no client / with client / with client+matter) and Owed (with/without a matter; no client → 422 `CUSTOMER_REQUIRED_FOR_OWED`) on a personal profile; future/backdated `occurredOn`; `dueDate` default; missing/replayed/mismatched Idempotency-Key; `captureSource` present/absent on the audit row; every write audited `actorType: USER`; refused `READ_ONLY_PROFILE`/`PRINCIPAL_NOT_ACCEPTED` on a Malafat-fed profile with nothing written; undo (Received reversed, Owed voided, both idempotent on repeat, 409 on settled/allocated, 404 across users/organizations and on an unknown id); the read-surface agreement (`GET /v1/receivables?customerId=`, `GET /v1/summaries/organization`'s Owed→Overdue bucketing, two independent currency blocks, a partial settle's outstanding delta) |
+| Routes: settle | `__tests__/receivables-settle.test.ts` (new) | full and partial settle; `amount` over outstanding → 422; future/backdated/defaulted `paidAt` (lands on `Payment.receivedOn`); idempotent replay; Malafat refusal; cross-organization 404; an already-settled receivable → 422 `RECEIVABLE_NOT_OPEN`; method default/override; `captureSource` on the audit row; `payment.recorded`/`receivable.settled` audited `actorType: USER` |
+| Inventory (generic, route-derived) | `__tests__/writability-routes.test.ts`, `__tests__/route-security.test.ts` | the three new/changed routes fold into the existing matrix-driven and principal-driven sweeps with no hand-kept list drifting out of sync; `POST /v1/customers`/`/v1/projects` move out of the key-only set; `INCOME_OPERATIONS` is the new session-only trio |
+| Mutation checks (manual, reverted) | — | undo's ownership check (another user's entry wrongly succeeds without it); the `paidMinor`/`creditedMinor` guard (an already-settled entry wrongly deletes without it); `selectProfile`'s `sessionScopesFor` wiring (every positive case fails without it); `store-guard.ts`'s `mayWriteFor` (15 store-guard cases fail without it, independently of the scope layer) |
+
+**Not run in this environment**: `npm run test:db` (the Prisma contract against Postgres, and the migration applying from an empty/pre-existing database) — no `MUTABA3A_TEST_DATABASE_URL`/`DATABASE_URL` configured here. The Prisma repository code and the migration SQL were written and reviewed against the schema and the existing M4 migration's conventions, but not executed.
+
+**Post-review pass (2026-10-12)** — four approved fixes, each written test-first and watched fail for the right reason before the fix:
+
+| Fix | Test | Red looked like |
+|---|---|---|
+| Settle refuses a non-ADJUSTMENT receivable (404) | `__tests__/receivables-settle.test.ts` — seeds a real installment-origin receivable through `agreements.create` + `postInstallment`, then settles it | 201: a Malafat installment settled from a session, bypassing the allocation engine |
+| Settle maps `InsufficientCapacity` → 409 `VERSION_MISMATCH` | same file — a store proxy arms the next `payments.create` to throw it (the `FOR UPDATE` re-read losing the race) | 500, and `idempotency.ts` releasing the key on a 5xx |
+| `softDeleteAdjustment` re-asserts the money guard in its `WHERE` | `repositories/__tests__/store-contract-m4.ts` (runs against **both** stores): paid and credited rows come back undeleted, a clean one still voids. Route level: `__tests__/income-routes.test.ts` stages the race with a one-shot `interleave` hook that fires a real settle between the undo's guard read and its write | contract: the paid row voided anyway; route: 204, with a POSTED payment allocated to a now-hidden receivable |
+| The customer summary counts matterless Owed | `__tests__/income-routes.test.ts` — the AC 3 test (title corrected; it had baked the gap in as expected behaviour) now asserts the client block's buckets and status before/after the due date, plus a second test for an Owed whose currency nothing else touches | buckets `0.00`/`SETTLED`; the second test: no USD block at all |
+
+New harness affordances, both minimal and local to their test file: `harness(wrap)` in `receivables-settle.test.ts` lets one test hand the app a stubbed store while assertions keep reading the real one; `h.interleave` in `income-routes.test.ts` registers a one-shot side effect to run immediately before a named store call.
+
+**Baseline after MUT-65 (2026-10-12)**: server `npm test` 1159 passed, 11 skipped. lint, typecheck, build and `openapi:check` pass.
+**Baseline after the MUT-65 post-review pass (2026-10-12)**: server `npm test` 1171 passed, 11 skipped (72 files). lint, typecheck, build and `openapi:check` pass. `npm run test:db` still not runnable here (no `MUTABA3A_TEST_DATABASE_URL`), so the new `softDeleteAdjustment` contract case has been executed against the memory store only; the Prisma `WHERE` clause change is unexecuted.
+
+### TD-009 — the structural axe violations on the core surfaces (2026-10-12)
+
+Plan: `.claude/designs/td-009-axe-structural-tests.md`. Each new assertion was written first and failed on the old code (16 of them; the English "Close" case already passed, because the label was hard-coded English).
+
+| File | Covers |
+|---|---|
+| `src/components/drawers/__tests__/Drawer.test.tsx` (new) | The drawer is a dialog named by its title, and the name follows a title change; two open drawers each have their own name; the close button is "Close" in English and "إغلاق" in Arabic |
+| `src/hosted/components/__tests__/Drawer.test.tsx` (new) | The portal's drawer is a dialog named by its title |
+| `src/components/filters/__tests__/DateRangeControl.test.tsx` | The preset select is a combobox named "Period"; with a custom range, the date inputs are labelled "From" and "To" |
+| `src/components/ui/__tests__/RowActionsHeader.test.tsx` (new) | It is a column header named "Actions", and the text is `.sr-only` |
+| `src/pages/income/__tests__/IncomePage.test.tsx` | The Income table has an "Actions" column header, and the period select is named |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | The work table and the payments table each have an "Actions" column header, and the work list's period select is named |
+| `src/pages/settings/__tests__/SettingsPage.a11y.test.tsx` (new) | The default-currency select is named by its `<label>` and described by its row's description; each profile's ⋯ button is "Actions for <name>", and `aria-expanded` follows it open; the eight section titles are `h2` under the `h1`, with no `h3` |
+| `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx` | The section title is a level-2 heading |
+| `src/lib/i18n/__tests__/a11yKeys.test.ts` (new) | `common.actions`, `common.close`, `filters.period`, `filters.periodFrom`, `filters.periodTo` and `settings.profile.actionsFor` are non-empty in en and ar; `{name}` is kept in both |
+| `e2e/support/axe.ts` | `KNOWN_AXE_VIOLATIONS` is only `color-contrast`, so any of the five fixed rules coming back fails `accessibility.spec.ts` |
+
+**Found by the e2e run, not by jsdom:** the first Settings fix named the select with `aria-labelledby`. That passed `select-name`, but axe's best-practice `label-title-only` fired. Axe's `labelVirtual` takes a labelledby target's *on-screen* visible text, and the label sat at y = 890, outside the 720 px `overflow: hidden` `.main-content`/`.app-shell`. A `<label for>` is checked for screen-reader visibility only, so it passes wherever it is scrolled. The unit test now asserts the label is a `LABEL`.
+
+**Verified in the browser** (dev server, 800×600 and 1024×768, English and Arabic):
+- The Settings section titles and the currency row look unchanged. `.settings-label` is `display: block`, so the `<label>` lays out like the `<div>`s: 20 px tall, with the select still 440 px wide.
+- In Arabic, the period select is "الفترة", the new-income drawer is labelled "إيراد جديد", and its close button is "إغلاق".
+
+**How e2e was run:** a throwaway config on port 5193 (`webServer: npx vite --port 5193 --strictPort`, TD-004), deleted afterwards along with `test-results/`.
+
+**Gate (2026-10-12, branch head 976093d on main 4eaa583):**
+- `npx playwright test`: 19/19. `accessibility.spec.ts` passed 7/7 again after the CSS change.
+- `npx vitest run` (Node 22, TD-054): 187 files, 2,875 passed, 4 skipped.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run typecheck`: clean.
+- `npm run build` and `npm run test:bundles`: OK.
+
+Main 8ef2df0 (MUT-65: `server/` and docs only) was merged in afterwards. Only lint and typecheck were re-run on the merged tree.
+
+### Release tooling — `make release web` / `make release server` (ADR-043, 2026-10-12)
+
+No automated tests. These scripts deploy; a test suite for them would either mock away the only thing they do or actually push and roll. They are verified by running the non-destructive halves and by reading the destructive half's dry run. What was verified on 2026-10-12, on `main` at `4eaa583`:
+
+| Checked | How | Result |
+|---|---|---|
+| `make help`, target dispatch | `make help`; `make --dry-run release web`; `make --dry-run release server` | pass |
+| An unknown target is rejected | `make release desktop` | exits 2, "unknown release target" |
+| Shell/Makefile syntax | `bash -n` on all three scripts; `make --dry-run` | pass |
+| Preflight catches a real dirty tree | `make preflight-web` with 8 uncommitted files | fails, lists them |
+| Preflight catches parked worktrees | same run, 2 epic worktrees checked out | fails, names both |
+| Preflight catches stale deps | `scripts/preflight.sh web` before `npm ci` | fails ("package-lock.json is newer than node_modules") — this is what the missing `openapi-typescript` binary looked like before the check existed |
+| …and passes once fixed | after `npm ci` | passes |
+| Server tools/credentials/config | `make preflight-server` | gcloud, ADC, docker, terraform, cloud-sql-proxy, tfvars all detected; `GCP_PROJECT_ID` and `TF_STATE_BUCKET` derived and cross-checked; `gs://…` confirmed readable |
+| The version prompt | `scripts/bump-version.sh server` with `9` then `2` | re-prompts on `9`, bumps minor `0.1.0 → 0.2.0` on `2`; reverted |
+| Non-interactive bumps | `BUMP=patch make bump-web`; `BUMP=keep`; `BUMP=custom BUMP_VERSION=9.9` | `0.0.65 → 0.0.66` across all five manifests **including `Cargo.lock`**; keep is a no-op; `9.9` rejected; reverted |
+| No terminal, no release | piped stdin, `/dev/tty` unopenable | bump and confirm both refuse with "set BUMP=…" / "re-run with AUTO=1" rather than hanging or defaulting to yes |
+| Server gates | `make check-server` | pass — lint, typecheck, **1210 tests**, `openapi:check` up to date, build |
+| Web gates | `make check-web` | lint (0 errors, 19 warnings), typecheck, **2857 tests**, and `test:bundles` (3 builds + the leak guard) all pass; **`hosted:types:check` fails** — pre-existing drift on `main`, logged as TD-058 |
+
+Not exercised, by nature: the push, `server/scripts/deploy.sh`, and the Netlify build. The confirmation in front of each is the tested part.

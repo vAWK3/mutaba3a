@@ -13,7 +13,7 @@
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
-| **Table headers** | SortableHeader |
+| **Table headers** | SortableHeader, RowActionsHeader |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
@@ -310,7 +310,7 @@ Tests: `src/pages/landing/__tests__/`.
 ## Drawer Components
 
 ### Base Drawer Pattern
-Every drawer renders `Drawer` (`src/components/drawers/Drawer.tsx`; the portal's is `src/hosted/components/Drawer.tsx`) and is mounted by its owner while its store says open:
+Every drawer renders `Drawer` (`src/components/drawers/Drawer.tsx`; the portal's is `src/hosted/components/Drawer.tsx`, which takes `closeLabel`) and is mounted by its owner while its store says open. It is a `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide), and its close button is `common.close` (TD-009). Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
 
 ```tsx
 interface DrawerProps {
@@ -751,6 +751,22 @@ ProjectDetailPage.
 
 ---
 
+### RowActionsHeader
+**Location**: `src/components/ui/RowActionsHeader.tsx` (+ `.css`)
+**Purpose**: The header cell of a table's row-actions column (Record payment and the row kebab). The column has no visible title, so the cell carries a visually hidden "Actions" (`common.actions`) and is never an empty header (axe `empty-table-header`, TD-009). It owns `.row-actions-header`, the shrink-to-fit width rule (`width: 1%; white-space: nowrap`). No props.
+
+```tsx
+<tr>
+  <th className="text-end">{t('transactions.columns.amount')}</th>
+  <RowActionsHeader />
+</tr>
+```
+
+**Used by**: IncomePage, ClientWorkSection, ClientPaymentsSection, ProjectDetailPage. Use it for any new table with a row-actions column; never write an empty `<th>`.
+**Tests**: `src/components/ui/__tests__/RowActionsHeader.test.tsx`
+
+---
+
 ## Display Components
 
 ### Card
@@ -934,11 +950,13 @@ Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactio
 
 ```tsx
 <DateRangeControl
-  value={{ from: dateFrom, to: dateTo }}
-  onChange={({ from, to }) => setFilters({ dateFrom: from, dateTo: to })}
-  presets={['this-month', 'last-month', 'this-year', 'custom']}
+  dateFrom={dateRange.dateFrom}
+  dateTo={dateRange.dateTo}
+  onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
 />
 ```
+
+**Accessible names** (TD-009): the preset select is "Period" (`filters.period`), because it has no visible label beside it in the top bar. With Custom chosen, the date inputs are "From" and "To" (`filters.periodFrom` / `periodTo`).
 
 **Presets**:
 - `this-month`: Current calendar month
@@ -1276,6 +1294,16 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `auth/middleware.ts` (MUT-38 rewrite, MUT-39, MUT-64) | `authenticate()` (one principal per request, routes a bearer token to the API-key or device-session verifier by prefix, enforces each route's OpenAPI `security`, sets the request's store guard, maps a session on a key-only Malafat write to READ_ONLY_PROFILE), `buildRouteAccessIndex(definitions, app.routes)` (principals + tagged scopes; `deviceSession` scheme maps to the `'session'` Principal), `requireScope` (tagged; either principal), `requiredScopeOf`, `keyAuth(c)` for key-only handlers, `sessionAuth(c)` for session-only ones (MUT-42), `lazyPostingOf(c, store)` for lazy posting in reads (`postingActorOf(c)` stays for key-only creates), `AuthContext = ApiKeyAuth \| SessionAuth` (session carries `writerOfRecord`), `c.get('identity')`; MUT-64 adds `authenticateDeviceSessionToken`/`validateSessionRecord` (shared digest/expiry/touch core) and `finishSessionAuth` (the tail both the cookie and device-bearer paths call); `SessionSettings.deviceIdleDays`/`deviceAbsoluteDays` (optional) | every /v1 route |
 | `routes/sessions.ts` (MUT-38) | `POST /v1/sessions`, `DELETE /v1/sessions/current`, `GET /v1/me` (also accepts `deviceSession`, MUT-64); `ORGANIZATION_INDEPENDENT_ROUTES`; `buildMe(store, user)` exported for `routes/device-sessions.ts` | the portal (MUT-43) |
 | `routes/device-sessions.ts` (MUT-64) | `POST /v1/device-sessions` (public, returns a bearer token, no cookie, no CSRF check), `DELETE /v1/device-sessions/current`; `DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES` | the native app (MUT-67, not yet built) |
+
+| `auth/sessions.ts` (MUT-38) | `generateSessionToken`, `sessionDigest` (HMAC under the pepper), `sessionCookieName`, `clientIp` (trusted-hop X-Forwarded-For), `isSameOriginRequest` (CSRF rule), `SignInThrottle` + `SIGN_IN_POLICY` | sign-in route, `authenticate()` |
+| `auth/writability.ts` (MUT-38, MUT-39, MUT-65) | `WRITABILITY_MATRIX` (brief §5 as a const, incl. its "Routes covered" cell), `sessionScopes()`, `sessionAccess()`, `matrixRow`, `domainOfScope`, `mayWrite`, `writeRefusal` (READ_ONLY_PROFILE on a Malafat row, else PRINCIPAL_NOT_ACCEPTED), `profileWriterOf(store, orgId)`; MUT-65 adds `PROFILE_DEPENDENT_DOMAINS` (`customers`/`projects`/`payments`), `sessionAccessFor(domain, profileWriter)`, `sessionScopesFor(profileWriter)`, `mayWriteFor(principal, domain, profileWriter)` — the per-profile layer on top of the three, everything else routes through the unchanged static functions | session effective scopes, `GET /v1/me`, `authenticate()`, `requireScope`, the store guard |
+| `expenses/*` (MUT-42) | `compose.ts` (`resolveLinks`, `requestedLinks`, `assertCategoryChoosable`, `parseExpenseAmount`, `expensePatch`, `EXPENSE_ENTITY_TYPES`, `MAX_RECEIPTS_PER_EXPENSE`), `cursor.ts` (newest-first `(occurredOn, id)` keyset), `summary.ts` (`summarizeExpenses`: per currency, by category / client), `presets.ts` (`GENERAL_PRESET`, `LAW_FIRM_PRESET`, `presetFor(writer, locale)`; parity-tested against `src/db/defaultExpenseCategories.ts`), `names.ts` (`categoryNameKey`) | `routes/expenses.ts`, `routes/expense-categories.ts`, both stores; MUT-44's portal form consumes the routes |
+| `routes/expenses.ts`, `routes/expense-categories.ts` (MUT-42) | the 13 session-only expense operations (CRUD, receipts on the M6 flow, categories, `GET /v1/summaries/expenses`); MUT-65 threads an optional `captureSource` into `expense.created`'s audit metadata | the portal (MUT-44) |
+| `income/compose.ts` (MUT-65) | `resolveIncomeLinks(store, organizationId, kind, { customerId, projectId })` (expenses/compose.ts's `resolveLinks` rule, plus "Owed requires a customer"), `dueDateForOwed(occurredOn, explicit)` (EOM_15 via the existing `dueDateFor`), `owedVatFields(amountMinor)` (always `OUT_OF_SCOPE`, zero rate), `assertNotFuture(date, today, field)` (a new, stricter check than `assertNotAbsurdDate` — see ADR-038 addendum) | `routes/income.ts`, `routes/receivables.ts`'s settle route |
+| `routes/income.ts` (MUT-65) | `POST /v1/income` (Received, optionally clientless/matter-linked; Owed, a bare `ADJUSTMENT` receivable), `DELETE /v1/income/{id}` (undo: void an unsettled Owed, or reverse an unallocated Received — idempotent, never leaks another user's/profile's row) — session-only, `payments:write` | the phone capture app (MUT-68), MUT-66's inbox filing |
+| `auth/store-guard.ts` (MUT-39, MUT-65) | `STORE_ACCESS` (every repository method classified read / control / operator / `{ write: Domain }`; typed over `LedgerStore`), `principalStoreGuard(principal, profileWriter)`, `storeRefusal` (now calls `mayWriteFor`, MUT-65), `requestScopedStore(base)` (the store every route factory gets), `unguarded(store)` (only via `lazyPostingOf`); MUT-42 adds `{ read: Domain }` (refused where the column is `none`) and classifies the 17 expense methods; MUT-65 classifies `receivables.{createAdjustment,softDeleteAdjustment,getByIdIncludingDeleted}` | `app.ts`, `authenticate()` |
+| `auth/middleware.ts` (MUT-38 rewrite, MUT-39, MUT-65) | `authenticate()` (one principal per request, enforces each route's OpenAPI `security`, sets the request's store guard, maps a session on a key-only Malafat write to READ_ONLY_PROFILE), `buildRouteAccessIndex(definitions, app.routes)` (principals + tagged scopes), `requireScope` (tagged; either principal), `requiredScopeOf`, `keyAuth(c)` for key-only handlers, `sessionAuth(c)` for session-only ones (MUT-42), `actorOf(c)` for routes that accept either principal and must audit the real caller (MUT-65: `POST /v1/customers`/`/v1/projects`), `lazyPostingOf(c, store)` for lazy posting in reads (`postingActorOf(c)` stays for key-only creates), `AuthContext = ApiKeyAuth \| SessionAuth` (session carries `writerOfRecord`, now from `sessionScopesFor`), `c.get('identity')` | every /v1 route |
+| `routes/sessions.ts` (MUT-38, MUT-65) | `POST /v1/sessions`, `DELETE /v1/sessions/current`, `GET /v1/me` (its `access` map now per-organization via `sessionAccessFor`); `ORGANIZATION_INDEPENDENT_ROUTES` | the portal (MUT-43) |
 | `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |
 
 ---

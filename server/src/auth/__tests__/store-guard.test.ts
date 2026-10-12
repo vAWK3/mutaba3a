@@ -5,7 +5,7 @@ import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { AppEnv } from '../middleware.js';
 import { STORE_ACCESS, principalStoreGuard, requestScopedStore, storeRefusal, unguarded, type MethodAccess } from '../store-guard.js';
-import { WRITABILITY_MATRIX, type Access } from '../writability.js';
+import { PROFILE_DEPENDENT_DOMAINS, WRITABILITY_MATRIX, type Access, type Domain } from '../writability.js';
 
 type Entry = [repo: string, method: string, access: MethodAccess];
 const entries: Entry[] = Object.entries(STORE_ACCESS).flatMap(([repo, methods]) =>
@@ -29,6 +29,10 @@ function expected(access: MethodAccess, principal: 'apiKey' | 'session', writer:
   if (access === 'operator') return 'PRINCIPAL_NOT_ACCEPTED:null';
   if ('read' in access) return row(access.read)[principal] === 'none' ? 'PRINCIPAL_NOT_ACCEPTED:null' : 'allowed';
   const r = row(access.write);
+  // MUT-65: the three profile-dependent domains are read-write for a session on a personal profile (writer === null), read-only on a Malafat-fed one — a wrapper over the matrix, not a matrix edit.
+  if (principal === 'session' && PROFILE_DEPENDENT_DOMAINS.has(access.write as Domain)) {
+    return writer === null ? 'allowed' : `READ_ONLY_PROFILE:${JSON.stringify({ domain: access.write, writerOfRecord: writer })}`;
+  }
   const column: Access = r[principal];
   if (column === 'read-write') return 'allowed';
   return r.writerOfRecord === 'MALAFAT'
@@ -80,6 +84,28 @@ describe('STORE_ACCESS', () => {
       'users.setPassword',
       'users.setStatus',
     ]);
+  });
+});
+
+describe('storeRefusal on the three profile-dependent rows (MUT-65)', () => {
+  it('lets a session write payments/customers/projects on a personal profile', () => {
+    for (const domain of ['payments', 'customers', 'projects'] as const) {
+      expect(storeRefusal('session', null, { write: domain })).toBeNull();
+    }
+  });
+
+  it('refuses a session the same write on a Malafat-fed profile, READ_ONLY_PROFILE', () => {
+    expect(storeRefusal('session', 'MALAFAT', { write: 'payments' })?.code).toBe('READ_ONLY_PROFILE');
+    expect(storeRefusal('session', 'MALAFAT', { write: 'payments' })?.details).toEqual({ domain: 'payments', writerOfRecord: 'MALAFAT' });
+  });
+
+  it('agreements stays out of session reach even on a personal profile (not one of the three named rows)', () => {
+    expect(storeRefusal('session', null, { write: 'agreements' })?.code).toBe('READ_ONLY_PROFILE');
+  });
+
+  it('the new receivables.createAdjustment/softDeleteAdjustment are classified payments:write', () => {
+    expect(STORE_ACCESS.receivables.createAdjustment).toEqual({ write: 'payments' });
+    expect(STORE_ACCESS.receivables.softDeleteAdjustment).toEqual({ write: 'payments' });
   });
 });
 
@@ -144,6 +170,15 @@ describe('requestScopedStore', () => {
     expect(await res.json()).toEqual({ code: 'READ_ONLY_PROFILE' });
     const org = (await store.organizations.list())[0]!;
     expect((await store.customers.list(org.id, {}, { limit: 10, cursor: null })).items).toEqual([]);
+  });
+
+  it('MUT-65: lets a session on a personal profile (writer null) write where a Malafat-fed one is refused', async () => {
+    const store = new MemoryLedgerStore();
+    const { a } = app(store, principalStoreGuard('session', null));
+    const res = await a.request('/write', { method: 'POST' });
+    expect(await res.json()).toEqual({ ok: true });
+    const org = (await store.organizations.list())[0]!;
+    expect((await store.customers.list(org.id, {}, { limit: 10, cursor: null })).items.map((c) => c.name)).toEqual(['Haddad']);
   });
 
   it('lets system work through unguarded()', async () => {

@@ -15,6 +15,7 @@
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
+| **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009) |
 
 ---
 
@@ -1451,6 +1452,23 @@ Then prove it with a **canary sweep**, generated from the published document:
    path slot;
 3. no response body may contain a canary (`expenses-invisible.test.ts`).
 
+### A writability-matrix row can depend on the profile, not just the principal (MUT-65)
+Most rows are a constant per principal (`WRITABILITY_MATRIX[i].session`). Three
+rows (`customers`, `projects`, `payments`) are not: a personal profile
+(`profileWriter === null`) may write them through its own session; a
+Malafat-fed one may not, unchanged from before. The matrix itself stays
+unedited — a `sessionAccessFor(domain, profileWriter)` wrapper layers the
+per-profile branch on top for exactly `PROFILE_DEPENDENT_DOMAINS`, and falls
+through to the static `matrixRow(domain).session` for everything else.
+`sessionScopesFor`/`mayWriteFor` are the profile-aware counterparts of
+`sessionScopes`/`mayWrite`, used at the two points that actually decide
+access (`selectProfile()`, `store-guard.ts`'s `storeRefusal`); the static
+originals are kept, since other call sites (e.g. the API-key column) never
+needed to change. The brief's matrix cell for such a row gets a fixed,
+**literal suffix** (`` `read; read-write on a personal profile` ``) rather than
+a richer cell grammar — keep the table one `Access` value per cell plus a
+pinned string, not a format a drift test has to parse.
+
 ### A view in error renders no data (MUT-43)
 After a failed refetch, TanStack Query keeps the last `data`. A portal view
 ignores it while any of its queries is in error and shows the unreachable card
@@ -1708,6 +1726,55 @@ Every Playwright test gets an empty IndexedDB, so the Welcome dialog always open
 
 `expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
 
+## Accessibility patterns — added 2026-10-12 (TD-009)
+
+### A control with a visible label gets a real `<label for>`
+A select or input that has visible label text beside it is named by a `<label htmlFor={id}>`, with the id from `useId()`. A description underneath goes in `aria-describedby`. Don't use `aria-labelledby` for this. Axe's best-practice `label-title-only` checks a labelledby target's *on-screen* visibility, and the app shell clips at `.main-content`/`.app-shell` (`overflow: hidden`). So a label scrolled below the fold reads as hidden, and the rule fails. A `<label for>` is checked for screen-reader visibility only. Settings' rows style it with `.settings-label`, which is `display: block`. A control with no visible label, such as the top bar's period filter, takes an i18n'd `aria-label`.
+
+### Every accessible name goes through `t()`
+`aria-label`, visually hidden text and dialog titles are user-facing strings, so they live in `en.json` and `ar.json` like any other copy. For an icon-only button in a list, put the row's subject in the name with a variable ("Actions for {name}"), so a screen reader's button list tells the rows apart. Add new keys to `src/lib/i18n/__tests__/a11yKeys.test.ts`, which checks both locales.
+
+### Dialogs are named by their visible title
+A `role="dialog"` points `aria-labelledby` at its heading, using a `useId()` id, never a fixed string: two drawers can be open at once, such as Income with Record payment over it. `Drawer` does this for every drawer.
+
+### A column without a visible title still has a header
+The row-actions column uses `RowActionsHeader` (a visually hidden "Actions"), never an empty `<th>`. Axe's `empty-table-header` flags an empty one, and a screen reader announces a nameless column.
+
+---
+
+## Release patterns — added 2026-10-12 (ADR-043)
+
+### Gate before you build, confirm before you commit
+
+A release target runs in a fixed order, and the order is the point:
+
+```
+preflight  →  gates  →  version prompt  →  build  →  confirm  →  commit/push/roll
+```
+
+- **Preflight is cheap and first.** Every reason a release should not happen — wrong branch, dirty tree, unmerged branch, parked worktree, behind `origin`, wrong `node`, stale `node_modules`, a missing tool or credential — is found in under a second, before anything spends minutes building. `scripts/preflight.sh` reports *every* failure and exits once, rather than dying on the first; an operator fixes the whole list in one pass.
+- **Gates that cannot fail the build run before the version bump**, so a failure leaves the working tree exactly as it was. The build runs *after*, because the version is compiled into the bundle (`__APP_VERSION__`).
+- **The irreversible step is last and asks.** `scripts/confirm.sh` defaults to no and fails closed when there is no terminal: a release never proceeds because a prompt could not be shown. `AUTO=1` is the only way past it.
+
+### Every override is a named variable
+
+A check that can be bypassed silently is not a check. Preflight's escape hatches are `ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE` — each downgrades exactly one check to a warning and prints why it was downgraded. There is no blanket `--force`.
+
+### Derive configuration, then verify it
+
+Do not ask an operator for a value the repository already knows. `GCP_PROJECT_ID` is read from `project_id` in `<environment>.tfvars`, `TF_STATE_BUCKET` from the backend of the last `terraform init`. Because a derived value could be wrong, preflight re-derives both independently and **fails on a mismatch** — a project that disagrees with the tfvars would push an image to one project and apply infrastructure in another. Derivation removes setup friction; verification is what makes it safe.
+
+### Prompt output goes to stderr
+
+Anything read back by `$(...)` must print its UI to stderr and only the answer to stdout — otherwise the menu is captured instead of shown, and the caller receives the menu text as the answer. Read from `/dev/tty` where there is one, falling back to stdin, and probe the terminal by *opening* it (`exec 3</dev/tty`) rather than testing the path: `/dev/tty` can exist and still refuse to open.
+
+### A release commit names only the release
+
+`git add` lists the version files explicitly — never `git add .`, which sweeps whatever was dirty into a commit labelled as a release. Preflight's clean-tree check is what makes an explicit list sufficient.
+
+### Reuse the rollout, own only the order
+
+`make` does not reimplement a deploy. The server roll stays `server/scripts/deploy.sh`; the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied, so the list of files carrying the version has one definition. When sourcing a script that also runs interactively, guard its entry point (`[[ "${BASH_SOURCE[0]}" == "${0}" ]]`) and namespace your own variables — `deploy.sh` defines `$GREEN` and friends as literal `\033` strings for `echo -e`, which silently corrupts a `printf '%s'` caller that uses the same names.
 ## Motion patterns — added 2026-10-12 (MUT-80, ADR-044)
 
 ### A close is immediate; the exit is presentation

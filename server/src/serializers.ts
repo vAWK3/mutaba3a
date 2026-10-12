@@ -242,6 +242,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     postingDate: r.postingDate,
     postedAt: r.postedAt.toISOString(),
     status: receivableStatus(r, today),
+    title: r.title,
     version: r.version,
   };
 }
@@ -433,4 +434,41 @@ export function serializeExpenseReceipt(r: ExpenseReceiptRecord) {
 
 export function serializeExpenseCategory(c: ExpenseCategoryRecord) {
   return { id: c.id, name: c.name, color: c.color, archived: c.archivedAt !== null, version: c.version, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
+}
+
+// ---- MUT-65: personal profile income capture --------------------------------
+
+/** POST /v1/income's response envelope: one shape for Received (a Payment) or Owed (a Receivable). */
+export function serializeIncomeEntry(entry: { kind: 'received'; payment: PaymentRecord } | { kind: 'owed'; receivable: ReceivableRecord }) {
+  if (entry.kind === 'received') {
+    const p = entry.payment;
+    return {
+      id: p.id,
+      kind: 'received' as const,
+      amount: amt(p.amountMinor, p.currency),
+      currency: p.currency as Currency,
+      occurredOn: p.receivedOn,
+      customerId: p.customerId,
+      projectId: p.projectId,
+      title: null,
+      notes: p.notes,
+      dueDate: null,
+      // Always true at creation: a fresh Received payment carries no allocations yet.
+      status: 'unallocated' as const,
+    };
+  }
+  const r = entry.receivable;
+  return {
+    id: r.id,
+    kind: 'owed' as const,
+    amount: amt(r.grossMinor, r.currency),
+    currency: r.currency as Currency,
+    occurredOn: r.postingDate,
+    customerId: r.customerId,
+    projectId: r.projectId,
+    title: r.title,
+    notes: null,
+    dueDate: r.dueDate,
+    status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
+  };
 }

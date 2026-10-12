@@ -145,7 +145,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         { organizationId: organization.id, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId: user.id },
         c.get('now')(),
       );
-      await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn });
+      await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       return c.json(serializeExpense(expense), 201);
     },
   );
