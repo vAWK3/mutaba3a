@@ -1,12 +1,18 @@
 /**
  * @vitest-environment jsdom
  *
- * MUT-6 AC #3 and #4: the drawer opens with the amount prefilled to the full
- * remaining balance so settling in full is one confirm, the user can overwrite
- * it with a smaller amount, and a backdated date is what gets stored.
+ * MUT-86 (decision P1): the Record payment drawer leads with what's left. Its
+ * title names the balance, one large amount field is prefilled with it, a live
+ * line under it says what the amount leaves owed, the date reads "Today ›",
+ * notes sit behind "+ Add note", and one primary button records -- so opening
+ * the drawer and pressing Record Payment settles the entry ("Paid? Two taps.").
+ *
+ * Kept from MUT-6 / MUT-18: the prefill is overwritable, a backdated date is
+ * what gets stored, overpayment and future dates are refused inline (ADR-030,
+ * ADR-038), and the date defaults to the local calendar today (ADR-022).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PartialPaymentDrawer } from '../PartialPaymentDrawer';
 import { todayISO } from '../../../lib/utils';
@@ -20,33 +26,47 @@ const mockEditPaymentRecord = vi.fn();
 
 let mockTransaction: TransactionDisplay;
 let mockPaymentRecords: unknown[] = [];
+let mockRecordsLoading = false;
 let mockEditingPaymentRecordId: string | undefined;
 
+const TRANSLATIONS: Record<string, string> = {
+  'transactions.partialPayment.title': 'Record Payment',
+  'transactions.partialPayment.titleLeft': 'Record Payment · {amount} left',
+  'transactions.partialPayment.recordPayment': 'Record Payment',
+  'transactions.partialPayment.record': 'Record Payment',
+  'transactions.partialPayment.amount': 'Payment amount',
+  'transactions.partialPayment.date': 'Payment date',
+  'transactions.partialPayment.notes': 'Notes',
+  'transactions.partialPayment.addNote': 'Add note',
+  'transactions.partialPayment.paidInFull': 'Paid in full',
+  'transactions.partialPayment.stillOwed': '{amount} still owed',
+  'transactions.partialPayment.remaining': 'Remaining',
+  'transactions.partialPayment.received': 'Received so far',
+  'transactions.partialPayment.history': 'Payment History',
+  'transactions.partialPayment.noPayments': 'No payments recorded yet',
+  'transactions.partialPayment.editPayment': 'Edit Payment',
+  'transactions.partialPayment.updatePayment': 'Update Payment',
+  'transactions.partialPayment.deletePayment': 'Delete Payment',
+  'transactions.partialPayment.amountMustBePositive': 'Payment amount must be greater than 0',
+  'transactions.partialPayment.overpayment': 'Payment amount exceeds the remaining balance of {amount}',
+  'transactions.partialPayment.futureDate': 'Payment date cannot be in the future',
+  'validation.amountInvalid': 'Enter an amount like 1200 or 1,200.50',
+  'validation.amountCurrencyMismatch': 'The amount is in {typed}, but this entry is in {currency}',
+  'validation.dateRequired': 'Date is required',
+  'time.today': 'Today',
+  'transactions.columns.amount': 'Amount',
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.saving': 'Saving...',
+};
+
 vi.mock('../../../lib/i18n', () => ({
-  useT: () => (key: string, params?: Record<string, unknown>) => {
-    const translations: Record<string, string> = {
-      'transactions.partialPayment.title': 'Record Payment',
-      'transactions.partialPayment.recordPayment': 'Record Payment',
-      'transactions.partialPayment.record': 'Record Payment',
-      'transactions.partialPayment.amount': 'Payment amount',
-      'transactions.partialPayment.date': 'Payment date',
-      'transactions.partialPayment.notes': 'Notes',
-      'transactions.partialPayment.remaining': 'Remaining',
-      'transactions.partialPayment.received': 'Received so far',
-      'transactions.partialPayment.history': 'Payment History',
-      'transactions.partialPayment.noPayments': 'No payments recorded yet',
-      'transactions.partialPayment.editPayment': 'Edit Payment',
-      'transactions.partialPayment.updatePayment': 'Update Payment',
-      'transactions.partialPayment.markFullyPaid': 'Mark Fully Paid',
-      'transactions.partialPayment.amountMustBePositive':
-        'Payment amount must be greater than 0',
-      'transactions.partialPayment.overpayment': `Payment amount exceeds the remaining balance of ${params?.amount}`,
-      'transactions.partialPayment.futureDate': 'Payment date cannot be in the future',
-      'transactions.columns.amount': 'Amount',
-      'common.cancel': 'Cancel',
-      'common.saving': 'Saving...',
-    };
-    return translations[key] ?? key;
+  useT: () => (key: string, params?: Record<string, string | number>) => {
+    const template = TRANSLATIONS[key] ?? key;
+    return Object.entries(params ?? {}).reduce(
+      (text, [name, value]) => text.replace(`{${name}}`, String(value)),
+      template,
+    );
   },
   useLanguage: () => ({ language: 'en' }),
   getLocale: () => 'en-US',
@@ -66,20 +86,48 @@ vi.mock('../../../lib/stores', () => ({
 
 vi.mock('../../../hooks/useQueries', () => ({
   useTransactionDisplay: () => ({ data: mockTransaction, isLoading: false }),
-  usePaymentRecords: () => ({ data: mockPaymentRecords, isLoading: false }),
+  usePaymentRecords: () => ({ data: mockRecordsLoading ? undefined : mockPaymentRecords, isLoading: mockRecordsLoading }),
   useCreatePaymentRecord: () => ({ mutateAsync: mockCreate, isPending: false }),
   useUpdatePaymentRecord: () => ({ mutateAsync: mockUpdate, isPending: false }),
   useDeletePaymentRecord: () => ({ mutateAsync: mockDelete, isPending: false }),
 }));
 
+/** Text as read, without the bidi isolates that keep amounts whole in Arabic */
+function plain(text: string | null | undefined): string {
+  return (text ?? '').replace(/[\u2068\u2069]/g, '');
+}
+
 function amountInput() {
   return screen.getByLabelText('Payment amount') as HTMLInputElement;
+}
+
+function amountStatus() {
+  return plain(screen.getByTestId('payment-amount-status').textContent);
+}
+
+function title() {
+  return plain(screen.getByRole('heading', { level: 2 }).textContent);
+}
+
+function recordButton() {
+  return screen.getByRole('button', { name: 'Record Payment' });
+}
+
+async function openDateField(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Payment date/ }));
+  return screen.getByLabelText('Payment date') as HTMLInputElement;
+}
+
+function renderDrawer(onClose = vi.fn()) {
+  const result = render(<PartialPaymentDrawer transactionId="tx-1" onClose={onClose} />);
+  return { ...result, onClose };
 }
 
 describe('PartialPaymentDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPaymentRecords = [];
+    mockRecordsLoading = false;
     mockEditingPaymentRecordId = undefined;
     mockTransaction = {
       id: 'tx-1',
@@ -96,141 +144,267 @@ describe('PartialPaymentDrawer', () => {
     } as TransactionDisplay;
   });
 
-  it('prefills the amount with the full remaining balance', () => {
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('leads with what is left', () => {
+    it('names the remaining balance in the title', () => {
+      renderDrawer();
 
-    expect(amountInput().value).toBe('750');
-  });
+      expect(title()).toBe('Record Payment · $750 left');
+    });
 
-  it('records the prefilled amount in one confirm', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+    it('prefills the amount with the full remaining balance and says it pays in full', () => {
+      renderDrawer();
 
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+      expect(amountInput().value).toBe('750');
+      expect(amountStatus()).toBe('Paid in full');
+    });
 
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ transactionId: 'tx-1', amountMinor: 75000 })
-      );
+    // The field always writes cents as two digits. The title uses the app's
+    // shared formatAmount, which drops a trailing zero ("$887.5", TD-062).
+    it('writes a balance with cents to two decimals in the field', () => {
+      mockTransaction = { ...mockTransaction, receivedAmountMinor: 11250, remainingAmountMinor: 88750 };
+      renderDrawer();
+
+      expect(title()).toBe('Record Payment · $887.5 left');
+      expect(amountInput().value).toBe('887.50');
+      expect(amountStatus()).toBe('Paid in full');
+    });
+
+    it('focuses the amount on open so typing replaces the prefill', () => {
+      renderDrawer();
+
+      expect(amountInput()).toHaveFocus();
+      expect(amountInput().selectionStart).toBe(0);
+      expect(amountInput().selectionEnd).toBe(3);
     });
   });
 
-  it('lets the user overwrite the prefill with a smaller amount', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('one primary action', () => {
+    it('offers exactly Cancel and Record Payment', () => {
+      const { container } = renderDrawer();
 
-    await user.clear(amountInput());
-    await user.type(amountInput(), '100');
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+      const footer = container.querySelector('.drawer-footer') as HTMLElement;
+      const names = within(footer).getAllByRole('button').map((button) => button.textContent);
+      expect(names).toEqual(['Cancel', 'Record Payment']);
+      expect(screen.queryByRole('button', { name: 'Mark Fully Paid' })).not.toBeInTheDocument();
+    });
 
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ amountMinor: 10000 })
-      );
+    it('has no quick-amount chips, no summary box and no empty history', () => {
+      renderDrawer();
+
+      expect(screen.queryByText(/25%|50%|100%/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Received so far')).not.toBeInTheDocument();
+      expect(screen.queryByText('Remaining')).not.toBeInTheDocument();
+      expect(screen.queryByText('Payment History')).not.toBeInTheDocument();
+      expect(screen.queryByText('No payments recorded yet')).not.toBeInTheDocument();
     });
   });
 
-  it('stores the backdated date the user chose, not today', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('two taps', () => {
+    it('records the full remaining amount for today and closes', async () => {
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer();
 
-    const dateField = screen.getByLabelText('Payment date') as HTMLInputElement;
-    expect(dateField.value).toBe(todayISO());
+      await user.click(recordButton());
 
-    await user.clear(dateField);
-    await user.type(dateField, '2026-01-15');
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
-
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ paidAt: '2026-01-15' })
-      );
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      expect(mockCreate).toHaveBeenCalledWith({
+        transactionId: 'tx-1',
+        amountMinor: 75000,
+        paidAt: todayISO(),
+        notes: undefined,
+      });
     });
   });
 
-  /**
-   * MUT-18: "Mark fully paid" used to call a separate mutation that always
-   * stamped "now", bypassing the date field sitting right next to it. It must
-   * now record through the same date-aware path as "Record Payment".
-   */
-  it('records "Mark fully paid" under today by default', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('the live line', () => {
+    it('updates on every keystroke', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
 
-    await user.click(screen.getByRole('button', { name: 'Mark Fully Paid' }));
+      await user.clear(amountInput());
+      expect(amountStatus()).toBe('');
 
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ transactionId: 'tx-1', amountMinor: 75000, paidAt: todayISO() })
-      );
+      await user.type(amountInput(), '1');
+      expect(amountStatus()).toBe('$749 still owed');
+      await user.type(amountInput(), '0');
+      expect(amountStatus()).toBe('$740 still owed');
+      await user.type(amountInput(), '0');
+      expect(amountStatus()).toBe('$650 still owed');
+    });
+
+    it('reads Arabic-Indic digits', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), '١٠٠');
+
+      expect(amountStatus()).toBe('$650 still owed');
+    });
+
+    it('stays quiet while a grouped amount is half typed', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), '1,2');
+
+      expect(amountStatus()).toBe('');
+    });
+
+    it('warns about an overpayment as it is typed', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), '800');
+
+      expect(amountStatus()).toBe('Payment amount exceeds the remaining balance of $750');
     });
   });
 
-  it('records "Mark fully paid" under the backdated date the user chose', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('a partial payment', () => {
+    it('records the smaller amount and closes', async () => {
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer();
 
-    const dateField = screen.getByLabelText('Payment date') as HTMLInputElement;
-    await user.clear(dateField);
-    await user.type(dateField, '2026-01-15');
-    await user.click(screen.getByRole('button', { name: 'Mark Fully Paid' }));
+      await user.clear(amountInput());
+      await user.type(amountInput(), '100');
+      await user.click(recordButton());
 
-    await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ amountMinor: 75000, paidAt: '2026-01-15' })
-      );
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 10000, paidAt: todayISO() }));
     });
   });
 
-  it('rejects a future-dated payment inline without calling the mutation', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('notes', () => {
+    it('sit behind "+ Add note", which opens a focused field in its place', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
 
-    const dateField = screen.getByLabelText('Payment date') as HTMLInputElement;
-    await user.clear(dateField);
-    await user.type(dateField, '2099-01-01');
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+      expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Add note' }));
 
-    expect(await screen.findByText('Payment date cannot be in the future')).toBeInTheDocument();
-    expect(mockCreate).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Notes')).toHaveFocus();
+      expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument();
+    });
+
+    it('are kept when the full amount is recorded', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(screen.getByRole('button', { name: 'Add note' }));
+      await user.type(screen.getByLabelText('Notes'), 'Bank transfer');
+      await user.click(recordButton());
+
+      await waitFor(() => {
+        expect(mockCreate).toHaveBeenCalledWith({
+          transactionId: 'tx-1',
+          amountMinor: 75000,
+          paidAt: todayISO(),
+          notes: 'Bank transfer',
+        });
+      });
+    });
   });
 
-  it('rejects an overpayment inline without calling the mutation', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('refused inline, without calling the mutation', () => {
+    it('an overpayment, shown once, with the drawer left open', async () => {
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer();
 
-    await user.clear(amountInput());
-    await user.type(amountInput(), '800'); // $800 > $750 remaining
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+      await user.clear(amountInput());
+      await user.type(amountInput(), '800'); // $800 > $750 remaining
+      await user.click(recordButton());
 
-    expect(await screen.findByText(/exceeds the remaining balance/i)).toBeInTheDocument();
-    expect(mockCreate).not.toHaveBeenCalled();
+      expect(screen.getAllByText(/exceeds the remaining balance/i)).toHaveLength(1);
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['1,2', 'Enter an amount like 1200 or 1,200.50'],
+      ['0', 'Payment amount must be greater than 0'],
+      ['€100', 'The amount is in EUR, but this entry is in USD'],
+    ])('"%s"', async (typed, message) => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), typed);
+      await user.click(recordButton());
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('clears an amount error once the amount changes', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), '0');
+      await user.click(recordButton());
+      expect(await screen.findByText('Payment amount must be greater than 0')).toBeInTheDocument();
+
+      await user.type(amountInput(), '5');
+      expect(screen.queryByText('Payment amount must be greater than 0')).not.toBeInTheDocument();
+      expect(amountStatus()).toBe('$745 still owed');
+    });
   });
 
-  it('rejects a zero amount with a translated message', async () => {
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+  describe('the date', () => {
+    it('reads "Today" and opens into a focused date field holding today', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
 
-    await user.clear(amountInput());
-    await user.type(amountInput(), '0');
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+      const row = screen.getByRole('button', { name: /Payment date/ });
+      expect(within(row).getByText('Today')).toBeInTheDocument();
 
-    expect(await screen.findByText('Payment amount must be greater than 0')).toBeInTheDocument();
-    expect(mockCreate).not.toHaveBeenCalled();
-  });
+      const dateField = await openDateField(user);
+      expect(dateField).toHaveFocus();
+      expect(dateField.value).toBe(todayISO());
+    });
 
-  it('surfaces a repository rejection inline', async () => {
-    mockCreate.mockRejectedValueOnce(
-      new Error('Payment amount exceeds the remaining balance of 750 USD')
-    );
-    const user = userEvent.setup();
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+    it('stores the backdated date the user chose, not today', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
 
-    await user.click(screen.getByRole('button', { name: 'Record Payment' }));
+      const dateField = await openDateField(user);
+      await user.clear(dateField);
+      await user.type(dateField, '2026-01-15');
+      await user.click(recordButton());
 
-    expect(
-      await screen.findByText('Payment amount exceeds the remaining balance of 750 USD')
-    ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 75000, paidAt: '2026-01-15' }));
+      });
+    });
+
+    it('refuses a future date (ADR-038)', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      const dateField = await openDateField(user);
+      await user.clear(dateField);
+      await user.type(dateField, '2099-01-01');
+      await user.click(recordButton());
+
+      expect(await screen.findByText('Payment date cannot be in the future')).toBeInTheDocument();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses an emptied date', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      const dateField = await openDateField(user);
+      await user.clear(dateField);
+      await user.click(recordButton());
+
+      expect(await screen.findByText('Date is required')).toBeInTheDocument();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
   });
 
   /**
@@ -254,42 +428,154 @@ describe('PartialPaymentDrawer', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date(instant));
 
-      render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+      renderDrawer();
+      fireEvent.click(screen.getByRole('button', { name: /Payment date/ }));
 
       expect((screen.getByLabelText('Payment date') as HTMLInputElement).value).toBe(todayISO());
     });
   });
 
-  it('leaves the amount empty when there is nothing left to pay', () => {
-    mockTransaction = {
-      ...mockTransaction,
-      status: 'paid',
-      receivedAmountMinor: 100000,
-      paymentStatus: 'paid',
-      remainingAmountMinor: 0,
-    } as TransactionDisplay;
+  describe('edit mode', () => {
+    beforeEach(() => {
+      mockEditingPaymentRecordId = 'pr-1';
+      mockPaymentRecords = [
+        {
+          id: 'pr-1',
+          transactionId: 'tx-1',
+          amountMinor: 25000,
+          paidAt: '2026-02-10',
+          notes: 'Wire',
+          createdAt: '2026-02-10T00:00:00Z',
+          updatedAt: '2026-02-10T00:00:00Z',
+        },
+      ];
+    });
 
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+    it('prefills the record, not the remaining balance', () => {
+      renderDrawer();
 
-    expect(amountInput().value).toBe('');
+      expect(title()).toBe('Edit Payment');
+      expect(amountInput().value).toBe('250');
+      expect(within(screen.getByRole('button', { name: /Payment date/ })).getByText('Feb 10, 2026')).toBeInTheDocument();
+      expect((screen.getByLabelText('Notes') as HTMLInputElement).value).toBe('Wire');
+    });
+
+    it("counts the record's own amount as payable", async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      expect(amountStatus()).toBe('$750 still owed');
+      await user.clear(amountInput());
+      await user.type(amountInput(), '1000');
+      expect(amountStatus()).toBe('Paid in full');
+    });
+
+    it('updates the record and returns to the entry', async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), '300');
+      await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+      await waitFor(() => {
+        expect(mockUpdate).toHaveBeenCalledWith({
+          id: 'pr-1',
+          transactionId: 'tx-1',
+          data: { amountMinor: 30000, paidAt: '2026-02-10', notes: 'Wire' },
+        });
+      });
+      expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-1' });
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('waits for the records instead of falling back to a new payment', () => {
+      mockRecordsLoading = true;
+      renderDrawer();
+
+      expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Update Payment' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
+    });
   });
 
-  it('prefills the edited record amount, not the remaining balance, in edit mode', () => {
-    mockEditingPaymentRecordId = 'pr-1';
-    mockPaymentRecords = [
-      {
-        id: 'pr-1',
-        transactionId: 'tx-1',
-        amountMinor: 25000,
-        paidAt: '2026-02-10',
-        createdAt: '2026-02-10T00:00:00Z',
-        updatedAt: '2026-02-10T00:00:00Z',
-      },
-    ];
+  describe('history', () => {
+    beforeEach(() => {
+      mockPaymentRecords = [
+        {
+          id: 'pr-1',
+          transactionId: 'tx-1',
+          amountMinor: 25000,
+          paidAt: '2026-02-10',
+          createdAt: '2026-02-10T00:00:00Z',
+          updatedAt: '2026-02-10T00:00:00Z',
+        },
+      ];
+    });
 
-    render(<PartialPaymentDrawer transactionId="tx-1" onClose={vi.fn()} />);
+    it('lists the recorded payments below the form', () => {
+      renderDrawer();
 
-    expect(amountInput().value).toBe('250');
-    expect((screen.getByLabelText('Payment date') as HTMLInputElement).value).toBe('2026-02-10');
+      const heading = screen.getByText('Payment History');
+      expect(amountInput().compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByText('$250')).toBeInTheDocument();
+    });
+
+    it("opens a payment's edit from its row", async () => {
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.click(screen.getByTitle('Edit Payment'));
+
+      expect(mockEditPaymentRecord).toHaveBeenCalledWith({ transactionId: 'tx-1', paymentRecordId: 'pr-1' });
+    });
+  });
+
+  describe('a settled entry', () => {
+    beforeEach(() => {
+      mockTransaction = {
+        ...mockTransaction,
+        status: 'paid',
+        receivedAmountMinor: 100000,
+        paymentStatus: 'paid',
+        remainingAmountMinor: 0,
+      } as TransactionDisplay;
+      mockPaymentRecords = [
+        {
+          id: 'pr-1',
+          transactionId: 'tx-1',
+          amountMinor: 100000,
+          paidAt: '2026-02-10',
+          createdAt: '2026-02-10T00:00:00Z',
+          updatedAt: '2026-02-10T00:00:00Z',
+        },
+      ];
+    });
+
+    it('offers nothing to record, says it is paid in full and lists the history', async () => {
+      const user = userEvent.setup();
+      const { onClose, container } = renderDrawer();
+
+      expect(title()).toBe('Record Payment');
+      expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
+      expect(screen.getByText('Paid in full')).toBeInTheDocument();
+      expect(screen.getByText('Payment History')).toBeInTheDocument();
+
+      const footer = container.querySelector('.drawer-footer') as HTMLElement;
+      await user.click(within(footer).getByRole('button', { name: 'Close' }));
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  it('surfaces a repository rejection inline and stays open', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('Payment amount exceeds the remaining balance of 750 USD'));
+    const user = userEvent.setup();
+    const { onClose } = renderDrawer();
+
+    await user.click(recordButton());
+
+    expect(await screen.findByText('Payment amount exceeds the remaining balance of 750 USD')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

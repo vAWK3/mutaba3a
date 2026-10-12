@@ -118,3 +118,19 @@ export function isDueSoon(tx: ReceivableLike, today: string, windowDays = 7): bo
   const days = daysUntilDue(tx.dueDate, today);
   return days >= 0 && days <= windowDays;
 }
+
+/**
+ * A payment dated after today (ADR-038, as amended by MUT-5). Only the calendar
+ * day matters. A date-only value is compared as is. A full timestamp is future
+ * only when both its UTC date and its local date are, so nowISO() is today in
+ * every timezone: in the evening west of UTC its UTC date is already tomorrow.
+ *
+ * The repository refuses such a payment and the payment drawer checks the same
+ * rule first, to say so in the user's language (MUT-86).
+ */
+export function isFuturePaymentDate(paidAt: string, today: string = todayLocalISO()): boolean {
+  if (paidAt.split('T')[0] <= today) return false;
+  if (!paidAt.includes('T')) return true;
+  const instant = new Date(paidAt);
+  return Number.isNaN(instant.getTime()) || formatLocalDate(instant) > today;
+}
