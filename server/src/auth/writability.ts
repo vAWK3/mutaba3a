@@ -13,7 +13,7 @@ import { isScope, type Scope } from './scopes.js';
  * authenticate() and requireScope(), and drives the store guard
  * (store-guard.ts) from the same rows.
  */
-export type Domain = 'integration' | 'customers' | 'projects' | 'agreements' | 'payments' | 'attachments' | 'summaries' | 'audit' | 'expenses' | 'identity';
+export type Domain = 'integration' | 'customers' | 'projects' | 'agreements' | 'payments' | 'attachments' | 'summaries' | 'audit' | 'expenses' | 'capture' | 'identity';
 export type Access = 'read-write' | 'read' | 'none';
 export type WriterOfRecord = 'MALAFAT' | 'USER' | null;
 /** The two columns of the matrix that are enforced on the server. */
@@ -42,6 +42,9 @@ export const WRITABILITY_MATRIX: readonly MatrixRow[] = [
   { domain: 'summaries', scopes: ['summaries:read'], routes: '/v1/summaries/* (except expenses)', apiKey: 'read', session: 'read', writerOfRecord: null },
   { domain: 'audit', scopes: ['audit:read'], routes: '/v1/audit', apiKey: 'read', session: 'none', writerOfRecord: null },
   { domain: 'expenses', scopes: ['expenses:read', 'expenses:write'], routes: '/v1/expenses*, /v1/expense-categories*, /v1/summaries/expenses', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
+  // MUT-61: a person recording money they were handed, on any hosted profile — a Malafat-fed one included. Its own
+  // row so it never widens `payments`: Owed, settle, credits and allocations stay the payments row's business.
+  { domain: 'capture', scopes: ['capture:write'], routes: '/v1/income*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
   { domain: 'identity', scopes: [], routes: '/v1/me, /v1/sessions/current', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
 ];
 

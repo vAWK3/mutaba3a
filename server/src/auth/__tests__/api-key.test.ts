@@ -87,7 +87,12 @@ describe('session-only scopes (MUT-42 D4)', () => {
   });
 
   it('grants both expense scopes to a session, from the matrix', () => {
-    expect(SESSION_ONLY_SCOPES).toEqual(['expenses:read', 'expenses:write']);
+    expect(SESSION_ONLY_SCOPES).toEqual(['expenses:read', 'expenses:write', 'capture:write']);
     expect(sessionScopes()).toEqual(expect.arrayContaining(['expenses:read', 'expenses:write']));
+  });
+
+  it('never issues capture:write to a key (MUT-61: capturing is a person’s act)', () => {
+    expect(parseScopes(['capture:write'])).toEqual({ ok: false, invalid: ['capture:write'] });
+    expect(sessionScopes()).toContain('capture:write');
   });
 });

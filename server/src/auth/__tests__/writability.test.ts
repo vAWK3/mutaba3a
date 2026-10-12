@@ -72,3 +72,29 @@ describe('mayWriteFor', () => {
     expect(mayWriteFor('session', 'agreements', 'MALAFAT')).toBe(false);
   });
 });
+
+/**
+ * MUT-61: the `capture` row — a person recording money they were handed, on
+ * any hosted profile including a Malafat-fed one. Its own row, so widening it
+ * never widens `payments` (Owed, settle, credits, allocations stay Malafat's).
+ */
+describe('capture row (MUT-61)', () => {
+  it('is session read-write on every profile and invisible to an API key', () => {
+    expect(sessionAccessFor('capture', null)).toBe('read-write');
+    expect(sessionAccessFor('capture', 'MALAFAT')).toBe('read-write');
+    expect(mayWriteFor('session', 'capture', 'MALAFAT')).toBe(true);
+    expect(mayWriteFor('apiKey', 'capture', 'MALAFAT')).toBe(false);
+    expect(mayWriteFor('apiKey', 'capture', null)).toBe(false);
+  });
+
+  it('a Malafat-fed profile’s session holds capture:write but still not payments:write', () => {
+    const scopes = sessionScopesFor('MALAFAT');
+    expect(scopes).toContain('capture:write');
+    expect(scopes).not.toContain('payments:write');
+    expect(sessionScopesFor(null)).toEqual(expect.arrayContaining(['capture:write', 'payments:write']));
+  });
+
+  it('is not profile-dependent — its column is a constant, like expenses', () => {
+    expect(PROFILE_DEPENDENT_DOMAINS.has('capture')).toBe(false);
+  });
+});
