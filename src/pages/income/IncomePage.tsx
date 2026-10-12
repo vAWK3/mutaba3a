@@ -11,12 +11,16 @@
  * Its filters are one model in the URL (MUT-83), so a link can open it
  * filtered: the clients index's "No client" and "Archived clients" rows open
  * the unpaid entries behind their figures.
+ *
+ * Each row shows what was done, the entry's title (MUT-62): the entry is the
+ * work record (MUT-5). Rows are shaped once per result and the columns are one
+ * stable list that drives the header and every row (incomeRows.ts).
  */
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
+import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle } from '../../components/ui';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
@@ -30,9 +34,11 @@ import {
   formatDateCompact,
   formatAmount,
   cn,
+  EMPTY_CELL,
 } from '../../lib/utils';
 import { todayLocalISO, isOverdueReceivable } from '../../lib/dates';
 import { resolveIncomeFilters, type IncomeStatusFilter } from '../../lib/incomeSearch';
+import { toIncomeRow, incomeColumns, type IncomeColumnKey, type IncomeRow } from './incomeRows';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 
@@ -80,6 +86,11 @@ export function IncomePage() {
 
   const { data: transactions = [], isLoading } = useIncome(queryFilters);
 
+  // Shaped once per result, so a render that isn't a new result reshapes nothing
+  const rows = useMemo(() => transactions.map((tx) => toIncomeRow(tx)), [transactions]);
+  // One of two module-level lists: the same objects on every render
+  const columns = incomeColumns(isCompact);
+
   const handleRowClick = (id: string) => {
     openTransactionDrawer({ mode: 'edit', transactionId: id });
   };
@@ -106,6 +117,85 @@ export function IncomePage() {
     const overdue = transactions.filter((tx) => isOverdueReceivable(tx, today)).length;
     return { all, unpaid, received, overdue };
   }, [transactions]);
+
+  const rowActions = (row: IncomeRow) => [
+    ...(row.canMarkPaid
+      ? [
+          {
+            label: t('common.markPaid'),
+            icon: <CheckIcon size={16} />,
+            // Opens the date-aware payment drawer (MUT-18)
+            // instead of stamping today silently.
+            onClick: () => openPartialPaymentDrawer({ transactionId: row.id }),
+          },
+        ]
+      : []),
+    {
+      label: t('common.duplicate'),
+      icon: <CopyIcon size={16} />,
+      onClick: () => handleDuplicate(row.id),
+    },
+  ];
+
+  // What each column's cell shows for a row; the header comes from the same list
+  const renderCell = (key: IncomeColumnKey, row: IncomeRow): ReactNode => {
+    switch (key) {
+      case 'date':
+        return isCompact ? formatDateCompact(row.date) : formatDate(row.date, locale);
+      case 'work':
+        return row.title ? (
+          <TruncatedTitle title={row.title} onOpen={() => handleRowClick(row.id)} />
+        ) : (
+          <span className="text-muted">{EMPTY_CELL}</span>
+        );
+      case 'client':
+        return row.clientName || t('common.noClient');
+      case 'project':
+        return row.projectName || EMPTY_CELL;
+      case 'status':
+        return (
+          <>
+            {row.paymentStatus ? (
+              <PaymentStatusBadge
+                paymentStatus={row.paymentStatus}
+                amountMinor={row.amountMinor}
+                receivedAmountMinor={row.tx.receivedAmountMinor}
+              />
+            ) : (
+              <span className={cn('status-badge', row.status === 'paid' ? 'paid' : 'unpaid')}>
+                {row.status === 'paid' ? t('transactions.status.paid') : t('transactions.status.unpaid')}
+              </span>
+            )}
+            {row.overdueDays !== undefined && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '2px' }}>
+                {t('transactions.status.overdue', { days: row.overdueDays })}
+              </div>
+            )}
+          </>
+        );
+      case 'amount':
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+            <AmountWithConversion amountMinor={row.amountMinor} currency={row.currency} type="income" />
+            {row.partialReceivedMinor !== undefined && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                {t('transactions.partialPayment.received')}: {formatAmount(row.partialReceivedMinor, row.currency, locale)}
+              </div>
+            )}
+          </div>
+        );
+      case 'actions':
+        return (
+          <div className="row-actions-cell">
+            <RecordPaymentButton
+              transaction={row.tx}
+              onRecordPayment={() => openPartialPaymentDrawer({ transactionId: row.id })}
+            />
+            <RowActionsMenu actions={rowActions(row)} />
+          </div>
+        );
+    }
+  };
 
   return (
     <>
@@ -199,88 +289,33 @@ export function IncomePage() {
             <table>
               <thead>
                 <tr>
-                  <th>{t('transactions.columns.date')}</th>
-                  <th>{t('transactions.columns.client')}</th>
-                  {!isCompact && <th>{t('transactions.columns.project')}</th>}
-                  <th>{t('transactions.columns.status')}</th>
-                  <th className="text-end">{t('transactions.columns.amount')}</th>
-                  <RowActionsHeader />
+                  {columns.map((column) =>
+                    column.headerKey ? (
+                      <th key={column.key} className={column.headerClassName}>
+                        {t(column.headerKey)}
+                      </th>
+                    ) : (
+                      <RowActionsHeader key={column.key} />
+                    )
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => (
+                {rows.map((row) => (
                   <tr
-                    key={tx.id}
+                    key={row.id}
                     className="clickable"
-                    onClick={() => handleRowClick(tx.id)}
+                    onClick={() => handleRowClick(row.id)}
                   >
-                    <td>
-                      {isCompact
-                        ? formatDateCompact(tx.occurredAt)
-                        : formatDate(tx.occurredAt, locale)}
-                    </td>
-                    <td>{tx.clientName || t('common.noClient')}</td>
-                    {!isCompact && <td className="text-secondary">{tx.projectName || '-'}</td>}
-                    <td>
-                      {tx.paymentStatus ? (
-                        <PaymentStatusBadge
-                          paymentStatus={tx.paymentStatus}
-                          amountMinor={tx.amountMinor}
-                          receivedAmountMinor={tx.receivedAmountMinor}
-                        />
-                      ) : (
-                        <span className={cn('status-badge', tx.status === 'paid' ? 'paid' : 'unpaid')}>
-                          {tx.status === 'paid' ? t('transactions.status.paid') : t('transactions.status.unpaid')}
-                        </span>
-                      )}
-                      {tx.daysOverdue !== undefined && tx.daysOverdue > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '2px' }}>
-                          {t('transactions.status.overdue', { days: tx.daysOverdue })}
-                        </div>
-                      )}
-                    </td>
-                    <td className="amount-cell">
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                        <AmountWithConversion
-                          amountMinor={tx.amountMinor}
-                          currency={tx.currency}
-                          type="income"
-                        />
-                        {tx.receivedAmountMinor && tx.receivedAmountMinor > 0 && tx.paymentStatus === 'partial' && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                            {t('transactions.partialPayment.received')}: {formatAmount(tx.receivedAmountMinor, tx.currency, locale)}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="row-actions-cell">
-                        <RecordPaymentButton
-                          transaction={tx}
-                          onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })}
-                        />
-                        <RowActionsMenu
-                          actions={[
-                            ...(tx.status === 'unpaid' && tx.paymentStatus !== 'paid'
-                              ? [
-                                  {
-                                    label: t('common.markPaid'),
-                                    icon: <CheckIcon size={16} />,
-                                    // Opens the date-aware payment drawer (MUT-18)
-                                    // instead of stamping today silently.
-                                    onClick: () => openPartialPaymentDrawer({ transactionId: tx.id }),
-                                  },
-                                ]
-                              : []),
-                            {
-                              label: t('common.duplicate'),
-                              icon: <CopyIcon size={16} />,
-                              onClick: () => handleDuplicate(tx.id),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </td>
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={column.cellClassName}
+                        onClick={column.key === 'actions' ? (e) => e.stopPropagation() : undefined}
+                      >
+                        {renderCell(column.key, row)}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

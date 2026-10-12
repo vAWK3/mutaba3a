@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IncomePage } from '../IncomePage';
@@ -53,6 +53,7 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.columns.project': 'Project',
       'transactions.columns.status': 'Status',
       'transactions.columns.amount': 'Amount',
+      'clients.profile.work.what': 'What',
       'common.loading': 'Loading...',
       'common.actions': 'Actions',
       'filters.period': 'Period',
@@ -92,10 +93,24 @@ vi.mock('../../../lib/stores', () => ({
   }),
 }));
 
-// Mock media query
+// Mock media query: a wide table unless a test asks for the compact one
+const media = vi.hoisted(() => ({ compact: false }));
 vi.mock('../../../hooks/useMediaQuery', () => ({
-  useIsCompactTable: () => false,
+  useIsCompactTable: () => media.compact,
 }));
+
+// Count row shaping, to prove the rows are memoized (MUT-62)
+const rowShaping = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../incomeRows', async () => {
+  const actual = await vi.importActual<typeof import('../incomeRows')>('../incomeRows');
+  return {
+    ...actual,
+    toIncomeRow: (...args: Parameters<typeof actual.toIncomeRow>) => {
+      rowShaping.calls += 1;
+      return actual.toIncomeRow(...args);
+    },
+  };
+});
 
 // Mock profile aware hooks
 vi.mock('../../../hooks/useActiveProfile', () => ({
@@ -265,6 +280,8 @@ describe('IncomePage', () => {
     vi.clearAllMocks();
     urlFilters.initial = {};
     urlFilters.writes = [];
+    media.compact = false;
+    rowShaping.calls = 0;
     // shouldAdvanceTime keeps Testing Library's waitFor from deadlocking.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(FIXED_NOW);
@@ -1091,6 +1108,102 @@ describe('IncomePage', () => {
         const lastCall = calls[calls.length - 1];
         expect(lastCall[0].search).toBeUndefined();
       });
+    });
+  });
+
+  // MUT-62: the entry is the work record (MUT-5), so the ledger shows what was done
+  describe('What column (MUT-62)', () => {
+    const titled: TransactionDisplay[] = [
+      { ...mockIncomeTransactions[0], title: 'Homepage copy and pricing table' },
+      { ...mockIncomeTransactions[1], title: undefined }, // a legacy entry saved without a title
+      { ...mockIncomeTransactions[2], title: '   ' }, // no project either
+      { ...mockIncomeTransactions[3], title: 'هوية بصرية لمقهى' },
+    ];
+
+    async function renderEntries(data: TransactionDisplay[] = titled) {
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      const mockUseIncome = vi.fn().mockReturnValue({ data, isLoading: false });
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockUseIncome);
+      renderWithProviders(<IncomePage />);
+      await screen.findByText('Beta Inc');
+      return mockUseIncome;
+    }
+
+    const rowOf = (text: string) => screen.getByText(text).closest('tr')!;
+    const headers = () => screen.getAllByRole('columnheader').map((th) => th.textContent);
+
+    it('heads the column "What", right after the date', async () => {
+      await renderEntries();
+
+      expect(headers()).toEqual(['Date', 'What', 'Client', 'Project', 'Status', 'Amount', 'Actions']);
+    });
+
+    it("shows each entry's title, an Arabic one included", async () => {
+      await renderEntries();
+
+      expect(within(rowOf('Website Redesign')).getAllByRole('cell')[1]).toHaveTextContent('Homepage copy and pricing table');
+      expect(within(rowOf('Gamma LLC')).getAllByRole('cell')[1]).toHaveTextContent('هوية بصرية لمقهى');
+    });
+
+    it('shows a dash for an untitled entry and for a blank title', async () => {
+      await renderEntries();
+
+      expect(within(rowOf('Beta Inc')).getAllByRole('cell')[1]).toHaveTextContent(/^—$/);
+      const blank = screen.getAllByText('Acme Corp')[1].closest('tr')!;
+      expect(within(blank).getAllByRole('cell')[1]).toHaveTextContent(/^—$/);
+      // Nothing to open from: the dash is plain text, not a button
+      expect(within(within(blank).getAllByRole('cell')[1]).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('shows the same dash for a missing project', async () => {
+      await renderEntries();
+
+      const noProject = screen.getAllByText('Acme Corp')[1].closest('tr')!;
+      expect(within(noProject).getAllByRole('cell')[3]).toHaveTextContent(/^—$/);
+    });
+
+    it('makes the title a button that opens the entry once, by click or keyboard', async () => {
+      const user = userEvent.setup();
+      await renderEntries();
+
+      await user.click(screen.getByRole('button', { name: 'Homepage copy and pricing table' }));
+      expect(mockOpenTransactionDrawer).toHaveBeenCalledTimes(1);
+      expect(mockOpenTransactionDrawer).toHaveBeenCalledWith({ mode: 'edit', transactionId: 'tx-1' });
+
+      screen.getByRole('button', { name: 'هوية بصرية لمقهى' }).focus();
+      await user.keyboard('{Enter}');
+      expect(mockOpenTransactionDrawer).toHaveBeenLastCalledWith({ mode: 'edit', transactionId: 'tx-4' });
+      expect(mockOpenTransactionDrawer).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps What and drops Project on a compact table, with headers and cells lined up', async () => {
+      media.compact = true;
+      await renderEntries();
+
+      expect(headers()).toEqual(['Date', 'What', 'Client', 'Status', 'Amount', 'Actions']);
+      for (const row of screen.getAllByRole('row').slice(1)) {
+        expect(within(row).getAllByRole('cell')).toHaveLength(6);
+      }
+    });
+
+    it('renders every row from the same column list as the header', async () => {
+      await renderEntries();
+
+      for (const row of screen.getAllByRole('row').slice(1)) {
+        expect(within(row).getAllByRole('cell')).toHaveLength(headers().length);
+      }
+    });
+
+    it('shapes the rows once per result, not on every render', async () => {
+      const user = userEvent.setup();
+      await renderEntries();
+      expect(rowShaping.calls).toBe(titled.length);
+
+      // A filter change re-renders the page; the (mocked) result is the same array
+      await user.click(screen.getByRole('tab', { name: /Unpaid/ }));
+      await waitFor(() => expect(urlFilters.writes).toContainEqual({ status: 'unpaid' }));
+
+      expect(rowShaping.calls).toBe(titled.length);
     });
   });
 });
