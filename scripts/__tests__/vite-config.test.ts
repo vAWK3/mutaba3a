@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
-import configFn from '../../vite.config';
+import configFn, { PWA_WORKBOX } from '../../vite.config';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
  * `desktop` configs were snapshotted before the `hosted` branch existed, so any
- * change to them fails here first.
+ * change to them fails here first. MUT-102 masks the release version so a
+ * release bump doesn't break it.
  */
 
 type ConfigFactory = (env: ConfigEnv) => UserConfig;
@@ -27,12 +28,29 @@ function pluginNames(plugins: PluginOption[] | undefined): string[] {
 }
 
 function comparable(config: UserConfig) {
-  return { ...config, plugins: pluginNames(config.plugins) };
+  return { ...config, define: { ...config.define, __APP_VERSION__: '<package.json version>' }, plugins: pluginNames(config.plugins) };
 }
+
 
 describe('vite.config', () => {
   it.each(['web', 'desktop'])('leaves the %s build exactly as it was', (mode) => {
     expect(comparable(resolve(mode))).toMatchSnapshot();
+  });
+
+  describe('brand fonts (MUT-102)', () => {
+    it.each(['web', 'desktop', 'hosted'])('the %s build preloads no font: swap paints text first (ADR-058)', (mode) => {
+      expect(pluginNames(resolve(mode).plugins).filter((name) => /preload/.test(name))).toEqual([]);
+    });
+
+    it('caches fonts on first use instead of precaching ~1.2 MB of .otf on every install (PD10)', () => {
+      const { globPatterns, runtimeCaching } = PWA_WORKBOX;
+      expect(globPatterns?.join()).not.toMatch(/otf/);
+      const isFont = (rule: (typeof runtimeCaching & object)[number], destination: string) =>
+        typeof rule.urlPattern === 'function' && rule.urlPattern({ request: { destination } } as never) === true;
+      const fontRule = runtimeCaching?.find((rule) => isFont(rule, 'font'));
+      expect(fontRule).toMatchObject({ handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 12 } } });
+      expect(isFont(fontRule!, 'script')).toBe(false);
+    });
   });
 
   describe('hosted', () => {

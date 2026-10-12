@@ -31,11 +31,16 @@ password prints once, on its own line:
 ```bash
 export MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2)
 npm run provision:user -- --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> --locale ar
+npm run provision:user -- --email solo@me.ps --name "Solo" --currency ILS --timezone Asia/Jerusalem   # no firm (MUT-120)
 npm run grant:user -- --email nour@firm.ps --organization-id <another uuid>   # a second firm
 npm run revoke:user -- --email nour@firm.ps --organization-id <uuid>
 npm run rotate:password -- --email nour@firm.ps                               # operator reset
 npm run disable:user -- --email nour@firm.ps                                  # enable:user undoes it
 ```
+
+Every user is created with exactly one personal profile (`Personal` / `شخصي`, MUT-120); with no
+`--organization-id`, `--currency` and `--timezone` set it. A personal profile is never shared,
+issued an API key or bound to Malafat.
 
 Sign a person out everywhere: `npm run revoke:sessions -- --email nour@firm.ps`
 (an operator reset or a disable does this too).

@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
  * create a user, grant access or reset a password — by design.
  *
  *   npm run provision:user  -- --url https://api.mutaba3a.app --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> [--locale ar]
+ *   npm run provision:user  -- --email solo@me.ps --name "Solo" --currency ILS --timezone Asia/Jerusalem   (no firm; MUT-120)
  *   npm run grant:user      -- --email nour@firm.ps --organization-id <uuid>
  *   npm run revoke:user     -- --email nour@firm.ps --organization-id <uuid>
  *   npm run rotate:password -- --email nour@firm.ps
@@ -33,7 +34,8 @@ type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
   'usage: tsx src/scripts/users.ts <command> [--url <base url>] <options>',
-  '  create  --email <email> --name <display name> --organization-id <uuid> [--locale en|ar]',
+  '  create  --email <email> --name <display name> [--organization-id <uuid>] [--currency ILS|USD|EUR] [--timezone <IANA>] [--locale en|ar]',
+  '          (every user gets a personal profile; with no --organization-id, --currency and --timezone are required)',
   '  grant   --email <email> --organization-id <uuid>',
   '  revoke  --email <email> --organization-id <uuid>',
   '  rotate  --email <email>',
@@ -70,6 +72,8 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         name: { type: 'string' },
         'organization-id': { type: 'string' },
         locale: { type: 'string' },
+        currency: { type: 'string' },
+        timezone: { type: 'string' },
       },
     }).values;
   } catch (e) {
@@ -131,13 +135,24 @@ interface HandlerContext {
 const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> = {
   create: async ({ client, need, optional, out }) => {
     const locale = optional('locale');
-    const created = await client.call<{ user: UserSummary; memberships: { organizationId: string }[]; initialPassword: string }>('POST', '/admin/v1/users', {
+    const organizationId = optional('organization-id');
+    const defaultCurrency = optional('currency');
+    const timezone = optional('timezone');
+    const created = await client.call<{
+      user: UserSummary;
+      memberships: { organizationId: string }[];
+      personalProfile: { id: string; name: string };
+      initialPassword: string;
+    }>('POST', '/admin/v1/users', {
       email: need('email'),
       displayName: need('name'),
-      organizationId: need('organization-id'),
+      ...(organizationId ? { organizationId } : {}),
+      ...(defaultCurrency ? { defaultCurrency } : {}),
+      ...(timezone ? { timezone } : {}),
       ...(locale ? { locale } : {}),
     });
     out(`user ${created.user.id} ${created.user.email} (${created.user.locale})`);
+    out(`personal ${created.personalProfile.id} ${created.personalProfile.name}`);
     for (const m of created.memberships) out(`membership ${m.organizationId}`);
     out('');
     out(SHOWN_ONCE);

@@ -283,11 +283,17 @@ npm run provision:user -- --url "$URL" --email nour@firm.ps --name "Nour Haddad"
   --organization-id <uuid> --locale ar
 ```
 
+Every user is also created with exactly one personal profile (MUT-120). With no
+firm, pass `--currency` and `--timezone` instead of `--organization-id`; with a
+firm they default to the firm's. A personal profile is never shared, issued an
+API key or bound to Malafat (409 `CONFLICT`, `reason: PERSONAL_PROFILE`).
+
 A person in two firms gets a second membership:
 `npm run grant:user -- --url "$URL" --email nour@firm.ps --organization-id <uuid>`.
-Every account change is audited as `ADMIN` on each firm the person belongs to
-(`user.created`, `membership.granted`, `membership.revoked`,
-`user.password_reset`, `user.disabled`, `user.enabled`).
+Every account change is audited as `ADMIN` on each organization the person belongs
+to, their personal profile included (`user.created`, `membership.granted`,
+`membership.revoked`, `user.password_reset`, `user.disabled`, `user.enabled`; the
+personal profile also gets `organization.created`).
 
 As of MUT-45, the portal is live at the service's own URL (`$URL/`) — a
 provisioned person can sign in there directly; `POST /v1/sessions` and

@@ -20,6 +20,8 @@ export interface Organization {
   slug: string;
   defaultCurrency: string;
   timezone: string;
+  /** MUT-120: the owner of a user's one personal organization; null on every firm. */
+  personalOwnerUserId: string | null;
   createdAt: Date;
 }
 
@@ -28,6 +30,8 @@ export interface CreateOrganizationInput {
   slug: string;
   defaultCurrency: string;
   timezone: string;
+  /** MUT-120: UniqueViolation when the user already has a personal organization. */
+  personalOwnerUserId?: string | null;
 }
 
 export interface ApiKeyRecord {
@@ -919,13 +923,19 @@ export interface UserRecord {
   updatedAt: Date;
 }
 
-/** A user is always created with its first membership, in one transaction. */
+/**
+ * A user is always created with their personal organization (MUT-120) and its
+ * membership, plus a firm membership when `organizationId` is given, in one
+ * transaction. The caller names the personal organization; the store marks it.
+ */
 export interface CreateUserInput {
   email: string;
   displayName: string;
   passwordHash: string;
   locale: UserLocale;
-  organizationId: string;
+  /** The firm this user belongs to, if any. */
+  organizationId?: string;
+  personal: { name: string; slug: string; defaultCurrency: string; timezone: string };
   at: Date;
 }
 
@@ -937,8 +947,11 @@ export interface MembershipRecord {
 }
 
 export interface UserRepository {
-  /** UniqueViolation on email; ForeignKeyViolation (and no user) on an unknown organization. */
-  create(input: CreateUserInput): Promise<{ user: UserRecord; membership: MembershipRecord }>;
+  /**
+   * UniqueViolation on email; ForeignKeyViolation on an unknown organization. Either way
+   * nothing is left behind. `memberships` is the personal one first, then the firm's.
+   */
+  create(input: CreateUserInput): Promise<{ user: UserRecord; memberships: MembershipRecord[]; personalOrganization: Organization }>;
   getById(id: string): Promise<UserRecord | null>;
   findByEmail(normalizedEmail: string): Promise<UserRecord | null>;
   /** Replaces the hash, stamps passwordChangedAt and clears failedSignIns / lockedUntil. */

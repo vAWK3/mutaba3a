@@ -1,8 +1,9 @@
 /* Mutaba3a design tokens — Brand v2. Source of truth: ./mutaba3a.tokens.json (see docs/brand/README.md).
+ * Primitives only (--m-*): src/styles/theme.css imports this file and maps every semantic token onto
+ * it (MUT-102, ADR-058). brand.test.ts › drift keeps these values equal to the JSON.
  * Light inks are the AAA-tuned values (>= 7:1), matching the iOS app.
- * Fonts are self-hosted (public/fonts); no CDN @import — the Thmanyah licence forbids third-party
- * redistribution, and scripts/check-bundles.ts + the portal CSP reject new origins.
- * Not imported yet: wiring into src/styles/theme.css is the Brand v2 foundation ticket. */
+ * Fonts are bundled from src/assets/fonts through ./fonts.css; no CDN @import — the Thmanyah licence
+ * forbids third-party redistribution, and scripts/check-bundles.ts + the portal CSP reject new origins. */
 :root {
   --m-canvas: oklch(0.975 0.014 80); /* #FCF6ED */
   --m-surface: oklch(0.993 0.008 80); /* #FFFCF7 */
@@ -30,7 +31,7 @@
 
   --m-font-display: "Thmanyah Serif Display", serif;
   --m-font-body: "Thmanyah Sans", system-ui, sans-serif;
-  --m-font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --m-font-num: "IBM Plex Mono", "Thmanyah Sans", ui-monospace, monospace; /* Thmanyah before the system mono: Arabic inside a figure cell keeps the brand face */
 
   --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px;
   --m-radius-card: 24px; --m-radius-hero: 28px; --m-radius-pill: 999px;
@@ -38,22 +39,14 @@
   --m-ease-spring: cubic-bezier(.32,.72,0,1);
   --m-ease-overshoot: cubic-bezier(.34,1.56,.64,1);
   --m-dur-press: 120ms; --m-dur-toggle: 350ms; --m-dur-nav: 420ms; --m-stagger: 50ms;
+  --m-press-scale: 0.96; --m-stagger-rise: 14px; --m-stagger-blur: 6px;
 
-  --m-shadow-card: 0 1px 2px oklch(0.45 0.08 300 / .06), 0 12px 40px oklch(0.45 0.08 300 / .07);
+  /* The shadow ink, factored out of the delivered card shadow (same values), so theme.css derives
+     its shadows and overlay from one primitive per mode. */
+  --m-shadow-tint: oklch(0.45 0.08 300);
+  --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 6%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 7%, transparent);
   --m-shadow-primary: 0 6px 16px oklch(0.55 0.14 295 / .28);
   --m-focus-ring: inset 0 0 0 2px var(--m-focus), 0 0 0 5px oklch(0.6 0.13 295 / .14);
-
-  /* Map onto existing app tokens (src/styles/theme.css) */
-  --bg: var(--m-canvas); --surface: var(--m-surface); --text: var(--m-ink); --muted: var(--m-ink2);
-  --border: var(--m-line); --accent: var(--m-primary); --accent-hover: var(--m-primary-hover);
-  --accent-solid: var(--m-primary); --on-accent: var(--m-on-primary); --accent-subtle: var(--m-lavender);
-  --success: var(--m-mint-ink); --success-subtle: var(--m-mint);
-  --warning: var(--m-butter-ink); --warning-subtle: var(--m-butter);
-  --error: var(--m-rose-ink); --error-subtle: var(--m-rose);
-  --badge-paid-bg: var(--m-mint); --badge-paid-text: var(--m-mint-ink);
-  --badge-unpaid-bg: var(--m-butter); --badge-unpaid-text: var(--m-butter-ink);
-  --badge-overdue-bg: var(--m-rose); --badge-overdue-text: var(--m-rose-ink);
-  --font-ar: var(--m-font-body); --font-heading-ar: var(--m-font-display); --font-mono: var(--m-font-num);
 }
 
 /* Dark mode — follows OS, or force with <html data-theme="dark"> */
@@ -82,7 +75,8 @@
     --m-peach-strong: oklch(0.78 0.11 55); /* #EEA471 */
     --m-butter: oklch(0.4 0.06 85); /* #57451E */
     --m-butter-ink: oklch(0.9 0.09 95); /* #F0DE99 */
-    --m-shadow-card: 0 1px 2px oklch(0.15 0.03 300 / .4), 0 12px 40px oklch(0.15 0.03 300 / .35);
+    --m-shadow-tint: oklch(0.15 0.03 300);
+    --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 35%, transparent);
     --m-shadow-primary: none;
   }
 }
@@ -110,6 +104,7 @@
   --m-peach-strong: oklch(0.78 0.11 55); /* #EEA471 */
   --m-butter: oklch(0.4 0.06 85); /* #57451E */
   --m-butter-ink: oklch(0.9 0.09 95); /* #F0DE99 */
-  --m-shadow-card: 0 1px 2px oklch(0.15 0.03 300 / .4), 0 12px 40px oklch(0.15 0.03 300 / .35);
+  --m-shadow-tint: oklch(0.15 0.03 300);
+  --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 35%, transparent);
   --m-shadow-primary: none;
 }

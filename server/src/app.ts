@@ -94,7 +94,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.14.0-mut61';
+export const API_VERSION = '1.15.0-mut61';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is

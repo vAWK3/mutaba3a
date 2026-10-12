@@ -143,8 +143,14 @@ export class MemoryLedgerStore implements LedgerStore {
     create: async (input: CreateOrganizationInput) => {
       for (const o of this.orgs.values()) {
         if (o.slug === input.slug) throw new UniqueViolation('organizations.slug');
+        if (input.personalOwnerUserId && o.personalOwnerUserId === input.personalOwnerUserId) {
+          throw new UniqueViolation('organizations.personalOwnerUserId');
+        }
       }
-      const org: Organization = { id: randomUUID(), ...input, createdAt: new Date() };
+      if (input.personalOwnerUserId && !this.people.has(input.personalOwnerUserId)) {
+        throw new ForeignKeyViolation('organizations.personalOwnerUserId');
+      }
+      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, createdAt: new Date() };
       this.orgs.set(org.id, org);
       return { ...org };
     },
@@ -196,7 +202,10 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const u of this.people.values()) {
         if (u.email === input.email) throw new UniqueViolation('users.email');
       }
-      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('memberships.organizationId');
+      if (input.organizationId && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('memberships.organizationId');
+      for (const o of this.orgs.values()) {
+        if (o.slug === input.personal.slug) throw new UniqueViolation('organizations.slug');
+      }
       const user: UserRecord = {
         id: randomUUID(),
         email: input.email,
@@ -211,10 +220,17 @@ export class MemoryLedgerStore implements LedgerStore {
         createdAt: input.at,
         updatedAt: input.at,
       };
-      const membership: MembershipRecord = { userId: user.id, organizationId: input.organizationId, createdAt: input.at };
+      // Every check above runs before the first write, so a refusal leaves nothing behind (the Prisma transaction's guarantee).
+      const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, createdAt: new Date() };
+      const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
+        userId: user.id,
+        organizationId,
+        createdAt: input.at,
+      }));
       this.people.set(user.id, user);
-      this.members.set(membershipKey(user.id, input.organizationId), membership);
-      return { user: { ...user }, membership: { ...membership } };
+      this.orgs.set(personalOrganization.id, personalOrganization);
+      for (const m of memberships) this.members.set(membershipKey(user.id, m.organizationId), m);
+      return { user: { ...user }, memberships: memberships.map((m) => ({ ...m })), personalOrganization: { ...personalOrganization } };
     },
     getById: async (id) => clone(this.people.get(id)),
     findByEmail: async (email) => clone([...this.people.values()].find((u) => u.email === email)),

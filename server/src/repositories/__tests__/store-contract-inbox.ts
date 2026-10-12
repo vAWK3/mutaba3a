@@ -17,7 +17,7 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
 
   async function person(store: LedgerStore, label: string): Promise<{ user: UserRecord; organization: Organization }> {
     const organization = await store.organizations.create({ name: label, slug: `${label.toLowerCase()}-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
-    const { user } = await store.users.create({ email: `${label.toLowerCase()}-${unique()}@firm.ps`, displayName: label, passwordHash: 'x', locale: 'en', organizationId: organization.id, at: at(0) });
+    const { user } = await store.users.create({ email: `${label.toLowerCase()}-${unique()}@firm.ps`, displayName: label, passwordHash: 'x', locale: 'en', organizationId: organization.id, personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: at(0) });
     return { user, organization };
   }
 
@@ -182,7 +182,8 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
       const w = await world(store);
       await store.inboxEntries.create(w.entry(), at(1));
 
-      await store.memberships.revoke(w.owner.user.id, w.owner.organization.id);
+      // MUT-120: the person also holds their personal profile's membership; revoke every one, so none is left.
+      for (const m of await store.memberships.listByUser(w.owner.user.id)) await store.memberships.revoke(w.owner.user.id, m.organizationId);
       expect(await store.memberships.listByUser(w.owner.user.id)).toEqual([]);
       expect(await store.inboxEntries.countByUser(w.owner.user.id)).toBe(1);
       expect((await store.inboxEntries.list(w.owner.user.id, { limit: 10, cursor: null })).items).toHaveLength(1);

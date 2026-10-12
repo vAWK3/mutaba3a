@@ -46,7 +46,7 @@
 
 .migration-step.active {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
   background: var(--accent-subtle);
 }
 

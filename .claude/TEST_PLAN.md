@@ -1567,6 +1567,21 @@ Plan: `.claude/designs/mut-62-income-work-column-tests.md`. **At the owner's req
 
 ---
 
+## MUT-120 — every user gets exactly one personal profile (2026-10-12)
+
+Plan: `.claude/designs/mut-120-personal-profile-tests.md`. ADR-037 amendment (MUT-120).
+
+| Area | File | What it proves |
+|---|---|---|
+| Store contract (memory and Postgres) | `repositories/__tests__/store-contract-users.ts` | user, personal org (marked, named, settings) and memberships created together; personal-only user; a second personal org for the same user is a `UniqueViolation`; a duplicate email or unknown firm leaves no user and no personal org behind; firms carry `personalOwnerUserId: null` |
+| Admin users | `__tests__/routes-users.test.ts` (`personal profile (MUT-120)`) | firm inherits currency/timezone; `شخصي` for `ar`; personal-only from currency+timezone; 422 for each incomplete combination with nobody created; request overrides firm; retry → 409 with exactly one personal org; ADMIN audit rows per org; grant to another user → 409 (owner re-grant → 200 `created:false`); create inside another's personal profile → 409, nobody created |
+| Admin orgs / bind | `__tests__/routes.test.ts` (`personal profiles are never bound, keyed or shown as firms`) | API key refused on a personal org (firms unaffected); `personalOwnerUserId` on the org detail; bind refused even with a key planted through the store |
+| `/v1/me`, device sessions | `routes-sessions.test.ts`, `routes-device-sessions.test.ts` | `isPersonalDefault` only on the caller's own personal profile; customers/projects/payments `read-write` there; firm `false` |
+| CLI | `scripts/__tests__/users-cli.test.ts` | `create` with no `--organization-id`, from `--currency`/`--timezone`, makes exactly one membership and prints `personal <id> Personal` |
+| Review fixes | `routes-sessions.test.ts`, `routes-users.test.ts`, `routes.test.ts`, `store-contract-users.ts` | `/v1/me` order is firms then personal, compared without sorting; another user's personal profile is never marked; an unknown IANA timezone gets 422 with nobody created; revoking one's own personal profile gets 409 and the membership stays; a key planted on a personal profile gets 409 on bind and on `GET /v1/customers`; unknown owner gives ForeignKeyViolation; a personal-slug clash rolls back |
+
+Run: server lint 0, typecheck clean, `npm test` 1,333 passed (12 Postgres files skipped), `npm run test:db` on a dedicated database 1,423 passed (82 files), `openapi:check` up to date, build ok; root typecheck clean, `hosted:types:check` matches, `npx vitest run src/hosted` 145 passed.
+
 ## MUT-73 — device sync retired (2026-10-12)
 
 Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.
@@ -1774,4 +1789,44 @@ Plan: `.claude/designs/mut-61-malafat-received-capture-tests.md`; regression con
 | Rules | `income/__tests__/compose.test.ts` | `incomeCaptureRulesFor` both ways; `linked-required`: no client, unlinked client, PROJECT-only reference, derived client from a matter |
 | Routes | `__tests__/income-routes.test.ts` | AC 1–6 on profile M: 201 unallocated capture; matter kept; matter alone → client derived and checked; 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED / PROJECT_CUSTOMER_MISMATCH with nothing written; Owed 403 with nothing written; idempotent replay writes one payment; key → PRINCIPAL_NOT_ACCEPTED; undo 204 → 204, 409 after full/partial allocation, staged race (allocation before the write) → 409 with the allocation intact, Malafat payment → 404; payment view fields + filters via the key; summaries count it once and drop it after allocation; `/v1/me` income rules |
 | Regression (D3) | `__tests__/writability-routes.test.ts`, `inbox-filing.test.ts` | every other READ_ONLY row unchanged (403, zero writes); the one intended change (Received, no client → 422) is its own named test; inbox file-as-income on M still 403 |
+
+### MUT-102 — Brand v2 foundation (epic MUT-101, 2026-10-12)
+Plan: `.claude/designs/mut-102-brand-v2-foundation-tests.md`. ADR-058. Each unit's tests were written first and failed for the right reason (missing font files; the evaluator refusing the old four-copy `theme.css`; the missing plugin, cache rule and font checks; 41 `color: var(--accent)` sites; axe and the browser for the rest).
+
+| File | Covers |
+|---|---|
+| `src/test/css/brandCss.ts` (new support) | postcss-based `:root` evaluator for OS light/dark × `data-theme` × reduced motion; `var()` resolution; OKLCH ↔ sRGB, `color-mix(in oklch)`, compositing, WCAG contrast; src scans for custom-property definitions and bare `var()` references |
+| `src/styles/__tests__/brand.test.ts` (new, node) | **harness:** every JSON hex within ±1 of its OKLCH; mix/contrast edge cases; cascade, the six state combinations, refusals. **fonts:** sha256 pins, `@font-face` set, Plex Mono via @fontsource, retired packages gone from `package.json` and the entries. **drift:** `--m-*` = JSON. **tokens:** every var resolves in 4 states, no colour literal, colour tokens only over `--m-*`, radii on the brand scale, body 16 and the type roles, faces, motion + reduced motion, TD-048 font half, no Inter features. **contrast:** light ≥ 7, dark ≥ 4.5 over the plan's pair list; purple text = primary-hover; placeholder ≥ 4.5 and below muted. **names:** the 132 pre-rewrite names stay defined. **references:** no new dead `var()`; the allowlist (48) shrinks only. **accent-text guard** |
+| `scripts/__tests__/vite-config.test.ts` | Snapshot updated on purpose (plugin; version masked). Preload plugin in all three builds; font runtime cache CacheFirst/12, `font` only; no `otf` in precache; `findEmittedAsset` hit/miss; `fontPreloadTag` with the base |
+| `scripts/__tests__/check-bundles.test.ts` | `cssUrls`, `unresolvedUrls` (missing file, escaping the dist), `fontProblems` (retired face, missing/altered Thmanyah, preload missing/without crossorigin/wrong file) |
+| `qa/specs/web/brand.spec.ts` (new) | axe incl. contrast, light and dark: Home, payment drawer, Income, income drawer, Clients split, Settings, landing. EN/AR: Thmanyah Sans body 16px and loaded; Serif Display headings (landing headline inner lines too); Plex Mono tabular on Home, Income and Clients amounts; no off-origin font/stylesheet. ThemeToggle 4 states (`--bg`) + focus ring. 375/1280 × EN/AR fit, screenshots attached; TD-083's two overflows annotated |
+| `qa/specs/portal/signin.spec.ts` (new; `portal` app in `qa.config.mjs`) | `/v1` stubbed 401: Thmanyah Sans body, heading Serif Display 700 in EN/AR, no off-origin font; axe light and dark (`region` known, TD-082) |
+| existing `qa/specs/web/*` | Now enforce `color-contrast` (empty `KNOWN_AXE_VIOLATIONS` for the app); axe waits for drawers and animations to settle |
+
+**What was run (Node 22):** `npx vitest run` 225 files, 3,390 passed, 4 skipped · `npm run typecheck` clean · `npm run lint` 0 errors (12 pre-existing warnings) · `npm run test:bundles` passed · `npm run build:desktop` built · `npm --prefix server test` 70 passed, 12 skipped · QA web + portal on `vite preview` builds (a gitignored throwaway config, ports 5192–5194; dev servers broke lazy chunks under parallel workers while optimising deps): 45/45, 90/90 with `--repeat-each=2` · PWA offline after one visit: Thmanyah still renders · landing LCP (Fast 3G, 4× CPU, median of 5): 4116 ms on main → 4744 ms (TD-081). **Not run:** `npm run tauri dev` with the network off; `check-bundles`' url() resolution in `dist-desktop` stands in for it.
+
+**Review round (qa-reconcile, 2026-10-12).** New and changed tests. Each new guard was red before its fix.
+
+| File | Covers |
+|---|---|
+| `brand.test.ts` › `rendered pairs` | Every `src` rule that sets a colour and an opaque background clears 7:1 light / 4.5:1 dark in 4 states. Every stylesheet parses. `KNOWN_LITERAL_PAIRS` (6 CSV literals) is shrink-only |
+| `brand.test.ts` › `contrast` | Token pairs composited over `--bg` and `--surface`. New grounds: `--bg-subtle`, `--surface-hover/2`, row and nav tints; `--on-accent-subtle`; `--on-status` on the status inks and their hovers; `--text` on `--surface-3` and lavender. `--focus` on `--bg` ≥ 3:1 |
+| `brand.test.ts` › `tokens` | oklch hue-drift guard (> 30°). Mono stack falls back to Thmanyah Sans. `a:not([class]):visited` |
+| `brand.test.ts` › `fonts` | `src/assets/fonts` holds exactly the pinned files, and the pins live in one JSON. Only theme.css sets the page face. No mono rule asks for 600+. `html` disables bold synthesis |
+| `brand.test.ts` › `focus` | No `inset var(--focus-ring)`. Primary/danger/success/warning take `--focus-ring-on-fill`, including a hovered primary. No literal colour in a focus rule |
+| `brand.test.ts` › `accent-text guard` | Also `var(--accent, fallback)`, multi-line declarations, and `.ts` files |
+| `scripts/__tests__/check-bundles.test.ts` | `fontProblems` flags a font preload (it used to require one) |
+| `scripts/__tests__/vite-config.test.ts` | No build preloads a font. Snapshot back to main's plugin list (version masked) |
+| `profileAvatarStyle.test.ts` (new), `ProfileBadge.test.tsx`, `ProfileSwitcher.test.tsx` | No inline style without a readable colour; white initials on a chosen one |
+| `qa/specs/web/brand.spec.ts`, `qa/specs/portal/signin.spec.ts` | Enter moves focus into the Clients profile pane and shows a ring. Known overflows fail past their measured width (Income 726px, drawer 480px). Theme toggling is bounded. The portal heading is read from its translations |
+
+**What was run (Node 22):**
+- `npx vitest run`: 226 files, 3,418 passed, 4 skipped;
+- typecheck clean; lint 0 errors (12 pre-existing warnings);
+- `test:bundles` passed;
+- QA web + portal on `vite preview`: 90/90 with `--repeat-each=2`, after setting the Arabic Income ceiling to its measured 726px.
+
+**Perf runs:** landing LCP medians: preload high 4664 ms, low 4356 ms, none **3964 ms**; main 4116 ms; CLS 0.009 throughout.
+
+**Still not run:** `npm run tauri dev` with the network off. The AAA axe rule in the browser is TD-086.
 

@@ -138,12 +138,12 @@
 }
 .hp-signin-card { width: 100%; max-width: var(--hp-card-width); padding: var(--space-6); }
 .hp-signin-card h1 {
-  font-family: var(--font-en);
+  font-family: var(--font-heading);
   font-size: var(--text-2xl);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   margin: 0 0 var(--space-4);
 }
-[dir="rtl"] .hp-signin-card h1 { font-family: var(--font-ar); }
+[dir="rtl"] .hp-signin-card h1 { font-family: var(--font-heading-ar); }
 
 .hp-field { margin: 0 0 var(--space-3); }
 .hp-field label { display: block; font-size: var(--text-base); font-weight: var(--weight-medium); color: var(--text-secondary); margin: 0 0 var(--space-1-5); }
@@ -164,7 +164,7 @@
   transform: translateY(-50%);
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--on-accent-subtle); /* sits on the field ground */
   font: inherit;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -219,7 +219,7 @@
   padding: 1px var(--space-2);
   border-radius: var(--radius-full);
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
 }
 
 .hp-popover {
@@ -248,7 +248,7 @@
 }
 .hp-option:hover, .hp-option:focus-visible { background: var(--surface-hover); outline: none; }
 .hp-option-on { background: var(--surface-2); }
-.hp-check { width: 14px; color: var(--accent); font-weight: var(--weight-bold); }
+.hp-check { width: 14px; color: var(--accent-text); font-weight: var(--weight-bold); }
 .hp-option-text { flex: 1; min-width: 0; }
 .hp-option-line { display: flex; gap: var(--space-2); align-items: center; font-weight: var(--weight-medium); }
 .hp-option-sub { display: block; font-size: var(--text-sm); color: var(--muted); }
@@ -269,7 +269,7 @@
   height: 28px;
   border-radius: var(--radius-full);
   background: var(--surface-3);
-  color: var(--text-secondary);
+  color: var(--text); /* --surface-3 carries primary text only */
   display: grid;
   place-items: center;
   font-size: var(--text-xs);
@@ -325,7 +325,7 @@
 .hp-currency-block { margin: 0 0 var(--space-6); }
 .hp-currency-block .hp-strip { margin-bottom: var(--space-3); }
 
-.hp-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hp-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hp-amount-negative { color: var(--error); }
 
 .hp-filterbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin: 0 0 var(--space-4); }

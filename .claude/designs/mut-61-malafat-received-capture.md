@@ -359,4 +359,4 @@ These are deviations from the plan above. None changes an approved behavior.
 - **`allocationState` filters POSTED payments only.** A REVERSED payment serializes as `unallocated`, with its `status` saying why.
 - **Found and fixed:** `payments.list`'s project filter was dropped from page 2 on, because the cursor's `OR` overwrote it.
 - **The migration tests' timeout is now 60 s, for both MUT-59's and this ticket's.** Replaying history under `test:db` load ran past vitest's 5 s default. The second migration test made the existing one flaky.
-- **Debt:** TD-084 (old captures have no `captureSource`), TD-085 (no org-wide unallocated index), TD-086 (inbox filing as Received onto Malafat is still refused).
+- **Debt:** TD-092 (old captures have no `captureSource`), TD-093 (no org-wide unallocated index), TD-094 (inbox filing as Received onto Malafat is still refused); from /review TD-095 (4xx idempotency replay) and TD-096 (unallocatable captures). Planned as TD-084..088, renumbered at merge because MUT-102 took those numbers. API version became 1.15.0-mut61 because MUT-120 took 1.14.0.

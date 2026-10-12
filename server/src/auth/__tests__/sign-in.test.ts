@@ -27,6 +27,7 @@ async function activeUser(store: LedgerStore, at: Date, overrides: { email?: str
     passwordHash,
     locale: 'en',
     organizationId: org.id,
+    personal: { name: 'Personal', slug: `personal-${Math.random().toString(36).slice(2)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
     at,
   });
   return { user, hasher, org };

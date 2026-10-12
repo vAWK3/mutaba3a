@@ -1,12 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import '@fontsource-variable/inter';
-import '@fontsource-variable/source-serif-4';
-import '@fontsource/ibm-plex-sans-arabic/400.css';
-import '@fontsource/ibm-plex-sans-arabic/500.css';
-import '@fontsource/ibm-plex-sans-arabic/600.css';
-
+// Theme tokens and the Brand v2 fonts, the same files the app loads (MUT-102)
 import '../styles/theme.css';
 import '../index.css';
 import './hosted.css';

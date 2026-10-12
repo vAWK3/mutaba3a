@@ -35,7 +35,7 @@
 }
 
 .landing-faq-question:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .landing-faq-question:focus-visible {

@@ -57,7 +57,7 @@
 }
 
 .welcome-modal-icon svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .welcome-modal-title {

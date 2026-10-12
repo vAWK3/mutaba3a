@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
-import { PAYMENT_TERMS } from './dates.js';
+import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { ITEM_STATUSES } from './agreements/status.js';
@@ -35,6 +35,8 @@ export const OrganizationSchema = z
     slug: z.string(),
     defaultCurrency: CurrencySchema,
     timezone: z.string(),
+    /** MUT-120: the owning user on their personal profile; null on every firm. */
+    personalOwnerUserId: z.string().uuid().nullable(),
     createdAt: z.string().datetime(),
   })
   .openapi('Organization');
@@ -198,15 +200,22 @@ export const CreateUserRequestSchema = z
     email: z.string().trim().email().max(320),
     displayName: z.string().trim().min(1).max(200),
     locale: UserLocaleSchema.default('en'),
-    /** The user's first membership. More are granted with POST /admin/v1/users/{userId}/memberships. */
-    organizationId: z.string().uuid(),
+    /** The firm this user belongs to, if any. More are granted with POST /admin/v1/users/{userId}/memberships. */
+    organizationId: z.string().uuid().optional(),
+    /** The personal profile's currency (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
+    defaultCurrency: CurrencySchema.optional(),
+    /** The personal profile's IANA timezone (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
+    timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
   })
   .openapi('CreateUserRequest');
 
 export const CreateUserResponseSchema = z
   .object({
     user: UserSummarySchema,
+    /** The personal profile's membership first, then the firm's. */
     memberships: z.array(MembershipSchema),
+    /** The user's one personal profile (MUT-120), created with them: Personal / شخصي by locale. */
+    personalProfile: z.object({ id: z.string().uuid(), name: z.string() }),
     /** Shown exactly once; the service stores only its argon2id hash. Deliver it to the person over a secure channel. */
     initialPassword: z.string(),
   })
@@ -274,12 +283,15 @@ export const HostedProfileSchema = z
         customer: z.enum(['optional', 'linked-required']),
       })
       .openapi('IncomeCaptureRules'),
+    /** MUT-120: true on the signed-in user's own personal profile (exactly one), false everywhere else. Clients read this, not writerOfRecord. */
+    isPersonalDefault: z.boolean(),
   })
   .openapi('HostedProfile');
 
 export const MeSchema = z
   .object({
     user: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), locale: UserLocaleSchema }),
+    /** Firm profiles in membership order (oldest first), then the caller's own personal profile last (MUT-120). */
     profiles: z.array(HostedProfileSchema),
   })
   .openapi('Me');

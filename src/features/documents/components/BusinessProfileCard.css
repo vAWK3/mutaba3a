@@ -96,7 +96,7 @@
 
 .business-profile-card-edit-btn {
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--accent-text);
   background: none;
   border: none;
   padding: 0;

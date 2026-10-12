@@ -65,7 +65,7 @@ async function firm(h: Harness) {
 
 async function person(h: Harness, organizationId: string, email = `partner${++seq}@firm.ps`) {
   const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId }, admin)));
-  return { id: created.user.id as string, email, password: created.initialPassword as string };
+  return { id: created.user.id as string, email, password: created.initialPassword as string, personalId: created.personalProfile.id as string };
 }
 
 async function signIn(h: Harness, email: string, password: string, headers: Record<string, string> = SAME_ORIGIN) {
@@ -103,7 +103,7 @@ describe('POST /v1/sessions — sign in', () => {
     expect(text).not.toContain(token);
     const me = JSON.parse(text);
     expect(me.user).toMatchObject({ id: p.id, email: p.email });
-    expect(me.profiles.map((x: Loose) => x.id)).toEqual([f.org.id]);
+    expect(me.profiles.map((x: Loose) => x.id).sort()).toEqual([p.personalId, f.org.id].sort());
 
     const user = await h.store.users.getById(p.id);
     expect(user?.lastSignInAt?.toISOString()).toBe(h.clock.now.toISOString());
@@ -231,6 +231,46 @@ describe('GET /v1/me', () => {
     expect(byId[a.org.id].access).toMatchObject({ customers: 'read', payments: 'read', expenses: 'read-write', integration: 'none' });
     // MUT-65: org b has no Malafat integration (a personal profile) — the three profile-dependent rows are read-write there, unlike org a.
     expect(byId[b.org.id].access).toMatchObject({ customers: 'read-write', projects: 'read-write', payments: 'read-write', expenses: 'read-write', integration: 'none' });
+  });
+
+  it('marks the caller’s own personal profile with isPersonalDefault, read-write where MUT-65 allows, and no firm (MUT-120)', async () => {
+    const h = harness();
+    const a = await firm(h);
+    await h.store.integrations.connect({ organizationId: a.org.id, provider: 'MALAFAT', externalTenantId: `tenant-${seq}`, displayName: 'Firm A', connectedByApiKeyId: a.keyId, at: h.clock.now });
+    const p = await person(h, a.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    const byId = Object.fromEntries(me.profiles.map((x: Loose) => [x.id, x]));
+    expect(Object.keys(byId).sort()).toEqual([p.personalId, a.org.id].sort());
+    expect(byId[p.personalId]).toMatchObject({ name: 'Personal', writerOfRecord: null, isPersonalDefault: true });
+    expect(byId[p.personalId].access).toMatchObject({ customers: 'read-write', projects: 'read-write', payments: 'read-write' });
+    expect(byId[a.org.id].isPersonalDefault).toBe(false);
+  });
+
+  it('lists firm profiles first and the caller’s personal profile last, deterministically (MUT-120 review)', async () => {
+    const h = harness();
+    const a = await firm(h);
+    const b = await firm(h);
+    const p = await person(h, a.org.id);
+    await h.app.request(`/admin/v1/users/${p.id}/memberships`, json({ organizationId: b.org.id }, admin));
+    const { token } = await signIn(h, p.email, p.password);
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    // Not sorted on purpose: the portal opens profiles[0], so the order is the contract.
+    expect(me.profiles.map((x: Loose) => x.id)).toEqual([a.org.id, b.org.id, p.personalId]);
+  });
+
+  it('never marks another user’s personal profile as the caller’s default (MUT-120 review)', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const owner = await person(h, f.org.id);
+    const other = await person(h, f.org.id);
+    // Planted below the admin API, which refuses this grant.
+    await h.store.memberships.grant(other.id, owner.personalId, h.clock.now);
+    const { token } = await signIn(h, other.email, other.password);
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    expect(me.profiles.filter((x: Loose) => x.isPersonalDefault).map((x: Loose) => x.id)).toEqual([other.personalId]);
+    expect(me.profiles.find((x: Loose) => x.id === owner.personalId)?.isPersonalDefault).toBe(false);
   });
 
   it('answers 401 UNAUTHENTICATED without a credential and SESSION_EXPIRED for an unknown cookie', async () => {

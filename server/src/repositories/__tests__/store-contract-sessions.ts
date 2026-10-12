@@ -20,6 +20,7 @@ export function describeLedgerStoreSessionsContract(name: string, makeStore: () 
       passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA',
       locale: 'en',
       organizationId: org.id,
+      personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
       at: at(0),
     });
     return created;

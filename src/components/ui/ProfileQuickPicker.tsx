@@ -4,6 +4,7 @@ import type { BusinessProfile } from '../../types';
 import type { ProfileQuickPickerProps } from '../../hooks/useProfileAwareAction';
 import { nudgeInside, POPOVER_EDGE_MARGIN } from '../layout/popoverPosition';
 import './ProfileQuickPicker.css';
+import { profileAvatarStyle } from './profileAvatarStyle';
 
 /**
  * ProfileQuickPicker
@@ -177,7 +178,7 @@ function ProfileAvatar({ profile, size = 'medium' }: ProfileAvatarProps) {
   return (
     <div
       className={`profile-quick-picker-avatar profile-quick-picker-avatar-initials ${sizeClass}`}
-      style={{ backgroundColor: profile.primaryColor || 'var(--accent)' }}
+      style={profileAvatarStyle(profile.primaryColor)}
     >
       {initials}
     </div>

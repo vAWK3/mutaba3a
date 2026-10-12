@@ -1,0 +1,10 @@
+{
+  "$comment": "The delivered Thmanyah files, pinned by sha256 (MUT-102, ADR-058). The licence forbids any modification (no subsetting, no woff2), so a changed hash is a licence problem, not a refresh. brand.test.ts checks src/assets/fonts holds exactly these; scripts/check-bundles.ts checks every dist ships them byte-identical. Re-pin only when Thmanyah's official files replace these: the two Serif Display files are byte-identical to the copies MUT-105 flags as third-party, so they are due to be re-downloaded from Thmanyah's official site and re-pinned once (TD-085).",
+  "files": {
+    "thmanyahsans-Regular.otf": "f45a420632384b42a37ec9b24298ddc6502faa52d55d973144779262ebc023dc",
+    "thmanyahsans-Medium.otf": "f2762ffbe17351193e3d630dd10f0c3a965e6c873998dfdeda2bd0dcad7985c6",
+    "thmanyahsans-Bold.otf": "72cc27021cc1a503e5c03b072df8b16d55c78983e5fd73a4cdf92b5a600af2f7",
+    "thmanyah-serif-display-regular.otf": "1f5c735a6c05cce9fe9b2459d5aedb1d039541d50b726304bd617a69587bf112",
+    "thmanyah-serif-display-bold.otf": "ac2f056441891276792ab6d828d8ad9169ef44ecea60d6ccf126b25361f0ee9d"
+  }
+}

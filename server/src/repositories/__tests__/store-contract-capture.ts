@@ -13,7 +13,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
     store.organizations.create({ name: label, slug: `${label.toLowerCase()}-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
 
   async function person(store: LedgerStore, organizationId: string, label = 'Nour') {
-    const { user } = await store.users.create({ email: `${label.toLowerCase()}-${unique()}@firm.ps`, displayName: label, passwordHash: 'x', locale: 'en', organizationId, at: at(0) });
+    const { user } = await store.users.create({ email: `${label.toLowerCase()}-${unique()}@firm.ps`, displayName: label, passwordHash: 'x', locale: 'en', organizationId, personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: at(0) });
     return user;
   }
 

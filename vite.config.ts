@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { VitePWA } from "vite-plugin-pwa";
+import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 
@@ -33,6 +33,31 @@ function emitHostedEntryAsIndex(): Plugin {
     },
   };
 }
+
+/**
+ * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
+ * licence forbids converting) is cached on use instead of being precached on
+ * every install (MUT-102, PD10). No font is preloaded either: a preload
+ * competed with the app code and delayed first paint by ~700 ms (ADR-058).
+ */
+export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
+  navigateFallback: "/index.html",
+  // Only serve SPA shell for /app/* routes
+  navigateFallbackAllowlist: [/^\/app/],
+  navigateFallbackDenylist: [
+    /^\/download(\/|$)/,  // /download/* never gets SPA
+    /^\/api\//,           // future-proofing for API routes
+  ],
+  // Limit what files get precached
+  globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+  runtimeCaching: [
+    {
+      urlPattern: ({ request }) => request.destination === "font",
+      handler: "CacheFirst",
+      options: { cacheName: "fonts", expiration: { maxEntries: 12 } },
+    },
+  ],
+};
 
 /**
  * The hosted portal (MUT-43, hosted-portal.md §2, §7.5, §9): its own entry,
@@ -128,17 +153,7 @@ export default defineConfig(({ mode }) => {
           },
         ],
       },
-      workbox: {
-        navigateFallback: "/index.html",
-        // Only serve SPA shell for /app/* routes
-        navigateFallbackAllowlist: [/^\/app/],
-        navigateFallbackDenylist: [
-          /^\/download(\/|$)/,  // /download/* never gets SPA
-          /^\/api\//,           // future-proofing for API routes
-        ],
-        // Limit what files get precached
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-      },
+      workbox: PWA_WORKBOX,
       devOptions: {
         enabled: false,  // Disable PWA in dev to avoid caching issues
       },

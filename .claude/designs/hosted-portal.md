@@ -60,7 +60,7 @@ It has its own shell, routes and query hooks over a typed HTTP client. It **neve
   - **`hosted`**: an `Organization` the signed-in user has a `Membership` in.
 - **The server has no `Profile` table.** "Hosted profile" is a projection `Membership × Organization` (+ `Integration` for the writer of record). One organization is one hosted profile, matching MUT-39 ("a hosted profile binds the Organization that Malafat feeds"). A table would add a second id for the same thing.
 - **Hosted profile data is a separate dataset from local profile data.** They share no ids or tables. No hosted row is written to Dexie, no op enters the op-log, and the portal opens no IndexedDB. There is nothing to merge, so there is nothing to sync (ADR-013 untouched).
-- **Personal vs firm needs nothing new.** A personal hosted profile is an operator-provisioned organization with no Malafat integration and the user as its only member. Its income views are empty (nothing writes them), and its expenses work like any hosted profile's (MUT-42/44).
+- **Personal vs firm needs nothing new.** *(Superseded by MUT-120, ADR-037 amendment: a personal profile is now an explicit, unique, provisioning-created marker, `Organization.personalOwnerUserId`.)* A personal hosted profile is an operator-provisioned organization with no Malafat integration and the user as its only member. Its income views are empty (nothing writes them), and its expenses work like any hosted profile's (MUT-42/44).
 
 ### 3.1 Server models (MUT-37 builds them)
 
