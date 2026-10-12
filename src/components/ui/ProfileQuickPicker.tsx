@@ -1,8 +1,12 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import type { ProfileQuickPickerProps } from '../../hooks/useProfileAwareAction';
+import { nudgeInside } from '../layout/popoverPosition';
 import './ProfileQuickPicker.css';
+
+/** Gap kept between the picker and the window's edges */
+const EDGE_MARGIN = 8;
 
 /**
  * ProfileQuickPicker
@@ -58,6 +62,16 @@ export function ProfileQuickPicker({
       document.removeEventListener('keydown', handleEscape);
     };
   }, [anchor, onClose]);
+
+  // Before paint: keep the picker inside the window. The top bar's Add menu
+  // sits at the inline end, where a picker aligned to its item would run past
+  // the edge (MUT-89, the first time this picker can open)
+  useLayoutEffect(() => {
+    const popover = popoverRef.current;
+    if (!anchor || !popover) return;
+    const dx = nudgeInside(popover.getBoundingClientRect(), { left: 0, right: window.innerWidth }, EDGE_MARGIN);
+    popover.style.translate = dx === 0 ? '' : `${dx}px 0`;
+  }, [anchor]);
 
   // Position popover near anchor
   const getPosition = useCallback(() => {
