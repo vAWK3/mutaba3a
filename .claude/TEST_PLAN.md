@@ -272,8 +272,7 @@ src/
 │   └── aggregations.test.ts     # Aggregation functions
 ├── lib/__tests__/
 │   ├── utils.test.ts            # Format, parse utilities
-│   ├── matchingAlgorithm.test.ts # Retainer matching
-│   └── monthDetection.test.ts   # Date utilities
+│   └── matchingAlgorithm.test.ts # Retainer matching
 └── sync/core/__tests__/
     ├── hlc.test.ts              # Hybrid Logical Clock
     ├── ops-engine.test.ts       # Operation processing
@@ -799,7 +798,7 @@ pre-date these tickets and are untouched by them.
 | Refresh after save (AC #5) | `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` invalidates `income`, `receivables`, `incomeOverviewTotals`, `incomeAttentionReceivables` alongside the payment-record and transaction keys. Uses real Dexie, no `vi.mock`, so a stubbed barrel cannot fake a pass |
 | Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; empty prefill when settled; edit mode prefills the record's own amount |
 | Local-date default (ADR-022) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | the date field defaults to `todayISO()`, asserted at two faked instants straddling midnight in opposite directions so it holds in both `Asia/Jerusalem` and `npm run test:tz` |
-| Derived money views refresh | `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10), `useQueries.test.tsx`, `useIncomeQueries.test.tsx` | all nine money-event keys are invalidated and no others; the payment path and `markPaid` both trigger them. The expense and retainer paths are wired but uncovered — those modules have no mutation-test harness |
+| Derived money views refresh | `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10), `useQueries.test.tsx`, `useIncomeQueries.test.tsx` | all nine money-event keys are invalidated and no others; the payment path and `markPaid` both trigger them. The expense and retainer paths are wired but uncovered — those modules have no mutation-test harness. **Superseded by MUT-58:** the keys lost their last reader, the helper and its test file are deleted, and the two hook cases now assert that no `money*` key is invalidated |
 | Per-surface gate | `IncomePage.test.tsx`, `ClientDetailPage.test.tsx`, `ProjectDetailPage.test.tsx` | the button appears on exactly the rows each surface showed the kebab entry on, never on paid rows or expenses, opens the drawer with the row's id, and does not trigger the row's own click |
 
 The four IncomePage "Record Payment" tests that existed before this ticket
@@ -1351,3 +1350,48 @@ Plan: `.claude/designs/td-009-axe-structural-tests.md`. Each new assertion was w
 - `npm run build` and `npm run test:bundles`: OK.
 
 Main 8ef2df0 (MUT-65: `server/` and docs only) was merged in afterwards. Only lint and typecheck were re-run on the merged tree.
+
+### Release tooling — `make release web` / `make release server` (ADR-043, 2026-10-12)
+
+No automated tests. These scripts deploy; a test suite for them would either mock away the only thing they do or actually push and roll. They are verified by running the non-destructive halves and by reading the destructive half's dry run. What was verified on 2026-10-12, on `main` at `4eaa583`:
+
+| Checked | How | Result |
+|---|---|---|
+| `make help`, target dispatch | `make help`; `make --dry-run release web`; `make --dry-run release server` | pass |
+| An unknown target is rejected | `make release desktop` | exits 2, "unknown release target" |
+| Shell/Makefile syntax | `bash -n` on all three scripts; `make --dry-run` | pass |
+| Preflight catches a real dirty tree | `make preflight-web` with 8 uncommitted files | fails, lists them |
+| Preflight catches parked worktrees | same run, 2 epic worktrees checked out | fails, names both |
+| Preflight catches stale deps | `scripts/preflight.sh web` before `npm ci` | fails ("package-lock.json is newer than node_modules") — this is what the missing `openapi-typescript` binary looked like before the check existed |
+| …and passes once fixed | after `npm ci` | passes |
+| Server tools/credentials/config | `make preflight-server` | gcloud, ADC, docker, terraform, cloud-sql-proxy, tfvars all detected; `GCP_PROJECT_ID` and `TF_STATE_BUCKET` derived and cross-checked; `gs://…` confirmed readable |
+| The version prompt | `scripts/bump-version.sh server` with `9` then `2` | re-prompts on `9`, bumps minor `0.1.0 → 0.2.0` on `2`; reverted |
+| Non-interactive bumps | `BUMP=patch make bump-web`; `BUMP=keep`; `BUMP=custom BUMP_VERSION=9.9` | `0.0.65 → 0.0.66` across all five manifests **including `Cargo.lock`**; keep is a no-op; `9.9` rejected; reverted |
+| No terminal, no release | piped stdin, `/dev/tty` unopenable | bump and confirm both refuse with "set BUMP=…" / "re-run with AUTO=1" rather than hanging or defaulting to yes |
+| Server gates | `make check-server` | pass — lint, typecheck, **1210 tests**, `openapi:check` up to date, build |
+| Web gates | `make check-web` | lint (0 errors, 19 warnings), typecheck, **2857 tests**, and `test:bundles` (3 builds + the leak guard) all pass; **`hosted:types:check` fails** — pre-existing drift on `main`, logged as TD-058 |
+
+Not exercised, by nature: the push, `server/scripts/deploy.sh`, and the Netlify build. The confirmation in front of each is the tested part.
+
+### MUT-58 — prune the money-event read side (2026-10-12)
+
+Plan: `.claude/designs/mut-58-prune-money-events-tests.md`. A deletion with zero behaviour change. The guard and the two flipped assertions were written first and failed (7 red) before anything was deleted.
+
+| File | Covers |
+|---|---|
+| `src/__tests__/noDeadMoneyEventModules.test.ts` (new, 6) | `useMoneyEventQueries.ts`, `moneyEventRepository.ts` and `lib/monthDetection.ts` stay gone; no file under `src/` (tests included, since they are outside `tsc`) names them or `invalidateMoneyEventQueries`; `src/types/index.ts` declares none of the twelve money-event and guidance types; `moneyEventVersions` is still a Dexie table (ADR-029) |
+| `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` still invalidates the income, receivable, payment and transaction keys, and no `money*` key (was: asserted three money-event keys) |
+| `src/hooks/__tests__/useIncomeQueries.test.tsx` | `useMarkIncomePaid` invalidates `income` and `transactions`, and no `money*` key (was: "should invalidate the derived money-event views") |
+
+Removed with their subjects: `src/db/__tests__/moneyEvent.test.ts` (5), `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10) and `src/lib/__tests__/monthDetection.test.ts` (23), 38 tests in all.
+
+**How e2e was run:** a throwaway config on port 5198 (`webServer: npm run dev -- --port 5198 --strictPort`, output in the session scratchpad, TD-004), deleted afterwards and never committed.
+
+**Verified in the browser** (`web-mut58`, `/app/`, a fresh install): saved an unpaid $500 income for a new client, and Home's Owed now read $500. Marked it fully paid; Income moved it to Received, Home read "Nothing owed" with the payment under Recent payments, and Clients showed the client settled with the payment as the last one. Turned on Expenses and saved a $42 expense, which the ledger listed. No console errors. The ledger's Total expenses strip read ₪0 before and after a reload. That is not this change: the strip reads `useOverviewTotalsByCurrency` (expense *transactions*), and the rows come from the `expenses` table.
+
+**Gate (2026-10-12, branch `feature/mut-58-prune-money-events` on main 5674515, Node 22):**
+- `npx vitest run`: 185 files, 2,843 passed, 4 skipped. Before: 187 files, 2,875 passed, 4 skipped; the difference is the 38 deleted tests and the 6 new ones.
+- `npx playwright test` (port 5198): 19/19.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run typecheck` and `npx tsc -b`: clean.
+- `npm run build` and `npm run test:bundles`: OK.

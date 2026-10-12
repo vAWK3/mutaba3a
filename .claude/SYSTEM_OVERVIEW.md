@@ -155,7 +155,7 @@
 
 ### Implemented (v0.0.48)
 
-- **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone; MUT-58 prunes the money-event read side they leave unused.
+- **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone, and MUT-58 deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, and the refresh every write path ran for it). The `moneyEventVersions` sync table stays (ADR-029).
 - **Clients index (MUT-7 / ADR-035)** — `/clients` answers "who owes me, and who is late". The strip shows the client count and Owed now for everyone listed. The columns are Client · Owed Now (per currency, or Settled) · Overdue (per currency, with the oldest item's age) · Last Payment (date and amount, or Never paid) · Last Activity. The default order is owed now descending, ranked by today's exchange rate with nothing shown converted. Click a header to sort; the sort persists in the URL. A row opens the profile.
 - **Adding income (MUT-5 / ADR-039)**: the income drawer is the work record.
   - **Fast path:** "What did you do?" (focused), the amount (currency prefix, LTR in Arabic, Arabic-Indic digits accepted, ambiguous input or a symbol naming another currency refused) and the client. Title, Tab, amount, Tab, client, Enter, Enter saves, even while a new client is still being created.
@@ -200,6 +200,16 @@
 ---
 
 ## 5. Deployment Architecture
+
+### Release entry points (since 2026-10-12, ADR-043)
+
+| Command | Rolls out | How |
+|---------|-----------|-----|
+| `make release web` | the frontend + landing at mutaba3a.app | gates → version prompt → a commit holding only the version files → `git push origin main`; Netlify builds `main` |
+| `make release server` | the hosted API + the portal it serves | gates → version prompt → commit + push → `server/scripts/deploy.sh` (image → `prisma migrate deploy` → `terraform apply` → smoke) |
+| `npm run release` | the desktop app (DMG, notarized, GitHub release) | unchanged; `scripts/release.ts` over `deploy.sh` |
+
+`scripts/preflight.sh` gates the first two and refuses to release from a tree that does not describe itself — wrong branch, uncommitted changes, an unmerged branch, a parked worktree, behind `origin`, the wrong `node` major, stale `node_modules` — then checks that target's tools, credentials and config (`make doctor` runs all of it read-only). Where the server deploy points is derived from `production.tfvars` and the last `terraform init`, and verified rather than trusted; `deploy.env` overrides it.
 
 ### Build Targets
 

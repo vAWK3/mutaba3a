@@ -28,6 +28,63 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-58: the money-event read side MUT-8 left without a screen is deleted
+
+**Scope:**
+- Deleted: `src/hooks/useMoneyEventQueries.ts`, `src/db/moneyEventRepository.ts`, `src/lib/monthDetection.ts`, and their tests `src/db/__tests__/moneyEvent.test.ts`, `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts`, `src/lib/__tests__/monthDetection.test.ts`
+- `src/types/index.ts` (the "Money Answers Types" block)
+- `src/hooks/useQueries.ts`, `useExpenseQueries.ts`, `useRetainerQueries.ts` (one import and one call each)
+- `src/hooks/__tests__/useQueries.test.tsx`, `useIncomeQueries.test.tsx`; `src/__tests__/noDeadMoneyEventModules.test.ts` (new)
+- Test plan: `.claude/designs/mut-58-prune-money-events-tests.md`
+
+**Why:** MUT-8 deleted Home's forecast strip, month actuals and guidance feed by decision (D10 = B, ADR-036 §3). They were the only readers of the money-event engine, so its eleven read hooks and the 842-line repository had no consumer. Every income, payment, expense and retainer write still refreshed nine query keys that nothing read. Closes TD-034.
+
+### Removed
+- **The money-event read side**: `useMoneyEvents`, `useDailyAggregates`, `useMonthSummary`, `useMonthKPIs`, `useMonthKPIsBothCurrencies`, `useGuidance`, `useDayEvents`, `useYearSummary`, `useYearSummaryBothCurrencies`, `useInvalidateMoneyEvents`, `moneyEventQueryKeys`, `invalidateMoneyEventQueries`, and `moneyEventRepo`, which had no provider or interface slot.
+- **The refresh on every write.** `invalidateMoneyEventQueries` had three call sites on main, not the four the ticket counted: `invalidateTransactionQueries`, `invalidateExpenseQueries` and `invalidateProjectedIncomeQueries`. `useIncomeQueries.ts` needed no change, since it has reused `invalidateTransactionQueries` since MUT-5.
+- **`src/lib/monthDetection.ts`**: its last importers were the MUT-8 components.
+- **The twelve money-event and guidance types**, from `MoneyDirection` to `MoneyEventFilters`, including `GuidanceItem`.
+- **Their tests**: 38 cases in three files.
+
+### Changed
+- The two MUT-6 tests asserting that a payment and Mark paid refresh the money-event keys now assert that no `money*` key is refreshed. Each sits next to a check that the write's own keys still are.
+
+### Kept
+- The `moneyEventVersions` table and the `MoneyEventVersion` type. They belong to sync versioning, not the read side. The Dexie schema and version are unchanged (ADR-029); the guard asserts that the table is still there.
+- `src/lib/aggregations.ts` and its forecast types (`ForecastKPIs`, `MonthActuals`, `ForecastOptions`, `AmountByCurrency`, `AttentionItem`). They never had an app consumer, but the money-event files didn't keep them alive either, so they are out of scope and recorded as TD-071.
+
+### Technical
+- `noDeadMoneyEventModules.test.ts` guards the deleted paths, any import or call of them anywhere in `src/` (tests included, since they are outside `tsc`), the removed types, and the table's retention.
+- Gate (Node 22): vitest 185 files, 2,843 passed, 4 skipped (was 187 / 2,875 / 4); Playwright 19/19 on port 5198; lint 0 errors; typecheck, `tsc -b`, build and `test:bundles` OK. Browser smoke on `web-mut58` covered income, mark paid and an expense across Home, Clients, Income and Expenses, with no console errors.
+
+---
+
+## [Unreleased] - 2026-10-12 — Release: one front door for both deploys (`make release web` / `make release server`)
+
+**Scope:**
+- `Makefile` (new): `release web`, `release server`, plus `doctor`, `preflight-web`, `preflight-server`, `check-web`, `check-server`, `check`, `bump-web`, `bump-server`, `migrate-status`, `clean-dist`, `help`
+- `scripts/preflight.sh` (new): the release gate, per target
+- `scripts/bump-version.sh` (new): the patch/minor/major/custom/keep prompt
+- `scripts/confirm.sh` (new): the yes/no gate in front of an irreversible step
+- `deploy.env.example` (new) + `.gitignore` (`deploy.env`)
+
+### Added
+- **`make release web`** — preflight → lint, typecheck, unit tests, hosted API types → version prompt → the three builds and the bundle guard → confirm → a commit holding only the version files → `git push origin main`, which is what Netlify builds.
+- **`make release server`** — preflight → server lint, typecheck, tests, `openapi:check`, build → version prompt → confirm → the version commit → push so the deployed sha is reachable → `server/scripts/deploy.sh` (image, `prisma migrate deploy`, `terraform apply`, smoke), unchanged.
+- **`scripts/preflight.sh`** — refuses to release from a tree that does not describe itself: merge/rebase in progress, conflicted files, wrong branch, dirty tree, a branch not merged into `main`, an extra worktree, behind `origin`, the wrong `node` major (TD-054), `node_modules` staler than the lockfile. Then per target: `netlify.toml` and push access; or gcloud + ADC, docker daemon, terraform, cloud-sql-proxy, tfvars, and a readable state bucket. Each override is a named variable (`ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE`).
+- **`make doctor`** — the same checks for both targets, read-only, non-fatal.
+- The server deploy now points itself: `GCP_PROJECT_ID` comes from `project_id` in `production.tfvars` and `TF_STATE_BUCKET` from the last `terraform init`, and preflight fails if the two disagree. `deploy.env` is for overriding, not for setup.
+
+### Changed
+- The version is asked for, not assumed. `deploy.sh`'s `deploy_web` always incremented the patch and ran `git add .`; the new path prompts patch/minor/major/custom/keep and stages only `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`. `Cargo.lock` moves with the others so it cannot drift (the v0.0.65 Windows failure).
+
+### Technical
+- Nothing about either rollout is reimplemented: the server roll stays `server/scripts/deploy.sh`, and the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied.
+- ADR-043. Desktop (DMG, notarization, GitHub release) is untouched and still `npm run release`.
+- Found by the first full run and left for its owner: **TD-058** — `src/hosted/api/schema.d.ts` is stale against `server/openapi/openapi.yaml` on `main`, and regenerating it fails `typecheck` in `ReceivablesList.tsx` and `PaymentsList.tsx` because MUT-65 made `Receivable.projectId` and `Payment.customerId` nullable. `make release web` is blocked until that lands.
+
+---
+
 ## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
 
 **Scope:**
