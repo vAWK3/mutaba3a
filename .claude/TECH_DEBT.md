@@ -26,6 +26,14 @@
 **Remediation**: Delete `src/lib/aggregations.ts`, its test and the five types, and add the paths to a guard test like `noDeadMoneyEventModules.test.ts`. Re-grep first: a future forecast ticket may want to wire it in instead.
 **Effort**: Small
 
+### TD-058: `src/hosted/api/schema.d.ts` is stale on `main`, and regenerating it breaks the hosted typecheck
+**Status**: Open
+**Added**: 2026-10-12 (found by the first `make check-web` run, ADR-043)
+**Priority**: High — it blocks `make release web`
+**Impact**: `npm run hosted:types:check` fails on `main`. MUT-65 changed `server/openapi/openapi.yaml` (commits `7382c56`, `ac3817f`, merge `8ef2df0`) without regenerating the portal's client types, which were last written at MUT-64 (`8840f1c`). The drift is 382 insertions: the new `POST /v1/receivables/{receivableId}/settle` path, the session-may-create wording on customers and projects, and — the part that matters — `Receivable.projectId` and `Payment.customerId` becoming nullable. So this is not a stale generated file to refresh and forget: running `npm run hosted:types` makes `npm run typecheck` fail with two real errors, `src/hosted/pages/views/ReceivablesList.tsx:37` and `PaymentsList.tsx:39`, both `Argument of type 'string | null' is not assignable to parameter of type 'string'`. The portal reads fields the API may now return as null. Shipped portal code has the same gap at runtime; it is only invisible because the types were never regenerated.
+**Remediation**: Run `npm run hosted:types`, then fix both views to handle a null id (a personal-profile receivable has no matter; a personal-profile payment has no client) — decide per view whether that renders a dash, hides the link, or groups under "No client". Land the regenerated `schema.d.ts` with the fixes in one commit. Add `hosted:types:check` to the server's CI alongside `openapi:check` so the pair cannot drift again.
+**Effort**: Small–Medium (the regeneration is one command; the two views need a product decision about what a missing client or matter looks like)
+
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open
 **Added**: 2026-10-12 (found while checking the TD-009 fixes in the browser)

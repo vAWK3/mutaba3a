@@ -57,6 +57,34 @@
 - `noDeadMoneyEventModules.test.ts` guards the deleted paths, any import or call of them anywhere in `src/` (tests included, since they are outside `tsc`), the removed types, and the table's retention.
 - Gate (Node 22): vitest 185 files, 2,843 passed, 4 skipped (was 187 / 2,875 / 4); Playwright 19/19 on port 5198; lint 0 errors; typecheck, `tsc -b`, build and `test:bundles` OK. Browser smoke on `web-mut58` covered income, mark paid and an expense across Home, Clients, Income and Expenses, with no console errors.
 
+---
+
+## [Unreleased] - 2026-10-12 — Release: one front door for both deploys (`make release web` / `make release server`)
+
+**Scope:**
+- `Makefile` (new): `release web`, `release server`, plus `doctor`, `preflight-web`, `preflight-server`, `check-web`, `check-server`, `check`, `bump-web`, `bump-server`, `migrate-status`, `clean-dist`, `help`
+- `scripts/preflight.sh` (new): the release gate, per target
+- `scripts/bump-version.sh` (new): the patch/minor/major/custom/keep prompt
+- `scripts/confirm.sh` (new): the yes/no gate in front of an irreversible step
+- `deploy.env.example` (new) + `.gitignore` (`deploy.env`)
+
+### Added
+- **`make release web`** — preflight → lint, typecheck, unit tests, hosted API types → version prompt → the three builds and the bundle guard → confirm → a commit holding only the version files → `git push origin main`, which is what Netlify builds.
+- **`make release server`** — preflight → server lint, typecheck, tests, `openapi:check`, build → version prompt → confirm → the version commit → push so the deployed sha is reachable → `server/scripts/deploy.sh` (image, `prisma migrate deploy`, `terraform apply`, smoke), unchanged.
+- **`scripts/preflight.sh`** — refuses to release from a tree that does not describe itself: merge/rebase in progress, conflicted files, wrong branch, dirty tree, a branch not merged into `main`, an extra worktree, behind `origin`, the wrong `node` major (TD-054), `node_modules` staler than the lockfile. Then per target: `netlify.toml` and push access; or gcloud + ADC, docker daemon, terraform, cloud-sql-proxy, tfvars, and a readable state bucket. Each override is a named variable (`ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE`).
+- **`make doctor`** — the same checks for both targets, read-only, non-fatal.
+- The server deploy now points itself: `GCP_PROJECT_ID` comes from `project_id` in `production.tfvars` and `TF_STATE_BUCKET` from the last `terraform init`, and preflight fails if the two disagree. `deploy.env` is for overriding, not for setup.
+
+### Changed
+- The version is asked for, not assumed. `deploy.sh`'s `deploy_web` always incremented the patch and ran `git add .`; the new path prompts patch/minor/major/custom/keep and stages only `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`. `Cargo.lock` moves with the others so it cannot drift (the v0.0.65 Windows failure).
+
+### Technical
+- Nothing about either rollout is reimplemented: the server roll stays `server/scripts/deploy.sh`, and the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied.
+- ADR-043. Desktop (DMG, notarization, GitHub release) is untouched and still `npm run release`.
+- Found by the first full run and left for its owner: **TD-058** — `src/hosted/api/schema.d.ts` is stale against `server/openapi/openapi.yaml` on `main`, and regenerating it fails `typecheck` in `ReceivablesList.tsx` and `PaymentsList.tsx` because MUT-65 made `Receivable.projectId` and `Payment.customerId` nullable. `make release web` is blocked until that lands.
+
+---
+
 ## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
 
 **Scope:**
