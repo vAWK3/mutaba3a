@@ -33,13 +33,18 @@ vi.mock('@tanstack/react-router', () => ({
     to,
     params,
     search,
+    'aria-current': ariaCurrent,
   }: {
     children: React.ReactNode;
     to: string;
     params?: Record<string, string>;
     search?: Record<string, string> | true;
+    'aria-current'?: 'page';
   }) => (
-    <a href={typeof search === 'object' ? `${to}?${new URLSearchParams(search)}` : `${to}/${params?.clientId || ''}`}>
+    <a
+      href={typeof search === 'object' ? `${to}?${new URLSearchParams(search)}` : `${to}/${params?.clientId || ''}`}
+      aria-current={ariaCurrent}
+    >
       {children}
     </a>
   ),

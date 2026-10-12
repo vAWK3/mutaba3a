@@ -1,7 +1,6 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect, useRef, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { EmptyState, SortableHeader } from '../../components/ui';
 import { OwedNowSummary } from '../../components/clients/OwedNowSummary';
@@ -10,23 +9,31 @@ import {
   toOwedBucketRows,
   orderClientIndex,
   BUCKET_SCOPE,
-  CLIENT_SORT_FIELDS,
   type ClientIndexItem,
   type ClientIndexRow,
   type ClientSortField,
   type OwedBucketRow,
   type RatesToIls,
 } from '../../components/clients/clientIndexRows';
+import { resolveClientsSearch } from '../../components/clients/clientsSearch';
+import { useClientsSearch } from '../../components/clients/useClientsSearch';
+import {
+  listKeyAction,
+  adjacentClientId,
+  firstClientId,
+  clientRowLink,
+  hasModifier,
+} from '../../components/clients/clientsSplitView';
 import { useClientOwedIndex, useClients, useBusinessProfiles } from '../../hooks/useQueries';
 import { useFxRate } from '../../hooks/useFxRate';
 import { getCrossProfileClientStats } from '../../db/crossProfileStats';
 import { combineOwed } from '../../db/aggregations';
-import { useSortState, type SortDir } from '../../hooks/useSortState';
+import type { SortDir } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
 import { owedEntriesSearch } from '../../lib/incomeSearch';
-import { formatAmount, formatDate, formatRelativeDate } from '../../lib/utils';
-import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { formatAmount, formatDate, formatRelativeDate, cn } from '../../lib/utils';
+import { useT, useLanguage, useDirection, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
 import type { ClientSummary, Currency } from '../../types';
 
@@ -41,6 +48,15 @@ const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
 
 const NO_SUMMARIES: ClientSummary[] = [];
 
+export interface ClientsPageProps {
+  /** The client open beside the list or in place of it: its row is marked and its link is the current page (MUT-84) */
+  openClientId?: string;
+  /** Wide windows only: ↑/↓ on a client row open the previous/next client (the walk) */
+  onWalk?: (clientId: string) => void;
+  /** Wide windows with a client open: Enter on its row, or the arrow toward the profile, moves focus there */
+  onEnterProfile?: () => void;
+}
+
 /**
  * The clients index (MUT-7): who owes me, and who is late. Owed now and
  * overdue are per currency and never combined; owed now is ordered by today's
@@ -49,25 +65,32 @@ const NO_SUMMARIES: ClientSummary[] = [];
  * Its strip equals Home's Owed now (MUT-83, ADR-049): it counts this
  * business's entries only, and what belongs to no listed client shows in two
  * muted rows after the clients, "No client" and "Archived clients".
+ *
+ * Since MUT-84 (ADR-050) it is the Clients layout's list pane: the layout owns
+ * the top bar and opens a client beside this list on a wide window. The search
+ * and sort live in the URL (`useClientsSearch`) and every client link keeps
+ * them, so they survive switching clients.
  */
-export function ClientsPage() {
+export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPageProps = {}) {
   const { openClientDrawer } = useDrawerStore();
   const navigate = useNavigate();
   const t = useT();
   const tp = useTp();
+  const direction = useDirection();
   const { language } = useLanguage();
   const locale = getLocale(language);
-  const [search, setSearch] = useState('');
+  const tableRef = useRef<HTMLDivElement>(null);
 
-  const { sortField, sortDir, setSort } = useSortState<ClientSortField>({
-    defaultField: 'owed',
-    defaultDir: 'desc',
-    validFields: CLIENT_SORT_FIELDS,
-  });
+  const { search: urlSearch, setSearch: setUrlSearch } = useClientsSearch();
+  const { q: search, sort: sortField, dir: sortDir } = useMemo(() => resolveClientsSearch(urlSearch), [urlSearch]);
+  const setSearch = useCallback((q: string) => setUrlSearch({ q }), [setUrlSearch]);
   const handleSort = useCallback(
     (field: ClientSortField) =>
-      setSort(field, field === sortField ? (sortDir === 'asc' ? 'desc' : 'asc') : FIRST_CLICK_DIR[field]),
-    [setSort, sortField, sortDir]
+      setUrlSearch({
+        sort: field,
+        dir: field === sortField ? (sortDir === 'asc' ? 'desc' : 'asc') : FIRST_CLICK_DIR[field],
+      }),
+    [setUrlSearch, sortField, sortDir]
   );
 
   // Active profile only (strict mode)
@@ -108,6 +131,49 @@ export function ClientsPage() {
     [search, rows, index]
   );
 
+  // Keep the open client's row in view when it changes from outside the list
+  // (a deep link, Back) and when the rows first arrive. A background refresh
+  // doesn't move the list.
+  const hasItems = items.length > 0;
+  useEffect(() => {
+    if (hasItems) clientRowLink(tableRef.current, openClientId)?.scrollIntoView?.({ block: 'nearest' });
+  }, [openClientId, hasItems]);
+
+  /** Open a client from the keyboard and keep focus on its row, so the next arrow walks on from there. */
+  const walkTo = (clientId: string) => {
+    onWalk?.(clientId);
+    clientRowLink(tableRef.current, clientId)?.focus();
+  };
+
+  // The walk (MUT-84): on a client row ↑/↓ open the previous/next client,
+  // skipping the muted rows and stopping at either end; Enter on the open
+  // client, or the arrow toward the profile, moves focus into it.
+  const handleRowKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!onWalk || event.defaultPrevented || hasModifier(event)) return;
+    const rowId = (event.target as HTMLElement).closest<HTMLElement>('tr[data-client-id]')?.dataset.clientId;
+    if (!rowId) return;
+    const action = listKeyAction(event.key, direction);
+    if (action === 'previous' || action === 'next') {
+      event.preventDefault();
+      const nextId = adjacentClientId(items, rowId, action === 'next' ? 1 : -1);
+      if (nextId) walkTo(nextId);
+    } else if (action === 'toProfile' && onEnterProfile && (event.key !== 'Enter' || rowId === openClientId)) {
+      event.preventDefault();
+      onEnterProfile();
+    }
+  };
+
+  // ↓ in the search box moves to the open client's row, or opens the first client
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!onWalk || event.key !== 'ArrowDown' || hasModifier(event)) return;
+    const openRow = clientRowLink(tableRef.current, openClientId);
+    const targetId = openRow ? openClientId : firstClientId(items);
+    if (!targetId) return;
+    event.preventDefault();
+    if (openRow) openRow.focus();
+    else walkTo(targetId);
+  };
+
   const columns = useMemo(
     () => [
       { field: 'name' as const, label: t('clients.columns.client') },
@@ -140,14 +206,17 @@ export function ClientsPage() {
   const renderRow = (row: ClientIndexRow) => (
     <tr
       key={row.id}
-      className={row.isSettled ? 'clickable client-index-settled-row' : 'clickable'}
-      onClick={() => navigate({ to: '/clients/$clientId', params: { clientId: row.id } })}
+      data-client-id={row.id}
+      className={cn('clickable', row.isSettled && 'client-index-settled-row', row.id === openClientId && 'client-index-row-open')}
+      onClick={() => navigate({ to: '/clients/$clientId', params: { clientId: row.id }, search: true })}
     >
       <td>
         <Link
           to="/clients/$clientId"
           params={{ clientId: row.id }}
+          search
           className="client-index-name"
+          aria-current={row.id === openClientId ? 'page' : undefined}
           onClick={(e) => e.stopPropagation()}
         >
           {row.name}
@@ -223,64 +292,61 @@ export function ClientsPage() {
   const isSearchMiss = Boolean(search) && allClients.length > 0;
 
   return (
-    <>
-      <TopBar title={t('clients.title')} />
-      <div className="page-content">
-        <div className="filters-row">
-          <SearchInput value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
-        </div>
-
-        {isLoading ? (
-          <div className="loading">
-            <div className="spinner" />
-          </div>
-        ) : items.length === 0 ? (
-          <EmptyState
-            title={isSearchMiss ? t('clients.emptyFiltered') : t('clients.empty')}
-            description={
-              isSearchMiss
-                ? t('clients.emptyFilteredCount', { count: allClients.length })
-                : search
-                  ? t('clients.emptySearch')
-                  : t('clients.emptyHint')
-            }
-            action={
-              isSearchMiss
-                ? { label: t('clients.clearSearch'), onClick: () => setSearch('') }
-                : { label: t('clients.addClient'), onClick: () => openClientDrawer({ mode: 'create' }) }
-            }
-          />
-        ) : (
-          <>
-            <div className="card clients-index-summary">
-              <div className="clients-summary-count">
-                {rows.length === 1
-                  ? t('clients.summary.clientsCountOne')
-                  : t('clients.summary.clientsCount', { count: rows.length })}
-              </div>
-              <OwedNowSummary owed={totalOwed} />
-            </div>
-            <div className="data-table clients-index-table">
-              <table>
-                <thead>
-                  <tr>
-                    {columns.map((column) => (
-                      <SortableHeader
-                        key={column.field}
-                        {...column}
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      />
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>{items.map(renderItem)}</tbody>
-              </table>
-            </div>
-          </>
-        )}
+    <div className="page-content">
+      <div className="filters-row" onKeyDown={handleSearchKeyDown}>
+        <SearchInput value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
       </div>
-    </>
+
+      {isLoading ? (
+        <div className="loading">
+          <div className="spinner" />
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          title={isSearchMiss ? t('clients.emptyFiltered') : t('clients.empty')}
+          description={
+            isSearchMiss
+              ? t('clients.emptyFilteredCount', { count: allClients.length })
+              : search
+                ? t('clients.emptySearch')
+                : t('clients.emptyHint')
+          }
+          action={
+            isSearchMiss
+              ? { label: t('clients.clearSearch'), onClick: () => setSearch('') }
+              : { label: t('clients.addClient'), onClick: () => openClientDrawer({ mode: 'create' }) }
+          }
+        />
+      ) : (
+        <>
+          <div className="card clients-index-summary">
+            <div className="clients-summary-count">
+              {rows.length === 1
+                ? t('clients.summary.clientsCountOne')
+                : t('clients.summary.clientsCount', { count: rows.length })}
+            </div>
+            <OwedNowSummary owed={totalOwed} />
+          </div>
+          <div ref={tableRef} className="data-table clients-index-table" onKeyDown={handleRowKeyDown}>
+            <table>
+              <thead>
+                <tr>
+                  {columns.map((column) => (
+                    <SortableHeader
+                      key={column.field}
+                      {...column}
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>{items.map(renderItem)}</tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

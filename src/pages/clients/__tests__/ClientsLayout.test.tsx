@@ -405,7 +405,7 @@ describe('ClientsLayout (MUT-84)', () => {
     });
 
     it('keeps the list, its search and its sort while switching clients', async () => {
-      const { router } = renderAt('/clients/acme?q=a&sort=name');
+      const { router } = renderAt('/clients/acme?q=a&sort=name&dir=asc');
       await screen.findByRole('heading', { name: 'Profile of acme' });
       const pane = listPane();
       const scroller = pane.querySelector('.page-content');
@@ -413,12 +413,12 @@ describe('ClientsLayout (MUT-84)', () => {
       rowLink('Acme').focus();
       press(rowLink('Acme'), 'ArrowDown');
       await waitFor(() => expect(path(router)).toBe('/clients/beta'));
-      expect(router.state.location.search).toEqual({ q: 'a', sort: 'name' });
+      expect(router.state.location.search).toEqual({ q: 'a', sort: 'name', dir: 'asc' });
 
       // A click keeps them too, and adds a history entry as any link does
       fireEvent.click(rowLink('Gamma'));
       await waitFor(() => expect(path(router)).toBe('/clients/gamma'));
-      expect(router.state.location.search).toEqual({ q: 'a', sort: 'name' });
+      expect(router.state.location.search).toEqual({ q: 'a', sort: 'name', dir: 'asc' });
 
       expect(listPane()).toBe(pane);
       expect(pane.querySelector('.page-content')).toBe(scroller);
