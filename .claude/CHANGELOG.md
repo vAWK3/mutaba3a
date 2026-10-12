@@ -28,6 +28,53 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Retire `e2e/` for the `qa/` release-qa kit (MUT-97)
+
+**Why:** MAL-1007 built a reusable, stack-agnostic release-qa engine (`~/Work/tools/release-qa`, the `/release-qa` Claude skill) plus a per-repo `qa/` folder, with the explicit goal of also serving Mutaba3a. MUT-97 is that port: a feature catalog that replaces the old hand-run `e2e/*.spec.ts` suite with change-scoped runs, recorded video and an approve/reject review page.
+
+### Added
+- `qa/qa.config.mjs`: single `web` app, no personas (mini-crm is local-first, single-user, no auth), git-tag release detection (`v*`), isolated worktree env (`.claude/worktrees/qa-release`) — no docker/Postgres needed, there is no server or shared database to isolate.
+- `qa/features/web/*.yaml`: 7 areas, 21 features (9 core / 8 secondary / 4 tertiary) — `navigation`, `home`, `income`, `clients`, `record-payment`, `settings`, `drawer-motion`. Every `e2e/*.spec.ts` file's coverage was ported, including the standalone `accessibility.spec.ts` checks, which were folded into the flow test they exercise rather than kept as a disconnected parallel suite.
+- `qa/specs/web/*.spec.ts`, `qa/support/{app,axe,qa}.ts`: the ported Playwright logic, restructured one test per feature id (`@web.<area>.<id>`), with `step()` captions for the recorded video.
+- `make check-e2e` now runs `release-qa release --no-open` (was `npm run test:e2e`) — same "not part of a release, run it deliberately" posture, now with an isolated worktree, a dev server it starts itself, and a reviewable report instead of a bare Playwright run.
+
+### Removed
+- `e2e/` (8 spec files + `support/`) and the root `playwright.config.ts`. `@playwright/test` and `@axe-core/playwright` stay as root devDependencies — `qa/` resolves them the same way.
+- `package.json` scripts `test:e2e`, `test:e2e:ui` (dead: their config no longer exists).
+
+**Verification:** `release-qa lint` — 0 errors, 21/21 features automated. `release-qa run --attach --all` against a live `npm run dev` — 21/21 passed.
+
+**Known gaps, not silently covered:** `release-qa run --all` also reported 142 changed files under `src/**` mapping to no feature — mostly optional/gated areas (expenses, retainers, planning, documents, recurring) that `e2e/` never covered either; MUT-97's scope was porting existing coverage, not writing new. `qa/` is not in any tsconfig program, so `npm run typecheck` doesn't cover it — the same gap `e2e/` had (TEST_PLAN.md, TD-004).
+
+### Technical
+- `.claude/PATTERNS.md`, `.claude/COMPONENT_REGISTRY.md`, `.claude/TEST_PLAN.md`: living references to `e2e/*` repointed to `qa/*`. Dated historical narrative (the 2026-10-12 "E2E port-over" section, per-ticket test-plan appendices) left as-is with a superseded note, not rewritten.
+- Jira: MUT-97 created, linked (Relates) to MAL-1007.
+
+---
+
+## [Unreleased] - 2026-10-12 — Regenerate stale hosted-portal API types (TD-058, TD-072)
+
+**Why:** `src/hosted/api/schema.d.ts` hadn't been regenerated since MUT-65 made `Payment.customerId` and `Receivable.projectId` nullable (personal-profile captures with no client/matter). `hosted:types:check` was already failing on `main`; mobile work (MUT-68) was about to start leaning on the stale types.
+
+### Fixed
+- `src/hosted/api/schema.d.ts`: regenerated via `npm run hosted:types` (1,038 insertions / 129 deletions against the current `server/openapi/openapi.yaml`).
+- `src/hosted/pages/views/PaymentsList.tsx`, `src/hosted/pages/views/ReceivablesList.tsx`: guard the now-nullable `customerId`/`projectId` before the `Map.get` lookup, falling back to the existing "—" rendering instead of a type error.
+
+**Scope:** `hosted:types:check`, `typecheck`, `lint`, and the hosted test suite (145 tests) all pass. No CI change needed — `hosted:types:check` was already wired into the Makefile gates.
+
+---
+
+## [Unreleased] - 2026-10-12 — `make release full`
+
+**Why:** `make release web` and `make release server` (ADR-043) had no combined front door; releasing both meant running each by hand.
+
+### Added
+- `make release full` (and `make release full` via the `release` dispatcher): runs `release-server` then `release-web` as ordinary prerequisites — server first, so the API a release ships is already live before the frontend calling it goes out. Each half keeps its own preflight, gates, version bump and confirmation; declining one does not block the other.
+
+**Scope:** `Makefile` only. Desktop (DMG, notarization, GitHub release) stays excluded, per ADR-043 — confirmed with Basel, not reopened. See ADR-043 addendum in `.claude/DECISIONS.md`.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-83: Owed now on Home and Clients always match
 
 **Why:** Home and the Clients list showed the same-looking Owed now block with different numbers and no explanation.

@@ -24,8 +24,6 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
     "test:tz": "TZ=America/New_York vitest run",
     "test:bundles": "vite build --mode web && vite build --mode desktop && vite build --mode hosted && tsx scripts/check-bundles.ts",
     "hosted:types": "openapi-typescript server/openapi/openapi.yaml -o src/hosted/api/schema.d.ts",

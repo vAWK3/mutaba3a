@@ -1967,6 +1967,8 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Consequences**: A release cannot be cut from a tree that does not describe itself, and both deploys answer the same questions in the same order. Parked epic worktrees now block a release until removed or explicitly allowed, which is the point — their work is not in it. `make release web` immediately exposed TD-057. Desktop (DMG, notarization, GitHub release) stays with `npm run release`; folding it in is a later decision.
 
+**Addendum (2026-10-12)**: Added `make release full`, a third entry point that runs `release-server` then `release-web` as two ordinary prerequisites — server first, so the API a release ships is already live before the frontend that calls it goes out. It reimplements nothing: each half keeps its own preflight, gates, version bump and confirmation, and declining one does not block the other. Desktop stays excluded, per the decision above — raised and confirmed with Basel when `full` was requested, not reopened.
+
 **Alternatives Considered**: npm scripts instead of a Makefile (rejected: `package.json` is the frontend's, and the server deploy is not a frontend concern); extend `deploy.sh`'s menu (rejected: its `git add .` and fixed patch bump are the behaviour being replaced, and the file already carries the desktop pipeline); checks inside each `deploy.sh` (rejected: the two would drift, and the checks are most useful before `make` even starts a build).
 
 ---

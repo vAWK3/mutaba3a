@@ -1,0 +1,35 @@
+app: web
+area: settings
+title: Settings
+tier: secondary
+paths:
+  - src/pages/settings/SettingsPage.tsx
+  - src/lib/i18n/**
+  - src/lib/theme/**
+features:
+  - id: language
+    title: Switch language to Arabic (RTL) and back to English
+    tier: secondary
+    steps:
+      - Open Settings
+      - Click العربية, then English
+    expect:
+      - html's lang/dir switch to ar/rtl, then back to en/ltr
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+  - id: theme
+    title: Switch between Dark, Light and System themes
+    tier: secondary
+    steps:
+      - Click Dark, then Light, then System
+    expect:
+      - html's data-theme follows the choice, and System removes the attribute
+  - id: export
+    title: Data Management exports the default profile
+    tier: secondary
+    paths:
+      - src/pages/settings/DataToolsSection.tsx
+    steps:
+      - Open the Export Data dialog
+      - Export the default profile
+    expect:
+      - A CSV download starts, named mutaba3a-Default-Profile-<date>.csv

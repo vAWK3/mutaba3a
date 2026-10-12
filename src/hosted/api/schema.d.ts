@@ -765,7 +765,7 @@ export interface paths {
         put?: never;
         /**
          * Create a customer
-         * @description With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider.
+         * @description With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider. A session may create a customer on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.
          */
         post: {
             parameters: {
@@ -1195,7 +1195,7 @@ export interface paths {
         put?: never;
         /**
          * Create a project
-         * @description One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not.
+         * @description One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not. A session may create a project on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.
          */
         post: {
             parameters: {
@@ -4019,6 +4019,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/receivables/{receivableId}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle a receivable directly, with one payment and one allocation
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    receivableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SettleReceivableRequest"];
+                };
+            };
+            responses: {
+                /** @description Settled (or partially) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SettleReceivableResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/allocations/preview": {
         parameters: {
             query?: never;
@@ -6529,6 +6631,689 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capture money received or owed, directly — no agreement, no allocation dance
+         * @description Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateIncomeRequest"];
+                };
+            };
+            responses: {
+                /** @description Captured */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IncomeResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/income/{incomeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Undo an income entry this session created
+         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or an allocated Received payment is refused with 409, since undoing one with real money applied is an edit, not an undo.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    incomeId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your unsorted entries, newest first
+         * @description Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page size, 1–200. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxEntryPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Capture an amount now, decide where it belongs later
+         * @description occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. kind is fixed at capture.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateInboxEntryRequest"];
+                };
+            };
+            responses: {
+                /** @description Captured */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Throw away an unsorted entry
+         * @description Gone for good — an entry is a scratch note, not a ledger row, so there is no tombstone and no 204-again. A second delete is 404.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Fix an unsorted entry (optimistic, If-Match)
+         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture, as an expense's currency is. null clears an optional field.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateInboxEntryRequest"];
+                };
+            };
+            responses: {
+                /** @description Changed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/inbox/{entryId}/file-as-expense": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File an unsorted entry as an expense on a profile
+         * @description Amount, currency, date and note come from the entry; only what it could not know is sent here. The expense is created and the entry removed in one transaction: on success it is gone, on any refusal it is untouched. 409 ENTRY_KIND_MISMATCH for an entry captured as income.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileAsExpenseRequest"];
+                };
+            };
+            responses: {
+                /** @description Filed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Expense"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/{entryId}/file-as-income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File an unsorted entry as income on a profile
+         * @description Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileAsIncomeRequest"];
+                };
+            };
+            responses: {
+                /** @description Filed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IncomeResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/organizations": {
         parameters: {
             query?: never;
@@ -6962,7 +7747,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inspect a user and their memberships */
+        /** Inspect a user, their memberships and their unsorted-inbox size */
         get: {
             parameters: {
                 query?: never;
@@ -7954,7 +8739,7 @@ export interface components {
             /** Format: uuid */
             customerId: string;
             /** Format: uuid */
-            projectId: string;
+            projectId: string | null;
             /** Format: uuid */
             agreementId: string | null;
             /** @enum {string} */
@@ -7983,6 +8768,7 @@ export interface components {
             /** Format: date-time */
             postedAt: string;
             status: components["schemas"]["ItemStatus"];
+            title: string | null;
             version: number;
         };
         TriggerInstallmentRequest: {
@@ -8216,6 +9002,74 @@ export interface components {
             receivable: components["schemas"]["Receivable"];
             credits: components["schemas"]["Credit"][];
         };
+        SettleReceivableResponse: {
+            receivable: components["schemas"]["Receivable"];
+            payment: components["schemas"]["Payment"];
+        };
+        Payment: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            /** Format: uuid */
+            customerId: string | null;
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            allocated: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            unallocated: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            receivedOn: string;
+            method: components["schemas"]["PaymentMethod"];
+            reference: string | null;
+            notes: string | null;
+            status: components["schemas"]["PaymentStatus"];
+            /** Format: date-time */
+            reversedAt: string | null;
+            reversalReason: string | null;
+            /** Format: uuid */
+            replacesPaymentId: string | null;
+            /** Format: uuid */
+            replacedByPaymentId: string | null;
+            allocations: components["schemas"]["Allocation"][];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        PaymentMethod: "CASH" | "BANK";
+        /** @enum {string} */
+        PaymentStatus: "POSTED" | "REVERSED";
+        Allocation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            receivableId: string;
+            /** Format: uuid */
+            projectId: string;
+            /** @enum {string} */
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            receivableOutstanding: string;
+            receivableStatus: components["schemas"]["ItemStatus"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SettleReceivableRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            paidAt?: string;
+            method?: components["schemas"]["PaymentMethod"];
+            captureSource?: components["schemas"]["CaptureSource"];
+        };
+        /** @enum {string} */
+        CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share";
         AllocationPreviewResponse: {
             /** Format: uuid */
             customerId: string;
@@ -8297,60 +9151,6 @@ export interface components {
         };
         /** @enum {string} */
         AllocationStrategy: "OLDEST_FIRST" | "SETTLE_MATTERS";
-        Payment: {
-            /** Format: uuid */
-            id: string;
-            number: string;
-            /** Format: uuid */
-            customerId: string;
-            currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
-            amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
-            allocated: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
-            unallocated: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            receivedOn: string;
-            method: components["schemas"]["PaymentMethod"];
-            reference: string | null;
-            notes: string | null;
-            status: components["schemas"]["PaymentStatus"];
-            /** Format: date-time */
-            reversedAt: string | null;
-            reversalReason: string | null;
-            /** Format: uuid */
-            replacesPaymentId: string | null;
-            /** Format: uuid */
-            replacedByPaymentId: string | null;
-            allocations: components["schemas"]["Allocation"][];
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        PaymentMethod: "CASH" | "BANK";
-        /** @enum {string} */
-        PaymentStatus: "POSTED" | "REVERSED";
-        Allocation: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            receivableId: string;
-            /** Format: uuid */
-            projectId: string;
-            /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
-            amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
-            receivableOutstanding: string;
-            receivableStatus: components["schemas"]["ItemStatus"];
-            /** Format: date-time */
-            createdAt: string;
-        };
         CreatePaymentRequest: {
             /** Format: uuid */
             customerId: string;
@@ -8679,6 +9479,7 @@ export interface components {
              */
             projectId?: string;
             notes?: string;
+            captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -8764,6 +9565,113 @@ export interface components {
             color?: string | null;
             archived?: boolean;
         };
+        IncomeResponse: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["IncomeKind"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** Format: uuid */
+            customerId: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            title: string | null;
+            notes: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string | null;
+            status: components["schemas"]["IncomeStatus"];
+        };
+        /** @enum {string} */
+        IncomeKind: "received" | "owed";
+        /** @enum {string} */
+        IncomeStatus: "unallocated" | "open" | "settled";
+        CreateIncomeRequest: {
+            kind: components["schemas"]["IncomeKind"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** Format: uuid */
+            customerId?: string;
+            /** Format: uuid */
+            projectId?: string;
+            title?: string;
+            notes?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+            method?: components["schemas"]["PaymentMethod"];
+            captureSource?: components["schemas"]["CaptureSource"];
+        };
+        InboxEntryPage: {
+            items: components["schemas"]["InboxEntry"][];
+            nextCursor: string | null;
+        };
+        InboxEntry: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["InboxEntryKind"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            note: string | null;
+            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        InboxEntryKind: "income" | "expense";
+        CreateInboxEntryRequest: {
+            kind: components["schemas"]["InboxEntryKind"];
+            /** @description Greater than zero, in the currency's fractional digits */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. */
+            occurredOn: string;
+            note?: string;
+            captureSource?: components["schemas"]["CaptureSource"];
+        };
+        UpdateInboxEntryRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            amount?: string;
+            currency?: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn?: string;
+            note?: string | null;
+            captureSource?: components["schemas"]["CaptureSource"] & unknown;
+        };
+        FileAsExpenseRequest: {
+            /** Format: uuid */
+            categoryId?: string;
+            vendor?: string;
+            title?: string;
+            /** Format: uuid */
+            customerId?: string;
+            /**
+             * Format: uuid
+             * @description With projectId alone, customerId is the project's customer
+             */
+            projectId?: string;
+        };
+        FileAsIncomeRequest: {
+            kind: components["schemas"]["IncomeKind"];
+            /** Format: uuid */
+            customerId?: string;
+            /** Format: uuid */
+            projectId?: string;
+            title?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+            method?: components["schemas"]["PaymentMethod"];
+        };
         CreateOrganizationRequest: {
             name: string;
             slug?: string;
@@ -8831,6 +9739,7 @@ export interface components {
         UserDetail: {
             user: components["schemas"]["UserSummary"];
             memberships: components["schemas"]["Membership"][];
+            inboxEntryCount: number;
         };
         GrantMembershipResponse: {
             membership: components["schemas"]["Membership"];

@@ -1,5 +1,6 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
-import { openFreshApp, openNewIncomeDrawer } from './support/app';
+import type { Locator, Page } from '@playwright/test';
+import { test, expect } from '../../support/qa';
+import { openFreshApp, openNewIncomeDrawer } from '../../support/app';
 
 // Drawers on springs (MUT-80, brief R2). jsdom has no layout, so the motion
 // itself is proven here: the exit after a close, drag to dismiss, and the
@@ -57,48 +58,71 @@ async function dragTitle(page: Page, drawer: Locator, dx: number) {
   await page.mouse.up();
 }
 
-test.describe('Drawer motion', () => {
-  test('Escape closes the dialog at once, and its snapshot slides out to the right and goes', async ({ page }) => {
+test(
+  'Escape closes the dialog at once, and its snapshot slides out to the trailing edge',
+  { tag: '@web.drawer-motion.escape-exit' },
+  async ({ page, step }) => {
     await openFreshApp(page, '/income');
     const drawer = await openNewIncomeDrawer(page);
     await atRest(drawer);
     await traceExit(page);
 
-    await page.keyboard.press('Escape');
+    await step('Press Escape', async () => {
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    });
 
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect.poll(() => exitTrace(page), { timeout: 2000 }).toMatchObject({ added: true, removed: true });
-    expect((await exitTrace(page)).maxX).toBeGreaterThan(400);
-    await expect(page.locator('.drawer, .drawer-overlay')).toHaveCount(0);
-  });
+    await step('Check the exit snapshot slid past 400px before being removed', async () => {
+      await expect.poll(() => exitTrace(page), { timeout: 2000 }).toMatchObject({ added: true, removed: true });
+      expect((await exitTrace(page)).maxX).toBeGreaterThan(400);
+      await expect(page.locator('.drawer, .drawer-overlay')).toHaveCount(0);
+    });
+  },
+);
 
-  test('a drag past half the width closes it; a shorter one springs back', async ({ page }) => {
+test(
+  'a drag past half the width closes it; a shorter one springs back',
+  { tag: '@web.drawer-motion.drag-dismiss' },
+  async ({ page, step }) => {
     await openFreshApp(page, '/income');
     const drawer = await openNewIncomeDrawer(page);
     await atRest(drawer);
 
-    await dragTitle(page, drawer, 120);
-    await atRest(drawer);
-    await expect(drawer).toBeVisible();
+    await step('Drag the title by 120px and release', async () => {
+      await dragTitle(page, drawer, 120);
+      await atRest(drawer);
+      await expect(drawer).toBeVisible();
+    });
 
-    await dragTitle(page, drawer, 320);
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-  });
+    await step('Drag the title by 320px and release', async () => {
+      await dragTitle(page, drawer, 320);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    });
+  },
+);
 
-  test('in Arabic the drawer sits on the left and a drag to the left closes it', async ({ page }) => {
-    await page.goto('/app/settings');
-    await page.getByRole('button', { name: /skip for now/i }).click();
-    await page.getByRole('button', { name: 'العربية' }).click();
-    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+test(
+  'in Arabic the drawer sits on the left and a drag to the left closes it',
+  { tag: '@web.drawer-motion.rtl-mirror' },
+  async ({ page, step }) => {
+    await step('Switch language to Arabic', async () => {
+      await openFreshApp(page, '/settings');
+      await page.getByRole('button', { name: 'العربية' }).click();
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    });
 
-    await page.goto('/app/income');
-    await page.getByRole('button', { name: 'إضافة إيراد' }).click();
-    const drawer = page.getByRole('dialog').filter({ hasText: 'إيراد جديد' });
-    await atRest(drawer);
-    expect((await drawer.boundingBox())?.x).toBe(0);
+    let drawer = page.getByRole('dialog');
+    await step('Open the New Income drawer', async () => {
+      await page.goto('/app/income');
+      await page.getByRole('button', { name: 'إضافة إيراد' }).click();
+      drawer = page.getByRole('dialog').filter({ hasText: 'إيراد جديد' });
+      await atRest(drawer);
+      expect((await drawer.boundingBox())?.x).toBe(0);
+    });
 
-    await dragTitle(page, drawer, -320);
-
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-  });
-});
+    await step('Drag the title left', async () => {
+      await dragTitle(page, drawer, -320);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    });
+  },
+);
