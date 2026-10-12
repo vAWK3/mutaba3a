@@ -1,0 +1,21 @@
+# One file per area. Feature ids become <app>.<area>.<id> — tag the test with that id.
+app: web
+area: navigation
+title: Sidebar navigation
+tier: core
+paths:
+  - src/components/layout/**
+  - src/router.tsx
+  - src/lib/features/**
+features:
+  - id: core-sidebar
+    title: A fresh install shows the core four (Home, Clients, Income, Settings) and each one navigates
+    tier: core
+    legacy: [MUT-15]
+    steps:
+      - Open a fresh install
+      - Read the sidebar's nav items
+      - Click Clients, then Income, then Settings, then Home
+    expect:
+      - The sidebar shows exactly Home, Clients, Income, Settings — no Projects, Transactions, Reports or Expenses
+      - Each click lands on the matching route and marks that link aria-current="page"

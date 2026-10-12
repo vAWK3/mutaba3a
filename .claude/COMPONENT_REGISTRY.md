@@ -334,7 +334,7 @@ Unmount it whenever you like: the exit animation plays after it has gone (ADR-04
 **Purpose**: the one slide-over shell for both builds. Both `Drawer`s wrap it; the local one passes `t('common.close')`, the portal its own label.
 **Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
 **Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
-**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `e2e/drawer-motion.spec.ts`.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `qa/specs/web/drawer-motion.spec.ts`.
 
 ### Motion physics and focusables (MUT-80)
 - `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
@@ -395,7 +395,7 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 **Tests**:
 - `src/components/__tests__/IncomeDrawer.test.tsx`
 - `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx`
-- `e2e/income-fast-path.spec.ts`
+- `qa/specs/web/income.spec.ts`
 
 ---
 
@@ -430,7 +430,7 @@ editPaymentRecord({ transactionId, paymentRecordId });          // edit one reco
 - `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx`
 - `src/lib/__tests__/paymentEntry.test.ts`
 - `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts`
-- `e2e/record-payment.spec.ts`
+- `qa/specs/web/record-payment.spec.ts`
 
 ---
 

@@ -1,0 +1,59 @@
+app: web
+area: income
+title: Income
+tier: core
+paths:
+  - src/pages/income/**
+  - src/components/drawers/IncomeDrawer.tsx
+  - src/lib/incomeSearch.ts
+features:
+  - id: fast-path
+    title: "Title, Tab, amount, Tab, client, Enter saves — the 3-field fast path (MUT-5)"
+    tier: core
+    legacy: [MUT-5]
+    steps:
+      - Open a fresh install at /income
+      - Click Add Income
+      - Type a title, Tab, type an amount, Tab, type a new client's name, Enter, Enter
+    expect:
+      - The drawer closes
+      - The entry appears on the new client's profile with the right title and amount
+  - id: create-minimal
+    title: An amount alone saves an unpaid entry
+    tier: core
+    steps:
+      - Open the New Income drawer
+      - Fill only the amount
+      - Save
+    expect:
+      - 'The entry appears in the Income list as Unpaid, with "No client"'
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+  - id: validation
+    title: Saving with no amount shows a field error, not a crash
+    tier: secondary
+    steps:
+      - Open the New Income drawer
+      - Save with every field empty
+    expect:
+      - '"Amount is required" is shown'
+      - The drawer stays open
+  - id: status-due-date
+    title: Due Date shows for Earned/Invoiced income and hides once Received
+    tier: secondary
+    steps:
+      - Open the New Income drawer and expand More details
+      - Switch Status between Earned, Received and Invoiced
+    expect:
+      - Due Date is visible for Earned and Invoiced, hidden for Received
+      - The drawer (with More details open) has no new accessibility violations beyond the known Save-button contrast issue
+  - id: rtl-amount
+    title: In Arabic the amount input stays left-to-right with the currency prefix on the correct side
+    tier: tertiary
+    paths:
+      - src/lib/i18n/**
+    steps:
+      - Switch language to Arabic in Settings
+      - Open the New Income drawer
+    expect:
+      - The amount group and its input render with direction ltr
+      - The currency prefix sits to the left of the input

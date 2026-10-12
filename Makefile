@@ -84,7 +84,7 @@ help:
 	@printf '  make check-web         lint + typecheck + unit tests + bundle guard\n'
 	@printf '  make check-server      lint + typecheck + tests + openapi + build\n'
 	@printf '  make check             both of the above\n'
-	@printf '  make check-e2e         playwright end-to-end specs (not part of a release)\n'
+	@printf '  make check-e2e         release-qa core-tier specs (not part of a release)\n'
 	@printf '  make migrate-status    pending prisma migrations against $(ENVIRONMENT)\n'
 	@printf '\n$(C_BOLD)Pieces$(C_OFF)\n'
 	@printf '  make bump-web          choose patch/minor/major for the app version\n'
@@ -144,11 +144,13 @@ check-server:
 
 check: check-web check-server
 
-# Playwright, against a dev server it starts itself. Not part of a release:
-# it needs browsers installed, and a flaky browser should not be able to block
-# a deploy whose unit and bundle gates are green. Run it deliberately.
+# release-qa (MUT-97, companion to Malafat's MAL-1007): isolated worktree +
+# its own dev server, recorded video, review page. Not part of a release: it
+# needs browsers installed, and a flaky browser should not be able to block a
+# deploy whose unit and bundle gates are green. Run it deliberately.
+# See qa/qa.config.mjs and ~/Work/tools/release-qa/SKILL.md.
 check-e2e:
-	@npm run --silent test:e2e
+	@release-qa release --no-open
 
 migrate-status:
 	@cd server && TF_STATE_BUCKET=$${TF_STATE_BUCKET:?set TF_STATE_BUCKET} npm run --silent db:migrate:status

@@ -1,0 +1,4 @@
+# release-qa outputs (videos, run results, sessions)
+runs/
+.state/
+test-results/

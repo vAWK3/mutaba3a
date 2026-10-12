@@ -489,7 +489,7 @@ describe('Button', () => {
 
 ### 4. E2E Tests (Planned)
 
-> The live suite is `e2e/*.spec.ts`, listed under "E2E port-over" below (2026-10-12). This section is the original plan.
+> The live suite is `qa/specs/web/*.spec.ts`, run via `release-qa` (`make check-e2e`; MUT-97, 2026-10-12). It replaced `e2e/*.spec.ts`, listed under "E2E port-over" below — that section is now history, not the current location. This section (the examples that follow) was always the original aspirational plan, never implemented as written.
 
 **Scope**: Full user flows from UI to database.
 
@@ -616,8 +616,10 @@ npm run test -- src/db/__tests__/repository.test.ts
 # Pattern match
 npm run test -- -t "creates a transaction"
 
-# E2E (when implemented)
-npm run test:e2e
+# E2E (release-qa kit; MUT-97)
+release-qa run --attach   # against a dev server you already started
+release-qa release        # isolated worktree + its own dev server + recorded review page
+make check-e2e            # the latter, wired for local/CI use
 
 # Timezone matrix -- runs the suite west of UTC (America/New_York)
 npm run test:tz
@@ -1279,6 +1281,12 @@ Plan: `.claude/designs/mut-64-device-sessions-tests.md`. Written red first per f
 
 
 ### E2E port-over — the stale Playwright specs on the current UI (TD-004, 2026-10-12)
+
+> **Superseded 2026-10-12 (MUT-97)**: `e2e/` was retired in favor of `qa/` (the
+> release-qa kit, companion to Malafat's MAL-1007). Every file and path named
+> below was ported to `qa/specs/web/*.spec.ts` with the same coverage, tagged
+> `@web.<area>.<id>` and described in `qa/features/web/*.yaml`. This section
+> stays as the historical record of the 2026-10-12 port-over itself.
 
 The 13 cases that failed on main (stale paths without `/app`, pages that no longer exist, the pre-MUT-5 drawer) are each updated or removed. Helpers live in `e2e/support/`:
 - `openFreshApp(page, path)` waits for the Welcome dialog and skips it, which creates the default USD profile;
