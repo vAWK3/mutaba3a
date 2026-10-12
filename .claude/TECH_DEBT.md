@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-063: Sample part-paid entries have a received amount but no payment record, so paying one raises Owed now
+**Status**: Open
+**Added**: 2026-10-12 (MUT-86, found in the browser on `/app/clients?sample=1`)
+**Priority**: Medium. This is the path the landing page's "Paid? Two taps." chapter sends visitors down.
+**Impact**: `src/demo/seedData/transactions.ts` (from line 319) seeds part-paid entries with `receivedAmountMinor` set and no `PaymentRecord`. The first payment recorded on one runs `recalculateReceivedAmount`, which sums the records alone and so drops the seeded part. For example, an entry of ₪6,300 with ₪2,298.72 received and ₪4,001.28 left took a ₪2,000 payment and showed ₪4,300 left. The client's Owed now went from ₪6,901.28 up to ₪7,200, and the entry's "Recorded on the entry" row disappeared from Payments. The repository's overpayment guard also counts records only, so it allows more than the drawer does on such an entry. This predates MUT-86; the old drawer did the same. Real data rarely reaches it, because the legacy migration wrote "Migrated from accumulated total" records. TD-029 / MUT-60 is the general case (received money with no record).
+**Remediation**: Have the seed write one `PaymentRecord` per part-paid entry, dated before today, instead of a bare `receivedAmountMinor`. MUT-60's backfill, a record per uncovered received amount, would also cover it.
+**Effort**: Small (the seed); Medium (with MUT-60)
+
+### TD-062: `formatAmount` prints a lone tenth ("₪887.5")
+**Status**: Open
+**Added**: 2026-10-12 (MUT-86)
+**Priority**: Low
+**Impact**: `formatAmount` (`src/lib/utils.ts`) formats with `minimumFractionDigits: 0, maximumFractionDigits: 2`, so ₪887.50 prints "₪887.5". The brief flagged it on the payment drawer's chips, which MUT-86 removed. The same output shows wherever an amount has cents ending in zero: the drawer's new title ("Record Payment · $887.5 left"), the row's Record Payment button, tables and Owed now. Tests pin the current output (`RecordPaymentButton.test.tsx` "₪70.5", `Numeric.test.tsx` "$100.5"). The drawer's amount field is not affected: `minorToAmountInput` writes "887.50".
+**Remediation**: Print 0 decimals for whole amounts and 2 otherwise, using two cached formatters keyed by `amountMinor % 100 === 0`. Update the two pinned tests. This is a shared formatter, so make the change in one pass (MUT-92's craft bundle is the natural home) and check the hosted portal's own formatter too.
+**Effort**: Small
+
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open
 **Added**: 2026-10-12 (found while checking the TD-009 fixes in the browser)
@@ -131,6 +147,7 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Impact**: `ExpenseDrawer`, `RetainerDrawer` and `PlanAssumptionDrawer` save `parseAmountToMinor(data.amount)`, which returns 0 for text it can't read and ignores a typed currency token. The income drawer refuses both: an ambiguous amount is a field error, and "€100" in a USD entry is refused (`amountInputCurrency`). In the other drawers "€100" is saved as 100 in the drawer's currency, and an unreadable amount relies on each schema's own checks.
 **Remediation**: Validate with `parseAmountInput` (null → field error) and compare `amountInputCurrency` with the selected currency, as `IncomeDrawer` does; keep the lenient wrappers for display-only paths.
 **Effort**: Small per drawer
+**Update (2026-10-12, MUT-86):** the payment drawer, which was not listed but used the same lenient path (`formatCurrencyInput` filtering keystrokes, then `parseCurrencyInput`), now validates strictly. `describePaymentAmount` reads the text with `parseAmountInput`, and an unreadable amount or another currency's symbol is a field error. The three drawers above remain. `parseCurrencyInput` and `formatCurrencyInput` (`src/lib/utils.ts`) no longer have any production caller; delete them, and their `utils.test.ts` cases, when this entry closes.
 
 ### TD-046: `useTransactionActions.ts` is dead code carrying the same dateless mark-paid bug ADR-038 just fixed
 **Status**: Open

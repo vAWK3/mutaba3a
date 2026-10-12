@@ -46,11 +46,12 @@
 | ADR-035 | Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted | Active | 2026-10 |
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
 | ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
-| ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active | 2026-10 |
+| ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active; §5 superseded by ADR-047 | 2026-10 |
 | ADR-039 | Payment Records Own an Entry's Payment State; an Edit Never Rewrites It | Active | 2026-10 |
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
+| ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 
 ---
 
@@ -1799,7 +1800,7 @@ date field held.
    the drawer (prefilled with the full remaining balance, so settling in full
    is still one confirm) removes that duplicate path outright rather than
    growing a date picker into four more menu items.
-5. **`PartialPaymentDrawer`'s "Mark fully paid" shortcut now submits through
+5. *(Superseded 2026-10-12 by ADR-047: the shortcut is removed, and the date lives in the form again.)* **`PartialPaymentDrawer`'s "Mark fully paid" shortcut now submits through
    `useCreatePaymentRecord` with the form's own `dateInput`**, lifted from
    `PaymentForm` into the drawer so both the shortcut and the explicit submit
    button record under the same chosen date. `useMarkTransactionPaid` is no
@@ -1936,3 +1937,31 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Alternatives Considered**: start empty with the sample optional (rejected by Basel: an empty app doesn't show the value the page just promised); keep the demo flow and fix its bugs (rejected: an internal tool's confirm dialog as a visitor's first sight); delete only `demo_` rows on leaving (rejected: rows the visitor added to a sample business would be orphaned on a profile that no longer exists).
 
+---
+
+## ADR-047: The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5)
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-86 (epic MUT-74). Brief: `.claude/designs/landing-apple-redesign.md`, decision P1, approved by Basel 2026-10-11. Test plan: `.claude/designs/mut-86-payment-drawer-tests.md`.
+
+`PartialPaymentDrawer` had two footer actions for one outcome. "Mark Fully Paid" recorded the remaining balance, exactly as Record Payment did with its prefilled amount, but it dropped anything typed in Notes. ADR-038 §5 had lifted the date into the drawer only so that this shortcut could use it. The two buttons also ended differently: Mark Fully Paid closed the drawer, while Record Payment cleared the form and stayed open on an empty amount. Separately, an edit opened before the entry's records had loaded mounted as a create form under the title "Edit Payment", so pressing its button recorded a second payment.
+
+**Decision**:
+1. **One primary action.** The footer is Cancel and Record Payment (Update Payment when editing). Mark Fully Paid and its `markFullyPaid` key are removed. ADR-038 §5 is superseded, and the date state moves back into the form. Settling in full stays one confirm, because the amount is prefilled with the remaining balance (MUT-6, ADR-038 §4).
+2. **A save closes the drawer**, whether the payment settles the entry or not. H1 (the Home row slides out on save) and R1 (show where it landed) both need the drawer closed afterwards. Update still returns to the entry's create view, as before.
+3. **The live line and the field errors read one classification.** `describePaymentAmount` (`src/lib/paymentEntry.ts`) uses MUT-5's strict parser. The answer ("Paid in full", "₪1,775 still owed") and an overpayment show as the user types. Unreadable text, zero, or another currency's symbol show only after Record is pressed, so a half-typed "1,2" never nags. The repository stays the source of truth (ADR-030, ADR-038). The drawer checks first only to say why in the user's language.
+4. **The drawer and the repository share one future-date rule.** `isFuturePaymentDate` moves unchanged from `repository.ts` to `lib/dates.ts` and takes an optional `today`. An emptied date is refused too, with `validation.dateRequired`.
+5. **An edit waits for its record.** While an edit is requested and the records are still loading, the drawer shows its spinner, and the form is keyed on the found record.
+6. **Nothing to record means no form.** With nothing left in create mode, the drawer says "Paid in full", lists the history and offers Close.
+
+**Consequences**:
+- The landing page's "Paid? Two taps." stays true: open, then Record Payment, with today's date.
+- Notes are never lost on the way to a full payment.
+- MUT-82 opens the drawer as it is today and gets the remaining amount and today's date. Its Undo needs the created record. `useCreatePaymentRecord` already returns it, and an `onRecorded` callback can pass it out at that point.
+- After Update Payment, the drawer lands on the entry's create view, which is one tap from recording another payment. That was true before, but the prefilled single button makes it more prominent. It is a follow-up, not part of this decision.
+
+**Alternatives Considered**:
+- Keep Mark Fully Paid and pass the notes to it (rejected): two buttons for one outcome is the defect P1 names.
+- Keep the drawer open after a partial payment so the history updates (rejected): H1 and R1 show the result where it landed, not inside the drawer.
+- Show every amount error live (rejected): grouped amounts pass through unreadable states while they are being typed.

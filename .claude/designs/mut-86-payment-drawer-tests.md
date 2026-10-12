@@ -19,6 +19,9 @@
 | D10 | **Removed.** Mark Fully Paid (and the `markFullyPaid` key in both locales), the 25/50/100% chips (`QuickAmountButton`), the Amount/Received/Remaining box, the empty "No payments recorded yet" history (the key stays: the client's Payments section uses it), and the form's "Record Payment" sub-heading. The date state moves back into the form: ADR-038 §5 lifted it to the drawer only for Mark Fully Paid. |
 | D11 | **Props unchanged** (`transactionId`, `onClose`). MUT-82 opens the drawer the same way and gets the remaining amount and today by default. Its Undo will need the created record, which `useCreatePaymentRecord` already resolves with; an `onRecorded` callback can surface it then. Not built here. |
 | D12 | **Styles** live in a co-located `PartialPaymentDrawer.css` with logical properties. `index.css`'s drawer block and the shared `Drawer` are untouched (MUT-80 is changing them). |
+| D13 | *(found in the browser)* The classes are prefixed `pay-drawer-`. `index.css` already has global `.payment-row` and `.payment-amount { width: 120px }` (document forms), which squeezed the amount field. |
+| D14 | *(found in the browser)* The history rows' inline styles named tokens that don't exist (`--color-bg-secondary`, …) and fell back to light colours in dark mode. They now use theme tokens through `pay-drawer-record` classes. |
+| D15 | *(found while testing)* The title uses the shared `formatAmount`, which prints "$887.5". The field writes "887.50". Changing the shared formatter is out of scope (TD-062). |
 
 ## Rules under test
 
@@ -49,7 +52,7 @@
 
 ## Edge cases
 
-- Remaining has cents (887.50) → prefill "887.50", title "$887.50 left", live line "Paid in full".
+- Remaining has cents (887.50) → prefill "887.50", title "$887.5 left" (shared `formatAmount`, TD-062), live line "Paid in full".
 - A legacy entry with more received than its amount → remaining ≤ 0 → settled view, nothing recordable (ADR-030).
 - Arabic UI → the title's amount stays whole inside the RTL sentence (isolates); the amount field stays LTR, currency first; the date chevron points left.
 - Edit mode Cancel → back to the create view of the same entry (unchanged).

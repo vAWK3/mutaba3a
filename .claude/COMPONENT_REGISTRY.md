@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -388,6 +388,41 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 - `src/components/__tests__/IncomeDrawer.test.tsx`
 - `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx`
 - `e2e/income-fast-path.spec.ts`
+
+---
+
+### PartialPaymentDrawer ("Record payment")
+**Location**: `src/components/drawers/PartialPaymentDrawer.tsx` + `PartialPaymentDrawer.css`. It is mounted in `AppShell` while `partialPaymentDrawer.isOpen`.
+**Purpose**: record a payment against an income entry, or edit a recorded one. It is the only UI that writes a `PaymentRecord` (ADR-038). Its layout follows P1 (MUT-86, ADR-047): it leads with what's left.
+
+```tsx
+openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
+editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
+// Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
+```
+
+**Layout** (classes prefixed `pay-drawer-`; `index.css` already has global `.payment-row` and `.payment-amount`):
+- **Title:** "Record Payment · {amount} left" (`titleLeft`, the amount in bidi isolates). In edit mode it is "Edit Payment".
+- **Amount:** one large `.input-with-prefix` field, LTR in Arabic. Its label is visually hidden. It is prefilled with `minorToAmountInput` ("3550", "887.50") and selected on open.
+- **Live line** (`aria-live="polite"`, describes the input): "Paid in full", "{amount} still owed", or the overpayment message. Other amount errors show only after Record is pressed.
+- **Date:** a "Payment date · Today ›" row that opens the date field in its place. **Notes:** "+ Add note", which opens a focused field. Edit mode opens Notes when the record has one.
+- **Footer:** Cancel plus Record Payment (create) or Update Payment (edit). With nothing left to record, the footer is Close and there is no form.
+- **Payment history:** below the form, only when the entry has records. Each row has edit and delete.
+
+**Rules** (pure, in `src/lib/paymentEntry.ts`, unit-tested):
+- `describePaymentAmount(raw, currency, allowedMinor)`. Allowed is the remaining balance, plus the record's own amount when editing.
+- `minorToAmountInput(minor)`
+- Dates go through `isFuturePaymentDate` (`lib/dates.ts`), the same helper the repository uses.
+
+**Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
+
+**Props**: `transactionId`, `onClose`. MUT-82 opens it the same way.
+
+**Tests**:
+- `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx`
+- `src/lib/__tests__/paymentEntry.test.ts`
+- `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts`
+- `e2e/record-payment.spec.ts`
 
 ---
 
