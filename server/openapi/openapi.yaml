@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.15.0-mut61
+  version: 1.16.0-mut100
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -13,9 +13,9 @@ info:
 
     PATCH routes require `If-Match: <version>` (optimistic concurrency).
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -1168,10 +1168,7 @@ components:
           type: string
           format: uuid
         type:
-          type: string
-          enum:
-            - FIXED
-            - RECURRING
+          $ref: "#/components/schemas/AgreementType"
         status:
           type: string
           enum:
@@ -1250,6 +1247,8 @@ components:
             - cancelEffectiveMonth
             - cancelEffectiveDate
             - finalMonth
+        contingency:
+          $ref: "#/components/schemas/AgreementContingency"
         cancelledAt:
           type: string
           nullable: true
@@ -1280,10 +1279,17 @@ components:
         - description
         - paymentTerms
         - retainer
+        - contingency
         - cancelledAt
         - version
         - createdAt
         - updatedAt
+    AgreementType:
+      type: string
+      enum:
+        - FIXED
+        - RECURRING
+        - CONTINGENCY
     PaymentTerms:
       type: string
       enum:
@@ -1293,6 +1299,50 @@ components:
         - EOM_30
         - EOM_45
         - EOM_60
+    AgreementContingency:
+      type: object
+      nullable: true
+      properties:
+        commissionRateBasisPoints:
+          type: integer
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+        outcome:
+          type: string
+          enum:
+            - AWAITING
+            - AWARDED
+            - NO_RECOVERY
+        outcomeDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        awarded:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        note:
+          type: string
+          nullable: true
+        outcomeRecordedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - commissionRateBasisPoints
+        - upfrontTreatment
+        - outcome
+        - outcomeDate
+        - awarded
+        - note
+        - outcomeRecordedAt
+    UpfrontTreatment:
+      type: string
+      enum:
+        - SEPARATE
+        - CREDITED
     Installment:
       type: object
       properties:
@@ -1343,6 +1393,8 @@ components:
           type: string
           nullable: true
           format: uuid
+        isCommission:
+          type: boolean
         version:
           type: integer
       required:
@@ -1361,6 +1413,7 @@ components:
         - status
         - postedAt
         - receivableId
+        - isCommission
         - version
     InstallmentTrigger:
       type: object
@@ -1487,6 +1540,13 @@ components:
     AgreementPreviewResponse:
       type: object
       properties:
+        type:
+          type: string
+          enum:
+            - FIXED
+            - CONTINGENCY
+        contingency:
+          $ref: "#/components/schemas/ContingencyTerms"
         totals:
           type: object
           properties:
@@ -1558,6 +1618,8 @@ components:
                 description: Calendar date in the organization timezone, YYYY-MM-DD
               status:
                 $ref: "#/components/schemas/ItemStatus"
+              isCommission:
+                type: boolean
             required:
               - position
               - label
@@ -1571,17 +1633,32 @@ components:
               - paymentTerms
               - dueDate
               - status
+              - isCommission
         previewToken:
           type: string
           minLength: 64
           maxLength: 64
       required:
+        - type
+        - contingency
         - totals
         - vatRateBasisPoints
         - vatTreatment
         - currency
         - installments
         - previewToken
+    ContingencyTerms:
+      type: object
+      nullable: true
+      properties:
+        commissionRateBasisPoints:
+          type: integer
+          description: The commission on the award, 1..10000 (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+      required:
+        - commissionRateBasisPoints
+        - upfrontTreatment
     AgreementPreviewRequest:
       type: object
       properties:
@@ -1611,8 +1688,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InstallmentSpec"
-          minItems: 1
           maxItems: 60
+        contingency:
+          $ref: "#/components/schemas/ContingencyTerms"
       required:
         - projectId
         - amount
@@ -1755,6 +1833,236 @@ components:
     CancelAgreementRequest:
       type: object
       properties: {}
+    ContingencyTermsPatchRequest:
+      type: object
+      properties:
+        commissionRateBasisPoints:
+          type: integer
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+    ContingencyOutcomePreview:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+            - RECORD
+            - CORRECT
+        outcome:
+          $ref: "#/components/schemas/ContingencyOutcome"
+        awarded:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        outcomeDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        commissionRateBasisPoints:
+          type: integer
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+        commission:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        upfrontCounted:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        appliedUpfront:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        billable:
+          type: object
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - amount
+            - net
+            - vat
+            - gross
+        vatRateBasisPoints:
+          type: integer
+        postingDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        dueDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        replaces:
+          type: object
+          nullable: true
+          properties:
+            installmentId:
+              type: string
+              format: uuid
+            receivableId:
+              type: string
+              nullable: true
+              format: uuid
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits
+          required:
+            - installmentId
+            - receivableId
+            - gross
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - mode
+        - outcome
+        - awarded
+        - outcomeDate
+        - commissionRateBasisPoints
+        - upfrontTreatment
+        - commission
+        - upfrontCounted
+        - appliedUpfront
+        - billable
+        - vatRateBasisPoints
+        - postingDate
+        - dueDate
+        - replaces
+        - previewToken
+    ContingencyOutcome:
+      type: string
+      enum:
+        - AWARDED
+        - NO_RECOVERY
+    ContingencyOutcomePreviewRequest:
+      type: object
+      properties:
+        outcome:
+          $ref: "#/components/schemas/ContingencyOutcome"
+        awardedAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        outcomeDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        note:
+          type: string
+          maxLength: 500
+        commissionLabel:
+          type: string
+          minLength: 1
+          maxLength: 80
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        commissionRateBasisPoints:
+          type: integer
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+        correctionReason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - outcome
+        - outcomeDate
+    ContingencyOutcomeRequest:
+      type: object
+      properties:
+        outcome:
+          $ref: "#/components/schemas/ContingencyOutcome"
+        awardedAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        outcomeDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        note:
+          type: string
+          maxLength: 500
+        commissionLabel:
+          type: string
+          minLength: 1
+          maxLength: 80
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - outcome
+        - outcomeDate
+        - previewToken
+    ContingencyOutcomeCorrectRequest:
+      type: object
+      properties:
+        outcome:
+          $ref: "#/components/schemas/ContingencyOutcome"
+        awardedAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        outcomeDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        note:
+          type: string
+          maxLength: 500
+        commissionLabel:
+          type: string
+          minLength: 1
+          maxLength: 80
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        commissionRateBasisPoints:
+          type: integer
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+        correctionReason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - outcome
+        - outcomeDate
+        - correctionReason
+        - previewToken
     TriggerInstallmentResponse:
       type: object
       properties:
@@ -3284,6 +3592,8 @@ components:
           $ref: "#/components/schemas/ProjectSummaryStatus"
         proposal:
           $ref: "#/components/schemas/FeeProposalSummary"
+        contingency:
+          $ref: "#/components/schemas/ProjectContingency"
       required:
         - projectId
         - currency
@@ -3300,6 +3610,7 @@ components:
         - pending
         - status
         - proposal
+        - contingency
     ProjectSummaryStatus:
       type: string
       enum:
@@ -3348,6 +3659,34 @@ components:
         - agreedAmount
         - proposedOn
         - agreementId
+    ProjectContingency:
+      type: object
+      nullable: true
+      properties:
+        agreementId:
+          type: string
+          format: uuid
+        commissionRateBasisPoints:
+          type: integer
+        upfrontTreatment:
+          $ref: "#/components/schemas/UpfrontTreatment"
+        outcome:
+          type: string
+          enum:
+            - AWAITING
+            - AWARDED
+            - NO_RECOVERY
+        awarded:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+      required:
+        - agreementId
+        - commissionRateBasisPoints
+        - upfrontTreatment
+        - outcome
+        - awarded
     ProjectSummaryResponse:
       allOf:
         - $ref: "#/components/schemas/ProjectSummary"
@@ -6073,7 +6412,7 @@ paths:
     post:
       tags:
         - Agreements
-      summary: "Preview a fixed-fee agreement: totals, installments, due dates, preview token"
+      summary: "Preview a fixed-fee or contingency agreement: totals, installments, due dates, preview token"
       description: Writes nothing. The token covers the body and the VAT rate in force on agreementDate, so a rate change before create is refused with 409 PREVIEW_STALE.
       security:
         - apiKey: []
@@ -6118,7 +6457,7 @@ paths:
     post:
       tags:
         - Agreements
-      summary: Create a fixed-fee agreement from a preview
+      summary: Create a fixed-fee or contingency agreement from a preview
       description: Same body as the preview plus its previewToken. IMMEDIATE installments and DATE installments whose date has arrived are posted as receivables at once.
       security:
         - apiKey: []
@@ -6222,10 +6561,7 @@ paths:
           name: status
           in: query
         - schema:
-            type: string
-            enum:
-              - FIXED
-              - RECURRING
+            $ref: "#/components/schemas/AgreementType"
           required: false
           name: type
           in: query
@@ -6390,8 +6726,8 @@ paths:
     post:
       tags:
         - Agreements
-      summary: Cancel a fixed-fee agreement while nothing is posted
-      description: Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted. Retainers cancel through POST /v1/retainers/{id}/cancel.
+      summary: Cancel a fixed-fee or contingency agreement while nothing is posted
+      description: Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted, and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. Retainers cancel through POST /v1/retainers/{id}/cancel.
       security:
         - apiKey: []
       parameters:
@@ -6419,6 +6755,287 @@ paths:
       responses:
         "200":
           description: Cancelled (or already was)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/contingency:
+    patch:
+      tags:
+        - Agreements
+      summary: Change a contingency agreement’s commission rate or upfront treatment before its outcome
+      description: If-Match carries the version you read. After an outcome the terms are frozen (409 OUTCOME_ALREADY_RECORDED); a correction (POST …/outcome/correct) may fix them while the commission is unpaid.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContingencyTermsPatchRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/outcome/preview:
+    post:
+      tags:
+        - Agreements
+      summary: "Preview a contingency outcome, or a correction of one: the commission, what the upfront covers, and the bill"
+      description: Writes nothing. mode is RECORD before an outcome exists and CORRECT after; send the same body (plus previewToken) to /outcome or /outcome/correct. The token covers the body, the agreement version, the VAT rate on outcomeDate, the counted upfront, the commission, the billable amount and — when correcting — the replaced receivable’s version, so a credit or payment in between is 409 PREVIEW_STALE.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContingencyOutcomePreviewRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContingencyOutcomePreview"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/outcome:
+    post:
+      tags:
+        - Agreements
+      summary: "Record a contingency outcome from a preview: AWARDED bills the commission once, NO_RECOVERY bills nothing"
+      description: The commission is an installment on the agreement, DATE-triggered on outcomeDate and posted at once with VAT at the rate in force on that date. Nothing posts when the bill is zero (NO_RECOVERY, or CREDITED with the upfront covering the commission). A second record is 409 OUTCOME_ALREADY_RECORDED.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContingencyOutcomeRequest"
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgreementDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/outcome/correct:
+    post:
+      tags:
+        - Agreements
+      summary: "Correct a recorded outcome while its commission is unpaid: credit the old commission in full and post the new one"
+      description: "One transaction: the replaced commission’s receivable is credited in full (correctionReason becomes the credit’s reason), its line is voided, and the new outcome, terms and commission line are written; the new line posts at once. Refused with 409 OUTCOME_HAS_PAYMENTS once the commission has a payment or credit — re-checked under the receivable’s lock, so a payment racing the correction is refused too. The body may also fix commissionRateBasisPoints and upfrontTreatment."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContingencyOutcomeCorrectRequest"
+      responses:
+        "200":
+          description: Corrected
           content:
             application/json:
               schema:
