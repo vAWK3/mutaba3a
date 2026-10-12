@@ -40,6 +40,17 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — `make release full`
+
+**Why:** `make release web` and `make release server` (ADR-043) had no combined front door; releasing both meant running each by hand.
+
+### Added
+- `make release full` (and `make release full` via the `release` dispatcher): runs `release-server` then `release-web` as ordinary prerequisites — server first, so the API a release ships is already live before the frontend calling it goes out. Each half keeps its own preflight, gates, version bump and confirmation; declining one does not block the other.
+
+**Scope:** `Makefile` only. Desktop (DMG, notarization, GitHub release) stays excluded, per ADR-043 — confirmed with Basel, not reopened. See ADR-043 addendum in `.claude/DECISIONS.md`.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-83: Owed now on Home and Clients always match
 
 **Why:** Home and the Clients list showed the same-looking Owed now block with different numbers and no explanation.
