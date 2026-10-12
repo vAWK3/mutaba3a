@@ -4,6 +4,7 @@ title: Home (Overview)
 tier: core
 paths:
   - src/pages/overview/**
+  - src/components/home/**
 features:
   - id: first-run
     title: A fresh install's Home shows Get Started
@@ -25,3 +26,59 @@ features:
     expect:
       - Owed Now equals the sum of both entries
       - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+  - id: attention-pay-full
+    title: "A full payment from Needs attention slides the row out and lowers Owed now; Undo brings both back (MUT-82)"
+    tier: secondary
+    paths:
+      - src/hooks/usePaymentUndo.ts
+      - src/lib/motion/rowExit.ts
+      - src/lib/attention.ts
+    legacy: [MUT-82]
+    steps:
+      - Log two entries due soon (Acme Studio $1,200 overdue, Beta Labs $300 due in 2 days) and open Home
+      - Check accessibility with Record Payment on the rows
+      - Click Record Payment on Acme Studio's row
+      - Record the full amount
+      - Click Undo on the toast
+    expect:
+      - The drawer opens prefilled with $1,200, the amount focused
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - The row slides toward the inline end (more than 100 px), fading below half, then goes
+      - Owed now drops to $300, and focus moves to Beta Labs' Record Payment
+      - The toast reads "Recorded $1,200 from Acme Studio"
+      - Undo brings the row back, Owed now returns to $1,500, and focus lands on the row's Record Payment
+  - id: attention-pay-partial
+    title: A partial payment from Needs attention keeps the row with what is still left (MUT-82)
+    tier: secondary
+    legacy: [MUT-82]
+    steps:
+      - Click Record Payment on Acme Studio's row ($1,200 left)
+      - Replace the amount with $200 and record it
+    expect:
+      - The row stays, its Record Payment now named "Remaining: $1,000"
+      - Owed now drops to $1,300
+  - id: attention-pay-reduced-motion
+    title: Under reduced motion the paid row only fades (MUT-82)
+    tier: tertiary
+    paths:
+      - src/lib/motion/rowExit.ts
+      - src/hooks/usePrefersReducedMotion.ts
+      - src/components/home/HomeNeedsAttention.tsx
+    legacy: [MUT-82]
+    steps:
+      - Turn on reduced motion
+      - Record the full amount on a Needs attention row
+    expect:
+      - The row's copy fades and never moves sideways
+  - id: attention-pay-rtl
+    title: In Arabic the paid row slides toward the left (MUT-82)
+    tier: tertiary
+    paths:
+      - src/lib/motion/rowExit.ts
+      - src/components/home/HomeNeedsAttention.tsx
+    legacy: [MUT-82]
+    steps:
+      - Switch to Arabic in Settings and open Home
+      - Record the full amount on a Needs attention row
+    expect:
+      - The row's copy slides more than 100 px to the left, then goes

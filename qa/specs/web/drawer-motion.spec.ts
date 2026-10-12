@@ -1,45 +1,14 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { openFreshApp, openNewIncomeDrawer } from '../../support/app';
+import { traceExit, readExitTrace } from '../../support/motion';
 
 // Drawers on springs (MUT-80, brief R2). jsdom has no layout, so the motion
 // itself is proven here: the exit after a close, drag to dismiss, and the
 // mirrored edge in Arabic.
 
-interface ExitTrace {
-  added: boolean;
-  removed: boolean;
-  minX: number;
-  maxX: number;
-}
-
-/** Record the exit snapshot (the hidden clone) frame by frame from the moment it is added. */
-async function traceExit(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const trace: ExitTrace = { added: false, removed: false, minX: 0, maxX: 0 };
-    (window as unknown as { __exit: ExitTrace }).__exit = trace;
-    new MutationObserver((records) => {
-      for (const record of records) {
-        record.addedNodes.forEach((node) => {
-          if (!(node instanceof HTMLElement) || !node.matches('.drawer[aria-hidden="true"]')) return;
-          trace.added = true;
-          const tick = () => {
-            const match = /translateX\((-?[\d.]+)px\)/.exec(node.style.transform);
-            if (match) {
-              trace.minX = Math.min(trace.minX, Number(match[1]));
-              trace.maxX = Math.max(trace.maxX, Number(match[1]));
-            }
-            if (node.isConnected) requestAnimationFrame(tick);
-            else trace.removed = true;
-          };
-          tick();
-        });
-      }
-    }).observe(document.body, { childList: true, subtree: true });
-  });
-}
-
-const exitTrace = (page: Page) => page.evaluate(() => (window as unknown as { __exit: ExitTrace }).__exit);
+/** The drawer's exit snapshot: the hidden clone that slides out after a close (ADR-044 §2). */
+const DRAWER_EXIT = '.drawer[aria-hidden="true"]';
 
 async function atRest(drawer: Locator) {
   await expect.poll(() => drawer.evaluate((el) => (el as HTMLElement).style.transform)).toBe('');
@@ -65,7 +34,7 @@ test(
     await openFreshApp(page, '/income');
     const drawer = await openNewIncomeDrawer(page);
     await atRest(drawer);
-    await traceExit(page);
+    await traceExit(page, DRAWER_EXIT);
 
     await step('Press Escape', async () => {
       await page.keyboard.press('Escape');
@@ -73,8 +42,8 @@ test(
     });
 
     await step('Check the exit snapshot slid past 400px before being removed', async () => {
-      await expect.poll(() => exitTrace(page), { timeout: 2000 }).toMatchObject({ added: true, removed: true });
-      expect((await exitTrace(page)).maxX).toBeGreaterThan(400);
+      await expect.poll(() => readExitTrace(page), { timeout: 2000 }).toMatchObject({ added: true, removed: true });
+      expect((await readExitTrace(page)).maxX).toBeGreaterThan(400);
       await expect(page.locator('.drawer, .drawer-overlay')).toHaveCount(0);
     });
   },

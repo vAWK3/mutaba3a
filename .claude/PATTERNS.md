@@ -1687,6 +1687,14 @@ Every Playwright test gets an empty IndexedDB, so the Welcome dialog always open
 
 `expectOnlyKnownAxeViolations(page, surface)` (`qa/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
 
+### Exit motion is traced frame by frame with `traceExit`
+
+jsdom has no layout, so a slide-out is proven in the browser. `traceExit(page, selector)` (`qa/support/motion.ts`) follows the next element matching `selector` that is added to the page, frame by frame (`MutationObserver` + rAF), until it leaves; `readExitTrace(page)` returns `{ added, removed, minX, maxX, minOpacity }`. Start the trace before the action, poll until `added` and `removed` are both true, then assert the range: past 100 px toward the inline end, negative in Arabic, x stuck at 0 under `page.emulateMedia({ reducedMotion: 'reduce' })`. The selector names the inert copy the app animates (`.drawer[aria-hidden="true"]` for a drawer's snapshot, `.row-exit` for a list row). That is a probe, not a locator, so it is the one place a spec may use a class. Used by `drawer-motion.spec.ts` (MUT-80) and `home.spec.ts` (MUT-82).
+
+### An Arabic spec switches from Settings and finds controls by the app's own copy
+
+Log the data in English first (`logIncome` uses the English labels), then `switchToArabic(page)` (`qa/support/app.ts`): it opens Settings, clicks العربية and waits for `dir="rtl"`. To find a translated control, read its name from `ar` (`qa/support/i18n.ts`, which loads `src/lib/i18n/translations/ar.json`), as in `ar.clients.split.profile`, so a copy change never breaks a spec. Load it through that module and don't import the JSON in a spec: the root package is ESM, and Node refuses a JSON import that has no `with { type: 'json' }`. User data such as client names stays as typed.
+
 ## Accessibility patterns — added 2026-10-12 (TD-009)
 
 ### A control with a visible label gets a real `<label for>`
@@ -1754,7 +1762,7 @@ A motion that needs a measured size (`offsetWidth`) skips itself when the size i
 In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
 
 ### Hidden documents pause motion
-`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`qa/specs/web/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`traceExit` in `qa/support/motion.ts`, a `MutationObserver` + rAF), not in a hidden pane.
 
 ---
 
