@@ -12,6 +12,8 @@ import type {
   AgreementFilter,
   AgreementRecord,
   AgreementRepository,
+  CorrectOutcomeInput,
+  OutcomeWriteInput,
   AllocationInput,
   AllocationRecord,
   CreateAdjustmentReceivableInput,
@@ -693,9 +695,27 @@ export class MemoryLedgerStore implements LedgerStore {
     create: async (input: CreateAgreementInput, at) => {
       const project = this.projs.get(input.projectId);
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('agreements.projectId');
-      const { installments: specs, approveProposal, ...rest } = input;
+      const { installments: specs, approveProposal, commissionRateBasisPoints, upfrontTreatment, ...rest } = input;
       if (new Set(specs.map((x) => x.position)).size !== specs.length) throw new UniqueViolation('installments.agreementId_position');
-      const agreement: AgreementRecord = { id: randomUUID(), ...rest, status: 'ACTIVE', cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: at, updatedAt: at };
+      const agreement: AgreementRecord = {
+        id: randomUUID(),
+        ...rest,
+        status: 'ACTIVE',
+        cancelEffectiveMonth: null,
+        cancelEffectiveDate: null,
+        finalMonth: null,
+        cancelledAt: null,
+        commissionRateBasisPoints: commissionRateBasisPoints ?? null,
+        upfrontTreatment: upfrontTreatment ?? null,
+        outcome: null,
+        outcomeDate: null,
+        awardedAmountMinor: null,
+        outcomeNote: null,
+        outcomeRecordedAt: null,
+        version: 1,
+        createdAt: at,
+        updatedAt: at,
+      };
       if (approveProposal) {
         // M8: the approval rides the creation; a proposal that moved since the route checked it refuses the whole create.
         const proposal = this.props.get(approveProposal.id);
@@ -712,7 +732,7 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       this.agrs.set(agreement.id, agreement);
       const installments = specs.map((spec) => {
-        const record: InstallmentRecord = { id: randomUUID(), organizationId: input.organizationId, agreementId: agreement.id, ...spec, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
+        const record: InstallmentRecord = { id: randomUUID(), organizationId: input.organizationId, agreementId: agreement.id, ...spec, isCommission: spec.isCommission ?? false, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
         this.insts.set(record.id, record);
         return { ...record };
       });
@@ -771,7 +791,7 @@ export class MemoryLedgerStore implements LedgerStore {
         Object.assign(i, { amountMinor: u.amountMinor, netMinor: u.netMinor, vatMinor: u.vatMinor, grossMinor: u.grossMinor, version: i.version + 1 });
       }
       for (const spec of input.newInstallments) {
-        const record: InstallmentRecord = { id: randomUUID(), organizationId, agreementId, ...spec, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
+        const record: InstallmentRecord = { id: randomUUID(), organizationId, agreementId, ...spec, isCommission: spec.isCommission ?? false, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
         this.insts.set(record.id, record);
       }
       Object.assign(a, { ...input.totals, version: a.version + 1, updatedAt: at });
@@ -828,7 +848,66 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     listVersions: async (organizationId, agreementId) =>
       [...this.versions.values()].filter((v) => v.organizationId === organizationId && v.agreementId === agreementId).sort((x, y) => x.version - y.version).map((v) => ({ ...v })),
+    updateContingencyTerms: async (organizationId, agreementId, expectedVersion, patch, at) => {
+      const a = this.agrs.get(agreementId);
+      if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
+      if (a.version !== expectedVersion || a.outcome !== null) return { kind: 'stale', record: { ...a } };
+      if (patch.commissionRateBasisPoints !== undefined) a.commissionRateBasisPoints = patch.commissionRateBasisPoints;
+      if (patch.upfrontTreatment !== undefined) a.upfrontTreatment = patch.upfrontTreatment;
+      a.version += 1;
+      a.updatedAt = at;
+      return { kind: 'updated', record: { ...a } };
+    },
+    recordOutcome: async (organizationId, agreementId, input: OutcomeWriteInput, at) => {
+      const a = this.agrs.get(agreementId);
+      if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
+      if (a.version !== input.expectedVersion || a.outcome !== null) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
+      this.writeOutcome(a, input, at);
+      return { kind: 'updated', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
+    },
+    correctOutcome: async (organizationId, agreementId, input: CorrectOutcomeInput, at) => {
+      const a = this.agrs.get(agreementId);
+      if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
+      if (a.version !== input.expectedVersion || a.outcome === null) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: null } };
+      const replaced = input.replaceInstallmentId ? this.insts.get(input.replaceInstallmentId) : undefined;
+      if (input.replaceInstallmentId && (!replaced || replaced.agreementId !== agreementId || !replaced.isCommission || replaced.voidedAt)) throw new ForeignKeyViolation('installments.id');
+      const receivable = replaced?.receivableId ? this.recs.get(replaced.receivableId) : undefined;
+      // Nothing is written before this check, so a refusal leaves the ledger exactly as it was.
+      if (receivable && (receivable.paidMinor > 0n || receivable.creditedMinor > 0n)) return { kind: 'has_payments', receivableId: receivable.id };
+      let credit: CreditRecord | null = null;
+      if (receivable) {
+        credit = { id: randomUUID(), organizationId, receivableId: receivable.id, amountMinor: receivable.grossMinor, netMinor: receivable.netMinor, vatMinor: receivable.vatMinor, ...input.credit, createdAt: at };
+        this.credits.set(credit.id, credit);
+        receivable.creditedMinor += receivable.grossMinor;
+        settle(receivable);
+      }
+      if (replaced) replaced.voidedAt = at;
+      this.writeOutcome(a, input, at);
+      return { kind: 'updated', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: credit ? { ...credit } : null } };
+    },
   };
+
+  /** Outcome, terms, totals and version on the agreement, plus the commission line when there is one (MUT-100). */
+  private writeOutcome(a: AgreementRecord, input: OutcomeWriteInput, at: Date): void {
+    const line = input.commissionInstallment;
+    if (line && [...this.insts.values()].some((i) => i.agreementId === a.id && i.position === line.position)) throw new UniqueViolation('installments.agreementId_position');
+    Object.assign(a, {
+      outcome: input.outcome,
+      outcomeDate: input.outcomeDate,
+      awardedAmountMinor: input.awardedAmountMinor,
+      outcomeNote: input.outcomeNote,
+      commissionRateBasisPoints: input.commissionRateBasisPoints,
+      upfrontTreatment: input.upfrontTreatment,
+      outcomeRecordedAt: at,
+      ...input.totals,
+      version: a.version + 1,
+      updatedAt: at,
+    });
+    if (line) {
+      const record: InstallmentRecord = { id: randomUUID(), organizationId: a.organizationId, agreementId: a.id, ...line, isCommission: true, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
+      this.insts.set(record.id, record);
+    }
+  }
 
   readonly receivables: ReceivableRepository = {
     getById: async (organizationId, id) => {

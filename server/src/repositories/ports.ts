@@ -2,6 +2,7 @@ import type { ApiKeyEnvironment } from '../auth/api-key.js';
 import type { KeyScope } from '../auth/scopes.js';
 import type { SessionKind } from '../auth/sessions.js';
 import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
+import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/contingency.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
 
 /**
@@ -86,6 +87,16 @@ export interface ConnectIntegrationInput {
 /** USER (MUT-38): a signed-in person acting through a session; actorId is the user id. */
 export type AuditActorType = 'API_KEY' | 'ADMIN' | 'SYSTEM' | 'USER';
 
+/**
+ * A value Postgres' `jsonb` stores as given (MUT-100, eng re-review R9). Audit
+ * metadata is typed with it so a `bigint` or a `Date` — which the memory store
+ * keeps and Prisma cannot serialize — is a compile error in every caller,
+ * not a production 500 after the write it describes. Money goes in as
+ * `formatMoney` strings, as every audit payload already does.
+ */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+
 export interface AuditEventInput {
   organizationId: string;
   actorType: AuditActorType;
@@ -93,7 +104,7 @@ export interface AuditEventInput {
   action: string;
   entityType: string;
   entityId: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
   requestId: string | null;
 }
 
@@ -387,7 +398,8 @@ export interface VatRateRepository {
   effectiveOn(organizationId: string, date: IsoDate): Promise<VatRateRecord | null>;
 }
 
-export type AgreementType = 'FIXED' | 'RECURRING';
+export type AgreementType = 'FIXED' | 'RECURRING' | 'CONTINGENCY';
+export type { ContingencyOutcome, UpfrontTreatment };
 export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
 export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
@@ -424,6 +436,16 @@ export interface AgreementRecord {
   cancelEffectiveDate: IsoDate | null;
   finalMonth: FinalMonth | null;
   cancelledAt: Date | null;
+  // CONTINGENCY only (MUT-100): the terms, then the outcome once recorded; null on every other type.
+  commissionRateBasisPoints: number | null;
+  upfrontTreatment: UpfrontTreatment | null;
+  outcome: ContingencyOutcome | null;
+  outcomeDate: IsoDate | null;
+  /** AWARDED: the award in the pricing basis' minor units; null otherwise. */
+  awardedAmountMinor: bigint | null;
+  outcomeNote: string | null;
+  /** When the latest outcome (or correction) was written. */
+  outcomeRecordedAt: Date | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -442,6 +464,8 @@ export interface CreateInstallmentInput {
   triggerDate: IsoDate | null;
   paymentTerms: PaymentTerms | null;
   dueDateOverride: IsoDate | null;
+  /** MUT-100: the commission line a contingency outcome posts. Absent = false. */
+  isCommission?: boolean;
 }
 
 export interface CreateAgreementInput {
@@ -463,6 +487,9 @@ export interface CreateAgreementInput {
   startMonth: IsoMonth | null;
   billingDay: number | null;
   endMonth: IsoMonth | null;
+  /** CONTINGENCY only (MUT-100): both set on a contingency agreement, absent on every other type. */
+  commissionRateBasisPoints?: number;
+  upfrontTreatment?: UpfrontTreatment;
   installments: CreateInstallmentInput[];
   /** M8: the PROPOSED proposal this agreement approves; moved to APPROVED with these figures in the same transaction, or the whole create is refused (StateConflict). */
   approveProposal?: ApproveProposalInput | null;
@@ -476,6 +503,7 @@ export interface ApproveProposalInput {
 }
 
 export interface InstallmentRecord extends CreateInstallmentInput {
+  isCommission: boolean;
   id: string;
   organizationId: string;
   agreementId: string;
@@ -577,6 +605,40 @@ export interface ApplySupplementInput {
   expectedVersion: number;
 }
 
+// ---- MUT-100: contingency terms and outcomes ----------------------------------
+
+export interface ContingencyTermsPatch {
+  commissionRateBasisPoints?: number;
+  upfrontTreatment?: UpfrontTreatment;
+}
+
+export interface OutcomeWriteInput {
+  outcome: ContingencyOutcome;
+  outcomeDate: IsoDate;
+  awardedAmountMinor: bigint | null;
+  outcomeNote: string | null;
+  /** The terms the outcome was computed with: the current ones, or a correction's fix (R3/D5). */
+  commissionRateBasisPoints: number;
+  upfrontTreatment: UpfrontTreatment;
+  /** Null when the outcome bills nothing (NO_RECOVERY, or CREDITED covered by the upfront). */
+  commissionInstallment: CreateInstallmentInput | null;
+  /** The agreement's totals after the write: every live installment, the new commission line included. */
+  totals: { amountMinor: bigint; netMinor: bigint; vatMinor: bigint; grossMinor: bigint };
+  expectedVersion: number;
+}
+
+export interface CorrectOutcomeInput extends OutcomeWriteInput {
+  /** The commission installment the correction replaces; null when the old outcome billed nothing. */
+  replaceInstallmentId: string | null;
+  /** The full credit of the replaced commission's receivable, when it posted. */
+  credit: { reason: string; effectiveDate: IsoDate; requestId: string | null };
+}
+
+export type OutcomeWriteResult = UpdateResult<{ agreement: AgreementRecord; installments: InstallmentRecord[] }>;
+
+/** `has_payments`: the replaced commission's receivable was paid or credited before the write; nothing was written. */
+export type CorrectOutcomeResult = UpdateResult<{ agreement: AgreementRecord; installments: InstallmentRecord[]; credit: CreditRecord | null }> | { kind: 'has_payments'; receivableId: string };
+
 export interface AgreementFilter {
   projectId?: string;
   customerId?: string;
@@ -648,6 +710,16 @@ export interface AgreementRepository {
   cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
   /** M5: appends a terms version (unique per agreement + version) and bumps the agreement version atomically; `conflict` when the agreement moved. */
   appendVersion(input: AppendVersionInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; version: RetainerVersionRecord }>>;
+  /** MUT-100: the commission rate and/or upfront treatment, under the version; `stale` also once an outcome exists. */
+  updateContingencyTerms(organizationId: string, agreementId: string, expectedVersion: number, patch: ContingencyTermsPatch, at: Date): Promise<UpdateResult<AgreementRecord>>;
+  /** MUT-100: outcome + terms + commission installment + totals + version, atomically; `stale` on a wrong version or once an outcome exists. */
+  recordOutcome(organizationId: string, agreementId: string, input: OutcomeWriteInput, at: Date): Promise<OutcomeWriteResult>;
+  /**
+   * MUT-100: replaces a recorded outcome atomically — a full credit on the replaced commission's receivable, its
+   * installment voided, the new outcome, terms, line and totals. Refuses with `has_payments` (writing nothing) when
+   * that receivable was paid or credited, re-checked under its row lock; `stale` on a wrong version or no outcome.
+   */
+  correctOutcome(organizationId: string, agreementId: string, input: CorrectOutcomeInput, at: Date): Promise<CorrectOutcomeResult>;
   /** Stored versions (≥ 2) in version order; version 1 is synthesized from the agreement by the domain. */
   listVersions(organizationId: string, agreementId: string): Promise<RetainerVersionRecord[]>;
   /** RECURRING agreements that may still generate charges (ACTIVE, or CANCELLED with a cancel month). */

@@ -11,7 +11,7 @@ import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js'
 import { summarizeExpenses } from '../expenses/summary.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
-import type { ExpenseFilter, ExpenseRecord, LedgerStore } from '../repositories/ports.js';
+import type { ExpenseFilter, ExpenseRecord, JsonObject, LedgerStore } from '../repositories/ports.js';
 import {
   AttachmentDownloadSchema,
   CreateExpenseRequestSchema,
@@ -57,7 +57,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     return options.storage;
   }
 
-  function audit(c: Context<AppEnv>, action: string, entityType: 'expense' | 'expense_receipt', entityId: string, metadata?: Record<string, unknown>) {
+  function audit(c: Context<AppEnv>, action: string, entityType: 'expense' | 'expense_receipt', entityId: string, metadata?: JsonObject) {
     const auth = sessionAuth(c);
     return store.audit.append({ organizationId: auth.organization.id, actorType: 'USER', actorId: auth.user.id, action, entityType, entityId, ...(metadata ? { metadata } : {}), requestId: c.get('requestId') });
   }

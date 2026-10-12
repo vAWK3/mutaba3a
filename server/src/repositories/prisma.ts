@@ -8,6 +8,8 @@ import type {
   AttachmentFilter,
   AttachmentRepository,
   AuditEventRecord,
+  CreditRecord,
+  JsonObject,
   AuditFilter,
   CreateAttachmentInput,
   AppendVersionInput,
@@ -27,6 +29,8 @@ import type {
   ApiKeyRecord,
   ApiKeyRepository,
   ApplySupplementInput,
+  CorrectOutcomeInput,
+  OutcomeWriteInput,
   AuditRepository,
   InstallmentRecord,
   ReceivableFilter,
@@ -290,7 +294,7 @@ export class PrismaLedgerStore implements LedgerStore {
         action: r.action,
         entityType: r.entityType,
         entityId: r.entityId,
-        ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as Record<string, unknown> } : {}),
+        ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as JsonObject } : {}),
         requestId: r.requestId,
         createdAt: r.createdAt,
       })),
@@ -685,6 +689,61 @@ export class PrismaLedgerStore implements LedgerStore {
         }),
       ),
     listVersions: (organizationId, agreementId) => this.prisma.retainerVersion.findMany({ where: { organizationId, agreementId }, orderBy: { version: 'asc' } }),
+    updateContingencyTerms: async (organizationId, agreementId, expectedVersion, patch, at) => {
+      const current = await this.prisma.agreement.findFirst({ where: { id: agreementId, organizationId } });
+      if (!current) return { kind: 'not_found' as const };
+      const { count } = await this.prisma.agreement.updateMany({
+        where: { id: agreementId, organizationId, version: expectedVersion, outcome: null },
+        data: {
+          ...(patch.commissionRateBasisPoints !== undefined ? { commissionRateBasisPoints: patch.commissionRateBasisPoints } : {}),
+          ...(patch.upfrontTreatment !== undefined ? { upfrontTreatment: patch.upfrontTreatment } : {}),
+          version: { increment: 1 },
+          updatedAt: at,
+        },
+      });
+      const record = await this.prisma.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+      return count === 1 ? { kind: 'updated' as const, record } : { kind: 'stale' as const, record };
+    },
+    recordOutcome: (organizationId, agreementId, input: OutcomeWriteInput, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const current = await tx.agreement.findFirst({ where: { id: agreementId, organizationId } });
+          if (!current) return { kind: 'not_found' as const };
+          // The conditional write is the guard: a second record, or one racing a terms change, matches no row.
+          const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: null }, data: outcomeData(input, at) });
+          if (count !== 1) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
+          if (input.commissionInstallment) await tx.installment.create({ data: { ...input.commissionInstallment, isCommission: true, organizationId, agreementId } });
+          const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+          return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
+        }),
+      ),
+    correctOutcome: (organizationId, agreementId, input: CorrectOutcomeInput, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const current = await tx.agreement.findFirst({ where: { id: agreementId, organizationId } });
+          if (!current) return { kind: 'not_found' as const };
+          const stale = async () => ({ kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit: null } });
+          if (current.version !== input.expectedVersion || current.outcome === null) return stale();
+          const replaced = input.replaceInstallmentId ? await tx.installment.findFirst({ where: { id: input.replaceInstallmentId, organizationId, agreementId, isCommission: true, voidedAt: null } }) : null;
+          if (input.replaceInstallmentId && !replaced) throw new ForeignKeyViolation('installments.id');
+          // Under the receivable's row lock, before anything is written: a payment or credit that landed after the
+          // preview refuses the whole correction (an allocation waits on this lock until we commit or roll back).
+          const locked = replaced?.receivableId ? await lockReceivable(tx, replaced.receivableId) : null;
+          if (locked && (locked.paidMinor > 0n || locked.creditedMinor > 0n)) return { kind: 'has_payments' as const, receivableId: locked.id };
+          const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: { not: null } }, data: outcomeData(input, at) });
+          if (count !== 1) return stale();
+          let credit: CreditRecord | null = null;
+          if (locked) {
+            const r = await tx.receivable.findUniqueOrThrow({ where: { id: locked.id } });
+            credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: r.id, amountMinor: r.grossMinor, netMinor: r.netMinor, vatMinor: r.vatMinor, ...input.credit, createdAt: at } });
+            await settleReceivable(tx, r.id, { creditedMinor: { increment: r.grossMinor } });
+          }
+          if (replaced) await tx.installment.update({ where: { id: replaced.id }, data: { voidedAt: at } });
+          if (input.commissionInstallment) await tx.installment.create({ data: { ...input.commissionInstallment, isCommission: true, organizationId, agreementId } });
+          const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+          return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit } };
+        }),
+      ),
     cancel: async (organizationId, agreementId, input, at) => {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.agreement.updateMany({
@@ -1113,6 +1172,22 @@ function entityTypeWhere(filter: AuditFilter): { entityType?: Prisma.StringFilte
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
 type Tx = Prisma.TransactionClient;
 
+/** The agreement columns a contingency outcome (or its correction) writes, with the totals and the version bump. */
+function outcomeData(input: OutcomeWriteInput, at: Date): Prisma.AgreementUpdateManyMutationInput {
+  return {
+    outcome: input.outcome,
+    outcomeDate: input.outcomeDate,
+    awardedAmountMinor: input.awardedAmountMinor,
+    outcomeNote: input.outcomeNote,
+    commissionRateBasisPoints: input.commissionRateBasisPoints,
+    upfrontTreatment: input.upfrontTreatment,
+    outcomeRecordedAt: at,
+    ...input.totals,
+    version: { increment: 1 },
+    updatedAt: at,
+  };
+}
+
 /** Row lock so capacity checks and sum updates serialise per receivable. */
 async function lockReceivable(tx: Tx, receivableId: string): Promise<{ id: string; status: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint }> {
   const rows = await tx.$queryRaw<Array<{ id: string; status: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint }>>`SELECT "id", "status", "grossMinor", "paidMinor", "creditedMinor" FROM "receivables" WHERE "id" = ${receivableId}::uuid FOR UPDATE`;
@@ -1225,7 +1300,7 @@ function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditE
     action: r.action,
     entityType: r.entityType,
     entityId: r.entityId,
-    ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as Record<string, unknown> } : {}),
+    ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as JsonObject } : {}),
     requestId: r.requestId,
     createdAt: r.createdAt,
   };

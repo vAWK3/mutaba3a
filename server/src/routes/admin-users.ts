@@ -6,7 +6,7 @@ import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '..
 import { ApiError, personalProfileConflict } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
-import type { CreateUserInput, LedgerStore, Organization, UserLocale, UserRecord } from '../repositories/ports.js';
+import type { CreateUserInput, JsonObject, LedgerStore, Organization, UserLocale, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -77,7 +77,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
   const { store, passwordHasher, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
 
-  async function audit(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: Record<string, unknown>) {
+  async function audit(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject) {
     if (organizationIds.length === 0) {
       logger.info({ requestId: c.get('requestId'), userId, action }, 'account change on a user with no memberships; no organization to audit');
       return;

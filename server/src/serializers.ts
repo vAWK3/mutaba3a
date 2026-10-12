@@ -99,7 +99,8 @@ export function serializeAuditEvent(e: AuditEventRecord) {
     action: e.action,
     entityType: e.entityType,
     entityId: e.entityId,
-    ...(e.metadata ? { metadata: e.metadata } : {}),
+    // Widened at the wire: the schema's z.unknown() record, compared with the recursive JsonValue, exhausts the route type checker.
+    ...(e.metadata ? { metadata: e.metadata as Record<string, unknown> } : {}),
     requestId: e.requestId,
     createdAt: e.createdAt.toISOString(),
   };

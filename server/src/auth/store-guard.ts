@@ -94,6 +94,10 @@ export const STORE_ACCESS: StoreAccess = {
     listRetainers: 'read',
     listCharges: 'read',
     createPostedCharge: { write: 'agreements' },
+    // MUT-100: contingency terms and outcomes are agreement writes, Malafat's alone.
+    updateContingencyTerms: { write: 'agreements' },
+    recordOutcome: { write: 'agreements' },
+    correctOutcome: { write: 'agreements' },
   },
   receivables: {
     getById: 'read',

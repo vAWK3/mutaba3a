@@ -1,5 +1,5 @@
 import { formatMoney } from '../money.js';
-import type { AgreementRecord, ApproveProposalInput, CreateInstallmentInput, InstallmentRecord, LedgerStore, Organization } from '../repositories/ports.js';
+import type { AgreementRecord, ApproveProposalInput, CreateInstallmentInput, InstallmentRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import { serializeAgreement, serializeInstallment, serializeSupplement } from '../serializers.js';
 import {
   agreementPreviewToken,
@@ -83,7 +83,7 @@ export async function createAgreementFromPreview(
     },
     now,
   );
-  const audit = (action: string, entityType: string, entityId: string, metadata: Record<string, unknown>) =>
+  const audit = (action: string, entityType: string, entityId: string, metadata: JsonObject) =>
     store.audit.append({ organizationId: organization.id, actorType: actor.actorType, actorId: actor.actorId, action, entityType, entityId, metadata, requestId: actor.requestId });
   await audit('agreement.created', 'agreement', created.agreement.id, {
     projectId: created.agreement.projectId,

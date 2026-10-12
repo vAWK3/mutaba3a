@@ -623,6 +623,8 @@ export const VALIDATION_REASONS = [
 export const ItemStatusSchema = z.enum(ITEM_STATUSES).openapi('ItemStatus');
 export const FinalMonthSchema = z.enum(['FULL', 'PRORATE', 'WAIVE']).openapi('FinalMonth');
 export const TriggerTypeSchema = z.enum(['IMMEDIATE', 'DATE', 'MANUAL']).openapi('TriggerType');
+/** MUT-100: CONTINGENCY = an upfront fee plus a commission on the award, billed when the outcome is recorded. */
+export const AgreementTypeSchema = z.enum(['FIXED', 'RECURRING', 'CONTINGENCY']).openapi('AgreementType');
 
 export const VatRateSchema = z
   .object({ id: uuid, rateBasisPoints: z.number().int().min(0).max(10000), effectiveFrom: IsoDateSchema, createdAt: z.string().datetime() })
@@ -708,7 +710,7 @@ export const AgreementSchema = z
     id: uuid,
     projectId: uuid,
     customerId: uuid,
-    type: z.enum(['FIXED', 'RECURRING']),
+    type: AgreementTypeSchema,
     status: z.enum(['ACTIVE', 'CANCELLED']),
     currency: CurrencySchema,
     pricingBasis: PricingBasisSchema,
@@ -754,7 +756,7 @@ export const ListAgreementsQuerySchema = z.object({
   projectId: uuid.optional(),
   customerId: uuid.optional(),
   status: z.enum(['ACTIVE', 'CANCELLED']).optional(),
-  type: z.enum(['FIXED', 'RECURRING']).optional(),
+  type: AgreementTypeSchema.optional(),
 });
 
 export const AgreementIdParamSchema = z.object({ agreementId: uuid });
