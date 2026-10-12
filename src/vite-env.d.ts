@@ -11,7 +11,3 @@ interface ImportMeta {
 // Build-time constants
 declare const __APP_VERSION__: string;
 declare const __BUILD_MODE__: 'web' | 'desktop';
-
-// Fontsource variable fonts
-declare module '@fontsource-variable/inter';
-declare module '@fontsource-variable/source-serif-4';

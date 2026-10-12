@@ -1776,3 +1776,44 @@ Plan: `.claude/designs/mut-81-after-save-feedback.md` (two `/plan-eng-review` pa
 **Scope note.** The design review (`/plan-design-review`) approved eleven refinements beyond the ticket's five literal acceptance criteria; this build implements the mechanism and all five criteria, and discloses the rest as TD-077 (anchored-strip presentation, kept as the existing Toast instead) and TD-078 (pagination, the Owed-now tick, currency-block collapse, and a focus chain outside Home) rather than silently dropping them.
 
 **What was run.** `npm run lint`: 0 errors (12 pre-existing warnings, none in changed files). `npm run typecheck`: clean (both `tsconfig.app.json` and `tsconfig.hosted.json`). `npx vitest run`: 218 files, 3,186 passed, 4 skipped (pre-existing). `npm run build`: clean (the one chunk-size warning is pre-existing, unrelated to this change). **Not run:** `npm run test:e2e` / `release-qa` — no browser spec was written for this ticket in this session.
+
+### MUT-102 — Brand v2 foundation (epic MUT-101, 2026-10-12)
+Plan: `.claude/designs/mut-102-brand-v2-foundation-tests.md`. ADR-058. Each unit's tests were written first and failed for the right reason (missing font files; the evaluator refusing the old four-copy `theme.css`; the missing plugin, cache rule and font checks; 41 `color: var(--accent)` sites; axe and the browser for the rest).
+
+| File | Covers |
+|---|---|
+| `src/test/css/brandCss.ts` (new support) | postcss-based `:root` evaluator for OS light/dark × `data-theme` × reduced motion; `var()` resolution; OKLCH ↔ sRGB, `color-mix(in oklch)`, compositing, WCAG contrast; src scans for custom-property definitions and bare `var()` references |
+| `src/styles/__tests__/brand.test.ts` (new, node) | **harness:** every JSON hex within ±1 of its OKLCH; mix/contrast edge cases; cascade, the six state combinations, refusals. **fonts:** sha256 pins, `@font-face` set, Plex Mono via @fontsource, retired packages gone from `package.json` and the entries. **drift:** `--m-*` = JSON. **tokens:** every var resolves in 4 states, no colour literal, colour tokens only over `--m-*`, radii on the brand scale, body 16 and the type roles, faces, motion + reduced motion, TD-048 font half, no Inter features. **contrast:** light ≥ 7, dark ≥ 4.5 over the plan's pair list; purple text = primary-hover; placeholder ≥ 4.5 and below muted. **names:** the 132 pre-rewrite names stay defined. **references:** no new dead `var()`; the allowlist (48) shrinks only. **accent-text guard** |
+| `scripts/__tests__/vite-config.test.ts` | Snapshot updated on purpose (plugin; version masked). Preload plugin in all three builds; font runtime cache CacheFirst/12, `font` only; no `otf` in precache; `findEmittedAsset` hit/miss; `fontPreloadTag` with the base |
+| `scripts/__tests__/check-bundles.test.ts` | `cssUrls`, `unresolvedUrls` (missing file, escaping the dist), `fontProblems` (retired face, missing/altered Thmanyah, preload missing/without crossorigin/wrong file) |
+| `qa/specs/web/brand.spec.ts` (new) | axe incl. contrast, light and dark: Home, payment drawer, Income, income drawer, Clients split, Settings, landing. EN/AR: Thmanyah Sans body 16px and loaded; Serif Display headings (landing headline inner lines too); Plex Mono tabular on Home, Income and Clients amounts; no off-origin font/stylesheet. ThemeToggle 4 states (`--bg`) + focus ring. 375/1280 × EN/AR fit, screenshots attached; TD-083's two overflows annotated |
+| `qa/specs/portal/signin.spec.ts` (new; `portal` app in `qa.config.mjs`) | `/v1` stubbed 401: Thmanyah Sans body, heading Serif Display 700 in EN/AR, no off-origin font; axe light and dark (`region` known, TD-082) |
+| existing `qa/specs/web/*` | Now enforce `color-contrast` (empty `KNOWN_AXE_VIOLATIONS` for the app); axe waits for drawers and animations to settle |
+
+**What was run (Node 22):** `npx vitest run` 225 files, 3,390 passed, 4 skipped · `npm run typecheck` clean · `npm run lint` 0 errors (12 pre-existing warnings) · `npm run test:bundles` passed · `npm run build:desktop` built · `npm --prefix server test` 70 passed, 12 skipped · QA web + portal on `vite preview` builds (a gitignored throwaway config, ports 5192–5194; dev servers broke lazy chunks under parallel workers while optimising deps): 45/45, 90/90 with `--repeat-each=2` · PWA offline after one visit: Thmanyah still renders · landing LCP (Fast 3G, 4× CPU, median of 5): 4116 ms on main → 4744 ms (TD-081). **Not run:** `npm run tauri dev` with the network off; `check-bundles`' url() resolution in `dist-desktop` stands in for it.
+
+**Review round (qa-reconcile, 2026-10-12).** New and changed tests. Each new guard was red before its fix.
+
+| File | Covers |
+|---|---|
+| `brand.test.ts` › `rendered pairs` | Every `src` rule that sets a colour and an opaque background clears 7:1 light / 4.5:1 dark in 4 states. Every stylesheet parses. `KNOWN_LITERAL_PAIRS` (6 CSV literals) is shrink-only |
+| `brand.test.ts` › `contrast` | Token pairs composited over `--bg` and `--surface`. New grounds: `--bg-subtle`, `--surface-hover/2`, row and nav tints; `--on-accent-subtle`; `--on-status` on the status inks and their hovers; `--text` on `--surface-3` and lavender. `--focus` on `--bg` ≥ 3:1 |
+| `brand.test.ts` › `tokens` | oklch hue-drift guard (> 30°). Mono stack falls back to Thmanyah Sans. `a:not([class]):visited` |
+| `brand.test.ts` › `fonts` | `src/assets/fonts` holds exactly the pinned files, and the pins live in one JSON. Only theme.css sets the page face. No mono rule asks for 600+. `html` disables bold synthesis |
+| `brand.test.ts` › `focus` | No `inset var(--focus-ring)`. Primary/danger/success/warning take `--focus-ring-on-fill`, including a hovered primary. No literal colour in a focus rule |
+| `brand.test.ts` › `accent-text guard` | Also `var(--accent, fallback)`, multi-line declarations, and `.ts` files |
+| `scripts/__tests__/check-bundles.test.ts` | `fontProblems` flags a font preload (it used to require one) |
+| `scripts/__tests__/vite-config.test.ts` | No build preloads a font. Snapshot back to main's plugin list (version masked) |
+| `profileAvatarStyle.test.ts` (new), `ProfileBadge.test.tsx`, `ProfileSwitcher.test.tsx` | No inline style without a readable colour; white initials on a chosen one |
+| `qa/specs/web/brand.spec.ts`, `qa/specs/portal/signin.spec.ts` | Enter moves focus into the Clients profile pane and shows a ring. Known overflows fail past their measured width (Income 726px, drawer 480px). Theme toggling is bounded. The portal heading is read from its translations |
+
+**What was run (Node 22):**
+- `npx vitest run`: 226 files, 3,418 passed, 4 skipped;
+- typecheck clean; lint 0 errors (12 pre-existing warnings);
+- `test:bundles` passed;
+- QA web + portal on `vite preview`: 90/90 with `--repeat-each=2`, after setting the Arabic Income ceiling to its measured 726px.
+
+**Perf runs:** landing LCP medians: preload high 4664 ms, low 4356 ms, none **3964 ms**; main 4116 ms; CLS 0.009 throughout.
+
+**Still not run:** `npm run tauri dev` with the network off. The AAA axe rule in the browser is TD-086.
+

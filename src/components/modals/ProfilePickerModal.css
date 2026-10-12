@@ -101,7 +101,9 @@
   justify-content: center;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: white;
+  /* Without a business colour: the filled pair; a colour comes inline (profileAvatarStyle) */
+  background-color: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 .profile-picker-option-info {

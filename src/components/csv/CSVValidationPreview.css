@@ -239,15 +239,16 @@
 .validation-notice.duplicate-notice {
   background-color: #eff6ff;
   color: #1e40af;
-  border: 1px solid: #bfdbfe;
+  border: 1px solid #bfdbfe;
 }
 
 .notice-icon {
   font-size: 1.25rem;
 }
 
-/* Text utilities */
-.text-muted {
-  color: #94a3b8;
+/* A missing value in the preview. Scoped: an unscoped .text-muted here overrode the theme's
+   utility app-wide once this chunk loaded (slate #94a3b8, 2.5:1; found by MUT-102's axe pass) */
+.csv-validation-preview .text-muted {
+  color: var(--muted);
   font-style: italic;
 }

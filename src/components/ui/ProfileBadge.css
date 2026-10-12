@@ -5,7 +5,9 @@
   align-items: center;
   justify-content: center;
   font-weight: var(--weight-semibold);
-  color: white;
+  /* Without a business colour: the filled pair; a colour comes inline (profileAvatarStyle) */
+  background-color: var(--accent-solid);
+  color: var(--on-accent);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   user-select: none;

@@ -15,7 +15,7 @@ features:
       - Click العربية, then English
     expect:
       - html's lang/dir switch to ar/rtl, then back to en/ltr
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
   - id: theme
     title: Switch between Dark, Light and System themes
     tier: secondary

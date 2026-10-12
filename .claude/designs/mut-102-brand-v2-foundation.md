@@ -4,7 +4,7 @@
 - **Blocks:** MUT-103 (app sweep), MUT-106 (invoice PDFs), MUT-77 (landing), MUT-91 (portal). **Blocked by:** none.
 - **Settled (memory `brand-v2-decisions`, do not re-open):** AAA light inks canonical · Thmanyah for EN and AR · brand scale everywhere (body 16) · fonts self-hosted and unmodified, licence risk accepted.
 - **Reserved:** ADR-058 · TD-079..TD-081 (main tops out at ADR-057 / TD-078 after MUT-89 merged at `b9af895`; re-check before use).
-- **Status:** planned, not built.
+- **Status:** built on `feature/mut-102-brand-foundation` (2026-10-12), then fixed in the `/qa-reconcile` review round; see *Build notes* and *Review round* at the end.
 
 ## Problem
 
@@ -842,3 +842,69 @@ None. D1–D8 are all answered.
 - **VERDICT:** no review is CLEAR. The Eng Review is ISSUES OPEN: its 12 findings are dispositioned and mapped to T1–T10, with nothing unresolved. Eng review required.
 
 NO UNRESOLVED DECISIONS
+
+---
+
+# Build notes — /eng-build, 2026-10-12
+
+Commits on `feature/mut-102-brand-foundation` (from main `530aec2`), in plan order: fonts move + pin → token harness → `theme.css` rewrite → entries, preload, PWA and `check-bundles` → `--accent-text` sweep → AC-surface fixes → QA specs → knowledge. Every unit's tests were written first and seen failing for the right reason.
+
+**Numbers used:** ADR-058; TD-079 (MUT-103's sweep), TD-080 (border non-text contrast), TD-081 (landing LCP), TD-082 (portal sign-in `region`), TD-083 (phone-width layout).
+
+**Found during the build (beyond the plan):**
+- **Dead references were 49, not 48.** One more had arrived since the review. The avatar fix below removed `--color-accent`, so the allowlist is 48 again.
+- **Amounts were not in Plex Mono.** The plan's proof read `owed-now-amount` and `currency-amount`, but neither set a face (only table `.amount-cell`s did). `--font-mono` was added to the three shared amount components (owed-now at weight 500: Plex Mono ships no 700, so bold would be faked), and the spec checks Home, Income and Clients amounts. The ~40 ad-hoc amount classes are TD-079 / MUT-103. `currency-amount` only renders in the recurring-expenses list (an optional area), so the spec reads the core surfaces' amounts instead.
+- **Axe, with contrast enforced, found component problems on AC surfaces**, fixed per the plan (literal on an AC surface → fix it here):
+  - the profile avatar's dead `var(--color-accent)` (white on nothing, 1.04:1; TD-009's "profile avatar");
+  - the Mac banner button (white on the dark-mode accent);
+  - a global `.text-muted` leaking from `CSVValidationPreview.css` (slate #94a3b8, italic, app-wide once the chunk loads);
+  - the landing get-it links (`link-in-text-block`: purple next to purple-grey ink is under 3:1 apart).
+- **Headings that ask for semibold** compute 600 but are drawn with Serif Display's Bold file (risk 3). The spec checks weight ≥ 600 and that the 700 face is loaded.
+- **The `vite-config` snapshot was already failing on main**: the release bumps to 0.0.66/0.0.67 changed the embedded version. While updating it on purpose, the version is masked so the next release doesn't break it.
+- **Phone width was already broken on main** (TD-083): the sidebar never collapses, Income is ~680px wide, drawers are 480px. Measured on a main build; the layout spec annotates those two overflows and fails on any other. Screens for review: 375/1280 × EN/AR attached to the QA run.
+- **Axe on a moving drawer** reads washed-out colours; `expectOnlyKnownAxeViolations` now waits until no dialog carries inline opacity/transform and no finite animation is running.
+- **Dev-server QA was flaky** (Vite optimising deps broke lazy chunks under 4 workers); the QA runs used `vite preview` builds via a gitignored throwaway config.
+
+**Guardrails, measured:**
+- **LCP** (landing, `vite preview`, Fast 3G 1444/675 kbps, 562.5 ms RTT, 4× CPU, 5 cold runs; LCP element = the subheadline): main 4088, 4088, 4116, 4116, 4204 → **median 4116 ms**; Brand v2 4716, 4716, 4744, 4756, 4824 → **median 4744 ms** (+628 ms). Font bytes by then: 180 KB → 236 KB. Reported, not gated → TD-081.
+- **PWA offline:** after one online visit the `fonts` cache holds four Thmanyah faces, and an offline reload renders Thmanyah Sans.
+- **Reduced motion:** unit-tested tokens; `drawer-motion.spec.ts` passes.
+- **Desktop offline:** `check-bundles` proves every `dist-desktop` CSS `url()` resolves locally and the preload is relative. The manual `npm run tauri dev` with the network off was **not run**.
+- **Licence:** the Serif Display files are still the copies MUT-105 flags as third-party; re-download from Thmanyah's official site and re-pin `THMANYAH_SHA256` once.
+
+# Review round — /qa-reconcile + gstack /review, 2026-10-12
+
+**What the reviewers ran:** five specialists (testing, maintainability, performance, design, simplification), a red team, and an in-host adversarial pass. Codex isn't installed, so there was no outside model.
+
+**The headline finding:** the 7:1 light-text AC held for token pairs but not for the rules components render. The browser axe check is AA only, so it passed 5.52:1 purple-on-lavender everywhere.
+
+**Owner decisions:**
+- **D1 = "Blockers + regressions":** fix everything this branch caused or that breaks an AC surface; defer the app-wide sweeps.
+- **D2 = "Drop the preload":** this reverses the ticket's "preload Thmanyah Sans 400" guardrail. LCP medians: high-priority preload 4664 ms, low 4356 ms, none 3964 ms; main 4116 ms.
+
+**Fixed (with tests, each red first):**
+- new tokens `--on-accent-subtle`, `--on-status` and `--focus-ring-on-fill`;
+- about 40 component rules;
+- avatars, through `profileAvatarStyle()`;
+- the Clients pane focus ring;
+- oklab blends and capped tints;
+- no faked bold;
+- index.css no longer sets the body face; the mono stack falls back to Thmanyah; `:visited` scoped;
+- a CSS syntax error;
+- pins moved to one JSON;
+- the preload removed.
+
+**Deferred** (TD-079 → MUT-103, TD-084–088):
+- amounts to mono, for `tnum` and ₪;
+- AAA in the browser;
+- the PWA first-visit cache;
+- the Safari 16.2 floor;
+- heading sizes;
+- user colour inks;
+- bundle checks on the ship paths;
+- Serif Display provenance.
+
+**Advisory, not applied:**
+- `postcss.list.comma` could replace the harness's own `splitTopLevel`;
+- hex/rgb parsing stays, because the rendered-pairs check reads literals.
+

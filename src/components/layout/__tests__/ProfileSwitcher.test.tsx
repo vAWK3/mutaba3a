@@ -120,3 +120,30 @@ describe('ProfileSwitcher: All businesses (MUT-89)', () => {
     expect(switcherButton()).not.toHaveTextContent('All businesses');
   });
 });
+
+// MUT-102: an avatar without a business colour takes the stylesheet's filled
+// pair (--accent-solid / --on-accent); it used to fall back to an undefined token.
+describe('ProfileSwitcher: avatar colour (MUT-102)', () => {
+  afterEach(() => {
+    cleanup();
+    useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+    vi.restoreAllMocks();
+  });
+
+  const initials = () => document.querySelector('.profile-switcher-avatar-initials');
+
+  it('leaves a business without a colour to the stylesheet (no inline style)', () => {
+    mockBusinesses([studio]);
+    useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: false });
+    renderSwitcher();
+    expect(initials()).not.toBeNull();
+    expect(initials()).not.toHaveAttribute('style');
+  });
+
+  it('paints a business colour with white initials', () => {
+    mockBusinesses([{ ...studio, primaryColor: '#FF5500' }]);
+    useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: false });
+    renderSwitcher();
+    expect(initials()).toHaveStyle({ backgroundColor: 'rgb(255, 85, 0)', color: 'rgb(255, 255, 255)' });
+  });
+});

@@ -51,7 +51,7 @@
 ### Fixed (pre-landing review, 2026-10-12)
 - `/v1/me` order is now deterministic: firms come first and the caller's personal profile last. Before this, the portal landed firm users on Personal by UUID chance (QA: 1–2 of 20 per firm; 0 of 20 after the fix).
 - `CreateUserRequest.timezone` must be an IANA zone (422).
-- An owner's own personal-profile membership cannot be revoked (409). This resolved TD-079.
+- An owner's own personal-profile membership cannot be revoked (409). This resolved TD-089.
 - API-key auth refuses keys on personal profiles (409); this replaces the bind-only check.
 - A 409 on create-user says "email" only for an email clash.
 - Provisioning docs (`server/README.md`, `server/DEPLOYMENT.md`) are updated.
@@ -59,7 +59,7 @@
   - `/v1/me` never marks another user's personal profile;
   - store contract: unknown owner gives ForeignKeyViolation, and a personal-slug clash rolls the user back;
   - CLI: no-firm create makes exactly one membership.
-- New debt: TD-081.
+- New debt: TD-091.
 
 ### Technical
 - Cut from the ticket: the backfill script, since there were no existing users. Before deploying, confirm `SELECT count(*) FROM users` is 0 in production (review action).
@@ -69,6 +69,94 @@
 - `npm run test:db` against a dedicated database: 82 files, 1,423 passed;
 - `openapi:check` up to date; `npm run build` ok;
 - root `npm run typecheck` clean, `hosted:types:check` matches, `npx vitest run src/hosted` 145 passed.
+
+## [Unreleased] - 2026-10-12 — Brand v2 foundation: tokens, Thmanyah + Plex Mono and the type scale in every web build (MUT-102)
+
+**Why:** `theme.css` still carried the old look (teal, Inter, Source Serif 4, a 13px body) and repeated every colour in four blocks, while Brand v2 sat unimported. This lands Brand v2 once for the landing page, the app, the desktop app and the portal, with light text at AAA. Epic MUT-101; ADR-058 (amends ADR-018). Plan `.claude/designs/mut-102-brand-v2-foundation.md` (PD0–PD11, eng review D1–D8); test plan `…-tests.md`.
+
+### Added
+- `src/styles/brand/fonts.css`: Thmanyah Sans 400/500/700 and Serif Display 400/700 (`swap`), plus Plex Mono 400/500 from `@fontsource`. The five `.otf` files moved, bytes unchanged, from `public/fonts` to `src/assets/fonts` and are bundled (D4).
+- Brand roles `--text-label/body/headline/title/figure/display`, `--radius-card/hero/pill`, `--accent-text`, and motion tokens (`--ease-spring`, `--ease-overshoot`, `--duration-press/toggle/nav`, `--stagger-step`, `--press-scale`) that zero under reduced motion.
+- `brandFontPreload()` (`vite.config.ts`): every build preloads Thmanyah Sans 400; a missing file fails the build. The PWA caches fonts on first use (CacheFirst, 12).
+- `check-bundles`: each dist ships the delivered Thmanyah bytes, bundles no retired face, preloads the body face, and resolves every CSS `url()` inside itself.
+- `src/test/css/brandCss.ts` (Node CSS evaluator + OKLCH/contrast maths) and `src/styles/__tests__/brand.test.ts`: fonts, drift, tokens, contrast, names, references, accent-text guard.
+- QA: `qa/specs/web/brand.spec.ts`; a `portal` app and `qa/specs/portal/signin.spec.ts`; `qa/support/brand.ts`.
+
+### Changed
+- `theme.css` maps every semantic token once onto `--m-*`: no colour literal, 862 → 545 lines. Light text pairs clear 7:1, dark 4.5:1; the placeholder (85% ink2) is the one exemption, at 5.02 / 4.66:1 (D7).
+- Body 16; headings Thmanyah Serif Display 700; `--font-en`/`--font-ar` Thmanyah Sans; amounts in Plex Mono (owed-now at the figure weight 500, `CurrencyAmounts`, the portal's `.hp-amount`). Old size and radius names alias the brand scale (TD-079).
+- Filled buttons use primary-hover; the selected nav label is lavender-ink; the 41 `color: var(--accent)` sites use `--accent-text`.
+- The brand CSS holds primitives only; `--m-shadow-tint`, `--m-press-scale`, `--m-stagger-rise/blur` added from the JSON (PD7).
+- TD-048, font half: the `:lang()` font rules style `<html>` only; the landing hero's `font-family: inherit` workaround is gone. The direction half is MUT-109.
+- The portal sign-in heading is Serif Display 700 (D5). `KNOWN_AXE_VIOLATIONS` no longer lists `color-contrast`; `expectOnlyKnownAxeViolations` waits for drawers and animations to settle.
+
+### Fixed
+- The profile avatar's default fell back to the undefined `--color-accent`: white initials on nothing (1.04:1). It now uses the filled-button pair.
+- `CSVValidationPreview.css` declared a global `.text-muted` (slate, italic) that overrode the theme utility app-wide once loaded (Clients "Never paid", Settings' Default badge). Scoped.
+- The Mac download banner button (white on dark-mode accent, 1.5:1) and the landing get-it links (axe `link-in-text-block`).
+- The web/desktop `vite-config` snapshot no longer embeds the release version (it had failed on main since v0.0.66).
+
+### Removed
+- `@fontsource-variable/inter`, `@fontsource-variable/source-serif-4`, `@fontsource/ibm-plex-sans-arabic` and their imports; Plex Mono 600; the Inter `cv02…` feature settings; the brand CSS's partial mapping block.
+
+### Technical
+- `postcss` 8.5.6 (already in the tree via Vite) is a pinned devDependency for the harness.
+- `bundle-origins.json` and `server/src/__tests__/portal.test.ts` are unchanged.
+- New debt: TD-079 (MUT-103's sweep), TD-080 (border non-text contrast), TD-081 (landing LCP +628 ms at Fast 3G), TD-082 (portal sign-in `region`), TD-083 (phone-width layout; on main too).
+
+**Run on this branch (Node 22):**
+- `npx vitest run`: 225 files, 3,390 passed, 4 skipped;
+- `npm run typecheck` clean; `npm run lint` 0 errors (12 warnings, all pre-existing, in files this ticket did not touch);
+- `npm run test:bundles` passed; `npm run build:desktop` built;
+- `npm --prefix server test`: 70 files passed, 12 skipped (database suites);
+- QA (web + portal) on `vite preview` builds: 45/45, and 90/90 with `--repeat-each=2`;
+- PWA: after one online visit, an offline reload still renders Thmanyah (4 faces in the `fonts` cache);
+- landing LCP, Fast 3G + 4× CPU, median of 5: 4116 ms on main → 4744 ms.
+- **Not run:** the manual desktop check with the network off (`npm run tauri dev`); `check-bundles` proves every `dist-desktop` font `url()` resolves locally.
+
+### Review round (qa-reconcile, 2026-10-12)
+
+`/qa-reconcile` with gstack `/review` used six specialists plus a red-team pass and an adversarial pass. They found that the 7:1 promise held for token pairs but not for the rules components render; the browser check is AA only. The owner chose to fix the blockers and regressions here (D1) and to drop the font preload (D2).
+
+**Fixed:**
+- **Purple text on lavender** (5.52:1) now uses `--on-accent-subtle`, which is lavender-ink. This covers the nav, + Add, the open client row, pills, chips, badges and alerts.
+- **Fills that turn light in dark mode.**
+  - Status fills use `--on-status`.
+  - Accent fills use `--accent-solid`/`--on-accent`: the update banner, the sidebar toggle, the download CTA, the PDF icon and the matching hover.
+  - Avatars without a business colour use the filled pair through `profileAvatarStyle()`. An unreadable colour is ignored.
+- **Focus.**
+  - The Clients profile pane had lost its focus ring (`inset var(--focus-ring)` was invalid).
+  - Filled buttons get `--focus-ring-on-fill`, and a hovered primary keeps it.
+  - Focus rules no longer use literal colours.
+- **Blends** across hues mix in oklab. In oklch, cream met lavender-grey at pink.
+- **Tints** are capped where ink2 keeps 7:1, and `--surface-3` carries primary text only.
+- **No faked bold:** `font-synthesis-weight: none` on `html`, and the mono rules ask for weight 500.
+- **Fonts and links.**
+  - index.css no longer re-sets the body face.
+  - The mono stack falls back to Thmanyah Sans.
+  - `:visited` applies only to unclassed links.
+- **Small fixes:** a CSS syntax error in `CSVValidationPreview.css`, and a missed `var(--accent, …)` text colour.
+- **Font preload dropped.** Landing LCP is now **3964 ms vs 4116 ms on main**; the preload measured 4664. `check-bundles` flags a font preload and reads the pinned hashes from `src/assets/fonts/thmanyah.sha256.json`.
+- **New tests:**
+  - rendered pairs, with a shrink-only list of literal pairs;
+  - token pairs composited over `--bg` and `--surface`;
+  - the oklch hue-drift guard;
+  - focus guards;
+  - font placement, mono weight and synthesis;
+  - the visited rule;
+  - the accent guard's fallback and multi-line forms;
+  - avatar tests;
+  - QA: the Clients pane ring, known overflows that fail if they grow, bounded theme toggling, and the portal heading read from translations.
+
+**Deferred** (TD-079 for MUT-103, plus TD-084–088): moving amounts to mono for tabular figures and ₪; AAA axe in the browser; the PWA font cache on first visit; the Safari 16.2 floor; heading sizes; user colour inks; bundle checks on the ship paths; the Serif Display provenance.
+
+**Run after the fixes (Node 22):**
+- `npx vitest run`: 226 files, 3,418+ passed;
+- typecheck clean; lint 0 errors;
+- `test:bundles` passed;
+- QA on `vite preview`: 90/90 with `--repeat-each=2`, after one ceiling fix.
+
+---
 
 ## [Unreleased] - 2026-10-12 — "All businesses" on Home and Clients (MUT-89)
 

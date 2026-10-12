@@ -34,6 +34,20 @@ export default {
       ready: 'http://localhost:5173',
       personas: {}, // no auth — local-first, single-user
     },
+    portal: {
+      label: 'Hosted portal',
+      platform: 'web',
+      release: { strategy: 'tag', pattern: 'v*' },
+      // The portal's own code, plus the shared token and font files it renders with (MUT-102)
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
+      // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
+      // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
+      baseURL: 'http://127.0.0.1:5175',
+      attachURL: 'http://127.0.0.1:5175',
+      start: { cmd: 'npm run dev:hosted' },
+      ready: 'http://127.0.0.1:5175',
+      personas: {},
+    },
   },
 
   env: {

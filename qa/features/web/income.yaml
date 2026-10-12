@@ -27,7 +27,7 @@ features:
       - Save
     expect:
       - 'The entry appears in the Income list as Unpaid, with "No client"'
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
   - id: validation
     title: Saving with no amount shows a field error, not a crash
     tier: secondary

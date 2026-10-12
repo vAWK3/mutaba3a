@@ -28,7 +28,7 @@
 }
 
 .sample-bar-action {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .sample-bar-action::after {

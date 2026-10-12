@@ -67,7 +67,7 @@
 
 .badge-accent {
   background-color: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
 }
 
 /* Reduced motion */

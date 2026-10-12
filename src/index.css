@@ -43,8 +43,8 @@ body,
 }
 
 body {
-  /* Canonical variables from theme.css */
-  font-family: var(--font-en);
+  /* Canonical variables from theme.css; the face comes from <html> (theme.css), so
+     html:lang(ar) reaches the body too */
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   color: var(--text);
@@ -81,7 +81,7 @@ h4 {
 
 /* Links */
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -436,20 +436,20 @@ td {
   background: var(--accent-subtle);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   transition: all var(--transition-fast);
 }
 
 .new-action-btn:hover {
-  background: var(--accent);
-  color: var(--on-accent, white);
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 .new-action-btn.active {
-  background: var(--accent);
-  color: var(--on-accent, white);
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 .new-action-btn .nav-icon {
@@ -584,8 +584,8 @@ td {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
-  background: var(--accent);
-  color: white;
+  background: var(--accent-solid);
+  color: var(--on-accent);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -626,8 +626,8 @@ td {
 }
 
 .nav-item.active {
-  background: var(--accent-subtle);
-  color: var(--accent);
+  background: var(--nav-item-active);
+  color: var(--nav-item-active-text);
 }
 
 .nav-icon {
@@ -734,7 +734,7 @@ td {
 }
 
 .feature-notice-banner-action {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: var(--weight-medium);
   text-decoration: none;
   white-space: nowrap;
@@ -789,7 +789,7 @@ td {
   padding: 0;
   font: inherit;
   cursor: pointer;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: var(--weight-medium);
   text-decoration: none;
   white-space: nowrap;
@@ -921,7 +921,7 @@ td {
   height: 14px;
   border-radius: 50%;
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
   font-size: 9px;
   font-weight: var(--weight-semibold);
 }
@@ -943,7 +943,7 @@ td {
 }
 
 .breadcrumb-link:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .breadcrumb-current {
@@ -1068,7 +1068,7 @@ td {
 
 .segment-tab-active .segment-tab-count {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
 }
 
 /* Currency Tabs */
@@ -1331,7 +1331,7 @@ div.input-with-prefix {
 
 .btn-danger {
   background: var(--error);
-  color: white;
+  color: var(--on-status);
 }
 
 .btn-danger:hover {
@@ -1676,7 +1676,7 @@ div.input-with-prefix {
 
 .income-status-tab-active .income-status-count {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
 }
 
 /* MUT-83: the client scope a link opened /income with; one tap clears it */
@@ -2345,7 +2345,7 @@ div.input-with-prefix {
 }
 
 .document-guard-icon {
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: var(--space-4);
 }
 
@@ -2545,7 +2545,11 @@ div.input-with-prefix {
 /* Warning button */
 .btn-warning {
   background: var(--warning);
-  color: white;
+  color: var(--on-status);
+}
+
+.btn-warning:focus-visible {
+  box-shadow: var(--focus-ring-on-fill); /* a filled control: the inset ring would paint over it */
 }
 
 .btn-warning:hover {
@@ -2562,7 +2566,7 @@ div.input-with-prefix {
 
 .alert-info {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
   border: 1px solid var(--accent);
 }
 
@@ -2592,7 +2596,7 @@ div.input-with-prefix {
 }
 
 .tab.active {
-  color: var(--accent);
+  color: var(--accent-text);
   border-bottom-color: var(--accent);
 }
 
@@ -2623,7 +2627,7 @@ div.input-with-prefix {
 }
 
 .insights-tab.active {
-  color: var(--accent);
+  color: var(--accent-text);
   border-bottom-color: var(--accent);
 }
 
@@ -2705,8 +2709,10 @@ div.input-with-prefix {
 
 /* The largest figure on the page; stays LTR inside Arabic text */
 .owed-now-amount {
+  /* Brand figure: Plex Mono 500 (the mono face ships no 700) */
+  font-family: var(--font-mono);
   font-size: var(--text-4xl);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   color: var(--text);
@@ -2804,7 +2810,7 @@ div.input-with-prefix {
 }
 
 a.project-tag:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .client-work-subline {
@@ -2849,7 +2855,7 @@ a.project-tag:hover {
 
 /* Document indicator */
 .doc-indicator {
-  color: var(--accent);
+  color: var(--accent-text);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -2999,10 +3005,14 @@ a.project-tag:hover {
 /* Success button variant */
 .btn-success {
   background: var(--success);
-  color: white;
+  color: var(--on-status);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.btn-success:focus-visible {
+  box-shadow: var(--focus-ring-on-fill); /* a filled control: the inset ring would paint over it */
 }
 
 .btn-success:hover {
@@ -3039,7 +3049,7 @@ a.project-tag:hover {
 
 .settings-update-card-title {
   font-weight: var(--weight-semibold);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .settings-update-card-versions {
@@ -3093,7 +3103,7 @@ a.project-tag:hover {
 
 .report-preset.active {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--on-accent-subtle);
 }
 
 .reports-content {
@@ -3695,7 +3705,7 @@ a.project-tag:hover {
 
 .matching-context-amount {
   font-family: var(--font-mono);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium); /* Plex Mono ships 400/500 */
   color: var(--success);
   margin-inline-start: var(--space-3);
   flex-shrink: 0;
@@ -3705,7 +3715,7 @@ a.project-tag:hover {
   margin-inline-start: var(--space-3);
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--accent-text);
   background: transparent;
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -3714,8 +3724,8 @@ a.project-tag:hover {
 }
 
 .matching-context-change:hover {
-  background: var(--accent);
-  color: white;
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 /* Matching List */
@@ -3994,13 +4004,13 @@ a.project-tag:hover {
 
 .matching-confirmation-card-amount {
   font-family: var(--font-mono);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium); /* Plex Mono ships 400/500 */
   margin-top: var(--space-2);
 }
 
 .matching-confirmation-arrow {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .matching-confirmation-actions {

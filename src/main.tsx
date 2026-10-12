@@ -4,18 +4,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 
-// Import fonts
-import "@fontsource-variable/inter";
-import "@fontsource-variable/source-serif-4";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/ibm-plex-mono/600.css";
-import "@fontsource/ibm-plex-sans-arabic/400.css";
-import "@fontsource/ibm-plex-sans-arabic/500.css";
-import "@fontsource/ibm-plex-sans-arabic/600.css";
-import "@fontsource/ibm-plex-sans-arabic/700.css";
-
-// Import theme and styles
+// Theme tokens and the Brand v2 fonts (theme.css imports brand/fonts.css; MUT-102)
 import "./styles/theme.css";
 import "./index.css";
 import { createAppQueryClient } from "./lib/queryClient";
@@ -65,8 +54,8 @@ const LandingLoader = () => (
       alignItems: "center",
       justifyContent: "center",
       height: "100vh",
-      background: "var(--color-bg-base, #070C16)",
-      color: "var(--color-text-muted, #888)",
+      background: "var(--bg)",
+      color: "var(--muted)",
     }}
   >
     Loading...
