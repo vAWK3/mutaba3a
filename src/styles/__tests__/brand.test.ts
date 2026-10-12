@@ -533,3 +533,37 @@ describe('contrast', () => {
     expect(ratio).toBeLessThan(contrast(tokens.color('--muted'), tokens.color('--input-bg'), tokens.color('--bg')));
   });
 });
+
+/**
+ * `color: var(--accent)` puts purple text at 4.78:1 on canvas, below AAA. Text
+ * uses --accent-text (primary-hover); --accent is for fills, borders and
+ * decoration (PD3). Matches the whole `color` property only, in CSS and in
+ * TSX inline styles (CQ3).
+ */
+const ACCENT_AS_TEXT = /(?<![-\w])color\s*:\s*['"`]?var\(--accent\)/;
+
+describe('accent-text guard', () => {
+  it.each(['color: var(--accent);', "{ color: 'var(--accent)' }", 'a{color:var(--accent)}', '  color : "var(--accent)"'])('catches %s', (code) => {
+    expect(ACCENT_AS_TEXT.test(code)).toBe(true);
+  });
+
+  it.each(['border-color: var(--accent);', 'color: var(--accent-text);', 'background-color: var(--accent);', 'color: var(--accent-solid);', '--link-color: var(--accent);', 'outline-color: var(--accent)'])(
+    'leaves %s alone',
+    (code) => {
+      expect(ACCENT_AS_TEXT.test(code)).toBe(false);
+    },
+  );
+
+  it('no stylesheet or component colours text with --accent', () => {
+    const offenders = sourceFiles()
+      .filter((file) => /\.(css|tsx)$/.test(file))
+      .flatMap((file) =>
+        readFileSync(file, 'utf8')
+          .split('\n')
+          .map((line, i) => ({ line, at: `${file.replace(`${repoPath('.')}/`, '')}:${i + 1}` }))
+          .filter(({ line }) => ACCENT_AS_TEXT.test(line))
+          .map(({ at }) => at),
+      );
+    expect(offenders).toEqual([]);
+  });
+});

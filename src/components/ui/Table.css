@@ -39,7 +39,7 @@
 }
 
 .table th.sorted {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Cells */

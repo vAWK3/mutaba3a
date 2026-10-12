@@ -46,7 +46,7 @@
   padding-inline: var(--space-3);
 
   background-color: white;
-  color: var(--accent);
+  color: var(--accent-text);
   border: none;
   border-radius: var(--radius-sm);
 

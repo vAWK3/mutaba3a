@@ -572,7 +572,7 @@ a.landing-get-it-option:focus-visible {
 }
 
 .landing-get-it-meta a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 

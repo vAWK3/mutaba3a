@@ -172,7 +172,7 @@
 .demo-stat-value {
   font-size: var(--text-xl);
   font-weight: var(--weight-bold);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .demo-stat-label {

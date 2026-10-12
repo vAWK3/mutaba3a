@@ -81,7 +81,7 @@ h4 {
 
 /* Links */
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -436,7 +436,7 @@ td {
   background: var(--accent-subtle);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   transition: all var(--transition-fast);
@@ -627,7 +627,7 @@ td {
 
 .nav-item.active {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .nav-icon {
@@ -734,7 +734,7 @@ td {
 }
 
 .feature-notice-banner-action {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: var(--weight-medium);
   text-decoration: none;
   white-space: nowrap;
@@ -789,7 +789,7 @@ td {
   padding: 0;
   font: inherit;
   cursor: pointer;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: var(--weight-medium);
   text-decoration: none;
   white-space: nowrap;
@@ -921,7 +921,7 @@ td {
   height: 14px;
   border-radius: 50%;
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 9px;
   font-weight: var(--weight-semibold);
 }
@@ -943,7 +943,7 @@ td {
 }
 
 .breadcrumb-link:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .breadcrumb-current {
@@ -1068,7 +1068,7 @@ td {
 
 .segment-tab-active .segment-tab-count {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Currency Tabs */
@@ -1676,7 +1676,7 @@ div.input-with-prefix {
 
 .income-status-tab-active .income-status-count {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* MUT-83: the client scope a link opened /income with; one tap clears it */
@@ -2345,7 +2345,7 @@ div.input-with-prefix {
 }
 
 .document-guard-icon {
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: var(--space-4);
 }
 
@@ -2562,7 +2562,7 @@ div.input-with-prefix {
 
 .alert-info {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
   border: 1px solid var(--accent);
 }
 
@@ -2592,7 +2592,7 @@ div.input-with-prefix {
 }
 
 .tab.active {
-  color: var(--accent);
+  color: var(--accent-text);
   border-bottom-color: var(--accent);
 }
 
@@ -2623,7 +2623,7 @@ div.input-with-prefix {
 }
 
 .insights-tab.active {
-  color: var(--accent);
+  color: var(--accent-text);
   border-bottom-color: var(--accent);
 }
 
@@ -2804,7 +2804,7 @@ div.input-with-prefix {
 }
 
 a.project-tag:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .client-work-subline {
@@ -2849,7 +2849,7 @@ a.project-tag:hover {
 
 /* Document indicator */
 .doc-indicator {
-  color: var(--accent);
+  color: var(--accent-text);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -3039,7 +3039,7 @@ a.project-tag:hover {
 
 .settings-update-card-title {
   font-weight: var(--weight-semibold);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .settings-update-card-versions {
@@ -3093,7 +3093,7 @@ a.project-tag:hover {
 
 .report-preset.active {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .reports-content {
@@ -3705,7 +3705,7 @@ a.project-tag:hover {
   margin-inline-start: var(--space-3);
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--accent-text);
   background: transparent;
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -4000,7 +4000,7 @@ a.project-tag:hover {
 
 .matching-confirmation-arrow {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .matching-confirmation-actions {

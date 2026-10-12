@@ -54,7 +54,7 @@
   height: 40px;
   border-radius: var(--radius-md);
   background: var(--surface);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .pdf-choice-option--primary .pdf-choice-option-icon {

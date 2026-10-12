@@ -68,7 +68,7 @@
 }
 
 .clients-index-table tr.client-index-row-open .client-index-name {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Enter or → moves focus into the profile: show where it went, inside the

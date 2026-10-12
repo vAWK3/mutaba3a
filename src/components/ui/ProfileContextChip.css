@@ -37,7 +37,7 @@
 
 .profile-context-chip-change {
   font-size: 12px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: none;
   border: none;
   padding: 0;

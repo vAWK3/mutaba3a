@@ -172,7 +172,7 @@
 
 .line-items-add-row:hover {
   background-color: var(--surface-hover);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Footer */
