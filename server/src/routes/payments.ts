@@ -211,7 +211,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let created;
       try {
         created = await store.payments.create(
-          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, allocations: value.allocations },
+          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: value.allocations },
           now,
         );
       } catch (err) {

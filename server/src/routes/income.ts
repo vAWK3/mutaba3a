@@ -63,6 +63,8 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             replacesPaymentId: null,
             requestId: c.get('requestId'),
             createdByUserId: user.id,
+            origin: 'CAPTURE',
+            captureSource: body.captureSource ?? null,
             allocations: [],
           },
           now,

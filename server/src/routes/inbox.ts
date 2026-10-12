@@ -297,6 +297,8 @@ function incomeWrite(
         replacesPaymentId: null,
         requestId,
         createdByUserId: userId,
+        origin: 'CAPTURE' as const,
+        captureSource: entry.captureSource,
         allocations: [],
       },
     };

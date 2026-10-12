@@ -201,6 +201,9 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             replacesPaymentId: null,
             requestId,
             createdByUserId: user.id,
+            // MUT-61: a person settling their own Owed is a capture too (matches the migration's backfill rule).
+            origin: 'CAPTURE',
+            captureSource: body.captureSource ?? null,
             allocations: [{ receivableId: receivable.id, amountMinor }],
           },
           now,

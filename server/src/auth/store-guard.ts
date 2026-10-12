@@ -116,6 +116,9 @@ export const STORE_ACCESS: StoreAccess = {
     allocate: { write: 'payments' },
     reverse: { write: 'payments' },
     findReplacedBy: 'read',
+    // MUT-61: the capture row's entire write surface — a person's own unallocated Received and its undo.
+    capture: { write: 'capture' },
+    undoCapture: { write: 'capture' },
   },
   attachments: {
     create: { write: 'attachments' },

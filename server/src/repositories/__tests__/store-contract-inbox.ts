@@ -227,6 +227,8 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
               replacesPaymentId: null,
               requestId: null,
               createdByUserId: w.owner.user.id,
+              origin: 'CAPTURE',
+              captureSource: 'share',
               allocations: [],
             },
           },
@@ -236,6 +238,7 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
       expect(received.kind).toBe('filed');
       if (received.kind !== 'filed' || received.result.kind !== 'received') throw new Error('unreachable');
       expect(received.result.payment.amountMinor).toBe(12_345n);
+      expect(received.result.payment).toMatchObject({ origin: 'CAPTURE', captureSource: 'share' });
       expect(await store.inboxEntries.getById(w.owner.user.id, forReceived.id)).toBeNull();
 
       const owed = await store.inboxEntries.fileAsIncome(

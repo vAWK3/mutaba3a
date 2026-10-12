@@ -55,6 +55,8 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
     replacesPaymentId: null,
     requestId: 'req-1',
     createdByUserId: null,
+    origin: 'INTEGRATION' as const,
+    captureSource: null,
     allocations,
     ...over,
   });
