@@ -638,85 +638,13 @@ function Component() {
 
 ---
 
-## Sync Patterns
+## Sync Patterns (retired)
 
-### Pattern: HLC Operations
-
-All mutations create an operation in the opLog for sync.
-
-```typescript
-// src/sync/core/ops-engine.ts
-
-export async function createOperation(
-  entityType: EntityType,
-  entityId: string,
-  opType: OpType,
-  field?: string,
-  value?: unknown,
-  previousValue?: unknown
-): Promise<Operation> {
-  const hlc = await tickHLC();
-  const device = await getLocalDevice();
-
-  const op: Operation = {
-    id: crypto.randomUUID(),
-    hlc: serializeHLC(hlc),
-    entityType,
-    entityId,
-    opType,
-    field,
-    value,
-    previousValue,
-    createdBy: device.id,
-    createdAt: new Date().toISOString(),
-  };
-
-  await db.opLog.add(op);
-  return op;
-}
-```
-
----
-
-### Pattern: Conflict Detection
-
-Detect conflicts when applying remote operations.
-
-```typescript
-// src/sync/core/conflict-resolver.ts
-
-export async function detectConflict(
-  localOp: Operation,
-  remoteOp: Operation
-): Conflict | null {
-  // Same entity, same field, different values
-  if (
-    localOp.entityType === remoteOp.entityType &&
-    localOp.entityId === remoteOp.entityId &&
-    localOp.field === remoteOp.field &&
-    localOp.value !== remoteOp.value
-  ) {
-    // Check if operations are concurrent (neither happened-before the other)
-    if (areConcurrent(localOp.hlc, remoteOp.hlc)) {
-      return {
-        id: crypto.randomUUID(),
-        entityType: localOp.entityType,
-        entityId: localOp.entityId,
-        conflictType: 'profile_field',
-        field: localOp.field,
-        localOp,
-        remoteOp,
-        localValue: localOp.value,
-        remoteValue: remoteOp.value,
-        detectedAt: new Date().toISOString(),
-        status: 'open',
-      };
-    }
-  }
-
-  return null;
-}
-```
+*Retired 2026-10-12 with device sync (MUT-73, ADR-053).* The HLC-operation and
+conflict-detection patterns described code that no longer exists: `src/sync`,
+the op-log and its Dexie tables are gone. Do not reintroduce an op-log or an
+HLC for a new feature without a new ADR. Moving data between devices is the
+JSON backup's job.
 
 ---
 
@@ -1181,10 +1109,12 @@ queryFn: () => getRepositories().base.transactions.list(filters)
 const repos = getRepositories();
 ```
 
-Two families are exposed on purpose. `base` is the plain Dexie repository;
-`synced` is the decorator that also captures an op in the sync log. Call sites
-state which one they use, so the (pre-existing, uneven) split is visible rather
-than hidden — see TODOS.md item 1.
+One family, `base`: the plain Dexie repositories. Until MUT-73 a second
+family, `synced`, wrapped some of them to capture device-sync ops; device sync
+is retired (ADR-053), so every call site uses `base` and the registry is
+`{ base }`. The wrapper object stays so call sites and test overrides
+(`setRepositories({ ...real, base: { ...real.base, settings } })`) keep their
+shape.
 
 `satisfies` on both registries is the conformance check: deleting or renaming a
 repository method fails `npm run typecheck` at `provider.ts`. Verified by
@@ -1315,6 +1245,20 @@ still are, so the negative cannot pass vacuously. The guard
 (`noDeadMoneyEventModules.test.ts`) also scans `src/` for the deleted names,
 because test files are outside `tsc` and a stale `vi.mock` path would not fail
 the typecheck.
+
+A refinement from MUT-73 (device sync): **a retired subsystem's bookkeeping
+tables may drop** — the one exception to "tables never go". It needs an explicit
+ADR override naming the tables (ADR-053 for the eight sync tables), an argument
+that no user record lives only there and no shipped screen could open them, a
+migration test that upgrades a database *with* those rows (opens without error,
+stores gone, every other row unchanged, a pre-upgrade JSON backup still
+restores), and a guard that checks the schema. The Dexie version only declares
+`null` for each table; the old version blocks stay verbatim. Remember that
+Dexie will not re-run a drop on a native version it has already passed: if a
+pre-drop build ever reopens the database, it recreates the stores empty, and
+only a later version that re-declares the `null`s removes them again. The guard
+for a cross-stack deletion also reads non-TS files: `lib.rs` for IPC commands,
+`Cargo.toml` for crates, `package.json` for dependencies.
 
 ---
 
@@ -1691,8 +1635,8 @@ When a picker's choice needs an async write first (creating a client), the picke
 ### Local work runs offline; network work opts in (ADR-040)
 The main app's `QueryClient` (`createAppQueryClient`) uses `networkMode: 'always'`, because its queries and mutations hit IndexedDB. A hook that calls the network sets `networkMode: 'online'` itself and gives the user something meanwhile (the FX rate's cached `placeholderData`). Test offline behaviour with `onlineManager.setOnline(false)` and a settle timeout: a paused query never settles.
 
-### A synced write logs what was stored
-When a repository may refuse or derive fields (transactions with payment records, ADR-039), the synced wrapper re-reads the entity after the write and logs the stored values: refused fields are not logged, derived changes are. Logging the request instead puts state in the op log that the local database never had.
+### ~~A synced write logs what was stored~~ (retired, MUT-73)
+The synced wrapper and its op log were deleted with device sync (ADR-053). The underlying lesson still holds for any future audit trail: record what the repository stored, not what was requested.
 
 ### One invalidation list per entity family
 Hooks for one table that live in two modules (`useQueries` and `useIncomeQueries`) share one exported invalidation function (`invalidateTransactionQueries`) covering both modules' keys. Two hand-copied lists drift, and a save from one module then never refreshes screens built on the other.
@@ -1870,3 +1814,12 @@ All destination-side validation — writability, link resolution, category/custo
 
 "Unsorted entries never change any summary" is asserted twice: once by comparing whole summary responses before and after filling an inbox, and once by reading the summary sources — enumerated from the directory so a module added later is covered — and finding no reference to the table. The second keeps the first from being a coincidence that a future query could quietly break.
 
+### Smoke a desktop debug build without touching the owner's data (MUT-73)
+
+A debug build of the Tauri app shares the installed app's config directory (keyed by the identifier) and, when unbundled, a WebView data directory keyed by the executable name (`~/Library/WebKit/app` is the owner's `tauri dev` data). So:
+- build with an overridden identifier: `npx tauri build --debug --no-bundle --config '{"identifier":"com.elmokhtbr.mutaba3a.mut73"}'` (add `"build":{"beforeBuildCommand":""}` to embed a hand-patched `dist-desktop`);
+- copy the binary to a unique name before launching, so WebKit writes to `~/Library/WebKit/<that name>`;
+- record the mtimes of the real and dev WebKit directories before launch and compare after;
+- with no way to drive the webview, let an injected throwaway script report through the app itself: each outcome binds a different loopback port with `bind_oauth_callback`, and the shell reads `lsof -iTCP -sTCP:LISTEN`. Avoid `setTimeout` in that script: an occluded WKWebView throttles timers until they effectively stop;
+- a capability for the smoke only goes inline in the same `--config` (`app.security.capabilities: ["default", {...}]`), never in `capabilities/`;
+- delete the isolated config, WebKit, cache and log directories afterwards.

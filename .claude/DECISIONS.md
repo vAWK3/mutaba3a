@@ -19,9 +19,9 @@
 | ADR-008 | URL-Driven Drawer State | Active | 2024-02 |
 | ADR-009 | Amounts in Minor Units (Cents) | Active | 2024-02 |
 | ADR-010 | Receivable as Transaction Status | Active | 2024-02 |
-| ADR-011 | Hybrid Logical Clock for Sync | Active | 2024-06 |
-| ADR-012 | Operation Log (CRDT-like) for Sync | Active | 2024-06 |
-| ADR-013 | Local-Only Sync (LAN + File Bundle) | Active | 2024-06 |
+| ADR-011 | Hybrid Logical Clock for Sync | Superseded by ADR-053 (2026-10-12) | 2024-06 |
+| ADR-012 | Operation Log (CRDT-like) for Sync | Superseded by ADR-053 (2026-10-12) | 2024-06 |
+| ADR-013 | Local-Only Sync (LAN + File Bundle) | Superseded by ADR-053 (2026-10-12) | 2024-06 |
 | ADR-014 | Document Immutability After Export | Active | 2024-08 |
 | ADR-015 | Profile-Scoped Expenses | Active | 2024-09 |
 | ADR-016 | Tauri for Desktop Distribution | Active | 2024-03 |
@@ -37,7 +37,7 @@
 | ADR-026 | Hosted API Deployment: Terraform Owns the Stack Including the Image Tag, One Local Script Rolls It (Local Build, Local Migrations), One Instance Until TD-017 | Active | 2026-10 |
 | ADR-027 | Fee Approval Creates the Agreement (Override of M7 Brief Decisions 2 and 3) | Active | 2026-10 |
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
-| ADR-029 | Removing a Feature's UI Never Removes Its Tables | Active | 2026-10 |
+| ADR-029 | Removing a Feature's UI Never Removes Its Tables (overridden by ADR-053 for the eight sync tables only) | Active | 2026-10 |
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
 | ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
@@ -55,6 +55,7 @@
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
+| ADR-053 | Device-to-Device Sync Is Retired; Local↔Hosted Sync Is Off the Roadmap (Supersedes ADR-011, ADR-012, ADR-013; Narrow Override of ADR-029) | Active | 2026-10 |
 
 ---
 
@@ -323,7 +324,7 @@ const overdue = receivables.filter(
 
 ## ADR-011: Hybrid Logical Clock for Sync
 
-**Status**: Active
+**Status**: Superseded by ADR-053 (2026-10-12, MUT-73). The clock existed only to order sync operations; it was deleted with them. Text kept for history.
 **Date**: 2024-06
 **Context**: P2P sync requires ordering operations from different devices.
 
@@ -348,7 +349,7 @@ interface HLC {
 
 ## ADR-012: Operation Log (CRDT-like) for Sync
 
-**Status**: Active
+**Status**: Superseded by ADR-053 (2026-10-12, MUT-73). The op-log, its writers and its Dexie table are gone. Text kept for history.
 **Date**: 2024-06
 **Context**: Need to sync changes between devices without central server.
 
@@ -369,7 +370,7 @@ interface HLC {
 
 ## ADR-013: Local-Only Sync (LAN + File Bundle)
 
-**Status**: Active
+**Status**: Superseded by ADR-053 (2026-10-12, MUT-73). Device-to-device sync is retired product-wide, and local↔hosted sync is off the roadmap. Text kept for history.
 **Date**: 2024-06
 **Context**: Must sync without cloud involvement for privacy.
 
@@ -646,7 +647,13 @@ Every predicate takes `today` as an explicit argument, which keeps it pure and t
 
 ## Superseded Decisions
 
-*None yet. When a decision is replaced, move it here with override date and reason.*
+The superseded ADRs keep their text in place, so numbers and links stay stable; each one's **Status** line names its replacement.
+
+| ADR | Superseded by | Date | Reason |
+|---|---|---|---|
+| ADR-011 Hybrid Logical Clock for Sync | ADR-053 | 2026-10-12 | Device sync retired (MUT-73); the clock had no other user |
+| ADR-012 Operation Log (CRDT-like) for Sync | ADR-053 | 2026-10-12 | Device sync retired; the op-log and its table were dropped (Dexie v21) |
+| ADR-013 Local-Only Sync (LAN + File Bundle) | ADR-053 | 2026-10-12 | Device sync retired product-wide; local↔hosted sync is off the roadmap |
 
 ---
 
@@ -716,6 +723,11 @@ Sync) remain Active and in conflict with cloud sync. Overriding them is MUT-30's
 job and must happen before any cloud sync ships. This ADR covers only how a
 client authenticates when that work is approved.
 
+> **Note (2026-10-12, ADR-053).** Cloud sync will not ship: ADR-053 retired
+> device sync and took local↔hosted sync off the roadmap. The OAuth client this
+> ADR governs survives, moved to `src/services/oauth/` and
+> `src-tauri/src/oauth/`; it has no caller yet (TD-075).
+
 > **Override note (2026-10-11, ADR-037).** The clause "builds no account
 > system, no password storage, and no session of its own" no longer describes
 > the hosted service: ADR-037 gives `server/` operator-provisioned users,
@@ -749,6 +761,8 @@ than an architecture rule:
 - **ADR-013 (local-only sync) stays Active.** The hosted service is not a sync
   target for the desktop in this decision. Making it one is a separate ADR,
   gated on MUT-27 (op-log transport) and TD-015 (durable tokens).
+  *(Note 2026-10-12: ADR-053 superseded ADR-013 and took local↔hosted sync off
+  the roadmap, so that separate ADR will not be written.)*
 - **Firm data on the hosted service** is privileged client financial data and
   must be encrypted at rest, regionally resident beside the firm's CRM (GCP
   me-west1, matching Malafat), backed up, and deletable on request.
@@ -1105,6 +1119,16 @@ override it. Money events were derived, so no table was involved. The
 `moneyEventVersions` sync table is unrelated and stays (§1), and
 `noDeadMoneyEventModules.test.ts` asserts it is still in the schema.
 
+**Override note 2026-10-12 — MUT-73 / ADR-053: the eight sync tables drop.**
+ADR-053 overrides §1 for `localDevice`, `trustedPeers`, `opLog`, `peerCursors`,
+`entityFieldMeta`, `moneyEventVersions`, `conflictQueue` and `syncHistory` only
+(Dexie v21), because they hold sync bookkeeping, not user records, and no
+shipped screen could open the two record-like ones. The reasoning and the
+migration test that replaces §3's retention test are in ADR-053. The note
+above is history: `moneyEventVersions` went with the other seven, and
+`noSyncModules.test.ts` now asserts it is gone. Every other table remains
+under §1.
+
 ---
 
 ## ADR-030: Overpayment Is Rejected; Locked Transactions Still Accept Payments
@@ -1259,7 +1283,8 @@ voice folded in).
    no data and is never auto-enabled). Nothing ever turns an area *off*
    automatically. The reconcile runs on upgrade, after backup restore, data
    import, demo seeding and sync-bundle import, because each of those rewrites
-   or adds rows after the upgrade has already run.
+   or adds rows after the upgrade has already run. *(2026-10-12: sync-bundle
+   import was deleted with device sync, ADR-053; the other four remain.)*
 3. **The user is told once, by a dismissible banner, not a toast.** The
    auto-enabled keys are stored in `Settings.featureNotice`; `FeatureNoticeBanner`
    in `AppShell` shows them with a link to Settings and clears the notice only
@@ -1624,6 +1649,10 @@ separate ADR gated on MUT-27 and TD-015 (ADR-024). TD-037 records that the
 op-log has no `profileId` concept at all, so profile-selective sync is not
 even expressible today.
 
+> **Note (2026-10-12, ADR-053).** ADR-013 and the op-log are gone, and
+> local↔hosted sync is off the roadmap, so "neither syncs to the other" is now
+> permanent rather than a v1 deferral. TD-037 is resolved as moot.
+
 **ADR-024's guarantee is demonstrated, not asserted**: the desktop/PWA bundles
 are checked to contain none of the portal's endpoints, cookie name or headers,
 and no new network origins; Dexie schema, profile types, profile store,
@@ -1824,7 +1853,9 @@ and `useMarkIncomePaid`/`useMarkTransactionPaid` are kept as repository/hook
 primitives — `synced-repository.ts`'s sync wrapper and `paymentRequestService`
 still have legitimate reasons to flip a transaction to paid without going
 through this drawer — so this decision narrows *where the UI calls them*, not
-the primitives themselves. `src/hooks/useTransactionActions.ts` duplicates the
+the primitives themselves. *(2026-10-12: the sync wrapper was deleted with
+device sync, ADR-053; the hooks now call `transactionRepo.markPaid` directly,
+and `paymentRequestService` remains a caller.)* `src/hooks/useTransactionActions.ts` duplicates the
 same dateless pattern this ADR fixes but has no production caller; left alone
 here and logged as tech debt (TD-046) rather than deleted as a scope expansion
 of a bug-fix ticket.
@@ -1882,7 +1913,7 @@ When a cut makes the entry fully paid, `paidAt` is the latest record's date, bec
 *(Amended 2026-10-11 by the adversarial re-review.)* Two callers wrote payment state the way rule 2 now refuses, and both follow it:
 - **Record Payment on a payment request** (`recordPaymentForRequest`) wrote `status: 'paid'` through `update`, so a part-paid receivable stayed unpaid while its document showed paid. It calls `markPaid`, which records the balance still owed.
 - **`updatePaymentRequestWithTransaction`** (no callers yet) updates the linked receivable before the document, so a refused currency change leaves both untouched.
-- **The op log** (`syncedTransactionRepo.update`) logs the entry as stored: a payment field only when it really changed (refused or derived), every other requested field with the value written.
+- **The op log** (`syncedTransactionRepo.update`) logs the entry as stored: a payment field only when it really changed (refused or derived), every other requested field with the value written. *(2026-10-12: the op log and its wrapper were deleted with device sync, ADR-053; rules 1–3 live in `transactionRepo.update` and are unchanged.)*
 
 One gap remains, ticketed: an entry saved as Received in the drawer still has no record (TD-029 → MUT-60). Until it does, it follows rule 3, not rule 1.
 
@@ -2041,3 +2072,66 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Alternatives Considered**: a nullable `organizationId` on `Expense`/`Payment`/`Receivable` (rejected: MUT-65 loosened *client/matter* columns, which keeps the row inside an organization; teaching every reader of a ledger table to handle a null organization is a far larger and riskier change, and it reintroduces the FK that must be absent for the membership AC to hold structurally); keying the table `(userId, organizationId?)` (rejected for the same reason one level down); one filing route with a content-derived scope (rejected, decision 4); an `inbox` matrix domain (rejected, decision 7).
 
+
+---
+
+## ADR-053: Device-to-Device Sync Is Retired; Local↔Hosted Sync Is Off the Roadmap (Supersedes ADR-011, ADR-012, ADR-013; Narrow Override of ADR-029)
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-73 (epic MUT-2). Brief: `.claude/designs/mut-73-retire-sync.md`, approved by the owner on 2026-10-12 with decisions D1–D12 as recommended. Device sync (LAN pairing and `.msync` bundles, ADR-013, built on ADR-011's HLC and ADR-012's op-log) was broken in ways users could not see:
+- transaction creates and edits were never captured (MUT-46);
+- payment ops were captured but never applied (MUT-55);
+- expenses never synced at all;
+- conflicts were counted but no shipped screen could resolve them (the "Review Conflicts" button had no handler).
+
+The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it. The owner decided on 2026-10-11 to drop it product-wide.
+
+**Decision**:
+1. **Device sync is deleted, not repaired.** The following are removed:
+   - `src/sync` (HLC, op-log engine, conflict resolver, synced decorators, sync store, bundle encoder and crypto);
+   - `src/components/sync` (pairing, bundle export and import, the status chip, the conflict banner, the Settings section);
+   - `usePairingSession`;
+   - the Tauri `src-tauri/src/sync` module (LAN server, mDNS discovery, pairing, paired-device persistence, bundle crypto, 17 IPC commands);
+   - the 15 crates only it used, or that nothing used;
+   - the `qrcode.react` dependency.
+2. **Local↔hosted sync is off the roadmap, not deferred.** This closes the op-log-over-OAuth path MUT-25 left open, and the "a separate ADR, gated on MUT-27 and TD-015" thread in ADR-023, ADR-024 and ADR-037. MUT-34 decision 1 ("neither syncs to the other in v1") becomes permanent: a local profile and a hosted profile never sync. Moving data between devices is the JSON backup's job, as the landing FAQ already says.
+3. **The repository registry has one family.**
+   - `getRepositories()` keeps its `{ base }` shape (D6), and `ISyncedRepositories` is gone.
+   - The eight call sites that used the decorators now call the base repository: Mark paid (×2), partial payment (×2), payment record create/update/delete, business-profile archive.
+   - The decorators wrote the same rows and then appended an op-log entry outside the write's transaction. So the change is invisible on success, and it removes one failure: a failed append could reject a mutation whose payment was already stored, inviting a duplicate.
+4. **Dexie v21 drops the eight sync-only tables**: `localDevice`, `trustedPeers`, `opLog`, `peerCursors`, `entityFieldMeta`, `moneyEventVersions`, `conflictQueue`, `syncHistory`.
+5. **The Malafat OAuth client stays, moved out of the sync tree.**
+   - TypeScript: `src/services/oauth/`, unchanged apart from paths and comments.
+   - Rust: `src-tauri/src/oauth/{mod.rs, callback.rs}`.
+   - The three commands keep their names and get their own `OAuthState`. The opener plugin and its `*.malafat.app` permission stay.
+   - Nothing in the app calls the flow yet; its future is TD-075.
+6. **The desktop removes `paired_devices.json` and `paired_devices.tmp`** from its config directory on every launch (`src-tauri/src/retired_sync.rs`). This is best effort: a missing file is success, any other failure is logged and never blocks startup. The file held bearer tokens issued to phones, which now authenticate to nothing.
+
+**Override log — ADR-029 (for these eight tables only).**
+- *What:* ADR-029's "deleting a feature's UI never drops a Dexie table".
+- *Why it is safe here:*
+  - every user record lives in a table v21 does not touch;
+  - the eight tables hold sync bookkeeping: device identity, peers that no TS code ever wrote, op-log copies of rows that exist in their own tables, LWW clocks, conflicts and history;
+  - the two record-like residues (pre-sync transaction snapshots in `moneyEventVersions`, and received ops that never applied, MUT-55) were never visible in any shipped screen, and their originals live on the device that sent them;
+  - every JSON backup saved before the upgrade still contains the rows, and restore skips them.
+- *What replaces it, for these tables:* the v21 migration test (`src/db/__tests__/migration-v21.test.ts`). It upgrades a v20 database with op-log rows, a paired peer and an open conflict, and asserts that it opens without error, that the stores are gone, that every user row is unchanged, and that a pre-upgrade backup restores.
+- ADR-029 stands for every other table. A future retirement that wants the same exception needs its own explicit override.
+
+**Consequences**:
+- About 10,000 lines leave: 33 files, 4,790 lines of TS/TSX, 939 of CSS, 1,780 of TS tests, 2,484 of Rust.
+- About 62 KB of minified JS leaves the web and desktop bundles, 16.6 KB of it from `qrcode.react`.
+- The desktop no longer opens a plain-HTTP listener on `0.0.0.0` or advertises over mDNS.
+- `rustls` is built with `ring` only, from `tauri-plugin-updater`, which installs that provider itself when none is set. `aws-lc-rs` and its C build leave the graph.
+- Rollback:
+  - a pre-v21 build reopening a v21 database works, because Dexie recreates the stores empty;
+  - re-landing after such a rollback needs a later version that re-declares the eight `null`s. Dexie will not re-run v21's drop on a native version it has already passed.
+- `scripts/bundle-rules.ts` fails the local bundles if `.msync`, `start_sync_server` or "Export Sync Bundle" ever ships again.
+- `noSyncModules.test.ts` fails on any file, import, mock, table, command or crate coming back.
+
+**Alternatives Considered**:
+- Fixing sync (MUT-46, MUT-55) (rejected): it repairs a feature the roadmap no longer needs, plus expense sync from scratch.
+- Keeping the tables inert under `src/db/retained/` (ADR-029 as written) (rejected): every install would keep an op-log copy of its money and a device row forever, and the ticket's "no leftover sync tables" criterion fails.
+- Dropping only the three tables the ticket named (rejected): the other five had no reader left either.
+- Flattening `getRepositories()` (rejected for this ticket): it would rewrite 160 call sites in files three parallel lanes are editing.
+- Removing the paired-devices file from JavaScript (rejected): it would need a new `fs:allow-remove` capability, and would run only after the UI mounts.
