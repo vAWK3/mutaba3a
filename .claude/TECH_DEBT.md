@@ -31,6 +31,18 @@
 **Priority**: Low
 **Impact**: `GET /v1/payments?origin=capture&allocationState=unallocated` without `customerId` scans the organization's payments (the `[organizationId, createdAt, id]` index orders, nothing narrows `origin`). MAL-1097 lists per client, which `[organizationId, customerId]` serves. Revisit with `@@index([organizationId, origin, status])` if Malafat adds a firm-wide inbox.
 
+### TD-087: A capture refused with a 4xx replays that 4xx for the same Idempotency-Key
+**Status**: Open
+**Added**: 2026-10-12 (MUT-61 /review; pre-existing behaviour)
+**Priority**: Medium (for MUT-68/MUT-123)
+**Impact**: `idempotency.ts` stores 4xx responses: Hono's `onError` turns a thrown `ApiError` into a response before `next()` returns, so the release-on-throw path never runs. A state-dependent refusal — `CUSTOMER_NOT_LINKED` until Malafat links the client — replays for ever if the phone's outbox retries with the same key. The phone must mint a new key after any 4xx (an edit-and-resend), or the server must stop storing 4xx. Decide with MUT-68/MUT-123.
+
+### TD-088: Captures that can never be allocated — client-only off-currency, and personal-era captures after connecting
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-61 /review)
+**Priority**: Low
+**Impact**: (1) On a Malafat-fed profile a client-only capture may be in a currency the client owes nothing in (only a named matter fixes the currency). (2) A profile that was personal and later connects Malafat keeps its MUT-65 captures as `origin: CAPTURE`, including clientless ones Malafat cannot allocate (`PAYMENT_HAS_NO_CUSTOMER`); they appear in an unfiltered `?origin=capture&allocationState=unallocated`. MAL-1097 lists per client, so neither shows there. Revisit if Malafat adds a firm-wide queue.
+
 ### TD-086: Filing an unsorted Received onto a Malafat-fed profile is still refused
 **Status**: Open
 **Added**: 2026-10-12 (MUT-61)

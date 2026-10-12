@@ -1804,6 +1804,10 @@ holds).
   - **The payment view gains** `origin`, `captureSource`, `allocationState`, `projectId` and `capturedBy { userId, displayName }` (D4, for MAL-1097's "who recorded it" — the firm's own staff, resolved once per distinct person on a page); `GET /v1/payments` gains `?origin=` and `?allocationState=` (POSTED only).
 - *Why*: a lawyer handed cash could not log it at that moment on their firm's profile; the rule existed to prevent double-counting, and tagging + unallocated + Malafat-allocates prevents it without Mutaba3a ever calling Malafat.
 - *What it replaces*: decision 7's "Malafat is the writer of record for payments" now reads "…except a person's own unallocated Received, which Malafat allocates". `customers`, `projects`, `agreements` and receivables stay read-only for sessions on Malafat-fed profiles.
+- *Added in /review (2026-10-12)*:
+  - **Undo is truthful about who reversed.** A capture the integration reversed answers 409 `REVERSED_BY_MALAFAT` on the person's undo. `already-reversed` (204) is only their own earlier undo, told apart by the reversal reason `capture_undo`, which the key's reverse route now refuses (422 `REASON_RESERVED`).
+  - **A named matter fixes the currency on a Malafat-fed profile** (422 `CURRENCY_MISMATCH` with `projectCurrency`): Malafat allocates only within a payment's currency. A client-only capture is not checked, by choice.
+  - **`CaptureSource` is registered as itself before routes mount.** The generator takes the first use it meets as the component, and a nullable response use had made the shared component — and so four request bodies — advertise null.
 - *Found while building*: `GET /v1/payments?projectId=` lost its project filter from page 2 on — the cursor's `OR` replaced the project's `OR` when both were spread into one `where`. Every OR-shaped condition now goes in `AND` (PATTERNS.md).
 
 ---

@@ -48,7 +48,11 @@
 - **A captured `projectId` is a hint until allocated:** `?projectId=` matches a payment's own matter only while it has no allocations.
 - OpenAPI `1.14.0-mut61`; `src/hosted/api/schema.d.ts` regenerated.
 
-### Fixed
+### Fixed (from /review, 2 fix cycles, converged)
+- **The published `CaptureSource` component had become nullable**, so four request bodies advertised a null the server rejects; it is registered first now, and a spec test pins it.
+- **A capture Malafat reversed** answered 204 to the person's undo; now 409 `REVERSED_BY_MALAFAT`, and `capture_undo` is a reserved reversal reason (422 `REASON_RESERVED`).
+- **An off-currency capture against a matter** on a Malafat-fed profile could never be allocated; now 422 `CURRENCY_MISMATCH`.
+- New reasons published; audit metadata shapes aligned; project-filter relation clauses tenant-scoped; Postgres race test for allocate vs undo (mutation-checked); route tests for settle/inbox/key origin, `capturedBy`, device-session Me; DEPLOYMENT.md post-roll backfill step.
 - **`GET /v1/payments?projectId=` lost the project filter from page 2 on** — the cursor's `OR` replaced the project's `OR` in one `where`. OR-shaped conditions now go in `AND`.
 - **Migration tests timed out under `test:db` load** (5 s default; replaying history takes longer in parallel) — both now set 60 s.
 
