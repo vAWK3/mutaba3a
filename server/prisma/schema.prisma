@@ -223,8 +223,48 @@ model User {
   expenseReceipts ExpenseReceipt[]
   /// MUT-65: income captured by this person.
   payments        Payment[]
+  /// MUT-66: this person's unsorted captures, owned by them and by no profile.
+  inboxEntries    InboxEntry[]
 
   @@map("users")
+}
+
+/// What an unsorted capture becomes once filed: an Expense, or income
+/// (Received or Owed — that finer choice is made at filing time, not here).
+enum InboxEntryKind {
+  INCOME
+  EXPENSE
+}
+
+/// A user's own unsorted capture, before it is filed to a profile (MUT-66).
+/// Deliberately has no Organization FK: the one user-owned, not
+/// organization-owned, row shape in this schema, which is what makes
+/// "removing a user's last membership does not delete their inbox" true by
+/// construction rather than by a guard. Hard-deleted on explicit delete and on
+/// successful filing — there is no audit value in a tombstone for a pre-ledger
+/// scratch note once the real record (with its own audit row) exists.
+model InboxEntry {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @db.Uuid
+  user          User           @relation(fields: [userId], references: [id])
+  kind          InboxEntryKind
+  amountMinor   BigInt
+  currency      String         @db.VarChar(3)
+  /// The date as the capturing device understood it. No organization timezone
+  /// exists yet to validate "future" against — that check happens at filing
+  /// time, against the chosen profile's own timezone.
+  occurredOn    String         @db.VarChar(10)
+  note          String?
+  /// Persisted, unlike the captureSource of MUT-42/65 (audit metadata only):
+  /// an entry can sit unfiled for a while, and the UI keeps showing "captured
+  /// via Siri" across that whole lifetime, not just at the moment of a write.
+  captureSource String?        @db.VarChar(20)
+  version       Int            @default(1)
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("inbox_entries")
 }
 
 /// Access/no-access: the user may see this organization's hosted profile.

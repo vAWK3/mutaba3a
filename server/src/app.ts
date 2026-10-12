@@ -23,6 +23,8 @@ import { summaryRoutes } from './routes/summaries.js';
 import { expenseCategoryRoutes } from './routes/expense-categories.js';
 import { expenseRoutes } from './routes/expenses.js';
 import { incomeRoutes } from './routes/income.js';
+import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
+import { inboxRoutes } from './routes/inbox.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { customerRoutes } from './routes/customers.js';
 import { feeProposalRoutes } from './routes/fee-proposals.js';
@@ -92,7 +94,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.12.0-mut65';
+export const API_VERSION = '1.13.0-mut66';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -162,7 +164,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -206,6 +208,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', expenseCategoryRoutes(store));
   app.route('/', incomeRoutes(store));
+  app.route('/', inboxRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
 
