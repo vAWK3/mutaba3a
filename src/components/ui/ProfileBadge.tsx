@@ -67,7 +67,7 @@ export function ProfileBadgeWithName({
         showTooltip={showTooltip && !showName}
       />
       {showName && (
-        <bdi className="profile-badge-name">{profile.name}</bdi>
+        <bdi className="profile-badge-name" title={profile.name}>{profile.name}</bdi>
       )}
     </span>
   );
