@@ -601,12 +601,16 @@ Known violations, measured in Chromium, light theme:
   primary buttons, "+ Add", the drawer's Save, and the client name links on
   white. The active nav label and the sidebar "New" label (`#1d8a84` on
   `#e8f3f3`) are 3.69:1. The profile avatar initials are 1.04:1. The FX
-  banner's "Live" chip is 2.95:1. The "Unpaid" status badge (`#d97706` on
+  "Live" chip is 2.95:1 (since MUT-79 it is in the top-bar popover, which axe
+  only sees when it is open). The "Unpaid" status badge (`#d97706` on
   `#fbf1e6`) is 2.85:1. Positive amounts (`#16a34a` on white) are 3.29:1.
   Muted text (`#94a3b8`, the Clients "last payment" dash) is 2.56:1. This
   belongs with MUT-74's palette work.
-- `landmark-no-duplicate-banner`, every page. The top bar, the FX banner and
-  the desktop-app banner are each a `banner` landmark.
+- ~~`landmark-no-duplicate-banner`, every page.~~ **Fixed by MUT-79
+  (2026-10-12).** The FX banner, the Mac-app bar and the desktop update bar no
+  longer claim `role="banner"`, and the top bar's `<header>` inside `<main>` is
+  not a landmark. Axe confirms it on all six surfaces; the rule was removed
+  from `KNOWN_AXE_VIOLATIONS`.
 - `aria-dialog-name`, every drawer. `components/drawers/Drawer.tsx` sets
   `role="dialog"` with no `aria-labelledby` pointing at its title.
 - `select-name`, on Income and the client profile (the period `<select>`)

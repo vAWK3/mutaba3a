@@ -21,7 +21,7 @@ test.describe('Settings', () => {
   });
 
   test('switches between the dark, light and system themes', async ({ page }) => {
-    // Scoped to main: the FX banner has its own "System" button
+    // Scoped to main: the sidebar's theme toggle ("Theme: System") sits outside it
     const main = page.getByRole('main');
     const html = page.locator('html');
     await expect(main.getByRole('heading', { name: 'Theme' })).toBeVisible();

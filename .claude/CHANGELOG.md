@@ -61,6 +61,9 @@
 - The test setup replaces `fetch` with a guard that rejects, because every page test now renders the readout. Tests that need `fetch` already stub it themselves.
 - The test suite needs Node 22 (as in CI). Under Homebrew's Node 26, jsdom's `localStorage` is undefined (TD-054).
 
+### Fixed
+- Axe `landmark-no-duplicate-banner` on every app page (TD-009). None of the bars claims `role="banner"` any more: the FX banner is gone, the Mac bar is a plain `div`, and the update bar is `role="status"`. The rule is removed from `e2e/support/axe.ts`'s `KNOWN_AXE_VIOLATIONS`.
+
 **Why:** decision A1 of the Apple-design brief: nothing floats over content (F15).
 
 ---

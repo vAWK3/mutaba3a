@@ -1236,6 +1236,8 @@ Checked by hand in the browser (2026-10-12, sample data):
 - **Arabic:** the formula reads `$1 = ₪3.06`. At 575 px the popover was being clipped by `<main>`, which led to `nudgeInside` (it now shifts −83 px and fits). Amounts are unchanged.
 - **Mac bar:** in flow (`position: static`); dismissed, it stays gone after a reload.
 
+**E2E (after merging main, which ported the stale specs):** all 19 Playwright specs pass, run through a throwaway config on port 5194. Axe no longer reports `landmark-no-duplicate-banner` on any of the six surfaces, so it was removed from `KNOWN_AXE_VIOLATIONS`, and no new rule fires.
+
 **Baseline after MUT-79 (2026-10-12)**: root `npx vitest run` **under Node 22** 182 files, 2857 passed, 4 skipped; `npm run typecheck`, `npm run lint` (0 errors, 16 pre-existing warnings) and `npm run test:bundles` pass. Under Node 26, files that touch `localStorage` fail even on main (TD-054).
 
 ### MUT-64 — device sessions, native app sign-in for hosted accounts (`server/`, epic MUT-63)
