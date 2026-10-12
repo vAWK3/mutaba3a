@@ -124,7 +124,7 @@ There is no end-to-end Malafat sign-in: the client has no UI caller (brief §2.1
 | # | Command (from the worktree, `CARGO_TARGET_DIR` in the scratchpad) | Expect |
 |---|---|---|
 | R1 | `cargo test --manifest-path src-tauri/Cargo.toml` | 10 OAuth + the `retired_sync` tests, all green; **0 compiler warnings** (12 at baseline) |
-| R2 | `retired_sync` unit tests (tempfile) | removes `paired_devices.json` and `paired_devices.tmp`; both absent is success with no error; unrelated files and the directory are untouched; a **directory** named `paired_devices.json` is reported as an error, not a panic; a missing config dir is reported, not a panic |
+| R2 | `retired_sync` unit tests (tempfile) | removes `paired_devices.json` and `paired_devices.tmp`; both absent is success with no error; unrelated files and the directory are untouched; a **directory** named `paired_devices.json` is reported as an error, not a panic; a missing config dir counts as success (nothing to remove) |
 | R3 | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` | clean. **Prerequisite:** `rustup component add clippy` is not installed here and needs the owner's OK; if declined, record the gate as waived |
 | R4 | `cargo tree -i rustls -e features` | no `aws-lc-rs` / `aws_lc_rs` feature; `ring` only via `tauri-plugin-updater` |
 | R5 | `npm run tauri build -- --debug --no-bundle --config '{"identifier":"com.elmokhtbr.mutaba3a.mut73"}'` | builds green (the "Tauri build is green" AC) |

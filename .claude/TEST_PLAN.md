@@ -250,7 +250,6 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 | `src/hooks/` | ~25% | 80% | 🔄 In Progress | Business profile + document hooks tested |
 | `src/components/` | ~15% | 70% | 🔄 In Progress | UpdateBanner, BusinessProfileDrawer tested |
 | `src/lib/` | ~10% | 90% | ⏳ Pending | Needs utils tests |
-| `src/sync/` | ~0% | 80% | ⏳ Pending | Not yet tested |
 | `src/features/` | ~40% | 80% | 🔄 In Progress | Document calculations tested |
 | **Overall** | **~65%** | **80%** | 🔄 **Good Progress** | Core pages meet targets |
 
@@ -273,10 +272,7 @@ src/
 ├── lib/__tests__/
 │   ├── utils.test.ts            # Format, parse utilities
 │   └── matchingAlgorithm.test.ts # Retainer matching
-└── sync/core/__tests__/
-    ├── hlc.test.ts              # Hybrid Logical Clock
-    ├── ops-engine.test.ts       # Operation processing
-    └── conflict-resolver.test.ts # Conflict detection
+└── services/oauth/__tests__/    # Malafat OAuth client (moved from sync/ by MUT-73)
 ```
 
 **Example**:
@@ -588,7 +584,6 @@ test.describe('Transaction Management', () => {
 |------|-----------|
 | Empty state (no data) | Component |
 | Large dataset (1000+ rows) | Performance |
-| Concurrent edits (sync) | Integration |
 | Invalid form input | Component |
 | Network offline | E2E |
 | Browser back/forward | E2E |
@@ -761,11 +756,11 @@ export function createTransactions(count: number): Transaction[] {
 
 | Area | File | Coverage |
 |---|---|---|
-| PKCE S256 | `src/sync/transport/__tests__/oauth-pkce.test.ts` | RFC 7636 Appendix B vector, charset/length bounds, no `plain` |
+| PKCE S256 | `src/services/oauth/__tests__/oauth-pkce.test.ts` (moved from `src/sync/transport/` by MUT-73) | RFC 7636 Appendix B vector, charset/length bounds, no `plain` |
 | Authorization-code client | `__tests__/oauth-client.test.ts` | discovery, authorize URL, state/error handling, exchange, rotation |
 | Flow orchestration | `__tests__/oauth-flow.test.ts` | bind-before-open ordering, revocation clears tokens only, transient failure keeps them |
 | Published CIMD document | `__tests__/cimd-document.test.ts` | mirrors Malafat's validation; ports match the code |
-| Loopback listener (Rust) | `src-tauri/src/sync/oauth_callback.rs` | loopback-only bind, port fallback, single-shot, timeout releases port |
+| Loopback listener (Rust) | `src-tauri/src/oauth/callback.rs` (moved from `src-tauri/src/sync/oauth_callback.rs` by MUT-73) | loopback-only bind, port fallback, single-shot, timeout releases port |
 
 Not covered by automated tests (requires a provisioned staging tenant, see the
 findings doc): live CIMD fetch, consent screen, grant appearing and revoking in
@@ -1152,7 +1147,7 @@ Brief: `.claude/designs/mut-5-income-fast-path.md`; plan: `.claude/designs/mut-5
 | `src/lib/__tests__/utils.test.ts` | +22 | Bidi embeddings/isolates stripped; two tokens, `£`, `GBP` and over-long input refused; a 50k-space paste parses in linear time (3.4 s before); `amountInputCurrency` for every token form and for no token. |
 | `src/components/__tests__/IncomeDrawer.test.tsx` | +4 (1 updated) | A mismatched currency symbol is refused and opens More details; switching the currency clears it and saves; a matching symbol saves; a failed records load shows the notice and Try again recovers. The recorded-total message now expects FSI. |
 | `src/lib/i18n/__tests__/incomeDrawerKeys.test.ts` | +1 | Three new keys in both locales; `{typed}`/`{currency}` survive. |
-| `src/sync/core/__tests__/synced-transaction-update.test.ts` (new) | 3 | Requested fields logged on a record-less entry; refused payment fields not logged; a derived status change logged. |
+| `src/sync/core/__tests__/synced-transaction-update.test.ts` (new; deleted with device sync by MUT-73) | 3 | Requested fields logged on a record-less entry; refused payment fields not logged; a derived status change logged. |
 | `src/lib/__tests__/queryClient.test.ts` (new) | 2 | A local query and a mutation settle while `onlineManager` is offline. |
 | `src/hooks/__tests__/useFxRate.test.tsx` | +1 | Offline, the FX query waits instead of fetching or erroring, and loads once online. |
 | `e2e/income-fast-path.spec.ts` | +1 | Enter, Enter straight away creates the client and saves the entry; it fails with the replay disabled. |
@@ -1478,3 +1473,45 @@ Plan: `.claude/designs/mut-66-unsorted-inbox-tests.md`. Server-only; the portal 
 
 **Counts:** 15 store-contract cases × 2 stores, 4 DMMF, 9 compose/cursor, 16 CRUD route, 18 filing route, 6 isolation. Server suite 1310 (memory) / 1397 (`test:db`, all 82 files) green.
 
+---
+
+## MUT-73 — device sync retired (2026-10-12)
+
+Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.
+
+**What was run, and what was not.**
+- **Before the owner's instructions to skip gates arrived**, the gates ran once on this branch at `eaedf2f`: the code state after the last code commit, merged with main at `6ec7c56`. Results:
+  - `npx vitest run`: 190 files, 2,857 passed, 4 skipped;
+  - Playwright, full suite on a throwaway config on port 5198: 26/26;
+  - `npm run test:bundles`: passed;
+  - `npm run lint`: 0 errors, 13 warnings, none in changed files;
+  - `npm run typecheck` and `npx tsc -b`: clean;
+  - `cargo test`: 15 passed, 0 warnings;
+  - `cargo clippy --all-targets -- -D warnings`: clean.
+- **After the instructions**, at the owner's request, **lint, typecheck, clippy and tests were not run again**, pending one combined run on main after every lane merges. That covers the knowledge commits (docs only) and the final merge of main into this branch.
+- **The one compile check left in this lane** was the desktop debug build. It was green at `eaedf2f` and was not rebuilt after the final merge.
+
+**Acceptance criteria → evidence.** "Written, not re-run after the final merge" means the test passed at `eaedf2f` but has not run against the merged tree.
+
+| AC | Evidence | Status |
+|---|---|---|
+| No pairing, bundle, chip or conflict banner in either language | `src/__tests__/noSyncModules.test.ts` (paths, imports and `vi.mock` paths, names, Tauri commands, crates, `qrcode.react`); `scripts/bundle-rules.ts` markers (`.msync`, `start_sync_server`, `Export Sync Bundle`) plus 4 unit cases; browser check in English and Arabic | Browser: done. Tests: written, not re-run after the final merge |
+| No module outside OAuth imports a sync path; `tsc -b`, lint, unit suite and Tauri build green | `noSyncModules` import scan; the gates listed above; the debug Tauri build | Green at `eaedf2f`; not re-run after the final merge |
+| A v20 database with op-log rows and a paired device opens cleanly, with no sync tables left | `src/db/__tests__/migration-v21.test.ts`: opens without `console.error`, stores gone, every user row unchanged, fresh install at v21; `completeMigrationSafety` v20→v21 writes a snapshot with no sync tables. Browser: a real v20 database (op-log rows, a paired peer, an open conflict, a version snapshot) upgraded to native 210; all 24 user tables byte-identical; no sync stores | Browser: done. Test: written, not re-run after the final merge |
+| Rerouted mutations behave the same | `provider.test.ts` (registry is `{ base }`); `useIncomeQueries.test.tsx` (Mark paid and partial payment call `base`, +1 case); `useQueries.test.tsx` (+3 cases: partial payment, payment update, payment delete, on real Dexie); the repository suites unchanged. Browser: a partial payment, a payment edit, a payment delete and Mark paid each updated Income and Home, with no console warnings | Browser: done. Tests: written, not re-run after the final merge |
+| Malafat OAuth sign-in still works | 74 moved TS cases plus 10 Rust listener tests. **Desktop IPC smoke** on the debug build under `com.elmokhtbr.mutaba3a.mut73`: `bind_oauth_callback` bound 14100; a redirect returned exactly `code=abc&state=xyz` through `await_oauth_callback`; a replayed redirect was refused (listener gone); `cancel_oauth_callback` released the port | Smoke: done. Tests: not re-run after the final merge |
+| JSON backup and restore round-trip | `migration-v21.test.ts`: a v20 backup carrying all eight sync tables restores into v21, user rows only. Browser: the real pre-upgrade backup restored 24 rows and recreated no sync store | Browser: done. Test: written, not re-run after the final merge |
+| ADR-013 marked Superseded | `DECISIONS.md`: index, status lines and the Superseded table | Done |
+| `paired_devices.json` removed on launch | `src-tauri/src/retired_sync.rs` (5 tests). Desktop smoke: `paired_devices.json` and `.tmp` in the isolated config dir were gone after launch, and a neighbouring file survived | Smoke: done. Tests: not re-run after the final merge |
+
+**Desktop smoke, as run.** The method is in PATTERNS, "Smoke a desktop debug build without touching the owner's data".
+- **Isolation:** the identifier was overridden, the binary was copied under a unique name, and the owner's `~/Library/WebKit/app` and `~/Library/WebKit/com.elmokhtbr.mutaba3a` mtimes were unchanged afterwards. The isolated directories were deleted.
+- **Updater, with the shipped capabilities:** `plugin:updater|check` was rejected with "not allowed". `capabilities/default.json` grants no updater permission, so the in-app update check cannot run in any shipped build. This predates MUT-73 and is unrelated to it; it was reported for a ticket.
+- **Updater, with the permission added inline for the smoke only:** the check reached GitHub over TLS and resolved "no newer version". There was nothing on stderr. This is the `ring`-only `rustls` path; `tauri-plugin-updater` installs that provider itself when none is set.
+
+**Browser note.** While files were being deleted under a running dev server, Vite's hot reload logged `removeChild` and `createRoot` errors. That was a dev-only artefact; clean page loads afterwards logged nothing.
+
+**Counts at `eaedf2f`.**
+- Deleted: 131 TS cases (with `src/sync`) and 14 Rust tests (pairing, persistence, crypto).
+- Added: 17 guard cases, 7 migration-v21 cases, 4 hook cases and 4 bundle-rule cases (2 new `it` blocks, one of them `it.each` over 3 markers), plus 5 Rust cleanup tests.
+- Moved: 74 OAuth cases and 10 Rust tests.
