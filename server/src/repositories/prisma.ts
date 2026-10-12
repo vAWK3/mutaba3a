@@ -707,10 +707,13 @@ export class PrismaLedgerStore implements LedgerStore {
       return count === 1 ? { kind: 'updated' as const, record } : { kind: 'stale' as const, record };
     },
     recordOutcome: (organizationId, agreementId, input: OutcomeWriteInput, at) =>
+      this.asStaleOnLockConflict(organizationId, agreementId, () =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
-          const current = await tx.agreement.findFirst({ where: { id: agreementId, organizationId } });
-          if (!current) return { kind: 'not_found' as const };
+          // Agreement row first, then receivables: the same lock order as correctOutcome.
+          const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+          if (lockedAgreement.length === 0) return { kind: 'not_found' as const };
+          const current = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
           if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
           // The conditional write is the guard: a second record, or one racing a terms change, matches no row.
           const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: null }, data: outcomeData(input, at) });
@@ -719,8 +722,9 @@ export class PrismaLedgerStore implements LedgerStore {
           const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
           return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
         }),
-      ),
+      )),
     correctOutcome: (organizationId, agreementId, input: CorrectOutcomeInput, at) =>
+      this.asStaleOnLockConflict(organizationId, agreementId, () =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
           // The agreement row lock serializes corrections (and a record) against each other: a loser waits, then
@@ -731,7 +735,8 @@ export class PrismaLedgerStore implements LedgerStore {
           const stale = async () => ({ kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit: null } });
           if (current.version !== input.expectedVersion || current.outcome === null) return stale();
           const replaced = input.replaceInstallmentId ? await tx.installment.findFirst({ where: { id: input.replaceInstallmentId, organizationId, agreementId, isCommission: true, voidedAt: null } }) : null;
-          if (input.replaceInstallmentId && !replaced) return stale();
+          // Gone, or posted since the bill was composed (its preview promised no credit): stale either way.
+          if (input.replaceInstallmentId && (!replaced || replaced.receivableId !== input.replaceReceivableId)) return stale();
           if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return stale();
           // Under the receivable's row lock, before anything is written: a payment or credit that landed after the
           // preview refuses the whole correction (an allocation waits on this lock until we commit or roll back).
@@ -755,7 +760,7 @@ export class PrismaLedgerStore implements LedgerStore {
           const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
           return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit } };
         }),
-      ),
+      )),
     cancel: async (organizationId, agreementId, input, at) => {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.agreement.updateMany({
@@ -822,6 +827,20 @@ export class PrismaLedgerStore implements LedgerStore {
       }
     },
   };
+
+  /**
+   * MUT-100 review: the outcome writes lock receivables, which can deadlock with an allocation locking them in another
+   * order. Postgres rolls the loser back, so nothing was written; answer `stale` (409, preview again) rather than a 500.
+   */
+  private async asStaleOnLockConflict<T>(organizationId: string, agreementId: string, write: () => Promise<T>): Promise<T | { kind: 'stale'; record: { agreement: AgreementRecord; installments: InstallmentRecord[]; credit: null } }> {
+    try {
+      return await write();
+    } catch (err) {
+      if (!isLockConflict(err)) throw err;
+      const agreement = await this.prisma.agreement.findFirstOrThrow({ where: { id: agreementId, organizationId } });
+      return { kind: 'stale', record: { agreement, installments: await this.prisma.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit: null } };
+    }
+  }
 
   readonly receivables: ReceivableRepository = {
     getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId, deletedAt: null } }),
@@ -1186,9 +1205,10 @@ type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
 type Tx = Prisma.TransactionClient;
 
 /**
- * MUT-100 review D2: locks the posted upfront receivables the counted upfront was read from (in id order, the same
- * order every caller uses) and reports whether any is gone or moved since — a credit landing between the commit's
- * compose and this write would otherwise bill against an upfront that no longer stands.
+ * MUT-100 review D2: locks the posted upfront receivables the counted upfront was read from (in id order) and reports
+ * whether any is gone or moved since — a credit landing between the commit's compose and this write would otherwise
+ * bill against an upfront that no longer stands. Allocations and reversals lock receivables in request order, so a
+ * deadlock with one is possible; `asStaleOnLockConflict` turns it into a retryable `stale` instead of a 500.
  */
 async function upfrontMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): Promise<boolean> {
   if (seen.length === 0) return false;
@@ -1196,6 +1216,14 @@ async function upfrontMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<
   const rows = await tx.$queryRaw<Array<{ id: string; version: number }>>`SELECT "id"::text AS "id", "version" FROM "receivables" WHERE "id" = ANY(${ids}::uuid[]) AND "organizationId" = ${organizationId}::uuid ORDER BY "id" FOR UPDATE`;
   const now = new Map(rows.map((r) => [r.id, r.version]));
   return seen.some((s) => now.get(s.id) !== s.version);
+}
+
+/** Postgres aborted the transaction to break a deadlock or a serialization conflict (40P01 / 40001): safe to retry. */
+export function isLockConflict(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (err.code === 'P2034') return true;
+  const dbCode = (err.meta as { code?: unknown } | undefined)?.code;
+  return err.code === 'P2010' && (dbCode === '40P01' || dbCode === '40001');
 }
 
 /** The agreement columns a contingency outcome (or its correction) writes, with the totals and the version bump. */

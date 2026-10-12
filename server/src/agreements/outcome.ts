@@ -64,11 +64,12 @@ export async function composeOutcome(store: LedgerStore, organization: Organizat
 
   const installments = await store.agreements.listInstallments(organization.id, agreement.id);
   const live = installments.filter((i) => i.voidedAt === null);
-  // One read per posted upfront line (≤ 59), issued together rather than one round trip after another.
   const upfrontReceivableIds = live.filter((i) => !i.isCommission && i.receivableId !== null).map((i) => i.receivableId as string);
-  const credits = new Map<string, CreditRecord[]>(await Promise.all(upfrontReceivableIds.map(async (id) => [id, await store.receivables.listCredits(organization.id, id)] as const)));
-  // Re-checked under their row locks by the write (review D2): a credit landing after this read makes it stale.
+  // Versions BEFORE credits: a credit committing between the two reads then bumps a version already recorded, and the
+  // write (which re-checks them under lock, review D2) is stale — never a bill that silently misses the credit.
   const upfrontReceivables = (await store.receivables.getByIds(organization.id, upfrontReceivableIds)).map((r) => ({ id: r.id, version: r.version }));
+  // One read per posted upfront line (≤ 59), issued together rather than one round trip after another.
+  const credits = new Map<string, CreditRecord[]>(await Promise.all(upfrontReceivableIds.map(async (id) => [id, await store.receivables.listCredits(organization.id, id)] as const)));
   const counted = upfrontCountedMinor({ installments: live, creditsByReceivableId: credits, pricingBasis: agreement.pricingBasis });
   const plan = planOutcome({ outcome: body.outcome, treatment, awardedMinor, rateBasisPoints: rate, upfrontCountedMinor: counted });
 

@@ -635,6 +635,8 @@ export interface OutcomeWriteInput {
 export interface CorrectOutcomeInput extends OutcomeWriteInput {
   /** The commission installment the correction replaces; null when the old outcome billed nothing. */
   replaceInstallmentId: string | null;
+  /** The receivable that line had when the bill was composed (null = unposted); a line that posted since is `stale`. */
+  replaceReceivableId: string | null;
   /** The full credit of the replaced commission's receivable, when it posted. */
   credit: { reason: string; effectiveDate: IsoDate; requestId: string | null };
 }

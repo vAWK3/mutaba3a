@@ -870,7 +870,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const a = this.agrs.get(agreementId);
       if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
       const replaced = input.replaceInstallmentId ? this.insts.get(input.replaceInstallmentId) : undefined;
-      const replacedGone = input.replaceInstallmentId !== null && (!replaced || replaced.agreementId !== agreementId || !replaced.isCommission || replaced.voidedAt !== null);
+      const replacedGone = input.replaceInstallmentId !== null && (!replaced || replaced.agreementId !== agreementId || !replaced.isCommission || replaced.voidedAt !== null || replaced.receivableId !== input.replaceReceivableId);
       if (a.version !== input.expectedVersion || a.outcome === null || replacedGone || this.upfrontMoved(organizationId, input.upfrontReceivables)) {
         return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: null } };
       }

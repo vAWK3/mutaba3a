@@ -666,6 +666,38 @@ describe('review fixes (D1–D4)', () => {
     expect((await h.store.agreements.getById(org.id, detail.agreement.id))?.outcome).toBeNull();
   });
 
+  it('a credit landing between the commit reading the credits and the write is still caught: versions are read first', async () => {
+    const h = harness();
+    const { org, auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id, { contingency: { commissionRateBasisPoints: 2000, upfrontTreatment: 'CREDITED' } }));
+    const upfront = detail.installments[0].receivableId;
+    const preview = await read(await previewOutcome(h, auth, detail.agreement.id, award()));
+    const original = h.store.receivables.listCredits.bind(h.store.receivables);
+    // The credit commits right after the commit's credit read: counted misses it, so the version check must see it.
+    (h.store.receivables as Loose).listCredits = async (...args: Parameters<typeof original>) => {
+      const before = await original(...args);
+      if (args[1] === upfront) await h.store.receivables.credit(org.id, upfront, { amountMinor: 11_800n, netMinor: 10_000n, vatMinor: 1_800n, reason: 'Goodwill', effectiveDate: '2026-10-13', requestId: null }, h.clock.now);
+      return before;
+    };
+    const res = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome`, json({ ...award(), previewToken: preview.previewToken }, { ...auth, ...idem() }));
+    expect(res.status).toBe(409);
+    expect(await reason(res)).toBe('PREVIEW_STALE');
+  });
+
+  it('triggering a MANUAL upfront that a cancel voided under the route is 409 AGREEMENT_CANCELLED, not 404', async () => {
+    const h = harness();
+    const { org, auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id, { installments: [{ label: 'Upfront', amount: '1500.00', trigger: { type: 'MANUAL' } }] }));
+    const original = h.store.agreements.postInstallment.bind(h.store.agreements);
+    (h.store.agreements as Loose).postInstallment = async (...args: Parameters<typeof original>) => {
+      await h.store.agreements.cancel(org.id, detail.agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, h.clock.now);
+      return original(...args);
+    };
+    const res = await h.app.request(`/v1/installments/${detail.installments[0].id}/trigger`, json({}, { ...auth, ...idem() }));
+    expect(res.status).toBe(409);
+    expect(await reason(res)).toBe('AGREEMENT_CANCELLED');
+  });
+
   it('a correction previewed without its reason commits with one (the reason is not in the token, D3)', async () => {
     const h = harness();
     const { auth, project } = await firm(h);

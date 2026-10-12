@@ -61,7 +61,8 @@
 - **The terms CHECK refused no NULL rate** (`NULL BETWEEN …` is NULL; a NULL CHECK passes) — explicit `IS NOT NULL`; the unapplied migration is edited in place.
 - Credits read in parallel; `COMMISSION_RATE_RULE` from the bounds; due-date override bounded; rollback runbook corrected (an old revision fails reads of CONTINGENCY rows: roll forward only).
 - Tests added: cancelled guard, credited-not-paid commission, terms stale after an outcome (store), correcting a never-posted commission, VAT-included CREDITED end to end, read-only key 403 on the three writes, Postgres race of two corrections, voided-line posting, cancel vs record. Each new route test was mutation-checked (fails with its fix reverted). New debt TD-100..103.
-- **Re-run:** `server/` lint, typecheck, build, openapi:check clean; `npm test` 1,485 passed / 17 skipped; Postgres 1,607 passed; hosted types match.
+- **Re-review (cycle 2, adversarial pass over the fix diff):** versions read before credits in compose; record locks the agreement first; lock conflicts in the outcome writes → 409 (`isLockConflict`); a replaced line that posted since compose → stale; MANUAL trigger voided by a concurrent cancel → 409. Mutation-checked.
+- **Re-run:** `server/` lint, typecheck, build, openapi:check clean; `npm test` 1,490 passed / 17 skipped; Postgres 1,613 passed (contract race tests stable over 3 runs); hosted types match.
 
 ## [Unreleased] - 2026-10-12 — deploy.sh runs post-roll data repairs (MUT-61 follow-up)
 

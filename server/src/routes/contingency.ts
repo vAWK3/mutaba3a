@@ -202,7 +202,7 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const result = await store.agreements.correctOutcome(
         organization.id,
         agreement.id,
-        { ...outcomeWrite(composed, agreement), replaceInstallmentId: composed.replaced?.id ?? null, credit: { reason: body.correctionReason, effectiveDate: today, requestId: actor.requestId } },
+        { ...outcomeWrite(composed, agreement), replaceInstallmentId: composed.replaced?.id ?? null, replaceReceivableId: composed.replaced?.receivableId ?? null, credit: { reason: body.correctionReason, effectiveDate: today, requestId: actor.requestId } },
         now,
       );
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such agreement');

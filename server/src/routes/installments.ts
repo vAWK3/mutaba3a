@@ -47,7 +47,11 @@ export function installmentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const postingDate = postingDateFor(installment, agreement.agreementDate, today);
       const dueDate = body.dueDate ?? installmentDueDate(installment, agreement, postingDate);
       const result = await store.agreements.postInstallment(organization.id, installment.id, { postingDate, dueDate, at: now });
-      if (!result) throw new ApiError('NOT_FOUND', 'No such installment');
+      if (!result) {
+        // MUT-100: null is also "voided under us" — a cancel landed after the check above.
+        if ((await store.agreements.getInstallment(organization.id, installment.id))?.voidedAt) throw new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
+        throw new ApiError('NOT_FOUND', 'No such installment');
+      }
       if (result.created) {
         await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'installment.posted', entityType: 'installment', entityId: installment.id, metadata: { agreementId: agreement.id, receivableId: result.receivable.id, trigger: 'MANUAL', dueDate }, requestId: c.get('requestId') });
       }

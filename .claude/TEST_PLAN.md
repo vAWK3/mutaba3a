@@ -1792,7 +1792,7 @@ Plan: `.claude/designs/mut-61-malafat-received-capture-tests.md`; regression con
 
 ## Hosted API — MUT-100: Contingency fee agreements (2026-10-13)
 
-Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression contract R5/D7 in the brief. Run (Node 22, `server/`): `npm test` 1,485 passed / 17 skipped; full suite on Postgres 1,607 passed (after the pre-landing review fixes).
+Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression contract R5/D7 in the brief. Run (Node 22, `server/`): `npm test` 1,490 passed / 17 skipped; full suite on Postgres 1,613 passed (after both pre-landing review cycles). `repositories/__tests__/prisma-lock-conflict.test.ts` pins which Postgres failures count as a retryable lock conflict.
 
 | Area | File | What is pinned |
 |---|---|---|
