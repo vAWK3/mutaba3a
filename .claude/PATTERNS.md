@@ -1664,7 +1664,7 @@ Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, an
 - Browsers submit implicitly through that button.
 - `@testing-library/user-event` (14.6.1, `keypress.js`) only looks for submit buttons inside the form, so a unit test can't press Enter to save.
 - Unit-test the contract instead: Enter is not `defaultPrevented`.
-- Cover the real path with a Playwright spec (`e2e/income-fast-path.spec.ts`).
+- Cover the real path with a Playwright spec (`qa/specs/web/income.spec.ts`, `@web.income.fast-path`).
 
 ### Amounts stay left-to-right inside Arabic; set it in CSS, not only with `dir`
 theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks a `dir="ltr"` attribute. An LTR island (an amount with its currency prefix) needs `direction: ltr` from a selector that out-ranks `:lang(ar)` (`div.input-with-prefix`, `.input-with-prefix > .input`; see also `.num-input`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`.
@@ -1727,15 +1727,21 @@ When an effect consumes a URL parameter (reads it, strips it with `replaceState`
 To undo a session without tracking every write, record when it started, and only start it on a database with none of the person's data. Leaving then removes the session's seeded rows by prefix and everything else by `createdAt >= startedAt`; imported or restored rows keep their older `createdAt` and survive (ADR-042).
 
 
-## E2E patterns — added 2026-10-12 (TD-004)
+## E2E patterns — added 2026-10-12 (TD-004); moved from `e2e/` to `qa/` 2026-10-12 (MUT-97)
+
+The standalone `e2e/` Playwright suite was retired in favor of the `qa/` release-qa
+kit (MUT-97, companion to Malafat's MAL-1007): a feature catalog
+(`qa/features/web/*.yaml`) plus one spec per feature, tagged `@web.<area>.<id>`
+and run with `release-qa` (`~/Work/tools/release-qa`, `make check-e2e`). The
+patterns below are unchanged — only the paths moved.
 
 ### A spec starts from a fresh install with `openFreshApp`
 
-Every Playwright test gets an empty IndexedDB, so the Welcome dialog always opens once the profile query answers. `openFreshApp(page, path)` (`e2e/support/app.ts`) goes to `/app${path}`, clicks the dialog's "Skip for now" (which creates the default USD profile) and waits for the dialog to close. Never guard the skip with a one-off `isVisible()`: under parallel load the dialog can mount after the check and swallow the next click. Open the drawer from the top bar's "+ Add" › Income (`openNewIncomeDrawer`), which every page has; the empty-state "Add Income" button disappears once there is data. Scope buttons to `main` when the FX banner has one with the same name ("System").
+Every Playwright test gets an empty IndexedDB, so the Welcome dialog always opens once the profile query answers. `openFreshApp(page, path)` (`qa/support/app.ts`) goes to `/app${path}`, clicks the dialog's "Skip for now" (which creates the default USD profile) and waits for the dialog to close. Never guard the skip with a one-off `isVisible()`: under parallel load the dialog can mount after the check and swallow the next click. Open the drawer from the top bar's "+ Add" › Income (`openNewIncomeDrawer`), which every page has; the empty-state "Add Income" button disappears once there is data. Scope buttons to `main` when the FX banner has one with the same name ("System").
 
 ### Axe checks fail on new rules, not on known ones
 
-`expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
+`expectOnlyKnownAxeViolations(page, surface)` (`qa/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
 
 ## Accessibility patterns — added 2026-10-12 (TD-009)
 
@@ -1804,7 +1810,7 @@ A motion that needs a measured size (`offsetWidth`) skips itself when the size i
 In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
 
 ### Hidden documents pause motion
-`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`qa/specs/web/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
 
 ---
 

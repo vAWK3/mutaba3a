@@ -1,0 +1,27 @@
+app: web
+area: home
+title: Home (Overview)
+tier: core
+paths:
+  - src/pages/overview/**
+features:
+  - id: first-run
+    title: A fresh install's Home shows Get Started
+    tier: core
+    steps:
+      - Open a fresh install at /
+    expect:
+      - '"Get Started" heading is visible'
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+  - id: needs-attention-owed-now
+    title: "Needs Attention's Owed Now matches Clients, including entries with no client (MUT-83)"
+    tier: core
+    paths:
+      - src/pages/clients/** # Home and Clients must always agree on this total
+    legacy: [MUT-83]
+    steps:
+      - Log one income entry for a client and one with no client
+      - Open Home and read Owed Now under Needs Attention
+    expect:
+      - Owed Now equals the sum of both entries
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)

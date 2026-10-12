@@ -2,8 +2,12 @@
 #
 #   make release web      Netlify frontend  (bump → gates → commit → push main)
 #   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh)
+#   make release full     server, then web — each gated and confirmed on its own
 #
-# Both run scripts/preflight.sh first: clean tree on main, nothing unmerged, no
+# Desktop (DMG, notarization, GitHub release) is a separate pipeline
+# (`npm run release`) and is deliberately not part of `full` — see ADR-043.
+#
+# All three run scripts/preflight.sh first: clean tree on main, nothing unmerged, no
 # stray worktrees, in sync with origin, the right node, and the tools and
 # secrets that target needs. A failed check stops the release before anything
 # is built, committed, pushed or rolled.
@@ -60,7 +64,7 @@ ifeq (release,$(firstword $(MAKECMDGOALS)))
   endif
 endif
 
-.PHONY: help release release-web release-server \
+.PHONY: help release release-web release-server release-full \
         preflight-web preflight-server doctor \
         check-web check-server check check-e2e \
         bump-web bump-server \
@@ -72,6 +76,7 @@ help:
 	@printf '$(C_BOLD)Mutaba3a — release$(C_OFF)\n\n'
 	@printf '  $(C_GREEN)make release web$(C_OFF)       deploy the frontend to Netlify (push to $(RELEASE_BRANCH))\n'
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
+	@printf '  $(C_GREEN)make release full$(C_OFF)      server, then web — each gated and confirmed on its own\n'
 	@printf '\n$(C_BOLD)Checks only — change nothing$(C_OFF)\n'
 	@printf '  make doctor            run every preflight check for both targets\n'
 	@printf '  make preflight-web     release-readiness for the web target\n'
@@ -79,7 +84,7 @@ help:
 	@printf '  make check-web         lint + typecheck + unit tests + bundle guard\n'
 	@printf '  make check-server      lint + typecheck + tests + openapi + build\n'
 	@printf '  make check             both of the above\n'
-	@printf '  make check-e2e         playwright end-to-end specs (not part of a release)\n'
+	@printf '  make check-e2e         release-qa core-tier specs (not part of a release)\n'
 	@printf '  make migrate-status    pending prisma migrations against $(ENVIRONMENT)\n'
 	@printf '\n$(C_BOLD)Pieces$(C_OFF)\n'
 	@printf '  make bump-web          choose patch/minor/major for the app version\n'
@@ -98,8 +103,9 @@ release:
 	@case '$(RELEASE_ARGS)' in \
 	  web)    $(MAKE) --no-print-directory release-web ;; \
 	  server) $(MAKE) --no-print-directory release-server ;; \
-	  '')     printf 'usage: make release web | make release server\n' >&2; exit 2 ;; \
-	  *)      printf 'unknown release target "%s" — expected web or server\n' '$(RELEASE_ARGS)' >&2; exit 2 ;; \
+	  full)   $(MAKE) --no-print-directory release-full ;; \
+	  '')     printf 'usage: make release web | make release server | make release full\n' >&2; exit 2 ;; \
+	  *)      printf 'unknown release target "%s" — expected web, server, or full\n' '$(RELEASE_ARGS)' >&2; exit 2 ;; \
 	esac
 
 # ---------------------------------------------------------------------------
@@ -138,11 +144,13 @@ check-server:
 
 check: check-web check-server
 
-# Playwright, against a dev server it starts itself. Not part of a release:
-# it needs browsers installed, and a flaky browser should not be able to block
-# a deploy whose unit and bundle gates are green. Run it deliberately.
+# release-qa (MUT-97, companion to Malafat's MAL-1007): isolated worktree +
+# its own dev server, recorded video, review page. Not part of a release: it
+# needs browsers installed, and a flaky browser should not be able to block a
+# deploy whose unit and bundle gates are green. Run it deliberately.
+# See qa/qa.config.mjs and ~/Work/tools/release-qa/SKILL.md.
 check-e2e:
-	@npm run --silent test:e2e
+	@release-qa release --no-open
 
 migrate-status:
 	@cd server && TF_STATE_BUCKET=$${TF_STATE_BUCKET:?set TF_STATE_BUCKET} npm run --silent db:migrate:status
@@ -232,6 +240,16 @@ release-server: preflight-server
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
 	cd server && ./scripts/deploy.sh
+
+# ---------------------------------------------------------------------------
+# release full — server then web, back to back. Server first so the API a
+# release ships is already live before the frontend that calls it goes out.
+# Each half keeps its own preflight, gates, version bump and confirmation;
+# declining one does not block the other. Desktop is excluded on purpose
+# (ADR-043) — it stays its own pipeline: npm run release.
+# ---------------------------------------------------------------------------
+
+release-full: release-server release-web
 
 # ---------------------------------------------------------------------------
 

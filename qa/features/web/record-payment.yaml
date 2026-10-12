@@ -1,0 +1,44 @@
+app: web
+area: record-payment
+title: Record payment
+tier: core
+paths:
+  - src/components/drawers/PartialPaymentDrawer.tsx
+  - src/components/drawers/PartialPaymentDrawer.css
+features:
+  - id: full-settle
+    title: "Record Payment on an unpaid row settles it in full in two clicks (MUT-86)"
+    tier: core
+    legacy: [MUT-86]
+    steps:
+      - Log an income entry for a client
+      - Click the row's Record Payment button
+      - Click Record Payment in the drawer, with the amount prefilled to the full balance
+    expect:
+      - The drawer closes
+      - The row no longer shows a Record Payment button
+  - id: enter-submits
+    title: Enter in the focused payment-amount field records it
+    tier: secondary
+    steps:
+      - Open the Record Payment drawer
+      - Press Enter with the prefilled amount focused
+    expect:
+      - The drawer closes and the row updates
+  - id: partial
+    title: A partial amount leaves the rest owed, visible on the row
+    tier: core
+    steps:
+      - Open the Record Payment drawer
+      - Replace the amount with less than the full balance
+      - Record Payment
+    expect:
+      - The row's Record Payment button shows the remaining balance
+  - id: axe-expanded
+    title: The drawer has no new accessibility violations with the date and note fields open
+    tier: secondary
+    steps:
+      - Open the Record Payment drawer
+      - Open the Payment date field and the Add note field
+    expect:
+      - No new accessibility violations beyond the known Record-Payment-button contrast issue

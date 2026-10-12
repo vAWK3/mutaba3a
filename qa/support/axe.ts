@@ -2,16 +2,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 // Every app page breaks this today: the brand teal fails 4.5:1 (white on
-// #1d8a84, the active nav label, the profile avatar). The duplicate banner
-// landmarks went with MUT-79's frame (no role="banner" on the bars); the
-// unnamed drawer dialog, selects, icon button and row-actions header, and
-// Settings' h1 -> h3 jump, were fixed on 2026-10-12 (TD-009).
+// #1d8a84, the active nav label, the profile avatar). (TD-009, measured 2026-10-12)
 const APP_SHELL = ['color-contrast'];
 
 /**
- * Axe rules each surface is known to break (TD-009, measured 2026-10-12).
- * Any other rule fails the test, so a new kind of violation is caught while
- * these wait for their fix. Remove a rule here once its fix lands.
+ * Axe rules each surface is known to break (TD-009). Any other rule fails the
+ * test, so a new kind of violation is caught while these wait for their fix.
+ * Remove a rule here once its fix lands.
  */
 export const KNOWN_AXE_VIOLATIONS = {
   homeFirstRun: [...APP_SHELL],
