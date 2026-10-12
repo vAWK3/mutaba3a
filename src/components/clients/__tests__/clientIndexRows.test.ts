@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { toClientIndexRow, compareClientRows, owedRank, type ClientIndexRow } from '../clientIndexRows';
-import type { ClientSummary } from '../../../types';
+import {
+  toClientIndexRow,
+  compareClientRows,
+  owedRank,
+  toOwedBucketRows,
+  orderClientIndex,
+  CLIENT_SORT_FIELDS,
+  type ClientIndexRow,
+} from '../clientIndexRows';
+import type { ClientSummary, OwedBucket } from '../../../types';
 
 const summary = (overrides: Partial<ClientSummary> = {}): ClientSummary => ({
   id: 'c-1',
@@ -144,4 +152,71 @@ describe('compareClientRows', () => {
     expect([z, a2, a1].sort(compareClientRows('owed', 'desc')).map((r) => r.id)).toEqual(['a1', 'a2', 'z2']);
     expect([z, a2, a1].sort(compareClientRows('owed', 'asc')).map((r) => r.id)).toEqual(['a1', 'a2', 'z2']);
   });
+});
+
+/**
+ * MUT-83 (ADR-049): the debts the strip counts that belong to no listed
+ * client get up to two muted rows, always after the clients.
+ */
+describe('toOwedBucketRows', () => {
+  const none: OwedBucket = { owed: [], count: 0 };
+  const owing: OwedBucket = {
+    owed: [
+      { currency: 'USD', owedMinor: 500, overdueMinor: 0 },
+      { currency: 'ILS', owedMinor: 900, overdueMinor: 300 },
+    ],
+    count: 2,
+  };
+
+  it('shows nothing when neither bucket owes anything', () => {
+    expect(toOwedBucketRows({ noClient: none, archivedClients: none })).toEqual([]);
+  });
+
+  it('shows only the non-zero buckets, No client first', () => {
+    expect(toOwedBucketRows({ noClient: none, archivedClients: owing }).map((b) => b.kind)).toEqual(['archivedClients']);
+    expect(toOwedBucketRows({ noClient: owing, archivedClients: owing }).map((b) => b.kind)).toEqual([
+      'noClient',
+      'archivedClients',
+    ]);
+  });
+
+  it('carries the count and splits overdue per currency like a client row', () => {
+    const [bucket] = toOwedBucketRows({ noClient: owing, archivedClients: none });
+
+    expect(bucket).toEqual({
+      kind: 'noClient',
+      owed: owing.owed,
+      overdue: [{ currency: 'ILS', amountMinor: 300 }],
+      count: 2,
+    });
+  });
+});
+
+describe('orderClientIndex', () => {
+  const clients = [
+    row({ id: 'a', name: 'Abe', owed: [{ currency: 'ILS', owedMinor: 100, overdueMinor: 0 }], lastActivityAt: '2026-10-01' }),
+    row({ id: 'z', name: 'Zed', owed: [{ currency: 'ILS', owedMinor: 900, overdueMinor: 900 }], oldestOverdueDays: 9 }),
+    row({ id: 'm', name: 'Mia', lastPayment: { paidAt: '2026-10-02', amountMinor: 1, currency: 'USD' } }),
+  ];
+  const buckets = toOwedBucketRows({
+    // Bigger than any client, overdue and recent: none of that may lift them
+    noClient: { owed: [{ currency: 'USD', owedMinor: 10_000_000, overdueMinor: 10_000_000 }], count: 1 },
+    archivedClients: { owed: [{ currency: 'ILS', owedMinor: 1, overdueMinor: 0 }], count: 1 },
+  });
+
+  it.each(CLIENT_SORT_FIELDS.flatMap((field) => (['asc', 'desc'] as const).map((dir) => [field, dir] as const)))(
+    'puts No client, then Archived clients, after every client when sorted by %s %s (AC2)',
+    (field, dir) => {
+      const items = orderClientIndex(clients, buckets, field, dir);
+
+      expect(items.slice(0, 3).map((i) => i.type)).toEqual(['client', 'client', 'client']);
+      expect(items.slice(3).map((i) => (i.type === 'bucket' ? i.row.kind : i.row.id))).toEqual([
+        'noClient',
+        'archivedClients',
+      ]);
+      expect(items.slice(0, 3).map((i) => (i.type === 'client' ? i.row.name : ''))).toEqual(
+        order(clients, field, dir)
+      );
+    }
+  );
 });

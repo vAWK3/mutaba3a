@@ -1502,3 +1502,35 @@ Plan: `.claude/designs/mut-66-unsorted-inbox-tests.md`. Server-only; the portal 
 
 **Counts:** 15 store-contract cases × 2 stores, 4 DMMF, 9 compose/cursor, 16 CRUD route, 18 filing route, 6 isolation. Server suite 1310 (memory) / 1397 (`test:db`, all 82 files) green.
 
+### MUT-83 — Owed now on Home and Clients always match (2026-10-12)
+
+Plan: `.claude/designs/mut-83-owed-parity-tests.md`. ADR-049. Every new assertion was written first and failed on the old code (checkpoint `5623e7e`, 32 failures plus 5 files that did not load).
+
+| File | Covers |
+|---|---|
+| `src/db/__tests__/aggregations.test.ts` | `clientScopeOf` (none / gone row / archived / live); `owedNowRemaining`; `partitionOwedNow`: the No client and Archived clients buckets and their counts, every live entry of a live client grouped, total = `summarizeOwedByCurrency` of the same entries, parts add up to the total, empty input |
+| `src/db/__tests__/clientOwedIndex.test.ts` (new, fake-indexeddb) | **AC1 parity:** two businesses, USD/ILS/EUR, unassigned, deleted-client, archived-client, archived-entry and shared-client (D3/D4) debts. `listOwedIndex(P).total` equals Home's `summarizeOwedByCurrency(transactionRepo.list(Home's filters))` in each business, the rows add up to it, and it stays equal after archiving a client. Also covers listing (own clients even with no entries, plus other businesses' clients with an entry here), per-business row columns (owed, overdue age, last payment, activity), search, and `transactionRepo.list({ clientScope })` returning exactly the entries behind each muted row |
+| `src/components/clients/__tests__/clientIndexRows.test.ts` | `toOwedBucketRows` (non-zero only, fixed order, overdue split); **AC2:** `orderClientIndex` puts the muted rows last for all 5 fields × 2 directions |
+| `src/pages/clients/__tests__/ClientsPage.test.tsx` | Mocks `useClientOwedIndex`. Muted rows are absent when zero, after the clients, muted, labelled with counts, amounts per currency, and last under any sort. The strip includes them. Clicking a row navigates to `/income` with `owedEntriesSearch`, and the label is a link. A search hides them and sums only the matches. No clients but a No-client debt shows the strip and the row |
+| `src/lib/__tests__/incomeSearch.test.ts` (new) | Parsing, merging, defaults and the muted-row link of `/income`'s URL model |
+| `src/hooks/__tests__/useIncomeFilters.test.tsx` (new) | On a real memory router: reads the URL; a write keeps the other filters and adds no history entry; a cleared filter leaves the URL |
+| `src/pages/income/__tests__/IncomePage.test.tsx` | `useIncomeFilters` is replaced by an in-memory stand-in. No params = old defaults; a link's scope, status and period apply; the chip names the scope and clears it; tabs write to the URL; an empty scoped list says nothing matched |
+| `src/lib/i18n/__tests__/owedIndexKeys.test.ts` (new) | Chip keys in en/ar with `{name}`; row labels have every plural form (en one/other, ar six) |
+| `e2e/owed-parity.spec.ts` (new) | Logs a client entry and a no-client entry, then checks: Home's and Clients' Owed now are equal (`$1,500`); the No client row opens `/income?client=none` with one row and a chip that clears it; axe adds no rule on either page; the muted row and the chip pass `color-contrast` |
+
+**Verified in the browser** (`web-mut83`, sample data):
+- **Setup through the UI:** an income with no client, an archived client, and an income in Creative Design Studio for a client created in Advanced Tech.
+- **Parity:** Home and Clients showed the same Owed now in both businesses: `$2,400 / ₪36,051.28`, and `$1,600 / ₪46,834.41`.
+- **Shared client:** it was listed in the second business with only its `$700`. Its row in its own business was unchanged.
+- **The No client row** opened `/income` filtered, with the chip.
+- **Languages and themes:** English and Arabic (RTL labels and plural forms), light and dark.
+- **375 px:** the strip used to run past its card. It now wraps (CSS fix), with no page-level horizontal scroll.
+
+**How e2e was run:** a throwaway config on port 5196, deleted afterwards along with `test-results/`.
+
+**Gate (2026-10-12, branch `feature/mut-83-owed-parity` on main 5674515, Node 22):**
+- `npx vitest run`: 191 files, 2,949 passed, 4 skipped, 0 failed. An earlier full run under four-agent load timed out 2 unrelated tests (`IncomeDrawer.locked`, `DataToolsSection`), which pass on their own.
+- `npm run typecheck`: clean.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run test:bundles`: passed.
+- `npx playwright test`: 21/21.

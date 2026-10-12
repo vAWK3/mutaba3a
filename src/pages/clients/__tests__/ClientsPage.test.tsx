@@ -5,6 +5,10 @@
  * and overdue per currency (never summed across currencies), default order
  * owed-now descending by today's rate (ADR-035), last payment with a "never"
  * state, settled clients labelled, click-to-sort headers, row → profile.
+ *
+ * MUT-83 (ADR-049): the strip equals Home's Owed now. Debts of no listed
+ * client get up to two muted rows after the clients, "No client" and
+ * "Archived clients", each opening /income filtered to those entries.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -12,12 +16,24 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
 import * as useQueries from '../../../hooks/useQueries';
 import { formatDate } from '../../../lib/utils';
-import type { ClientSummary } from '../../../types';
+import { combineOwed } from '../../../db/aggregations';
+import { owedEntriesSearch } from '../../../lib/incomeSearch';
+import type { ClientSummary, OwedBucket } from '../../../types';
 
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, params }: { children: React.ReactNode; to: string; params?: Record<string, string> }) => (
-    <a href={`${to}/${params?.clientId || ''}`}>{children}</a>
+  Link: ({
+    children,
+    to,
+    params,
+    search,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    params?: Record<string, string>;
+    search?: Record<string, string>;
+  }) => (
+    <a href={search ? `${to}?${new URLSearchParams(search)}` : `${to}/${params?.clientId || ''}`}>{children}</a>
   ),
   useNavigate: () => mockNavigate,
 }));
@@ -53,6 +69,17 @@ vi.mock('../../../lib/i18n', () => {
   const t = (key: string, vars?: Record<string, string | number>) =>
     (translations[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(vars?.[name] ?? ''));
   return { useT: () => t, useLanguage: () => ({ language: 'en' }), useDirection: () => 'ltr', getLocale: () => 'en-US' };
+});
+
+vi.mock('../../../lib/i18n/plural', () => {
+  const plurals: Record<string, Record<'one' | 'other', string>> = {
+    'clients.index.bucket.noClient': { one: 'No client · 1 entry', other: 'No client · {count} entries' },
+    'clients.index.bucket.archivedClients': { one: 'Archived clients · 1', other: 'Archived clients · {count}' },
+  };
+  return {
+    useTp: () => (key: string, count: number) =>
+      (plurals[key]?.[count === 1 ? 'one' : 'other'] ?? key).replace('{count}', String(count)),
+  };
 });
 
 const mockOpenClientDrawer = vi.fn();
@@ -112,12 +139,35 @@ const delta = summary({
   lastActivityAt: '2026-08-15',
 });
 
-function mockSummaries(rows: ClientSummary[], isLoading = false) {
-  vi.spyOn(useQueries, 'useClientSummaries').mockReturnValue({
-    data: rows,
-    isLoading,
-  } as unknown as ReturnType<typeof useQueries.useClientSummaries>);
+const NOTHING: OwedBucket = { owed: [], count: 0 };
+
+/**
+ * The index read: client rows plus the two muted rows. As in the repository,
+ * a search narrows the client rows only; the total always covers everything.
+ */
+function mockSummaries(
+  rows: ClientSummary[],
+  isLoading = false,
+  { noClient = NOTHING, archivedClients = NOTHING }: { noClient?: OwedBucket; archivedClients?: OwedBucket } = {}
+) {
+  const total = combineOwed([...rows.map((r) => r.owed), noClient.owed, archivedClients.owed]);
+  vi.spyOn(useQueries, 'useClientOwedIndex').mockImplementation(
+    (_profileId?: string, search?: string) =>
+      ({
+        data: {
+          clients: rows.filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase())),
+          total,
+          noClient,
+          archivedClients,
+        },
+        isLoading,
+      }) as unknown as ReturnType<typeof useQueries.useClientOwedIndex>
+  );
 }
+
+// No client: ₪500 (₪200 overdue) over 2 entries. Archived clients: $100 from 1 client.
+const noClientDebt: OwedBucket = { owed: [{ currency: 'ILS', owedMinor: 50_000, overdueMinor: 20_000 }], count: 2 };
+const archivedDebt: OwedBucket = { owed: [{ currency: 'USD', owedMinor: 10_000, overdueMinor: 0 }], count: 1 };
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -268,9 +318,9 @@ describe('ClientsPage', () => {
     });
   });
 
-  // Archived clients: left out by clientSummaryRepo.list (the clientRepo.list
-  // default), pinned in src/db/__tests__/clientRepo.test.ts "leaves archived
-  // clients out". The page adds no filter of its own.
+  // Archived clients are not listed: their debts sit in the Archived clients
+  // row. Which clients are listed, and what each row counts, is pinned in
+  // src/db/__tests__/clientOwedIndex.test.ts. The page adds no filter of its own.
 
   describe('empty and loading states', () => {
     it('shows the add-client empty state when there are no clients', () => {
@@ -300,6 +350,104 @@ describe('ClientsPage', () => {
       mockSummaries([], true);
       const { container } = renderPage();
       expect(container.querySelector('.spinner')).toBeInTheDocument();
+    });
+  });
+
+  describe('No client and Archived clients rows (MUT-83)', () => {
+    const bucketRow = (label: RegExp) => screen.getByRole('link', { name: label }).closest('tr')!;
+
+    it('shows neither row when nothing is owed outside the listed clients', () => {
+      renderPage();
+      expect(screen.queryByRole('link', { name: /No client/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Archived clients/ })).not.toBeInTheDocument();
+    });
+
+    it('adds a muted row for each non-zero bucket, after every client', () => {
+      mockSummaries([delta, beta, acme, gamma], false, { noClient: noClientDebt, archivedClients: archivedDebt });
+      renderPage();
+
+      expect(names()).toEqual(['Gamma', 'Acme', 'Beta', 'Delta', 'No client · 2 entries', 'Archived clients · 1']);
+      expect(bucketRow(/No client/)).toHaveClass('client-index-bucket-row');
+      expect(bucketRow(/Archived clients/)).toHaveClass('client-index-bucket-row');
+    });
+
+    it('shows only the bucket that owes something', () => {
+      mockSummaries([acme], false, { archivedClients: archivedDebt });
+      renderPage();
+
+      expect(names()).toEqual(['Acme', 'Archived clients · 1']);
+    });
+
+    it('shows each bucket\'s owed now and overdue per currency, like a client row', () => {
+      mockSummaries([acme], false, { noClient: noClientDebt });
+      renderPage();
+
+      const row = bucketRow(/No client/);
+      expect(within(within(row).getByTestId('client-owed')).getAllByTestId('client-amount').map((e) => e.textContent)).toEqual([
+        '₪500',
+      ]);
+      expect(within(row).getByTestId('client-overdue')).toHaveTextContent('₪200');
+    });
+
+    it('keeps them last whatever the sort', () => {
+      mockSummaries([delta, beta, acme, gamma], false, { noClient: noClientDebt, archivedClients: archivedDebt });
+      renderPage();
+
+      fireEvent.click(within(header('Client')).getByRole('button'));
+      expect(names().slice(-2)).toEqual(['No client · 2 entries', 'Archived clients · 1']);
+      fireEvent.click(within(header('Client')).getByRole('button'));
+      expect(names().slice(-2)).toEqual(['No client · 2 entries', 'Archived clients · 1']);
+    });
+
+    it('sums them into the strip, so it equals Home\'s Owed now', () => {
+      mockSummaries([delta, beta, acme, gamma], false, { noClient: noClientDebt, archivedClients: archivedDebt });
+      renderPage();
+
+      const strip = screen.getByRole('region', { name: 'Owed now' });
+      // USD 1,300 + 900 + archived 100; ILS 12,000 + 4,200 + no client 500
+      expect(within(strip).getAllByTestId('owed-now-amount').map((e) => e.textContent)).toEqual(['$2,300', '₪16,700']);
+    });
+
+    it('opens /income filtered to those entries: unpaid, all time', () => {
+      mockSummaries([acme], false, { noClient: noClientDebt, archivedClients: archivedDebt });
+      renderPage();
+
+      fireEvent.click(bucketRow(/No client/));
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/income', search: owedEntriesSearch('none') });
+
+      fireEvent.click(bucketRow(/Archived clients/));
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/income', search: owedEntriesSearch('archived') });
+    });
+
+    it('keeps each label a link to the same filtered list', () => {
+      mockSummaries([acme], false, { noClient: noClientDebt });
+      renderPage();
+
+      const href = screen.getByRole('link', { name: /No client/ }).getAttribute('href')!;
+      expect(href).toMatch(/^\/income\?/);
+      expect(new URLSearchParams(href.split('?')[1]).get('client')).toBe('none');
+    });
+
+    it('hides them during a search; the strip then sums the matching clients', async () => {
+      mockSummaries([delta, beta, acme, gamma], false, { noClient: noClientDebt, archivedClients: archivedDebt });
+      renderPage();
+      fireEvent.change(screen.getByPlaceholderText('Search clients...'), { target: { value: 'acm' } });
+
+      // SearchInput debounces by 200ms
+      expect(await screen.findByText('1 client')).toBeInTheDocument();
+      expect(names()).toEqual(['Acme']);
+      const strip = screen.getByRole('region', { name: 'Owed now' });
+      expect(within(strip).getAllByTestId('owed-now-amount').map((e) => e.textContent)).toEqual(['$1,300', '₪4,200']);
+    });
+
+    it('shows the strip and the row instead of the empty state when only unassigned income is owed', () => {
+      mockSummaries([], false, { noClient: noClientDebt });
+      renderPage();
+
+      expect(screen.queryByText('No clients found')).not.toBeInTheDocument();
+      expect(names()).toEqual(['No client · 2 entries']);
+      const strip = screen.getByRole('region', { name: 'Owed now' });
+      expect(within(strip).getAllByTestId('owed-now-amount').map((e) => e.textContent)).toEqual(['₪500']);
     });
   });
 

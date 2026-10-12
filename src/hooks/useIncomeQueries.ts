@@ -11,7 +11,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../db';
 import { useMutationWithFeedback } from './useMutationWithFeedback';
-import type { QueryFilters, Transaction, Currency, TxStatus } from '../types';
+import type { QueryFilters, Transaction, Currency, TxStatus, ClientScope } from '../types';
 import { invalidateTransactionQueries } from './useQueries';
 
 // ============================================================================
@@ -43,6 +43,8 @@ export interface IncomeFilters {
   search?: string;
   limit?: number;
   sort?: { by: string; dir: 'asc' | 'desc' };
+  /** Only entries with no client, or only those of archived clients (MUT-83) */
+  clientScope?: ClientScope;
 }
 
 export interface ReceivablesFilters {
@@ -87,6 +89,7 @@ export function useIncome(filters: IncomeFilters = {}) {
     search: filters.search,
     limit: filters.limit,
     sort: filters.sort,
+    clientScope: filters.clientScope,
   };
 
   return useQuery({

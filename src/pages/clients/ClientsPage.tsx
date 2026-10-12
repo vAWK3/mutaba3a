@@ -7,22 +7,28 @@ import { EmptyState, SortableHeader } from '../../components/ui';
 import { OwedNowSummary } from '../../components/clients/OwedNowSummary';
 import {
   toClientIndexRow,
-  compareClientRows,
+  toOwedBucketRows,
+  orderClientIndex,
+  BUCKET_SCOPE,
   CLIENT_SORT_FIELDS,
+  type ClientIndexItem,
   type ClientIndexRow,
   type ClientSortField,
+  type OwedBucketRow,
   type RatesToIls,
 } from '../../components/clients/clientIndexRows';
-import { useClientSummaries, useClients, useBusinessProfiles } from '../../hooks/useQueries';
+import { useClientOwedIndex, useClients, useBusinessProfiles } from '../../hooks/useQueries';
 import { useFxRate } from '../../hooks/useFxRate';
 import { getCrossProfileClientStats } from '../../db/crossProfileStats';
 import { combineOwed } from '../../db/aggregations';
 import { useSortState, type SortDir } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
+import { owedEntriesSearch } from '../../lib/incomeSearch';
 import { formatAmount, formatDate, formatRelativeDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { Currency } from '../../types';
+import { useTp } from '../../lib/i18n/plural';
+import type { ClientSummary, Currency } from '../../types';
 
 /** Direction a column sorts in when first clicked: names A–Z, money and dates biggest/newest first. */
 const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
@@ -33,15 +39,22 @@ const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
   activity: 'desc',
 };
 
+const NO_SUMMARIES: ClientSummary[] = [];
+
 /**
  * The clients index (MUT-7): who owes me, and who is late. Owed now and
  * overdue are per currency and never combined; owed now is ordered by today's
  * exchange rate without showing anything converted (ADR-035).
+ *
+ * Its strip equals Home's Owed now (MUT-83, ADR-049): it counts this
+ * business's entries only, and what belongs to no listed client shows in two
+ * muted rows after the clients, "No client" and "Archived clients".
  */
 export function ClientsPage() {
   const { openClientDrawer } = useDrawerStore();
   const navigate = useNavigate();
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const locale = getLocale(language);
   const [search, setSearch] = useState('');
@@ -63,7 +76,7 @@ export function ClientsPage() {
   // All clients (every profile), to count the total behind a search
   const { data: allClients = [] } = useClients(undefined);
 
-  const { data: summaries = [], isLoading } = useClientSummaries(profileId, undefined, search);
+  const { data: index, isLoading } = useClientOwedIndex(profileId, search);
 
   // Cross-profile badges: only query if multiple profiles exist
   const { data: profiles = [] } = useBusinessProfiles();
@@ -80,10 +93,20 @@ export function ClientsPage() {
   const rates = useMemo((): RatesToIls => ({ USD: usdRate ?? undefined, EUR: eurRate ?? undefined }), [usdRate, eurRate]);
 
   const rows = useMemo(
-    () => summaries.map((s) => toClientIndexRow(s, rates)).sort(compareClientRows(sortField, sortDir)),
-    [summaries, rates, sortField, sortDir]
+    () => (index?.clients ?? NO_SUMMARIES).map((s) => toClientIndexRow(s, rates)),
+    [index, rates]
   );
-  const totalOwed = useMemo(() => combineOwed(summaries.map((s) => s.owed)), [summaries]);
+  // A search narrows the list to named clients: the muted rows hide and the
+  // strip sums what is listed. Unsearched, the strip is Home's figure.
+  const buckets = useMemo(() => (index && !search ? toOwedBucketRows(index) : []), [index, search]);
+  const items = useMemo(
+    () => orderClientIndex(rows, buckets, sortField, sortDir),
+    [rows, buckets, sortField, sortDir]
+  );
+  const totalOwed = useMemo(
+    () => (search ? combineOwed(rows.map((r) => r.owed)) : (index?.total ?? [])),
+    [search, rows, index]
+  );
 
   const columns = useMemo(
     () => [
@@ -101,6 +124,18 @@ export function ClientsPage() {
       {formatAmount(amountMinor, currency, locale)}
     </bdi>
   );
+
+  const renderOverdue = (overdue: ClientIndexRow['overdue'], oldestOverdueDays?: number) =>
+    overdue.length === 0 ? (
+      <span className="text-muted">—</span>
+    ) : (
+      <div className="client-index-lines text-danger">
+        {overdue.map((o) => amount(o.amountMinor, o.currency, o.currency))}
+        {oldestOverdueDays !== undefined && (
+          <span className="client-index-subline">{t('clients.index.oldestOverdue', { days: oldestOverdueDays })}</span>
+        )}
+      </div>
+    );
 
   const renderRow = (row: ClientIndexRow) => (
     <tr
@@ -138,18 +173,7 @@ export function ClientsPage() {
         )}
       </td>
       <td className="amount-cell" data-testid="client-overdue">
-        {row.overdue.length === 0 ? (
-          <span className="text-muted">—</span>
-        ) : (
-          <div className="client-index-lines text-danger">
-            {row.overdue.map((o) => amount(o.amountMinor, o.currency, o.currency))}
-            {row.oldestOverdueDays !== undefined && (
-              <span className="client-index-subline">
-                {t('clients.index.oldestOverdue', { days: row.oldestOverdueDays })}
-              </span>
-            )}
-          </div>
-        )}
+        {renderOverdue(row.overdue, row.oldestOverdueDays)}
       </td>
       <td data-testid="client-last-payment">
         {row.lastPayment ? (
@@ -167,6 +191,35 @@ export function ClientsPage() {
     </tr>
   );
 
+  /** A muted row: owed now of no listed client, opening /income on those entries. */
+  const renderBucketRow = (bucket: OwedBucketRow) => {
+    const entries = owedEntriesSearch(BUCKET_SCOPE[bucket.kind]);
+    return (
+      <tr
+        key={bucket.kind}
+        className="clickable client-index-bucket-row"
+        onClick={() => navigate({ to: '/income', search: entries })}
+      >
+        <td>
+          <Link to="/income" search={entries} className="client-index-name" onClick={(e) => e.stopPropagation()}>
+            {tp(`clients.index.bucket.${bucket.kind}`, bucket.count)}
+          </Link>
+        </td>
+        <td className="amount-cell" data-testid="client-owed">
+          <div className="client-index-lines">{bucket.owed.map((o) => amount(o.owedMinor, o.currency, o.currency))}</div>
+        </td>
+        <td className="amount-cell" data-testid="client-overdue">
+          {renderOverdue(bucket.overdue)}
+        </td>
+        <td />
+        <td />
+      </tr>
+    );
+  };
+
+  const renderItem = (item: ClientIndexItem) =>
+    item.type === 'client' ? renderRow(item.row) : renderBucketRow(item.row);
+
   const isSearchMiss = Boolean(search) && allClients.length > 0;
 
   return (
@@ -181,7 +234,7 @@ export function ClientsPage() {
           <div className="loading">
             <div className="spinner" />
           </div>
-        ) : rows.length === 0 ? (
+        ) : items.length === 0 ? (
           <EmptyState
             title={isSearchMiss ? t('clients.emptyFiltered') : t('clients.empty')}
             description={
@@ -222,7 +275,7 @@ export function ClientsPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody>{rows.map(renderRow)}</tbody>
+                <tbody>{items.map(renderItem)}</tbody>
               </table>
             </div>
           </>

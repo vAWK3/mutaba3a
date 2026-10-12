@@ -6,10 +6,13 @@
  * rate (ADR-035) -- a ranking only, nothing converted is ever displayed --
  * and every other column compares something currency-free (days, dates,
  * names). Ties always fall back to name A–Z, then id, so the order is stable.
+ *
+ * Owed now that belongs to no listed client gets up to two muted rows after
+ * the clients, whatever the sort (MUT-83, ADR-049).
  */
 
 import { convertAmount } from '../../lib/fx';
-import type { ClientSummary, Currency, LastPayment, OwedByCurrency } from '../../types';
+import type { ClientOwedIndex, ClientScope, ClientSummary, Currency, LastPayment, OwedByCurrency } from '../../types';
 import type { SortDir } from '../../hooks/useSortState';
 
 export type ClientSortField = 'name' | 'owed' | 'overdue' | 'lastPayment' | 'activity';
@@ -54,15 +57,17 @@ export function owedRank(owed: OwedByCurrency[], rates: RatesToIls): number[] {
   return [ratedTotal, ...unrated];
 }
 
+/** The currencies with an overdue amount, in owed order. */
+const overdueLines = (owed: OwedByCurrency[]) =>
+  owed.filter((o) => o.overdueMinor > 0).map((o) => ({ currency: o.currency, amountMinor: o.overdueMinor }));
+
 export function toClientIndexRow(summary: ClientSummary, rates: RatesToIls): ClientIndexRow {
   return {
     id: summary.id,
     name: summary.name,
     owed: summary.owed,
     isSettled: summary.owed.length === 0,
-    overdue: summary.owed
-      .filter((o) => o.overdueMinor > 0)
-      .map((o) => ({ currency: o.currency, amountMinor: o.overdueMinor })),
+    overdue: overdueLines(summary.owed),
     oldestOverdueDays: summary.oldestOverdueDays,
     lastPayment: summary.lastPayment,
     lastActivityAt: summary.lastActivityAt,
@@ -93,4 +98,53 @@ const tieBreak = (a: ClientIndexRow, b: ClientIndexRow) =>
 export function compareClientRows(field: ClientSortField, dir: SortDir) {
   const sign = dir === 'asc' ? 1 : -1;
   return (a: ClientIndexRow, b: ClientIndexRow) => sign * byField[field](a, b) || tieBreak(a, b);
+}
+
+export type OwedBucketKind = 'noClient' | 'archivedClients';
+
+/** Fixed order of the muted rows: No client, then Archived clients. */
+const BUCKET_KINDS: readonly OwedBucketKind[] = ['noClient', 'archivedClients'];
+
+/** Which entries each muted row opens on /income. */
+export const BUCKET_SCOPE: Record<OwedBucketKind, ClientScope> = {
+  noClient: 'none',
+  archivedClients: 'archived',
+};
+
+/** A muted row after the clients: owed now that belongs to no listed client. */
+export interface OwedBucketRow {
+  kind: OwedBucketKind;
+  owed: OwedByCurrency[];
+  overdue: { currency: Currency; amountMinor: number }[];
+  /** No client: entries. Archived clients: clients. */
+  count: number;
+}
+
+/** The muted rows to show, in fixed order; a bucket that owes nothing has none. */
+export function toOwedBucketRows(index: Pick<ClientOwedIndex, OwedBucketKind>): OwedBucketRow[] {
+  return BUCKET_KINDS.filter((kind) => index[kind].owed.length > 0).map((kind) => ({
+    kind,
+    owed: index[kind].owed,
+    overdue: overdueLines(index[kind].owed),
+    count: index[kind].count,
+  }));
+}
+
+export type ClientIndexItem = { type: 'client'; row: ClientIndexRow } | { type: 'bucket'; row: OwedBucketRow };
+
+/**
+ * The index in display order: clients sorted by the chosen column, then the
+ * muted rows. Those never take part in the sort, so a large unassigned debt
+ * can't rank above the clients (AC: "the extra rows sort after real clients").
+ */
+export function orderClientIndex(
+  rows: ClientIndexRow[],
+  buckets: OwedBucketRow[],
+  field: ClientSortField,
+  dir: SortDir
+): ClientIndexItem[] {
+  return [
+    ...[...rows].sort(compareClientRows(field, dir)).map((row) => ({ type: 'client' as const, row })),
+    ...buckets.map((row) => ({ type: 'bucket' as const, row })),
+  ];
 }

@@ -13,6 +13,7 @@ import type {
   OverviewTotals,
   ProjectSummary,
   ClientSummary,
+  ClientOwedIndex,
   TransactionDisplay,
   Currency,
   BusinessProfile,
@@ -41,6 +42,8 @@ import {
   paymentRowsForIncome,
   summarizeClientCollection,
   groupBy,
+  clientScopeOf,
+  partitionOwedNow,
   type TransactionTotalsByCurrency,
 } from './aggregations';
 
@@ -205,6 +208,7 @@ export const transactionRepo = {
     const categories = await db.categories.toArray();
 
     const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+    const clientsById = new Map(clients.map((c) => [c.id, c]));
     const projectMap = new Map(projects.map((p) => [p.id, p.name]));
     const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
 
@@ -214,6 +218,7 @@ export const transactionRepo = {
       if (!excludeDeleted(tx)) return false;
       if (tx.archivedAt && !filters.includeArchived) return false;
       if (!scopeToProfile(tx, filters.profileId)) return false;
+      if (filters.clientScope && clientScopeOf(tx, clientsById) !== filters.clientScope) return false;
       if (filters.dateFrom && tx.occurredAt < filters.dateFrom) return false;
       if (filters.dateTo && tx.occurredAt > filters.dateTo + 'T23:59:59') return false;
       if (filters.currency && tx.currency !== filters.currency) return false;
@@ -658,9 +663,11 @@ export const projectSummaryRepo = {
 export const clientSummaryRepo = {
   /**
    * One row per non-archived client: totals, activity and the MUT-7 collection
-   * fields (owed now, oldest overdue age, last payment). Transactions and
-   * payment records are each read and grouped once, so a few hundred clients
-   * cost one pass, not one scan per client.
+   * fields (owed now, oldest overdue age, last payment), each counted over the
+   * client's entries in every business. Read by Insights and Reports; the
+   * clients index reads listOwedIndex, which counts one business (ADR-049).
+   * Transactions and payment records are each read and grouped once, so a few
+   * hundred clients cost one pass, not one scan per client.
    */
   async list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]> {
     const clients = await clientRepo.list({ profileId: filters?.profileId });
@@ -689,6 +696,49 @@ export const clientSummaryRepo = {
       });
 
     return sortByLastActivity(summaries);
+  },
+
+  /**
+   * The clients index (MUT-83, ADR-049). Reads the business's entries through
+   * transactionRepo.list -- the read behind Home's Owed now -- and splits them
+   * with partitionOwedNow, so `total` equals Home's and the client rows plus
+   * No client and Archived clients add up to it.
+   *
+   * Lists the business's own live clients (even with no entries) and live
+   * clients of other businesses that have an entry here. Every figure on a row
+   * counts only this business's entries; the client profile stays
+   * all-businesses. A search narrows the client rows only.
+   *
+   * @param filters.profileId the business; undefined reads every business
+   */
+  async listOwedIndex(filters: { profileId?: string; search?: string } = {}): Promise<ClientOwedIndex> {
+    const [clients, entries, projects, records] = await Promise.all([
+      db.clients.toArray(),
+      transactionRepo.list({ profileId: filters.profileId, includeArchived: true }),
+      db.projects.toArray(),
+      db.paymentRecords.filter((r) => !r.deletedAt).toArray(),
+    ]);
+    const today = todayLocalISO();
+    const { total, entriesByClient, noClient, archivedClients } = partitionOwedNow(entries, clients, today);
+    const recordsByTx = groupBy(records, (r) => r.transactionId);
+    const activeProjects = groupBy(projects.filter((p) => p.clientId && !p.archivedAt), (p) => p.clientId!);
+    const searchLower = filters.search?.toLowerCase();
+
+    const listed = clients.filter(
+      (c) =>
+        !c.archivedAt &&
+        (scopeToProfile(c, filters.profileId) || entriesByClient.has(c.id)) &&
+        (!searchLower || c.name.toLowerCase().includes(searchLower))
+    );
+
+    return {
+      clients: listed.map((c) =>
+        buildClientSummary(c, entriesByClient.get(c.id) ?? [], activeProjects.get(c.id)?.length ?? 0, recordsByTx, today)
+      ),
+      total,
+      noClient,
+      archivedClients,
+    };
   },
 
   async get(clientId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ClientSummary | undefined> {

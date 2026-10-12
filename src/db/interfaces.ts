@@ -25,6 +25,7 @@ import type {
   OverviewTotals,
   ProjectSummary,
   ClientSummary,
+  ClientOwedIndex,
   TransactionDisplay,
   Currency,
   BusinessProfile,
@@ -129,6 +130,8 @@ export interface IProjectSummaryRepository {
 
 export interface IClientSummaryRepository {
   list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]>;
+  /** The clients index: rows, No client, Archived clients and a total equal to Home's (MUT-83) */
+  listOwedIndex(filters?: { profileId?: string; search?: string }): Promise<ClientOwedIndex>;
   get(clientId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ClientSummary | undefined>;
 }
 
