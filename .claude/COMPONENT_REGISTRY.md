@@ -1352,7 +1352,7 @@ The parts always add up to `total`. It takes entries and clients rather than a b
 
 `owedNowRemaining(tx)` is what one entry adds to Owed now (`summarizeOwedByCurrency` sums it).
 
-**Reads built on them**: `clientSummaryRepo.listOwedIndex({ profileId, search })` → `ClientOwedIndex`, through the `useClientOwedIndex(profileId, search)` hook (key `['clientSummaries', 'owedIndex', …]`).
+**Reads built on them**: `clientSummaryRepo.listOwedIndex({ profileId, search })` → `ClientOwedIndex`, through the `useClientOwedIndex(profileId, search, { enabled })` hook (key `['clientSummaries', 'owedIndex', …]`). `profileId` is a `ProfileScope`: a list (All businesses, MUT-89) adds `profileIds` to each row and `byProfile` (the muted rows per business).
 **Tests**: `src/db/__tests__/aggregations.test.ts`, `src/db/__tests__/clientOwedIndex.test.ts` (parity with Home).
 
 ---
@@ -1363,8 +1363,36 @@ The parts always add up to `total`. It takes entries and clients rather than a b
 - `toOwedBucketRows(index)` turns an index's `noClient` and `archivedClients` into the muted rows to show, in fixed order, dropping a bucket that owes nothing.
 - `orderClientIndex(rows, buckets, field, dir)` returns the display order: clients sorted by the chosen column (ADR-035), then the muted rows, which never take part in the sort.
 - `BUCKET_SCOPE` maps a bucket to the `/income` client scope it opens.
+- `toBusinessBucketRows(byProfile)` (MUT-89): the muted rows under All businesses, one per business that owes, all No client rows first, each carrying its `profileId`.
 
 **Tests**: `src/components/clients/__tests__/clientIndexRows.test.ts`.
+
+---
+
+### All businesses lens (MUT-89, ADR-051)
+**Locations**: `src/hooks/useActiveProfile.ts`, `src/lib/profileStore.ts`, `src/components/layout/AppShell.tsx`, `src/components/ui/ProfileBadge.tsx`, `src/db/baseQuery.ts`
+
+**Hooks:**
+- **`useOwedLens()`**: for Home and Clients only. It returns `{ scope, isAll, profilesById }`:
+  - the scope is every live business in All, else the working id;
+  - it is `''` with no business at all, and `undefined` while the businesses load (read nothing yet);
+  - it ignores the route flag.
+- **`useActiveProfile()`**: `activeProfileId` is always concrete. `isAllProfiles` and `showAllProfilesOption` (for the chrome) need the lens, an owed screen and 2 or more businesses. `setActiveProfile(id)` is a pick (lens off); `setAllBusinesses(on)` turns the lens on or off.
+- **`useOwedScreenSync()`**: called once in AppShell. It reads `useMatches()` for `staticData.owedLens` and writes `onOwedScreen` before paint, into **`useOwedScreenStore`** (`src/lib/profileStore.ts`), an unsaved store kept apart from the persisted profile store so navigation never writes localStorage.
+- **`useProfileAwareAction`**: `trigger(event, returnFocus?)` records where the asking menu item was (`anchorRect`) and the button to give focus back to (`returnFocus`). `ProfileQuickPicker` places itself from that rectangle, focuses its first business, and returns focus on Escape. Callers pass `menu.buttonProps.ref.current`.
+- **`ClientTypeahead`** `canCreate` (default true): a form still asking which business turns "Create new" off, so a new client is never filed in the default business by accident. The Income drawer also passes `disabled` to `ProjectTypeahead` until then. Picker options are `tabIndex={-1}`: the list is one Tab stop, moved with the arrow keys.
+- **`POPOVER_EDGE_MARGIN`** (`src/components/layout/popoverPosition.ts`, beside `nudgeInside`): the one edge gap for TruncatedTitle, FxRateReadout and ProfileQuickPicker.
+- **`ClientOwedIndexRow`** (`src/types`): a clients-index row, `ClientSummary` plus the required `profileIds`.
+
+**Components:**
+- **`BusinessesGate`** (AppShell.tsx): renders the routed page only once the businesses have loaded.
+- **`BusinessTags`** (ProfileBadge.tsx): `profileIds` + `profilesById`, one `ProfileBadgeWithName` per known business, the name in `<bdi>` with a title. Renders nothing when none is known. Rows use the classes `home-row-business` and `client-index-businesses`, for a line of their own.
+
+**Data:**
+- **`ProfileScope`** (`src/types`, re-exported by `baseQuery`): `string | readonly string[]`.
+- **`scopeToProfile(record, scope)`**: a list never matches a record with no business.
+
+**Tests**: `useActiveProfile.test.tsx`, `allBusinessesLens.test.tsx`, `profileStore.test.ts`, `router.owedLens.test.ts`, `AppShell.gate.test.tsx`, `ProfileBadge.test.tsx`, `baseQuery.test.ts`.
 
 ---
 

@@ -18,6 +18,29 @@
 
 ## Open Debt
 
+### TD-068: "All businesses" leftovers from the MUT-89 pre-landing review
+**Status**: Open
+**Added**: 2026-10-12 (MUT-89, ADR-051; the owner chose to record these rather than fix them)
+**Priority**: Low
+**Impact**: None of these gives a wrong result in normal use today. Each is a corner of the new lens:
+- **Cold start is a few ms slower.** `BusinessesGate` mounts the routed page only after the businesses query answers, and lazy page chunks only start loading when mounted, so the chunk download now waits behind the IndexedDB open plus the businesses read.
+- **Extra renders.** `useActiveProfile` (and `useOwedLens` through it) reads the whole profile store and the route flag, so every consumer re-renders once more when navigation crosses Home/Clients.
+- **Middle-click on a per-business muted row.** The row sets the working business in its click handler, not in the URL. A middle-click (or a new tab) opens `/income` in the old working business, so it shows another business's "No client" entries.
+- **A failed businesses read.** If `useBusinessProfiles` errors, `BusinessesGate` lets pages through with no business, and a blank business reads every record (unassigned and archived-business records too), with no error shown.
+- **All turned off from a screen that hides it.** Off Home and Clients the switcher doesn't list All; re-picking the already-checked working business still turns All off (O1's rule).
+- **A drawer kept open across Back.** `IncomeDrawer` reads `isAllProfiles` on every render, so if the route changes while it is open it can fill the working business and stop asking.
+- **Downgrade.** The profile store is at version 1. An older build reading it resets to the default business and drops the All choice; nothing crashes.
+- **Top bar.** Under All the indicator is text only; the single-business indicator has a colour badge.
+**Remediation**: in order of value:
+- give Income a `profile` search param so the muted row is a plain link;
+- show an error state (or hold the gate) when the businesses read fails;
+- preload page chunks from the route (`lazyRouteComponent` or a `beforeLoad` preload);
+- select store fields narrowly in `useOwedLens`/`useProfileFilter`;
+- make re-picking the current working business a no-op for the lens;
+- capture `isAllProfiles` once when the drawer opens;
+- reuse the switcher's grid glyph in the top-bar indicator.
+**Effort**: Small each
+
 ### TD-074: `migration-safety`'s hand-kept table list misses five live tables
 **Status**: Open
 **Added**: 2026-10-12 (MUT-73, found in the audit; brief decision D10)
@@ -99,6 +122,7 @@
 **Priority**: Low
 **Impact**: Since ADR-049, each business's Clients list counts only that business's entries. The client profile page (`/clients/:id`) still adds up the client's entries in every business: Owed now, Work and billing, Payments. For a client shared across businesses, a row can say $700 while the profile says $1,500. The owner accepted this trade-off for parity with Home. The row's cross-profile badges ("N entries" per other business) hint at it, but nothing on the profile says which business each figure belongs to.
 **Remediation**: With MUT-89 ("All businesses" lens, business tags on rows), give the profile page the same business context: tag each entry and payment with its business, or show Owed now per business when the client has entries in more than one. Don't scope the profile to one business without an owner decision: it is the one place that shows everything a client owes.
+**Update 2026-10-12 (MUT-89, ADR-051)**: the owner deferred profile-page tags (O6). With All businesses on, a shared client's row now counts every business, so it equals the profile page; the gap remains only in the single-business view.
 **Effort**: Medium
 
 ### TD-069: Expenses Needs attention only looks back 90 days

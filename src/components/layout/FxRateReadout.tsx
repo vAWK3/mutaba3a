@@ -3,7 +3,7 @@ import { useFxRate, type UseFxRateResult } from '../../hooks/useFxRate';
 import { useMenuButton } from '../../hooks/useMenuButton';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { cn, formatDate, formatRelativeDate } from '../../lib/utils';
-import { nudgeInside } from './popoverPosition';
+import { nudgeInside, POPOVER_EDGE_MARGIN } from './popoverPosition';
 import './FxRateReadout.css';
 
 /**
@@ -17,7 +17,6 @@ const QUOTE_SYMBOL = '₪';
 const NO_RATE = '—';
 const READOUT_DECIMALS = 2;
 const DETAIL_DECIMALS = 4;
-const EDGE_MARGIN = 8;
 
 /** `$1 = ₪3.06` in the reader's digits; a dash when there is no rate. */
 function formatRateLine(baseSymbol: string, rate: number | null, decimals: number, locale: string): string {
@@ -51,7 +50,7 @@ export function FxRateReadout() {
     const panel = rootRef.current?.querySelector<HTMLElement>('.fx-popover');
     const bounds = panel?.closest('main');
     if (!panel || !bounds) return;
-    const dx = nudgeInside(panel.getBoundingClientRect(), bounds.getBoundingClientRect(), EDGE_MARGIN);
+    const dx = nudgeInside(panel.getBoundingClientRect(), bounds.getBoundingClientRect(), POPOVER_EDGE_MARGIN);
     panel.style.translate = dx === 0 ? '' : `${dx}px 0`;
   }, [popover.isOpen]);
 

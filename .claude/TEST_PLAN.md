@@ -1608,6 +1608,57 @@ Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.
 - Added: 17 guard cases, 7 migration-v21 cases, 4 hook cases and 4 bundle-rule cases (2 new `it` blocks, one of them `it.each` over 3 markers), plus 5 Rust cleanup tests.
 - Moved: 74 OAuth cases and 10 Rust tests.
 
+### MUT-89 — "All businesses" on Home and Clients (epic MUT-74, 2026-10-12)
+Plan: `.claude/designs/mut-89-all-businesses-lens-tests.md`. ADR-051. Tests were written first and failed for the right reason before each unit's code.
+
+| File | Covers |
+|---|---|
+| `src/lib/__tests__/profileStore.test.ts` (rewritten) | A pick turns the lens off; a repair keeps it; `setAllBusinesses`; `reset`; persisted at v1 without `onOwedScreen`; legacy `'all'` → lens on |
+| `src/hooks/__tests__/useActiveProfile.test.tsx` | **AC1:** the option needs an owed screen and 2+ businesses; `isAllProfiles` needs the lens too. **AC3:** `activeProfileId` / `useProfileFilter` stay the working business. **D5:** the auto-correct uses `setWorkingProfile`. **D6:** `setAllBusinesses`, refused with one business. **useOwedLens:** undefined while loading (D2), `''` with no business (D4), every business in All, ignores the route flag (D3). Strict-mode `:114`/`:124` rewritten, `:173` deleted |
+| `src/hooks/__tests__/allBusinessesLens.test.tsx` (new, memory router, real stores and fake-indexeddb) | **AC3 / O1:** Home reads every business; `/income` reads the working one with no All option; back on `/`, All returns; a client under the Clients layout is an owed screen |
+| `src/__tests__/router.owedLens.test.ts` (new) | `/`, `/clients` and `/clients/$clientId` are tagged on the real route tree; eight other areas are not |
+| `src/components/layout/__tests__/AppShell.gate.test.tsx` (new) | **D8:** the page is held until the businesses load; it mounts with no business at all |
+| `src/db/__tests__/baseQuery.test.ts` | A list scope: members match; others, unassigned records and `[]` don't |
+| `src/db/__tests__/clientOwedIndex.test.ts` | **AC2 / O3 / O4** over two businesses: the total equals the sum of each business's Home; rows plus per-business muted rows add up; a shared client counts both and is tagged with both; a no-entry client carries its own business; unassigned and archived-business records stay out; `byProfile` in scope order; one business unchanged |
+| `src/db/__tests__/paymentRecords.test.ts` | `listRecent` over a list carries each row's business and leaves out unassigned and archived-business payments |
+| `src/components/clients/__tests__/clientIndexRows.test.ts`, `src/components/ui/__tests__/ProfileBadge.test.tsx` | `profileIds` on rows; `toBusinessBucketRows` order; `BusinessTags` order, `<bdi>`, unknown ids skipped |
+| `src/pages/overview/__tests__/OverviewPage.test.tsx` | Mock moved to `useOwedLens` (D7). No tags in one business. In All: one receivables query (ADR-055), per currency across businesses, tags on both sections. Waits for the scope (D2). Reads All on its first render (D3, real lens) |
+| `src/components/home/__tests__/HomeNeedsAttention.test.tsx` | Mock moved to `useOwedLens` (D7). In All: both businesses listed and tagged; **the same-frame payment test passes with a list scope** (ADR-055) |
+| `src/pages/clients/__tests__/ClientsPage.test.tsx` | In All: reads every business; tags (two on a shared client); no cross-profile badges or their query; one No client row per business; a click sets the working business with All kept on and opens Income; the badges stay in one business |
+| `src/components/layout/__tests__/ProfileSwitcher.test.tsx` (new), `TopBar.profileIndicator.test.tsx` (new) | **AC1 / O1 / O2:** All is listed first only on owed screens with 2+ businesses; picking it labels the switcher; picking a business turns it off; off the owed screens the working business is shown. The top bar says All businesses |
+| `src/components/__tests__/IncomeDrawer.test.tsx` | **AC4:** from All the business field is up front, empty and required; the Add menu's pick prefills it; off the owed screens it works in the working business |
+| `src/components/ui/__tests__/ProfileQuickPicker.test.tsx` (new) | The picker stays inside the window (found in the browser check) |
+
+**What was run (Node 22), on this branch:**
+- `npx vitest run`: 219 files, 3,218 passed, 4 skipped;
+- `npm run typecheck` and `npx tsc -b`: clean;
+- `npm run lint`: 0 errors (12 pre-existing warnings);
+- `npm run test:bundles`: passed.
+
+**Browser check** (preview on port 5187, visitor sample, three businesses):
+- **Switcher on Clients:** it listed All first; picking it showed 10 clients with tags under each name, and the top bar read All businesses.
+- **A shared client from the app:** income added through Add → (picker) → the consulting office for a client created in the tech business. The row showed both tags, and Owed now covered both (₪18,100 + ₪500).
+- **An entry with no client in the design studio:** one tagged "No client · 1 entry" row. Its click opened Income in the design studio, listing exactly that entry, with All still on.
+- **Income:** the switcher listed only the businesses.
+- **Home in All:** Owed now matched Clients' strip, and the rows were tagged.
+- **Client profile in All:** Add income showed "Business Profile *" up front and empty (AC4).
+- **Arabic RTL** read correctly, and there were no console errors.
+- **Two bugs found and fixed:** the tags ran on the name's line (CSS specificity), and the picker overflowed the window.
+
+**Not run:** the `qa/` release-QA kit (no qa spec covers this flow yet).
+
+**Pre-landing review round (tests written first):**
+- `SavedFlashAnnouncer.test.tsx`: Show keeps All on.
+- `ClientDrawer.test.tsx` and `ProjectDrawer.test.tsx`: each prefills the picker's business.
+- `SidebarNav.features.test.tsx`: New → Income/Expense sets the working business before navigating.
+- `ProfileQuickPicker.test.tsx`: placed from the saved rectangle, focuses its first business, Escape returns focus, arrows/Home/End move, leaving closes it.
+- `IncomeDrawer.test.tsx`: "Create new" client only once a business is chosen.
+- `useProfileAwareAction.test.tsx`: the real All state, with a concrete working id.
+- `IncomeDrawer.test.tsx`: business before client; from a client; duplicating keeps the business.
+- `profileStore.test.ts`: the route flag never writes the saved key.
+- `AppShell.gate.test.tsx`: AppShell routes pages through the gate (mutation-checked).
+- Third pass: `IncomeDrawer.test.tsx` (the client error says choose the business first; the project field is closed until then), `ProfileQuickPicker.test.tsx` (one Tab stop; focus going nowhere keeps it open), `incomeDrawerKeys.test.ts` (the hint key).
+
 ### MUT-84 — Clients split view on wide windows (epic MUT-74, 2026-10-12)
 
 Plan: `.claude/designs/mut-84-clients-split-view-tests.md`. ADR-050. TD-067.

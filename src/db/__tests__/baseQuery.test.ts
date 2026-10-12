@@ -33,3 +33,25 @@ describe('scopeToProfile', () => {
     expect(scopeToProfile({ profileId: undefined }, 'abc')).toBe(false);
   });
 });
+
+describe('scopeToProfile with several businesses (MUT-89, All businesses)', () => {
+  const ALL = ['studio', 'teaching'];
+
+  it('matches a record of any listed business', () => {
+    expect(scopeToProfile({ profileId: 'studio' }, ALL)).toBe(true);
+    expect(scopeToProfile({ profileId: 'teaching' }, ALL)).toBe(true);
+  });
+
+  it('leaves out a record of a business that is not listed (an archived one, O3)', () => {
+    expect(scopeToProfile({ profileId: 'archived-business' }, ALL)).toBe(false);
+  });
+
+  it('leaves out an unassigned record: it belongs to no business (O3)', () => {
+    expect(scopeToProfile({}, ALL)).toBe(false);
+    expect(scopeToProfile({ profileId: undefined }, ALL)).toBe(false);
+  });
+
+  it('matches nothing for an empty list', () => {
+    expect(scopeToProfile({ profileId: 'studio' }, [])).toBe(false);
+  });
+});

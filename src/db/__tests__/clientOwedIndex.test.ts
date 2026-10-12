@@ -244,3 +244,91 @@ describe('transactionRepo.list clientScope', () => {
     expect(await owedOf('archived')).toEqual(index.archivedClients.owed);
   });
 });
+
+/**
+ * MUT-89 (ADR-051): "All businesses" passes every live business in. The
+ * Clients list then counts each client's entries in all of them, tags each
+ * row with the businesses it has entries in, and splits the muted rows per
+ * business (O4) so a click can open Income in that one business. Unassigned
+ * records and archived businesses' records stay out (O3).
+ */
+describe('clientSummaryRepo.listOwedIndex over All businesses (MUT-89)', () => {
+  const ALL = [P1, P2];
+  const ARCHIVED_BUSINESS = 'business-archived';
+
+  beforeEach(async () => {
+    await Promise.all([db.clients.clear(), db.transactions.clear(), db.paymentRecords.clear(), db.projects.clear()]);
+    await db.clients.bulkAdd([...CLIENTS, client('loner', P1, { profileId: undefined })]);
+    await db.transactions.bulkAdd([
+      ...ENTRIES,
+      entry('acme-p2', P2, { clientId: 'acme', currency: 'ILS', amountMinor: 800 }),
+      entry('unassigned', P1, { profileId: undefined, amountMinor: 55500 }),
+      entry('archived-business', ARCHIVED_BUSINESS, { clientId: 'acme', amountMinor: 66600 }),
+    ]);
+  });
+
+  afterEach(async () => {
+    await Promise.all([db.clients.clear(), db.transactions.clear(), db.paymentRecords.clear(), db.projects.clear()]);
+  });
+
+  it('owes per currency what each business owes, added up, and never more (AC2, O3)', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: ALL });
+    const perBusiness = combineOwed([await homeOwedNow(P1), await homeOwedNow(P2)]);
+
+    expect(index.total).toEqual(perBusiness);
+  });
+
+  it('adds up: client rows plus each business\'s muted rows equal the total', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: ALL });
+    const muted = (index.byProfile ?? []).flatMap((b) => [b.noClient.owed, b.archivedClients.owed]);
+
+    expect(combineOwed([...index.clients.map((c) => c.owed), ...muted])).toEqual(index.total);
+  });
+
+  it('counts a client\'s entries in every business and tags it with each one (AC2)', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: ALL });
+    const acme = rowOf(index, 'acme');
+
+    expect(acme?.profileIds).toEqual([P1, P2]);
+    expect(acme?.owed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ currency: 'USD', owedMinor: 10000 }),
+        expect.objectContaining({ currency: 'ILS', owedMinor: 800 }),
+      ])
+    );
+  });
+
+  it('tags a client with the business its entries are in, or its own when it has none', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: ALL });
+
+    expect(rowOf(index, 'shared')?.profileIds).toEqual([P1]); // created in P2, entries only in P1
+    expect(rowOf(index, 'mine')?.profileIds).toEqual([P2]); // created in P1, entries only in P2
+    expect(rowOf(index, 'beta')?.profileIds).toEqual([P1]); // no entries: its own business
+  });
+
+  it('leaves out unassigned records and archived businesses\' records (O3)', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: ALL });
+
+    expect(rowOf(index, 'loner')).toBeUndefined();
+    expect(rowOf(index, 'acme')?.owed.find((o) => o.currency === 'USD')?.owedMinor).toBe(10000);
+    expect(index.noClient.count).toBe(3); // no-client, ghost (P1) and p2-no-client: not the unassigned one
+  });
+
+  it('splits No client and Archived clients per business, in the order given (O4)', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: ALL });
+
+    expect(index.byProfile?.map((b) => b.profileId)).toEqual([P1, P2]);
+    const [design, consulting] = index.byProfile!;
+    expect(design.noClient.count).toBe(2);
+    expect(design.archivedClients.count).toBe(2);
+    expect(consulting.noClient).toEqual({ owed: [expect.objectContaining({ currency: 'ILS', owedMinor: 1100 })], count: 1 });
+    expect(consulting.archivedClients).toEqual({ owed: [], count: 0 });
+  });
+
+  it('keeps one business\'s index unchanged: no per-business split', async () => {
+    const index = await clientSummaryRepo.listOwedIndex({ profileId: P1 });
+
+    expect(index.byProfile).toBeUndefined();
+    expect(rowOf(index, 'acme')?.profileIds).toEqual([P1]);
+  });
+});

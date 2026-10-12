@@ -21,6 +21,12 @@ export interface ClientTypeaheadProps {
    * once it exists (its id has then been passed to onChange).
    */
   onCreatingChange?: (creating: boolean) => void;
+  /**
+   * Whether "Create new" is offered (default true). A form that still has to
+   * ask which business turns it off, so a new client is never filed in the
+   * default business by accident (MUT-89).
+   */
+  canCreate?: boolean;
 }
 
 export function ClientTypeahead({
@@ -32,6 +38,7 @@ export function ClientTypeahead({
   className,
   onPendingTextChange,
   onCreatingChange,
+  canCreate = true,
 }: ClientTypeaheadProps) {
   const t = useT();
   const [inputValue, setInputValue] = useState('');
@@ -80,7 +87,7 @@ export function ClientTypeahead({
     }));
 
     // Add "Create new" if no exact name match and input is non-empty
-    if (trimmed) {
+    if (trimmed && canCreate) {
       const hasExactMatch = activeClients.some(
         (c) => c.name.toLowerCase() === trimmed
       );
@@ -94,7 +101,7 @@ export function ClientTypeahead({
     }
 
     return results;
-  }, [inputValue, activeClients]);
+  }, [inputValue, activeClients, canCreate]);
 
   const selectedName = activeClients.find((c) => c.id === value)?.name;
   const pickedLabel = value || creating ? pickedName : null;

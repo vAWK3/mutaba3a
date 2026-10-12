@@ -138,6 +138,15 @@ export interface Settings {
 export type ResolvedSettings = Settings & { features: Record<FeatureKey, boolean> };
 
 // Query filters for transactions
+/**
+ * Which businesses a read covers: one business id, or several for the "All
+ * businesses" lens on Home and Clients (MUT-89, ADR-051).
+ * - absent (undefined) or an empty string: every record;
+ * - a list: records of those businesses only. A record with no business never
+ *   matches, and an empty list matches no record (unlike an empty string).
+ */
+export type ProfileScope = string | readonly string[];
+
 export interface QueryFilters {
   dateFrom?: string;
   dateTo?: string;
@@ -146,8 +155,8 @@ export interface QueryFilters {
   status?: TxStatus | 'overdue';
   clientId?: string;
   projectId?: string;
-  /** Filter by business profile (undefined = all profiles) */
-  profileId?: string;
+  /** Filter by business: one id, or several for All businesses (undefined = every record) */
+  profileId?: ProfileScope;
   search?: string;
   limit?: number;
   offset?: number;
@@ -253,15 +262,39 @@ export interface OwedBucket {
   count: number;
 }
 
+/** A clients-index row: a client's summary and the businesses it is tagged with */
+export interface ClientOwedIndexRow extends ClientSummary {
+  /**
+   * The businesses of the client's entries in the index's scope, in scope
+   * order, or its own business when it has none: the tags "All businesses"
+   * shows on the row (MUT-89).
+   */
+  profileIds: string[];
+}
+
 /**
  * The clients index of one business (MUT-83, ADR-049): every figure comes
  * from the entries recorded in that business, the same set Home's Owed now sums.
  */
 export interface ClientOwedIndex {
   /** The listed clients; every column counts only this business's entries */
-  clients: ClientSummary[];
+  clients: ClientOwedIndexRow[];
   /** Owed now over every entry in the business: equals Home's (ADR-036 §5) */
   total: OwedByCurrency[];
+  noClient: OwedBucket;
+  archivedClients: OwedBucket;
+  /**
+   * All businesses only (MUT-89, O4): No client and Archived clients per
+   * business, in the scope's order, so each muted row can open Income in its
+   * own business. Present whenever `profileId` is a list; absent for a single
+   * id or undefined.
+   */
+  byProfile?: OwedBusinessBuckets[];
+}
+
+/** One business's muted rows on the clients index under All businesses (MUT-89) */
+export interface OwedBusinessBuckets {
+  profileId: string;
   noClient: OwedBucket;
   archivedClients: OwedBucket;
 }
@@ -296,6 +329,8 @@ export interface PaymentByClientRow {
 export interface RecentPaymentRow extends PaymentByClientRow {
   clientId?: string;
   clientName?: string;
+  /** The business of the entry it paid: Home's tag under All businesses (MUT-89) */
+  profileId?: string;
 }
 
 // Transaction with resolved names for display

@@ -31,7 +31,7 @@ type FormData = z.infer<typeof schema>;
 
 export function ProjectDrawer() {
   const { projectDrawer, closeProjectDrawer } = useDrawerStore();
-  const { mode, projectId, defaultClientId } = projectDrawer;
+  const { mode, projectId, defaultClientId, defaultProfileId } = projectDrawer;
   const t = useT();
   const { currentStep, completeStep } = useOnboardingStore();
 
@@ -50,7 +50,9 @@ export function ProjectDrawer() {
       clientId: defaultClientId || '',
       field: '',
       notes: '',
-      profileId: activeProfile?.id || '',
+      // The business the opener asked for (the Add menu's picker under All
+      // businesses, MUT-89), else the working business
+      profileId: defaultProfileId || activeProfile?.id || '',
     },
   });
 

@@ -28,6 +28,86 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — "All businesses" on Home and Clients (MUT-89)
+
+**Why:** the pitch is "who owes me across my businesses", but the app showed one business at a time. An All Profiles mode was switched off in April (`70b5093`) with no ADR. Decision S2 of the Apple-design brief (epic MUT-74) brings it back for the owed screens only. The owner approved O1–O7 and eng review D1–D8. ADR-051. Brief `.claude/designs/mut-89-all-businesses-lens.md`; test plan `.claude/designs/mut-89-all-businesses-lens-tests.md`.
+
+**Run on this branch (Node 22):**
+- `npx vitest run`: 219 files, 3,218 passed, 4 skipped;
+- `npm run typecheck` clean, and `npx tsc -b` clean;
+- `npm run lint`: 0 errors (12 warnings, all pre-existing, in files and rules this ticket did not touch);
+- `npm run test:bundles` passed;
+- a browser check on the preview (sample data, three businesses, see TEST_PLAN).
+
+### Added
+- **"All businesses" in the switcher**, first, on Home and Clients only, with two or more businesses (AC1, O2). Picking it turns the lens on; picking a business works in it and turns it off. It sticks for Home and Clients while other screens use the working business (O1). The top bar says "All businesses" while it is on.
+- **Home in All:** Owed now per currency across every business, never summed. Needs attention and Recent payments rows carry their business tag.
+- **Clients in All:**
+  - every live business's clients, each row tagged with the businesses its entries are in (a shared client shows each);
+  - "No client" and "Archived clients" come one row per business (O4), and a click opens Income in that business with All kept on.
+- **`BusinessTags`** (`ProfileBadge.tsx`): one colour-and-name tag per business, the name in `<bdi>`, the full name as a title.
+- **AppShell `BusinessesGate`:** pages mount once the businesses have loaded, so no page reads with a blank business (D8).
+
+### Changed
+- **`profileStore` v1:** working business + `allBusinesses` + unpersisted `onOwedScreen`; the setters `setActiveProfile` (pick, lens off), `setWorkingProfile` (repair, lens kept) and `setAllBusinesses`. A legacy `'all'` migrates to the lens on.
+- **`useActiveProfile`:**
+  - `activeProfileId` is always concrete;
+  - `isAllProfiles` and `showAllProfilesOption` are real again (lens + owed screen + 2 or more businesses);
+  - `setAllBusinesses` is new;
+  - the auto-correct repairs without turning the lens off (D5).
+- **New `useOwedLens()`** (Home and Clients) and **`useOwedScreenSync()`** (called in AppShell). The `/` and `/clients` routes carry `staticData.owedLens`.
+- **`ProfileScope`** (one id or a list) on `transactionRepo.list`, `clientRepo.list`, `paymentRecordRepo.listRecent` and `clientSummaryRepo.listOwedIndex`, and their hooks, which also take an `enabled` gate. A list never matches an unassigned record (O3).
+- **`listOwedIndex`** adds `profileIds` per row and `byProfile` for a list. `RecentPaymentRow` carries `profileId`.
+- **Home's new-user check** waits on a resolved scope and `isPending` (D2). The Clients spinner uses `isPending`.
+- **The `'all'` sentinel is gone** from `ActiveProfileId` and from the checks in `IncomeDrawer`, `useProfileAwareAction` and `PlanningPage` (D6).
+- "All Profiles" now reads "All businesses" / "كل الأعمال".
+
+### Fixed
+- **The Add menus' business picker** (`ProfileQuickPicker`), which could not open before this ticket, ran about 21 px past the window's inline end from the top bar. It now nudges itself inside with `nudgeInside`.
+
+### Pre-landing review (qa-reconcile + /review, 2026-10-12)
+Seven specialists, Red Team and an adversarial pass reviewed the branch; Codex was not installed. Main (MUT-81 after-save feedback, the qa port) was merged in, with two code conflicts in `HomeAttentionRow.tsx` / `HomeNeedsAttention.tsx` (both sides added a prop; kept both).
+- **Fixed, a chosen business was being lost** (owner D1):
+  - MUT-81's Saved · Show now uses `setWorkingProfile` and keeps All on;
+  - the Client and Project drawers prefill the business the Add menu's picker returned (`defaultProfileId`);
+  - the sidebar's New → Income/Expense makes the picked business the working one before opening its list.
+- **Fixed** (owner D2):
+  - the picker is placed from where its menu item was, focuses its first business, moves with arrow keys/Home/End, closes when focus leaves it, and gives focus back to the Add/New button on Escape (`trigger(event, returnFocus)`);
+  - the Income drawer asks for the business before the client, and offers "Create new" client only once one is chosen (second pass: order alone didn't stop a new client landing in the default business);
+  - the Home/Clients route flag moved to an unsaved `useOwedScreenStore`, so navigating never rewrites the saved choice or overwrites another tab's.
+- **Auto-fixed:**
+  - Planning reads the resolved working business;
+  - the switcher's up/down estimate counts the All row;
+  - the All row uses the shared option states and its avatar is a solid tint (readable in dark mode);
+  - a badge beside its name is decorative, so screen readers say the business once;
+  - one spacing token for the tag lines;
+  - doc corrections (`ProfileScope`'s `''` vs `[]`, when `byProfile` is present, archived counts).
+- **Tests and cleanups** (owner D3):
+  - an AppShell-level gate test (mutation-checked);
+  - the hook under the real All state;
+  - the Income drawer from a client and when duplicating;
+  - QueryGate moved so `@deprecated` is back on `useTransactions`;
+  - an unused `enabled` param and a re-export dropped;
+  - one shared `POPOVER_EDGE_MARGIN`;
+  - `ClientOwedIndexRow` for index rows.
+- **Third pass** (informational, applied): while no business is chosen, an unknown client's error says to choose the business first (not "press Enter"), and the project field stays closed too; the picker is one Tab stop; the Arabic hint uses the field's own noun ("الملف التجاري"); the hint key is in the drawer's i18n guard; a test pins that focus going nowhere (WebKit clicks) never closes the picker. The review stopped at its three-cycle cap, recorded as not converged.
+- **Recorded as TD-068** (owner D4): the leftovers (cold-start chunk wait, extra renders, middle-click on a muted row, a failed businesses read, re-picking from an off-screen switcher, a drawer kept open across Back, downgrade, the top-bar icon).
+
+### Files
+- **Changed source:**
+  - routing and shell: `src/router.tsx`, `src/components/layout/{AppShell,ProfileSwitcher,TopBar}.tsx`;
+  - state: `src/lib/profileStore.ts`, `src/hooks/{useActiveProfile,useQueries,useIncomeQueries,useProfileAwareAction}.ts`;
+  - data: `src/db/{baseQuery,repository,interfaces}.ts`, `src/types/index.ts`;
+  - Home: `src/pages/overview/OverviewPage.tsx`, `src/components/home/{HomeNeedsAttention,HomeAttentionRow,HomeRecentPayments}.tsx`;
+  - Clients: `src/pages/clients/ClientsPage.tsx`, `src/components/clients/clientIndexRows.ts`;
+  - shared UI: `src/components/ui/{ProfileBadge.tsx,ProfileBadge.css,ProfileQuickPicker.tsx}`, `src/components/drawers/IncomeDrawer.tsx`, `src/pages/planning/PlanningPage.tsx`;
+  - styles and strings: `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`.
+- **New tests:** `src/__tests__/router.owedLens.test.ts`, `src/hooks/__tests__/allBusinessesLens.test.tsx`, `src/components/layout/__tests__/{AppShell.gate,ProfileSwitcher,TopBar.profileIndicator}.test.tsx`, `src/components/ui/__tests__/ProfileQuickPicker.test.tsx`.
+- **Changed tests:** `profileStore`, `useActiveProfile`, `baseQuery`, `clientOwedIndex`, `paymentRecords`, `clientIndexRows`, `ProfileBadge`, `OverviewPage`, `HomeNeedsAttention`, `ClientsPage`, `IncomeDrawer`.
+- **Knowledge:** ADR-051, COMPONENT_REGISTRY, PATTERNS, SYSTEM_OVERVIEW, TECH_DEBT (TD-065 note), TEST_PLAN.
+
+---
+
 ## [Unreleased] - 2026-10-12 — After saving, show where the entry or payment landed (MUT-81)
 
 **Why:** After saving income or a payment, the drawer closed and the list updated with no highlight and no message. With a filter active, another profile selected, or a long list, the entry landed out of view with nothing to say where — the "entered it and can't find it" problem. Two `/plan-eng-review` passes (the second re-verified against MUT-82 and MUT-84 after they landed mid-review) and one `/plan-design-review` pass preceded the build: `.claude/designs/mut-81-after-save-feedback.md`.

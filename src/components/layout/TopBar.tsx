@@ -106,18 +106,20 @@ function AddMenu() {
 
   const handleAction = (action: AddMenuAction, event: React.MouseEvent<HTMLElement>) => {
     menu.close();
+    // A business picker, if one opens, gives focus back to the Add button (MUT-89)
+    const returnFocus = menu.buttonProps.ref.current;
     switch (action) {
       case 'income':
-        incomeAction.trigger(event);
+        incomeAction.trigger(event, returnFocus);
         break;
       case 'expense':
-        expenseAction.trigger(event);
+        expenseAction.trigger(event, returnFocus);
         break;
       case 'client':
-        clientAction.trigger(event);
+        clientAction.trigger(event, returnFocus);
         break;
       case 'project':
-        projectAction.trigger(event);
+        projectAction.trigger(event, returnFocus);
         break;
     }
   };
@@ -160,11 +162,22 @@ function AddMenu() {
   );
 }
 
-function ActiveProfileIndicator() {
-  const { activeProfile, profiles } = useActiveProfile();
+/** The business this page shows, or "All businesses" on Home and Clients while the lens is on (MUT-89) */
+export function ActiveProfileIndicator() {
+  const t = useT();
+  const { activeProfile, profiles, isAllProfiles } = useActiveProfile();
 
   // Only show if there are multiple profiles
   if (!activeProfile || profiles.length <= 1) return null;
+
+  if (isAllProfiles) {
+    const label = t('profileSwitcher.allProfiles');
+    return (
+      <div className="topbar-profile-indicator" title={label}>
+        <span className="topbar-profile-name">{label}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="topbar-profile-indicator" title={activeProfile.name}>

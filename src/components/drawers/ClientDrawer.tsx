@@ -22,7 +22,7 @@ type FormData = z.infer<typeof schema>;
 
 export function ClientDrawer() {
   const { clientDrawer, closeClientDrawer } = useDrawerStore();
-  const { mode, clientId } = clientDrawer;
+  const { mode, clientId, defaultProfileId } = clientDrawer;
   const t = useT();
   const { currentStep, completeStep } = useOnboardingStore();
 
@@ -40,7 +40,9 @@ export function ClientDrawer() {
       email: '',
       phone: '',
       notes: '',
-      profileId: activeProfile?.id || '',
+      // The business the opener asked for (the Add menu's picker under All
+      // businesses, MUT-89), else the working business
+      profileId: defaultProfileId || activeProfile?.id || '',
     },
   });
 

@@ -28,7 +28,7 @@ import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { formatLocalDate, todayLocalISO } from '../../../lib/dates';
 import { db } from '../../../db/database';
 import { clientRepo, transactionRepo } from '../../../db/repository';
-import type { Transaction } from '../../../types';
+import type { BusinessProfile, Transaction } from '../../../types';
 
 const PROFILE = 'p1';
 
@@ -65,9 +65,13 @@ vi.mock('@tanstack/react-router', () => ({
 // The top bar is chrome with its own suite; Home's content is what's tested
 vi.mock('../../layout', () => ({ TopBar: ({ title }: { title: string }) => <h1>{title}</h1> }));
 
+// Home reads the owed screens' lens (MUT-89): one business unless a test turns All on
+const lens = vi.hoisted(() => ({
+  current: { scope: 'p1' as string | string[], isAll: false, profilesById: new Map<string, BusinessProfile>() },
+}));
 vi.mock('../../../hooks/useActiveProfile', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../hooks/useActiveProfile')>()),
-  useProfileFilter: () => PROFILE,
+  useOwedLens: () => lens.current,
 }));
 
 /** Mounts the payment drawer from the store, as AppShell does */
@@ -375,6 +379,75 @@ describe('Home: Record payment from Needs attention (MUT-82)', () => {
 
       expect(useDrawerStore.getState().incomeDrawer).toMatchObject({ isOpen: true, mode: 'edit', transactionId: ids.walkIn });
       expect(screen.queryByRole('dialog', { name: /Record Payment/ })).toBeNull();
+    });
+  });
+
+  describe('with All businesses on (MUT-89)', () => {
+    const OTHER = 'p2';
+    const STAMP = '2026-01-01T00:00:00Z';
+    const studio: BusinessProfile = { id: PROFILE, name: 'Studio', createdAt: STAMP, updatedAt: STAMP };
+    const teaching: BusinessProfile = { id: OTHER, name: 'Teaching', createdAt: STAMP, updatedAt: STAMP };
+
+    beforeEach(async () => {
+      lens.current = {
+        scope: [PROFILE, OTHER],
+        isAll: true,
+        profilesById: new Map([
+          [PROFILE, studio],
+          [OTHER, teaching],
+        ]),
+      };
+      const gamma = await clientRepo.create({ name: 'Gamma School', profileId: OTHER });
+      await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        currency: 'ILS',
+        occurredAt: daysFromToday(-30),
+        profileId: OTHER,
+        clientId: gamma.id,
+        title: 'Course fee',
+        amountMinor: 50000,
+        dueDate: daysFromToday(-3),
+      });
+    });
+
+    afterEach(() => {
+      lens.current = { scope: PROFILE, isAll: false, profilesById: new Map() };
+    });
+
+    async function waitForAllBusinesses() {
+      await within(await screen.findByRole('region', { name: 'Needs Attention' })).findByText('Course fee');
+      await waitFor(() => expect(owedAmounts()).toBe('$200 ₪5,250'));
+    }
+
+    it('lists what every business is owed, each row tagged with its business', async () => {
+      renderHome();
+      await waitForAllBusinesses();
+
+      expect(within(attention()).getByText('Course fee').closest('tr')).toHaveTextContent('Teaching');
+      expect(within(attention()).getByText('Logo redesign').closest('tr')).toHaveTextContent('Studio');
+    });
+
+    it('still changes the row and Owed now in the same render (ADR-055, D7)', async () => {
+      const user = userEvent.setup();
+      const { container } = renderHome();
+      await waitForAllBusinesses();
+      const states = new Set<string>();
+      const observer = new MutationObserver(() => {
+        const rowShown = within(attention()).queryByText('Logo redesign') !== null;
+        states.add(`${rowShown ? 'row' : 'no row'} | ${owedAmounts()}`);
+      });
+      observer.observe(container, { subtree: true, childList: true, characterData: true, attributes: true });
+
+      await user.click(payButton('₪3,550'));
+      await user.click(await drawerRecordButton());
+      await waitFor(() => expect(within(attention()).queryByText('Logo redesign')).toBeNull());
+      await waitFor(() => expect(owedAmounts()).toBe('$200 ₪1,700'));
+      observer.disconnect();
+
+      expect(states).toContain('no row | $200 ₪1,700');
+      expect(states).not.toContain('no row | $200 ₪5,250');
+      expect(states).not.toContain('row | $200 ₪1,700');
     });
   });
 });

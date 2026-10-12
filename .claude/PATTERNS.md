@@ -1947,3 +1947,30 @@ Some callers of a shared drawer pass an optional callback for a side effect (Hom
 
 ### A background wash needs a second channel when the app already uses that token for "selected"
 A transient "this just changed" highlight that reuses an existing subtle-background token (`--accent-subtle`) will look identical to every other place that token already means "selected" or "active" -- and a flat wash is easy to miss if the eye is not already on the row. Add a second, cheap signal that reads in peripheral vision: a 3px leading rail on the logical inline-start edge (`box-shadow: inset 3px 0 0 var(--accent)`), so it mirrors correctly under `dir="rtl"` for free.
+
+---
+
+## App patterns added by MUT-89 (2026-10-12)
+
+### A view that applies to some routes only: tag the routes, sync one flag, keep data off it
+When a mode belongs to a few screens ("All businesses" on Home and Clients):
+1. Tag those routes with TanStack Router's `staticData` (typed by augmenting `StaticDataRouteOption`). A layout route's tag covers its children.
+2. One hook in AppShell reads `useMatches()` and writes a store flag in a layout effect, so the chrome (switcher, top bar, drawers) never paints a stale state.
+3. Hooks and drawers read the store, not the router, so they stay testable without one.
+4. **The tagged screens' own data must not wait for the flag:** it is set after the first render, and waiting would double-read and flash. They know what they are, so give them their own hook (`useOwedLens`).
+
+### A query that waits is pending, not loading
+In TanStack Query 5, `isLoading` is `isPending && isFetching`, so a query with `enabled: false` reports `isLoading: false`. A page that decides an empty or new-user state from `isLoading` will flash it while the query waits. Decide on `isPending`, or on the value the query waits for (`scope === undefined`).
+
+### A blank id must not mean "everything" while it loads: gate at the root
+Repository reads treat a falsy business as "every record". Rather than guarding each page, `BusinessesGate` in AppShell mounts the routed page only once the businesses have loaded, the way AppShell already holds it while the visitor sample is prepared. New pages inherit the guard.
+
+### Pick and repair are different setters
+When a store value can change because the user chose it or because the app repaired it (a deleted working business), give each its own setter. `setActiveProfile` (a pick) turns All businesses off; `setWorkingProfile` (a repair or a drill-down) keeps it. A background fix must never undo a choice the user made.
+
+### A flag derived from the route does not belong in a persisted store
+zustand's `persist` writes the partialized state to localStorage on every `set`, whatever `partialize` keeps. A value that changes on navigation (the owed-screen flag) would rewrite the saved choice on every route change, and overwrite a choice another tab just saved. Keep derived, per-tab state in its own unsaved store (`useOwedScreenStore`) next to the persisted one.
+
+### A popover opened from a menu item remembers where the item was
+A menu closes (and unmounts its items) as soon as an item is chosen. A follow-up popover anchored to that item must capture the item's rectangle when it opens, never re-measure it. It also needs to take focus itself and know which mounted element to give focus back to (the menu's button), because the item it would return to is gone (`useProfileAwareAction.trigger(event, returnFocus)`).
+

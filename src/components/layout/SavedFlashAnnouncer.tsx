@@ -49,8 +49,10 @@ export function SavedFlashAnnouncer() {
     const handleShow = () => {
       // The raw store, never useActiveProfile's wrapper: that hook silently
       // refuses an id the profiles query has not loaded yet (eng review).
+      // Show is not a pick: it changes the working business and leaves All
+      // businesses as the user set it (MUT-89, ADR-051).
       if (pending.profileId) {
-        useProfileStore.getState().setActiveProfile(pending.profileId);
+        useProfileStore.getState().setWorkingProfile(pending.profileId);
       }
       void navigate(flashTarget(pending));
       useSavedFlashStore.getState().rearm({ ...pending, messaged: true });

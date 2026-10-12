@@ -171,7 +171,7 @@ export function IncomeDrawer() {
   const initialProfileId = useMemo(() => {
     if (existingTx?.profileId) return existingTx.profileId;
     if (defaultProfileId) return defaultProfileId;
-    if (!isAllProfiles && activeProfileId && activeProfileId !== 'all') return activeProfileId;
+    if (!isAllProfiles && activeProfileId) return activeProfileId;
     if (profiles.length === 1) return profiles[0].id;
     return '';
   }, [existingTx, defaultProfileId, isAllProfiles, activeProfileId, profiles]);
@@ -200,6 +200,9 @@ export function IncomeDrawer() {
   const selectedStatus = watch('incomeStatus');
   const selectedClientId = watch('clientId');
   const watchedProfileId = watch('profileId');
+  // While the business is still asked for and unanswered, a new client can't
+  // be created: it would be filed in the default business (MUT-89 review)
+  const businessStillAsked = profileInFastPath && !watchedProfileId;
   const watchedCurrency = watch('currency');
   const watchedOccurredAt = watch('occurredAt');
   // Set when the user picks a currency; from then on a profile change leaves it alone.
@@ -415,6 +418,9 @@ export function IncomeDrawer() {
     return t(error.message);
   };
 
+  const clientDraftError =
+    errorText('clientDraft') && (businessStillAsked ? t('drawer.income.chooseBusinessFirst') : errorText('clientDraft'));
+
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   if (mode === 'edit' && txLoading) {
@@ -562,6 +568,11 @@ export function IncomeDrawer() {
           {errorText('amount') && <p className="form-error">{errorText('amount')}</p>}
         </div>
 
+        {/* Asked before the client. Until it is answered the client field
+            offers no "Create new", so a new client is filed in the business
+            chosen, never the default one (MUT-89 review) */}
+        {profileInFastPath && profileField}
+
         <div className="form-group">
           <label className="form-label">
             {t('drawer.transaction.client')}
@@ -576,13 +587,17 @@ export function IncomeDrawer() {
                 onChange={field.onChange}
                 onPendingTextChange={handleClientDraft}
                 onCreatingChange={setClientCreating}
+                canCreate={!businessStillAsked}
               />
             )}
           />
-          {errorText('clientDraft') && <p className="form-error">{errorText('clientDraft')}</p>}
+          {/* With no business yet, Enter cannot create the client: the error says what will (MUT-89 review) */}
+          {clientDraftError ? (
+            <p className="form-error">{clientDraftError}</p>
+          ) : (
+            businessStillAsked && <p className="form-hint">{t('drawer.income.chooseBusinessFirst')}</p>
+          )}
         </div>
-
-        {profileInFastPath && profileField}
 
         <button
           type="button"
@@ -699,6 +714,7 @@ export function IncomeDrawer() {
                       clientId={selectedClientId || undefined}
                       value={field.value || ''}
                       onChange={field.onChange}
+                      disabled={businessStillAsked}
                     />
                   )}
                 />

@@ -57,6 +57,7 @@
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
 | ADR-049 | Each Business's Clients List Counts Only That Business's Entries; Its Owed Now Equals Home's, With "No Client" and "Archived Clients" Rows | Active | 2026-10 |
 | ADR-050 | On a Wide Window a Client Opens Beside the Clients List; the URL Stays /clients/:id; Arrows Walk Clients by Visual Direction and the Walk Replaces History | Active | 2026-10 |
+| ADR-051 | "All Businesses" Is a Lens on Home and Clients Only; Every Other Screen Works in One Concrete Business (Overrides the Unrecorded April Strict Mode) | Active | 2026-10 |
 | ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 | ADR-053 | Device-to-Device Sync Is Retired; Local↔Hosted Sync Is Off the Roadmap (Supersedes ADR-011, ADR-012, ADR-013; Narrow Override of ADR-029) | Active | 2026-10 |
 
@@ -2188,6 +2189,84 @@ Home counted D1 to D3; the Clients strip counted only D4.
 - **Wrap at the ends**: Mail doesn't, and a wrap from the last client to the first is easy to miss in a long list.
 - **Push a history entry per step**: thirty presses of ↓ would need thirty presses of Back.
 - **A CSS media query for the breakpoint**: the width would then live in two places.
+
+---
+
+## ADR-051: "All Businesses" Is a Lens on Home and Clients Only; Every Other Screen Works in One Concrete Business (Overrides the Unrecorded April Strict Mode)
+
+**Status**: Active
+**Date**: 2026-10-12
+**Numbering**: the epic's parallel lanes reserve ids; lane 3 holds ADR-051 and TD-068 (the review's leftovers).
+**Context**: MUT-89 (epic MUT-74), decision S2 of `.claude/designs/landing-apple-redesign.md`. Brief `.claude/designs/mut-89-all-businesses-lens.md`, with owner decisions O1–O7 (Basel, 2026-10-12, all as recommended) and eng review D1–D8. Test plan: `.claude/designs/mut-89-all-businesses-lens-tests.md`.
+
+The pitch is "who owes me across my businesses", but the app showed one business at a time. An "All Profiles" mode existed. Commit `70b5093` ("added vendors page", April 2026) switched it off by hard-coding `isAllProfiles = false` and `showAllProfilesOption = false` in `useActiveProfile.ts`. No ADR recorded that "strict mode". Two facts shaped the design:
+- every repository read treats a blank business as "every record", which includes unassigned records and archived businesses' records;
+- the 13 screens that read the active business were never designed for several.
+
+**Decision**:
+1. **Scope.** "All businesses" applies to the owed screens only: Home (`/`) and the Clients layout (`/clients`, so also a client opened beside the list). Those routes carry `staticData: { owedLens: true }` (TanStack Router's built-in route tagging, D1). Income, Expenses, Documents, Retainers, Insights, Planning and Projects stay per business.
+2. **State** (`profileStore`, persisted at version 1):
+   - **Fields:**
+     - `activeProfileId` is the *working business*, always a concrete id;
+     - `allBusinesses` is the lens the user chose;
+     - `onOwedScreen` lives in its own unsaved store, `useOwedScreenStore` (§10). `useOwedScreenSync` writes it from the route, in a layout effect called once in AppShell.
+   - **Three setters:**
+     - `setActiveProfile` is a pick: it turns the lens off;
+     - `setWorkingProfile` is a repair or a drill-down: it keeps the lens (D5);
+     - `setAllBusinesses` turns the lens on or off (D6).
+   - **The lens sticks (O1):** other screens use the working business, and Home shows All again on return.
+   - **Migration:** a stored legacy `'all'` migrates to the lens on.
+3. **Every other area receives a concrete business.** `useActiveProfile().activeProfileId` and `useProfileFilter()` never return "all", and the `'all'` sentinel is gone from the type and from its checks (D6). Off the owed screens the switcher shows the working business and does not list All (O2).
+4. **Two derivations, by purpose:**
+   - `useOwedLens()` is called only by Home and Clients. It returns `{ scope, isAll, profilesById }`, and it ignores the route flag so their first frame reads the right businesses with one read (D3).
+   - `isAllProfiles` and `showAllProfilesOption` serve the chrome (the switcher, the top bar, the drawers and the Add menus). They also need the owed screen.
+   - Both need two or more live businesses (AC1).
+5. **All = the switcher's businesses (O3).**
+   - The scope is a list of live business ids: `ProfileScope = string | readonly string[]`, on `transactionRepo.list`, `clientRepo.list`, `paymentRecordRepo.listRecent` and `clientSummaryRepo.listOwedIndex`.
+   - `scopeToProfile` never matches an unassigned record against a list, and archived businesses' records stay out, as they are out of every business's lists today.
+6. **Per currency, never summed, with business tags (O5).**
+   - `listOwedIndex` gives each client row `profileIds`: the businesses of its entries in scope, in scope order, else its own business. Home rows carry their entry's business.
+   - `BusinessTags` shows one colour-and-name tag per business, and only in All.
+   - The muted rows come one per business (`byProfile`, O4), computed with the same `partitionOwedNow`, so the rows still add up to the strip. A click sets that business as the working one (lens kept) and opens `/income` filtered, which then lists exactly what the row counted.
+7. **Creating from All asks which business.**
+   - The Income drawer requires one: its existing `profileInFastPath` shows the required field, empty and up front (AC4).
+   - The Add menus ask through `ProfileQuickPicker`, which is now kept inside the window.
+   - The Client and Project drawers keep their visible business select, prefilled with the working business (O7; MUT-57 owns the sidebar New menu).
+8. **Nothing reads before the businesses are known.**
+   - The lens queries run only once `scope !== undefined`.
+   - Home's new-user check waits on `isPending`, because a disabled TanStack Query 5 query is pending but not "loading" (D2). With no business at all the scope is `''`, as before (D4).
+   - AppShell's `BusinessesGate` holds every routed page until the businesses have loaded, so no page ever reads with a blank business (D8, one gate rather than one per page, the owner's choice during the build).
+   - **Which guard is the guarantee:** the gate is. The per-query `enabled` gate and `scope === undefined` on Home and Clients are screen-level defence for a screen rendered without AppShell (tests, a future embed); they are not a second rule.
+9. **Choosing a business is never silently dropped** (pre-landing review, 2026-10-12):
+   - MUT-81's "Saved · Show" calls `setWorkingProfile`, so it is not a pick and keeps All on (ADR-057's Show is reconciled here).
+   - The Client and Project drawers prefill the business the Add menu's picker returned.
+   - The sidebar's New → Income/Expense makes the picked business the working one before opening its list.
+   - The Income drawer asks for the business before the client, and offers "Create new" client only once a business is chosen (a hint says so, and so does the error if an unknown client blocks the save), so a client created there is filed in that business, never the default one. The project field stays closed until then for the same reason.
+   - The picker is placed from where its menu item was, takes focus (arrow keys, Home, End), gives it back to the menu button on Escape, and closes when focus leaves it.
+10. **The route flag is unsaved** (`useOwedScreenStore`): a persisted store writes localStorage on every change, so keeping it in `profileStore` would rewrite the saved choice on each navigation and overwrite one made in another tab.
+
+**Relation to other ADRs**:
+- **Overrides** the unrecorded April strict mode.
+- **Fulfils ADR-049 §7** (the helper takes entries, not a business). **ADR-049 §3 stands**: the client profile page stays all-businesses.
+- **ADR-055 holds:** in All, Owed now and Needs attention still read one query, and the same-frame test also runs in All.
+- **ADR-036's Home content and ADR-035's ordering are unchanged.**
+- **ADR-050's walk skips** the per-business muted rows like the others.
+
+**Consequences**:
+- In All, a shared client's row equals its profile page (both count every business), so TD-065's gap now shows only in one business.
+- A cold start mounts the page a few milliseconds later, once the businesses query answers.
+- MUT-81 landed first; its "Show" now uses `setWorkingProfile` (§9).
+- Leftovers the review recorded rather than fixed are TD-068.
+- The hosted portal's switcher is unchanged (HP1 carries no S2).
+
+**Alternatives Considered**:
+- A one-shot lens that leaving Home switches off (O1).
+- All listed everywhere, navigating to Home (O2).
+- All = every record, which brings back unassigned records the orphan banner owns (O3).
+- Two aggregate muted rows whose click could show fewer entries than they counted (O4).
+- `useActiveProfile` reading the router: every consumer and test would need a router.
+- A pathname helper: it duplicates the route tree and must strip the `/app` basepath (D1).
+- Five per-page loading gates (D8, at build time).
 
 ---
 

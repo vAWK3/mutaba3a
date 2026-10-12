@@ -4,24 +4,26 @@ import {
   compareClientRows,
   owedRank,
   toOwedBucketRows,
+  toBusinessBucketRows,
   orderClientIndex,
   CLIENT_SORT_FIELDS,
   type ClientIndexRow,
 } from '../clientIndexRows';
-import type { ClientSummary, OwedBucket } from '../../../types';
+import type { ClientOwedIndexRow, OwedBucket } from '../../../types';
 
-const summary = (overrides: Partial<ClientSummary> = {}): ClientSummary => ({
+const summary = (overrides: Partial<ClientOwedIndexRow> = {}): ClientOwedIndexRow => ({
   id: 'c-1',
   name: 'Acme',
   activeProjectCount: 0,
   paidIncomeMinor: 0,
   unpaidIncomeMinor: 0,
   owed: [],
+  profileIds: [],
   ...overrides,
 });
 
 const rates = { USD: 3, EUR: 4 };
-const row = (overrides: Partial<ClientSummary> = {}, withRates = rates) =>
+const row = (overrides: Partial<ClientOwedIndexRow> = {}, withRates = rates) =>
   toClientIndexRow(summary(overrides), withRates);
 const order = (rows: ClientIndexRow[], ...args: Parameters<typeof compareClientRows>) =>
   [...rows].sort(compareClientRows(...args)).map((r) => r.name);
@@ -158,6 +160,13 @@ describe('compareClientRows', () => {
  * MUT-83 (ADR-049): the debts the strip counts that belong to no listed
  * client get up to two muted rows, always after the clients.
  */
+describe('a row\'s businesses (MUT-89)', () => {
+  it('carries the businesses the index tagged it with', () => {
+    expect(row({ profileIds: ['studio', 'teaching'] }).profileIds).toEqual(['studio', 'teaching']);
+    expect(row().profileIds).toEqual([]);
+  });
+});
+
 describe('toOwedBucketRows', () => {
   const none: OwedBucket = { owed: [], count: 0 };
   const owing: OwedBucket = {
@@ -219,4 +228,29 @@ describe('orderClientIndex', () => {
       );
     }
   );
+});
+
+describe('toBusinessBucketRows: All businesses (MUT-89, O4)', () => {
+  const none: OwedBucket = { owed: [], count: 0 };
+  const owing = (amount: number, count: number): OwedBucket => ({
+    owed: [{ currency: 'ILS', owedMinor: amount, overdueMinor: 0 }],
+    count,
+  });
+
+  it('gives one row per business that owes, No client rows first, businesses in the given order', () => {
+    const rows = toBusinessBucketRows([
+      { profileId: 'studio', noClient: owing(500, 2), archivedClients: owing(100, 1) },
+      { profileId: 'teaching', noClient: owing(300, 1), archivedClients: none },
+    ]);
+
+    expect(rows.map((r) => [r.kind, r.profileId, r.count])).toEqual([
+      ['noClient', 'studio', 2],
+      ['noClient', 'teaching', 1],
+      ['archivedClients', 'studio', 1],
+    ]);
+  });
+
+  it('shows nothing when no business owes outside its clients', () => {
+    expect(toBusinessBucketRows([{ profileId: 'studio', noClient: none, archivedClients: none }])).toEqual([]);
+  });
 });

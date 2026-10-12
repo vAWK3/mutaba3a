@@ -19,6 +19,7 @@ import { useDrawerStore } from '../../lib/stores';
 import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
 import { formatAmount, formatDate, todayISO } from '../../lib/utils';
+import { useProfileStore, useOwedScreenStore } from '../../lib/profileStore';
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -516,6 +517,142 @@ describe('IncomeDrawer', () => {
       await waitFor(() => expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'true'));
       expect(screen.getByText('Date is required')).toBeInTheDocument();
       expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+  });
+
+  describe('opened from All businesses (MUT-89, AC4)', () => {
+    let secondProfileId: string;
+
+    beforeEach(async () => {
+      const second = await businessProfileRepo.create({ name: 'Second Business', defaultCurrency: 'USD' });
+      secondProfileId = second.id;
+      useProfileStore.setState({ activeProfileId: testProfileId, allBusinesses: true });
+      useOwedScreenStore.setState({ onOwedScreen: true });
+    });
+
+    afterEach(() => {
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+      useOwedScreenStore.setState({ onOwedScreen: false });
+    });
+
+    it('asks which business up front, with none chosen, and will not save without one', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      const businessSelect = await screen.findByLabelText(/Business Profile/);
+      expect(businessSelect).toHaveValue('');
+      expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'false');
+
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+      expect(await screen.findByText('Profile is required')).toBeInTheDocument();
+      expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+
+    it('takes the business the Add menu asked for', async () => {
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', defaultProfileId: secondProfileId } });
+      renderDrawer();
+
+      await screen.findByText('New Income');
+      expect(screen.queryByLabelText(/Business Profile/)).not.toBeInTheDocument();
+    });
+
+    it('asks for the business before the client, so a new client is filed in the business chosen (review D2)', async () => {
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      const businessSelect = await screen.findByLabelText(/Business Profile/);
+      const clientInput = screen.getByPlaceholderText(CLIENT_PLACEHOLDER);
+      expect(businessSelect.compareDocumentPosition(clientInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('offers to create a new client only once a business is chosen, so it is filed there (review)', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
+      await user.type(clientInput, 'Brand New Co');
+      expect(screen.queryByRole('option', { name: /Brand New Co/ })).not.toBeInTheDocument();
+      expect(screen.getByText('Choose the business first to add a new client.')).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText(/Business Profile/), secondProfileId);
+      await user.click(clientInput);
+      expect(await screen.findByRole('option', { name: /Brand New Co/ })).toBeInTheDocument();
+      expect(screen.queryByText('Choose the business first to add a new client.')).not.toBeInTheDocument();
+    });
+
+    it('says to choose the business first, not to press Enter, when an unknown client blocks the save (review)', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      await user.type(await screen.findByPlaceholderText(CLIENT_PLACEHOLDER), 'Brand New Co');
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+
+      expect(await screen.findByText('Choose the business first to add a new client.')).toHaveClass('form-error');
+      expect(screen.queryByText('Pick a client from the list, or press Enter to create it')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Choose the business first to add a new client.')).toHaveLength(1);
+    });
+
+    it('keeps the project field closed until a business is chosen, so a new project is filed there too (review)', async () => {
+      const user = userEvent.setup();
+      await settingsRepo.update({ features: { projects: true } });
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      await openMoreDetails(user);
+      expect(await screen.findByPlaceholderText(PROJECT_PLACEHOLDER)).toBeDisabled();
+
+      await user.selectOptions(screen.getByLabelText(/Business Profile/), secondProfileId);
+      expect(screen.getByPlaceholderText(PROJECT_PLACEHOLDER)).toBeEnabled();
+    });
+
+    it('still asks for the business when opened from a client, whatever business the client is in', async () => {
+      const client = await clientRepo.create({ name: 'Gamma School', profileId: secondProfileId });
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', defaultClientId: client.id } });
+      renderDrawer();
+
+      expect(await screen.findByLabelText(/Business Profile/)).toHaveValue('');
+    });
+
+    it('keeps the business of the entry it duplicates', async () => {
+      const user = userEvent.setup();
+      const source = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        currency: 'USD',
+        amountMinor: 1500,
+        occurredAt: todayISO(),
+        title: 'Workshop',
+        profileId: secondProfileId,
+      });
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', duplicateFromId: source.id } });
+      renderDrawer();
+
+      await waitFor(() => expect(titleInput()).toHaveValue('Workshop'));
+      await user.click(saveButton());
+
+      await waitFor(async () => expect(await transactionRepo.list({})).toHaveLength(2));
+      const copies = (await transactionRepo.list({})).filter((tx) => tx.id !== source.id);
+      expect(copies[0].profileId).toBe(secondProfileId);
+    });
+
+    it('works in the working business when opened away from Home and Clients', async () => {
+      const user = userEvent.setup();
+      useOwedScreenStore.setState({ onOwedScreen: false });
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      await screen.findByText('New Income');
+      expect(screen.queryByLabelText(/Business Profile/)).not.toBeInTheDocument();
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+
+      await waitFor(async () => expect(await transactionRepo.list({})).toHaveLength(1));
+      expect((await transactionRepo.list({}))[0].profileId).toBe(testProfileId);
     });
   });
 

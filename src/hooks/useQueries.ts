@@ -14,6 +14,7 @@ import type {
   PaymentByClientFilters,
   ClientSummary,
   ProjectSummary,
+  ProfileScope,
 } from '../types';
 
 /**
@@ -62,7 +63,7 @@ export const queryKeys = {
     ['overviewTotalsByCurrency', { dateFrom, dateTo, profileId }] as const,
   attentionReceivables: (currency?: Currency, profileId?: string) =>
     ['attentionReceivables', { currency, profileId }] as const,
-  clients: (profileId?: string) => ['clients', { profileId }] as const,
+  clients: (profileId?: ProfileScope) => ['clients', { profileId }] as const,
   client: (id: string) => ['client', id] as const,
   clientSummaries: (profileId?: string, currency?: Currency, search?: string) =>
     ['clientSummaries', { profileId, currency, search }] as const,
@@ -89,8 +90,17 @@ export const queryKeys = {
   paymentRecords: (transactionId: string) => ['paymentRecords', transactionId] as const,
   paymentRecordsByClient: (clientId: string, filters: PaymentByClientFilters) =>
     ['paymentRecords', 'client', clientId, filters] as const,
-  recentPayments: (profileId?: string, limit?: number) => ['paymentRecords', 'recent', { profileId, limit }] as const,
+  recentPayments: (profileId?: ProfileScope, limit?: number) => ['paymentRecords', 'recent', { profileId, limit }] as const,
 };
+
+/**
+ * A read that may wait: Home and Clients pass `enabled: false` until the
+ * "All businesses" lens knows its businesses (MUT-89, D2), because an absent
+ * business means every record.
+ */
+export interface QueryGate {
+  enabled?: boolean;
+}
 
 // Transaction hooks
 /**
@@ -105,10 +115,11 @@ export const queryKeys = {
  *
  * For expenses, use hooks from `useExpenseQueries.ts`.
  */
-export function useTransactions(filters: QueryFilters) {
+export function useTransactions(filters: QueryFilters, { enabled }: QueryGate = {}) {
   return useQuery({
     queryKey: queryKeys.transactions(filters),
     queryFn: () => getRepositories().base.transactions.list(filters),
+    enabled,
   });
 }
 
@@ -230,7 +241,7 @@ export function usePaymentsByClient(
  * ['paymentRecords'], so invalidatePaymentRecordLists refreshes it after any
  * payment or income write.
  */
-export function useRecentPayments(profileId?: string, limit = 10) {
+export function useRecentPayments(profileId?: ProfileScope, limit = 10) {
   return useQuery({
     queryKey: queryKeys.recentPayments(profileId, limit),
     queryFn: () => getRepositories().base.paymentRecords.listRecent({ profileId, limit }),
@@ -298,10 +309,11 @@ export function useUnarchiveTransaction() {
 }
 
 // Client hooks
-export function useClients(profileId?: string) {
+export function useClients(profileId?: ProfileScope, { enabled }: QueryGate = {}) {
   return useQuery({
     queryKey: queryKeys.clients(profileId),
     queryFn: () => getRepositories().base.clients.list({ profileId }),
+    enabled,
   });
 }
 
@@ -326,10 +338,11 @@ export function useClientSummaries(profileId?: string, currency?: Currency, sear
  * under 'clientSummaries', so every write that refreshes client summaries
  * refreshes this too.
  */
-export function useClientOwedIndex(profileId?: string, search?: string) {
+export function useClientOwedIndex(profileId?: ProfileScope, search?: string, { enabled }: QueryGate = {}) {
   return useQuery({
     queryKey: ['clientSummaries', 'owedIndex', { profileId, search }] as const,
     queryFn: () => getRepositories().base.clientSummaries.listOwedIndex({ profileId, search }),
+    enabled,
   });
 }
 

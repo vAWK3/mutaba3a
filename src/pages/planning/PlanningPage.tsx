@@ -13,7 +13,7 @@ import {
   useArchivePlan,
 } from '../../hooks/usePlanQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { useProfileStore } from '../../lib/profileStore';
+import { useProfileFilter } from '../../hooks/useActiveProfile';
 // formatAmount is used in child components via props
 import { PlanSummaryStrip } from './components/PlanSummaryStrip';
 import { ScenarioTabs } from './components/ScenarioTabs';
@@ -32,16 +32,15 @@ export function PlanningPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: '/planning' });
 
-  const { activeProfileId } = useProfileStore();
   const { data: profiles = [] } = useBusinessProfiles();
 
-  // Get the actual profile ID (activeProfileId can be 'all' or a specific ID)
-  const selectedProfileId = activeProfileId === 'all' ? undefined : activeProfileId;
+  // The working business, resolved (never a stale stored id, never "all"; MUT-89, ADR-051)
+  const selectedProfileId = useProfileFilter() || undefined;
 
   // Get plans for the selected profile (show both draft and active plans)
   const planFilters: PlanFilters = useMemo(
     () => ({
-      profileId: selectedProfileId || undefined,
+      profileId: selectedProfileId,
       // Don't filter by status - show both draft and active plans
     }),
     [selectedProfileId]

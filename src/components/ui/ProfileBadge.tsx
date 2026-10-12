@@ -21,6 +21,9 @@ interface ProfileBadgeProps {
 
   /** Additional CSS class */
   className?: string;
+
+  /** The name is shown beside it: hide the badge from assistive tech so the name is read once */
+  decorative?: boolean;
 }
 
 export function ProfileBadge({
@@ -28,6 +31,7 @@ export function ProfileBadge({
   size = 'sm',
   showTooltip = true,
   className = '',
+  decorative = false,
 }: ProfileBadgeProps) {
   // Generate initial from name
   const initial = profile.name.charAt(0).toUpperCase();
@@ -37,7 +41,8 @@ export function ProfileBadge({
       className={`profile-badge profile-badge-${size} ${className}`}
       style={{ backgroundColor: profile.primaryColor || 'var(--accent)' }}
       title={showTooltip ? profile.name : undefined}
-      aria-label={profile.name}
+      aria-label={decorative ? undefined : profile.name}
+      aria-hidden={decorative || undefined}
     >
       {initial}
     </span>
@@ -65,10 +70,40 @@ export function ProfileBadgeWithName({
         profile={profile}
         size={size}
         showTooltip={showTooltip && !showName}
+        decorative={showName}
       />
       {showName && (
-        <span className="profile-badge-name">{profile.name}</span>
+        <bdi className="profile-badge-name" title={profile.name}>{profile.name}</bdi>
       )}
+    </span>
+  );
+}
+
+interface BusinessTagsProps {
+  /** The businesses to name, in order; unknown or missing ids are skipped */
+  profileIds: readonly (string | undefined)[];
+  /** The live businesses by id */
+  profilesById: ReadonlyMap<string, BusinessProfile>;
+  className?: string;
+}
+
+/**
+ * The business tags of a row under "All businesses" (MUT-89, O5): one
+ * colour-and-name tag per business, so a client shared across businesses
+ * shows each. Renders nothing when none of the ids is a live business.
+ */
+export function BusinessTags({ profileIds, profilesById, className = '' }: BusinessTagsProps) {
+  const profiles = profileIds.flatMap((id) => {
+    const profile = id ? profilesById.get(id) : undefined;
+    return profile ? [profile] : [];
+  });
+  if (profiles.length === 0) return null;
+
+  return (
+    <span className={`business-tags ${className}`}>
+      {profiles.map((profile) => (
+        <ProfileBadgeWithName key={profile.id} profile={profile} size="sm" />
+      ))}
     </span>
   );
 }

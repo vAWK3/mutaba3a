@@ -5,6 +5,7 @@ import { useT } from "../../lib/i18n";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { useDrawerStore } from "../../lib/stores";
+import { useProfileStore } from "../../lib/profileStore";
 import { useProfileAwareAction } from "../../hooks/useProfileAwareAction";
 import { ProfileQuickPicker } from "../ui/ProfileQuickPicker";
 import { useFeatureFlags } from "../../lib/features/useFeatures";
@@ -115,9 +116,14 @@ export function SidebarNav() {
   const openProjectDrawer = useDrawerStore((s) => s.openProjectDrawer);
   const openExpenseDrawer = useDrawerStore((s) => s.openExpenseDrawer);
 
+  // The list it opens shows the business the entry goes into: make it the
+  // working business first, keeping All businesses as it is (MUT-89, ADR-051)
+  const setWorkingProfile = useProfileStore((s) => s.setWorkingProfile);
+
   // Profile-aware action hooks for income and expense creation
   const incomeAction = useProfileAwareAction({
     onExecute: (profileId) => {
+      setWorkingProfile(profileId);
       openIncomeDrawer({
         mode: "create",
         defaultStatus: "earned",
@@ -129,6 +135,7 @@ export function SidebarNav() {
 
   const expenseAction = useProfileAwareAction({
     onExecute: (profileId) => {
+      setWorkingProfile(profileId);
       openExpenseDrawer({ mode: "create", defaultProfileId: profileId });
       navigate({ to: "/expenses" });
     },
@@ -151,14 +158,16 @@ export function SidebarNav() {
     event: React.MouseEvent<HTMLElement>,
   ) => {
     newMenu.close();
+    // A business picker, if one opens, gives focus back to the New button (MUT-89)
+    const returnFocus = newMenu.buttonProps.ref.current;
     switch (action) {
       case "income":
-        // Use profile-aware action - will show picker if in "All Profiles" mode
-        incomeAction.trigger(event);
+        // Profile-aware: shows the business picker under All businesses
+        incomeAction.trigger(event, returnFocus);
         break;
       case "expense":
-        // Use profile-aware action - will show picker if in "All Profiles" mode
-        expenseAction.trigger(event);
+        // Profile-aware: shows the business picker under All businesses
+        expenseAction.trigger(event, returnFocus);
         break;
       case "client":
         openClientDrawer({ mode: "create" });

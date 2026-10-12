@@ -10,8 +10,12 @@ import { DEFAULT_SETTINGS } from '../../../db/defaultSettings';
 import type { Settings } from '../../../types';
 import { ThemeProvider } from '../../../lib/theme';
 import { SidebarNav } from '../SidebarNav';
+import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 
 let mockPathname = '/';
+const mockNavigate = vi.hoisted(() => vi.fn());
+// The New menu's profile-aware actions, in hook order: income, then expense
+const profileActions = vi.hoisted(() => [] as { onExecute: (profileId: string) => void }[]);
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, className, title, ...rest }: { children: ReactNode; to: string; className?: string; title?: string }) => (
@@ -20,7 +24,7 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   useLocation: () => ({ pathname: mockPathname }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('../../../lib/i18n', () => ({
@@ -32,7 +36,10 @@ vi.mock('../../../hooks/useCheckForUpdates', () => ({
 }));
 
 vi.mock('../../../hooks/useProfileAwareAction', () => ({
-  useProfileAwareAction: () => ({ trigger: vi.fn(), pickerProps: {} }),
+  useProfileAwareAction: (options: { onExecute: (profileId: string) => void }) => {
+    profileActions.push(options);
+    return { trigger: vi.fn(), pickerProps: {} };
+  },
 }));
 
 vi.mock('../ProfileSwitcher', () => ({ ProfileSwitcher: () => null }));
@@ -416,3 +423,31 @@ describe('SidebarNav + New menu (MUT-15)', () => {
     expect(button).toHaveFocus();
   });
 });
+
+describe('SidebarNav New menu under All businesses (MUT-89)', () => {
+  afterEach(() => {
+    act(() => {
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+      useOwedScreenStore.setState({ onOwedScreen: false });
+    });
+    mockNavigate.mockClear();
+  });
+
+  it.each([
+    ['income', 0, '/income'],
+    ['expense', 1, '/expenses'],
+  ])('opens the %s list in the business the picker chose, keeping All businesses on', async (_kind, index, path) => {
+    installFakeSettings();
+    act(() => useProfileStore.setState({ activeProfileId: 'studio', allBusinesses: true }));
+    profileActions.length = 0;
+    renderNav();
+    await waitFor(() => expect(profileActions.length).toBeGreaterThanOrEqual(2));
+
+    const [incomeAction, expenseAction] = profileActions.slice(-2);
+    act(() => [incomeAction, expenseAction][index].onExecute('teaching'));
+
+    expect(useProfileStore.getState()).toMatchObject({ activeProfileId: 'teaching', allBusinesses: true });
+    expect(mockNavigate).toHaveBeenCalledWith({ to: path });
+  });
+});
+

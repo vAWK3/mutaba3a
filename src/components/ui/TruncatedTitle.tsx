@@ -19,14 +19,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { nudgeInside } from '../layout/popoverPosition';
+import { nudgeInside, POPOVER_EDGE_MARGIN } from '../layout/popoverPosition';
 import { cn } from '../../lib/utils';
 import './TruncatedTitle.css';
 
 /** Space between the title and its tooltip, in px */
 const TOOLTIP_GAP = 4;
-/** How close the tooltip may come to the window's edges, in px */
-const EDGE_MARGIN = 8;
 /** How long the tooltip stays after the pointer leaves, so it can be reached */
 const HIDE_GRACE_MS = 150;
 
@@ -113,11 +111,11 @@ export function TruncatedTitle({ title, onOpen, className }: TruncatedTitleProps
     const button = buttonRef.current;
     if (!placement || !tooltip || !button) return;
     const box = tooltip.getBoundingClientRect();
-    if (box.bottom > window.innerHeight - EDGE_MARGIN) {
+    if (box.bottom > window.innerHeight - POPOVER_EDGE_MARGIN) {
       const above = button.getBoundingClientRect().top - TOOLTIP_GAP - box.height;
-      tooltip.style.top = `${Math.max(EDGE_MARGIN, above)}px`;
+      tooltip.style.top = `${Math.max(POPOVER_EDGE_MARGIN, above)}px`;
     }
-    const dx = nudgeInside(box, { left: 0, right: window.innerWidth }, EDGE_MARGIN);
+    const dx = nudgeInside(box, { left: 0, right: window.innerWidth }, POPOVER_EDGE_MARGIN);
     tooltip.style.translate = dx === 0 ? '' : `${dx}px 0`;
   }, [placement]);
 

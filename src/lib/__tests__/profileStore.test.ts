@@ -1,110 +1,109 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useProfileStore } from '../profileStore';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { act } from '@testing-library/react';
+import { useProfileStore, useOwedScreenStore } from '../profileStore';
+
+/**
+ * The profile store (MUT-89, ADR-051): a working business (always a concrete
+ * id), the "All businesses" lens the user chose for Home and Clients, and
+ * whether the screen is one of those two. Picking a business turns the lens
+ * off; a background repair of the working business keeps it (D5).
+ */
+
+const state = () => useProfileStore.getState();
+const options = () => useProfileStore.persist.getOptions();
 
 describe('profileStore', () => {
   beforeEach(() => {
-    // Reset store state between tests
-    const { result } = renderHook(() => useProfileStore());
     act(() => {
-      result.current.reset();
+      state().reset();
+      useOwedScreenStore.getState().setOnOwedScreen(false);
     });
   });
 
-  describe('initial state', () => {
-    it('should start with empty activeProfileId', () => {
-      const { result } = renderHook(() => useProfileStore());
-      expect(result.current.activeProfileId).toBe('');
+  it('starts with no working business, the lens off and no owed screen', () => {
+    expect(state().activeProfileId).toBe('');
+    expect(state().allBusinesses).toBe(false);
+    expect(useOwedScreenStore.getState().onOwedScreen).toBe(false);
+  });
+
+  describe('setActiveProfile: picking a business', () => {
+    it('sets the working business', () => {
+      act(() => state().setActiveProfile('profile-123'));
+      expect(state().activeProfileId).toBe('profile-123');
+    });
+
+    it('turns All businesses off', () => {
+      act(() => state().setAllBusinesses(true));
+      act(() => state().setActiveProfile('profile-2'));
+      expect(state().allBusinesses).toBe(false);
+      expect(state().activeProfileId).toBe('profile-2');
     });
   });
 
-  describe('setActiveProfile', () => {
-    it('should set active profile to a specific ID', () => {
-      const { result } = renderHook(() => useProfileStore());
-
-      act(() => {
-        result.current.setActiveProfile('profile-123');
-      });
-
-      expect(result.current.activeProfileId).toBe('profile-123');
-    });
-
-    it('should set active profile to all', () => {
-      const { result } = renderHook(() => useProfileStore());
-
-      act(() => {
-        result.current.setActiveProfile('all');
-      });
-
-      expect(result.current.activeProfileId).toBe('all');
-    });
-
-    it('should update when changed multiple times', () => {
-      const { result } = renderHook(() => useProfileStore());
-
-      act(() => {
-        result.current.setActiveProfile('profile-1');
-      });
-      expect(result.current.activeProfileId).toBe('profile-1');
-
-      act(() => {
-        result.current.setActiveProfile('profile-2');
-      });
-      expect(result.current.activeProfileId).toBe('profile-2');
-
-      act(() => {
-        result.current.setActiveProfile('all');
-      });
-      expect(result.current.activeProfileId).toBe('all');
+  describe('setWorkingProfile: changing the working business without a pick', () => {
+    it('keeps All businesses on (D5)', () => {
+      act(() => state().setAllBusinesses(true));
+      act(() => state().setWorkingProfile('profile-2'));
+      expect(state().activeProfileId).toBe('profile-2');
+      expect(state().allBusinesses).toBe(true);
     });
   });
 
-  describe('reset', () => {
-    it('should reset to empty string', () => {
-      const { result } = renderHook(() => useProfileStore());
+  describe('setAllBusinesses (D6)', () => {
+    it('turns the lens on and off without touching the working business', () => {
+      act(() => state().setActiveProfile('profile-1'));
+      act(() => state().setAllBusinesses(true));
+      expect(state().allBusinesses).toBe(true);
+      expect(state().activeProfileId).toBe('profile-1');
 
-      act(() => {
-        result.current.setActiveProfile('profile-123');
-      });
-      expect(result.current.activeProfileId).toBe('profile-123');
-
-      act(() => {
-        result.current.reset();
-      });
-      expect(result.current.activeProfileId).toBe('');
+      act(() => state().setAllBusinesses(false));
+      expect(state().allBusinesses).toBe(false);
+      expect(state().activeProfileId).toBe('profile-1');
     });
+  });
+
+  it('reset clears the working business and the lens', () => {
+    act(() => {
+      state().setActiveProfile('profile-123');
+      state().setAllBusinesses(true);
+    });
+    act(() => state().reset());
+    expect(state().activeProfileId).toBe('');
+    expect(state().allBusinesses).toBe(false);
   });
 
   describe('persistence', () => {
-    // Note: In a real test environment with localStorage mocked,
-    // you would test that values persist across renders
-    it('should have a persist name', () => {
-      // The store uses 'mutaba3a-active-profile' as persist name
-      // This is more of a documentation test
-      const { result } = renderHook(() => useProfileStore());
-      expect(result.current).toBeDefined();
-    });
-  });
-
-  describe('type safety', () => {
-    it('should accept string IDs', () => {
-      const { result } = renderHook(() => useProfileStore());
-
-      act(() => {
-        result.current.setActiveProfile('any-string-id');
-      });
-
-      expect(result.current.activeProfileId).toBe('any-string-id');
+    it('is stored under the same key, at version 1', () => {
+      expect(options().name).toBe('mutaba3a-active-profile');
+      expect(options().version).toBe(1);
     });
 
-    it('should accept "all" as special value', () => {
-      const { result } = renderHook(() => useProfileStore());
-
+    it('keeps the working business and the lens', () => {
       act(() => {
-        result.current.setActiveProfile('all');
+        state().setActiveProfile('profile-1');
+        state().setAllBusinesses(true);
       });
+      const persisted = options().partialize!(state());
+      expect(persisted).toEqual({ activeProfileId: 'profile-1', allBusinesses: true });
+    });
 
-      expect(result.current.activeProfileId).toBe('all');
+    it('never rewrites the saved choice when only the screen changes, so another tab keeps its own (review D2)', () => {
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      act(() => useOwedScreenStore.getState().setOnOwedScreen(true));
+      act(() => useOwedScreenStore.getState().setOnOwedScreen(false));
+
+      expect(setItem).not.toHaveBeenCalledWith('mutaba3a-active-profile', expect.anything());
+      setItem.mockRestore();
+    });
+
+    it('migrates a stored legacy "all" to the lens on, with the working business left to resolve', () => {
+      const migrated = options().migrate!({ activeProfileId: 'all' }, 0);
+      expect(migrated).toEqual({ activeProfileId: '', allBusinesses: true });
+    });
+
+    it('migrates a stored business id as that working business, lens off', () => {
+      const migrated = options().migrate!({ activeProfileId: 'profile-7' }, 0);
+      expect(migrated).toEqual({ activeProfileId: 'profile-7', allBusinesses: false });
     });
   });
 });

@@ -87,6 +87,24 @@ describe('SavedFlashAnnouncer', () => {
     expect(useSavedFlashStore.getState().pending?.messaged).toBe(true);
   });
 
+  it('Show changes the working business but keeps All businesses on (MUT-89, ADR-051)', async () => {
+    act(() => {
+      useProfileStore.getState().setActiveProfile('some-other-profile');
+      useProfileStore.getState().setAllBusinesses(true);
+    });
+    act(() => useSavedFlashStore.getState().markSaved(income()));
+    renderWithProviders(<SavedFlashAnnouncer />);
+    act(() => {
+      useSavedFlashStore.getState().registerList('list-a');
+      useSavedFlashStore.getState().reportSettled('list-a', ['other'], true);
+    });
+
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    act(() => useToastStore.getState().toasts[0].action?.onClick());
+
+    expect(useProfileStore.getState()).toMatchObject({ activeProfileId: 'profile-1', allBusinesses: true });
+  });
+
   it('never shows the original message twice for the same save', async () => {
     act(() => {
       useSavedFlashStore.getState().markSaved(income());

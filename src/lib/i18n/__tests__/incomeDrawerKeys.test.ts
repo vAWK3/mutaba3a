@@ -15,6 +15,7 @@ const KEYS = [
   'drawer.income.saveFailed',
   'drawer.income.paymentsLoadFailed',
   'drawer.income.paymentsRetry',
+  'drawer.income.chooseBusinessFirst',
   'validation.amountInvalid',
   'validation.amountPositive',
   'validation.amountBelowRecorded',

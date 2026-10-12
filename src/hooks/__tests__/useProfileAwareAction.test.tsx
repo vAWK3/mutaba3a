@@ -116,8 +116,9 @@ describe('useProfileAwareAction', () => {
   describe('all profiles mode', () => {
     beforeEach(() => {
       (useActiveProfileModule.useActiveProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        // MUT-89: the working business stays concrete while All businesses is on
         isAllProfiles: true,
-        activeProfileId: 'all',
+        activeProfileId: 'profile-1',
         profiles: [mockProfile1, mockProfile2],
       });
     });
@@ -233,8 +234,9 @@ describe('useProfileAwareAction', () => {
   describe('picker props stability', () => {
     beforeEach(() => {
       (useActiveProfileModule.useActiveProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        // MUT-89: the working business stays concrete while All businesses is on
         isAllProfiles: true,
-        activeProfileId: 'all',
+        activeProfileId: 'profile-1',
         profiles: [mockProfile1, mockProfile2],
       });
     });
@@ -251,4 +253,40 @@ describe('useProfileAwareAction', () => {
       expect(result.current.pickerProps.profiles).toEqual([mockProfile1, mockProfile2]);
     });
   });
+
+  describe('under All businesses (MUT-89)', () => {
+    beforeEach(() => {
+      (useActiveProfileModule.useActiveProfile as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        isAllProfiles: true,
+        activeProfileId: 'profile-1',
+        profiles: [mockProfile1, mockProfile2],
+      });
+    });
+
+    it('asks which business instead of using the working one, then creates in the one picked', () => {
+      const { result } = renderHook(() => useProfileAwareAction({ onExecute: mockOnExecute }), { wrapper: createWrapper() });
+
+      act(() => result.current.trigger({ currentTarget: document.createElement('button') } as React.MouseEvent<HTMLElement>));
+      expect(mockOnExecute).not.toHaveBeenCalled();
+      expect(result.current.isPickerOpen).toBe(true);
+
+      act(() => result.current.pickerProps.onSelect(mockProfile2));
+      expect(mockOnExecute).toHaveBeenCalledWith('profile-2');
+      expect(result.current.isPickerOpen).toBe(false);
+    });
+
+    it('remembers where the asking item was, and which button to give focus back to', () => {
+      const { result } = renderHook(() => useProfileAwareAction({ onExecute: mockOnExecute }), { wrapper: createWrapper() });
+      const item = document.createElement('button');
+      const rect = { left: 900, right: 1020, top: 40, bottom: 70, width: 120, height: 30, x: 900, y: 40, toJSON: () => ({}) } as DOMRect;
+      item.getBoundingClientRect = () => rect;
+      const menuButton = document.createElement('button');
+
+      act(() => result.current.trigger({ currentTarget: item } as React.MouseEvent<HTMLElement>, menuButton));
+
+      expect(result.current.pickerProps.anchorRect).toBe(rect);
+      expect(result.current.pickerProps.returnFocus).toBe(menuButton);
+    });
+  });
 });
+

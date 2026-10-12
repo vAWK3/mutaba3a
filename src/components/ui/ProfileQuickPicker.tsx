@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback, type KeyboardEvent as ReactKeyboardEvent, type FocusEvent as ReactFocusEvent } from 'react';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import type { ProfileQuickPickerProps } from '../../hooks/useProfileAwareAction';
+import { nudgeInside, POPOVER_EDGE_MARGIN } from '../layout/popoverPosition';
 import './ProfileQuickPicker.css';
 
 /**
@@ -16,6 +17,8 @@ import './ProfileQuickPicker.css';
  */
 export function ProfileQuickPicker({
   anchor,
+  anchorRect,
+  returnFocus,
   profiles,
   onSelect,
   onClose,
@@ -39,10 +42,12 @@ export function ProfileQuickPicker({
       }
     }
 
+    // Focus goes back to the menu button: the item that asked has usually
+    // left the page with its menu (MUT-89)
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         onClose();
-        currentAnchor.focus();
+        (returnFocus ?? (currentAnchor.isConnected ? currentAnchor : null))?.focus();
       }
     }
 
@@ -57,21 +62,55 @@ export function ProfileQuickPicker({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [anchor, onClose]);
+  }, [anchor, returnFocus, onClose]);
 
-  // Position popover near anchor
+  // Before paint: keep the picker inside the window. The top bar's Add menu
+  // sits at the inline end, where a picker aligned to its item would run past
+  // the edge (MUT-89, the first time this picker can open)
+  // Focus moves into the picker, so a keyboard user lands on the choice
+  useLayoutEffect(() => {
+    const popover = popoverRef.current;
+    if (!anchor || !popover) return;
+    const dx = nudgeInside(popover.getBoundingClientRect(), { left: 0, right: window.innerWidth }, POPOVER_EDGE_MARGIN);
+    popover.style.translate = dx === 0 ? '' : `${dx}px 0`;
+    popover.querySelector<HTMLElement>('[role="option"]')?.focus();
+  }, [anchor]);
+
+  // Placed from where the item was when the picker opened: the item itself
+  // has usually left the page, and measuring it again would give zeros
   const getPosition = useCallback(() => {
-    if (!anchor) return { top: 0, left: 0 };
-    const rect = anchor.getBoundingClientRect();
+    const rect = anchorRect ?? anchor?.getBoundingClientRect();
+    if (!rect) return { top: 0, left: 0 };
     return {
       top: rect.bottom + 4,
       left: rect.left,
     };
-  }, [anchor]);
+  }, [anchor, anchorRect]);
 
   if (!anchor) return null;
 
   const position = getPosition();
+
+  // Arrow keys, Home and End move between the businesses (MUT-89 review)
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const options = [...(popoverRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])];
+    const current = options.indexOf(document.activeElement as HTMLElement);
+    const next =
+      event.key === 'ArrowDown' ? Math.min(current + 1, options.length - 1)
+      : event.key === 'ArrowUp' ? Math.max(current - 1, 0)
+      : event.key === 'Home' ? 0
+      : event.key === 'End' ? options.length - 1
+      : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    options[next]?.focus();
+  };
+
+  // Focus leaving the picker (Tab) closes it, so it never stays floating
+  const handleBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const to = event.relatedTarget as Node | null;
+    if (to && !popoverRef.current?.contains(to)) onClose();
+  };
 
   return (
     <div
@@ -84,6 +123,8 @@ export function ProfileQuickPicker({
       }}
       role="listbox"
       aria-label={t('profile.choose')}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
     >
       <div className="profile-quick-picker-header">
         {t('profile.choose')}
@@ -95,6 +136,7 @@ export function ProfileQuickPicker({
             type="button"
             className="profile-quick-picker-option"
             role="option"
+            tabIndex={-1}
             onClick={() => onSelect(profile)}
           >
             <ProfileAvatar profile={profile} size="small" />

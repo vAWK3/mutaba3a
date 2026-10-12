@@ -26,9 +26,21 @@ import { useDemoStore, DEMO_QUERY_PARAM } from "../../demo";
 import { FeatureNoticeBanner } from "./FeatureNoticeBanner";
 import { SavedFlashAnnouncer } from "./SavedFlashAnnouncer";
 import { useLeaveDisabledArea } from "../../lib/features/routeGuard";
+import { useActiveProfile, useOwedScreenSync } from "../../hooks/useActiveProfile";
 
 interface AppShellProps {
   children: ReactNode;
+}
+
+/**
+ * Holds the routed page back until the businesses have loaded (MUT-89, D8).
+ * Until then the working business is blank, and a blank business means
+ * "every record" to the repositories, so a page would briefly show other
+ * businesses' and unassigned records. One gate covers every page.
+ */
+export function BusinessesGate({ children }: { children: ReactNode }) {
+  const { isLoading } = useActiveProfile();
+  return isLoading ? <div className="page-content" aria-busy="true" /> : <>{children}</>;
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -51,6 +63,9 @@ export function AppShell({ children }: AppShellProps) {
 
   // A page whose optional area is switched off sends the user home (MUT-15)
   useLeaveDisabledArea();
+
+  // Home and Clients offer "All businesses"; the chrome follows the route (MUT-89)
+  useOwedScreenSync();
 
   // The landing page's "Open the web app" opens a sample business (MUT-78)
   const t = useT();
@@ -97,7 +112,7 @@ export function AppShell({ children }: AppShellProps) {
             {t("sample.preparing")}
           </div>
         ) : (
-          children
+          <BusinessesGate>{children}</BusinessesGate>
         )}
         {/* Bottom bars sit in flow below the page: nothing floats over content (MUT-79) */}
         <MacDownloadBanner />
