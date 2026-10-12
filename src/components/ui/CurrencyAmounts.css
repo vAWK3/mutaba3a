@@ -8,6 +8,7 @@
 
 /* An amount stays left to right inside Arabic text; out-ranks :lang(ar) */
 .currency-amounts > .currency-amount {
+  font-family: var(--font-mono);
   direction: ltr;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;

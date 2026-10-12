@@ -3,6 +3,7 @@ import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import './ProfilePickerModal.css';
+import { profileAvatarStyle } from '../ui/profileAvatarStyle';
 
 /**
  * ProfilePickerModal
@@ -127,7 +128,7 @@ function ProfileAvatar({ profile }: { profile: BusinessProfile }) {
   return (
     <div
       className="profile-picker-avatar profile-picker-avatar-initials"
-      style={{ backgroundColor: profile.primaryColor || 'var(--accent)' }}
+      style={profileAvatarStyle(profile.primaryColor)}
     >
       {initials}
     </div>

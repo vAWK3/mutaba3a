@@ -172,7 +172,7 @@
 
 .line-items-add-row:hover {
   background-color: var(--surface-hover);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Footer */
@@ -200,7 +200,7 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium); /* Plex Mono ships 400/500 */
   color: var(--text);
 }
 

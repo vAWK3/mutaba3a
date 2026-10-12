@@ -18,8 +18,16 @@
 }
 
 .btn:focus-visible {
-  /* Use bright accent for focus ring (--accent stays bright in dark mode) */
   box-shadow: var(--focus-ring);
+}
+
+/* The brand ring is inset: on a filled button it would paint over the fill and barely show */
+.btn-primary:focus-visible {
+  box-shadow: var(--focus-ring-on-fill);
+}
+
+.btn-danger:focus-visible {
+  box-shadow: var(--focus-ring-on-fill);
 }
 
 /*
@@ -73,6 +81,11 @@
   box-shadow: var(--btn-primary-shadow-hover);
 }
 
+.btn-primary:hover:not(:disabled):focus-visible {
+  /* The hover shadow above would replace the focus ring under a resting pointer */
+  box-shadow: var(--focus-ring-on-fill);
+}
+
 .btn-primary:active:not(:disabled) {
   background-color: var(--accent-solid-active);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -114,7 +127,7 @@
 /* Danger Variant */
 .btn-danger {
   background-color: var(--error);
-  color: white;
+  color: var(--on-status);
   border: 1px solid transparent;
 }
 

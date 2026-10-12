@@ -166,17 +166,17 @@ export function ThemeDemo() {
 
         <div className="demo-typography-row">
           <span className="demo-typography-label">Heading</span>
-          <h3 style={{ margin: 0 }}>Source Serif 4 — The quick brown fox jumps</h3>
+          <h3 style={{ margin: 0 }}>Thmanyah Serif Display — The quick brown fox jumps</h3>
         </div>
 
         <div className="demo-typography-row">
           <span className="demo-typography-label">Body (EN)</span>
-          <span>Inter — The quick brown fox jumps over the lazy dog</span>
+          <span>Thmanyah Sans — The quick brown fox jumps over the lazy dog</span>
         </div>
 
         <div className="demo-typography-row">
           <span className="demo-typography-label">Body (AR)</span>
-          <span lang="ar" style={{ fontFamily: 'var(--font-ar)' }}>IBM Plex Sans Arabic — الخط العربي الجميل</span>
+          <span lang="ar" style={{ fontFamily: 'var(--font-ar)' }}>Thmanyah Sans — الخط العربي الجميل</span>
         </div>
 
         <div className="demo-typography-row">

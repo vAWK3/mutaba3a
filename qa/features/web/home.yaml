@@ -13,7 +13,7 @@ features:
       - Open a fresh install at /
     expect:
       - '"Get Started" heading is visible'
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
   - id: needs-attention-owed-now
     title: "Needs Attention's Owed Now matches Clients, including entries with no client (MUT-83)"
     tier: core
@@ -25,7 +25,7 @@ features:
       - Open Home and read Owed Now under Needs Attention
     expect:
       - Owed Now equals the sum of both entries
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
   - id: attention-pay-full
     title: "A full payment from Needs attention slides the row out and lowers Owed now; Undo brings both back (MUT-82)"
     tier: secondary
@@ -42,7 +42,7 @@ features:
       - Click Undo on the toast
     expect:
       - The drawer opens prefilled with $1,200, the amount focused
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
       - The row slides toward the inline end (more than 100 px), fading below half, then goes
       - Owed now drops to $300, and focus moves to Beta Labs' Record Payment
       - The toast reads "Recorded $1,200 from Acme Studio"

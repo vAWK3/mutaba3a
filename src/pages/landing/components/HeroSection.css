@@ -32,8 +32,6 @@
 
 .hero-headline-line {
   display: block;
-  /* theme.css sets font-family on every :lang(en) element; keep the heading's face (TD-048) */
-  font-family: inherit;
 }
 
 :lang(ar) .landing-headline-large {
@@ -105,7 +103,7 @@
 }
 
 .hero-cta-alt {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   text-decoration: none;

@@ -33,7 +33,7 @@ exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
   },
   "clearScreen": false,
   "define": {
-    "__APP_VERSION__": ""0.0.65"",
+    "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""desktop"",
   },
   "plugins": [
@@ -109,7 +109,7 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
   },
   "clearScreen": false,
   "define": {
-    "__APP_VERSION__": ""0.0.65"",
+    "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""web"",
   },
   "plugins": [

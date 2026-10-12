@@ -17,7 +17,7 @@ features:
     expect:
       - Both totals are equal
       - '"No client" makes up the difference'
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
   - id: no-client-filter
     title: 'The "No client" row opens Income filtered to entries with no client, with a clearable chip'
     tier: secondary
@@ -35,7 +35,7 @@ features:
     expect:
       - '"Work and billing" is visible'
       - The logged entry's title and amount are shown
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
   - id: split-view
     title: "On a wide window a client opens beside the list, and the arrow keys walk the clients (MUT-84)"
     tier: secondary
@@ -56,7 +56,7 @@ features:
       - ↓/↑ open the next/previous client, with the URL, the focus and aria-current following
       - The status line says "Showing Beta Labs" after the walk
       - Enter and → move focus into the profile; Escape and ← return it to the open client's row
-      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+      - No accessibility violations, colour contrast included (MUT-102)
       - Back returns to the full list, not to the previous client
   - id: split-view-deep-link
     title: A deep link to a client with a sort opens both panes, sorted, and the walk keeps the sort (MUT-84)

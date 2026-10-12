@@ -18,6 +18,137 @@
 
 ## Open Debt
 
+### TD-088: The colour system needs Safari 16.2+ (oklch, color-mix) and 16.4+ (font-synthesis-weight)
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102 review, red-team finding)
+**Priority**: Low
+**Impact**:
+- Every brand primitive is `oklch()` (Safari 15.4+), and every derived token is a `color-mix()` (Safari/iOS 16.2+). There is no hex fallback.
+- On an older WebKit, such as an un-updated macOS WKWebView behind the Tauri app, or iOS 15:
+  - the derived tokens are invalid, so borders, hovers, shadows and the overlay vanish;
+  - without oklch, every colour drops to its initial value.
+- `font-synthesis-weight: none` needs Safari 16.4; older engines fake a bold on a 600 figure.
+- No supported-browser matrix is documented.
+**Remediation**: Either document a WebKit 16.2 floor (the desktop app's minimum macOS) and gate unsupported engines, or emit hex fallbacks from the JSON's `hex` values under `@supports not (color: color-mix(in oklab, red, red))`.
+**Effort**: Small to document; Medium for fallbacks
+
+### TD-087: The PWA's font cache fills only on the second online load, caches any 200, and is not checked in the built sw.js
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102 review, performance and red-team findings)
+**Priority**: Low
+**Impact**:
+- `registerSW.js` registers the worker on `load`. The first page's fonts are fetched before it controls the page, so they never reach the `fonts` runtime cache. Offline works only after a second online load; the Netlify `/assets` headers (`max-age=0, must-revalidate`) don't cover the gap.
+- The CacheFirst rule stores any 200. After a deploy, an old CSS asking for a font hash that no longer exists gets Netlify's `index.html` fallback with a 200, and that is cached under the font URL for good.
+- The PD10 contract (no `.otf` in the precache, a `fonts` runtime route) is tested on the exported `PWA_WORKBOX` only, not on the built `sw.js`.
+**Remediation**:
+- Match fonts by URL as well as destination, and on `navigator.serviceWorker.ready` post `CACHE_URLS` with the `.otf`/`.woff2` already loaded.
+- Add a `cacheWillUpdate` plugin that keeps only `font/*` responses.
+- Add an `sw.js` rule to `check-bundles`.
+**Effort**: Small
+
+### TD-086: Browser contrast checks are AA only, and axe's undecided contrast nodes are dropped
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102 review, red-team finding)
+**Priority**: Medium
+**Impact**:
+- `expectOnlyKnownAxeViolations` runs axe's default rules. Its `color-contrast` is AA (4.5:1); the 7:1 rule `color-contrast-enhanced` is off.
+- The helper also ignores `incomplete`, where axe puts contrast it cannot decide (images, gradients, overlaps).
+- The 7:1 light-text promise (ADR-058) is enforced in Node (`brand.test.ts` › `contrast` and `rendered pairs`), which cannot see:
+  - a colour and a background set in different rules;
+  - a translucent ground;
+  - a literal on a parent.
+**Remediation**: In light mode, run `color-contrast-enhanced` (or `withTags(['wcag2aaa'])`) on the acceptance surfaces, with its own known list for MUT-103 to burn down. Report `incomplete` colour-contrast nodes.
+**Effort**: Small to wire; the known list depends on MUT-103
+
+### TD-085: The pinned Serif Display files are the third-party copies; web release still needs Thmanyah's written OK
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102 review, adversarial finding)
+**Priority**: Medium (licence)
+**Impact**:
+- `thmanyah-serif-display-{regular,bold}.otf` are byte-identical to the Flutter copies MUT-105 says came from a third-party site; the licence allows only Thmanyah's official site.
+- `src/assets/fonts/thmanyah.sha256.json` pins these bytes, so the guards (`brand.test.ts`, `check-bundles`) enforce them until they are swapped.
+- Separately, nothing blocks a web release before the written OK from ask@thmanyah.com for web embedding (a MUT-102 guardrail).
+**Remediation**: Download both Serif Display files from Thmanyah's official site, replace them in `src/assets/fonts`, and re-pin `thmanyah.sha256.json` once (MUT-105 does the same for Flutter). Track the written OK on the release checklist.
+**Effort**: Small
+
+### TD-084: The bundle checks never run on the paths that ship
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102 review, adversarial finding; the origin checks had the same gap since MUT-43)
+**Priority**: Medium
+**Impact**:
+- `scripts/check-bundles.ts` proves several things:
+  - no portal code in the local builds;
+  - no new origins;
+  - since MUT-102, Thmanyah ships unmodified, no font is preloaded, and every CSS `url()` resolves (desktop offline; no Netlify `index.html` answer for a font).
+- It runs only through `npm run test:bundles` (`make check-web`/`release-web`).
+- Three ship paths skip it, and it fails unless all three dists exist, so it can't simply be appended to one of them:
+  - Netlify builds with `npm run build:web` (`netlify.toml`);
+  - `deploy.sh`'s `deploy_web` pushes without it;
+  - Tauri's `beforeBuildCommand` is `npm run build:desktop`.
+**Remediation**: Give `check-bundles` a per-dist mode (`--dist dist-web --rules local`) and run it after each ship build: in the Netlify command, in `deploy.sh`, and in Tauri's `beforeBuildCommand`.
+**Effort**: Small
+
+### TD-083: Phone-width layout: the sidebar never collapses, Income overflows, drawers are a fixed 480px
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102; found by the 375px layout spec, and present on main `530aec2` before Brand v2)
+**Priority**: Medium
+**Impact**: At 375px the 240px sidebar stays open and the content beside it is clipped inside `<main>`. Income scrolls sideways: its top bar, status tabs and table are about 680px wide (714px with Brand v2's body 16). Every drawer is `--drawer-width` 480px, so it starts 105px off-screen (or ends 105px past the edge in Arabic). `qa/specs/web/brand.spec.ts` annotates the two overflows (`KNOWN_OVERFLOW`) instead of failing; it fails on any other.
+**Remediation**: Collapse the sidebar to the rail or a menu below a breakpoint; let the Income table scroll inside its own container and wrap the top bar and tabs; cap drawers at `min(var(--drawer-width), 100vw)`. Remove each `KNOWN_OVERFLOW` entry as it fits. Needs a ticket (the app is desktop-first; the iPhone app is Flutter).
+**Effort**: Medium
+
+### TD-082: The portal sign-in page's language switch sits outside any landmark
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102; the first portal axe spec)
+**Priority**: Low
+**Impact**: axe `region` (moderate) on `/sign-in` in both modes: `.hp-signin-top`, the EN/عربي switch above `<main>`, is in no landmark, so screen-reader landmark navigation skips it. Listed in `KNOWN_AXE_VIOLATIONS.portalSignIn`.
+**Remediation**: Wrap it in a `<header>` (banner) or move it inside `<main>`; then empty the list. Fits MUT-91 (portal re-cut).
+**Effort**: Small
+
+### TD-081: Landing LCP is 628 ms slower on a slow connection with the unmodified Thmanyah files
+**Status**: Resolved 2026-10-12 (MUT-102 review, D2). The preload was the whole regression.
+  - Medians on `vite preview`, Fast 3G + 4× CPU, 5 cold runs: high-priority preload 4664 ms, `fetchpriority=low` 4356 ms, **no preload 3964 ms**; main is 4116 ms. CLS was 0.009 in all three.
+  - The preload is dropped, and `check-bundles` flags an entry that preloads a font. Brand v2's landing now paints faster than main.
+**Added**: 2026-10-12 (MUT-102, ADR-058)
+**Priority**: Low
+**Impact**: `vite preview` builds, landing `/`, Fast 3G + 4× CPU, 5 cold runs: median LCP 4116 ms on main, 4744 ms with Brand v2. The LCP element is the subheadline text; the preloaded Thmanyah Sans 400 `.otf` (236 KB) competes with the JS for bandwidth, where Inter's woff2 subsets were smaller. The licence forbids woff2 conversion and subsetting, so the bytes can't shrink without Thmanyah's permission.
+**Remediation**: Measure without the preload on the landing page (the hero text may paint sooner in the fallback face); ask Thmanyah (ask@thmanyah.com, already owed for web embedding) whether a woff2 of the unmodified glyphs is allowed; MUT-108's immutable caching helps repeat visits only.
+**Effort**: Small to measure
+
+### TD-080: Input and card borders are below the 3:1 non-text contrast floor
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102)
+**Priority**: Low
+**Impact**: `--border` / `--input-border` is the brand `line` (1.18:1 on canvas in light, 1.78:1 in dark). WCAG 1.4.11 asks 3:1 for the boundary of a control that has no other visual cue. Inputs here also differ by fill (`--input-bg` is field-bg), which softens it, but a field on a field-bg surface has no visible edge. axe does not check non-text contrast.
+**Remediation**: Decide with the brand whether inputs take `--border-strong` or a darker `line` variant; add the pair to `brand.test.ts` › `contrast` at 3:1.
+**Effort**: Small
+
+### TD-079: Brand v2 leaves the legacy names and component literals for MUT-103's sweep
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102, ADR-058)
+**Priority**: Medium
+**Impact**: The foundation re-points tokens; components still carry the old system:
+- **Legacy size and radius names** alias the brand scale: `--text-xs/sm` → label 13, `--text-base/md/lg` → body 16, `--text-xl/2xl` → headline 20, `--text-3xl/4xl` → title 32; `--radius-xl/2xl/full` → card/hero/pill. Some label/value pairs that differed now match.
+- **Layout tokens** (`--sidebar-width`, `--topbar-height`, `--drawer-width`, `--table-row-height`) are defined in both `theme.css` and `index.css` (the later wins; values identical).
+- **Headings** that set `--weight-semibold` render with Serif Display's Bold file (no 600), so they look right but compute 600.
+- **Amounts** outside the shared components (owed-now, `CurrencyAmounts`, the portal's `.hp-amount`, table `.amount-cell`) are not in Plex Mono: the 40-odd ad-hoc `*-amount`/`*-total` classes.
+- **Colour literals** in component CSS: e.g. `.btn-danger { color: white }` on `--error` is 1.52:1 in dark (rose-ink is light there); no AC surface shows one. `CSVValidationPreview.css` still hard-codes its notice colours.
+- **48 dead `var()` references** sit in `brand.test.ts`'s `KNOWN_DEAD_REFERENCES` (shrink-only). Six literal-only CSV preview pairs below 7:1 sit in `KNOWN_LITERAL_PAIRS` (shrink-only).
+- **Thmanyah has no `tnum` and no ₪.** Sixteen `tabular-nums` rules on body-face text do nothing, and ₪ in body text comes from a system font. Examples:
+  - the payment drawer's amount field (`PartialPaymentDrawer.css`);
+  - `.record-payment-remaining`;
+  - `.table`;
+  - the FX readout `$1 = ₪3.06`.
+
+  These amounts belong on `--font-mono`, which has both. A lint should fail a `tabular-nums` rule without a mono family.
+- **Non-amount text inside a mono cell inherits Plex Mono.** Examples: the Clients index overdue line inside `.data-table .amount-cell`, and `.client-work-subline`. Arabic falls back to Thmanyah through the mono stack; English sets in mono. Put `--font-mono` on the amount `<bdi>` instead of the cell.
+- **Heading sizes collapse.** `index.css` sets `h1`–`h4` to `--text-2xl/xl/lg/md`, which the aliases make 20/20/16/16px, and theme.css's 32px h1 never applies in the app. Map them onto the brand roles.
+- **User-chosen business colours.**
+  - The default `#3b82f6` with white initials is 3.68:1 in both modes.
+  - The field is free text with no format check (zod `z.string()`); `profileAvatarStyle` now ignores an unreadable value.
+  - Fix: pick the ink by the colour's luminance, and validate the field.
+**Remediation**: MUT-103 migrates call sites to the brand role names, removes the aliases and the duplicate layout block, replaces literals with tokens, puts amounts on `--font-mono`, and empties the allowlist.
+**Effort**: Large
+
 ### TD-068: "All businesses" leftovers from the MUT-89 pre-landing review
 **Status**: Open
 **Added**: 2026-10-12 (MUT-89, ADR-051; the owner chose to record these rather than fix them)
@@ -286,11 +417,12 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Effort**: Small
 
 ### TD-048: `theme.css` sets `font-family` on every `:lang()` element, so inline elements inside headings lose the heading face
-**Status**: Open
+**Status**: Open (font half resolved by MUT-102; direction half → MUT-109)
 **Added**: 2026-10-11 (MUT-75)
 **Priority**: Low
 **Impact**: `html:lang(en), html:lang(en) body, :lang(en) { font-family: var(--font-en) }` (and the `:lang(ar)` twin, which also sets `direction`) matches *every* element, not just the root, so a `<span>` inside an `<h1>`/`<h2>` renders in Inter instead of inheriting the serif heading. Found when the landing hero's two `<span>` lines rendered sans while the `<h1>` computed Source Serif. Worked around locally with `font-family: inherit` on `.hero-headline-line`.
 **Remediation**: scope the rules to `html:lang(..)` and let inheritance do the rest; then sweep for any component that relied on the per-element reset (likely none — the root rule already sets the same family). Pairs with MUT-77 (type pairing).
+**Update (2026-10-12, MUT-102): font half resolved.** `theme.css` now sets the face on `<html>` only (`html:lang(..)`), so inline elements inherit; `brand.test.ts` › `tokens` forbids a `:lang()` font-family rule whose subject is not `html`, and `brand.spec.ts` checks the landing headline's inner lines compute Serif Display in EN and AR. The `.hero-headline-line { font-family: inherit }` workaround is removed. **The direction half below is open and is MUT-109** (20 `dir="ltr"` sites, five of them inputs).
 **Also (MUT-79):** the `:lang(ar)` rule's `direction: rtl` beats the `dir` attribute, so every `<bdi dir="ltr">` renders right to left in Arabic. Three amount spans depend on that today: `OwedNowSummary`, `ClientWorkSection` and `HomeNeedsAttention`. Their Arabic-locale strings (`‏2,400 US$`) only look right, in CLDR's order, *because* the attribute loses. Scoping `direction` to the root therefore has to drop their `dir="ltr"` in the same change, leaving plain `<bdi>` (auto). The top bar's FX formula is the one span that must stay LTR; it states `.fx-formula[dir='ltr'] { direction: ltr }`. Tried and reverted in MUT-79.
 
 ### TD-047: The expense, retainer and plan drawers read amounts with the lenient parsers
