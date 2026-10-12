@@ -1,54 +1,72 @@
 /**
- * Premium Theme System
- * Light/Dark modes following OS preference via prefers-color-scheme
- * No manual toggle - system preference only
+ * Theme tokens (ADR-018, amended by ADR-058 for Brand v2).
+ *
+ * Two layers:
+ * 1. Primitives: `--m-*` in ./brand/mutaba3a-theme.css, from mutaba3a.tokens.json. They switch
+ *    between light and dark there, in three states: light `:root`; OS dark
+ *    `:root:not([data-theme="light"])`; forced dark `:root[data-theme="dark"]`. Forced light under
+ *    OS dark falls through to `:root`.
+ * 2. Semantic tokens: this file maps every app token onto the primitives once. No colour literal
+ *    lives here; only shadows, the overlay and `color-scheme` need a per-mode block.
+ *
+ * The theme follows the OS, or the ThemeToggle (MUT-79) forces it with <html data-theme>.
+ * brand.test.ts evaluates all four states: every token resolves, light text pairs reach 7:1, dark
+ * pairs 4.5:1, and the names components use stay defined.
  */
+@import "./brand/mutaba3a-theme.css";
+@import "./brand/fonts.css";
 
 /* ============================================
-   Typography Variables
+   Typography
    ============================================ */
 :root {
-  /* Font Families */
-  --font-en: "Inter Variable", "Inter", system-ui, -apple-system, sans-serif;
-  --font-ar: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
-  --font-heading: "Source Serif 4 Variable", "Source Serif 4", "Georgia", serif;
-  --font-heading-ar: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Monaco", "Consolas", monospace;
+  /* Thmanyah Sans for body text in both scripts; Serif Display for headings; Plex Mono for figures */
+  --font-en: var(--m-font-body);
+  --font-ar: var(--m-font-body);
+  --font-heading: var(--m-font-display);
+  --font-heading-ar: var(--m-font-display);
+  --font-mono: var(--m-font-num);
 
-  /* Font Sizes */
-  --text-xs: 0.6875rem;   /* 11px */
-  --text-sm: 0.75rem;     /* 12px */
-  --text-base: 0.8125rem; /* 13px */
-  --text-md: 0.875rem;    /* 14px */
-  --text-lg: 1rem;        /* 16px */
-  --text-xl: 1.125rem;    /* 18px */
-  --text-2xl: 1.25rem;    /* 20px */
-  --text-3xl: 1.5rem;     /* 24px */
-  --text-4xl: 1.875rem;   /* 30px */
+  /* Brand type scale (label 13, body 16, headline 20, title 32, figure 40, display 56) */
+  --text-label: 0.8125rem;
+  --text-body: 1rem;
+  --text-headline: 1.25rem;
+  --text-title: 2rem;
+  --text-figure: 2.5rem;
+  --text-display: 3.5rem;
 
-  /* Font Weights */
+  /* Legacy size names, kept as aliases until MUT-103 migrates them (TD-079) */
+  --text-xs: var(--text-label);
+  --text-sm: var(--text-label);
+  --text-base: var(--text-body);
+  --text-md: var(--text-body);
+  --text-lg: var(--text-body);
+  --text-xl: var(--text-headline);
+  --text-2xl: var(--text-headline);
+  --text-3xl: var(--text-title);
+  --text-4xl: var(--text-title);
+
+  /* Weights. Thmanyah ships 400/500/700, so semibold renders at 700. */
   --weight-normal: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
   --weight-bold: 700;
 
-  /* Line Heights */
   --leading-tight: 1.25;
   --leading-snug: 1.375;
   --leading-normal: 1.5;
   --leading-relaxed: 1.625;
 
-  /* Letter Spacing */
   --tracking-tight: -0.01em;
   --tracking-normal: 0;
   --tracking-wide: 0.025em;
 }
 
 /* ============================================
-   Spacing & Layout Variables
+   Spacing, radii and layout
    ============================================ */
 :root {
-  /* Spacing Scale (8px base) */
+  /* Spacing scale (8px base) */
   --space-0: 0;
   --space-px: 1px;
   --space-0-5: 0.125rem;  /* 2px */
@@ -65,15 +83,19 @@
   --space-12: 3rem;       /* 48px */
   --space-16: 4rem;       /* 64px */
 
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
-  --radius-full: 9999px;
+  /* Brand radii (sm 12, md 14, lg 18, card 24, hero 28, pill) */
+  --radius-sm: var(--m-radius-sm);
+  --radius-md: var(--m-radius-md);
+  --radius-lg: var(--m-radius-lg);
+  --radius-card: var(--m-radius-card);
+  --radius-hero: var(--m-radius-hero);
+  --radius-pill: var(--m-radius-pill);
+  /* Legacy radius names (TD-079) */
+  --radius-xl: var(--radius-card);
+  --radius-2xl: var(--radius-hero);
+  --radius-full: var(--radius-pill);
 
-  /* Layout */
+  /* Layout (index.css repeats these four; TD-079) */
   --sidebar-width: 240px;
   --topbar-height: 56px;
   --drawer-width: 480px;
@@ -81,523 +103,177 @@
 }
 
 /* ============================================
-   Light Mode Colors (Default)
+   Motion (CSS transitions; JS springs live in src/lib/motion/physics.ts)
    ============================================ */
 :root {
-  color-scheme: light dark;
-
-  /* Background */
-  --bg: #F6F8FA;
-  --bg-subtle: #EEF1F5;
-  --surface: #FFFFFF;
-  --surface-hover: #F8FAFB;
-  --surface-2: #F3F5F8;
-  --surface-3: #EBEEF2;
-
-  /* Text */
-  --text: #0B1220;
-  --text-secondary: #3D4B5C;
-  --muted: #516077;
-  --muted-2: #7A8899;
-  --placeholder: #9CA3AF;
-
-  /* Borders & Dividers */
-  --border: rgba(11, 18, 32, 0.12);
-  --border-strong: rgba(11, 18, 32, 0.18);
-  --border-subtle: rgba(11, 18, 32, 0.06);
-  --divider: rgba(11, 18, 32, 0.08);
-
-  /* Shadows */
-  --shadow-1: 0 1px 2px rgba(11, 18, 32, 0.04), 0 1px 3px rgba(11, 18, 32, 0.06);
-  --shadow-2: 0 2px 4px rgba(11, 18, 32, 0.04), 0 4px 8px rgba(11, 18, 32, 0.08);
-  --shadow-3: 0 4px 8px rgba(11, 18, 32, 0.06), 0 8px 16px rgba(11, 18, 32, 0.1);
-  --shadow-inset: inset 0 1px 2px rgba(11, 18, 32, 0.06);
-
-  /* Primary Accent (Teal/Blue-green) */
-  --accent: #1D8A84;
-  --accent-hover: #167A75;
-  --accent-active: #126B66;
-  --accent-subtle: rgba(29, 138, 132, 0.1);
-  --accent-muted: rgba(29, 138, 132, 0.15);
-
-  /*
-   * Solid Button Accent Tokens (Option A)
-   * -----------------------------------------
-   * These tokens are used for filled/solid buttons to ensure
-   * white text passes WCAG AA contrast (4.5:1 minimum for 13-14px text).
-   *
-   * Light mode: same as brand accent (already accessible)
-   * Dark mode: darker teals for contrast compliance
-   *
-   * CONTRAST CHECK (Light Mode):
-   * - --accent-solid (#1D8A84) + white: ~5.0:1 ✓
-   * - --accent-solid-hover (#167A75) + white: ~5.6:1 ✓
-   * - --accent-solid-active (#126B66) + white: ~6.3:1 ✓
-   */
-  --accent-solid: #1D8A84;
-  --accent-solid-hover: #167A75;
-  --accent-solid-active: #126B66;
-  --on-accent: #FFFFFF;
-
-  /* Button shadow tokens (light mode - minimal) */
-  --btn-primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --btn-primary-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --btn-primary-border: transparent;
-  --btn-primary-border-hover: transparent;
-
-  /* Secondary Accent (Bluer companion) */
-  --accent-2: #1976D2;
-  --accent-2-hover: #1565C0;
-  --accent-2-subtle: rgba(25, 118, 210, 0.1);
-
-  /* Semantic Colors */
-  --success: #16A34A;
-  --success-hover: #15803D;
-  --success-subtle: rgba(22, 163, 74, 0.1);
-  --success-muted: rgba(22, 163, 74, 0.15);
-
-  --warning: #D97706;
-  --warning-hover: #B45309;
-  --warning-subtle: rgba(217, 119, 6, 0.1);
-  --warning-muted: rgba(217, 119, 6, 0.15);
-
-  --error: #DC2626;
-  --error-hover: #B91C1C;
-  --error-subtle: rgba(220, 38, 38, 0.1);
-  --error-muted: rgba(220, 38, 38, 0.15);
-
-  --info: #2563EB;
-  --info-hover: #1D4ED8;
-  --info-subtle: rgba(37, 99, 235, 0.1);
-  --info-muted: rgba(37, 99, 235, 0.15);
-
-  /* Interactive States */
-  --focus: rgba(29, 138, 132, 0.4);
-  --focus-ring: 0 0 0 3px var(--focus);
-  --selection-bg: rgba(29, 138, 132, 0.15);
-  --selection-text: inherit;
-
-  /* Links */
-  --link: #1976D2;
-  --link-hover: #1565C0;
-  --link-visited: #7B1FA2;
-
-  /* Table Specific */
-  --table-header-bg: #F3F5F8;
-  --table-row-hover: rgba(29, 138, 132, 0.04);
-  --table-row-selected: rgba(29, 138, 132, 0.08);
-  --table-border: rgba(11, 18, 32, 0.08);
-
-  /* Badges */
-  --badge-paid-bg: rgba(22, 163, 74, 0.12);
-  --badge-paid-text: #15803D;
-  --badge-unpaid-bg: rgba(217, 119, 6, 0.12);
-  --badge-unpaid-text: #B45309;
-  --badge-overdue-bg: rgba(220, 38, 38, 0.12);
-  --badge-overdue-text: #B91C1C;
-  --badge-neutral-bg: rgba(81, 96, 119, 0.12);
-  --badge-neutral-text: #3D4B5C;
-
-  /* Sidebar */
-  --sidebar-bg: #FFFFFF;
-  --sidebar-border: var(--border);
-  --nav-item-hover: rgba(29, 138, 132, 0.06);
-  --nav-item-active: rgba(29, 138, 132, 0.1);
-  --nav-item-active-text: var(--accent);
-
-  /* Inputs */
-  --input-bg: #FFFFFF;
-  --input-border: var(--border);
-  --input-border-hover: var(--border-strong);
-  --input-border-focus: var(--accent);
-  --input-placeholder: var(--placeholder);
-
-  /* Overlay */
-  --overlay: rgba(11, 18, 32, 0.4);
-  --drawer-shadow: -4px 0 24px rgba(11, 18, 32, 0.12);
+  --ease-spring: var(--m-ease-spring);
+  --ease-overshoot: var(--m-ease-overshoot);
+  --duration-press: var(--m-dur-press);
+  --duration-toggle: var(--m-dur-toggle);
+  --duration-nav: var(--m-dur-nav);
+  --stagger-step: var(--m-stagger);
+  --press-scale: var(--m-press-scale);
 }
 
-/* ============================================
-   Dark Mode Colors
-   ============================================ */
-@media (prefers-color-scheme: dark) {
+@media (prefers-reduced-motion: reduce) {
   :root {
-    /* Background */
-    --bg: #070C16;
-    --bg-subtle: #0D1422;
-    --surface: #111827;
-    --surface-hover: #151D2E;
-    --surface-2: #1A2235;
-    --surface-3: #212B42;
-
-    /* Text */
-    --text: #E7EEF9;
-    --text-secondary: #C5D0E0;
-    --muted: #A6B4CC;
-    --muted-2: #8494B0;
-    --placeholder: #6B7A94;
-
-    /* Borders & Dividers */
-    --border: rgba(231, 238, 249, 0.1);
-    --border-strong: rgba(231, 238, 249, 0.15);
-    --border-subtle: rgba(231, 238, 249, 0.06);
-    --divider: rgba(231, 238, 249, 0.06);
-
-    /* Shadows */
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.3);
-    --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.2), 0 8px 16px rgba(0, 0, 0, 0.35);
-    --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-
-    /* Primary Accent (Teal/Blue-green) - kept bright for highlights/focus */
-    --accent: #2CB6A6;
-    --accent-hover: #36C9B8;
-    --accent-active: #40DBCA;
-    --accent-subtle: rgba(44, 182, 166, 0.12);
-    --accent-muted: rgba(44, 182, 166, 0.18);
-
-    /*
-     * Solid Button Accent Tokens (Dark Mode Override)
-     * ------------------------------------------------
-     * Darker teals to ensure white text passes WCAG AA contrast.
-     * The bright --accent (#2CB6A6) is preserved for focus rings,
-     * borders, links, and other non-filled UI elements.
-     *
-     * CONTRAST CHECK (Dark Mode):
-     * - --accent-solid (#117A72) + white: ~4.7:1 ✓
-     * - --accent-solid-hover (#117A72) + white: ~4.7:1 ✓ (lift via shadow)
-     * - --accent-solid-active (#0D6660) + white: ~5.8:1 ✓
-     *
-     * Note: Hover uses same bg color; visual feedback via shadow/border lift.
-     */
-    --accent-solid: #117A72;
-    --accent-solid-hover: #117A72;
-    --accent-solid-active: #0D6660;
-    --on-accent: #FFFFFF;
-
-    /* Premium button shadow tokens (dark mode only) */
-    --btn-primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
-    --btn-primary-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
-    --btn-primary-border: rgba(255, 255, 255, 0.1);
-    --btn-primary-border-hover: rgba(255, 255, 255, 0.15);
-
-    /* Secondary Accent (Bluer companion) */
-    --accent-2: #60A5FA;
-    --accent-2-hover: #7BB5FB;
-    --accent-2-subtle: rgba(96, 165, 250, 0.12);
-
-    /* Semantic Colors */
-    --success: #22C55E;
-    --success-hover: #34D16D;
-    --success-subtle: rgba(34, 197, 94, 0.12);
-    --success-muted: rgba(34, 197, 94, 0.18);
-
-    --warning: #F59E0B;
-    --warning-hover: #FBBF24;
-    --warning-subtle: rgba(245, 158, 11, 0.12);
-    --warning-muted: rgba(245, 158, 11, 0.18);
-
-    --error: #F87171;
-    --error-hover: #FCA5A5;
-    --error-subtle: rgba(248, 113, 113, 0.12);
-    --error-muted: rgba(248, 113, 113, 0.18);
-
-    --info: #60A5FA;
-    --info-hover: #7BB5FB;
-    --info-subtle: rgba(96, 165, 250, 0.12);
-    --info-muted: rgba(96, 165, 250, 0.18);
-
-    /* Interactive States */
-    --focus: rgba(44, 182, 166, 0.45);
-    --focus-ring: 0 0 0 3px var(--focus);
-    --selection-bg: rgba(44, 182, 166, 0.25);
-    --selection-text: inherit;
-
-    /* Links */
-    --link: #60A5FA;
-    --link-hover: #7BB5FB;
-    --link-visited: #C084FC;
-
-    /* Table Specific */
-    --table-header-bg: #151D2E;
-    --table-row-hover: rgba(44, 182, 166, 0.06);
-    --table-row-selected: rgba(44, 182, 166, 0.1);
-    --table-border: rgba(231, 238, 249, 0.06);
-
-    /* Badges */
-    --badge-paid-bg: rgba(34, 197, 94, 0.15);
-    --badge-paid-text: #4ADE80;
-    --badge-unpaid-bg: rgba(245, 158, 11, 0.15);
-    --badge-unpaid-text: #FBBF24;
-    --badge-overdue-bg: rgba(248, 113, 113, 0.15);
-    --badge-overdue-text: #FCA5A5;
-    --badge-neutral-bg: rgba(166, 180, 204, 0.15);
-    --badge-neutral-text: #C5D0E0;
-
-    /* Sidebar */
-    --sidebar-bg: #0D1422;
-    --sidebar-border: var(--border);
-    --nav-item-hover: rgba(44, 182, 166, 0.08);
-    --nav-item-active: rgba(44, 182, 166, 0.12);
-    --nav-item-active-text: var(--accent);
-
-    /* Inputs */
-    --input-bg: #151D2E;
-    --input-border: var(--border);
-    --input-border-hover: var(--border-strong);
-    --input-border-focus: var(--accent);
-    --input-placeholder: var(--placeholder);
-
-    /* Overlay */
-    --overlay: rgba(0, 0, 0, 0.6);
-    --drawer-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    --duration-press: 0ms;
+    --duration-toggle: 0ms;
+    --duration-nav: 0ms;
+    --stagger-step: 0ms;
+    --press-scale: 1;
   }
 }
 
 /* ============================================
-   Manual Theme Override Selectors
-   Used when user explicitly selects light/dark mode
-   instead of following system preference
+   Colour: one semantic map over the --m-* primitives, for every theme state
    ============================================ */
+:root {
+  /* Grounds */
+  --bg: var(--m-canvas);
+  --bg-subtle: color-mix(in oklch, var(--m-line) 40%, var(--m-canvas));
+  --surface: var(--m-surface);
+  --surface-hover: color-mix(in oklch, var(--m-field-bg) 60%, var(--m-surface));
+  --surface-2: var(--m-field-bg);
+  --surface-3: color-mix(in oklch, var(--m-line) 50%, var(--m-field-bg));
 
-/* Manual override - Light Mode */
-:root[data-theme="light"] {
-  /* Background */
-  --bg: #F6F8FA;
-  --bg-subtle: #EEF1F5;
-  --surface: #FFFFFF;
-  --surface-hover: #F8FAFB;
-  --surface-2: #F3F5F8;
-  --surface-3: #EBEEF2;
+  /* Text. All secondary text is ink2 (7:1 on every light ground). */
+  --text: var(--m-ink);
+  --text-secondary: var(--m-ink2);
+  --muted: var(--m-ink2);
+  --muted-2: var(--m-ink2);
+  /* The one exemption from 7:1 (ADR-058): a hint must not read as a typed value. Floor 4.5:1. */
+  --placeholder: color-mix(in oklch, var(--m-ink2) 85%, var(--m-field-bg));
 
-  /* Text */
-  --text: #0B1220;
-  --text-secondary: #3D4B5C;
-  --muted: #516077;
-  --muted-2: #7A8899;
-  --placeholder: #9CA3AF;
+  /* Borders and dividers */
+  --border: var(--m-line);
+  --border-strong: color-mix(in oklch, var(--m-line) 70%, var(--m-ink2));
+  --border-subtle: color-mix(in oklch, var(--m-line) 60%, transparent);
+  --divider: color-mix(in oklch, var(--m-line) 80%, transparent);
 
-  /* Borders & Dividers */
-  --border: rgba(11, 18, 32, 0.12);
-  --border-strong: rgba(11, 18, 32, 0.18);
-  --border-subtle: rgba(11, 18, 32, 0.06);
-  --divider: rgba(11, 18, 32, 0.08);
+  /* Accent. --accent is for fills, borders and decoration only; purple text uses --accent-text
+     (primary-hover clears 7:1 where primary is 4.78:1). Filled buttons use primary-hover too. */
+  --accent: var(--m-primary);
+  --accent-text: var(--m-primary-hover);
+  --accent-hover: var(--m-primary-hover);
+  --accent-active: color-mix(in oklch, var(--m-primary-hover) 85%, var(--m-ink));
+  --accent-subtle: var(--m-lavender);
+  --accent-muted: color-mix(in oklch, var(--m-lavender) 85%, var(--m-lavender-ink));
 
-  /* Shadows */
-  --shadow-1: 0 1px 2px rgba(11, 18, 32, 0.04), 0 1px 3px rgba(11, 18, 32, 0.06);
-  --shadow-2: 0 2px 4px rgba(11, 18, 32, 0.04), 0 4px 8px rgba(11, 18, 32, 0.08);
-  --shadow-3: 0 4px 8px rgba(11, 18, 32, 0.06), 0 8px 16px rgba(11, 18, 32, 0.1);
-  --shadow-inset: inset 0 1px 2px rgba(11, 18, 32, 0.06);
+  --accent-solid: var(--m-primary-hover);
+  --accent-solid-hover: color-mix(in oklch, var(--m-primary-hover) 85%, var(--m-ink));
+  --accent-solid-active: color-mix(in oklch, var(--m-primary-hover) 75%, var(--m-ink));
+  --on-accent: var(--m-on-primary);
 
-  /* Primary Accent */
-  --accent: #1D8A84;
-  --accent-hover: #167A75;
-  --accent-active: #126B66;
-  --accent-subtle: rgba(29, 138, 132, 0.1);
-  --accent-muted: rgba(29, 138, 132, 0.15);
-
-  /* Solid Button Accent Tokens */
-  --accent-solid: #1D8A84;
-  --accent-solid-hover: #167A75;
-  --accent-solid-active: #126B66;
-  --on-accent: #FFFFFF;
-
-  /* Button shadow tokens */
-  --btn-primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --btn-primary-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.1);
   --btn-primary-border: transparent;
   --btn-primary-border-hover: transparent;
 
-  /* Secondary Accent */
-  --accent-2: #1976D2;
-  --accent-2-hover: #1565C0;
-  --accent-2-subtle: rgba(25, 118, 210, 0.1);
+  /* Secondary accent: the brand has no second hue, so it is the lavender family */
+  --accent-2: var(--m-lavender-ink);
+  --accent-2-hover: color-mix(in oklch, var(--m-lavender-ink) 85%, var(--m-ink));
+  --accent-2-subtle: var(--m-lavender);
 
-  /* Semantic Colors */
-  --success: #16A34A;
-  --success-hover: #15803D;
-  --success-subtle: rgba(22, 163, 74, 0.1);
-  --success-muted: rgba(22, 163, 74, 0.15);
+  /* Status: chip ink on chip ground */
+  --success: var(--m-mint-ink);
+  --success-hover: color-mix(in oklch, var(--m-mint-ink) 85%, var(--m-ink));
+  --success-subtle: var(--m-mint);
+  --success-muted: color-mix(in oklch, var(--m-mint) 85%, var(--m-mint-ink));
 
-  --warning: #D97706;
-  --warning-hover: #B45309;
-  --warning-subtle: rgba(217, 119, 6, 0.1);
-  --warning-muted: rgba(217, 119, 6, 0.15);
+  --warning: var(--m-butter-ink);
+  --warning-hover: color-mix(in oklch, var(--m-butter-ink) 85%, var(--m-ink));
+  --warning-subtle: var(--m-butter);
+  --warning-muted: color-mix(in oklch, var(--m-butter) 85%, var(--m-butter-ink));
 
-  --error: #DC2626;
-  --error-hover: #B91C1C;
-  --error-subtle: rgba(220, 38, 38, 0.1);
-  --error-muted: rgba(220, 38, 38, 0.15);
+  --error: var(--m-rose-ink);
+  --error-hover: color-mix(in oklch, var(--m-rose-ink) 85%, var(--m-ink));
+  --error-subtle: var(--m-rose);
+  --error-muted: color-mix(in oklch, var(--m-rose) 85%, var(--m-rose-ink));
 
-  --info: #2563EB;
-  --info-hover: #1D4ED8;
-  --info-subtle: rgba(37, 99, 235, 0.1);
-  --info-muted: rgba(37, 99, 235, 0.15);
+  --info: var(--m-lavender-ink);
+  --info-hover: color-mix(in oklch, var(--m-lavender-ink) 85%, var(--m-ink));
+  --info-subtle: var(--m-lavender);
+  --info-muted: color-mix(in oklch, var(--m-lavender) 85%, var(--m-lavender-ink));
 
-  /* Interactive States */
-  --focus: rgba(29, 138, 132, 0.4);
-  --focus-ring: 0 0 0 3px var(--focus);
-  --selection-bg: rgba(29, 138, 132, 0.15);
+  /* Interaction */
+  --focus: var(--m-focus);
+  --focus-ring: var(--m-focus-ring);
+  --selection-bg: var(--m-lavender);
   --selection-text: inherit;
 
-  /* Links */
-  --link: #1976D2;
-  --link-hover: #1565C0;
-  --link-visited: #7B1FA2;
+  --link: var(--m-primary-hover);
+  --link-hover: color-mix(in oklch, var(--m-primary-hover) 80%, var(--m-ink));
+  --link-visited: var(--m-lavender-ink);
 
-  /* Table Specific */
-  --table-header-bg: #F3F5F8;
-  --table-row-hover: rgba(29, 138, 132, 0.04);
-  --table-row-selected: rgba(29, 138, 132, 0.08);
-  --table-border: rgba(11, 18, 32, 0.08);
+  /* Tables */
+  --table-header-bg: var(--m-field-bg);
+  --table-row-hover: color-mix(in oklch, var(--m-lavender) 35%, transparent);
+  --table-row-selected: color-mix(in oklch, var(--m-lavender) 60%, transparent);
+  --table-border: var(--divider);
 
   /* Badges */
-  --badge-paid-bg: rgba(22, 163, 74, 0.12);
-  --badge-paid-text: #15803D;
-  --badge-unpaid-bg: rgba(217, 119, 6, 0.12);
-  --badge-unpaid-text: #B45309;
-  --badge-overdue-bg: rgba(220, 38, 38, 0.12);
-  --badge-overdue-text: #B91C1C;
-  --badge-neutral-bg: rgba(81, 96, 119, 0.12);
-  --badge-neutral-text: #3D4B5C;
+  --badge-paid-bg: var(--m-mint);
+  --badge-paid-text: var(--m-mint-ink);
+  --badge-unpaid-bg: var(--m-butter);
+  --badge-unpaid-text: var(--m-butter-ink);
+  --badge-overdue-bg: var(--m-rose);
+  --badge-overdue-text: var(--m-rose-ink);
+  --badge-neutral-bg: var(--m-field-bg);
+  --badge-neutral-text: var(--m-ink2);
 
-  /* Sidebar */
-  --sidebar-bg: #FFFFFF;
+  /* Sidebar. The selected label is lavender-ink: primary-hover on lavender is only 5.53:1. */
+  --sidebar-bg: var(--m-surface);
   --sidebar-border: var(--border);
-  --nav-item-hover: rgba(29, 138, 132, 0.06);
-  --nav-item-active: rgba(29, 138, 132, 0.1);
-  --nav-item-active-text: var(--accent);
+  --nav-item-hover: color-mix(in oklch, var(--m-lavender) 45%, transparent);
+  --nav-item-active: var(--m-lavender);
+  --nav-item-active-text: var(--m-lavender-ink);
 
   /* Inputs */
-  --input-bg: #FFFFFF;
+  --input-bg: var(--m-field-bg);
   --input-border: var(--border);
   --input-border-hover: var(--border-strong);
-  --input-border-focus: var(--accent);
+  --input-border-focus: var(--m-focus);
   --input-placeholder: var(--placeholder);
 
-  /* Overlay */
-  --overlay: rgba(11, 18, 32, 0.4);
-  --drawer-shadow: -4px 0 24px rgba(11, 18, 32, 0.12);
+  /* Depth: the card shadow switches with the primitives */
+  --shadow-2: var(--m-shadow-card);
 }
 
-/* Manual override - Dark Mode */
+/* ============================================
+   Per mode: only what one mapping can't express (shadow strength, overlay, color-scheme)
+   ============================================ */
+:root {
+  color-scheme: light;
+  --shadow-1: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 6%, transparent), 0 1px 3px color-mix(in oklch, var(--m-shadow-tint) 8%, transparent);
+  --shadow-3: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 8%, transparent), 0 20px 48px color-mix(in oklch, var(--m-shadow-tint) 12%, transparent);
+  --shadow-inset: inset 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 6%, transparent);
+  --btn-primary-shadow: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 8%, transparent);
+  --btn-primary-shadow-hover: var(--m-shadow-primary);
+  --overlay: color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+  --drawer-shadow: -4px 0 24px color-mix(in oklch, var(--m-shadow-tint) 12%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --shadow-1: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklch, var(--m-shadow-tint) 30%, transparent);
+    --shadow-3: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 20px 48px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
+    --shadow-inset: inset 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+    --btn-primary-shadow: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+    --btn-primary-shadow-hover: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
+    --overlay: color-mix(in oklch, var(--m-shadow-tint) 60%, transparent);
+    --drawer-shadow: -4px 0 24px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+  }
+}
+
 :root[data-theme="dark"] {
-  /* Background */
-  --bg: #070C16;
-  --bg-subtle: #0D1422;
-  --surface: #111827;
-  --surface-hover: #151D2E;
-  --surface-2: #1A2235;
-  --surface-3: #212B42;
-
-  /* Text */
-  --text: #E7EEF9;
-  --text-secondary: #C5D0E0;
-  --muted: #A6B4CC;
-  --muted-2: #8494B0;
-  --placeholder: #6B7A94;
-
-  /* Borders & Dividers */
-  --border: rgba(231, 238, 249, 0.1);
-  --border-strong: rgba(231, 238, 249, 0.15);
-  --border-subtle: rgba(231, 238, 249, 0.06);
-  --divider: rgba(231, 238, 249, 0.06);
-
-  /* Shadows */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.3);
-  --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.2), 0 8px 16px rgba(0, 0, 0, 0.35);
-  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-
-  /* Primary Accent */
-  --accent: #2CB6A6;
-  --accent-hover: #36C9B8;
-  --accent-active: #40DBCA;
-  --accent-subtle: rgba(44, 182, 166, 0.12);
-  --accent-muted: rgba(44, 182, 166, 0.18);
-
-  /* Solid Button Accent Tokens */
-  --accent-solid: #117A72;
-  --accent-solid-hover: #117A72;
-  --accent-solid-active: #0D6660;
-  --on-accent: #FFFFFF;
-
-  /* Button shadow tokens */
-  --btn-primary-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
-  --btn-primary-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
-  --btn-primary-border: rgba(255, 255, 255, 0.1);
-  --btn-primary-border-hover: rgba(255, 255, 255, 0.15);
-
-  /* Secondary Accent */
-  --accent-2: #60A5FA;
-  --accent-2-hover: #7BB5FB;
-  --accent-2-subtle: rgba(96, 165, 250, 0.12);
-
-  /* Semantic Colors */
-  --success: #22C55E;
-  --success-hover: #34D16D;
-  --success-subtle: rgba(34, 197, 94, 0.12);
-  --success-muted: rgba(34, 197, 94, 0.18);
-
-  --warning: #F59E0B;
-  --warning-hover: #FBBF24;
-  --warning-subtle: rgba(245, 158, 11, 0.12);
-  --warning-muted: rgba(245, 158, 11, 0.18);
-
-  --error: #F87171;
-  --error-hover: #FCA5A5;
-  --error-subtle: rgba(248, 113, 113, 0.12);
-  --error-muted: rgba(248, 113, 113, 0.18);
-
-  --info: #60A5FA;
-  --info-hover: #7BB5FB;
-  --info-subtle: rgba(96, 165, 250, 0.12);
-  --info-muted: rgba(96, 165, 250, 0.18);
-
-  /* Interactive States */
-  --focus: rgba(44, 182, 166, 0.45);
-  --focus-ring: 0 0 0 3px var(--focus);
-  --selection-bg: rgba(44, 182, 166, 0.25);
-  --selection-text: inherit;
-
-  /* Links */
-  --link: #60A5FA;
-  --link-hover: #7BB5FB;
-  --link-visited: #C084FC;
-
-  /* Table Specific */
-  --table-header-bg: #151D2E;
-  --table-row-hover: rgba(44, 182, 166, 0.06);
-  --table-row-selected: rgba(44, 182, 166, 0.1);
-  --table-border: rgba(231, 238, 249, 0.06);
-
-  /* Badges */
-  --badge-paid-bg: rgba(34, 197, 94, 0.15);
-  --badge-paid-text: #4ADE80;
-  --badge-unpaid-bg: rgba(245, 158, 11, 0.15);
-  --badge-unpaid-text: #FBBF24;
-  --badge-overdue-bg: rgba(248, 113, 113, 0.15);
-  --badge-overdue-text: #FCA5A5;
-  --badge-neutral-bg: rgba(166, 180, 204, 0.15);
-  --badge-neutral-text: #C5D0E0;
-
-  /* Sidebar */
-  --sidebar-bg: #0D1422;
-  --sidebar-border: var(--border);
-  --nav-item-hover: rgba(44, 182, 166, 0.08);
-  --nav-item-active: rgba(44, 182, 166, 0.12);
-  --nav-item-active-text: var(--accent);
-
-  /* Inputs */
-  --input-bg: #151D2E;
-  --input-border: var(--border);
-  --input-border-hover: var(--border-strong);
-  --input-border-focus: var(--accent);
-  --input-placeholder: var(--placeholder);
-
-  /* Overlay */
-  --overlay: rgba(0, 0, 0, 0.6);
-  --drawer-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+  --shadow-1: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklch, var(--m-shadow-tint) 30%, transparent);
+  --shadow-3: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 20px 48px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
+  --shadow-inset: inset 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+  --btn-primary-shadow: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+  --btn-primary-shadow-hover: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
+  --overlay: color-mix(in oklch, var(--m-shadow-tint) 60%, transparent);
+  --drawer-shadow: -4px 0 24px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
 }
 
 /* ============================================
@@ -610,10 +286,10 @@
 }
 
 html {
+  font-family: var(--font-en);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 html, body, #root {
@@ -621,33 +297,41 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--font-en);
-  font-size: var(--text-base);
+  font-size: var(--text-body);
   line-height: var(--leading-normal);
   color: var(--text);
   background-color: var(--bg);
 }
 
-/* Language-specific font families */
+/* The face is set on <html> only; everything else inherits it, so a <span> inside a heading keeps
+   the heading face (TD-048, font half). */
+html:lang(ar) {
+  font-family: var(--font-ar);
+}
+
+html:lang(en) {
+  font-family: var(--font-en);
+}
+
+/* Direction still matches every element, and so still beats a dir attribute in Arabic. Twenty
+   dir="ltr" sites depend on that today; MUT-109 scopes it to the root (TD-048, direction half). */
 html:lang(ar),
 html:lang(ar) body,
 :lang(ar) {
-  font-family: var(--font-ar);
   direction: rtl;
 }
 
 html:lang(en),
 html:lang(en) body,
 :lang(en) {
-  font-family: var(--font-en);
   direction: ltr;
 }
 
-/* Headings always use serif */
+/* Headings: Thmanyah Serif Display 700 */
 h1, h2, h3, h4, h5, h6,
 .h1, .h2, .h3, .h4, .h5, .h6 {
   font-family: var(--font-heading);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   letter-spacing: var(--tracking-tight);
   color: var(--text);
@@ -660,7 +344,6 @@ h4, .h4 { font-size: var(--text-xl); }
 h5, .h5 { font-size: var(--text-lg); }
 h6, .h6 { font-size: var(--text-md); }
 
-/* Arabic headings use IBM Plex Sans Arabic */
 :lang(ar) h1, :lang(ar) h2, :lang(ar) h3,
 :lang(ar) h4, :lang(ar) h5, :lang(ar) h6,
 :lang(ar) .h1, :lang(ar) .h2, :lang(ar) .h3,
@@ -802,7 +485,7 @@ textarea::placeholder {
 .text-primary { color: var(--text); }
 .text-secondary { color: var(--text-secondary); }
 .text-muted { color: var(--muted); }
-.text-accent { color: var(--accent); }
+.text-accent { color: var(--accent-text); }
 .text-success { color: var(--success); }
 .text-warning { color: var(--warning); }
 .text-error { color: var(--error); }

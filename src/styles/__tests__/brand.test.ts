@@ -41,6 +41,7 @@ const THMANYAH_SHA256: Record<string, string> = {
   'thmanyah-serif-display-bold.otf': 'ac2f056441891276792ab6d828d8ad9169ef44ecea60d6ccf126b25361f0ee9d',
 };
 
+const THEME_CSS = repoPath('src/styles/theme.css');
 const BRAND_CSS = repoPath('src/styles/brand/mutaba3a-theme.css');
 const FONTS_DIR = repoPath('src/assets/fonts');
 const FONTS_CSS = repoPath('src/styles/brand/fonts.css');
@@ -86,6 +87,7 @@ describe('fonts', () => {
 
 const LIGHT: ThemeState = THEME_STATES['OS light'];
 const DARK: ThemeState = THEME_STATES['OS dark'];
+const STATES = Object.entries(THEME_STATES) as [string, ThemeState][];
 
 const kebab = (key: string) => key.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
 const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
@@ -252,6 +254,16 @@ describe('drift', () => {
     ]);
   });
 
+  it('the press scale and stagger rise/blur equal the JSON', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    expect(Number(tokens.resolve('--m-press-scale'))).toBe(tokensJson.motion.press.scale);
+    expect([tokens.px('--m-stagger-rise'), tokens.px('--m-stagger-blur')]).toEqual([tokensJson.motion.stagger.rise, tokensJson.motion.stagger.blur]);
+  });
+
+  it('the brand file holds primitives only: every custom property is --m-* (PD7)', () => {
+    expect(brand.declarations.filter((decl) => !decl.prop.startsWith('--m-')).map((decl) => decl.prop)).toEqual([]);
+  });
+
   it('the motion curves and durations equal the JSON', () => {
     const tokens = new Tokens(brand, LIGHT);
     const curve = (name: string) => [...tokens.resolve(name).matchAll(/-?\d*\.?\d+/g)].map((m) => Number(m[0]));
@@ -264,6 +276,45 @@ describe('drift', () => {
       press.ms,
       stagger.ms,
     ]);
+  });
+});
+
+/**
+ * Every custom property theme.css defined before the Brand v2 rewrite (eng
+ * review D6). Components use these names; dropping one silently strips a
+ * border, shadow or colour somewhere. Add names freely; remove one only with
+ * the sweep that stops every use of it.
+ */
+const FROZEN_THEME_NAMES = [
+  '--accent', '--accent-2', '--accent-2-hover', '--accent-2-subtle', '--accent-active', '--accent-hover',
+  '--accent-muted', '--accent-solid', '--accent-solid-active', '--accent-solid-hover', '--accent-subtle',
+  '--badge-neutral-bg', '--badge-neutral-text', '--badge-overdue-bg', '--badge-overdue-text', '--badge-paid-bg',
+  '--badge-paid-text', '--badge-unpaid-bg', '--badge-unpaid-text', '--bg', '--bg-subtle', '--border',
+  '--border-strong', '--border-subtle', '--btn-primary-border', '--btn-primary-border-hover', '--btn-primary-shadow',
+  '--btn-primary-shadow-hover', '--divider', '--drawer-shadow', '--drawer-width', '--error', '--error-hover',
+  '--error-muted', '--error-subtle', '--focus', '--focus-ring', '--font-ar', '--font-en', '--font-heading',
+  '--font-heading-ar', '--font-mono', '--info', '--info-hover', '--info-muted', '--info-subtle', '--input-bg',
+  '--input-border', '--input-border-focus', '--input-border-hover', '--input-placeholder', '--leading-normal',
+  '--leading-relaxed', '--leading-snug', '--leading-tight', '--link', '--link-hover', '--link-visited', '--muted',
+  '--muted-2', '--nav-item-active', '--nav-item-active-text', '--nav-item-hover', '--on-accent', '--overlay',
+  '--placeholder', '--radius-2xl', '--radius-full', '--radius-lg', '--radius-md', '--radius-sm', '--radius-xl',
+  '--selection-bg', '--selection-text', '--shadow-1', '--shadow-2', '--shadow-3', '--shadow-inset', '--sidebar-bg',
+  '--sidebar-border', '--sidebar-width', '--space-0', '--space-0-5', '--space-1', '--space-1-5', '--space-10',
+  '--space-12', '--space-16', '--space-2', '--space-2-5', '--space-3', '--space-4', '--space-5', '--space-6',
+  '--space-8', '--space-px', '--success', '--success-hover', '--success-muted', '--success-subtle', '--surface',
+  '--surface-2', '--surface-3', '--surface-hover', '--table-border', '--table-header-bg', '--table-row-height',
+  '--table-row-hover', '--table-row-selected', '--text', '--text-2xl', '--text-3xl', '--text-4xl', '--text-base',
+  '--text-lg', '--text-md', '--text-secondary', '--text-sm', '--text-xl', '--text-xs', '--topbar-height',
+  '--tracking-normal', '--tracking-tight', '--tracking-wide', '--warning', '--warning-hover', '--warning-muted',
+  '--warning-subtle', '--weight-bold', '--weight-medium', '--weight-normal', '--weight-semibold',
+];
+
+describe('names', () => {
+  const theme = loadStylesheet(THEME_CSS);
+
+  it.each(STATES)('every frozen theme.css token is still defined (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    expect(FROZEN_THEME_NAMES.filter((name) => !tokens.has(name))).toEqual([]);
   });
 });
 
@@ -297,5 +348,173 @@ describe('references', () => {
 
   it('lists only references that are still dead (remove fixed ones from KNOWN_DEAD_REFERENCES)', () => {
     expect(KNOWN_DEAD_REFERENCES.filter((name) => !dead.includes(name))).toEqual([]);
+  });
+});
+
+/** A colour literal anywhere in a declaration value: theme.css must take every colour from --m-*. */
+const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|\b(?:white|black)\b/i;
+
+const firstFamily = (value: string) => value.split(',')[0].replace(/["']/g, '').trim();
+
+describe('tokens', () => {
+  const theme = loadStylesheet(THEME_CSS);
+  const themeRoot = theme.roots.find((root) => root.source?.input.file === THEME_CSS)!;
+  const own = [...new Set(theme.declarations.filter((decl) => decl.file === THEME_CSS).map((decl) => decl.prop))];
+
+  it('theme.css imports the brand primitives and the fonts, and nothing else', () => {
+    expect(theme.roots.map((root) => root.source?.input.file)).toEqual([BRAND_CSS, FONTS_CSS, THEME_CSS]);
+    expect(theme.packageImports).toEqual(['@fontsource/ibm-plex-mono/400.css', '@fontsource/ibm-plex-mono/500.css']);
+  });
+
+  it('theme.css has no colour literal: every colour comes from a --m-* primitive', () => {
+    const literals: string[] = [];
+    themeRoot.walkDecls((decl) => {
+      if (COLOR_LITERAL.test(decl.value)) literals.push(`${decl.prop}: ${decl.value}`);
+    });
+    expect(literals).toEqual([]);
+  });
+
+  it.each(STATES)('every custom property resolves (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    const failures: string[] = [];
+    for (const name of tokens.names()) {
+      try {
+        tokens.resolve(name);
+      } catch (error) {
+        failures.push((error as Error).message);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it.each(STATES)('every colour token is a --m-* primitive, a color-mix over them, or transparent (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    const isColor = (name: string) => {
+      try {
+        parseColor(tokens.resolve(name));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const colors = new Set(own.filter(isColor));
+    const impure = [...colors].filter((name) => {
+      const raw = tokens.raw(name);
+      const refs = [...raw.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1]);
+      const leftover = raw
+        .replace(/var\(--[\w-]+\)/g, '')
+        .replace(/color-mix\(in oklch/g, '')
+        .replace(/\d*\.?\d+%/g, '')
+        .replace(/\btransparent\b/g, '')
+        .replace(/[(),\s]/g, '');
+      return leftover !== '' || refs.some((ref) => !ref.startsWith('--m-') && !colors.has(ref));
+    });
+    expect(colors.size).toBeGreaterThan(60);
+    expect(impure.map((name) => `${name}: ${tokens.raw(name)}`)).toEqual([]);
+  });
+
+  it('every radius is on the brand scale', () => {
+    const tokens = new Tokens(theme, LIGHT);
+    const radii = own.filter((name) => name.startsWith('--radius-'));
+    expect(radii.length).toBeGreaterThan(6);
+    for (const name of radii) expect([12, 14, 18, 24, 28, 999], name).toContain(tokens.px(name));
+  });
+
+  it('body text is 16px and the type roles equal the JSON scale', () => {
+    const tokens = new Tokens(theme, LIGHT);
+    expect(tokens.px('--text-body')).toBe(16);
+    expect(tokens.px('--text-base')).toBe(16);
+    for (const [role, [size]] of Object.entries(tokensJson.type)) expect(tokens.px(`--text-${role}`), role).toBe(size);
+  });
+
+  it('points the font roles at Thmanyah Sans, Thmanyah Serif Display and IBM Plex Mono', () => {
+    const tokens = new Tokens(theme, LIGHT);
+    expect(
+      ['--font-en', '--font-ar', '--font-heading', '--font-heading-ar', '--font-mono'].map((name) => firstFamily(tokens.resolve(name))),
+    ).toEqual(['Thmanyah Sans', 'Thmanyah Sans', 'Thmanyah Serif Display', 'Thmanyah Serif Display', 'IBM Plex Mono']);
+  });
+
+  it('exposes the motion tokens, and reduced motion zeroes them', () => {
+    const motion = (state: ThemeState) => {
+      const tokens = new Tokens(theme, state);
+      return {
+        press: tokens.ms('--duration-press'),
+        toggle: tokens.ms('--duration-toggle'),
+        nav: tokens.ms('--duration-nav'),
+        stagger: tokens.ms('--stagger-step'),
+        scale: Number(tokens.resolve('--press-scale')),
+        spring: tokens.resolve('--ease-spring'),
+        overshoot: tokens.resolve('--ease-overshoot'),
+      };
+    };
+    expect(motion(LIGHT)).toMatchObject({ press: 120, toggle: 350, nav: 420, stagger: 50, scale: 0.96 });
+    expect(motion(LIGHT).spring).toMatch(/^cubic-bezier\(/);
+    expect(motion(LIGHT).overshoot).toMatch(/^cubic-bezier\(/);
+    for (const state of [LIGHT, DARK]) {
+      expect(motion({ ...state, reducedMotion: true })).toMatchObject({ press: 0, toggle: 0, nav: 0, stagger: 0, scale: 1 });
+    }
+  });
+
+  it('TD-048 font half: a :lang() font-family rule styles only <html>, so inline elements inherit', () => {
+    const offenders: string[] = [];
+    themeRoot.walkRules((rule) => {
+      if (!rule.nodes.some((node) => node.type === 'decl' && node.prop === 'font-family')) return;
+      for (const selector of rule.selectors) {
+        const subject = selector.trim().split(/\s*[\s>+~]\s*/).pop()!;
+        if (subject.includes(':lang(') && !/^html:lang\([a-z-]+\)$/.test(subject)) offenders.push(selector);
+      }
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('retires the Inter-only font-feature-settings', () => {
+    let found = false;
+    themeRoot.walkDecls('font-feature-settings', () => {
+      found = true;
+    });
+    expect(found).toBe(false);
+  });
+});
+
+const SURFACES = ['--bg', '--surface', '--input-bg', '--table-header-bg'];
+
+/** Text on its ground. Light must reach 7:1 (AAA), dark 4.5:1 (AA). */
+const TEXT_PAIRS: [string, string][] = [
+  ...['--text', '--text-secondary', '--muted', '--muted-2'].flatMap((fg) => SURFACES.map((bg): [string, string] => [fg, bg])),
+  ...['--accent-text', '--link'].flatMap((fg) => ['--bg', '--surface'].map((bg): [string, string] => [fg, bg])),
+  ...['--accent-solid', '--accent-solid-hover', '--accent-solid-active'].map((bg): [string, string] => ['--on-accent', bg]),
+  ['--nav-item-active-text', '--nav-item-active'],
+  ...['paid', 'unpaid', 'overdue', 'neutral'].map((badge): [string, string] => [`--badge-${badge}-text`, `--badge-${badge}-bg`]),
+  ...['success', 'warning', 'error', 'info'].flatMap((tone) =>
+    ['--bg', '--surface', `--${tone}-subtle`].map((bg): [string, string] => [`--${tone}`, bg]),
+  ),
+];
+
+describe('contrast', () => {
+  const theme = loadStylesheet(THEME_CSS);
+
+  it.each(STATES)('every text pair clears its floor: 7:1 light, 4.5:1 dark (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    const floor = (state.dataTheme === 'none' ? state.os : state.dataTheme) === 'light' ? 7 : 4.5;
+    const base = tokens.color('--bg');
+    const failing = TEXT_PAIRS.map(([fg, bg]) => ({ pair: `${fg} on ${bg}`, ratio: contrast(tokens.color(fg), tokens.color(bg), base) }))
+      .filter(({ ratio }) => ratio < floor)
+      .map(({ pair, ratio }) => `${pair}: ${ratio.toFixed(2)}`);
+    expect(failing).toEqual([]);
+  });
+
+  it.each(STATES)('purple text uses primary-hover (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    expect([tokens.resolve('--accent-text'), tokens.resolve('--link')]).toEqual([
+      tokens.resolve('--m-primary-hover'),
+      tokens.resolve('--m-primary-hover'),
+    ]);
+  });
+
+  it.each(STATES)('placeholder stays a hint but clears 4.5:1 on the input (%s, D7)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    const ratio = contrast(tokens.color('--placeholder'), tokens.color('--input-bg'), tokens.color('--bg'));
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(ratio).toBeLessThan(contrast(tokens.color('--muted'), tokens.color('--input-bg'), tokens.color('--bg')));
   });
 });
