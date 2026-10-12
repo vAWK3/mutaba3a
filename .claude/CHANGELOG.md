@@ -28,6 +28,39 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-66: the unsorted inbox, and filing an entry onto a profile
+
+**Scope (server only; the portal and the offline app are untouched):**
+- New: `server/src/routes/inbox.ts`, `server/src/inbox/compose.ts`, `server/src/inbox/cursor.ts`, `server/src/inbox/routes-keys.ts`
+- `server/prisma/schema.prisma` + `server/prisma/migrations/20261012140000_mut66_inbox/` (one enum, one table, one index — purely additive)
+- `server/src/repositories/ports.ts`, `prisma.ts`, `memory.ts` (the `InboxEntryRepository`)
+- `server/src/auth/store-guard.ts` (the `'sessionOnly'` case), `schemas.ts`, `serializers.ts`, `app.ts`, `routes/admin-users.ts`
+- Tests: `store-contract-inbox.ts` + its memory/Prisma runners, `inbox-ownership.test.ts`, `inbox/__tests__/compose.test.ts`, `__tests__/inbox-routes.test.ts`, `inbox-filing.test.ts`, `inbox-isolation.test.ts`; `store-guard.test.ts` and `route-security.test.ts` extended
+- Design: `.claude/designs/mut-66-unsorted-inbox.md` + `-tests.md`
+
+**Why:** MUT-63's promise is "log it in seconds", and the fastest way to break it is a capture flow that stops to ask which business the money belongs to. "General" at intake now means *unsorted*: a durable place to put an amount the moment it happens, with filing deferred to whenever the person is ready. Named blocker of MUT-68 and MUT-69.
+
+### Added
+- **`GET/POST /v1/inbox`, `PATCH/DELETE /v1/inbox/{entryId}`** — a person's own unsorted captures (kind, amount, currency, date, optional note and capture source). They send no `X-Mutaba3a-Profile` and declare no scope, reading `identity` exactly as `GET /v1/me` does, and join the organization-independent route set through their own module. A future `occurredOn` is accepted here on purpose: with no profile there is no timezone in which "today" means anything.
+- **`POST /v1/inbox/{entryId}/file-as-expense` and `…/file-as-income`** — the entry becomes a real record on one chosen profile. Amount, currency, date and note come from the entry; only what it could not know is sent in the body, including the Received/Owed choice, which needs a client in the picture and so cannot be made at capture. Both require `Idempotency-Key` and reuse the existing middleware unmodified.
+- **`InboxEntry`**, the first user-owned table: no `organizationId`, no FK to `Organization` or `Membership` (ADR-044). Keyset-paged `(createdAt desc, id desc)`.
+- **`inboxEntryCount` on `GET /admin/v1/users/{userId}`** — one indexed count for support, never the contents.
+- **`'sessionOnly'`** `MethodAccess`, the first guard case that is neither "any principal" nor a per-organization domain. `ENTRY_KIND_MISMATCH` joins `CONFLICT_REASONS`.
+
+### Changed
+- `ExpenseRepository.create`'s row insert moved into `createExpenseRow(tx, …)` so filing can compose it inside its own transaction. Behaviour is unchanged. Income reuses MUT-65's `createPaymentTx`/`createAdjustmentTx`, which were built for exactly this.
+- API version `1.12.0-mut65` → `1.13.0-mut66`; `openapi.yaml` regenerated with the six operations.
+
+### Fixed
+- `store-contract-m4.ts` passed the literal `'user-1'` as `createdByUserId`. That column is a UUID in Postgres, so three MUT-65 cases passed against the memory store and failed against the real one — found because this was the first local `test:db` run with MUT-65's migration applied. See TD-072 and TD-073 for the two related gaps left open.
+
+### Technical
+- Filing is the store's only cross-repository transaction. The entry is claimed by a delete *inside* the transaction, which proves ownership and kind and holds the row lock until commit: two concurrent filings of one entry yield exactly one record, and a financial write that throws rolls the delete back with it. Both halves are proven against real Postgres, not only the in-memory simulation.
+- AC 5 is asserted twice: fifty inbox entries leave both summaries byte-identical, and the summary sources — enumerated from the directory, not hardcoded — contain no reference to the inbox at all.
+- Gates: server lint, typecheck, build, `openapi:check`, `npm test` (1310) and `npm run test:db` (1397, all 82 files) green; root lint, typecheck and build green.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-58: the money-event read side MUT-8 left without a screen is deleted
 
 **Scope:**

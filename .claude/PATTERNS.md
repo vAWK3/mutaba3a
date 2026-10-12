@@ -1786,3 +1786,51 @@ Anything read back by `$(...)` must print its UI to stderr and only the answer t
 ### Reuse the rollout, own only the order
 
 `make` does not reimplement a deploy. The server roll stays `server/scripts/deploy.sh`; the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied, so the list of files carrying the version has one definition. When sourcing a script that also runs interactively, guard its entry point (`[[ "${BASH_SOURCE[0]}" == "${0}" ]]`) and namespace your own variables — `deploy.sh` defines `$GREEN` and friends as literal `\033` strings for `echo -e`, which silently corrupts a `printf '%s'` caller that uses the same names.
+
+
+---
+
+## Inbox patterns — added 2026-10-12 (MUT-66)
+
+### A user-owned resource, where everything else is organization-owned
+
+`InboxEntry` is the first server-side row that belongs to a person rather than to an organization. The shape to copy, if there is ever a second:
+
+- **Every repository method takes `userId` first**, exactly where the ledger's take `organizationId`. Cross-user reads are then impossible by construction, not by a filter someone has to remember — the same guarantee ADR-025 point 2 gives the ledger, one ownership axis over.
+- **No FK to `Organization` or `Membership` at all.** This is what makes "survives losing every membership" a structural fact instead of a guard or a cleanup job. Guard it with a DMMF test (`inbox-ownership.test.ts`), so a later edit that adds an innocent-looking `organizationId` fails immediately rather than surfacing as a support ticket about vanished rows.
+- **Its routes send no `X-Mutaba3a-Profile` and declare no scope**, following `GET /v1/me`, and join the organization-independent set through their own exported module rather than editing `routes/sessions.ts`.
+- **In the store guard it is `'sessionOnly'`** — neither `control` ("any principal": an API key has no person behind it, so no inbox) nor a matrix `Domain` (which is per-organization by construction).
+
+### Claim-then-write: a cross-repository transaction that cannot double-write
+
+When one call must create a record *and* consume the thing it came from, do not check-then-act. Delete the source row **inside** the transaction first, and let the delete be the check:
+
+```ts
+const { count } = await tx.inboxEntry.deleteMany({ where: { id, userId, kind } });
+if (count !== 1) return { kind: 'not_found' };          // unknown, foreign, wrong kind, or already filed
+return { kind: 'filed', expense: await createExpenseRow(tx, input, at) };
+```
+
+The delete proves ownership and holds the row lock until commit, so of two concurrent calls exactly one proceeds; and because the financial insert is in the same transaction, a failure rolls the delete back with it. One shape gives both "exactly once" and "on failure it stays untouched".
+
+The in-memory store simulates it by removing the entry **synchronously, before any await** (so two concurrent calls cannot both see it) and restoring it in a `catch`.
+
+### Splitting a repository create so it can be composed
+
+To let an existing create participate in a larger transaction, extract its row insert to take an explicit handle and leave the public method as the one-statement caller:
+
+```ts
+create: (input, at) => createExpenseRow(this.prisma, input, at),   // implicit transaction
+// filing: createExpenseRow(tx, input, at) inside its own $transaction
+```
+
+Behaviour is unchanged and no rule is duplicated — only the transaction boundary moves outward. `settleReceivable(tx, …)`, `createPaymentTx` and `createAdjustmentTx` are the existing instances of this idiom.
+
+### Validate everything before the transaction opens
+
+All destination-side validation — writability, link resolution, category/customer/project existence, future dates — runs in the route, before the repository method that would consume the source row is called at all. "On failure it stays untouched" is then structural: a refusal never reaches the code that could delete it, and `READ_ONLY_PROFILE`/`INSUFFICIENT_SCOPE` are refused in middleware before the handler runs. Assert it with a spy proving zero store calls, not only by observing the row afterwards.
+
+### Prove an isolation claim structurally, not just behaviourally
+
+"Unsorted entries never change any summary" is asserted twice: once by comparing whole summary responses before and after filling an inbox, and once by reading the summary sources — enumerated from the directory so a module added later is covered — and finding no reference to the table. The second keeps the first from being a coincidence that a future query could quietly break.
+

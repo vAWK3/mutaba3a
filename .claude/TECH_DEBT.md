@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-072: The portal's vendored API types have been stale since MUT-65
+**Status**: Open
+**Added**: 2026-10-12 (found running MUT-66's gates)
+**Priority**: Medium
+**Impact**: `src/hosted/api/schema.d.ts` is generated from `server/openapi/openapi.yaml` by `npm run hosted:types`, but was not regenerated when MUT-65 landed. Regenerating it now produces ~1,040 changed lines and surfaces two real type errors the portal has been compiling past: `PaymentsList.tsx:39` and `ReceivablesList.tsx:37` pass `string | null` where `string` is required, because MUT-65 made `Payment.customerId` and `Receivable.projectId` nullable. The portal is reading those fields as if they can never be null. MUT-66 deliberately left the file alone — its design scopes it to the server, and regenerating would have dragged MUT-65's portal fixes into this ticket — so root `typecheck` still passes against the stale file.
+**Remediation**: Run `npm run hosted:types`, then handle the null cases at both call sites (and anywhere else the regeneration reveals). Consider adding `hosted:types --check` to the gates, the way `openapi:check` already guards the server document, so the two can never drift silently again.
+**Effort**: Small
+
+### TD-073: Suites time out under full parallel load, because the 5 s default is tuned for isolation
+**Status**: Open
+**Added**: 2026-10-12 (found running MUT-66's gates)
+**Priority**: Low
+**Impact**: Three suites fail intermittently in a full run and pass every time in isolation. `migration-mut59.test.ts` (5 tests) times out at the 5,000 ms default in `npm run test:db` but passes 5/5 with `--testTimeout=60000`; it shells out to `createdb`/`dropdb` and applies the whole migration history per test. `IncomeDrawer.test.tsx` times out in the root run and passes 54/54 alone, where it alone takes 12.7 s. Separately, `routes-m6`'s audit-pagination assertion failed once in four full runs: it writes `payment.recorded` then `payment.reversed`, both stamped `createdAt: new Date()` by the memory store, and when the two land in the same millisecond the keyset tiebreaker is a random UUID, making the order a coin flip. None of these is a product defect, but they make a green run a matter of luck and train the eye to ignore red.
+**Remediation**: Raise `testTimeout` for the DB-backed and heavy component suites (per-file `describe` options or a vitest project config) rather than globally. For `routes-m6`, advance the harness clock between the two audited writes so the ordering is determined by time rather than by UUID.
+**Effort**: Small
+
 ### TD-071: `src/lib/aggregations.ts` and its forecast types have never had an app consumer
 **Status**: Open
 **Added**: 2026-10-12 (found during MUT-58's consumer audit)
