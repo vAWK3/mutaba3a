@@ -118,6 +118,42 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       expect(await store.payments.getById(a.id, mine.id)).toMatchObject({ status: 'POSTED' });
     });
 
+    it('undoCapture tells a reversal by someone else (Malafat) from the person’s own earlier undo (MUT-61 review D2)', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const theirs = await store.payments.capture(capture(a.id, u.id, 5000n), at(10));
+      await store.payments.reverse(a.id, theirs.id, 'duplicate', at(11));
+      expect((await store.payments.undoCapture(a.id, theirs.id, u.id, at(12))).result).toBe('reversed-elsewhere');
+      const mine = await store.payments.capture(capture(a.id, u.id, 5000n), at(13));
+      await store.payments.undoCapture(a.id, mine.id, u.id, at(14));
+      expect((await store.payments.undoCapture(a.id, mine.id, u.id, at(15))).result).toBe('already-reversed');
+    });
+
+    it('allocate and undoCapture racing: exactly one wins, never a REVERSED payment with money still applied (MUT-61 review D4)', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const { c, receivable } = await seed(store, a.id, 100_000n);
+      let allocatedWon = 0;
+      for (let i = 0; i < 20; i += 1) {
+        const p = await store.payments.capture(capture(a.id, u.id, 100n, { customerId: c.id }), at(20 + i));
+        const [alloc, undo] = await Promise.allSettled([
+          store.payments.allocate(a.id, p.id, [{ receivableId: receivable.id, amountMinor: 100n }], at(20 + i)),
+          store.payments.undoCapture(a.id, p.id, u.id, at(20 + i)),
+        ]);
+        const after = (await store.payments.getById(a.id, p.id))!;
+        const rows = await store.payments.listAllocations(a.id, p.id);
+        if (after.status === 'REVERSED') {
+          expect([after.allocatedMinor, rows.length, alloc.status, undo.status === 'fulfilled' && undo.value.result]).toEqual([0n, 0, 'rejected', 'reversed']);
+        } else {
+          expect([after.allocatedMinor, rows.length, alloc.status, undo.status === 'fulfilled' && undo.value.result]).toEqual([100n, 1, 'fulfilled', 'allocated']);
+          allocatedWon += 1;
+        }
+      }
+      expect((await store.receivables.getById(a.id, receivable.id))!.paidMinor).toBe(BigInt(allocatedWon) * 100n);
+    });
+
     it('filters by origin and by allocation state (POSTED only)', async () => {
       const store = await makeStore();
       const a = await org(store);

@@ -969,7 +969,7 @@ export class MemoryLedgerStore implements LedgerStore {
     undoCapture: async (organizationId, paymentId, userId, at) => {
       const p = this.pays.get(paymentId);
       if (!p || p.organizationId !== organizationId || p.origin !== 'CAPTURE' || p.createdByUserId !== userId) return { result: 'not-found', payment: null };
-      if (p.status === 'REVERSED') return { result: 'already-reversed', payment: { ...p } };
+      if (p.status === 'REVERSED') return { result: p.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment: { ...p } };
       if (p.allocatedMinor > 0n) return { result: 'allocated', payment: { ...p } };
       Object.assign(p, { status: 'REVERSED', reversedAt: at, reversalReason: CAPTURE_UNDO_REASON, version: p.version + 1, updatedAt: at });
       return { result: 'reversed', payment: { ...p } };

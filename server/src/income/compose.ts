@@ -45,17 +45,22 @@ export function incomeCaptureRulesFor(writer: ProfileWriter): IncomeCaptureRules
  * agree; archived ones may be linked), plus: Owed requires a customer,
  * explicit or resolved from a project (MUT-65), and under `linked-required`
  * (MUT-61) Received does too — one Malafat has an ExternalReference for, so
- * Malafat can find and allocate the payment.
+ * Malafat can find and allocate the payment — in the matter's currency, when a
+ * matter is named (`currency` is only checked under `linked-required`).
  */
-export async function resolveIncomeLinks(store: LedgerStore, organizationId: string, kind: IncomeKind, requested: IncomeLinks, rules: IncomeCaptureRules): Promise<IncomeLinks> {
+export async function resolveIncomeLinks(store: LedgerStore, organizationId: string, kind: IncomeKind, requested: IncomeLinks, currency: string, rules: IncomeCaptureRules): Promise<IncomeLinks> {
   const resolved = await resolveLinks(store, organizationId, requested);
   if (kind === 'owed' && !resolved.customerId) {
     throw validationError('CUSTOMER_REQUIRED_FOR_OWED', 'Owed requires a client', { field: 'customerId' });
   }
   if (kind === 'received' && rules.customer === 'linked-required') {
     if (!resolved.customerId) throw validationError('CUSTOMER_REQUIRED', 'A client is required on this profile', { field: 'customerId' });
-    const [reference] = await store.externalReferences.findByEntities(organizationId, 'CUSTOMER', [resolved.customerId]);
-    if (reference?.provider !== 'MALAFAT') throw validationError('CUSTOMER_NOT_LINKED', 'This client is not linked to Malafat', { field: 'customerId' });
+    const references = await store.externalReferences.findByEntities(organizationId, 'CUSTOMER', [resolved.customerId]);
+    if (!references.some((r) => r.provider === 'MALAFAT')) throw validationError('CUSTOMER_NOT_LINKED', 'This client is not linked to Malafat', { field: 'customerId' });
+    // Malafat allocates only within a payment's currency, and a matter's currency is locked: a capture in another
+    // currency could never be allocated and would sit as unallocated money until someone reversed it.
+    const project = resolved.projectId ? await store.projects.getById(organizationId, resolved.projectId) : null;
+    if (project && project.currency !== currency) throw validationError('CURRENCY_MISMATCH', `This matter is in ${project.currency}`, { field: 'currency' });
   }
   return resolved;
 }

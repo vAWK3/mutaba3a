@@ -380,3 +380,14 @@ describe('POST /v1/inbox/{id}/file-as-income on a Malafat-fed profile', () => {
     expect(touched).toEqual([]);
   });
 });
+
+describe('MUT-61: filing as Received is a capture', () => {
+  it('writes origin CAPTURE with the entry’s own captureSource', async () => {
+    const s = await setup();
+    const entry = await s.capture(INCOME_ENTRY);
+    const res = await s.fileIncome(entry.id, { kind: 'received' });
+    expect(res.status).toBe(201);
+    const filed = await read(res);
+    expect(await s.h.store.payments.getById(s.p.id, filed.id)).toMatchObject({ origin: 'CAPTURE', captureSource: 'widget', createdByUserId: s.userId });
+  });
+});

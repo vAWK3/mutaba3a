@@ -240,8 +240,9 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'INCOME');
       assertNotFuture(entry.occurredOn, todayFor(organization, now), 'occurredOn');
-      // MUT-65's own validators, called exactly as routes/income.ts calls them — not reimplemented.
-      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, incomeCaptureRulesFor(writerOfRecord));
+      // MUT-65's own validators, reused rather than reimplemented. This route stays on payments:write, so a Malafat-fed
+      // profile is refused before this line and only personal-profile rules ever apply here (TD-086).
+      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, entry.currency, incomeCaptureRulesFor(writerOfRecord));
 
       const filed = await store.inboxEntries.fileAsIncome(
         { userId: user.id, inboxEntryId: entry.id, kind: 'INCOME', write: incomeWrite(entry, body, links, organization.id, user.id, now, c.get('requestId')) },
@@ -257,6 +258,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         customerId: links.customerId,
         projectId: links.projectId,
         filedFromInbox: true,
+        ...(body.kind === 'received' ? { origin: 'CAPTURE' } : {}),
         ...(entry.captureSource ? { captureSource: entry.captureSource } : {}),
       };
       if (filed.result.kind === 'received') {

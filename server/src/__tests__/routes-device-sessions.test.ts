@@ -172,3 +172,13 @@ describe('DELETE /v1/device-sessions/current — device sign-out', () => {
     expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
   });
 });
+
+describe('MUT-61: the device sign-in Me carries each profile’s capture rules', () => {
+  it('profiles[].income is present on the device-session response, same as GET /v1/me', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { body } = await deviceSignIn(h, p.email, p.password);
+    expect(body.profiles[0]).toMatchObject({ id: f.org.id, income: { received: true, owed: true, customer: 'optional' }, access: { capture: 'read-write' } });
+  });
+});

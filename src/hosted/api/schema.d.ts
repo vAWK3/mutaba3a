@@ -4225,13 +4225,16 @@ export interface paths {
                     /** @description Opaque `nextCursor` from the previous page. */
                     cursor?: string;
                     customerId?: string;
+                    /** @description Payments with an allocation on this project, or captured against it while they have no allocations at all (a captured matter is a hint until Malafat allocates). */
                     projectId?: string;
                     status?: components["schemas"]["PaymentStatus"];
                     /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                     receivedBefore?: string;
                     /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                     receivedAfter?: string;
+                    /** @description `capture`: money a person recorded (the phone, the portal); `integration`: recorded through this API key. */
                     origin?: components["schemas"]["PaymentOrigin"];
+                    /** @description Matches POSTED payments only (a REVERSED payment reads `unallocated` in the response but is never matched here). `?customerId=…&origin=capture&allocationState=unallocated` lists what a client's phone captures still need allocating; add `partial` for ones allocated in part. */
                     allocationState?: components["schemas"]["AllocationState"];
                 };
                 header?: never;
@@ -8152,6 +8155,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share";
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -9021,10 +9026,14 @@ export interface components {
             number: string;
             /** Format: uuid */
             customerId: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The matter picked when a person captured this payment — a hint until it is allocated; after that its allocations say where the money went. Null for payments recorded through the API key.
+             */
             projectId: string | null;
             origin: components["schemas"]["PaymentOrigin"];
-            captureSource: components["schemas"]["CaptureSource"];
+            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            /** @description Who captured it: null for payments recorded through the API key, and once that person's account is gone. */
             capturedBy: {
                 /** Format: uuid */
                 userId: string;
@@ -9060,8 +9069,6 @@ export interface components {
         };
         /** @enum {string} */
         PaymentOrigin: "integration" | "capture";
-        /** @enum {string|null} */
-        CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | null;
         /** @enum {string} */
         AllocationState: "unallocated" | "partial" | "allocated";
         /** @enum {string} */
@@ -9643,7 +9650,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn: string;
             note: string | null;
-            captureSource: components["schemas"]["CaptureSource"];
+            captureSource: components["schemas"]["CaptureSource"] & unknown;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -9669,7 +9676,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn?: string;
             note?: string | null;
-            captureSource?: components["schemas"]["CaptureSource"];
+            captureSource?: components["schemas"]["CaptureSource"] & unknown;
         };
         FileAsExpenseRequest: {
             /** Format: uuid */

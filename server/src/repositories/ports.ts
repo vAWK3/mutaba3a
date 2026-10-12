@@ -818,9 +818,10 @@ export const CAPTURE_UNDO_REASON = 'capture_undo';
 /**
  * MUT-61: what `payments.undoCapture` did. `not-found` covers every payment that
  * is not this person's own capture in this organization, so a caller cannot
- * probe for other people's payments.
+ * probe for other people's payments. `already-reversed` is only this person's own earlier undo; a capture the
+ * integration reversed (any other reason) is `reversed-elsewhere`, so the person is never told they undid it.
  */
-export type UndoCaptureResult = 'reversed' | 'already-reversed' | 'allocated' | 'not-found';
+export type UndoCaptureResult = 'reversed' | 'already-reversed' | 'reversed-elsewhere' | 'allocated' | 'not-found';
 
 export interface CreditInput {
   amountMinor: bigint;
@@ -838,7 +839,10 @@ export interface CreditRecord extends CreditInput {
   createdAt: Date;
 }
 
-/** MUT-61: a POSTED payment's allocation state; a REVERSED one has none. */
+/**
+ * MUT-61: how much of a payment is applied — `allocationStateOf` (payments/allocation-state.ts). A REVERSED payment
+ * reads `unallocated` (reverse() zeroes allocatedMinor); the `allocationState` list filter matches POSTED payments only.
+ */
 export type AllocationState = 'unallocated' | 'partial' | 'allocated';
 
 export interface PaymentFilter {

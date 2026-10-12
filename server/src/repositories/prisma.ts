@@ -828,7 +828,7 @@ export class PrismaLedgerStore implements LedgerStore {
           AND: [
             // MUT-65: a payment whose own projectId names it, OR one with an allocation on it. MUT-61 D2: the own
             // projectId is a capture-time hint, so it counts only while the payment has no allocations at all.
-            ...(filter.projectId ? [{ OR: [{ projectId: filter.projectId, allocations: { none: {} } }, { allocations: { some: { receivable: { projectId: filter.projectId } } } }] }] : []),
+            ...(filter.projectId ? [{ OR: [{ projectId: filter.projectId, allocations: { none: { organizationId } } }, { allocations: { some: { organizationId, receivable: { projectId: filter.projectId } } } }] }] : []),
             ...(filter.allocationState ? [this.allocationStateWhere(filter.allocationState)] : []),
             cursorWhere(page),
           ],
@@ -878,7 +878,8 @@ export class PrismaLedgerStore implements LedgerStore {
       const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
       if (count === 1) return { result: 'reversed', payment };
       if (!payment || payment.origin !== 'CAPTURE' || payment.createdByUserId !== userId) return { result: 'not-found', payment: null };
-      return { result: payment.status === 'REVERSED' ? 'already-reversed' : 'allocated', payment };
+      if (payment.status !== 'REVERSED') return { result: 'allocated', payment };
+      return { result: payment.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment };
     },
   };
 

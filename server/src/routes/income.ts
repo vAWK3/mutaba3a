@@ -4,6 +4,7 @@ import { writeRefusal } from '../auth/writability.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
 import { ApiError } from '../errors.js';
+import { formatMoney, type Currency } from '../money.js';
 import { idempotent } from '../idempotency.js';
 import { CAPTURE_UNDO_REASON, type LedgerStore } from '../repositories/ports.js';
 import { CreateIncomeRequestSchema, IncomeIdParamSchema, IncomeResponseSchema } from '../schemas.js';
@@ -51,9 +52,9 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       assertNotFuture(occurredOn, today, 'occurredOn');
       const amountMinor = parseAmount(body.amount, body.currency);
       if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
-      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, rules);
+      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, body.currency, rules);
 
-      const metadata = { amount: body.amount, currency: body.currency, customerId: links.customerId, projectId: links.projectId, ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
+      const metadata = { amount: body.amount, currency: body.currency, customerId: links.customerId, projectId: links.projectId, ...(body.kind === 'received' ? { origin: 'CAPTURE' } : {}), ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
 
       if (body.kind === 'received') {
         const payment = await store.payments.capture(
@@ -140,8 +141,9 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const undone = await store.payments.undoCapture(organization.id, incomeId, user.id, now);
       if (undone.result === 'not-found') throw new ApiError('NOT_FOUND', 'No such income entry');
       if (undone.result === 'allocated') throw new ApiError('CONFLICT', 'This entry has already been allocated', { reason: 'ALREADY_ALLOCATED' });
+      if (undone.result === 'reversed-elsewhere') throw new ApiError('CONFLICT', 'Malafat reversed this entry; it is no longer yours to undo', { reason: 'REVERSED_BY_MALAFAT' });
       if (undone.result === 'reversed' && undone.payment) {
-        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'payment.reversed', entityType: 'payment', entityId: undone.payment.id, metadata: { number: undone.payment.number, reason: CAPTURE_UNDO_REASON }, requestId: c.get('requestId') });
+        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'payment.reversed', entityType: 'payment', entityId: undone.payment.id, metadata: { number: undone.payment.number, reason: CAPTURE_UNDO_REASON, allocationsUndone: 0, amount: formatMoney({ minor: undone.payment.amountMinor, currency: undone.payment.currency as Currency }) }, requestId: c.get('requestId') });
       }
       return c.body(null, 204);
     },
