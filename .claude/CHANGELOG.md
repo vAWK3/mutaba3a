@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Combined check after the parallel lanes (MUT-62, MUT-73, MUT-82, MUT-84)
+
+**Why:** at the owner's request, MUT-62, MUT-73, MUT-82 and MUT-84 landed on main without running lint, typecheck or tests. Everything ran once on the combined tree (main `ff6225e`), in a separate worktree.
+
+### Results
+- `npm run lint`: 0 errors, 12 warnings. `npm run typecheck` and `npx tsc -b`: clean.
+- `npx vitest run` (Node 22): 214 files, 3,141 passed, 4 skipped. The only failures were the 2 below, now fixed.
+- `npm run test:bundles`: passed.
+- `cargo test`: 15 passed. `cargo clippy --all-targets -- -D warnings`: clean.
+- `release-qa run --attach --all`: 20 of the 21 `qa/` features passed. The 21st failed on a stale spec, fixed below; with the fix, all 5 `web.income` features pass.
+
+### Fixed (tests only, no app change)
+- **`exitSnapshot.test.ts`:** MUT-82 strips every id from a drawer's exit snapshot, so a drawer opened during the exit can't pick up the clone's form. Two tests still looked up the clone's fields by id.
+  - They now find them by `name` and by class.
+  - A new test checks that the clones carry no ids and the originals keep theirs. This is the regression test MUT-82 skipped while tests were paused.
+- **`qa/specs/web/income.spec.ts` (`web.income.fast-path`):** on a 1280 px window the client opens beside the list (MUT-84). The spec's `getByText('$1,200').first()` then matched the list's hidden Owed now strip. It now reads the amount off the entry's own row.
+
+### Files
+`src/components/ui/drawer/__tests__/exitSnapshot.test.ts`, `qa/specs/web/income.spec.ts`
+
+---
+
 ## [Unreleased] - 2026-10-12 — Home: record a payment straight from Needs attention, with Undo (MUT-82)
 
 **Why:** every Needs attention row on Home opened the client's profile, so recording that a client paid took four steps and a page change (Home → profile → find the row → Record payment). Decision H1 of the approved Apple-design brief (`.claude/designs/landing-apple-redesign.md`, epic MUT-74) puts the action on the row. ADR-055; TD-064. Test plan: `.claude/designs/mut-82-home-inline-payment-tests.md`.

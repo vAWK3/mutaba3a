@@ -46,8 +46,11 @@ test(
     await step("See the entry on the new client's profile", async () => {
       await page.goto('/app/clients');
       await page.getByRole('link', { name: 'Acme Studio' }).first().click();
-      await expect(page.getByText('Logo redesign')).toBeVisible();
-      await expect(page.getByText('$1,200').first()).toBeVisible();
+      // Read the amount off the entry's own row: on a wide window the profile opens
+      // beside the list (MUT-84), whose Owed now strip is hidden but still in the DOM.
+      const entry = page.getByRole('row', { name: /Logo redesign/ });
+      await expect(entry).toBeVisible();
+      await expect(entry.getByText('$1,200', { exact: true }).first()).toBeVisible();
     });
   },
 );
