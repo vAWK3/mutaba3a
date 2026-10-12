@@ -14,6 +14,7 @@ import {
   PaymentRecordError,
 } from '../../db/repository';
 import { useToastStore } from '../../lib/toastStore';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useDrawerStore } from '../../lib/stores';
 import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
@@ -174,6 +175,35 @@ describe('IncomeDrawer', () => {
         expect(tx.projectId).toBeUndefined();
       });
       expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
+    });
+
+    it('MUT-81: captures the saved entry for the after-save flash, with the client name resolved at save time', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Acme' });
+      useSavedFlashStore.getState().clear();
+      renderDrawer();
+
+      await user.type(await screen.findByLabelText('What did you do?'), 'Logo redesign');
+      await user.type(amountInput(), '1,200');
+      const clientInput = screen.getByPlaceholderText(CLIENT_PLACEHOLDER);
+      await user.click(clientInput);
+      await user.type(clientInput, 'Acm');
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(clientInput).toHaveValue('Acme'));
+
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const [tx] = await transactionRepo.list({});
+        const pending = useSavedFlashStore.getState().pending;
+        expect(pending).toMatchObject({
+          kind: 'income',
+          ids: [tx.id],
+          clientId: client.id,
+          clientName: 'Acme',
+          profileId: testProfileId,
+        });
+      });
     });
 
     it('names the defaults it applies: status, currency and today', async () => {
@@ -622,6 +652,36 @@ describe('IncomeDrawer', () => {
       await waitFor(() => {
         expect(amountInput().value).toBe('250');
         expect(titleInput().value).toBe('Test payment');
+      });
+    });
+
+    it('MUT-81: captures an edit for the after-save flash too', async () => {
+      const client = await clientRepo.create({ name: 'Shoreline Studio' });
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        clientId: client.id,
+        amountMinor: 25000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Test payment',
+      });
+      useSavedFlashStore.getState().clear();
+      const user = userEvent.setup();
+
+      await openEdit(tx.id);
+      await waitFor(() => expect(titleInput().value).toBe('Test payment'));
+      await user.click(saveButton());
+
+      await waitFor(() => {
+        expect(useSavedFlashStore.getState().pending).toMatchObject({
+          kind: 'income',
+          ids: [tx.id],
+          clientId: client.id,
+          clientName: 'Shoreline Studio',
+          profileId: testProfileId,
+        });
       });
     });
 

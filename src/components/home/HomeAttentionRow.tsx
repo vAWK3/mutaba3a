@@ -17,7 +17,7 @@ import { useLayoutEffect, useRef, type MouseEvent } from 'react';
 import { Link } from '@tanstack/react-router';
 import { RecordPaymentButton } from '../ui';
 import { BusinessTags } from '../ui/ProfileBadge';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount, cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import type { WorkRow } from '../clients/clientProfileRows';
 import type { BusinessProfile } from '../../types';
@@ -30,13 +30,26 @@ export interface HomeAttentionRowProps {
   locale: string;
   /** Under All businesses, the businesses to tag the row with (MUT-89) */
   businesses?: ReadonlyMap<string, BusinessProfile>;
+  /** This row is the one a save just landed on (MUT-81): a soft tint plus a
+   *  leading rail, fading over ~1.5s. Never true for a row a full payment is
+   *  about to remove -- that row gets captureRowExit's slide-out instead. */
+  flashed?: boolean;
   onOpen: (row: WorkRow) => void;
   onRecordPayment: (row: WorkRow) => void;
   onArrive: (id: string, element: HTMLTableRowElement) => void;
   onLeave: (id: string, element: HTMLTableRowElement) => void;
 }
 
-export function HomeAttentionRow({ row, locale, businesses, onOpen, onRecordPayment, onArrive, onLeave }: HomeAttentionRowProps) {
+export function HomeAttentionRow({
+  row,
+  locale,
+  businesses,
+  flashed,
+  onOpen,
+  onRecordPayment,
+  onArrive,
+  onLeave,
+}: HomeAttentionRowProps) {
   const t = useT();
   const rowRef = useRef<HTMLTableRowElement>(null);
   const handlers = useRef({ onArrive, onLeave });
@@ -64,7 +77,7 @@ export function HomeAttentionRow({ row, locale, businesses, onOpen, onRecordPaym
   );
 
   return (
-    <tr ref={rowRef} className="clickable" onClick={() => onOpen(row)}>
+    <tr ref={rowRef} className={cn('clickable', flashed && 'row-flash')} onClick={() => onOpen(row)}>
       <td className="home-row-main">
         {clientId ? (
           <Link to="/clients/$clientId" params={{ clientId }} className="home-attention-open" onClick={stop}>

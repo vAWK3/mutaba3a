@@ -2127,6 +2127,34 @@ div.input-with-prefix {
   cursor: pointer;
 }
 
+/* The saved-row flash (MUT-81, R1): a soft tint plus a 3px leading rail,
+   fading over 1.5s to match savedFlashStore's FLASH_MS. A tint alone would
+   be indistinguishable from the app's many existing --accent-subtle
+   "selected" states; the rail (a logical inline-start edge, so it mirrors
+   in RTL) reads at a glance without the row already having your attention. */
+@keyframes saved-flash-fade {
+  from { background-color: var(--accent-subtle); }
+  to { background-color: transparent; }
+}
+
+.data-table tr.row-flash td {
+  animation: saved-flash-fade 1.5s ease-out forwards;
+}
+
+.data-table tr.row-flash td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The AC: reduced motion keeps the tint, without the fade animation. The
+   class itself is still removed by savedFlashStore's timer after FLASH_MS;
+   this only turns the fade from an animated transition into a held state. */
+@media (prefers-reduced-motion: reduce) {
+  .data-table tr.row-flash td {
+    animation: none;
+    background-color: var(--accent-subtle);
+  }
+}
+
 /* A record's title (TruncatedTitle, MUT-62) takes the spare width and is cut
    to fit, so a long title never widens the table. Same technique as the
    client profile's Work list. */

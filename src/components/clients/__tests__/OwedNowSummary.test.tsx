@@ -57,11 +57,15 @@ describe('OwedNowSummary', () => {
     expect(screen.queryByTestId('owed-now-amount')).toBeNull();
   });
 
-  it('keeps amounts left-to-right inside right-to-left text', () => {
+  it('keeps the overdue amount whole inside a sentence of either direction', () => {
     render(<OwedNowSummary owed={[{ currency: 'USD', owedMinor: 150000, overdueMinor: 50000 }]} />);
 
     expect(screen.getByTestId('owed-now-amount')).toHaveAttribute('dir', 'ltr');
-    // The overdue sentence isolates its amount with U+2066 / U+2069.
-    expect(screen.getByText(/overdue$/).textContent).toContain('⁦$500⁩');
+    // The overdue sentence isolates its amount with the shared isolate()
+    // helper (U+2068 FSI / U+2069 PDI, MUT-81 eng review D4/D5) -- not the
+    // U+2066 LRI this component used to carry privately. For an amount (no
+    // strong directional character) the two render identically; this
+    // assertion is a deliberate tripwire against a silent revert to LRI.
+    expect(screen.getByText(/overdue$/).textContent).toContain('⁨$500⁩');
   });
 });

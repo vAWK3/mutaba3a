@@ -25,6 +25,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { useReceivables } from '../../hooks/useIncomeQueries';
 import { usePaymentUndo } from '../../hooks/usePaymentUndo';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
+import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useDrawerStore } from '../../lib/stores';
 import { toWorkRow, type WorkRow } from '../clients/clientProfileRows';
 import { CheckCircleIcon } from '../icons';
@@ -65,12 +67,20 @@ export function HomeNeedsAttention({ profileId, businesses }: HomeNeedsAttention
   const { offerUndo } = usePaymentUndo();
   // The receivables Owed now reads (same filters, same query): one refetch
   // changes both in one render (ADR-055)
-  const { data: receivables = [], isLoading, dataUpdatedAt } = useReceivables({ profileId });
+  const { data: receivables = [], isLoading, isFetching, dataUpdatedAt } = useReceivables({ profileId });
 
   const today = todayLocalISO();
   const rows = useMemo(
     () => selectAttentionReceivables(receivables, today).map((tx) => toWorkRow(tx, today)),
     [receivables, today]
+  );
+  // A partial payment keeps its row: MUT-81's tint is the only after-save
+  // feedback it gets (a full payment's row leaves instead, see onRecorded
+  // below -- that path never reaches this list).
+  const isFlashed = useSavedFlashRows(
+    'home-needs-attention',
+    rows.map((row) => row.id),
+    { isLoading, isFetching }
   );
 
   const sectionRef = useRef<HTMLElement>(null);
@@ -110,6 +120,14 @@ export function HomeNeedsAttention({ profileId, businesses }: HomeNeedsAttention
       onRecorded: (record) => {
         const leftMinor = row.tx.remainingAmountMinor ?? row.amountMinor;
         if (record.amountMinor >= leftMinor) {
+          // The drawer already called markSaved unconditionally (MUT-81 eng
+          // review D3). This row is about to leave via captureRowExit, which
+          // is already complete feedback (ADR-055 SS5-6) -- without this, the
+          // flash mechanism would otherwise report "not visible" the moment
+          // this list stops rendering the id and announce a confusing
+          // "Saved to X . Show" under a slide-out that already said it all
+          // (eng review D10).
+          useSavedFlashStore.getState().clear();
           settledAt.current.set(row.id, Date.now());
           // Taken now, before the drawer closes: it gives focus back to its
           // trigger only while focus is still inside it
@@ -182,6 +200,7 @@ export function HomeNeedsAttention({ profileId, businesses }: HomeNeedsAttention
                   row={row}
                   locale={locale}
                   businesses={businesses}
+                  flashed={isFlashed(row.id)}
                   onOpen={open}
                   onRecordPayment={recordPayment}
                   onArrive={onArrive}

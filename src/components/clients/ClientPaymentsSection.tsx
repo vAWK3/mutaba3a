@@ -12,9 +12,10 @@
  */
 
 import { usePaymentsByClient } from '../../hooks/useQueries';
+import { useSavedFlashRows } from '../../hooks/useSavedFlash';
 import { RowActionsMenu, RowActionsHeader, AmountWithConversion, type RowAction } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
-import { formatDate } from '../../lib/utils';
+import { formatDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { MIGRATED_PAYMENT_NOTE } from '../../db/database';
 import type { PaymentByClientRow } from '../../types';
@@ -29,7 +30,12 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
   const locale = getLocale(language);
   const { openIncomeDrawer, editPaymentRecord } = useDrawerStore();
   // Rows arrive shaped from the repository (joined title, currency, source)
-  const { data: payments = [], isLoading } = usePaymentsByClient(clientId);
+  const { data: payments = [], isLoading, isFetching } = usePaymentsByClient(clientId);
+  const isFlashed = useSavedFlashRows(
+    `client-payments-${clientId}`,
+    payments.map((p) => p.id),
+    { isLoading, isFetching }
+  );
 
   const openEntry = (payment: PaymentByClientRow) =>
     openIncomeDrawer({ mode: 'edit', transactionId: payment.transactionId });
@@ -80,7 +86,11 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
             </thead>
             <tbody>
               {payments.map((payment) => (
-                <tr key={payment.id} className="clickable" onClick={() => openPayment(payment)}>
+                <tr
+                  key={payment.id}
+                  className={cn('clickable', isFlashed(payment.id) && 'row-flash')}
+                  onClick={() => openPayment(payment)}
+                >
                   <td className="client-work-date">{formatDate(payment.paidAt, locale)}</td>
                   <td className="amount-cell">
                     <AmountWithConversion amountMinor={payment.amountMinor} currency={payment.currency} type="income" />

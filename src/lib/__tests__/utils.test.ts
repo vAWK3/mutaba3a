@@ -19,9 +19,27 @@ import {
   todayISO,
   nowISO,
   copyToClipboard,
+  isolate,
 } from '../utils';
 
 describe('utils', () => {
+  describe('isolate', () => {
+    it('wraps text in a first-strong isolate (U+2068 ... U+2069)', () => {
+      expect(isolate('$500')).toBe('⁨$500⁩');
+    });
+
+    it('does not force a strong right-to-left string to render left-to-right', () => {
+      // FSI takes direction from the first strong character inside it, unlike
+      // the LRI this helper replaces (MUT-81 eng review D4/D5), which always
+      // forced left-to-right. An Arabic client name is exactly the case that
+      // migration exists for: it must not come out reversed.
+      const arabicName = 'شركة الأثاث';
+      const isolated = isolate(arabicName);
+      expect(isolated.startsWith('⁦')).toBe(false); // not the old LRI
+      expect(isolated).toBe(`⁨${arabicName}⁩`);
+    });
+  });
+
   describe('getLocaleFromLanguage', () => {
     it('should return ar for Arabic', () => {
       expect(getLocaleFromLanguage('ar')).toBe('ar');

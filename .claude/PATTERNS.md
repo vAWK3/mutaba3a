@@ -1687,6 +1687,14 @@ Every Playwright test gets an empty IndexedDB, so the Welcome dialog always open
 
 `expectOnlyKnownAxeViolations(page, surface)` (`qa/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
 
+### Exit motion is traced frame by frame with `traceExit`
+
+jsdom has no layout, so a slide-out is proven in the browser. `traceExit(page, selector)` (`qa/support/motion.ts`) follows the next element matching `selector` that is added to the page, frame by frame (`MutationObserver` + rAF), until it leaves; `readExitTrace(page)` returns `{ added, removed, minX, maxX, minOpacity }`. Start the trace before the action, poll until `added` and `removed` are both true, then assert the range: past 100 px toward the inline end, negative in Arabic, x stuck at 0 under `page.emulateMedia({ reducedMotion: 'reduce' })`. The selector names the inert copy the app animates (`.drawer[aria-hidden="true"]` for a drawer's snapshot, `.row-exit` for a list row). That is a probe, not a locator, so it is the one place a spec may use a class. Used by `drawer-motion.spec.ts` (MUT-80) and `home.spec.ts` (MUT-82).
+
+### An Arabic spec switches from Settings and finds controls by the app's own copy
+
+Log the data in English first (`logIncome` uses the English labels), then `switchToArabic(page)` (`qa/support/app.ts`): it opens Settings, clicks العربية and waits for `dir="rtl"`. To find a translated control, read its name from `ar` (`qa/support/i18n.ts`, which loads `src/lib/i18n/translations/ar.json`), as in `ar.clients.split.profile`, so a copy change never breaks a spec. Load it through that module and don't import the JSON in a spec: the root package is ESM, and Node refuses a JSON import that has no `with { type: 'json' }`. User data such as client names stays as typed.
+
 ## Accessibility patterns — added 2026-10-12 (TD-009)
 
 ### A control with a visible label gets a real `<label for>`
@@ -1754,7 +1762,7 @@ A motion that needs a measured size (`offsetWidth`) skips itself when the size i
 In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
 
 ### Hidden documents pause motion
-`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`qa/specs/web/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`traceExit` in `qa/support/motion.ts`, a `MutationObserver` + rAF), not in a hidden pane.
 
 ---
 
@@ -1926,6 +1934,19 @@ When an action removes the element that will hold focus (the drawer returns focu
 
 ### A card that gets narrow reflows by container query
 A list inside a card that is narrow on a phone and also in a two-column layout on a small window (Home's cards) reflows with `container-type: inline-size` on the card and `@container (max-width: …)`, not a viewport media query. For a table, switch `table`/`tbody` to `display: block` and each `tr` to a grid, move the borders from cells to rows, and give the action cell `grid-column: 1 / -1`.
+
+---
+
+## App patterns added by MUT-81 (2026-10-12)
+
+### A save is claimed by whichever list renders it, resolved from what the lists report -- never a global fetch counter
+When a save needs to be found again by any one of several lists that might render it (a client profile's entry row and its payment row; a page that might or might not currently show it), give every list a `useSavedFlashRows(listId, ids, queryResult)` call that registers itself and reports `settled = !isLoading && !isFetching` on its own render. A shared store resolves "claimed" the instant any registered list's settled ids intersect the pending save, and "not claimed" only once **every** registered list has reported settled with no match. Watching a single global `useIsFetching()` for 1→0 looks simpler but is wrong: it counts every unrelated query on the page, and TanStack Query has a documented case where invalidating during an in-flight initial fetch reuses that fetch's promise and settles with no trailing refetch, so the global counter can hit zero while a list still holds pre-save data. Derive `settled` inside the hook, not from a value the caller passes in, so no list can get it wrong by using `!isLoading` alone. See `src/lib/savedFlashStore.ts`, `src/hooks/useSavedFlash.ts` (ADR-057).
+
+### An unconditional drawer call covers callers that pass no opt-in callback
+Some callers of a shared drawer pass an optional callback for a side effect (Home's `onRecorded`, for Undo); others pass none at all. If a second feature needs the same "a save happened" signal for every caller, it cannot ride the optional callback -- it must call from inside the drawer itself, unconditionally, after the mutation resolves. A caller that needs to suppress that signal for one specific case (Home's full-payment row, which already has complete feedback from its own slide-out) does so by undoing the effect synchronously in its own optional callback, which runs in the same tick right after -- not by asking the drawer to skip the call in the first place. Confirm which callers actually pass the optional callback with a grep before assuming it is a universal hook point (MUT-81 eng review: `ClientWorkSection` and `IncomePage` pass none).
+
+### A background wash needs a second channel when the app already uses that token for "selected"
+A transient "this just changed" highlight that reuses an existing subtle-background token (`--accent-subtle`) will look identical to every other place that token already means "selected" or "active" -- and a flat wash is easy to miss if the eye is not already on the row. Add a second, cheap signal that reads in peripheral vision: a 3px leading rail on the logical inline-start edge (`box-shadow: inset 3px 0 0 var(--accent)`), so it mirrors correctly under `dir="rtl"` for free.
 
 ---
 

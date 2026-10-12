@@ -9,8 +9,9 @@
 
 import { useNavigate } from '@tanstack/react-router';
 import { useRecentPayments } from '../../hooks/useQueries';
+import { useSavedFlashRows } from '../../hooks/useSavedFlash';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate } from '../../lib/utils';
+import { formatAmount, formatDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { BusinessTags } from '../ui/ProfileBadge';
 import type { BusinessProfile, ProfileScope, RecentPaymentRow } from '../../types';
@@ -28,7 +29,12 @@ export function HomeRecentPayments({ profileId, businesses }: HomeRecentPayments
   const navigate = useNavigate();
   const { openIncomeDrawer } = useDrawerStore();
   // Rows arrive shaped from the repository: newest first, client named, at most 10
-  const { data: payments = [], isLoading } = useRecentPayments(profileId);
+  const { data: payments = [], isLoading, isFetching } = useRecentPayments(profileId);
+  const isFlashed = useSavedFlashRows(
+    'home-recent-payments',
+    payments.map((p) => p.id),
+    { isLoading, isFetching }
+  );
 
   const open = (payment: RecentPaymentRow) =>
     payment.clientId
@@ -50,7 +56,11 @@ export function HomeRecentPayments({ profileId, businesses }: HomeRecentPayments
           <table>
             <tbody>
               {payments.map((payment) => (
-                <tr key={payment.id} className="clickable" onClick={() => open(payment)}>
+                <tr
+                  key={payment.id}
+                  className={cn('clickable', isFlashed(payment.id) && 'row-flash')}
+                  onClick={() => open(payment)}
+                >
                   <td className="home-row-main">
                     <span className="home-row-primary">{payment.clientName ?? t('overview.noClient')}</span>
                     <span className="home-row-secondary">

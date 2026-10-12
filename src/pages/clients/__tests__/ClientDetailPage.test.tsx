@@ -9,13 +9,14 @@
  * top bar names the client, so the page renders the profile body only.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientDetailPage } from '../ClientDetailPage';
 import * as useQueries from '../../../hooks/useQueries';
 import * as useIncomeQueries from '../../../hooks/useIncomeQueries';
 import { formatDate } from '../../../lib/utils';
 import { MIGRATED_PAYMENT_NOTE } from '../../../db/database';
+import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import type { IncomeFilters } from '../../../hooks/useIncomeQueries';
 import type { PaymentByClientRow, TransactionDisplay } from '../../../types';
 
@@ -261,6 +262,7 @@ describe('ClientDetailPage', () => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-10-11T12:00:00'));
+    useSavedFlashStore.getState().clear();
     featureFlags.invoices = false;
     featureFlags.retainers = false;
     featureFlags.projects = true;
@@ -428,6 +430,44 @@ describe('ClientDetailPage', () => {
       expect(useIncomeSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({ clientId: 'client-1', status: 'unpaid' })
       );
+    });
+
+    // MUT-81 qa-reconcile finding: ClientWorkSection's filters are local
+    // state, not in the URL, so a save for this client must reset them --
+    // otherwise Show can navigate here and the row stays hidden behind a
+    // stale filter, with no second message (the dead end design decision 2A
+    // exists to prevent).
+    it('MUT-81: a save for this client resets this list\'s own filters, so a just-saved row cannot stay hidden behind a stale one', () => {
+      renderPage();
+      fireEvent.click(within(workSection()).getByRole('button', { name: 'Unpaid' }));
+      expect(useIncomeSpy).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'unpaid' }));
+
+      act(() => {
+        useSavedFlashStore.getState().markSaved({
+          kind: 'income',
+          ids: ['tx-new'],
+          clientId: 'client-1',
+          profileId: 'p1',
+        });
+      });
+
+      expect(useIncomeSpy).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }));
+    });
+
+    it('MUT-81: a save for a DIFFERENT client leaves this list\'s filters alone', () => {
+      renderPage();
+      fireEvent.click(within(workSection()).getByRole('button', { name: 'Unpaid' }));
+
+      act(() => {
+        useSavedFlashStore.getState().markSaved({
+          kind: 'income',
+          ids: ['tx-new'],
+          clientId: 'some-other-client',
+          profileId: 'p1',
+        });
+      });
+
+      expect(useIncomeSpy).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'unpaid' }));
     });
 
     it('offers one primary action, Add income for this client, when the client has no work', () => {

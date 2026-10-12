@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-81 — after-save feedback: state wireframe</title>
+<style>
+/* Tokens copied verbatim from src/styles/theme.css so this reads as the real app, not an approximation. */
+:root{
+  --font-en:"Inter Variable","Inter",system-ui,-apple-system,sans-serif;
+  --font-heading:"Source Serif 4 Variable","Source Serif 4","Georgia",serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono","Monaco","Consolas",monospace;
+  --text-xs:.6875rem; --text-sm:.75rem; --text-base:.8125rem; --text-md:.875rem;
+  --text-lg:1rem; --text-xl:1.125rem; --text-2xl:1.25rem; --text-3xl:1.5rem; --text-4xl:1.875rem;
+  --space-1:.25rem; --space-2:.5rem; --space-3:.75rem; --space-4:1rem; --space-5:1.25rem;
+  --space-6:1.5rem; --space-8:2rem; --space-10:2.5rem; --space-12:3rem;
+  --bg:#F6F8FA; --bg-subtle:#EEF1F5; --surface:#FFFFFF; --surface-hover:#F8FAFB; --surface-2:#F3F5F8;
+  --muted:#516077; --muted-2:#7A8899;
+  --border:rgba(11,18,32,.12); --border-strong:rgba(11,18,32,.18); --border-subtle:rgba(11,18,32,.06);
+  --accent:#1D8A84; --accent-hover:#167A75; --accent-subtle:rgba(29,138,132,.1); --accent-muted:rgba(29,138,132,.15);
+  --success:#16A34A; --success-subtle:rgba(22,163,74,.1);
+  --error:#DC2626; --error-subtle:rgba(220,38,38,.1);
+  --fg:#0B1220;
+  --radius:8px;
+}
+[data-theme="dark"]{
+  --bg:#0B1220; --bg-subtle:#111A2B; --surface:#141E33; --surface-hover:#1A2540; --surface-2:#18233B;
+  --muted:#9AA8BD; --muted-2:#7A8899;
+  --border:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.18); --border-subtle:rgba(255,255,255,.06);
+  --accent:#2CB6A6; --accent-subtle:rgba(44,182,166,.12); --accent-muted:rgba(44,182,166,.2);
+  --fg:#E8EDF5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-en);font-size:var(--text-base);line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding:var(--space-8) var(--space-5) var(--space-12)}
+h1{font-family:var(--font-heading);font-size:var(--text-4xl);margin:0 0 var(--space-2)}
+h2{font-family:var(--font-heading);font-size:var(--text-2xl);margin:var(--space-10) 0 var(--space-1)}
+h3{font-size:var(--text-md);margin:0 0 var(--space-3);font-weight:600}
+.lede{color:var(--muted);max-width:68ch;margin:0 0 var(--space-4)}
+.note{color:var(--muted);font-size:var(--text-sm);max-width:74ch;margin:var(--space-2) 0 var(--space-4)}
+.bar{display:flex;gap:var(--space-2);align-items:center;margin-bottom:var(--space-6);flex-wrap:wrap}
+button.ctl{font:inherit;font-size:var(--text-sm);padding:var(--space-2) var(--space-3);border:1px solid var(--border);
+  background:var(--surface);color:var(--fg);border-radius:var(--radius);cursor:pointer}
+button.ctl[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.grid{display:grid;gap:var(--space-5);grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--space-4);position:relative;overflow:hidden}
+.panel.narrow{max-width:375px}
+.tag{display:inline-block;font-size:var(--text-xs);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--border);border-radius:99px;padding:2px var(--space-2);margin-bottom:var(--space-3)}
+.tag.good{color:var(--accent);border-color:var(--accent-muted);background:var(--accent-subtle)}
+.tag.warn{color:var(--error);border-color:var(--error-subtle);background:var(--error-subtle)}
+
+/* --- app chrome --- */
+.topbar{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:var(--space-3);
+  border-bottom:1px solid var(--border-subtle);margin-bottom:var(--space-4)}
+.topbar .title{font-family:var(--font-heading);font-size:var(--text-xl)}
+.owed{padding:var(--space-3) 0 var(--space-4)}
+.owed-label{font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.owed-amt{font-family:var(--font-mono);font-size:var(--text-3xl);font-variant-numeric:tabular-nums;line-height:1.1}
+.owed-sub{font-size:var(--text-sm);color:var(--muted)}
+.sect-h{font-size:var(--text-sm);font-weight:600;color:var(--muted);margin:var(--space-3) 0 var(--space-2)}
+table{width:100%;border-collapse:collapse;font-size:var(--text-base)}
+td{padding:var(--space-3) var(--space-2);border-bottom:1px solid var(--border-subtle);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.primary{display:block}
+.secondary{display:block;color:var(--muted);font-size:var(--text-sm)}
+.amt{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.status{display:block;font-size:var(--text-xs);color:var(--muted)}
+.status.late{color:var(--error)}
+
+/* --- THE TINT (candidate styling) --- */
+@keyframes flashfade{from{background-color:var(--accent-subtle)}to{background-color:transparent}}
+tr.flash td{animation:flashfade 1500ms ease-out forwards}
+tr.flash.rail td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+tr.hoverdemo td{background:var(--surface-hover)}
+tr.selectdemo td{background:var(--accent-subtle)}
+@media (prefers-reduced-motion:reduce){tr.flash td{animation:none;background-color:var(--accent-subtle)}}
+body[data-rm="on"] tr.flash td{animation:none;background-color:var(--accent-subtle)}
+
+/* --- message: option A, floating toast (today's Toast.css) --- */
+.toastzone{position:relative;height:96px;margin-top:var(--space-3);border-top:1px dashed var(--border);padding-top:var(--space-3)}
+.toast{position:absolute;left:50%;transform:translateX(-50%);bottom:var(--space-2);
+  background:var(--fg);color:var(--bg);border-radius:var(--radius);padding:var(--space-3) var(--space-4);
+  display:flex;gap:var(--space-4);align-items:center;font-size:var(--text-md);box-shadow:0 8px 24px rgba(0,0,0,.18);white-space:nowrap}
+.toast .act{color:#fff;background:transparent;border:0;font:inherit;font-weight:600;text-decoration:underline;cursor:pointer;padding:var(--space-1) var(--space-2)}
+[data-theme="dark"] .toast .act{color:var(--fg)}
+
+/* --- message: option B, anchored inline strip --- */
+.inlinemsg{display:flex;gap:var(--space-3);align-items:center;justify-content:space-between;
+  background:var(--accent-subtle);border:1px solid var(--accent-muted);border-radius:var(--radius);
+  padding:var(--space-2) var(--space-3);margin-bottom:var(--space-3);font-size:var(--text-md)}
+.inlinemsg .act{font:inherit;font-weight:600;color:var(--accent);background:transparent;border:0;cursor:pointer;
+  text-decoration:underline;padding:var(--space-2);min-height:44px}
+
+/* --- pagination --- */
+.pager{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+  padding-top:var(--space-3);margin-top:var(--space-2);border-top:1px solid var(--border-subtle);font-size:var(--text-sm);color:var(--muted)}
+.pager .nav{display:flex;gap:var(--space-1)}
+.pager button{min-width:44px;min-height:44px;border:1px solid var(--border);background:var(--surface);
+  color:var(--fg);border-radius:var(--radius);cursor:pointer;font:inherit}
+.pager button[disabled]{opacity:.4;cursor:default}
+.filters{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-3)}
+.chip{font-size:var(--text-sm);border:1px solid var(--border);border-radius:99px;padding:var(--space-1) var(--space-3);color:var(--muted);background:var(--surface-2)}
+.callout{border-inline-start:3px solid var(--accent);background:var(--accent-subtle);padding:var(--space-3) var(--space-4);
+  border-radius:var(--radius);margin:var(--space-3) 0;font-size:var(--text-md)}
+.callout.bad{border-color:var(--error);background:var(--error-subtle)}
+code{font-family:var(--font-mono);font-size:.92em;background:var(--surface-2);padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>MUT-81 — after saving, show where it landed</h1>
+<p class="lede">State wireframe for the design review. Tokens are copied verbatim from
+<code>src/styles/theme.css</code>, so colour, type and spacing are the real thing rather than an approximation.
+Toggle theme and reduced motion to see every state the plan has to specify.</p>
+
+<div class="bar">
+  <button class="ctl" id="theme" aria-pressed="false">Dark theme</button>
+  <button class="ctl" id="rm" aria-pressed="false">Reduced motion</button>
+  <button class="ctl" id="replay">Replay the tint</button>
+</div>
+
+<h2>1. The row is visible — the quiet path</h2>
+<p class="note">No message. The row tints and the figure that changed moves. This is the common case and it has to feel
+like nothing happened, which is the hardest part to get right.</p>
+
+<div class="grid">
+  <div class="panel">
+    <span class="tag good">Plan as written — tint only</span>
+    <div class="topbar"><span class="title">Home</span></div>
+    <div class="owed">
+      <div class="owed-label">Owed now</div>
+      <div class="owed-amt" id="tick1">₪12,450</div>
+      <div class="owed-sub">₪3,550 overdue</div>
+    </div>
+    <div class="sect-h">Needs attention</div>
+    <table><tbody>
+      <tr class="flash"><td><span class="primary">Furniture Co.</span><span class="secondary">Catalogue photography</span></td>
+        <td class="amt">₪3,550<span class="status late">12 days overdue</span></td></tr>
+      <tr><td><span class="primary">Najjar Studio</span><span class="secondary">Brand refresh</span></td>
+        <td class="amt">₪1,200<span class="status">due in 3 days</span></td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="panel">
+    <span class="tag">Variant — tint plus a 3px leading rail</span>
+    <div class="topbar"><span class="title">Home</span></div>
+    <div class="owed">
+      <div class="owed-label">Owed now</div>
+      <div class="owed-amt" id="tick2">₪12,450</div>
+      <div class="owed-sub">₪3,550 overdue</div>
+    </div>
+    <div class="sect-h">Needs attention</div>
+    <table><tbody>
+      <tr class="flash rail"><td><span class="primary">Furniture Co.</span><span class="secondary">Catalogue photography</span></td>
+        <td class="amt">₪3,550<span class="status late">12 days overdue</span></td></tr>
+      <tr><td><span class="primary">Najjar Studio</span><span class="secondary">Brand refresh</span></td>
+        <td class="amt">₪1,200<span class="status">due in 3 days</span></td></tr>
+    </tbody></table>
+    <p class="note">The rail survives the fade for the full 1.5s and reads at a glance in peripheral vision.
+    A background tint alone is easy to miss on a row you are not already looking at.</p>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>The collision to judge:</strong> <code>--accent-subtle</code> is already used 15 times in
+  <code>index.css</code> for selected and active states. Row hover is <code>--surface-hover</code>, so the tint will not
+  be confused with hover — but it will look identical to "selected". Compare the three rows below.
+</div>
+
+<div class="panel" style="max-width:520px">
+  <table><tbody>
+    <tr class="hoverdemo"><td><span class="primary">Hover</span><span class="secondary">--surface-hover</span></td><td class="amt">₪900</td></tr>
+    <tr class="selectdemo"><td><span class="primary">Selected / active elsewhere in the app</span><span class="secondary">--accent-subtle</span></td><td class="amt">₪900</td></tr>
+    <tr class="flash"><td><span class="primary">Just saved (this ticket)</span><span class="secondary">--accent-subtle, fading</span></td><td class="amt">₪900</td></tr>
+  </tbody></table>
+</div>
+
+<h2>2. The row is not visible — where does the message go?</h2>
+<p class="note">This is the open decision. Brief decision A1 for this very epic says
+<em>"Nothing floats over content."</em> Today's <code>Toast.css</code> is
+<code>position:fixed; bottom:var(--space-6); z-index:9999</code>.</p>
+
+<div class="grid">
+  <div class="panel">
+    <span class="tag warn">Option A — floating toast (plan as written)</span>
+    <div class="topbar"><span class="title">Income</span></div>
+    <div class="filters"><span class="chip">This month</span><span class="chip">Unpaid</span></div>
+    <table><tbody>
+      <tr><td><span class="primary">Najjar Studio</span><span class="secondary">Brand refresh</span></td><td class="amt">₪1,200</td></tr>
+      <tr><td><span class="primary">Qasr Events</span><span class="secondary">Venue stills</span></td><td class="amt">₪2,800</td></tr>
+    </tbody></table>
+    <div class="toastzone">
+      <div class="toast"><span>Saved to Furniture&nbsp;Co.</span><button class="act">Show</button></div>
+    </div>
+    <p class="note">Floats over content, centred, 24px off the bottom. Fires on routine saves, so the epic's
+    "nothing floats" principle gets tested several times a session.</p>
+  </div>
+
+  <div class="panel">
+    <span class="tag good">Option B — anchored strip above the list</span>
+    <div class="topbar"><span class="title">Income</span></div>
+    <div class="filters"><span class="chip">This month</span><span class="chip">Unpaid</span></div>
+    <div class="inlinemsg"><span>Saved to <strong>Furniture&nbsp;Co.</strong> — outside this filter</span><button class="act">Show</button></div>
+    <table><tbody>
+      <tr><td><span class="primary">Najjar Studio</span><span class="secondary">Brand refresh</span></td><td class="amt">₪1,200</td></tr>
+      <tr><td><span class="primary">Qasr Events</span><span class="secondary">Venue stills</span></td><td class="amt">₪2,800</td></tr>
+    </tbody></table>
+    <p class="note">Sits in flow, pushes the list down, obeys A1. It can also say <em>why</em> the row is not
+    here ("outside this filter", "in another business"), which the toast has no room for.
+    Costs a new component; the toast already exists.</p>
+  </div>
+</div>
+
+<h2>3. Reduced motion</h2>
+<p class="note">Toggle "Reduced motion" above. The plan says the tint stays and the fade does not animate.
+ADR-044 §5 set a different convention for this epic: moves become 150ms cross-fades. These two rules disagree.</p>
+
+<h2>4. Pagination — added by D7/D8, unspecified</h2>
+<div class="grid">
+  <div class="panel">
+    <span class="tag">Client profile — work and billing</span>
+    <div class="filters"><span class="chip">All time</span><span class="chip">All statuses</span><span class="chip">Search</span></div>
+    <table><tbody>
+      <tr class="flash"><td><span class="primary">Catalogue photography</span><span class="secondary">12 Oct 2026</span></td><td class="amt">₪3,550</td></tr>
+      <tr><td><span class="primary">Product stills, batch 4</span><span class="secondary">28 Sep 2026</span></td><td class="amt">₪2,100</td></tr>
+      <tr><td><span class="primary">Showroom shoot</span><span class="secondary">14 Sep 2026</span></td><td class="amt">₪4,000</td></tr>
+    </tbody></table>
+    <div class="pager">
+      <span>1–50 of 312</span>
+      <div class="nav"><button disabled>‹</button><button>›</button></div>
+    </div>
+    <p class="note">Open questions the plan does not answer: page size, whether the pager sits inside the card or
+    under it, what it does at 375px, and whether a filter change visibly resets you to page 1.</p>
+  </div>
+
+  <div class="panel narrow">
+    <span class="tag">375px — the squeeze</span>
+    <div class="inlinemsg"><span>Saved to Furniture&nbsp;Co.</span><button class="act">Show</button></div>
+    <table><tbody>
+      <tr class="flash"><td><span class="primary">Furniture Co.</span><span class="secondary">Catalogue photography</span></td><td class="amt">₪3,550<span class="status late">12d late</span></td></tr>
+      <tr><td><span class="primary">Najjar Studio</span><span class="secondary">Brand refresh</span></td><td class="amt">₪1,200<span class="status">3d</span></td></tr>
+    </tbody></table>
+    <div class="pager">
+      <span>1–50 of 312</span>
+      <div class="nav"><button disabled>‹</button><button>›</button></div>
+    </div>
+    <p class="note">A long client name plus "Show" plus a 44px touch target is the tightest case.
+    Arabic doubles it: the strip mirrors and the name needs an FSI isolate.</p>
+  </div>
+</div>
+
+<h2>5. The states nobody has specified yet</h2>
+<div class="callout bad">
+  <strong>Back-dated save lands on page 3.</strong> Both lists sort by date descending. Press Show and you arrive on
+  page 1 without the row, with no second message. Eng review flagged this as the one silent failure (task T2).
+  There is no designed state for "we took you there and it still is not visible".
+</div>
+<div class="callout">
+  <strong>Focus.</strong> ADR-044 §6 returns focus to the trigger when a drawer unmounts. If the trigger was a row
+  button in a list that just re-sorted, where does focus land? MUT-82's plan has a whole decision on this (its D12).
+  MUT-81's says nothing.
+</div>
+<div class="callout">
+  <strong>Copy.</strong> One string covers four events: income created, income edited, payment recorded, payment edited.
+  "Saved to Furniture Co." after editing an entry that was already there reads oddly.
+</div>
+
+<script>
+const b=document.body;
+document.getElementById('theme').onclick=e=>{const on=b.dataset.theme!=='dark';b.dataset.theme=on?'dark':'';e.target.setAttribute('aria-pressed',on);e.target.textContent=on?'Light theme':'Dark theme';};
+document.getElementById('rm').onclick=e=>{const on=b.dataset.rm!=='on';b.dataset.rm=on?'on':'';e.target.setAttribute('aria-pressed',on);};
+document.getElementById('replay').onclick=()=>{
+  document.querySelectorAll('tr.flash').forEach(r=>{r.classList.remove('flash');void r.offsetWidth;r.classList.add('flash');});
+  [['tick1',16000,12450],['tick2',16000,12450]].forEach(([id,from,to])=>{
+    const el=document.getElementById(id);if(!el)return;
+    if(b.dataset.rm==='on'||matchMedia('(prefers-reduced-motion:reduce)').matches){el.textContent='₪'+to.toLocaleString();return;}
+    const t0=performance.now(),dur=420;
+    const step=t=>{const p=Math.min(1,(t-t0)/dur),e2=1-Math.pow(1-p,3);
+      el.textContent='₪'+Math.round(from+(to-from)*e2).toLocaleString();if(p<1)requestAnimationFrame(step);};
+    requestAnimationFrame(step);});
+};
+</script>
+</div>
+</body>
+</html>

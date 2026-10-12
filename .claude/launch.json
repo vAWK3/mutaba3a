@@ -30,64 +30,19 @@
       "port": 5182
     },
     {
-      "name": "web-mut82",
+      "name": "web-mut89",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        ".claude/worktrees/mut-82-home-inline-payment",
+        ".claude/worktrees/mut-89-all-businesses",
         "run",
         "dev:web",
         "--",
         "--port",
-        "5183",
+        "5187",
         "--strictPort"
       ],
-      "port": 5183
-    },
-    {
-      "name": "web-mut84",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        ".claude/worktrees/mut-84-clients-split-view",
-        "run",
-        "dev:web",
-        "--",
-        "--port",
-        "5184",
-        "--strictPort"
-      ],
-      "port": 5184
-    },
-    {
-      "name": "web-mut62",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        ".claude/worktrees/mut-62-income-work-column",
-        "run",
-        "dev:web",
-        "--",
-        "--port",
-        "5185",
-        "--strictPort"
-      ],
-      "port": 5185
-    },
-    {
-      "name": "web-mut73",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        ".claude/worktrees/mut-73-retire-sync",
-        "run",
-        "dev:web",
-        "--",
-        "--port",
-        "5186",
-        "--strictPort"
-      ],
-      "port": 5186
+      "port": 5187
     }
   ]
 }

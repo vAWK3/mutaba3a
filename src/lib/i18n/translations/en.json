@@ -1423,5 +1423,13 @@
       "keep": "Keep looking"
     },
     "preparing": "Setting up the sample…"
+  },
+  "savedFlash": {
+    "saved": "Saved",
+    "incomeSaved": "Saved to {client}",
+    "incomeSavedNoClient": "Entry saved",
+    "paymentSaved": "Payment recorded for {client}",
+    "paymentSavedNoClient": "Payment recorded",
+    "show": "Show"
   }
 }

@@ -16,6 +16,7 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { PartialPaymentDrawer } from '../PartialPaymentDrawer';
 import { todayISO } from '../../../lib/utils';
+import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import type { PaymentRecord, TransactionDisplay } from '../../../types';
 
 const mockCreate = vi.fn().mockResolvedValue(undefined);
@@ -238,6 +239,56 @@ describe('PartialPaymentDrawer', () => {
       expect(onRecorded).toHaveBeenCalledTimes(1);
       expect(onRecorded).toHaveBeenCalledWith(record);
       expect(onRecorded.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+    });
+
+    // MUT-81 (eng review D3): unconditional, independent of onRecorded --
+    // ClientWorkSection and IncomePage open this drawer with no onRecorded at
+    // all, so the drawer itself is the only place that can call markSaved.
+    it('MUT-81: captures the recorded payment for the after-save flash', async () => {
+      mockTransaction = { ...mockTransaction, clientId: 'client-1', clientName: 'Furniture Co.', profileId: 'profile-1' };
+      const record: PaymentRecord = {
+        id: 'pr-new',
+        transactionId: 'tx-1',
+        amountMinor: 75000,
+        paidAt: todayISO(),
+        createdAt: '2026-03-02T00:00:00Z',
+        updatedAt: '2026-03-02T00:00:00Z',
+      };
+      mockCreate.mockResolvedValueOnce(record);
+      useSavedFlashStore.getState().clear();
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer();
+
+      await user.click(recordButton());
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(useSavedFlashStore.getState().pending).toMatchObject({
+        kind: 'payment',
+        ids: ['pr-new', 'tx-1'],
+        clientId: 'client-1',
+        clientName: 'Furniture Co.',
+        profileId: 'profile-1',
+      });
+    });
+
+    it('MUT-81: skips the flash when the transaction has no profileId (defensive, legacy data)', async () => {
+      // mockTransaction in beforeEach has no profileId at all.
+      mockCreate.mockResolvedValueOnce({
+        id: 'pr-new',
+        transactionId: 'tx-1',
+        amountMinor: 75000,
+        paidAt: todayISO(),
+        createdAt: '2026-03-02T00:00:00Z',
+        updatedAt: '2026-03-02T00:00:00Z',
+      });
+      useSavedFlashStore.getState().clear();
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer();
+
+      await user.click(recordButton());
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(useSavedFlashStore.getState().pending).toBeNull();
     });
 
     it('reports nothing when the repository refuses the payment', async () => {
@@ -524,6 +575,26 @@ describe('PartialPaymentDrawer', () => {
       });
       expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-1' });
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('MUT-81: captures an updated record for the after-save flash too', async () => {
+      mockTransaction = { ...mockTransaction, clientId: 'client-1', clientName: 'Furniture Co.', profileId: 'profile-1' };
+      useSavedFlashStore.getState().clear();
+      const user = userEvent.setup();
+      renderDrawer();
+
+      await user.clear(amountInput());
+      await user.type(amountInput(), '300');
+      await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(useSavedFlashStore.getState().pending).toMatchObject({
+        kind: 'payment',
+        ids: ['pr-1', 'tx-1'],
+        clientId: 'client-1',
+        clientName: 'Furniture Co.',
+        profileId: 'profile-1',
+      });
     });
 
     // MUT-82 (D4): an update is not a new payment, so nothing to undo; the

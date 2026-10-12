@@ -15,6 +15,8 @@ export const KNOWN_AXE_VIOLATIONS = {
   home: [...APP_SHELL],
   clients: [...APP_SHELL],
   clientProfile: [...APP_SHELL],
+  // A client open beside the list (MUT-84): both panes at once
+  clientsSplit: [...APP_SHELL],
   income: [...APP_SHELL],
   settings: [...APP_SHELL],
   // Save is brand teal

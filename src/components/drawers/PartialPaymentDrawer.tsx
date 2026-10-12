@@ -8,11 +8,12 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { cn, formatAmount, formatDate, todayISO } from '../../lib/utils';
+import { cn, formatAmount, formatDate, isolate, todayISO } from '../../lib/utils';
 import { isFuturePaymentDate } from '../../lib/dates';
 import { describePaymentAmount, minorToAmountInput, type PaymentAmountState } from '../../lib/paymentEntry';
 import type { Currency, PaymentRecord } from '../../types';
 import { useDrawerStore } from '../../lib/stores';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import './PartialPaymentDrawer.css';
 
 /**
@@ -44,14 +45,6 @@ interface PartialPaymentDrawerProps {
 
 const FORM_ID = 'partial-payment-form';
 
-// Bidi isolates: keep an amount whole inside a sentence of either direction
-const FIRST_STRONG_ISOLATE = '\u2068';
-const POP_ISOLATE = '\u2069';
-
-function isolate(text: string): string {
-  return `${FIRST_STRONG_ISOLATE}${text}${POP_ISOLATE}`;
-}
-
 export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: PartialPaymentDrawerProps) {
   const t = useT();
   const { language } = useLanguage();
@@ -66,6 +59,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
   const createMutation = useCreatePaymentRecord();
   const updateMutation = useUpdatePaymentRecord();
   const deleteMutation = useDeletePaymentRecord();
+  const markSaved = useSavedFlashStore((s) => s.markSaved);
 
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
 
@@ -110,8 +104,35 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
   };
 
   const handleRecorded = (record: PaymentRecord) => {
+    // Unconditional (MUT-81 eng review D3): ClientWorkSection and IncomePage
+    // open this drawer with no onRecorded at all, so they have no other way
+    // to learn a save happened. Home's own onRecorded (below) undoes this for
+    // the one case it already has complete feedback for -- a full payment,
+    // whose row is about to leave via captureRowExit (D10).
+    if (transaction.profileId) {
+      markSaved({
+        kind: 'payment',
+        ids: [record.id, transactionId],
+        clientId: transaction.clientId,
+        clientName: transaction.clientName,
+        profileId: transaction.profileId,
+      });
+    }
     onRecorded?.(record);
     onClose();
+  };
+
+  const handleUpdated = () => {
+    if (editingRecord && transaction.profileId) {
+      markSaved({
+        kind: 'payment',
+        ids: [editingRecord.id, transactionId],
+        clientId: transaction.clientId,
+        clientName: transaction.clientName,
+        profileId: transaction.profileId,
+      });
+    }
+    returnToEntry();
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
@@ -173,7 +194,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
           updateMutation={updateMutation}
           isPending={isPending}
           onRecorded={handleRecorded}
-          onUpdated={returnToEntry}
+          onUpdated={handleUpdated}
           t={t}
         />
       )}

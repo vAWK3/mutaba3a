@@ -16,6 +16,8 @@ import { SearchInput, StatusSegment, DateRangeControl } from '../filters';
 import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton, AmountWithConversion, EmptyState, type RowAction } from '../ui';
 import { CheckIcon, CopyIcon, DocumentIcon } from '../icons';
 import { useIncome, type IncomeFilters } from '../../hooks/useIncomeQueries';
+import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDateRangePreset, cn } from '../../lib/utils';
@@ -56,6 +58,23 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
   const [filters, setFilters] = useState<WorkFilters>(DEFAULT_FILTERS);
   const updateFilters = (patch: Partial<WorkFilters>) => setFilters((prev) => ({ ...prev, ...patch }));
 
+  // A save landing on this client resets this list's own filters (MUT-81,
+  // qa-reconcile finding): unlike /income's filters, these are local state,
+  // not in the URL, so Show navigating here would otherwise be able to land
+  // on a page where the row is still hidden behind a stale status/date/search
+  // filter, with no second message -- the dead end design decision 2A exists
+  // to prevent. Adjusted during render (react.dev's "Adjusting state when a
+  // prop changes"), not in an effect, so it takes effect before paint rather
+  // than one frame late.
+  const pendingFlash = useSavedFlashStore((s) => s.pending);
+  const [seenFlash, setSeenFlash] = useState(pendingFlash);
+  if (pendingFlash !== seenFlash) {
+    setSeenFlash(pendingFlash);
+    if (pendingFlash?.clientId === clientId) {
+      setFilters(DEFAULT_FILTERS);
+    }
+  }
+
   const queryFilters = useMemo(
     (): IncomeFilters => ({
       clientId,
@@ -67,11 +86,16 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
     }),
     [clientId, filters]
   );
-  const { data: entries = [], isLoading } = useIncome(queryFilters);
+  const { data: entries = [], isLoading, isFetching } = useIncome(queryFilters);
 
   // One "today" per render so every row is classified the same way
   const today = todayLocalISO();
   const rows = useMemo(() => entries.map((tx) => toWorkRow(tx, today)), [entries, today]);
+  const isFlashed = useSavedFlashRows(
+    `client-work-${clientId}`,
+    rows.map((row) => row.id),
+    { isLoading, isFetching }
+  );
 
   const hasNoWork = !isLoading && rows.length === 0 && isDefault(filters);
   const addIncome = () => openIncomeDrawer({ mode: 'create', defaultClientId: clientId });
@@ -180,7 +204,7 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
                   {rows.map((row) => (
                     <tr
                       key={row.id}
-                      className="clickable"
+                      className={cn('clickable', isFlashed(row.id) && 'row-flash')}
                       onClick={() => openIncomeDrawer({ mode: 'edit', transactionId: row.id })}
                     >
                       <td className="client-work-date">{formatDate(row.date, locale)}</td>

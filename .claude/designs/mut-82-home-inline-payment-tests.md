@@ -46,10 +46,10 @@
 | T16 | Home, focus after a full payment: focus moves to the next row's Record payment button | integration |
 | T17 | Home reads one receivables query: `useReceivables({ profileId: 'p1' })` feeds both Owed now and Needs attention; `useAttentionReceivables` is not called (`OverviewPage.test.tsx`) | component |
 | T18 | i18n: `overview.paymentRecorded`, `overview.paymentRecordedNoClient` and `overview.undoFailed` are non-empty in en and ar, with `{amount}` (and `{client}`) kept | unit |
-| T19 | Browser: from Home, Record payment → Record → the row slides out (its copy moves toward the inline end and is removed), Owed now updates, focus moves to the next row; Undo → the row and Owed now come back | e2e (dropped with `e2e/`; to port to `qa/`) |
-| T20 | Browser: a partial payment from Home keeps the row with the new remaining amount | e2e (dropped with `e2e/`; to port to `qa/`) |
-| T21 | Browser, reduced motion: the copy only fades (no translate); Arabic: it slides left | e2e (dropped with `e2e/`; to port to `qa/`) |
-| T22 | Axe on Home with a Needs attention row showing its button: only the known `color-contrast` (`home` surface) | e2e (dropped with `e2e/`; to port to `qa/`) |
+| T19 | Browser: from Home, Record payment → Record → the row slides out (its copy moves toward the inline end and is removed), Owed now updates, focus moves to the next row; Undo → the row and Owed now come back | qa: `web.home.attention-pay-full` |
+| T20 | Browser: a partial payment from Home keeps the row with the new remaining amount | qa: `web.home.attention-pay-partial` |
+| T21 | Browser, reduced motion: the copy only fades (no translate); Arabic: it slides left | qa: `web.home.attention-pay-reduced-motion`, `web.home.attention-pay-rtl` |
+| T22 | Axe on Home with a Needs attention row showing its button: only the known `color-contrast` (`home` surface) | qa: a step of `web.home.attention-pay-full` |
 
 ## Edge cases
 
@@ -62,4 +62,4 @@
 
 ## Run status
 
-At the owner's request, lint, typecheck and tests are not part of this lane's finish; they run once on main after every lane has merged. Before that instruction, before merging main: vitest 198 files, 3,006 passed, 4 skipped; typecheck clean; lint 0 errors; T19–T22 (then in `e2e/`) 5/5. T19–T22 were dropped when main retired `e2e/` (MUT-97) and are to port to `qa/`. Not re-run since: D15's fix and the merge of main. The full browser suite and `test:bundles` were never run on this branch. See `.claude/TEST_PLAN.md` § MUT-82.
+At the owner's request, lint, typecheck and tests are not part of this lane's finish; they run once on main after every lane has merged. Before that instruction, before merging main: vitest 198 files, 3,006 passed, 4 skipped; typecheck clean; lint 0 errors; T19–T22 (then in `e2e/`) 5/5. T19–T22 were dropped when main retired `e2e/` (MUT-97); on 2026-10-12 they were recovered from checkpoint `660ba96` and ported to `qa/specs/web/home.spec.ts`, where all four features pass. Not re-run since: D15's fix and the merge of main. The full browser suite and `test:bundles` were never run on this branch. See `.claude/TEST_PLAN.md` § MUT-82.

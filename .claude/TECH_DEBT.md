@@ -18,23 +18,6 @@
 
 ## Open Debt
 
-### TD-067: The Clients split view has no browser-level spec, and its unit tests have not run yet
-**Status**: Open
-**Added**: 2026-10-12 (MUT-84, ADR-050)
-**Priority**: Medium
-**Impact**: MUT-84's brief asked for an e2e spec of the split view: the keyboard walk and a deep link. The owner then stopped new tests, and every gate run, in all of the epic's lanes until they merge, so it was not written. Since MUT-97 retired `e2e/`, it belongs in `qa/`. The behaviour is covered only by jsdom tests on a real memory router (`ClientsLayout.test.tsx` and the helpers' tests). Those were written test-first, and the targeted suites passed once mid-build (11 files, 178 tests), before the stop order. They have not run since the last edits: the breakpoint moved from 1200 to 1280 px, and main was merged in. jsdom can't check what only a browser shows: real focus rings, the column widths, the mirrored columns in Arabic, and axe on the split view. `qa/playwright.config.ts` runs at 1280 × 720, which is exactly `BREAKPOINTS.clientsSplit`, so the existing `@web.clients.profile` spec now opens the profile beside the list; it has not been run against it.
-**Remediation**: Run the combined gate on main, then add `split-view` to `qa/features/web/clients.yaml`, with a spec in `qa/specs/web/clients.spec.ts`:
-- a click opens the profile beside the list;
-- ↓/↑ walk, with the URL and `aria-current` following;
-- Enter and Escape (→ and ←) move focus between the panes;
-- the status line names the client;
-- Back after a walk returns to the full list;
-- a deep link with `?sort=name&dir=asc` opens both panes, sorted;
-- resizing 1280 → 375 → 1280 keeps a value typed in the profile;
-- in Arabic the list sits on the right and ← moves into the profile;
-- axe on the split view adds no rule.
-**Effort**: Small
-
 ### TD-074: `migration-safety`'s hand-kept table list misses five live tables
 **Status**: Open
 **Added**: 2026-10-12 (MUT-73, found in the audit; brief decision D10)
@@ -50,6 +33,27 @@
 **Impact**: `src/services/oauth/` (`connectWorkspace`, `getValidAccessToken`, `disconnectWorkspace`; 570 lines plus 74 test cases) and `src-tauri/src/oauth/` (the loopback listener and its three IPC commands) are only called from tests. They were built (MUT-28) for op-log sync over Malafat OAuth, which ADR-053 took off the roadmap. MUT-73 kept them as the ticket asked and moved them out of the sync tree. Until something calls them, they cost upkeep and a 127.0.0.1 listener's worth of attack surface that never opens, and TD-015 (durable tokens) has nothing to serve.
 **Remediation**: Decide whether the desktop app should ever sign in to a Malafat workspace. If yes, ticket the screen that calls `connectWorkspace` (and TD-015 with it). If no, delete both modules, the three commands, the opener plugin and its `*.malafat.app` permission, and `public/.well-known/oauth-client.json`.
 **Effort**: Small either way; the decision is the work.
+
+### TD-077: The after-save message is the existing floating Toast, not design review's anchored strip
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-81, ADR-057 point 6; design review decision 5B)
+**Priority**: Low
+**Impact**: Brief decision A1 (epic MUT-74) says "nothing floats over content," and MUT-79 shipped it for the FX widget, theme toggle and the Mac-app bar. MUT-81's `/plan-design-review` pass found the same tension in its own message and proposed an anchored strip in flow above the list instead (`SavedFlashStrip`, decision 5B), which also has room to say *why* a row is missing (its own filter, another business, a page number) rather than only that it is. The build reused `Toast` instead: none of the ticket's five literal acceptance criteria name a presentation surface, and `Toast` already has `role="status"`, `aria-live`, and action support, so it satisfies all five.
+**Remediation**: Build `SavedFlashStrip` per the design review's decisions 5B/6A/9A/4A/2A (`.claude/designs/mut-81-after-save-feedback.md`) and swap it in for the Toast call in `SavedFlashAnnouncer`. The underlying store (`savedFlashStore.ts`) needs no change; only the announcer's render branch for the unclaimed case does.
+**Effort**: Medium (one new component, its styles, and the responsive/RTL cases the design review specified)
+
+### TD-078: MUT-81's design-review refinements are unbuilt — pagination, the Owed-now tick, currency-block collapse, and a non-Home focus chain
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-81)
+**Priority**: Low
+**Impact**: `.claude/designs/mut-81-after-save-feedback.md` carries several approved decisions beyond the ticket's five literal acceptance criteria that this build did not implement:
+- **Pagination** (D7/D8/11A) for `ClientWorkSection` and `IncomePage`, both still defaulting to All Time with no bound — `src/components/ui/Pagination.tsx` still has zero UI callers. This was itself a scope addition the eng review pulled into MUT-81 from an unrelated performance finding, not part of the original ticket.
+- **The Owed-now count-up tick** (design 1A/3A) when a save changes the figure — `OwedNowSummary` still snaps to the new value.
+- **Currency-block collapse** (design 3A, eng review D9A's `captureBlockExit`) when a save clears or opens a currency entirely.
+- **A dedicated keyboard-focus chain** (design 10A) for the client profile, `/income`, and Show's cross-navigation — ADR-055 §6 already covers Home's full-payment path; the other three screens have no equivalent today, so a keyboard user's focus can fall to the page after a save there.
+**Remediation**: Each is independently buildable against the landed `savedFlashStore`/`useSavedFlashRows` mechanism; none requires touching it. Pick up from the named design decisions.
+**Effort**: Medium in total (pagination and the focus chain are the two with real behavioural weight; the tick and the block collapse are polish)
+
 ### TD-076: An untitled entry reads "—" on Income and "Untitled" on the client profile, and only titled rows open from the keyboard
 **Status**: Open
 **Added**: 2026-10-12 (MUT-62)
@@ -77,8 +81,8 @@
 4. **Toasts and assistive technology.** `ToastContainer` mounts with its first toast, so its `role="status"` region is not in the page before the message and some screen readers won't announce it. Undo has no keyboard shortcut and sits at the end of the tab order; MUT-82 only pauses the timer once focus or the pointer reaches it.
 5. **The bidi isolate helper is copied four times** (`PartialPaymentDrawer`, `IncomeDrawer`, `OwedNowSummary`, `HomeNeedsAttention`).
 6. **Untested lines.** `exitSnapshot`'s id stripping (found in the browser after the owner paused new tests) has no unit test; the integration test drives the flow but not a drawer opened during another's exit.
-7. **The browser spec is not in `qa/`.** `e2e/home-record-payment.spec.ts` (full payment and slide-out, partial, reduced motion, Arabic, axe) was dropped when main retired `e2e/` (MUT-97); TEST_PLAN § MUT-82 lists what it covered.
-**Remediation**: 1 with TD-063 / MUT-60. 2: MUT-73 has landed, so delete both hooks and their tests, and `getAttentionReceivables` if nothing else reads it. 3: give Recent payments the same link cell and the container-query layout (`HomeNeedsAttention.css`). 4: keep the toast region mounted and empty; consider Cmd/Ctrl+Z for the Undo showing. 5: one `isolate` in `lib/utils.ts`. 6: add an `exitSnapshot.test.ts` case: a clone has no `[id]`. 7: port it to `qa/specs/web/home.spec.ts` with five `home.yaml` features, plus `logIncome({ dueDate })` and `localDateFromToday` in `qa/support/app.ts`.
+7. ~~**The browser spec is not in `qa/`.**~~ **Done 2026-10-12:** recovered from checkpoint `660ba96` and ported as `web.home.attention-pay-{full,partial,reduced-motion,rtl}` (`qa/specs/web/home.spec.ts`); the axe check runs inside the full-payment flow. TEST_PLAN § MUT-82.
+**Remediation**: 1 with TD-063 / MUT-60. 2: MUT-73 has landed, so delete both hooks and their tests, and `getAttentionReceivables` if nothing else reads it. 3: give Recent payments the same link cell and the container-query layout (`HomeNeedsAttention.css`). 4: keep the toast region mounted and empty; consider Cmd/Ctrl+Z for the Undo showing. 5: one `isolate` in `lib/utils.ts`. 6: add an `exitSnapshot.test.ts` case: a clone has no `[id]`. 7: done.
 **Effort**: Small each
 
 ### TD-066: Income's Received / Unpaid strip ignores the page's filters
@@ -1082,6 +1086,24 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-067: The Clients split view has no browser-level spec, and its unit tests have not run yet
+**Status**: Resolved (2026-10-12, qa port of the MUT-82/MUT-84 browser checks)
+**Added**: 2026-10-12 (MUT-84, ADR-050)
+**Priority**: Medium
+**Impact**: MUT-84's brief asked for an e2e spec of the split view: the keyboard walk and a deep link. The owner then stopped new tests, and every gate run, in all of the epic's lanes until they merge, so it was not written. Since MUT-97 retired `e2e/`, it belongs in `qa/`. The behaviour is covered only by jsdom tests on a real memory router (`ClientsLayout.test.tsx` and the helpers' tests). Those were written test-first, and the targeted suites passed once mid-build (11 files, 178 tests), before the stop order. They have not run since the last edits: the breakpoint moved from 1200 to 1280 px, and main was merged in. jsdom can't check what only a browser shows: real focus rings, the column widths, the mirrored columns in Arabic, and axe on the split view. `qa/playwright.config.ts` runs at 1280 × 720, which is exactly `BREAKPOINTS.clientsSplit`, so the existing `@web.clients.profile` spec now opens the profile beside the list; it has not been run against it.
+**Remediation**: Run the combined gate on main, then add `split-view` to `qa/features/web/clients.yaml`, with a spec in `qa/specs/web/clients.spec.ts`:
+- a click opens the profile beside the list;
+- ↓/↑ walk, with the URL and `aria-current` following;
+- Enter and Escape (→ and ←) move focus between the panes;
+- the status line names the client;
+- Back after a walk returns to the full list;
+- a deep link with `?sort=name&dir=asc` opens both panes, sorted;
+- resizing 1280 → 375 → 1280 keeps a value typed in the profile;
+- in Arabic the list sits on the right and ← moves into the profile;
+- axe on the split view adds no rule.
+**Effort**: Small
+**Resolution**: Both halves are done. The combined check on main (`eeacd57`) ran the split view's vitest files green. The browser spec is now four `qa/` features in `qa/features/web/clients.yaml`, with their tests in `qa/specs/web/clients.spec.ts`. `split-view` covers the click, the ↓/↑ walk with URL, focus, `aria-current` and the status line following, Enter/Escape and →/← between the panes, axe on both panes (new `clientsSplit` surface, only the known `color-contrast`), and Back after the walk. `split-view-deep-link` covers the sorted deep link and a walk that keeps the sort. `split-view-resize` covers 1280 → 375 → 1280 with a typed Work search kept. `split-view-rtl` covers Arabic: the list on the right, ← in and → out. All four passed first time, and each failed against a deliberately broken build. Real focus rings and exact column widths are still checked by eye only.
 
 ### TD-003 and TD-037: device sync is retired (won't do / moot)
 **Status**: Resolved (2026-10-12, MUT-73, ADR-053)
