@@ -390,7 +390,7 @@ describe('DELETE /v1/income/{id} — undo (AC 9)', () => {
 });
 
 describe('read-surface agreement (AC 3): captured income shows up where its money already lives', () => {
-  it('Owed appears in Owed and, once overdue, in Overdue instead (GET /v1/summaries/organization — the design doc\'s named surface; the customer summary is project-keyed and does not carry a matterless receivable)', async () => {
+  it('Owed appears in Owed and, once overdue, in Overdue instead — in the organization summary and, matterless as it is, in the client’s own summary for the same figure', async () => {
     const { h, p, u, create } = await setup();
     const c = await customer(h, u, p.id);
     await create({ ...BASE_RECEIVED, customerId: c.id, amount: '300.00' });
@@ -406,12 +406,35 @@ describe('read-surface agreement (AC 3): captured income shows up where its mone
     expect(beforeBlock.overdue).toBe('0.00');
     expect(beforeBlock.customers.find((x: Loose) => x.customerId === c.id).outstanding).toBe('500.00');
 
+    // The client-detail surface AC 3 actually names: the same figure, not a zero because the row has no matter.
+    const customerBefore = await read(await h.app.request(`/v1/summaries/customers/${c.id}`, { headers: u.as(p.id) }));
+    const customerBlockBefore = customerBefore.currencies.find((x: Loose) => x.currency === 'ILS');
+    expect(customerBlockBefore).toMatchObject({ outstanding: '500.00', notYetDue: '500.00', overdue: '0.00', status: 'UP_TO_DATE' });
+    // ...and it belongs to no matter, so it adds no row to projects[].
+    expect(customerBlockBefore.projects).toEqual([]);
+
     // Advance the clock past the due date: the same figure moves from "not yet due" to overdue (ADR-022 bucketing).
     h.clock.now = new Date('2026-10-20T09:00:00Z');
     const orgSummaryAfter = await read(await h.app.request('/v1/summaries/organization', { headers: u.as(p.id) }));
     const afterBlock = orgSummaryAfter.currencies.find((x: Loose) => x.currency === 'ILS');
     expect(afterBlock.overdue).toBe('500.00');
     expect(afterBlock.outstanding).toBe('500.00');
+
+    const customerAfter = await read(await h.app.request(`/v1/summaries/customers/${c.id}`, { headers: u.as(p.id) }));
+    expect(customerAfter.currencies.find((x: Loose) => x.currency === 'ILS')).toMatchObject({ overdue: '500.00', outstanding: '500.00', status: 'OVERDUE' });
+  });
+
+  it('a matterless Owed in a currency of its own still gives the client summary a block for that currency', async () => {
+    const { h, p, u, create } = await setup();
+    const c = await customer(h, u, p.id);
+    await create({ ...BASE_OWED, customerId: c.id, amount: '80.00', currency: 'USD', dueDate: '2026-10-15' });
+    const customerSummary = await read(await h.app.request(`/v1/summaries/customers/${c.id}`, { headers: u.as(p.id) }));
+    const usd = customerSummary.currencies.find((x: Loose) => x.currency === 'USD');
+    expect(usd).toBeTruthy();
+    expect(usd.outstanding).toBe('80.00');
+    // The two endpoints must never disagree about what this client owes.
+    const orgSummary = await read(await h.app.request('/v1/summaries/organization', { headers: u.as(p.id) }));
+    expect(orgSummary.currencies.find((x: Loose) => x.currency === 'USD').customers.find((x: Loose) => x.customerId === c.id).outstanding).toBe('80.00');
   });
 
   it('two currencies captured on the same profile: each currency block is independent, never summed together', async () => {
