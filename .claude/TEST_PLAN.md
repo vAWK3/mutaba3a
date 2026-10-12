@@ -485,7 +485,7 @@ describe('Button', () => {
 
 ### 4. E2E Tests (Planned)
 
-> The live suite is `e2e/*.spec.ts`, listed under "E2E port-over" below (2026-10-12). This section is the original plan.
+> The live suite is `qa/specs/web/*.spec.ts`, run via `release-qa` (`make check-e2e`; MUT-97, 2026-10-12). It replaced `e2e/*.spec.ts`, listed under "E2E port-over" below — that section is now history, not the current location. This section (the examples that follow) was always the original aspirational plan, never implemented as written.
 
 **Scope**: Full user flows from UI to database.
 
@@ -611,8 +611,10 @@ npm run test -- src/db/__tests__/repository.test.ts
 # Pattern match
 npm run test -- -t "creates a transaction"
 
-# E2E (when implemented)
-npm run test:e2e
+# E2E (release-qa kit; MUT-97)
+release-qa run --attach   # against a dev server you already started
+release-qa release        # isolated worktree + its own dev server + recorded review page
+make check-e2e            # the latter, wired for local/CI use
 
 # Timezone matrix -- runs the suite west of UTC (America/New_York)
 npm run test:tz
@@ -1275,6 +1277,12 @@ Plan: `.claude/designs/mut-64-device-sessions-tests.md`. Written red first per f
 
 ### E2E port-over — the stale Playwright specs on the current UI (TD-004, 2026-10-12)
 
+> **Superseded 2026-10-12 (MUT-97)**: `e2e/` was retired in favor of `qa/` (the
+> release-qa kit, companion to Malafat's MAL-1007). Every file and path named
+> below was ported to `qa/specs/web/*.spec.ts` with the same coverage, tagged
+> `@web.<area>.<id>` and described in `qa/features/web/*.yaml`. This section
+> stays as the historical record of the 2026-10-12 port-over itself.
+
 The 13 cases that failed on main (stale paths without `/app`, pages that no longer exist, the pre-MUT-5 drawer) are each updated or removed. Helpers live in `e2e/support/`:
 - `openFreshApp(page, path)` waits for the Welcome dialog and skips it, which creates the default USD profile;
 - `openNewIncomeDrawer(page)` opens the drawer from the top bar's "+ Add" › Income;
@@ -1445,6 +1453,30 @@ The repository's own future-date and overpayment tests (`paymentRecords.test.ts`
 **Gate (2026-10-12, branch head dad50d2 on main 5674515, Node 22 per TD-054):**
 - `npx vitest run`: 189 files, 2,923 passed, 4 skipped. An earlier full run on the same code had 3 tests and 2 suites time out under the load of four parallel lanes. They were `ExpenseDrawer.oneTimeFields`, `RetainerDrawer.projectField`, `CurrencyTabs`, `router.gates` and `legacyRedirects`. Rerun alone, those 5 files passed (35 tests), and the full rerun was clean.
 - `npx playwright test` (throwaway config, port 5195): 23/23, including the 4 new specs.
+
+### MUT-87 — Expenses Needs attention, one row per recurring rule (epic MUT-74, 2026-10-12)
+
+Plan: `.claude/designs/mut-87-recurring-rows-tests.md` (T1–T30). ADR-052.
+
+| File | Covers |
+|---|---|
+| `src/components/expenses/__tests__/recurringAttention.test.ts` (new, 15) | Grouping: one payment, several out of order (oldest first), several rules (ordered by oldest payment, title, id; never mixed), the row's fields, empty input; per-currency totals (no zero, USD → ILS → EUR, never combined); month lists in English and Arabic, the year only across two years, date-only values read as local dates; snooze dates across month and year ends |
+| `src/lib/__tests__/currencyAmounts.test.ts` (new, 2) | `orderCurrencyAmounts` order and zero handling |
+| `src/services/__tests__/recurringExpenseService.batch.test.ts` (new, 12, fake-indexeddb) | `confirmPayments` writes one expense per payment on its own expected date and links each occurrence; a partial selection leaves the rest due; **a failure on the second write leaves no expense and no occurrence**; an unknown rule writes nothing; an edited amount is the expense amount and `actualAmountMinor`, an unedited one leaves it unset; `skipOccurrences` (one, all, all or nothing); `snoozeOccurrences` (a date, a past date rejects the batch); `frequency` on virtual occurrences |
+| `src/hooks/__tests__/useRecurringExpenseQueries.test.tsx` (3 replaced) | The batch hooks call their service function once and invalidate occurrences, due occurrences, the rule's history, and expenses only on confirm |
+| `src/hooks/__tests__/useExpenseQueries.test.tsx` (+1) | Editing a rule invalidates `dueOccurrences` and `virtualOccurrences` |
+| `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` (new, 5, real dictionaries) | One row per rule with months, period amount, total and lateness; a one-payment rule ("Oct not marked", "Skip", "Snooze…"); the header's count and side-by-side totals in `<bdi dir="ltr">`; Mark Paid and the ⋯ menu by keyboard (focus on open, arrows, Escape back to the button) and each item's handler; Arabic month names, LTR amounts and the `few` plural form |
+| `src/components/drawers/__tests__/RecurringMarkPaidDrawer.test.tsx` (new, 10, real dictionaries) | All payments checked with their dates; Mark 3 paid sends each expected date; partial selection and the counted button; none checked disables it; an edited amount is sent, an unreadable, zero or other-currency amount blocks saving with the field error; per-payment Skip asks first; per-payment Snooze through the snooze view and back; Snooze all with a quick pick; a date not after today is refused; Cancel closes; Arabic |
+| `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` (+4) | The grouped section replaces the cards; Mark Paid opens the drawer on the rule; ⋯ › Skip all asks and skips every payment; ⋯ › Edit rule opens the expense drawer on the rule |
+| `src/lib/i18n/__tests__/recurringAttentionKeys.test.ts` (new, 5) | Every new string in en and ar with its placeholders; every counted string has `one`/`other` in English and all six forms in Arabic |
+| `src/__tests__/noDeadExpenseModules.test.ts` (+1) | The two recurring modals stay deleted and unexported |
+
+**Verified in the browser** (dev server `web-mut87`, Expenses switched on, two monthly rules started in July and September): the grouped rows, the header totals ($240 and ₪7,000 side by side), the ⋯ menu by keyboard, Mark 2 of 3 paid (IndexedDB holds expenses dated 2026-08-05 and 2026-10-05, the row then reads "Sep not marked"), a per-payment snooze and back, and Snooze all, in English and Arabic (RTL), light and dark, at 1024 px and 375 px. At 375 px every drawer is wider than the screen (TD-070, the shared `Drawer`). The "Total expenses" strip stayed ₪0 after marking expenses paid: it sums the wrong table (reported, not changed).
+
+**e2e:** not run. No Playwright spec covers the Expenses page (it is an optional area, off on a fresh install); `navigation.spec.ts` only asserts it is absent from the sidebar by default, which this ticket doesn't change.
+
+**Gate (2026-10-12, Node 22, branch on main 5674515):**
+- `npx vitest run`: 193 files, 2,930 passed, 4 skipped. A first run under load timed out 6 tests in four untouched files (IncomeDrawer, hosted views, ClientDetailPage, OverviewPage, 5 s timeouts); those four files pass alone, and the second full run passed.
 - `npm run lint`: 0 errors, 16 warnings, none in changed files.
 - `npm run typecheck`: clean.
 - `npm run test:bundles`: OK.
@@ -1472,6 +1504,39 @@ Plan: `.claude/designs/mut-66-unsorted-inbox-tests.md`. Server-only; the portal 
 `store-guard.test.ts` exercises both branches of the new `'sessionOnly'` case, asserts `inboxEntries`' full classification, and asserts that filing-as-income's `READ_ONLY_PROFILE` falls straight out of `STORE_ACCESS` — if that assertion needed anything inbox-specific, the design's central claim would be false. It also pins the matrix at ten domains, so reaching for an `inbox` domain fails immediately.
 
 **Counts:** 15 store-contract cases × 2 stores, 4 DMMF, 9 compose/cursor, 16 CRUD route, 18 filing route, 6 isolation. Server suite 1310 (memory) / 1397 (`test:db`, all 82 files) green.
+
+### MUT-83 — Owed now on Home and Clients always match (2026-10-12)
+
+Plan: `.claude/designs/mut-83-owed-parity-tests.md`. ADR-049. Every new assertion was written first and failed on the old code (checkpoint `5623e7e`, 32 failures plus 5 files that did not load).
+
+| File | Covers |
+|---|---|
+| `src/db/__tests__/aggregations.test.ts` | `clientScopeOf` (none / gone row / archived / live); `owedNowRemaining`; `partitionOwedNow`: the No client and Archived clients buckets and their counts, every live entry of a live client grouped, total = `summarizeOwedByCurrency` of the same entries, parts add up to the total, empty input |
+| `src/db/__tests__/clientOwedIndex.test.ts` (new, fake-indexeddb) | **AC1 parity:** two businesses, USD/ILS/EUR, unassigned, deleted-client, archived-client, archived-entry and shared-client (D3/D4) debts. `listOwedIndex(P).total` equals Home's `summarizeOwedByCurrency(transactionRepo.list(Home's filters))` in each business, the rows add up to it, and it stays equal after archiving a client. Also covers listing (own clients even with no entries, plus other businesses' clients with an entry here), per-business row columns (owed, overdue age, last payment, activity), search, and `transactionRepo.list({ clientScope })` returning exactly the entries behind each muted row |
+| `src/components/clients/__tests__/clientIndexRows.test.ts` | `toOwedBucketRows` (non-zero only, fixed order, overdue split); **AC2:** `orderClientIndex` puts the muted rows last for all 5 fields × 2 directions |
+| `src/pages/clients/__tests__/ClientsPage.test.tsx` | Mocks `useClientOwedIndex`. Muted rows are absent when zero, after the clients, muted, labelled with counts, amounts per currency, and last under any sort. The strip includes them. Clicking a row navigates to `/income` with `owedEntriesSearch`, and the label is a link. A search hides them and sums only the matches. No clients but a No-client debt shows the strip and the row |
+| `src/lib/__tests__/incomeSearch.test.ts` (new) | Parsing, merging, defaults and the muted-row link of `/income`'s URL model |
+| `src/hooks/__tests__/useIncomeFilters.test.tsx` (new) | On a real memory router: reads the URL; a write keeps the other filters and adds no history entry; a cleared filter leaves the URL |
+| `src/pages/income/__tests__/IncomePage.test.tsx` | `useIncomeFilters` is replaced by an in-memory stand-in. No params = old defaults; a link's scope, status and period apply; the chip names the scope and clears it; tabs write to the URL; an empty scoped list says nothing matched |
+| `src/lib/i18n/__tests__/owedIndexKeys.test.ts` (new) | Chip keys in en/ar with `{name}`; row labels have every plural form (en one/other, ar six) |
+| `e2e/owed-parity.spec.ts` (new) | Logs a client entry and a no-client entry, then checks: Home's and Clients' Owed now are equal (`$1,500`); the No client row opens `/income?client=none` with one row and a chip that clears it; axe adds no rule on either page; the muted row and the chip pass `color-contrast` |
+
+**Verified in the browser** (`web-mut83`, sample data):
+- **Setup through the UI:** an income with no client, an archived client, and an income in Creative Design Studio for a client created in Advanced Tech.
+- **Parity:** Home and Clients showed the same Owed now in both businesses: `$2,400 / ₪36,051.28`, and `$1,600 / ₪46,834.41`.
+- **Shared client:** it was listed in the second business with only its `$700`. Its row in its own business was unchanged.
+- **The No client row** opened `/income` filtered, with the chip.
+- **Languages and themes:** English and Arabic (RTL labels and plural forms), light and dark.
+- **375 px:** the strip used to run past its card. It now wraps (CSS fix), with no page-level horizontal scroll.
+
+**How e2e was run:** a throwaway config on port 5196, deleted afterwards along with `test-results/`.
+
+**Gate (2026-10-12, branch `feature/mut-83-owed-parity` on main 5674515, Node 22):**
+- `npx vitest run`: 191 files, 2,949 passed, 4 skipped, 0 failed. An earlier full run under four-agent load timed out 2 unrelated tests (`IncomeDrawer.locked`, `DataToolsSection`), which pass on their own.
+- `npm run typecheck`: clean.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run test:bundles`: passed.
+- `npx playwright test`: 21/21.
 
 ---
 

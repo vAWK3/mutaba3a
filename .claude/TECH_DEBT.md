@@ -34,12 +34,44 @@
 **Remediation**: Decide whether the desktop app should ever sign in to a Malafat workspace. If yes, ticket the screen that calls `connectWorkspace` (and TD-015 with it). If no, delete both modules, the three commands, the opener plugin and its `*.malafat.app` permission, and `public/.well-known/oauth-client.json`.
 **Effort**: Small either way; the decision is the work.
 
-### TD-072: The portal's vendored API types have been stale since MUT-65
+### TD-066: Income's Received / Unpaid strip ignores the page's filters
 **Status**: Open
+**Added**: 2026-10-12 (MUT-83, seen in the browser check)
+**Priority**: Low
+**Impact**: The strip above the Income list is `useOverviewTotalsByCurrency(dateFrom, dateTo, profileId)`. It follows the period, but not the status tab, the search or MUT-83's client scope. It also counts archived income (TD-030's lineage). So `/income?client=none`, opened from the Clients list's "No client" row, shows the whole business's Unpaid (₪43,388.8 in the sample) above a one-row list of ₪500, and that Unpaid differs from Owed now. This predates MUT-83, which only made the client-scoped view reachable.
+**Remediation**: Either make the strip follow the list's filters (one read over the same `useIncome` filters, with Unpaid as `summarizeOwedByCurrency`), or label it as the whole period's figures. Decide with whoever next touches Income's layout.
+**Effort**: Small
+
+### TD-065: A shared client's row on Clients can show less than its profile page
+**Status**: Open (accepted for now; revisit with MUT-89)
+**Added**: 2026-10-12 (MUT-83, ADR-049)
+**Priority**: Low
+**Impact**: Since ADR-049, each business's Clients list counts only that business's entries. The client profile page (`/clients/:id`) still adds up the client's entries in every business: Owed now, Work and billing, Payments. For a client shared across businesses, a row can say $700 while the profile says $1,500. The owner accepted this trade-off for parity with Home. The row's cross-profile badges ("N entries" per other business) hint at it, but nothing on the profile says which business each figure belongs to.
+**Remediation**: With MUT-89 ("All businesses" lens, business tags on rows), give the profile page the same business context: tag each entry and payment with its business, or show Owed now per business when the client has entries in more than one. Don't scope the profile to one business without an owner decision: it is the one place that shows everything a client owes.
+**Effort**: Medium
+
+### TD-069: Expenses Needs attention only looks back 90 days
+**Status**: Open
+**Added**: 2026-10-12 (MUT-87)
+**Priority**: Medium
+**Impact**: `getDueOccurrences` (`src/services/recurringExpenseService.ts`) asks for occurrences from 90 days ago to 30 days ahead. A payment missed more than 90 days ago never appears, so a rule started six months ago and never marked shows "Aug, Sep, Oct not marked" and silently drops April to July. MUT-87's one-row-per-rule now names the months, which makes the gap visible but does not cause it. The window predates MUT-87; changing it is a product decision (how far back should "not marked" reach: the rule's start, the last resolved payment, a fixed year?).
+**Remediation**: Decide the window with the owner. The likely answer is "since the rule's start date, or the day after its last resolved payment", which needs no new storage: `generateExpectedDates` already clamps to the rule's start. Check the cost for a long-running rule (at most twelve rows a year per rule).
+**Effort**: Small once decided
+
+### TD-070: The shared drawer is 480 px wide on a 375 px phone
+**Status**: Open
+**Added**: 2026-10-12 (found while checking MUT-87 at 375 px)
+**Priority**: Medium
+**Impact**: `.drawer` takes `width: var(--drawer-width)` (480 px) with no `max-width`, so at phone width every drawer is wider than the screen. In LTR its start edge (the title, the checkboxes) is cut off; in RTL its end edge is. `document.scrollWidth` stays 375, so nothing scrolls to reveal it. Seen on `RecurringMarkPaidDrawer` (MUT-87), and the same for the income, expense and payment drawers. MUT-87 may not touch the shared `Drawer` (MUT-80 rewrote its internals in parallel), so it is logged here.
+**Remediation**: In the shared drawer CSS, `width: min(var(--drawer-width), 100vw)` (and check MUT-80's drag offsets use the rendered width, not the variable). Verify at 375 px in English and Arabic on the income drawer and the mark-paid drawer.
+**Effort**: Small
+
+### TD-072: The portal's vendored API types have been stale since MUT-65
+**Status**: Resolved 2026-10-12
 **Added**: 2026-10-12 (found running MUT-66's gates)
 **Priority**: Medium
 **Impact**: `src/hosted/api/schema.d.ts` is generated from `server/openapi/openapi.yaml` by `npm run hosted:types`, but was not regenerated when MUT-65 landed. Regenerating it now produces ~1,040 changed lines and surfaces two real type errors the portal has been compiling past: `PaymentsList.tsx:39` and `ReceivablesList.tsx:37` pass `string | null` where `string` is required, because MUT-65 made `Payment.customerId` and `Receivable.projectId` nullable. The portal is reading those fields as if they can never be null. MUT-66 deliberately left the file alone — its design scopes it to the server, and regenerating would have dragged MUT-65's portal fixes into this ticket — so root `typecheck` still passes against the stale file.
-**Remediation**: Run `npm run hosted:types`, then handle the null cases at both call sites (and anywhere else the regeneration reveals). Consider adding `hosted:types --check` to the gates, the way `openapi:check` already guards the server document, so the two can never drift silently again.
+**Resolution**: Ran `npm run hosted:types`; both call sites now guard the null id before the `Map.get` lookup (`PaymentsList.tsx` customer lookup, `ReceivablesList.tsx` matter lookup), falling back to the existing "—" rendering. `hosted:types:check` already exists (package.json, wired into the Makefile gates) and now passes against the regenerated file.
 **Effort**: Small
 
 ### TD-073: Suites time out under full parallel load, because the 5 s default is tuned for isolation
@@ -48,7 +80,6 @@
 **Priority**: Low
 **Impact**: Three suites fail intermittently in a full run and pass every time in isolation. `migration-mut59.test.ts` (5 tests) times out at the 5,000 ms default in `npm run test:db` but passes 5/5 with `--testTimeout=60000`; it shells out to `createdb`/`dropdb` and applies the whole migration history per test. `IncomeDrawer.test.tsx` times out in the root run and passes 54/54 alone, where it alone takes 12.7 s. Separately, `routes-m6`'s audit-pagination assertion failed once in four full runs: it writes `payment.recorded` then `payment.reversed`, both stamped `createdAt: new Date()` by the memory store, and when the two land in the same millisecond the keyset tiebreaker is a random UUID, making the order a coin flip. None of these is a product defect, but they make a green run a matter of luck and train the eye to ignore red.
 **Remediation**: Raise `testTimeout` for the DB-backed and heavy component suites (per-file `describe` options or a vitest project config) rather than globally. For `routes-m6`, advance the harness clock between the two audited writes so the ordering is determined by time rather than by UUID.
-
 ### TD-063: Sample part-paid entries have a received amount but no payment record, so paying one raises Owed now
 **Status**: Open
 **Added**: 2026-10-12 (MUT-86, found in the browser on `/app/clients?sample=1`)
@@ -75,11 +106,11 @@
 **Effort**: Small
 
 ### TD-058: `src/hosted/api/schema.d.ts` is stale on `main`, and regenerating it breaks the hosted typecheck
-**Status**: Open
+**Status**: Resolved 2026-10-12
 **Added**: 2026-10-12 (found by the first `make check-web` run, ADR-043)
 **Priority**: High — it blocks `make release web`
 **Impact**: `npm run hosted:types:check` fails on `main`. MUT-65 changed `server/openapi/openapi.yaml` (commits `7382c56`, `ac3817f`, merge `8ef2df0`) without regenerating the portal's client types, which were last written at MUT-64 (`8840f1c`). The drift is 382 insertions: the new `POST /v1/receivables/{receivableId}/settle` path, the session-may-create wording on customers and projects, and — the part that matters — `Receivable.projectId` and `Payment.customerId` becoming nullable. So this is not a stale generated file to refresh and forget: running `npm run hosted:types` makes `npm run typecheck` fail with two real errors, `src/hosted/pages/views/ReceivablesList.tsx:37` and `PaymentsList.tsx:39`, both `Argument of type 'string | null' is not assignable to parameter of type 'string'`. The portal reads fields the API may now return as null. Shipped portal code has the same gap at runtime; it is only invisible because the types were never regenerated.
-**Remediation**: Run `npm run hosted:types`, then fix both views to handle a null id (a personal-profile receivable has no matter; a personal-profile payment has no client) — decide per view whether that renders a dash, hides the link, or groups under "No client". Land the regenerated `schema.d.ts` with the fixes in one commit. Add `hosted:types:check` to the server's CI alongside `openapi:check` so the pair cannot drift again.
+**Resolution**: Regenerated `schema.d.ts` via `npm run hosted:types` (1,038 insertions / 129 deletions against the current `openapi.yaml`). Fixed both views: a null `customerId`/`projectId` now renders "—" instead of being passed into `Map.get`, matching the existing missing-name fallback. `hosted:types:check`, `typecheck`, `lint`, and the hosted test suite (145 tests) all pass. `hosted:types:check` was already wired into the Makefile gates, so no CI change was needed.
 **Effort**: Small–Medium (the regeneration is one command; the two views need a product decision about what a missing client or matter looks like)
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open

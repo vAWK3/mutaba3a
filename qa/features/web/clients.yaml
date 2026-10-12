@@ -1,0 +1,37 @@
+app: web
+area: clients
+title: Clients
+tier: core
+paths:
+  - src/pages/clients/**
+features:
+  - id: owed-now-parity
+    title: "The Clients strip's Owed Now equals Home's, including a No client row (MUT-83)"
+    tier: core
+    legacy: [MUT-83]
+    steps:
+      - Log one income entry for a client and one with no client
+      - Open Home and read Owed Now
+      - Open Clients, read Owed Now and find the "No client · 1 entry" row
+    expect:
+      - Both totals are equal
+      - '"No client" makes up the difference'
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)
+  - id: no-client-filter
+    title: 'The "No client" row opens Income filtered to entries with no client, with a clearable chip'
+    tier: secondary
+    steps:
+      - Click the "No client" row on Clients
+      - Clear the filter chip
+    expect:
+      - Income is filtered to the one entry (the URL carries client=none)
+      - Clearing the chip removes the filter
+  - id: profile
+    title: A client's profile shows their logged work
+    tier: core
+    steps:
+      - Open a client from the Clients list
+    expect:
+      - '"Work and billing" is visible'
+      - The logged entry's title and amount are shown
+      - No new accessibility violations beyond the known brand-contrast issue (TD-009)

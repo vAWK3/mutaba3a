@@ -7,9 +7,13 @@
  * - Unpaid: Outstanding receivables
  * - Received: Paid income
  * - Overdue: Past due date receivables
+ *
+ * Its filters are one model in the URL (MUT-83), so a link can open it
+ * filtered: the clients index's "No client" and "Archived clients" rows open
+ * the unpaid entries behind their figures.
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
 import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
@@ -17,6 +21,7 @@ import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
+import { useIncomeFilters } from '../../hooks/useIncomeFilters';
 import type { IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useIsCompactTable } from '../../hooks/useMediaQuery';
 import { useDrawerStore } from '../../lib/stores';
@@ -24,14 +29,14 @@ import {
   formatDate,
   formatDateCompact,
   formatAmount,
-  getDateRangePreset,
   cn,
 } from '../../lib/utils';
 import { todayLocalISO, isOverdueReceivable } from '../../lib/dates';
+import { resolveIncomeFilters, type IncomeStatusFilter } from '../../lib/incomeSearch';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 
-type IncomeStatusFilter = 'all' | 'unpaid' | 'received' | 'overdue';
+const STATUS_TABS: IncomeStatusFilter[] = ['all', 'unpaid', 'received', 'overdue'];
 
 export function IncomePage() {
   const { openTransactionDrawer, openPartialPaymentDrawer } = useDrawerStore();
@@ -41,33 +46,37 @@ export function IncomePage() {
   const isCompact = useIsCompactTable();
   const profileId = useProfileFilter();
 
-  const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
-  const [statusFilter, setStatusFilter] = useState<IncomeStatusFilter>('all');
-  const [search, setSearch] = useState('');
+  // One filters model, mirrored to the URL (MUT-83)
+  const { search: urlSearch, setSearch: setUrlSearch } = useIncomeFilters();
+  const filters = useMemo(() => resolveIncomeFilters(urlSearch), [urlSearch]);
+  const { status: statusFilter, q: search, client: clientScope } = filters;
+  const dateRange = useMemo(() => ({ dateFrom: filters.dateFrom, dateTo: filters.dateTo }), [filters]);
+  const isFiltered = Boolean(search || clientScope);
 
   // Fetch totals for summary strip
   const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo, profileId);
 
   // Build query filters - income only (useIncome already filters by kind='income')
   const queryFilters = useMemo((): IncomeFilters => {
-    const filters: IncomeFilters = {
+    const query: IncomeFilters = {
       profileId,
       dateFrom: dateRange.dateFrom,
       dateTo: dateRange.dateTo,
       search: search || undefined,
       sort: { by: 'occurredAt', dir: 'desc' },
+      clientScope,
     };
 
     if (statusFilter === 'unpaid') {
-      filters.status = 'unpaid';
+      query.status = 'unpaid';
     } else if (statusFilter === 'received') {
-      filters.status = 'paid';
+      query.status = 'paid';
     } else if (statusFilter === 'overdue') {
-      filters.status = 'overdue';
+      query.status = 'overdue';
     }
 
-    return filters;
-  }, [profileId, dateRange, statusFilter, search]);
+    return query;
+  }, [profileId, dateRange, statusFilter, search, clientScope]);
 
   const { data: transactions = [], isLoading } = useIncome(queryFilters);
 
@@ -107,7 +116,7 @@ export function IncomePage() {
             <DateRangeControl
               dateFrom={dateRange.dateFrom}
               dateTo={dateRange.dateTo}
-              onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
+              onChange={(from, to) => setUrlSearch({ dateFrom: from, dateTo: to })}
             />
           </div>
         }
@@ -139,13 +148,13 @@ export function IncomePage() {
 
         {/* Status Tabs */}
         <div className="income-status-tabs" role="tablist">
-          {(['all', 'unpaid', 'received', 'overdue'] as IncomeStatusFilter[]).map((status) => (
+          {STATUS_TABS.map((status) => (
             <button
               key={status}
               role="tab"
               aria-selected={statusFilter === status}
               className={cn('income-status-tab', statusFilter === status && 'income-status-tab-active')}
-              onClick={() => setStatusFilter(status)}
+              onClick={() => setUrlSearch({ status: status === 'all' ? undefined : status })}
             >
               {t(`income.status.${status}`)}
               <span className="income-status-count">{counts[status]}</span>
@@ -157,9 +166,20 @@ export function IncomePage() {
         <div className="filters-row">
           <SearchInput
             value={search}
-            onChange={setSearch}
+            onChange={(q) => setUrlSearch({ q })}
             placeholder={t('transactions.searchPlaceholder')}
           />
+          {clientScope && (
+            <button
+              type="button"
+              className="income-scope-chip"
+              aria-label={t('income.clientScope.clear', { name: t(`income.clientScope.${clientScope}`) })}
+              onClick={() => setUrlSearch({ client: undefined })}
+            >
+              {t(`income.clientScope.${clientScope}`)}
+              <span aria-hidden="true" className="income-scope-chip-clear">×</span>
+            </button>
+          )}
         </div>
 
         {/* Income List */}
@@ -169,10 +189,10 @@ export function IncomePage() {
           </div>
         ) : transactions.length === 0 ? (
           <EmptyState
-            title={search ? t('transactions.emptySearch') : t('income.empty')}
-            hint={search ? undefined : t('income.emptyHint')}
-            actionLabel={!search ? t('income.addIncome') : undefined}
-            onAction={!search ? handleAddIncome : undefined}
+            title={isFiltered ? t('transactions.emptySearch') : t('income.empty')}
+            hint={isFiltered ? undefined : t('income.emptyHint')}
+            actionLabel={!isFiltered ? t('income.addIncome') : undefined}
+            onAction={!isFiltered ? handleAddIncome : undefined}
           />
         ) : (
           <div className="data-table">

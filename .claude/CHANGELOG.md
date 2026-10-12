@@ -100,6 +100,135 @@ The phone app is going hosted-only (MUT-63), so the owner dropped sync product-w
 
 ---
 
+## [Unreleased] - 2026-10-12 — Retire `e2e/` for the `qa/` release-qa kit (MUT-97)
+
+**Why:** MAL-1007 built a reusable, stack-agnostic release-qa engine (`~/Work/tools/release-qa`, the `/release-qa` Claude skill) plus a per-repo `qa/` folder, with the explicit goal of also serving Mutaba3a. MUT-97 is that port: a feature catalog that replaces the old hand-run `e2e/*.spec.ts` suite with change-scoped runs, recorded video and an approve/reject review page.
+
+### Added
+- `qa/qa.config.mjs`: single `web` app, no personas (mini-crm is local-first, single-user, no auth), git-tag release detection (`v*`), isolated worktree env (`.claude/worktrees/qa-release`) — no docker/Postgres needed, there is no server or shared database to isolate.
+- `qa/features/web/*.yaml`: 7 areas, 21 features (9 core / 8 secondary / 4 tertiary) — `navigation`, `home`, `income`, `clients`, `record-payment`, `settings`, `drawer-motion`. Every `e2e/*.spec.ts` file's coverage was ported, including the standalone `accessibility.spec.ts` checks, which were folded into the flow test they exercise rather than kept as a disconnected parallel suite.
+- `qa/specs/web/*.spec.ts`, `qa/support/{app,axe,qa}.ts`: the ported Playwright logic, restructured one test per feature id (`@web.<area>.<id>`), with `step()` captions for the recorded video.
+- `make check-e2e` now runs `release-qa release --no-open` (was `npm run test:e2e`) — same "not part of a release, run it deliberately" posture, now with an isolated worktree, a dev server it starts itself, and a reviewable report instead of a bare Playwright run.
+
+### Removed
+- `e2e/` (8 spec files + `support/`) and the root `playwright.config.ts`. `@playwright/test` and `@axe-core/playwright` stay as root devDependencies — `qa/` resolves them the same way.
+- `package.json` scripts `test:e2e`, `test:e2e:ui` (dead: their config no longer exists).
+
+**Verification:** `release-qa lint` — 0 errors, 21/21 features automated. `release-qa run --attach --all` against a live `npm run dev` — 21/21 passed.
+
+**Known gaps, not silently covered:** `release-qa run --all` also reported 142 changed files under `src/**` mapping to no feature — mostly optional/gated areas (expenses, retainers, planning, documents, recurring) that `e2e/` never covered either; MUT-97's scope was porting existing coverage, not writing new. `qa/` is not in any tsconfig program, so `npm run typecheck` doesn't cover it — the same gap `e2e/` had (TEST_PLAN.md, TD-004).
+
+### Technical
+- `.claude/PATTERNS.md`, `.claude/COMPONENT_REGISTRY.md`, `.claude/TEST_PLAN.md`: living references to `e2e/*` repointed to `qa/*`. Dated historical narrative (the 2026-10-12 "E2E port-over" section, per-ticket test-plan appendices) left as-is with a superseded note, not rewritten.
+- Jira: MUT-97 created, linked (Relates) to MAL-1007.
+
+---
+
+## [Unreleased] - 2026-10-12 — Regenerate stale hosted-portal API types (TD-058, TD-072)
+
+**Why:** `src/hosted/api/schema.d.ts` hadn't been regenerated since MUT-65 made `Payment.customerId` and `Receivable.projectId` nullable (personal-profile captures with no client/matter). `hosted:types:check` was already failing on `main`; mobile work (MUT-68) was about to start leaning on the stale types.
+
+### Fixed
+- `src/hosted/api/schema.d.ts`: regenerated via `npm run hosted:types` (1,038 insertions / 129 deletions against the current `server/openapi/openapi.yaml`).
+- `src/hosted/pages/views/PaymentsList.tsx`, `src/hosted/pages/views/ReceivablesList.tsx`: guard the now-nullable `customerId`/`projectId` before the `Map.get` lookup, falling back to the existing "—" rendering instead of a type error.
+
+**Scope:** `hosted:types:check`, `typecheck`, `lint`, and the hosted test suite (145 tests) all pass. No CI change needed — `hosted:types:check` was already wired into the Makefile gates.
+
+---
+
+## [Unreleased] - 2026-10-12 — `make release full`
+
+**Why:** `make release web` and `make release server` (ADR-043) had no combined front door; releasing both meant running each by hand.
+
+### Added
+- `make release full` (and `make release full` via the `release` dispatcher): runs `release-server` then `release-web` as ordinary prerequisites — server first, so the API a release ships is already live before the frontend calling it goes out. Each half keeps its own preflight, gates, version bump and confirmation; declining one does not block the other.
+
+**Scope:** `Makefile` only. Desktop (DMG, notarization, GitHub release) stays excluded, per ADR-043 — confirmed with Basel, not reopened. See ADR-043 addendum in `.claude/DECISIONS.md`.
+
+---
+
+## [Unreleased] - 2026-10-12 — MUT-83: Owed now on Home and Clients always match
+
+**Why:** Home and the Clients list showed the same-looking Owed now block with different numbers and no explanation.
+- Home counts income with no client, income of archived clients and income recorded for a client created in another business.
+- The Clients list counted none of those, but did count a client's debts from other businesses.
+
+Owner decision A (2026-10-12) and ADR-049 resolve it. The brief is H2 in `landing-apple-redesign.md`.
+
+**Scope:**
+- `src/db/aggregations.ts`:
+  - new `owedNowRemaining`, `clientScopeOf` and `partitionOwedNow`;
+  - `summarizeOwedByCurrency` now uses `owedNowRemaining`.
+- `src/db/repository.ts`:
+  - new `clientSummaryRepo.listOwedIndex`;
+  - `transactionRepo.list` accepts `clientScope`.
+- `src/db/interfaces.ts`, `src/types/index.ts`: added `ClientScope`, `OwedBucket` and `ClientOwedIndex`, plus `QueryFilters.clientScope`.
+- `src/hooks/useQueries.ts`: added `useClientOwedIndex`, keyed `['clientSummaries', 'owedIndex', …]`.
+- `src/hooks/useIncomeQueries.ts`: added `IncomeFilters.clientScope`.
+- `src/lib/incomeSearch.ts` and `src/hooks/useIncomeFilters.ts` (both new).
+- `src/router.tsx`: `/income` gets `validateSearch`.
+- `src/components/clients/clientIndexRows.ts`: added `toOwedBucketRows`, `orderClientIndex` and `BUCKET_SCOPE`.
+- Pages: `src/pages/clients/ClientsPage.tsx` and `src/pages/income/IncomePage.tsx`.
+- `src/index.css`: muted rows, the scope chip, and the phone layout of the Clients strip.
+- `src/lib/i18n/translations/{en,ar}.json`.
+- `e2e/owed-parity.spec.ts` (new).
+- Test plan: `.claude/designs/mut-83-owed-parity-tests.md`.
+
+### Changed
+- **The Clients strip equals Home's Owed now, per currency.** Both come from the same entries:
+  - `listOwedIndex` reads the business's entries through `transactionRepo.list`, the read behind Home;
+  - `partitionOwedNow` splits them into the client rows plus two muted rows;
+  - the strip is `summarizeOwedByCurrency` over all of them.
+- **Each business's Clients list counts only that business's entries.**
+  - It lists the business's own clients, plus clients created elsewhere that have an entry here.
+  - Owed now, overdue, last payment and activity on a row are this business's only.
+  - The client profile page stays all-businesses (TD-065).
+- **`/income`'s filters live in the URL as one object**: period, status, search and client scope, written with `replace`. With no parameters the page is as before. A chip names a client scope and clears it. An empty scoped list says nothing matched instead of "No income yet".
+- **On a phone the Clients strip wraps.** The client count sits above Owed now, so a five-digit shekel figure no longer runs past the card.
+
+### Added
+- **"No client · N entries" and "Archived clients · N" rows** after the clients, muted, shown only when non-zero, and always last under any sort. They are labelled in English and Arabic, with Arabic plural forms. Each opens `/income` on the unpaid entries behind it, over all time.
+- `transactionRepo.list({ clientScope: 'none' | 'archived' })`. "None" includes entries whose client row is gone, the same rule as the No client row.
+
+### Technical
+- TD-065 (shared client: row vs profile) and TD-066 (Income's strip ignores the page's filters) added.
+
+---
+
+## [Unreleased] - 2026-10-12 — MUT-87: Expenses Needs attention is one row per recurring rule
+
+**Why:** three missed months of one recurring expense were three identical cards and 12 buttons for one decision (decision E1, `.claude/designs/landing-apple-redesign.md`). ADR-052. Test plan: `.claude/designs/mut-87-recurring-rows-tests.md`.
+
+**Scope:**
+- `src/components/expenses/recurringAttention.ts` (new: grouping, totals, month labels, snooze dates, amount reading), `RecurringAttentionList.tsx` + `.css` (new)
+- `src/components/drawers/RecurringMarkPaidDrawer.tsx` + `.css` (new)
+- `src/components/ui/CurrencyAmounts.tsx` + `.css` (new), `src/lib/currencyAmounts.ts` (new)
+- `src/services/recurringExpenseService.ts` (`confirmPayments`, `skipOccurrences`, `snoozeOccurrences`; `frequency` on virtual occurrences), `src/db/interfaces.ts` + `src/db/expenseRepository.ts` (`recurringOccurrences.runAtomically`), `src/types/index.ts` (`VirtualOccurrenceDisplay.frequency`)
+- `src/hooks/useRecurringExpenseQueries.ts` (batch hooks replace the single-payment ones), `src/hooks/useExpenseQueries.ts` (one additive change, below)
+- `src/pages/expenses/ExpensesLedgerPage.tsx`; `src/components/ui/RecurringOccurrenceCard.tsx` + `.css` (read-only)
+- Removed: `src/components/modals/RecurringConfirmModal.tsx` + `.css` (both modals), their export from `components/modals/index.ts`
+- `src/lib/i18n/translations/{en,ar}.json`: `expenses.recurring.attention.*` added; five orphaned `expenses.recurring.occurrence.*` leaves (`confirmPayment`, `actualDate`, `editAmount`, `notes`, `notesPlaceholder`) removed
+
+### Changed
+- **One row per rule.** "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", with the oldest payment's lateness under the amount, read like Home's Needs attention. The section header shows the number of rules and the total of each currency side by side (`CurrencyAmounts`), never combined.
+- **One primary action, Mark Paid,** opens a small drawer: the rule's missed payments, oldest first, all checked, each with its date and an amount prefilled with the rule's amount. **Mark N paid** writes one expense per checked payment, **dated on its own expected date** (the old modal dated them today), in one all-or-nothing write.
+- **Skip, Snooze and Edit rule moved to a ⋯ menu** (`useMenuButton`: focus on open, arrows, Escape returns focus) and apply to all of the rule's missed payments; Skip asks first. In the drawer each payment has its own Skip and Snooze. Snoozing is a view of the same drawer, with quick picks in the user's language.
+- The forecast's cards are read-only.
+
+### Fixed
+- **Editing or creating a recurring rule now refreshes Needs attention and the forecast.** `invalidateRecurringRuleQueries` (`useExpenseQueries.ts`) didn't invalidate `dueOccurrences` / `virtualOccurrences`, so a rule edited from the row's ⋯ › Edit rule kept its old amount until a reload. Found in the browser check.
+
+### Removed
+- `RecurringConfirmModal` and `RecurringSnoozeModal` (no consumer left). The confirm modal's paid-date and notes fields go with it (each expense is dated on its expected date; notes stay editable on the expense).
+
+### Technical
+- `recurringOccurrences.runAtomically(work)`: one Dexie `rw` transaction over `recurringRules`, `recurringOccurrences` and `expenses`; the batch service functions loop over the existing single-payment functions inside it.
+- Tests (+55 net): grouping and labels (15), currency order (2), batches on fake-indexeddb incl. rollback (12), batch hooks (3, replacing 3), list (5), drawer (10), page (4), i18n keys (5), rule-edit refresh (1), modals-gone guard (1). Full suite: 193 files, 2,930 passed, 4 skipped.
+- Debt: TD-069 (Needs attention looks back only 90 days), TD-070 (the shared drawer is 480 px wide on a 375 px phone).
+- Found, not changed: the page's "Total expenses" strip sums `db.transactions`, not the ledger's `db.expenses` (also found by MUT-58's smoke test).
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-66: the unsorted inbox, and filing an entry onto a profile
 
 **Scope (server only; the portal and the offline app are untouched):**

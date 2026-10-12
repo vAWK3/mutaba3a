@@ -3,6 +3,7 @@ import React, { Suspense } from 'react';
 import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AppShell } from './components/layout';
 import { requireFeature } from './lib/features/routeGuard';
+import { parseIncomeSearch } from './lib/incomeSearch';
 
 // Keep OverviewPage eager (it's the landing page)
 import { OverviewPage } from './pages/overview/OverviewPage';
@@ -43,10 +44,11 @@ const overviewRoute = createRoute({
   component: OverviewPage,
 });
 
-// Income route (dedicated income tracking page)
+// Income route (dedicated income tracking page). Its filters are the URL (MUT-83).
 const incomeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/income',
+  validateSearch: parseIncomeSearch,
   component: lazyPage(() => import('./pages/income'), 'IncomePage'),
 });
 

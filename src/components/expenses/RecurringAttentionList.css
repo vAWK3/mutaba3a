@@ -1,0 +1,128 @@
+/* Expenses › Needs attention: one row per recurring rule (MUT-87).
+   Reads like Home's Needs attention: a card, a title line and a muted detail
+   line, the amount with its lateness beneath, then the row's actions. */
+
+.recurring-attention {
+  margin-bottom: var(--space-4);
+}
+
+.recurring-attention-header {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.recurring-attention-count {
+  min-width: 1.5rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.recurring-attention-total {
+  margin-inline-start: auto;
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.recurring-attention-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recurring-attention-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.recurring-attention-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.recurring-attention-title,
+.recurring-attention-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recurring-attention-title {
+  font-weight: var(--weight-medium);
+}
+
+.recurring-attention-detail {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.recurring-attention-amount-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.recurring-attention-amount {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.recurring-attention-status {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.recurring-attention-status.text-danger {
+  color: var(--error);
+}
+
+.recurring-attention-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* The ⋯ menu opens under its button, on the row's end edge (mirrors in RTL) */
+.recurring-attention-menu {
+  position: relative;
+}
+
+.recurring-attention-menu-list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  inset-inline-end: 0;
+  min-width: 11rem;
+}
+
+/* Phone width: the actions drop under the text, aligned to the end edge, and
+   the months wrap rather than being cut off */
+@media (max-width: 480px) {
+  .recurring-attention-row {
+    flex-wrap: wrap;
+  }
+
+  .recurring-attention-detail {
+    white-space: normal;
+  }
+
+  .recurring-attention-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+}

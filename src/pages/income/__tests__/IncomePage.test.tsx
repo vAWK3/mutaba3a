@@ -6,7 +6,31 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IncomePage } from '../IncomePage';
+import { getDateRangePreset } from '../../../lib/utils';
+import type { IncomeSearch } from '../../../lib/incomeSearch';
 import type { TransactionDisplay } from '../../../types';
+
+// The URL filters (MUT-83): an in-memory stand-in for the router, so a tab
+// click re-renders with the new filters as the real URL would. The URL itself
+// (parse, replace) is covered by useIncomeFilters.test.tsx.
+const urlFilters = vi.hoisted(() => ({
+  initial: {} as Record<string, unknown>,
+  writes: [] as Record<string, unknown>[],
+}));
+vi.mock('../../../hooks/useIncomeFilters', async () => {
+  const { useState, useCallback } = await import('react');
+  const { mergeIncomeSearch } = await import('../../../lib/incomeSearch');
+  return {
+    useIncomeFilters: () => {
+      const [search, setState] = useState<IncomeSearch>(() => urlFilters.initial as IncomeSearch);
+      const setSearch = useCallback((patch: Partial<IncomeSearch>) => {
+        urlFilters.writes.push(patch);
+        setState((prev) => mergeIncomeSearch(prev, patch));
+      }, []);
+      return { search, setSearch };
+    },
+  };
+});
 
 // Mock i18n
 vi.mock('../../../lib/i18n', () => ({
@@ -33,6 +57,9 @@ vi.mock('../../../lib/i18n', () => ({
       'common.actions': 'Actions',
       'filters.period': 'Period',
       'common.noClient': 'No Client',
+      'income.clientScope.none': 'No client',
+      'income.clientScope.archived': 'Archived clients',
+      'income.clientScope.clear': 'Clear filter: {name}',
       'common.markPaid': 'Mark as Paid',
       'common.duplicate': 'Duplicate',
       'transactions.status.paid': 'Paid',
@@ -45,7 +72,7 @@ vi.mock('../../../lib/i18n', () => ({
     let result = translations[key] || key;
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
-        result = result.replace(`{{${k}}}`, String(v));
+        result = result.replace(`{{${k}}}`, String(v)).replace(`{${k}}`, String(v));
       });
     }
     return result;
@@ -236,6 +263,8 @@ const FIXED_NOW = new Date(2026, 2, 14, 12, 0, 0); // 2026-03-14 12:00 local
 describe('IncomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    urlFilters.initial = {};
+    urlFilters.writes = [];
     // shouldAdvanceTime keeps Testing Library's waitFor from deadlocking.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(FIXED_NOW);
@@ -656,6 +685,73 @@ describe('IncomePage', () => {
         mode: 'create',
         defaultStatus: 'earned',
       });
+    });
+  });
+
+  describe('URL filters (MUT-83)', () => {
+    const lastIncomeFilters = (mock: ReturnType<typeof vi.fn>) => mock.mock.calls[mock.mock.calls.length - 1][0];
+
+    async function renderWith(initial: IncomeSearch, data: TransactionDisplay[] = mockIncomeTransactions) {
+      urlFilters.initial = initial as Record<string, unknown>;
+      const mockUseIncome = vi.fn().mockReturnValue({ data, isLoading: false });
+      const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+      vi.spyOn(useIncomeQueries, 'useIncome').mockImplementation(mockUseIncome);
+      renderWithProviders(<IncomePage />);
+      return mockUseIncome;
+    }
+
+    it('with no parameters behaves as before: this month, every status, every client', async () => {
+      const mockUseIncome = await renderWith({});
+
+      await waitFor(() => expect(mockUseIncome).toHaveBeenCalled());
+      const filters = lastIncomeFilters(mockUseIncome);
+      expect(filters).toMatchObject(getDateRangePreset('this-month'));
+      expect(filters.status).toBeUndefined();
+      expect(filters.clientScope).toBeUndefined();
+      expect(screen.queryByRole('button', { name: /Clear filter/ })).not.toBeInTheDocument();
+    });
+
+    it('opens on the filters a link carries: a client scope, a status tab and a period', async () => {
+      const mockUseIncome = await renderWith({ client: 'none', status: 'unpaid', ...getDateRangePreset('all') });
+
+      await waitFor(() =>
+        expect(lastIncomeFilters(mockUseIncome)).toMatchObject({
+          clientScope: 'none',
+          status: 'unpaid',
+          ...getDateRangePreset('all'),
+        })
+      );
+      expect(screen.getByRole('tab', { name: /Unpaid/ })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('names the client scope in a chip that clears it', async () => {
+      const user = userEvent.setup();
+      const mockUseIncome = await renderWith({ client: 'archived' });
+
+      const chip = await screen.findByRole('button', { name: 'Clear filter: Archived clients' });
+      expect(chip).toHaveTextContent('Archived clients');
+
+      await user.click(chip);
+
+      await waitFor(() => expect(lastIncomeFilters(mockUseIncome).clientScope).toBeUndefined());
+      expect(urlFilters.writes).toContainEqual({ client: undefined });
+    });
+
+    it('writes a tab change to the URL, not to its own state', async () => {
+      const user = userEvent.setup();
+      await renderWith({ client: 'none' });
+
+      await user.click(await screen.findByRole('tab', { name: /Overdue/ }));
+      await user.click(screen.getByRole('tab', { name: /All/ }));
+
+      expect(urlFilters.writes).toEqual([{ status: 'overdue' }, { status: undefined }]);
+    });
+
+    it('says nothing matched, rather than "no income yet", when a client scope finds nothing', async () => {
+      await renderWith({ client: 'none' }, []);
+
+      expect(await screen.findByText('No matching transactions')).toBeInTheDocument();
+      expect(screen.queryByText('Add Income')).not.toBeInTheDocument();
     });
   });
 

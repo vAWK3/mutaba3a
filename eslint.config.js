@@ -21,6 +21,18 @@ export default defineConfig([
     },
   },
   {
+    // release-qa tooling (MUT-97), not application code. Playwright's
+    // `test.extend()` fixtures take a second parameter conventionally named
+    // `use`, which react-hooks mistakes for the React hook of the same name;
+    // `support/qa.ts`'s require() fallback for qa.config.mjs is untyped by
+    // nature (a dynamically loaded config, not app data).
+    files: ['qa/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
     // The hosted portal (MUT-43, hosted-portal.md §8). It shows server figures
     // only: nothing from the local data layer, sync, local hooks, shell,
     // drawers or stores, and not the app's i18n provider (it carries the app's

@@ -302,6 +302,15 @@ export const recurringOccurrenceRepo = {
   async delete(id: string): Promise<void> {
     await db.recurringOccurrences.delete(id);
   },
+
+  /**
+   * One Dexie read-write transaction over the tables a recurring payment
+   * touches. Repository calls made inside `work` join it through Dexie's zone,
+   * so a rejection rolls every one of them back (MUT-87, ADR-052).
+   */
+  async runAtomically<T>(work: () => Promise<T>): Promise<T> {
+    return db.transaction('rw', [db.recurringRules, db.recurringOccurrences, db.expenses], work);
+  },
 };
 
 // ============================================================================

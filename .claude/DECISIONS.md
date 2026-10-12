@@ -55,6 +55,8 @@
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
+| ADR-049 | Each Business's Clients List Counts Only That Business's Entries; Its Owed Now Equals Home's, With "No Client" and "Archived Clients" Rows | Active | 2026-10 |
+| ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 | ADR-053 | Device-to-Device Sync Is Retired; Local↔Hosted Sync Is Off the Roadmap (Supersedes ADR-011, ADR-012, ADR-013; Narrow Override of ADR-029) | Active | 2026-10 |
 
 ---
@@ -1996,6 +1998,8 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Consequences**: A release cannot be cut from a tree that does not describe itself, and both deploys answer the same questions in the same order. Parked epic worktrees now block a release until removed or explicitly allowed, which is the point — their work is not in it. `make release web` immediately exposed TD-057. Desktop (DMG, notarization, GitHub release) stays with `npm run release`; folding it in is a later decision.
 
+**Addendum (2026-10-12)**: Added `make release full`, a third entry point that runs `release-server` then `release-web` as two ordinary prerequisites — server first, so the API a release ships is already live before the frontend that calls it goes out. It reimplements nothing: each half keeps its own preflight, gates, version bump and confirmation, and declining one does not block the other. Desktop stays excluded, per the decision above — raised and confirmed with Basel when `full` was requested, not reopened.
+
 **Alternatives Considered**: npm scripts instead of a Makefile (rejected: `package.json` is the frontend's, and the server deploy is not a frontend concern); extend `deploy.sh`'s menu (rejected: its `git add .` and fixed patch bump are the behaviour being replaced, and the file already carries the desktop pipeline); checks inside each `deploy.sh` (rejected: the two would drift, and the checks are most useful before `make` even starts a build).
 
 ---
@@ -2072,6 +2076,85 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Alternatives Considered**: a nullable `organizationId` on `Expense`/`Payment`/`Receivable` (rejected: MUT-65 loosened *client/matter* columns, which keeps the row inside an organization; teaching every reader of a ledger table to handle a null organization is a far larger and riskier change, and it reintroduces the FK that must be absent for the membership AC to hold structurally); keying the table `(userId, organizationId?)` (rejected for the same reason one level down); one filing route with a content-derived scope (rejected, decision 4); an `inbox` matrix domain (rejected, decision 7).
 
+---
+
+## ADR-049: Each Business's Clients List Counts Only That Business's Entries; Its Owed Now Equals Home's, With "No Client" and "Archived Clients" Rows
+
+**Status**: Active
+**Date**: 2026-10-12
+**Numbering**: ADR-043 to ADR-048 are reserved by the epic's parallel lanes; this lane holds ADR-049.
+**Context**: MUT-83 (epic MUT-74), brief `.claude/designs/landing-apple-redesign.md` decision H2, approved by Basel 2026-10-11. Test plan: `.claude/designs/mut-83-owed-parity-tests.md`.
+
+Home and the Clients list both show an **Owed now** block that looks the same, but they summed different things:
+- **Home** (ADR-036 §5) sums every unpaid entry *recorded in* the business (`tx.profileId`).
+- **The Clients list** (MUT-7) summed, for each live client *created in* the business (`client.profileId`), that client's unpaid entries *in every business*.
+
+The audit found four kinds of debt behind the gap, not the two the ticket named:
+- **D1**: an entry with no client.
+- **D2**: an entry of an archived client.
+- **D3**: an entry recorded here for a client created in another business. Clients are shared: the income drawer's client picker lists every business's clients.
+- **D4**: an entry recorded in another business for a client created here.
+
+Home counted D1 to D3; the Clients strip counted only D4.
+
+**Owner decision (Basel, 2026-10-12, option A, over B "keep rows all-business" and C "a third 'other businesses' row")**: each business's Clients list counts only that business's entries.
+
+**Decision**:
+1. **One input set.** The Clients list reads the business's entries through `transactionRepo.list`, the read behind Home's Owed now. It splits them with `partitionOwedNow(entries, clients, today)` (`src/db/aggregations.ts`) into:
+   - one group per live client;
+   - **No client**: no `clientId`, or one whose client row is gone. `clientScopeOf` is the single definition, shared with the `/income` filter.
+   - **Archived clients**.
+
+   The strip's total is `summarizeOwedByCurrency` over the same entries, so it equals Home's per currency by construction. Every entry lands in exactly one part, so the rows add up to the strip (ADR-033 §2). The read is `clientSummaryRepo.listOwedIndex`, and Home is unchanged.
+2. **Which clients are listed in business P**:
+   - P's own live clients, as before, including ones with no entries;
+   - plus live clients created in another business that have at least one entry recorded in P.
+
+   Archived clients are never listed.
+3. **Every column on a row counts only P's entries**: owed now, overdue and its oldest age, last payment, and last activity. **The client profile page stays all-businesses**, unchanged.
+4. **Two muted rows** sit after every client, whatever the sort column or direction, and each shows only when non-zero:
+   - "No client · N entries", where N counts entries with a balance;
+   - "Archived clients · N", where N counts archived clients with a balance.
+
+   They are not ranked by ADR-035, which still orders the real clients. Each shows Owed now and Overdue per currency.
+5. **Each muted row opens the entries behind it**: `/income?client=none|archived` with status Unpaid over all time, because Owed now has no period. `/income`'s filters become one model mirrored to the URL (`src/lib/incomeSearch.ts`, `useIncomeFilters`), written with `replace`. With no parameters the page behaves as before. A chip names the client scope and clears it.
+6. **A search** narrows the list to matching clients. The strip then sums what is listed and the muted rows hide, so parity is a property of the unsearched list.
+7. **The helper takes entries and clients, not a business**, so the "All businesses" lens (MUT-89) can pass several businesses' entries in.
+
+**Relation to other ADRs**:
+- **ADR-036 is unchanged**: Home's rule is the one the Clients list now follows. Its §5 says the clients index strip "sums only the clients it lists, so the two can differ". That described the MUT-7 list before this ADR; this ADR replaces that description, and nothing in Home's rule.
+- **ADR-033 §1** (one helper) and **ADR-035** (ordering the real clients) stand.
+
+**Consequences**:
+- For a shared client, a business's row can show less than the client's profile page, which adds up every business. That trade-off was accepted, and TD-065 tracks revisiting it with MUT-89.
+- A client created in one business appears in the Clients list of every business where it has an entry.
+- Archiving a client moves its debt from its row to Archived clients; the strip doesn't change.
+- `clientSummaryRepo.list` keeps its all-business semantics for Insights and Reports.
+
+**Alternatives Considered**:
+- **B: keep rows all-business.** The strip would equal Home, but the rows would not add up to it for shared clients.
+- **C: a third muted row**, "Clients from other businesses". It is not in the approved brief and hides a client that owes here behind a bucket.
+- **Explain the gap on Home** (H2's rejected option).
+- **A second query for the strip** (rejected by the ticket: two queries can drift).
+
+---
+
+## ADR-052: Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-87 (epic MUT-74), decision E1 of `.claude/designs/landing-apple-redesign.md`, approved by Basel 2026-10-11. The Expenses page's Needs attention list showed one card per missed payment of a recurring rule, each with Mark Paid, Skip, Snooze and Edit recurring rule. Three missed months of server hosting were three identical cards and 12 buttons for one decision. Mark Paid opened a modal that dated the expense **today** unless the user changed the date, so catching up on three months put three expenses on one day. Test plan: `.claude/designs/mut-87-recurring-rows-tests.md`.
+
+**Decision**:
+1. **One row per rule.** `groupOccurrencesByRule` (`src/components/expenses/recurringAttention.ts`) is the one pure grouping: rule → its missed payments, oldest first; rows ordered by their oldest payment, then title, then id. The row reads "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", with the oldest payment's lateness under the amount ("68d overdue"), as Home's Needs attention says it. `VirtualOccurrenceDisplay` gains `frequency` for "monthly"/"yearly"; occurrence generation is unchanged.
+2. **One primary action.** Mark paid opens `RecurringMarkPaidDrawer` (the shared `Drawer`, unchanged), listing the payments, all checked, each with its date and an amount field prefilled with the rule's amount. **Each checked payment becomes one expense dated on its own expected date** (overrides the old modal's default of today). The amount stays editable per payment, keeping the recurring brief's "amount can be edited before confirming"; it is sent only when changed, so `actualAmountMinor` records a real override. The old modal's paid-date and notes fields are dropped (the rule's default notes still apply; the expense stays editable in the ledger).
+3. **All or nothing.** `confirmPayments`, `skipOccurrences` and `snoozeOccurrences` (`recurringExpenseService.ts`) loop over the existing single-payment functions inside `recurringOccurrences.runAtomically(work)`, a new repository method. The Dexie implementation is one `rw` transaction over `recurringRules`, `recurringOccurrences` and `expenses`; repository calls inside join it, and a throw rolls every write back. `work` may await only repository calls.
+4. **Skip, Snooze and Edit rule live in a ⋯ menu** (`useMenuButton`, ADR-034 §4) and apply to all of the rule's missed payments; Skip asks first. Inside the drawer each payment has its own Skip (asks first) and Snooze. Snoozing is a view of the same drawer (date, quick picks via `Intl.RelativeTimeFormat`), for one payment or, opened from ⋯, for all of them. `RecurringConfirmModal` and `RecurringSnoozeModal` lost their last consumer and are deleted; `RecurringOccurrenceCard` keeps only the read-only form the forecast uses.
+5. **The section total shows each non-zero currency side by side**, never combined (ADR-004), in USD → ILS → EUR order like Owed now: `currencyTotals(groups)` over `orderCurrencyAmounts`, rendered by `CurrencyAmounts`. It is computed from the due occurrences only; it does not share `useOverviewTotalsByCurrency` (whose page-level "Total expenses" strip sums the wrong table — reported, not changed here).
+
+**Consequences**: Catching up on a rule is one decision and one write; a failure leaves the rule exactly as it was. Expenses from a catch-up land in the months they belong to, so a month's ledger and by-category totals are right. A user who paid on a different day edits the expense afterwards. Any future multi-row recurring write goes through `runAtomically`.
+
+**Alternatives Considered**: one compact row per month (rejected at approval, E1); keep the four-button cards (rejected, E1); date catch-up expenses today, as the modal did (rejected: the AC asks for each expected date, and today misfiles every month but the current one); drop amount editing to keep the drawer minimal (rejected: removes a capability the recurring brief requires, with no decision to remove it); keep the snooze modal and stack it over the drawer (rejected: two layers, and the drawer's Escape would close the wrong one); open the transaction in the service with `db` directly (rejected: services reach storage only through `getRepositories()`, ADR-002).
 
 ---
 

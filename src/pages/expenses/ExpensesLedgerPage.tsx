@@ -11,7 +11,9 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl, type SearchInputRef } from '../../components/filters';
 import { EmptyState, RowActionsMenu, AmountWithConversion, RecurringOccurrenceList } from '../../components/ui';
-import { RecurringConfirmModal, RecurringSnoozeModal } from '../../components/modals';
+import { RecurringAttentionList } from '../../components/expenses/RecurringAttentionList';
+import { groupOccurrencesByRule, formatMonthList, type RecurringAttentionGroup } from '../../components/expenses/recurringAttention';
+import { RecurringMarkPaidDrawer, type RecurringDrawerView } from '../../components/drawers/RecurringMarkPaidDrawer';
 import { CopyIcon, TrashIcon } from '../../components/icons';
 import {
   useOverviewTotalsByCurrency,
@@ -20,9 +22,7 @@ import { useExpenses, useDeleteExpense } from '../../hooks/useExpenseQueries';
 import {
   useDueOccurrences,
   useVirtualOccurrences,
-  useConfirmRecurringPayment,
-  useSkipRecurringOccurrence,
-  useSnoozeRecurringOccurrence,
+  useSkipRecurringOccurrences,
 } from '../../hooks/useRecurringExpenseQueries';
 import { useActiveProfile, useProfileFilter } from '../../hooks/useActiveProfile';
 import { useIsCompactTable } from '../../hooks/useMediaQuery';
@@ -36,7 +36,8 @@ import {
 } from '../../lib/utils';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { ExpenseFilters, ExpenseDisplay, VirtualOccurrenceDisplay } from '../../types';
+import { useTp } from '../../lib/i18n/plural';
+import type { ExpenseFilters, ExpenseDisplay } from '../../types';
 
 type ExpenseView = 'list' | 'byCategory';
 
@@ -50,6 +51,7 @@ interface GroupedExpenses {
 export function ExpensesLedgerPage() {
   const { openExpenseDrawer } = useDrawerStore();
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const locale = getLocale(language);
   const isCompact = useIsCompactTable();
@@ -61,10 +63,9 @@ export function ExpensesLedgerPage() {
   const [dateRange, setDateRange] = useState(() => getDateRangePreset('this-month'));
   const [viewMode, setViewMode] = useState<ExpenseView>('list');
   const [search, setSearch] = useState('');
-  const [showDueOccurrences, setShowDueOccurrences] = useState(true);
   const [showForecast, setShowForecast] = useState(false); // Collapsed by default
-  const [confirmModalOccurrence, setConfirmModalOccurrence] = useState<VirtualOccurrenceDisplay | null>(null);
-  const [snoozeModalOccurrence, setSnoozeModalOccurrence] = useState<VirtualOccurrenceDisplay | null>(null);
+  // The mark-paid drawer of one Needs attention row (MUT-87), by rule
+  const [recurringDrawer, setRecurringDrawer] = useState<{ ruleId: string; view: RecurringDrawerView } | null>(null);
 
   // Ref for search input (keyboard shortcut focus)
   const searchInputRef = useRef<SearchInputRef>(null);
@@ -107,15 +108,19 @@ export function ExpensesLedgerPage() {
     dateRange.dateTo
   );
 
+  // Needs attention: one row per recurring rule, its missed payments oldest first (MUT-87)
+  const attentionGroups = useMemo(() => groupOccurrencesByRule(dueOccurrences), [dueOccurrences]);
+  // The drawer follows its rule's live group, so a payment skipped inside it drops out
+  const drawerGroup = recurringDrawer
+    ? attentionGroups.find((group) => group.ruleId === recurringDrawer.ruleId)
+    : undefined;
+
   // Filter to only projected occurrences for the forecast
   const forecastOccurrences = useMemo(() => {
     return allOccurrences.filter(occ => occ.computedState === 'projected');
   }, [allOccurrences]);
 
-  // Recurring occurrence mutations
-  const confirmPaymentMutation = useConfirmRecurringPayment();
-  const skipOccurrenceMutation = useSkipRecurringOccurrence();
-  const snoozeOccurrenceMutation = useSnoozeRecurringOccurrence();
+  const skipOccurrencesMutation = useSkipRecurringOccurrences();
 
   // Build query filters - expenses only
   const queryFilters = useMemo((): ExpenseFilters => {
@@ -221,57 +226,22 @@ export function ExpensesLedgerPage() {
     openExpenseDrawer({ mode: 'create' });
   };
 
-  // Recurring occurrence handlers
-  const handleMarkPaid = (occurrence: VirtualOccurrenceDisplay) => {
-    setConfirmModalOccurrence(occurrence);
-  };
-
-  const handleSkip = (occurrence: VirtualOccurrenceDisplay) => {
-    if (confirm(t('expenses.recurring.occurrence.confirmSkip'))) {
-      skipOccurrenceMutation.mutate({
-        ruleId: occurrence.ruleId,
-        profileId: occurrence.profileId,
-        expectedDate: occurrence.expectedDate,
-      });
-    }
-  };
-
-  // The rule behind a projected occurrence is edited in the expense drawer (MUT-14)
-  const handleEditOccurrenceRule = (occurrence: VirtualOccurrenceDisplay) => {
-    openExpenseDrawer({ mode: 'edit', recurringRuleId: occurrence.ruleId });
-  };
-
-  const handleSnooze = (occurrence: VirtualOccurrenceDisplay) => {
-    setSnoozeModalOccurrence(occurrence);
-  };
-
-  const handleConfirmPayment = (params: {
-    ruleId: string;
-    profileId: string;
-    expectedDate: string;
-    amountMinor?: number;
-    actualPaidDate?: string;
-    notes?: string;
-  }) => {
-    confirmPaymentMutation.mutate(params, {
-      onSuccess: () => {
-        setConfirmModalOccurrence(null);
-      },
+  // Needs attention row actions (MUT-87): Mark paid and Snooze all open the
+  // rule's drawer; Skip all asks first, then skips every missed payment at once.
+  const handleSkipAll = (group: RecurringAttentionGroup) => {
+    const count = group.occurrences.length;
+    const dates = group.occurrences.map((occurrence) => occurrence.expectedDate);
+    const question = tp('expenses.recurring.attention.confirmSkipAll', count, {
+      title: group.title,
+      months: formatMonthList(dates, locale),
     });
+    if (!confirm(question)) return;
+    skipOccurrencesMutation.mutate({ ruleId: group.ruleId, profileId: group.profileId, expectedDates: dates });
   };
 
-  const handleConfirmSnooze = (params: {
-    ruleId: string;
-    profileId: string;
-    expectedDate: string;
-    snoozeUntil: string;
-    notes?: string;
-  }) => {
-    snoozeOccurrenceMutation.mutate(params, {
-      onSuccess: () => {
-        setSnoozeModalOccurrence(null);
-      },
-    });
+  // The rule behind a missed payment is edited in the expense drawer (MUT-14)
+  const handleEditOccurrenceRule = (group: RecurringAttentionGroup) => {
+    openExpenseDrawer({ mode: 'edit', recurringRuleId: group.ruleId });
   };
 
   return (
@@ -334,30 +304,15 @@ export function ExpensesLedgerPage() {
           />
         </div>
 
-        {/* Due Occurrences Section */}
-        {dueOccurrences.length > 0 && (
-          <div className="due-occurrences-section" style={{ marginBottom: 16 }}>
-            <button
-              className="recurring-rules-header"
-              onClick={() => setShowDueOccurrences(!showDueOccurrences)}
-              style={{ width: '100%', textAlign: 'start', background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <span style={{ fontWeight: 600 }}>
-                {t('expenses.recurring.occurrence.needsAttention')} ({dueOccurrences.length})
-              </span>
-              <span style={{ transform: showDueOccurrences ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>▶</span>
-            </button>
-
-            {showDueOccurrences && (
-              <RecurringOccurrenceList
-                occurrences={dueOccurrences}
-                onMarkPaid={handleMarkPaid}
-                onSkip={handleSkip}
-                onSnooze={handleSnooze}
-                onEditRule={handleEditOccurrenceRule}
-              />
-            )}
-          </div>
+        {/* Needs attention: one row per recurring rule (MUT-87) */}
+        {attentionGroups.length > 0 && (
+          <RecurringAttentionList
+            groups={attentionGroups}
+            onMarkPaid={(group) => setRecurringDrawer({ ruleId: group.ruleId, view: 'list' })}
+            onSnoozeAll={(group) => setRecurringDrawer({ ruleId: group.ruleId, view: 'snooze' })}
+            onSkipAll={handleSkipAll}
+            onEditRule={handleEditOccurrenceRule}
+          />
         )}
 
         {/* Forecast Section */}
@@ -375,13 +330,7 @@ export function ExpensesLedgerPage() {
             </button>
 
             {showForecast && (
-              <RecurringOccurrenceList
-                occurrences={forecastOccurrences}
-                onMarkPaid={handleMarkPaid}
-                onSkip={handleSkip}
-                onSnooze={handleSnooze}
-                compact
-              />
+              <RecurringOccurrenceList occurrences={forecastOccurrences} compact />
             )}
           </div>
         )}
@@ -424,21 +373,15 @@ export function ExpensesLedgerPage() {
         )}
       </div>
 
-      {/* Recurring Occurrence Modals */}
-      <RecurringConfirmModal
-        occurrence={confirmModalOccurrence}
-        isOpen={!!confirmModalOccurrence}
-        onClose={() => setConfirmModalOccurrence(null)}
-        onConfirm={handleConfirmPayment}
-        isLoading={confirmPaymentMutation.isPending}
-      />
-      <RecurringSnoozeModal
-        occurrence={snoozeModalOccurrence}
-        isOpen={!!snoozeModalOccurrence}
-        onClose={() => setSnoozeModalOccurrence(null)}
-        onSnooze={handleConfirmSnooze}
-        isLoading={snoozeOccurrenceMutation.isPending}
-      />
+      {/* The mark-paid drawer of one Needs attention row (MUT-87) */}
+      {drawerGroup && recurringDrawer && (
+        <RecurringMarkPaidDrawer
+          key={`${drawerGroup.ruleId}:${recurringDrawer.view}`}
+          group={drawerGroup}
+          initialView={recurringDrawer.view}
+          onClose={() => setRecurringDrawer(null)}
+        />
+      )}
     </>
   );
 }

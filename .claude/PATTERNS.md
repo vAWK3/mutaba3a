@@ -9,9 +9,9 @@
 
 | Category | Patterns |
 |----------|----------|
-| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
-| **State** | URL State, Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets |
+| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3), Same figure, same entries, split (MUT-83), All-or-nothing batches through `runAtomically` (MUT-87) |
+| **State** | URL State (one parsed model per page, MUT-83), Zustand Stores, Form State |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets, One row per decision (MUT-87), One `<Drawer>` for a drawer's views (MUT-87) |
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3), Ungrouped amount prefills (`minorToAmountInput`, MUT-86) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
@@ -1608,7 +1608,7 @@ Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, an
 - Browsers submit implicitly through that button.
 - `@testing-library/user-event` (14.6.1, `keypress.js`) only looks for submit buttons inside the form, so a unit test can't press Enter to save.
 - Unit-test the contract instead: Enter is not `defaultPrevented`.
-- Cover the real path with a Playwright spec (`e2e/income-fast-path.spec.ts`).
+- Cover the real path with a Playwright spec (`qa/specs/web/income.spec.ts`, `@web.income.fast-path`).
 
 ### Amounts stay left-to-right inside Arabic; set it in CSS, not only with `dir`
 theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks a `dir="ltr"` attribute. An LTR island (an amount with its currency prefix) needs `direction: ltr` from a selector that out-ranks `:lang(ar)` (`div.input-with-prefix`, `.input-with-prefix > .input`; see also `.num-input`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`.
@@ -1671,15 +1671,21 @@ When an effect consumes a URL parameter (reads it, strips it with `replaceState`
 To undo a session without tracking every write, record when it started, and only start it on a database with none of the person's data. Leaving then removes the session's seeded rows by prefix and everything else by `createdAt >= startedAt`; imported or restored rows keep their older `createdAt` and survive (ADR-042).
 
 
-## E2E patterns — added 2026-10-12 (TD-004)
+## E2E patterns — added 2026-10-12 (TD-004); moved from `e2e/` to `qa/` 2026-10-12 (MUT-97)
+
+The standalone `e2e/` Playwright suite was retired in favor of the `qa/` release-qa
+kit (MUT-97, companion to Malafat's MAL-1007): a feature catalog
+(`qa/features/web/*.yaml`) plus one spec per feature, tagged `@web.<area>.<id>`
+and run with `release-qa` (`~/Work/tools/release-qa`, `make check-e2e`). The
+patterns below are unchanged — only the paths moved.
 
 ### A spec starts from a fresh install with `openFreshApp`
 
-Every Playwright test gets an empty IndexedDB, so the Welcome dialog always opens once the profile query answers. `openFreshApp(page, path)` (`e2e/support/app.ts`) goes to `/app${path}`, clicks the dialog's "Skip for now" (which creates the default USD profile) and waits for the dialog to close. Never guard the skip with a one-off `isVisible()`: under parallel load the dialog can mount after the check and swallow the next click. Open the drawer from the top bar's "+ Add" › Income (`openNewIncomeDrawer`), which every page has; the empty-state "Add Income" button disappears once there is data. Scope buttons to `main` when the FX banner has one with the same name ("System").
+Every Playwright test gets an empty IndexedDB, so the Welcome dialog always opens once the profile query answers. `openFreshApp(page, path)` (`qa/support/app.ts`) goes to `/app${path}`, clicks the dialog's "Skip for now" (which creates the default USD profile) and waits for the dialog to close. Never guard the skip with a one-off `isVisible()`: under parallel load the dialog can mount after the check and swallow the next click. Open the drawer from the top bar's "+ Add" › Income (`openNewIncomeDrawer`), which every page has; the empty-state "Add Income" button disappears once there is data. Scope buttons to `main` when the FX banner has one with the same name ("System").
 
 ### Axe checks fail on new rules, not on known ones
 
-`expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
+`expectOnlyKnownAxeViolations(page, surface)` (`qa/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
 
 ## Accessibility patterns — added 2026-10-12 (TD-009)
 
@@ -1748,7 +1754,7 @@ A motion that needs a measured size (`offsetWidth`) skips itself when the size i
 In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
 
 ### Hidden documents pause motion
-`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`qa/specs/web/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
 
 ---
 
@@ -1765,8 +1771,6 @@ Under MUT-5's strict grammar, deleting a digit from a prefilled "3,550" leaves "
 
 ### A co-located stylesheet prefixes its classes with the component
 `index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, used by the document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.
-
-
 
 ---
 
@@ -1813,6 +1817,44 @@ All destination-side validation — writability, link resolution, category/custo
 ### Prove an isolation claim structurally, not just behaviourally
 
 "Unsorted entries never change any summary" is asserted twice: once by comparing whole summary responses before and after filling an inbox, and once by reading the summary sources — enumerated from the directory so a module added later is covered — and finding no reference to the table. The second keeps the first from being a coincidence that a future query could quietly break.
+
+---
+
+## App patterns added by MUT-87 (2026-10-12)
+
+### A batch of writes is all or nothing, through the repository
+When one user action writes several rows (marking three months paid writes three expenses and three occurrences), run it in one storage transaction so a failure leaves nothing half done. Services can't open one themselves: they reach storage only through `getRepositories()` (ADR-002). The repository offers a unit of work instead, `recurringOccurrences.runAtomically(work)`, and the service loops over the **existing** single-row functions inside it (`confirmPayments` → `confirmPayment`), so the rules for one row are written once. The Dexie implementation is `db.transaction('rw', [every table the work touches, reads included], work)`; repository calls inside join it through Dexie's zone. `work` may await only repository calls: a timer or a `fetch` inside commits the transaction early. Test it with fake-indexeddb by making the second write reject (`vi.spyOn(repo, 'create').mockImplementationOnce(original).mockRejectedValueOnce(...)`) and asserting the tables are empty (ADR-052).
+
+### One row per decision, not one card per item
+A list that asks the user to act should show one row per thing they decide about, not one card per underlying record. The Expenses Needs attention list groups a rule's missed payments into one row ("Aug, Sep, Oct not marked · $240") with one primary action; the less common actions go in a ⋯ menu (`useMenuButton`) and apply to the whole group; per-item choices live in the drawer the primary action opens. The grouping is a pure, tested function the page calls in `useMemo` (`groupOccurrencesByRule`), and the drawer looks its group up live by key, so an item resolved inside it drops out.
+
+### One `<Drawer>` for a drawer's views
+A drawer with a second step (the mark-paid drawer's snooze view) renders a single `<Drawer>` and swaps its body and footer by state. Returning a different component that each renders its own `<Drawer>` remounts the shell, which replays the open animation and loses state the first view held (checks, typed amounts). Keep that state in the component that owns the `<Drawer>`.
+
+---
+
+## App patterns added by MUT-83 (2026-10-12)
+
+### Two screens that show the same figure read the same entries, then split them
+When two screens show the same money figure, such as Home's and the Clients list's Owed now (ADR-049), both read the same set of entries through the same repository call. A screen that breaks the figure down does so with a pure partition of that set: `partitionOwedNow(entries, clients, today)` puts every entry in exactly one part. Its total is the one helper (`summarizeOwedByCurrency`) over the whole set, so it equals the other screen's figure by construction, and the parts add up to it. Never compute the total by adding up the parts from a second query, and never filter the set differently on one screen. A parity test seeds a fixture with every kind of row that could fall between the screens (no client, gone client, archived client, archived entry, another business's entries) and asserts both reads are equal. Pass the partition entries and clients, not a business id, so a multi-business lens can reuse it.
+
+### A row that isn't a record says so, and never sorts with the records
+Debts that belong to no listed client are muted rows ("No client · N", "Archived clients · N"), shown only when non-zero. They are appended after the sorted records by a function that returns tagged items (`orderClientIndex` → `{ type: 'client' | 'bucket' }`). A big bucket can't rank above a client, and the column sort never sees it. Each one opens the list of the entries behind it.
+
+### A page's filters are one URL model with a pure parser
+A main-app page whose filters a link must be able to set keeps them as one object in the URL:
+- **A pure module** (`src/lib/incomeSearch.ts`) holds the type, the parser (`parseIncomeSearch`, also the route's `validateSearch`), the merge that drops cleared fields, and the resolver that fills in defaults.
+- **A small hook** (`useIncomeFilters`) reads with `useSearch({ strict: false })` and writes with `navigate({ search: prev => merge(prev, patch), replace: true })`.
+
+Rules:
+- With no parameters the page must behave exactly as before.
+- The parser drops unknown values instead of throwing. The router parses `?q=2026` as a number, so read it back as text.
+- Write only the fields that differ from the defaults.
+- Test the hook once on a real memory router. In page tests, stand in for it with an in-memory `useState`, so the page's existing interaction tests keep working without a router.
+
+---
+
+## Desktop patterns added by MUT-73 (2026-10-12)
 
 ### Smoke a desktop debug build without touching the owner's data (MUT-73)
 
