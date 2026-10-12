@@ -1,16 +1,17 @@
 import { animate, motionValue, type AnimationPlaybackControls, type MotionValue } from 'motion';
-import { springFromResponse } from '../../../lib/motion/physics';
+import { REDUCED_MOTION_FADE_SECONDS, UI_SPRING } from '../../../lib/motion/presets';
 import { exitDistance, overlayOpacity } from './drawerGesture';
 import type { ExitSnapshot } from './exitSnapshot';
 
 /**
  * How a drawer moves (MUT-80, brief R2, ADR-043). One critically damped spring
- * for every move: an overshoot would pull the panel off its screen edge.
+ * for every move: an overshoot would pull the panel off its screen edge. The
+ * values are the app's (`lib/motion/presets`), shared with list rows (MUT-82).
  */
-export const DRAWER_SPRING = springFromResponse(0.3, 1);
+export const DRAWER_SPRING = UI_SPRING;
 
 /** Reduced motion swaps every move for an opacity cross-fade of this length. */
-export const REDUCED_MOTION_FADE_SECONDS = 0.15;
+export { REDUCED_MOTION_FADE_SECONDS };
 
 export interface DrawerGeometry {
   width: number;

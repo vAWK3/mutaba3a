@@ -16,6 +16,9 @@
  *     transaction={tx}
  *     onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })}
  *   />
+ *
+ * `compact` shows the label alone where the amount already sits beside the
+ * button (Home's Needs attention, MUT-82); the accessible name keeps it.
  */
 
 import { Button } from './Button';
@@ -29,12 +32,15 @@ export interface RecordPaymentButtonProps {
   transaction: TransactionDisplay;
   /** Open the payment drawer for this transaction. */
   onRecordPayment: () => void;
+  /** Show the label without the amount; the accessible name still has it. */
+  compact?: boolean;
   className?: string;
 }
 
 export function RecordPaymentButton({
   transaction,
   onRecordPayment,
+  compact = false,
   className,
 }: RecordPaymentButtonProps) {
   const t = useT();
@@ -70,7 +76,7 @@ export function RecordPaymentButton({
       aria-label={`${t('transactions.partialPayment.recordPayment')} — ${t('transactions.partialPayment.remaining')}: ${remainingLabel}`}
     >
       {t('transactions.partialPayment.recordPayment')}
-      <span className="record-payment-remaining">{remainingLabel}</span>
+      {!compact && <span className="record-payment-remaining">{remainingLabel}</span>}
     </Button>
   );
 }

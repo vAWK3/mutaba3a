@@ -34,6 +34,12 @@ function hideFromEveryone(clone: HTMLElement) {
   clone.setAttribute('aria-hidden', 'true');
   clone.setAttribute('inert', '');
   clone.style.pointerEvents = 'none';
+  // No duplicate ids while the clone plays out (MUT-82). A drawer opened in
+  // that time would otherwise find the clone's elements first: the payment
+  // drawer's footer button, linked to its form by id, submitted the clone's
+  // form natively and reloaded the page.
+  clone.removeAttribute('id');
+  clone.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
 }
 
 interface ScrollPosition {

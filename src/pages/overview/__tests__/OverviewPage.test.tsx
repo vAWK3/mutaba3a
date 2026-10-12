@@ -117,13 +117,11 @@ function mockData({
   clients = [{ id: 'acme', name: 'Acme' }],
   anyTransaction = true,
   receivables = [overdue, dueToday, dueInSeven, notDueSoon],
-  attention = [overdue, dueToday, dueInSeven],
   recent = payments,
 }: Partial<{
   clients: { id: string; name: string }[];
   anyTransaction: boolean;
   receivables: TransactionDisplay[];
-  attention: TransactionDisplay[];
   recent: RecentPaymentRow[];
 }> = {}) {
   vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: clients } as unknown as ReturnType<typeof useQueries.useClients>);
@@ -134,10 +132,8 @@ function mockData({
     data: receivables,
     isLoading: false,
   } as unknown as ReturnType<typeof useIncomeQueries.useReceivables>);
-  vi.spyOn(useIncomeQueries, 'useAttentionReceivables').mockReturnValue({
-    data: attention,
-    isLoading: false,
-  } as unknown as ReturnType<typeof useIncomeQueries.useAttentionReceivables>);
+  // MUT-82: Home no longer reads the attention list on its own (see below)
+  vi.spyOn(useIncomeQueries, 'useAttentionReceivables');
   vi.spyOn(useQueries, 'useRecentPayments').mockReturnValue({
     data: recent,
     isLoading: false,
@@ -190,11 +186,20 @@ describe('OverviewPage (Home)', () => {
       expect(stripIsolates(owed.querySelector('.owed-now-overdue')?.textContent)).toBe('$1,000 overdue');
     });
 
-    it('asks for the active profile\'s receivables, attention list and recent payments', () => {
+    it('asks for the active profile\'s receivables and recent payments', () => {
       renderPage();
       expect(useIncomeQueries.useReceivables).toHaveBeenCalledWith({ profileId: 'p1' });
-      expect(useIncomeQueries.useAttentionReceivables).toHaveBeenCalledWith(undefined, 'p1');
       expect(useQueries.useRecentPayments).toHaveBeenCalledWith('p1');
+    });
+
+    // MUT-82 (D5): Needs attention is selected from the receivables Owed now
+    // reads, so a payment changes both in one render.
+    it('feeds Owed now and Needs attention from one receivables query', () => {
+      renderPage();
+      const calls = vi.mocked(useIncomeQueries.useReceivables).mock.calls;
+      expect(calls.length).toBeGreaterThanOrEqual(2);
+      expect(calls.every(([filters]) => JSON.stringify(filters) === JSON.stringify({ profileId: 'p1' }))).toBe(true);
+      expect(useIncomeQueries.useAttentionReceivables).not.toHaveBeenCalled();
     });
 
     it('does not show the old forecast, month actuals or recent-activity blocks', () => {
@@ -206,13 +211,13 @@ describe('OverviewPage (Home)', () => {
   });
 
   describe('Needs attention', () => {
-    it('lists items in the order given (oldest due first), with client, what for and the remaining amount', () => {
+    it('lists overdue and due-soon items, oldest due first, with client, what for and the remaining amount', () => {
       renderPage();
       const rows = within(attentionSection()).getAllByRole('row');
       expect(rows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
-        'AcmeDesign sprint',
-        'GammaBrand book',
-        'No clientWalk-in job',
+        'Acme Design sprint',
+        'Gamma Brand book',
+        'No client Walk-in job',
       ]);
       expect(rowWith(attentionSection(), 'Walk-in job')).toHaveTextContent('€300');
     });
@@ -239,7 +244,7 @@ describe('OverviewPage (Home)', () => {
     });
 
     it('says there is nothing to chase when the list is empty', () => {
-      mockData({ attention: [] });
+      mockData({ receivables: [notDueSoon] });
       renderPage();
       expect(within(attentionSection()).getByText('No overdue or upcoming receivables')).toBeInTheDocument();
     });
@@ -273,7 +278,7 @@ describe('OverviewPage (Home)', () => {
 
   describe('brand-new install', () => {
     it('offers one primary action instead of zeroes and empty tables', () => {
-      mockData({ clients: [], anyTransaction: false, receivables: [], attention: [], recent: [] });
+      mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
       const { container } = renderPage();
 
       expect(screen.getByText('Nothing to track yet')).toBeInTheDocument();
@@ -288,7 +293,7 @@ describe('OverviewPage (Home)', () => {
 
     it('decides nothing while the profile is still loading: no empty state, no onboarding flash', () => {
       onboarding.skipped = false;
-      mockData({ clients: [], anyTransaction: false, receivables: [], attention: [], recent: [] });
+      mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
       vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<
         typeof useQueries.useClients
       >);
@@ -302,7 +307,7 @@ describe('OverviewPage (Home)', () => {
 
     it('still shows onboarding to a new user who has not skipped it', () => {
       onboarding.skipped = false;
-      mockData({ clients: [], anyTransaction: false, receivables: [], attention: [], recent: [] });
+      mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
       renderPage();
       expect(screen.getByTestId('onboarding-overlay')).toBeInTheDocument();
     });

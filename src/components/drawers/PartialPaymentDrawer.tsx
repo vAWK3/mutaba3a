@@ -28,6 +28,10 @@ import './PartialPaymentDrawer.css';
  * Payment records own the entry's payment state (ADR-039); overpayment and
  * future dates are refused by the repository (ADR-030, ADR-038) and checked
  * here first only to say so in the user's language.
+ *
+ * `onRecorded` hears the record a save created, just before the drawer
+ * closes, so the screen that opened it can offer Undo (MUT-82). An update or
+ * a delete is not reported.
  */
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
@@ -35,6 +39,7 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 interface PartialPaymentDrawerProps {
   transactionId: string;
   onClose: () => void;
+  onRecorded?: (record: PaymentRecord) => void;
 }
 
 const FORM_ID = 'partial-payment-form';
@@ -47,7 +52,7 @@ function isolate(text: string): string {
   return `${FIRST_STRONG_ISOLATE}${text}${POP_ISOLATE}`;
 }
 
-export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentDrawerProps) {
+export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: PartialPaymentDrawerProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -99,8 +104,14 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
     }
   };
 
+  // The opener still hears a payment recorded from the entry's view
   const returnToEntry = () => {
-    useDrawerStore.getState().openPartialPaymentDrawer({ transactionId });
+    useDrawerStore.getState().openPartialPaymentDrawer({ transactionId, onRecorded });
+  };
+
+  const handleRecorded = (record: PaymentRecord) => {
+    onRecorded?.(record);
+    onClose();
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
@@ -161,7 +172,7 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
           createMutation={createMutation}
           updateMutation={updateMutation}
           isPending={isPending}
-          onRecorded={onClose}
+          onRecorded={handleRecorded}
           onUpdated={returnToEntry}
           t={t}
         />
@@ -262,7 +273,7 @@ function PaymentForm({
   createMutation: ReturnType<typeof useCreatePaymentRecord>;
   updateMutation: ReturnType<typeof useUpdatePaymentRecord>;
   isPending: boolean;
-  onRecorded: () => void;
+  onRecorded: (record: PaymentRecord) => void;
   onUpdated: () => void;
   t: Translate;
 }) {
@@ -334,8 +345,8 @@ function PaymentForm({
         await updateMutation.mutateAsync({ id: editingRecord.id, transactionId, data: payment });
         onUpdated();
       } else {
-        await createMutation.mutateAsync({ transactionId, ...payment });
-        onRecorded();
+        const record = await createMutation.mutateAsync({ transactionId, ...payment });
+        onRecorded(record);
       }
     } catch (err) {
       // The repository is the source of truth (ADR-030): a refusal it still

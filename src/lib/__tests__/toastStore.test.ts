@@ -99,6 +99,39 @@ describe('toastStore', () => {
       expect(result.current.toasts).toHaveLength(3);
     });
 
+    // MUT-82 (D9): one Undo at a time. A newer payment's Undo replaces the
+    // older one; the older payment simply stays recorded.
+    it('replaces the toast showing in the same group', () => {
+      const { result } = renderHook(() => useToastStore());
+
+      let second = '';
+      act(() => {
+        result.current.addToast({ message: 'Recorded $10', duration: 5000, group: 'payment-undo' });
+        second = result.current.addToast({ message: 'Recorded $20', duration: 5000, group: 'payment-undo' });
+      });
+
+      expect(result.current.toasts.map((toast) => toast.message)).toEqual(['Recorded $20']);
+      expect(result.current.toasts[0].id).toBe(second);
+    });
+
+    it('stacks toasts of other groups and toasts with no group', () => {
+      const { result } = renderHook(() => useToastStore());
+
+      act(() => {
+        result.current.addToast({ message: 'Saved', duration: 3000 });
+        result.current.addToast({ message: 'Recorded $10', duration: 5000, group: 'payment-undo' });
+        result.current.addToast({ message: 'Duplicated', duration: 5000, group: 'other' });
+        result.current.addToast({ message: 'Saved again', duration: 3000 });
+      });
+
+      expect(result.current.toasts.map((toast) => toast.message)).toEqual([
+        'Saved',
+        'Recorded $10',
+        'Duplicated',
+        'Saved again',
+      ]);
+    });
+
     it('should generate unique IDs', () => {
       const { result } = renderHook(() => useToastStore());
 
@@ -152,6 +185,18 @@ describe('toastStore', () => {
       });
 
       expect(storeHook.result.current.toasts[0].duration).toBe(10000);
+    });
+
+    it('passes a group through to the store', () => {
+      const storeHook = renderHook(() => useToastStore());
+      const { result } = renderHook(() => useToast());
+
+      act(() => {
+        result.current.showToast('Recorded $10', { group: 'payment-undo' });
+        result.current.showToast('Recorded $20', { group: 'payment-undo' });
+      });
+
+      expect(storeHook.result.current.toasts.map((toast) => toast.message)).toEqual(['Recorded $20']);
     });
 
     it('should allow removing toast', () => {

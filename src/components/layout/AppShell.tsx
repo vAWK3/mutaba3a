@@ -148,6 +148,7 @@ export function AppShell({ children }: AppShellProps) {
           <PartialPaymentDrawer
             transactionId={partialPaymentDrawer.transactionId}
             onClose={closePartialPaymentDrawer}
+            onRecorded={partialPaymentDrawer.onRecorded}
           />
         </InlineErrorBoundary>
       )}

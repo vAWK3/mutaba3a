@@ -1,0 +1,83 @@
+/**
+ * Home's Needs attention rows (MUT-82): the client cell as a link, Record
+ * Payment in its own cell at the inline end, and room for a paid row's
+ * slide-out. Logical properties only, so Arabic mirrors for free.
+ */
+
+/* The copy of a leaving row is laid over the section (rowExit.ts) and must
+   never slide across into Recent payments */
+.home-attention {
+  position: relative;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+/* The row's own action: a link to the client, or a button for the entry */
+.home-attention-open {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.home-attention-open:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* As narrow as the button, which is always visible */
+.home-attention-action {
+  inline-size: 1%;
+  white-space: nowrap;
+  text-align: end;
+}
+
+/* Only a programmatic target when the last row leaves (tabIndex -1) */
+.home-attention .card-title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* A narrow card (a phone, or the two-column layout on a small window): the
+   button takes its own line under the client and the amount, so the client
+   keeps its room. The rows become grids; borders move from cells to rows. */
+@container (max-width: 400px) {
+  .home-attention .home-table table,
+  .home-attention .home-table tbody {
+    display: block;
+  }
+
+  .home-attention .home-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    border-block-end: 1px solid var(--border);
+  }
+
+  .home-attention .home-table tr:last-child {
+    border-block-end: none;
+  }
+
+  .home-attention .home-table td {
+    border-block-end: none;
+  }
+
+  .home-attention .home-row-main {
+    inline-size: auto;
+    max-inline-size: none;
+    min-inline-size: 0;
+  }
+
+  .home-attention .home-attention-action {
+    grid-column: 1 / -1;
+    inline-size: auto;
+    padding-block-start: 0;
+  }
+}

@@ -177,6 +177,9 @@
     "recentPayments": "أحدث الدفعات",
     "noPayments": "لا توجد دفعات مسجلة بعد",
     "noClient": "بدون عميل",
+    "paymentRecorded": "تم تسجيل {amount} من {client}",
+    "paymentRecordedNoClient": "تم تسجيل {amount}",
+    "undoFailed": "تعذّر التراجع. لا تزال الدفعة مسجّلة.",
     "empty": {
       "title": "لا يوجد ما يُتابَع بعد",
       "description": "أضف ما أنجزته لعميل وقيمته. ستعرض الصفحة الرئيسية بعدها ما هو مستحق لك، ومن تأخر، وما وصلك.",
