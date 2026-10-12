@@ -513,6 +513,8 @@ export const CONFLICT_REASONS = [
   // MUT-65
   'ALREADY_SETTLED',
   'ALREADY_ALLOCATED',
+  // MUT-66: filing an entry through the route for the other kind.
+  'ENTRY_KIND_MISMATCH',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1075,6 +1077,8 @@ export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, cr
 
 /** Where a write came from; recorded on the audit row only, never persisted on the entity itself. */
 export const CaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share']).openapi('CaptureSource');
+/** MUT-66 persists this on an inbox entry, so the serializer needs the type, not just the schema. */
+export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
 export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
 export const IncomeStatusSchema = z.enum(['unallocated', 'open', 'settled']).openapi('IncomeStatus');
 
@@ -1494,3 +1498,85 @@ export const ExpenseSummarySchema = z
     ),
   })
   .openapi('ExpenseSummary');
+
+// ---- MUT-66: the unsorted inbox ---------------------------------------------
+
+export const InboxEntryKindSchema = z.enum(['income', 'expense']).openapi('InboxEntryKind');
+
+const inboxNote = z.string().max(2000);
+
+export const InboxEntrySchema = z
+  .object({
+    id: uuid,
+    kind: InboxEntryKindSchema,
+    /** The original amount, in `currency`; never converted, here or in the record it becomes. */
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    occurredOn: IsoDateSchema,
+    note: z.string().nullable(),
+    /** Persisted here, unlike on an expense or income write: an entry can sit unfiled, and still shows how it arrived. */
+    captureSource: CaptureSourceSchema.nullable(),
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('InboxEntry');
+
+export const InboxEntryPageSchema = z.object({ items: z.array(InboxEntrySchema), nextCursor: z.string().nullable() }).openapi('InboxEntryPage');
+
+export const CreateInboxEntryRequestSchema = z
+  .object({
+    kind: InboxEntryKindSchema,
+    amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
+    currency: CurrencySchema,
+    occurredOn: IsoDateSchema.openapi({ description: 'May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check.' }),
+    note: inboxNote.optional(),
+    captureSource: CaptureSourceSchema.optional(),
+  })
+  .strict()
+  .openapi('CreateInboxEntryRequest');
+
+/** No `kind`: what an entry is destined to become is fixed at capture, as an expense's currency is. Null clears an optional field. */
+export const UpdateInboxEntryRequestSchema = z
+  .object({
+    amount: AmountSchema.optional(),
+    currency: CurrencySchema.optional(),
+    occurredOn: IsoDateSchema.optional(),
+    note: inboxNote.nullable().optional(),
+    captureSource: CaptureSourceSchema.nullable().optional(),
+  })
+  .strict()
+  .openapi('UpdateInboxEntryRequest');
+
+export const ListInboxQuerySchema = z.object({ ...pageQuery });
+
+export const InboxEntryIdParamSchema = z.object({ entryId: uuid });
+
+/** Amount, currency, date and note come from the entry itself; only what the entry could not know is supplied here. */
+export const FileAsExpenseRequestSchema = z
+  .object({
+    categoryId: uuid.optional(),
+    vendor: expenseText.optional(),
+    title: expenseText.optional(),
+    customerId: uuid.optional(),
+    projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
+  })
+  .strict()
+  .openapi('FileAsExpenseRequest');
+
+/** The Received/Owed choice is made here, not at capture: it only means something once a client is (or deliberately is not) in the picture. */
+export const FileAsIncomeRequestSchema = z
+  .object({
+    kind: IncomeKindSchema,
+    /** Required for `owed`; optional for `received`. */
+    customerId: uuid.optional(),
+    projectId: uuid.optional(),
+    /** `owed` only. */
+    title: incomeText.optional(),
+    /** `owed` only; defaults to EOM_15 of the entry's occurredOn. */
+    dueDate: IsoDateSchema.optional(),
+    /** `received` only; defaults CASH. */
+    method: PaymentMethodSchema.optional(),
+  })
+  .strict()
+  .openapi('FileAsIncomeRequest');

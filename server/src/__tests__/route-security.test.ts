@@ -39,10 +39,25 @@ const EXPENSE_OPERATIONS = [
 /** MUT-65: personal-profile income capture — session-only (Malafat has its own richer payment/allocation routes). */
 const INCOME_OPERATIONS = ['POST /v1/income', 'DELETE /v1/income/{incomeId}', 'POST /v1/receivables/{receivableId}/settle'];
 
+/**
+ * MUT-66: the unsorted inbox — session-only throughout. The four CRUD
+ * operations name no profile at all (like the identity routes); the two
+ * filing operations do, and declare the scope of the record they create.
+ */
+const INBOX_OPERATIONS = [
+  'GET /v1/inbox',
+  'POST /v1/inbox',
+  'PATCH /v1/inbox/{entryId}',
+  'DELETE /v1/inbox/{entryId}',
+  'POST /v1/inbox/{entryId}/file-as-expense',
+  'POST /v1/inbox/{entryId}/file-as-income',
+];
+
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */
 const SESSION_OPERATIONS = [
   ...EXPENSE_OPERATIONS,
   ...INCOME_OPERATIONS,
+  ...INBOX_OPERATIONS,
   'DELETE /v1/sessions/current',
   'GET /v1/agreements',
   'GET /v1/agreements/{agreementId}',
@@ -205,7 +220,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...INBOX_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -215,7 +230,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...INBOX_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
