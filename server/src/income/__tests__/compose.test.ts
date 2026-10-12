@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
-import { assertNotFuture, dueDateForOwed, owedVatFields, resolveIncomeLinks } from '../compose.js';
+import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../compose.js';
+
+const PERSONAL = incomeCaptureRulesFor(null);
+const MALAFAT = incomeCaptureRulesFor('MALAFAT');
 
 async function fixture() {
   const store = new MemoryLedgerStore();
@@ -14,10 +17,43 @@ async function fixture() {
   return { store, org, customer, otherCustomer, project, archivedProject };
 }
 
+describe('incomeCaptureRulesFor (MUT-61)', () => {
+  it('a personal profile keeps MUT-65: Received and Owed, client optional for Received', () => {
+    expect(PERSONAL).toEqual({ received: true, owed: true, customer: 'optional' });
+  });
+  it('a Malafat-fed profile: Received only, for a client Malafat has linked', () => {
+    expect(MALAFAT).toEqual({ received: true, owed: false, customer: 'linked-required' });
+  });
+});
+
+describe('resolveIncomeLinks under linked-required (MUT-61)', () => {
+  it('no client → CUSTOMER_REQUIRED', async () => {
+    const { store, org } = await fixture();
+    const err = await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: null }, MALAFAT).catch((e: unknown) => e);
+    expect((err as ApiError).details).toMatchObject({ reason: 'CUSTOMER_REQUIRED', field: 'customerId' });
+  });
+
+  it('a client with no Malafat reference → CUSTOMER_NOT_LINKED; with one → resolved', async () => {
+    const { store, org, customer, project } = await fixture();
+    const err = await resolveIncomeLinks(store, org.id, 'received', { customerId: customer.id, projectId: null }, MALAFAT).catch((e: unknown) => e);
+    expect((err as ApiError).details).toMatchObject({ reason: 'CUSTOMER_NOT_LINKED', field: 'customerId' });
+    await store.externalReferences.link({ organizationId: org.id, provider: 'MALAFAT', entityType: 'CUSTOMER', entityId: customer.id, externalId: 'c-1' }, new Date(0));
+    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: customer.id, projectId: null }, MALAFAT)).toEqual({ customerId: customer.id, projectId: null });
+    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: project.id }, MALAFAT)).toEqual({ customerId: customer.id, projectId: project.id });
+  });
+
+  it('a client linked only as a project reference does not count — the CUSTOMER reference is what Malafat allocates against', async () => {
+    const { store, org, customer, project } = await fixture();
+    await store.externalReferences.link({ organizationId: org.id, provider: 'MALAFAT', entityType: 'PROJECT', entityId: project.id, externalId: 'm-1' }, new Date(0));
+    const err = await resolveIncomeLinks(store, org.id, 'received', { customerId: customer.id, projectId: project.id }, MALAFAT).catch((e: unknown) => e);
+    expect((err as ApiError).details).toMatchObject({ reason: 'CUSTOMER_NOT_LINKED' });
+  });
+});
+
 describe('resolveIncomeLinks', () => {
   it("'owed' with no customerId and no projectId → CUSTOMER_REQUIRED_FOR_OWED", async () => {
     const { store, org } = await fixture();
-    const err = await resolveIncomeLinks(store, org.id, 'owed', { customerId: null, projectId: null }).catch((e: unknown) => e);
+    const err = await resolveIncomeLinks(store, org.id, 'owed', { customerId: null, projectId: null }, PERSONAL).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe('VALIDATION_FAILED');
     expect((err as ApiError).details).toMatchObject({ reason: 'CUSTOMER_REQUIRED_FOR_OWED', field: 'customerId' });
@@ -25,36 +61,36 @@ describe('resolveIncomeLinks', () => {
 
   it("'received' with no customerId → no error, money can stand alone", async () => {
     const { store, org } = await fixture();
-    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: null })).toEqual({ customerId: null, projectId: null });
+    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: null }, PERSONAL)).toEqual({ customerId: null, projectId: null });
   });
 
   it('projectId resolving to a different customer than the one explicitly given → PROJECT_CUSTOMER_MISMATCH', async () => {
     const { store, org, project, otherCustomer } = await fixture();
-    const err = await resolveIncomeLinks(store, org.id, 'received', { customerId: otherCustomer.id, projectId: project.id }).catch((e: unknown) => e);
+    const err = await resolveIncomeLinks(store, org.id, 'received', { customerId: otherCustomer.id, projectId: project.id }, PERSONAL).catch((e: unknown) => e);
     expect((err as ApiError).details).toMatchObject({ reason: 'PROJECT_CUSTOMER_MISMATCH' });
   });
 
   it('projectId given, no customerId given (received) → customerId is taken from the project', async () => {
     const { store, org, project, customer } = await fixture();
-    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: project.id })).toEqual({ customerId: customer.id, projectId: project.id });
+    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: project.id }, PERSONAL)).toEqual({ customerId: customer.id, projectId: project.id });
   });
 
   it("'owed' with only a projectId resolves its customer, satisfying the requirement", async () => {
     const { store, org, project, customer } = await fixture();
-    expect(await resolveIncomeLinks(store, org.id, 'owed', { customerId: null, projectId: project.id })).toEqual({ customerId: customer.id, projectId: project.id });
+    expect(await resolveIncomeLinks(store, org.id, 'owed', { customerId: null, projectId: project.id }, PERSONAL)).toEqual({ customerId: customer.id, projectId: project.id });
   });
 
   it('an archived project may still be linked (MUT-42 D6 precedent, re-asserted on the income path)', async () => {
     const { store, org, archivedProject, customer } = await fixture();
-    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: archivedProject.id })).toEqual({ customerId: customer.id, projectId: archivedProject.id });
+    expect(await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: archivedProject.id }, PERSONAL)).toEqual({ customerId: customer.id, projectId: archivedProject.id });
   });
 
   it('an unknown customerId → CUSTOMER_NOT_FOUND; an unknown projectId → PROJECT_NOT_FOUND', async () => {
     const { store, org } = await fixture();
     const ghost = '00000000-0000-4000-8000-000000000000';
-    const noCustomer = await resolveIncomeLinks(store, org.id, 'received', { customerId: ghost, projectId: null }).catch((e: unknown) => e);
+    const noCustomer = await resolveIncomeLinks(store, org.id, 'received', { customerId: ghost, projectId: null }, PERSONAL).catch((e: unknown) => e);
     expect((noCustomer as ApiError).details).toMatchObject({ reason: 'CUSTOMER_NOT_FOUND' });
-    const noProject = await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: ghost }).catch((e: unknown) => e);
+    const noProject = await resolveIncomeLinks(store, org.id, 'received', { customerId: null, projectId: ghost }, PERSONAL).catch((e: unknown) => e);
     expect((noProject as ApiError).details).toMatchObject({ reason: 'PROJECT_NOT_FOUND' });
   });
 });

@@ -233,18 +233,109 @@ describe('POST /v1/income on a personal profile', () => {
   });
 });
 
-describe('POST /v1/income on a Malafat-fed profile (M)', () => {
-  it.each([
-    ['received, no client', BASE_RECEIVED],
-    ['owed, with client', { ...BASE_OWED }],
-  ])('%s → 403 READ_ONLY_PROFILE { domain: payments }; nothing written', async (_label, base) => {
+/** A client (and optionally a matter) on M the way Malafat makes them: through its key, linked or not. */
+async function malafatClient(h: Harness, mAuth: Record<string, string>, opts: { linked?: boolean; name?: string } = {}) {
+  const ref = opts.linked === false ? {} : { externalReference: { provider: 'MALAFAT', externalId: `client-${++seq}` } };
+  return (await read(await h.app.request('/v1/customers', json({ name: opts.name ?? 'Haddad', ...ref }, { ...mAuth, ...idem() })))) as { id: string };
+}
+async function malafatMatter(h: Harness, mAuth: Record<string, string>, customerId: string) {
+  return (await read(await h.app.request('/v1/projects', json({ customerId, name: 'Case', currency: 'ILS', externalReference: { provider: 'MALAFAT', externalId: `matter-${++seq}` } }, { ...mAuth, ...idem() })))) as { id: string };
+}
+/** One posted receivable for `customerId` on M, written straight to the store: the allocation target. */
+async function receivableOn(h: Harness, organizationId: string, customerId: string, projectId: string, amountMinor = 100_000n) {
+  const { installments } = await h.store.agreements.create(
+    { organizationId, projectId, customerId, type: 'FIXED', currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, amountMinor, netMinor: amountMinor, vatMinor: 0n, grossMinor: amountMinor, agreementDate: '2026-10-01', description: null, paymentTerms: 'EOM', startMonth: null, billingDay: null, endMonth: null,
+      installments: [{ position: 1, label: 'Fee', amountMinor, netMinor: amountMinor, vatMinor: 0n, grossMinor: amountMinor, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'IMMEDIATE', triggerDate: null, paymentTerms: null, dueDateOverride: null }] },
+    h.clock.now,
+  );
+  return (await h.store.agreements.postInstallment(organizationId, installments[0]!.id, { postingDate: '2026-10-01', dueDate: '2026-10-31', at: h.clock.now }))!.receivable;
+}
+const writesOf = (h: Harness) => h.calls.filter((c) => c.repo === 'payments' || (c.repo === 'receivables' && c.method === 'createAdjustment')).filter((c) => !['getById', 'list', 'listAllocations', 'findReplacedBy'].includes(c.method));
+
+describe('POST /v1/income on a Malafat-fed profile (M) — MUT-61', () => {
+  it('Received for a Malafat-linked client → 201; an unallocated payment, origin CAPTURE, its source and its person (AC 1)', async () => {
+    const { h, m, mAuth, u, create } = await setup();
+    const c = await malafatClient(h, mAuth);
+    const res = await create({ ...BASE_RECEIVED, customerId: c.id, captureSource: 'app' }, m.id);
+    expect(res.status).toBe(201);
+    const body = await read(res);
+    expect(body).toMatchObject({ kind: 'received', customerId: c.id, status: 'unallocated' });
+    const stored = await h.store.payments.getById(m.id, body.id);
+    expect(stored).toMatchObject({ origin: 'CAPTURE', captureSource: 'app', createdByUserId: u.userId, allocatedMinor: 0n, amountMinor: 25_000n, status: 'POSTED' });
+    expect(await h.store.payments.listAllocations(m.id, body.id)).toEqual([]);
+  });
+
+  it('a matter is optional, and when given it is kept on the payment', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const c = await malafatClient(h, mAuth);
+    const matter = await malafatMatter(h, mAuth, c.id);
+    const body = await read(await create({ ...BASE_RECEIVED, customerId: c.id, projectId: matter.id }, m.id));
+    expect(await h.store.payments.getById(m.id, body.id)).toMatchObject({ customerId: c.id, projectId: matter.id });
+  });
+
+  it('a matter alone brings its client, and that client still has to be Malafat-linked', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const linked = await malafatClient(h, mAuth);
+    const matter = await malafatMatter(h, mAuth, linked.id);
+    const ok = await create({ ...BASE_RECEIVED, projectId: matter.id }, m.id);
+    expect(ok.status).toBe(201);
+    expect((await read(ok)).customerId).toBe(linked.id);
+
+    const unlinked = await malafatClient(h, mAuth, { linked: false, name: 'Walk-in' });
+    const theirs = await malafatMatter(h, mAuth, unlinked.id);
+    const refused = await create({ ...BASE_RECEIVED, projectId: theirs.id }, m.id);
+    expect(refused.status).toBe(422);
+    expect((await read(refused)).error.details).toMatchObject({ reason: 'CUSTOMER_NOT_LINKED', field: 'customerId' });
+  });
+
+  it('Received with no client → 422 CUSTOMER_REQUIRED; nothing written (was 403 before MUT-61)', async () => {
     const { h, m, create } = await setup();
     h.calls.length = 0;
-    const res = await create(base as Loose, m.id);
+    const res = await create(BASE_RECEIVED, m.id);
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'CUSTOMER_REQUIRED', field: 'customerId' });
+    expect(writesOf(h)).toEqual([]);
+  });
+
+  it('a client Malafat never linked → 422 CUSTOMER_NOT_LINKED; nothing written (AC 3)', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const c = await malafatClient(h, mAuth, { linked: false });
+    h.calls.length = 0;
+    const res = await create({ ...BASE_RECEIVED, customerId: c.id }, m.id);
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'CUSTOMER_NOT_LINKED', field: 'customerId' });
+    expect(writesOf(h)).toEqual([]);
+  });
+
+  it('a matter belonging to another client → 422 PROJECT_CUSTOMER_MISMATCH (AC 3)', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const c = await malafatClient(h, mAuth, { name: 'A' });
+    const other = await malafatClient(h, mAuth, { name: 'B' });
+    const theirs = await malafatMatter(h, mAuth, other.id);
+    const res = await create({ ...BASE_RECEIVED, customerId: c.id, projectId: theirs.id }, m.id);
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'PROJECT_CUSTOMER_MISMATCH' });
+  });
+
+  it('Owed, even for a linked client → 403 READ_ONLY_PROFILE { domain: payments }; nothing written (AC 2)', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const c = await malafatClient(h, mAuth);
+    h.calls.length = 0;
+    const res = await create({ ...BASE_OWED, customerId: c.id }, m.id);
     expect(res.status).toBe(403);
-    const body = await read(res);
-    expect(body.error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { domain: 'payments', writerOfRecord: 'MALAFAT' } });
-    expect(h.calls.filter((c) => (c.repo === 'payments' && c.method === 'create') || (c.repo === 'receivables' && c.method === 'createAdjustment'))).toEqual([]);
+    expect((await read(res)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { domain: 'payments', writerOfRecord: 'MALAFAT' } });
+    expect(writesOf(h)).toEqual([]);
+  });
+
+  it('a replayed Idempotency-Key returns the same payment and writes one', async () => {
+    const { h, m, mAuth, u } = await setup();
+    const c = await malafatClient(h, mAuth);
+    const key = idem();
+    const send = () => h.app.request('/v1/income', json({ ...BASE_RECEIVED, customerId: c.id }, { ...u.as(m.id), ...key }));
+    const first = await read(await send());
+    const second = await read(await send());
+    expect(second.id).toBe(first.id);
+    expect((await h.store.payments.list(m.id, { origin: 'CAPTURE' }, { limit: 10, cursor: null })).items).toHaveLength(1);
   });
 
   it('an API key belonging to M → 403 PRINCIPAL_NOT_ACCEPTED (session-only route)', async () => {
@@ -252,6 +343,54 @@ describe('POST /v1/income on a Malafat-fed profile (M)', () => {
     const res = await h.app.request('/v1/income', json(BASE_RECEIVED, { ...mAuth, ...idem() }));
     expect(res.status).toBe(403);
     expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
+describe('DELETE /v1/income/{id} on a Malafat-fed profile — MUT-61 (AC 5)', () => {
+  async function captured() {
+    const s = await setup();
+    const c = await malafatClient(s.h, s.mAuth);
+    const matter = await malafatMatter(s.h, s.mAuth, c.id);
+    const body = await read(await s.create({ ...BASE_RECEIVED, customerId: c.id }, s.m.id));
+    return { ...s, c, matter, paymentId: body.id as string };
+  }
+
+  it('before Malafat allocates it → 204, REVERSED; a repeat is 204 again', async () => {
+    const { h, m, del, paymentId } = await captured();
+    expect((await del(paymentId, m.id)).status).toBe(204);
+    expect(await h.store.payments.getById(m.id, paymentId)).toMatchObject({ status: 'REVERSED', reversalReason: 'capture_undo' });
+    expect((await del(paymentId, m.id)).status).toBe(204);
+  });
+
+  it.each([
+    ['fully', 25_000n],
+    ['partly', 10_000n],
+  ])('once Malafat has %s allocated it → 409 ALREADY_ALLOCATED; the allocation stands', async (_label, amount) => {
+    const { h, m, c, matter, del, paymentId } = await captured();
+    const r = await receivableOn(h, m.id, c.id, matter.id);
+    await h.store.payments.allocate(m.id, paymentId, [{ receivableId: r.id, amountMinor: amount }], h.clock.now);
+    const res = await del(paymentId, m.id);
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'ALREADY_ALLOCATED' });
+    expect(await h.store.payments.getById(m.id, paymentId)).toMatchObject({ status: 'POSTED', allocatedMinor: amount });
+    expect(await h.store.receivables.getById(m.id, r.id)).toMatchObject({ paidMinor: amount });
+  });
+
+  it('an allocation that lands while the undo is in flight wins: 409, never an unwound allocation', async () => {
+    const { h, m, c, matter, del, paymentId } = await captured();
+    const r = await receivableOn(h, m.id, c.id, matter.id);
+    h.interleave.set('payments.undoCapture', () => h.store.payments.allocate(m.id, paymentId, [{ receivableId: r.id, amountMinor: 25_000n }], h.clock.now));
+    const res = await del(paymentId, m.id);
+    expect(res.status).toBe(409);
+    expect(await h.store.payments.getById(m.id, paymentId)).toMatchObject({ status: 'POSTED', allocatedMinor: 25_000n });
+    expect(await h.store.receivables.getById(m.id, r.id)).toMatchObject({ paidMinor: 25_000n });
+  });
+
+  it('a payment Malafat recorded is not the session’s to undo → 404, untouched', async () => {
+    const { h, m, c, del } = await captured();
+    const { payment } = await h.store.payments.create({ organizationId: m.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
+    expect((await del(payment.id, m.id)).status).toBe(404);
+    expect(await h.store.payments.getById(m.id, payment.id)).toMatchObject({ status: 'POSTED' });
   });
 });
 
@@ -360,12 +499,11 @@ describe('DELETE /v1/income/{id} — undo (AC 9)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('a session on M cannot void/reverse anything via this route, including a guessed P-created id — writability refuses before any lookup', async () => {
-    const { m, create, del } = await setup();
+  it('a P-created id guessed from profile M → 404, and the P payment is untouched (MUT-61: undo is allowed on M, scoped to M)', async () => {
+    const { h, p, m, create, del } = await setup();
     const created = await read(await create(BASE_RECEIVED));
-    const res = await del(created.id, m.id);
-    expect(res.status).toBe(403);
-    expect((await read(res)).error.code).toBe('READ_ONLY_PROFILE');
+    expect((await del(created.id, m.id)).status).toBe(404);
+    expect(await h.store.payments.getById(p.id, created.id)).toMatchObject({ status: 'POSTED' });
   });
 
   it('an unknown id → 404', async () => {

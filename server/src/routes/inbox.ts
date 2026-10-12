@@ -7,7 +7,7 @@ import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
-import { assertNotFuture, dueDateForOwed, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
+import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { InboxEntryRecord, LedgerStore, UpdateInboxEntryPatch } from '../repositories/ports.js';
 import {
@@ -234,14 +234,14 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Filed', content: { 'application/json': { schema: IncomeResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization, user, writerOfRecord } = sessionAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'INCOME');
       assertNotFuture(entry.occurredOn, todayFor(organization, now), 'occurredOn');
       // MUT-65's own validators, called exactly as routes/income.ts calls them — not reimplemented.
-      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
+      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, incomeCaptureRulesFor(writerOfRecord));
 
       const filed = await store.inboxEntries.fileAsIncome(
         { userId: user.id, inboxEntryId: entry.id, kind: 'INCOME', write: incomeWrite(entry, body, links, organization.id, user.id, now, c.get('requestId')) },
