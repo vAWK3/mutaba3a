@@ -48,6 +48,17 @@ describe('users CLI (npm run provision:user and friends)', () => {
     expect(passwords).toHaveLength(1);
   });
 
+  it('create works with no firm, from --currency and --timezone, and prints the personal profile (MUT-120)', async () => {
+    const h = harness();
+    const code = await h.run(['create', '--email', 'solo@firm.ps', '--name', 'Solo', '--currency', 'USD', '--timezone', 'Asia/Hebron']);
+    expect(code).toBe(0);
+    const user = (await h.store.users.findByEmail('solo@firm.ps'))!;
+    const [membership] = await h.store.memberships.listByUser(user.id);
+    const personal = (await h.store.organizations.getById(membership!.organizationId))!;
+    expect(personal).toMatchObject({ personalOwnerUserId: user.id, defaultCurrency: 'USD', timezone: 'Asia/Hebron' });
+    expect(h.out).toContain(`personal ${personal.id} Personal`);
+  });
+
   it('grant and revoke resolve the user by email', async () => {
     const h = harness();
     const a = await org(h.store, 'Firm A');
