@@ -40,6 +40,13 @@ if (typeof window !== 'undefined') {
   URL.revokeObjectURL = vi.fn();
 }
 
+// Tests never reach the network. The top bar's exchange rate (MUT-79) renders
+// in every page test, and its query would otherwise call the live FX API; a
+// refused request takes the same cached/unavailable path as being offline.
+// Tests that need responses stub `fetch` themselves (vi.stubGlobal).
+globalThis.fetch = (input: RequestInfo | URL) =>
+  Promise.reject(new TypeError(`Network disabled in tests: ${String(input)}`));
+
 // Clean up after each test
 afterEach(() => {
   vi.clearAllMocks();

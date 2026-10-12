@@ -9,6 +9,7 @@ import { useT, useDirection } from '../../lib/i18n';
 import { useFeatureFlags } from '../../lib/features/useFeatures';
 import { useMenuButton } from '../../hooks/useMenuButton';
 import { visibleAddMenuActions, type AddMenuAction } from './addMenuActions';
+import { FxRateReadout } from './FxRateReadout';
 
 interface Breadcrumb {
   label: string;
@@ -55,6 +56,7 @@ export function TopBar({ title, breadcrumbs, filterSlot, rightSlot, hideAddMenu 
         {filterSlot}
       </div>
       <div className="topbar-right">
+        <FxRateReadout />
         <ActiveProfileIndicator />
         {rightSlot}
         {!hideAddMenu && <AddMenu />}

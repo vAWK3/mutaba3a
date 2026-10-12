@@ -146,3 +146,97 @@ describe('useMenuButton (MUT-15)', () => {
     expect(trigger()).not.toHaveFocus();
   });
 });
+
+function TestDialog({ actions = ['refresh', 'more'], disabled = false }: { actions?: string[]; disabled?: boolean }) {
+  const popover = useMenuButton({ kind: 'dialog' });
+  return (
+    <div>
+      <button type="button" {...popover.buttonProps}>
+        open
+      </button>
+      {popover.isOpen && (
+        <div {...popover.menuProps} aria-label="Details">
+          <p>Some text</p>
+          {actions.map((action) => (
+            <button key={action} type="button" disabled={disabled}>
+              {action}
+            </button>
+          ))}
+        </div>
+      )}
+      <button type="button">outside</button>
+    </div>
+  );
+}
+
+describe('useMenuButton dialog mode (MUT-79)', () => {
+  const dialog = () => screen.getByRole('dialog');
+
+  it('wires the button to a dialog for assistive technology', () => {
+    render(<TestDialog />);
+    expect(trigger()).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger());
+    expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger()).toHaveAttribute('aria-controls', dialog().id);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('focuses the first enabled control when it opens', () => {
+    render(<TestDialog />);
+    fireEvent.click(trigger());
+    expect(screen.getByRole('button', { name: 'refresh' })).toHaveFocus();
+  });
+
+  it('focuses the panel itself when it has no enabled control', () => {
+    render(<TestDialog disabled />);
+    fireEvent.click(trigger());
+    expect(dialog()).toHaveFocus();
+  });
+
+  it('stays open while Tab moves between its controls', () => {
+    render(<TestDialog />);
+    fireEvent.click(trigger());
+    fireEvent.keyDown(dialog(), { key: 'Tab' });
+    expect(dialog()).toBeInTheDocument();
+  });
+
+  it('closes when Tab leaves past the last control or Shift+Tab past the first', () => {
+    render(<TestDialog />);
+    fireEvent.click(trigger());
+    screen.getByRole('button', { name: 'more' }).focus();
+    fireEvent.keyDown(dialog(), { key: 'Tab' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.click(trigger());
+    fireEvent.keyDown(dialog(), { key: 'Tab', shiftKey: true });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not move focus with the arrow keys', () => {
+    render(<TestDialog />);
+    fireEvent.click(trigger());
+    fireEvent.keyDown(dialog(), { key: 'ArrowDown' });
+    expect(screen.getByRole('button', { name: 'refresh' })).toHaveFocus();
+  });
+
+  it('closes on Escape and gives focus back to the button', () => {
+    render(<TestDialog />);
+    fireEvent.click(trigger());
+    fireEvent.keyDown(dialog(), { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('closes on a click outside, and not on a click inside', () => {
+    render(<TestDialog />);
+    fireEvent.click(trigger());
+    fireEvent.mouseDown(screen.getByText('Some text'));
+    expect(dialog()).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'outside' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

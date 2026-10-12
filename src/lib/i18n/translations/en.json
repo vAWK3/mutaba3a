@@ -65,6 +65,7 @@
     "expenses": "Expenses",
     "reports": "Reports",
     "settings": "Settings",
+    "theme": "Theme: {mode}",
     "download": "Download",
     "new": "New",
     "collapse": "Collapse sidebar",
@@ -860,11 +861,11 @@
     "live": "Live",
     "cached": "Cached",
     "none": "Unavailable",
-    "bannerTitle": "Exchange Rate",
-    "showBanner": "Show exchange rate",
-    "refresh": "Refresh rate",
-    "minimize": "Minimize",
-    "drag": "Drag to move"
+    "refresh": "Refresh rates",
+    "title": "Exchange rate",
+    "readoutLabel": "Exchange rate: {rate}",
+    "rateDate": "Rates for {date}",
+    "updated": "Updated: {time}"
   },
   "welcome": {
     "title": "Welcome to Mutaba3a",

@@ -14,11 +14,27 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
  * Items are the menu's `[role="menuitem"]` descendants; the consumer renders
  * them and calls `close()` after running one (focus then goes wherever the
  * action takes it, usually a drawer).
+ *
+ * `kind: 'dialog'` (MUT-79) is the same button for a small non-modal panel of
+ * information and controls, such as the top bar's exchange rate. The panel is
+ * a `role="dialog"` that the consumer labels. Opening focuses its first
+ * enabled control, or the panel itself when it has none. There is no
+ * arrow-key movement. Tab moves between its controls and closes only when it
+ * leaves past the last one (Shift+Tab: past the first). Escape and an outside
+ * press behave as for a menu.
  */
 
 const ITEM_SELECTOR = '[role="menuitem"]:not([disabled])';
+const CONTROL_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 type FocusTarget = 'first' | 'last';
+
+export type MenuButtonKind = 'menu' | 'dialog';
+
+export interface MenuButtonOptions {
+  kind?: MenuButtonKind;
+}
 
 export interface MenuButton {
   isOpen: boolean;
@@ -27,19 +43,21 @@ export interface MenuButton {
     ref: RefObject<HTMLButtonElement | null>;
     onClick: () => void;
     onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
-    'aria-haspopup': 'menu';
+    'aria-haspopup': MenuButtonKind;
     'aria-expanded': boolean;
     'aria-controls': string | undefined;
   };
   menuProps: {
     ref: RefObject<HTMLDivElement | null>;
     id: string;
-    role: 'menu';
+    role: MenuButtonKind;
+    tabIndex: -1 | undefined;
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   };
 }
 
-export function useMenuButton(): MenuButton {
+export function useMenuButton({ kind = 'menu' }: MenuButtonOptions = {}): MenuButton {
+  const isDialog = kind === 'dialog';
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -47,16 +65,20 @@ export function useMenuButton(): MenuButton {
   const menuId = useId();
 
   const items = useCallback(
-    () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>(ITEM_SELECTOR) ?? []),
-    [],
+    () =>
+      Array.from(
+        menuRef.current?.querySelectorAll<HTMLElement>(isDialog ? CONTROL_SELECTOR : ITEM_SELECTOR) ?? [],
+      ),
+    [isDialog],
   );
 
   const focusItem = useCallback(
     (target: FocusTarget) => {
       const list = items();
-      (target === 'last' ? list[list.length - 1] : list[0])?.focus();
+      const next = target === 'last' ? list[list.length - 1] : list[0];
+      (next ?? (isDialog ? menuRef.current : null))?.focus();
     },
-    [items],
+    [items, isDialog],
   );
 
   const close = useCallback(() => setIsOpen(false), []);
@@ -98,16 +120,25 @@ export function useMenuButton(): MenuButton {
   };
 
   const handleButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (isDialog) return;
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     event.preventDefault();
     openAt(event.key === 'ArrowUp' ? 'last' : 'first');
   };
 
+  // A dialog keeps Tab inside while there is a control to move to
+  const tabLeavesDialog = (backwards: boolean) => {
+    const list = items();
+    const index = list.indexOf(document.activeElement as HTMLElement);
+    return backwards ? index <= 0 : index === list.length - 1;
+  };
+
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Tab') {
-      setIsOpen(false);
+      if (!isDialog || tabLeavesDialog(event.shiftKey)) setIsOpen(false);
       return;
     }
+    if (isDialog) return;
     const list = items();
     if (list.length === 0) return;
     const index = list.indexOf(document.activeElement as HTMLElement);
@@ -133,14 +164,15 @@ export function useMenuButton(): MenuButton {
         setIsOpen((open) => !open);
       },
       onKeyDown: handleButtonKeyDown,
-      'aria-haspopup': 'menu',
+      'aria-haspopup': kind,
       'aria-expanded': isOpen,
       'aria-controls': isOpen ? menuId : undefined,
     },
     menuProps: {
       ref: menuRef,
       id: menuId,
-      role: 'menu',
+      role: kind,
+      tabIndex: isDialog ? -1 : undefined,
       onKeyDown: handleMenuKeyDown,
     },
   };

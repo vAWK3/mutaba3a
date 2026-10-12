@@ -525,6 +525,53 @@ td {
   display: none;
 }
 
+/* Settings and the appearance toggle share one row; stacked on the rail (MUT-79) */
+.sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sidebar-footer-row .nav-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar.collapsed .sidebar-footer-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.sidebar-theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar.collapsed .sidebar-theme-toggle {
+  width: auto;
+}
+
+.sidebar-theme-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.sidebar-theme-toggle:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.sidebar-theme-toggle .nav-icon {
+  width: 18px;
+  height: 18px;
+}
+
 /* Expand Toggle (visible only when collapsed) */
 /* In flow below the footer: absolutely positioned it had no containing block
    in the sidebar and floated at the bottom of the window (MUT-15) */
@@ -2857,8 +2904,8 @@ a.project-tag:hover {
   flex-shrink: 0;
 }
 
-/* Update available banner (settings) */
-.update-banner {
+/* Update available card (settings); renamed from .update-banner, which the app-wide desktop bar uses (MUT-79) */
+.settings-update-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2869,23 +2916,23 @@ a.project-tag:hover {
   margin-bottom: var(--space-4);
 }
 
-.update-banner-content {
+.settings-update-card-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
 }
 
-.update-banner-title {
+.settings-update-card-title {
   font-weight: var(--weight-semibold);
   color: var(--accent);
 }
 
-.update-banner-versions {
+.settings-update-card-versions {
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
-.update-banner-version {
+.settings-update-card-version {
   font-family: var(--font-mono);
 }
 

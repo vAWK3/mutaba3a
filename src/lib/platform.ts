@@ -22,36 +22,6 @@ export function isWeb(): boolean {
   return !isTauri();
 }
 
-/**
- * Check if running on macOS.
- */
-export function isMacOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const platform = navigator.platform?.toLowerCase() || '';
-  const userAgent = navigator.userAgent?.toLowerCase() || '';
-  return platform.includes('mac') || userAgent.includes('macintosh');
-}
-
-/**
- * Check if running on Windows.
- */
-export function isWindows(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const platform = navigator.platform?.toLowerCase() || '';
-  const userAgent = navigator.userAgent?.toLowerCase() || '';
-  return platform.includes('win') || userAgent.includes('windows');
-}
-
-/**
- * Check if running on Linux.
- */
-export function isLinux(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const platform = navigator.platform?.toLowerCase() || '';
-  const userAgent = navigator.userAgent?.toLowerCase() || '';
-  return platform.includes('linux') || userAgent.includes('linux');
-}
-
 // --- Device kind (for choosing what to offer a visitor) ---
 
 export type DeviceKind = 'mac' | 'windows' | 'ios' | 'android' | 'linux' | 'unknown';
@@ -66,9 +36,10 @@ export interface DeviceSignals {
 /**
  * Which kind of device these navigator signals describe.
  *
- * Unlike `isMacOS`/`isLinux`, this separates an iPad from a Mac (iPadOS 13+
- * reports `MacIntel`; only touch support gives it away) and Android from
- * Linux (Android's UA also says "Linux"). It cannot tell an Intel Mac from an
+ * It separates an iPad from a Mac (iPadOS 13+ reports `MacIntel`; only touch
+ * support gives it away) and Android from Linux (Android's UA also says
+ * "Linux"). It replaced the substring checks `isMacOS`/`isWindows`/`isLinux`,
+ * which got both wrong (TD-049, MUT-79). It cannot tell an Intel Mac from an
  * Apple Silicon one — no browser signal does that reliably.
  */
 export function detectDevice({ userAgent, platform, maxTouchPoints }: DeviceSignals): DeviceKind {

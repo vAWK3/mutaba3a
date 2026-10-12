@@ -65,6 +65,7 @@
     "expenses": "المصروفات",
     "reports": "التقارير",
     "settings": "الإعدادات",
+    "theme": "المظهر: {mode}",
     "download": "تحميل",
     "new": "جديد",
     "collapse": "طي الشريط الجانبي",
@@ -1021,11 +1022,11 @@
     "live": "مباشر",
     "cached": "مخزن",
     "none": "غير متوفر",
-    "bannerTitle": "سعر الصرف",
-    "showBanner": "إظهار سعر الصرف",
-    "refresh": "تحديث السعر",
-    "minimize": "تصغير",
-    "drag": "اسحب للتحريك"
+    "refresh": "تحديث الأسعار",
+    "title": "سعر الصرف",
+    "readoutLabel": "سعر الصرف: {rate}",
+    "rateDate": "أسعار يوم {date}",
+    "updated": "آخر تحديث: {time}"
   },
   "welcome": {
     "title": "مرحباً بك في متابعة",

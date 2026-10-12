@@ -14,7 +14,6 @@ import { OrphanedRecordsDrawer } from "../drawers/OrphanedRecordsDrawer";
 import { WelcomeModal, DemoSeedModal, MigrationWizard } from "../modals";
 import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
 import { MacDownloadBanner } from "../ui/MacDownloadBanner";
-import { FxRateBanner } from "../ui/FxRateBanner";
 import { DemoBanner } from "../ui/DemoBanner";
 import { SampleDataBar } from "../ui/SampleDataBar";
 import { useT } from "../../lib/i18n";
@@ -114,6 +113,9 @@ export function AppShell({ children }: AppShellProps) {
         ) : (
           children
         )}
+        {/* Bottom bars sit in flow below the page: nothing floats over content (MUT-79) */}
+        <MacDownloadBanner />
+        <UpdateBanner />
       </main>
 
       {incomeDrawer.isOpen && (
@@ -175,10 +177,6 @@ export function AppShell({ children }: AppShellProps) {
         </InlineErrorBoundary>
       )}
 
-      <FxRateBanner />
-      <MacDownloadBanner />
-
-      <UpdateBanner />
       <ExportBundleModal />
       <ImportBundleModal />
       <PairingModal />

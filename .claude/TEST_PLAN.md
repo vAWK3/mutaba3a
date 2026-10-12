@@ -1215,6 +1215,31 @@ Checked by hand in the browser (2026-10-12) from a cleared origin: landing → "
 
 **Baseline after MUT-78 (2026-10-12)**: root `npx vitest run` 171 files, 2630 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass.
 
+### MUT-79 — app frame: nothing floats over content (epic MUT-74)
+
+Test plan: `.claude/designs/mut-79-app-frame-tests.md`.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Dialog mode | `src/hooks/__tests__/useMenuButton.test.tsx` | `aria-haspopup="dialog"`, `role="dialog"`, `aria-controls`. Opening focuses the first enabled control, or the panel when there is none. Tab between controls stays open; Tab past the last, or Shift+Tab past the first, closes. Arrows don't move focus. Escape refocuses the button. An outside press closes, an inside one doesn't. The menu-mode tests are unchanged. |
+| FX readout | `src/components/layout/__tests__/FxRateReadout.test.tsx` | `$1 = ₪3.06`, named "Exchange rate: …", a dash with no rate. Dialog "Exchange rate": both rates at 4 decimals, their sources, the rate date and the update time; no date lines when unavailable. Refresh is focused on open, refetches both, and is disabled while loading. Escape refocuses the readout. |
+| Popover placement | `src/components/layout/__tests__/popoverPosition.test.ts` | `nudgeInside`: fits → 0; past the right or left edge → back inside with the margin; wider than the bounds → pinned left |
+| Theme | `src/lib/theme/__tests__/themeModes.test.ts`, `src/components/layout/__tests__/ThemeToggle.test.tsx` | `THEME_MODES` order; `nextThemeMode` cycles. The toggle names the current mode, and each press sets `data-theme` (none for System) and saves `mutaba3a-theme`, the state Settings reads. |
+| Frame placement | `SidebarNav.features.test.tsx`, `TopBar.addMenu.test.tsx` | The toggle shares Settings' footer row, expanded and collapsed. The readout is in the top bar, with or without Add. |
+| Mac bar | `src/components/ui/__tests__/MacDownloadBanner.test.tsx` | Shows on a Mac browser. Hidden on an iPad (MacIntel + touch), on Windows, in Tauri, and after dismissal (also after a remount). Throwing storage doesn't break it. |
+| Retired keys | `src/lib/__tests__/retiredStorage.test.ts` | Removes `mutaba3a_fx_banner_state` and keeps other keys; survives throwing storage |
+
+Checked by hand in the browser (2026-10-12, sample data):
+- **Overlap sweep:** no `fixed`/`sticky`/outside-`absolute` element intersects `<main>` at 1440, 1024, 768 or 375 px.
+- **Popover:** opens by mouse, Escape returns focus.
+- **Theme:** the toggle cycles System → Light → Dark, and Settings → Theme agrees both ways.
+- **Arabic:** the formula reads `$1 = ₪3.06`. At 575 px the popover was being clipped by `<main>`, which led to `nudgeInside` (it now shifts −83 px and fits). Amounts are unchanged.
+- **Mac bar:** in flow (`position: static`); dismissed, it stays gone after a reload.
+
+**E2E (after merging main, which ported the stale specs):** all 19 Playwright specs pass, run through a throwaway config on port 5194. Axe no longer reports `landmark-no-duplicate-banner` on any of the six surfaces, so it was removed from `KNOWN_AXE_VIOLATIONS`, and no new rule fires.
+
+**Baseline after MUT-79 (2026-10-12)**: root `npx vitest run` **under Node 22** 182 files, 2857 passed, 4 skipped; `npm run typecheck`, `npm run lint` (0 errors, 16 pre-existing warnings) and `npm run test:bundles` pass. Under Node 26, files that touch `localStorage` fail even on main (TD-054).
+
 ### MUT-64 — device sessions, native app sign-in for hosted accounts (`server/`, epic MUT-63)
 
 Plan: `.claude/designs/mut-64-device-sessions-tests.md`. Written red first per file; each new file confirmed failing for the right reason (missing export/route) before implementation.

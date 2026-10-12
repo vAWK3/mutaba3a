@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getRepositories, setRepositories, resetRepositories, type Repositories } from '../../../db/provider';
 import { DEFAULT_SETTINGS } from '../../../db/defaultSettings';
 import type { Settings } from '../../../types';
+import { ThemeProvider } from '../../../lib/theme';
 import { SidebarNav } from '../SidebarNav';
 
 let mockPathname = '/';
@@ -54,7 +55,9 @@ function renderNav() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <SidebarNav />
+      <ThemeProvider>
+        <SidebarNav />
+      </ThemeProvider>
     </QueryClientProvider>,
   );
   return { ...view, queryClient };
@@ -284,6 +287,23 @@ describe('SidebarNav core shape (MUT-15)', () => {
     const settings = screen.getByText('nav.settings').closest('a')!;
     expect(container.querySelector('.sidebar-footer')).toContainElement(settings);
     expect(container.querySelector('.sidebar-nav')).not.toContainElement(settings);
+  });
+
+  it.each([
+    ['expanded', '0'],
+    ['collapsed', '1'],
+  ])('keeps the theme toggle beside Settings while %s (MUT-79)', async (_label, collapsed) => {
+    window.localStorage.setItem('sidebarCollapsed', collapsed);
+    const fake = installFakeSettings();
+    const { container } = renderNav();
+    await settled(fake);
+
+    const footer = container.querySelector('.sidebar-footer');
+    const settings = container.querySelector('a[href="/settings"]');
+    const toggle = screen.getByRole('button', { name: 'nav.theme' });
+    expect(footer).toContainElement(settings as HTMLElement);
+    expect(footer).toContainElement(toggle);
+    expect(settings?.parentElement).toBe(toggle.parentElement);
   });
 });
 

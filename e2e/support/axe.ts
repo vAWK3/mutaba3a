@@ -1,10 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-// Every app page breaks these today: the brand teal fails 4.5:1 (white on
-// #1d8a84, the active nav label, the profile avatar, the FX "Live" chip), and
-// the top bar, FX banner and desktop-app banner are all banner landmarks.
-const APP_SHELL = ['color-contrast', 'landmark-no-duplicate-banner'];
+// Every app page breaks this today: the brand teal fails 4.5:1 (white on
+// #1d8a84, the active nav label, the profile avatar). The duplicate banner
+// landmarks went with MUT-79's frame (no role="banner" on the bars).
+const APP_SHELL = ['color-contrast'];
 
 /**
  * Axe rules each surface is known to break (TD-009, measured 2026-10-12).

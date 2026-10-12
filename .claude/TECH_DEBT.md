@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-054: The test suite fails under Node 25+ (Homebrew's default `node`)
+**Status**: Open
+**Added**: 2026-10-12 (MUT-79)
+**Priority**: Medium
+**Impact**: Node 25+ defines its own `localStorage` global (Web Storage), which is undefined without `--localstorage-file`, and it hides jsdom's. Every test that touches `localStorage` then fails with "Cannot read properties of undefined", including unchanged main (`SidebarNav.features.test.tsx` fails 32 of 32). On this machine `/opt/homebrew/bin/node` (26.5.1) comes before nvm's, so a plain `npx vitest run` fails. CI pins Node 22, where everything passes. MUT-79 ran its gate with nvm's Node 22.
+**Remediation**: Either pass `--no-experimental-webstorage` to the test workers (checked: `NODE_OPTIONS=--no-experimental-webstorage` makes the suite pass on 26.5.1), for example through vitest's `execArgv`, or pin Node 22 with `.nvmrc` plus `engines`. Doing both is fine.
+**Effort**: Small
+
 ### TD-052: Malafat's vendored OpenAPI contract not re-verified against the new deviceSession scheme
 **Status**: Open
 **Added**: 2026-10-12 (MUT-64)
@@ -40,19 +48,13 @@
 **Remediation**: Toast the mapped error name, as `IncomeDrawer` does (`PaymentRecordError` / `TransactionLockedError` → translated message), or add a `MutationCache` `onError` in `createAppQueryClient` that toasts any unhandled mutation failure.
 **Effort**: Small
 
-### TD-049: `isMacOS()` is true on an iPad and `isLinux()` is true on Android
-**Status**: Open
-**Added**: 2026-10-12 (MUT-76)
-**Priority**: Low
-**Impact**: Both read `navigator.platform`/`userAgent` substrings. iPadOS 13+ reports `MacIntel`, and Android's UA contains "Linux", so `MacDownloadBanner` (the only `isMacOS` caller) offers the Mac app to iPad users. `detectDevice()` in the same file gets both right.
-**Remediation**: MUT-79 (app frame) shows the Mac-app bar only on a Mac — switch `MacDownloadBanner` to `currentDevice() === 'mac'` there, then decide whether `isMacOS`/`isWindows`/`isLinux` can be deleted (their only other users are tests).
-
 ### TD-048: `theme.css` sets `font-family` on every `:lang()` element, so inline elements inside headings lose the heading face
 **Status**: Open
 **Added**: 2026-10-11 (MUT-75)
 **Priority**: Low
 **Impact**: `html:lang(en), html:lang(en) body, :lang(en) { font-family: var(--font-en) }` (and the `:lang(ar)` twin, which also sets `direction`) matches *every* element, not just the root, so a `<span>` inside an `<h1>`/`<h2>` renders in Inter instead of inheriting the serif heading. Found when the landing hero's two `<span>` lines rendered sans while the `<h1>` computed Source Serif. Worked around locally with `font-family: inherit` on `.hero-headline-line`.
 **Remediation**: scope the rules to `html:lang(..)` and let inheritance do the rest; then sweep for any component that relied on the per-element reset (likely none — the root rule already sets the same family). Pairs with MUT-77 (type pairing).
+**Also (MUT-79):** the `:lang(ar)` rule's `direction: rtl` beats the `dir` attribute, so every `<bdi dir="ltr">` renders right to left in Arabic. Three amount spans depend on that today: `OwedNowSummary`, `ClientWorkSection` and `HomeNeedsAttention`. Their Arabic-locale strings (`‏2,400 US$`) only look right, in CLDR's order, *because* the attribute loses. Scoping `direction` to the root therefore has to drop their `dir="ltr"` in the same change, leaving plain `<bdi>` (auto). The top bar's FX formula is the one span that must stay LTR; it states `.fx-formula[dir='ltr'] { direction: ltr }`. Tried and reverted in MUT-79.
 
 ### TD-047: The expense, retainer and plan drawers read amounts with the lenient parsers
 **Status**: Open
@@ -599,12 +601,16 @@ Known violations, measured in Chromium, light theme:
   primary buttons, "+ Add", the drawer's Save, and the client name links on
   white. The active nav label and the sidebar "New" label (`#1d8a84` on
   `#e8f3f3`) are 3.69:1. The profile avatar initials are 1.04:1. The FX
-  banner's "Live" chip is 2.95:1. The "Unpaid" status badge (`#d97706` on
+  "Live" chip is 2.95:1 (since MUT-79 it is in the top-bar popover, which axe
+  only sees when it is open). The "Unpaid" status badge (`#d97706` on
   `#fbf1e6`) is 2.85:1. Positive amounts (`#16a34a` on white) are 3.29:1.
   Muted text (`#94a3b8`, the Clients "last payment" dash) is 2.56:1. This
   belongs with MUT-74's palette work.
-- `landmark-no-duplicate-banner`, every page. The top bar, the FX banner and
-  the desktop-app banner are each a `banner` landmark.
+- ~~`landmark-no-duplicate-banner`, every page.~~ **Fixed by MUT-79
+  (2026-10-12).** The FX banner, the Mac-app bar and the desktop update bar no
+  longer claim `role="banner"`, and the top bar's `<header>` inside `<main>` is
+  not a landmark. Axe confirms it on all six surfaces; the rule was removed
+  from `KNOWN_AXE_VIOLATIONS`.
 - `aria-dialog-name`, every drawer. `components/drawers/Drawer.tsx` sets
   `role="dialog"` with no `aria-labelledby` pointing at its title.
 - `select-name`, on Income and the client profile (the period `<select>`)
@@ -850,6 +856,14 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-049: `isMacOS()` is true on an iPad and `isLinux()` is true on Android
+**Status**: Resolved (2026-10-12, MUT-79)
+**Added**: 2026-10-12 (MUT-76)
+**Priority**: Low
+**Impact**: Both read `navigator.platform`/`userAgent` substrings. iPadOS 13+ reports `MacIntel`, and Android's UA contains "Linux", so `MacDownloadBanner` (the only `isMacOS` caller) offers the Mac app to iPad users. `detectDevice()` in the same file gets both right.
+**Remediation**: MUT-79 (app frame) shows the Mac-app bar only on a Mac — switch `MacDownloadBanner` to `currentDevice() === 'mac'` there, then decide whether `isMacOS`/`isWindows`/`isLinux` can be deleted (their only other users are tests).
+**Resolution**: `MacDownloadBanner` now uses `currentDevice() === 'mac' && !isTauri()`; `isMacOS`, `isWindows` and `isLinux` had no other callers and were deleted with their tests.
 
 ### TD-021: Two Overlapping Invalidation Key Lists for the Same Money Views
 **Status**: Resolved (2026-10-11, MUT-5)

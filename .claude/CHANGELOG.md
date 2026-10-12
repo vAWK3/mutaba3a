@@ -28,6 +28,46 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-79: App frame — nothing floats over content
+
+**Scope:**
+- `src/components/layout/FxRateReadout.tsx` + `.css` (new), `popoverPosition.ts` (new: `nudgeInside`), `ThemeToggle.tsx` (new); `TopBar.tsx` (readout before the profile indicator), `SidebarNav.tsx` (`.sidebar-footer-row`: Settings + toggle), `AppShell.tsx` (bottom bars inside `<main>`)
+- `src/hooks/useMenuButton.ts` (`{ kind: 'dialog' }`)
+- `src/lib/theme/modes.ts` (new: `THEME_MODES`, `nextThemeMode`); `SettingsPage.tsx` renders `THEME_MODES`
+- `src/components/ui/MacDownloadBanner.tsx` + `.css`, `UpdateBanner.tsx` + `.css` (in flow; `role="status"`)
+- `src/lib/retiredStorage.ts` (new), called from `src/main.tsx`; `src/lib/platform.ts` (removed `isMacOS`/`isWindows`/`isLinux`)
+- `src/index.css` (footer row, toggle; Settings' `.update-banner` card renamed `.settings-update-card`)
+- `src/lib/i18n/translations/{en,ar}.json`; `src/test/setup.ts` (fetch guard)
+- Removed: `src/components/ui/FxRateBanner.tsx` + `.css`
+- Tests: `FxRateReadout`, `ThemeToggle`, `popoverPosition`, `themeModes`, `MacDownloadBanner`, `retiredStorage` (new); `useMenuButton` (dialog mode), `SidebarNav.features`, `TopBar.addMenu`, `platform` (updated)
+- Test plan `.claude/designs/mut-79-app-frame-tests.md` (decisions D1–D8); TD-049 resolved; TD-048 updated; TD-054
+
+### Added
+- **Exchange rate in the top bar.** A quiet `$1 = ₪3.06 ▾` opens a small dialog showing the dollar and euro rates to four decimals, where each came from (Live / Cached / Unavailable), the date of the rates, when they were fetched, and Refresh rates. The formula reads left to right in Arabic too. On a narrow window the panel shifts to stay inside `<main>` rather than being clipped.
+- **Theme toggle beside Settings** in the sidebar footer, stacked on the collapsed rail. It cycles Light → Dark → System from the same list Settings shows, so the two always agree. Its icon is per mode, and it is named "Theme: Dark".
+- `useMenuButton({ kind: 'dialog' })` for a small non-modal panel. Opening focuses the first enabled control (or the panel). Tab leaves past the last control and closes it. Escape or an outside press closes it, as with a menu.
+
+### Changed
+- **The Mac-app bar** shows only on a Mac (`currentDevice() === 'mac'`, so not on an iPad), in a browser, until it is dismissed. Storage errors no longer break it.
+- **Both bottom bars**, the Mac bar and the desktop "update available" bar, sit in flow at the bottom of `<main>` instead of `position: fixed` over the page. The fixed update bar also used to start at the expanded sidebar's width when the sidebar was collapsed.
+- The `fx.*` keys: `refresh` is now "Refresh rates"; new keys `title`, `readoutLabel`, `rateDate`, `updated` and `nav.theme`.
+
+### Removed
+- **`FxRateBanner`**, the draggable, minimisable floating panel that covered table rows on every screen. Its drag and position state, its `fx.bannerTitle`/`showBanner`/`minimize`/`drag` keys, and its `mutaba3a_fx_banner_state` key all went with it; `removeRetiredStorageKeys()` deletes that key from existing browsers at startup.
+- `isMacOS`, `isWindows` and `isLinux` (TD-049), whose substring checks took an iPad for a Mac and Android for Linux.
+
+### Technical
+- Settings' update card used the class `.update-banner`, which is also the app-wide desktop bar's class. Once that bar sat in flow, the card's margin and border would have leaked onto it, so the card is now `.settings-update-card`.
+- The test setup replaces `fetch` with a guard that rejects, because every page test now renders the readout. Tests that need `fetch` already stub it themselves.
+- The test suite needs Node 22 (as in CI). Under Homebrew's Node 26, jsdom's `localStorage` is undefined (TD-054).
+
+### Fixed
+- Axe `landmark-no-duplicate-banner` on every app page (TD-009). None of the bars claims `role="banner"` any more: the FX banner is gone, the Mac bar is a plain `div`, and the update bar is `role="status"`. The rule is removed from `e2e/support/axe.ts`'s `KNOWN_AXE_VIOLATIONS`.
+
+**Why:** decision A1 of the Apple-design brief: nothing floats over content (F15).
+
+---
+
 ## [Unreleased] - 2026-10-12 — E2E: the stale Playwright specs run against the current UI (TD-004)
 
 **Scope:**
