@@ -1477,3 +1477,28 @@ Plan: `.claude/designs/mut-87-recurring-rows-tests.md` (T1–T30). ADR-052.
 - `npm run lint`: 0 errors, 16 warnings, none in changed files.
 - `npm run typecheck`: clean.
 - `npm run test:bundles`: OK.
+
+
+---
+
+## MUT-66 — the unsorted inbox (2026-10-12)
+
+Plan: `.claude/designs/mut-66-unsorted-inbox-tests.md`. Server-only; the portal and offline app are untouched, so nothing here is a component or e2e test.
+
+| AC | Proven by |
+|---|---|
+| A device session can create, list, edit and delete its own entries; another user can never see them | `store-contract-inbox.ts` (per-user scoping on every method; another person's rows absent from every page) + `inbox-routes.test.ts` (404 — never 403 — on a foreign entry; a second person's list never shows the first's, however many pages are walked) |
+| Filing as an expense onto any profile creates the expense and removes the entry in one transaction | `store-contract-inbox.ts` (both effects from one call; a refused filing writes no expense, asserted by counting the ledger rather than trusting the return value) + `inbox-filing.test.ts` (201 on personal and Malafat-fed profiles alike) |
+| Filing as income follows MUT-65 on a personal profile; `READ_ONLY_PROFILE` on a Malafat-fed one, entry stays | `inbox-filing.test.ts` (Received clientless, Owed with a client, `CUSTOMER_REQUIRED_FOR_OWED` byte-identical to `POST /v1/income`'s own refusal; on M every shape is 403 with `{ domain: 'payments', writerOfRecord: 'MALAFAT' }`, the entry still listed, and a spy proves zero `payments.create`/`receivables.createAdjustment`/`inboxEntries.file*` calls) |
+| Replaying with the same `Idempotency-Key` creates no second record | `inbox-filing.test.ts` (identical response, one expense/payment by direct count; a different body with the same key → `IDEMPOTENCY_KEY_REUSED`; a missing key → 422 with the entry untouched) |
+| Unsorted entries never change any `/v1/summaries/*` result | `inbox-isolation.test.ts` (50 entries leave both summaries byte-identical; filing one moves exactly one currency block by exactly that amount; and the summary sources, enumerated from the directory, contain no reference to the inbox) |
+| Losing the last membership does not delete the inbox; the operator can see a per-user count | `store-contract-inbox.ts` (revoke, then list and count unchanged), `inbox-ownership.test.ts` (the DMMF carries no organization/membership FK — the structural reason), `inbox-routes.test.ts` (end-to-end after revocation), `inbox-isolation.test.ts` (`inboxEntryCount` for 0/1/many, falling on delete and on filing, never another person's) |
+
+**Beyond the ACs.** The transaction boundary itself is tested where it lives: a concurrent double-filing of one entry yields exactly one `filed` and one `not_found` with one ledger row, and a financial insert made to throw after the entry was claimed leaves the entry byte-identical. Both run against the **memory store and real Postgres** through the same contract file, so the in-memory simulation cannot drift from the database's behaviour unnoticed.
+
+`inbox/__tests__/compose.test.ts` pins the deliberate asymmetry that a future-dated capture is accepted and a future-dated *filing* is refused — a regression guard, since "fixing" it by reflex is the obvious wrong move.
+
+`store-guard.test.ts` exercises both branches of the new `'sessionOnly'` case, asserts `inboxEntries`' full classification, and asserts that filing-as-income's `READ_ONLY_PROFILE` falls straight out of `STORE_ACCESS` — if that assertion needed anything inbox-specific, the design's central claim would be false. It also pins the matrix at ten domains, so reaching for an `inbox` domain fails immediately.
+
+**Counts:** 15 store-contract cases × 2 stores, 4 DMMF, 9 compose/cursor, 16 CRUD route, 18 filing route, 6 isolation. Server suite 1310 (memory) / 1397 (`test:db`, all 82 files) green.
+

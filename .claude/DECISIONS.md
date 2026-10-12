@@ -54,6 +54,7 @@
 | ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active | 2026-10 |
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
+| ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
 | ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 
 ---
@@ -2017,6 +2018,29 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 - Keep Mark Fully Paid and pass the notes to it (rejected): two buttons for one outcome is the defect P1 names.
 - Keep the drawer open after a partial payment so the history updates (rejected): H1 and R1 show the result where it landed, not inside the drawer.
 - Show every amount error live (rejected): grouped amounts pass through unreadable states while they are being typed.
+
+---
+
+## ADR-048: The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction
+
+**Status**: Active
+**Date**: 2026-10-12
+**Numbering**: drafted as ADR-044; renumbered on merge because MUT-80 took 044 and MUT-86 took 047 while this ticket was in flight.
+**Context**: MUT-66. Capture has to be able to outrun the decision "which business is this for?" — that stall is the thing most likely to break MUT-63's "log it in seconds" promise. But every hosted row in this schema — `Customer`, `Project`, `Expense`, and since MUT-65 `Payment`/`Receivable` — hangs off an `Organization`, and the whole request pipeline (`X-Mutaba3a-Profile` resolution, the per-profile writability guard, every `WHERE organizationId = ?`) assumes an organization is resolved before a repository call happens. There was structurally nowhere to put money that has no organization yet.
+
+**Decision**:
+1. **`InboxEntry` is owned by `User` and carries no `organizationId` and no FK to `Organization` or `Membership`.** It is the first user-owned row shape server-side. The absence is the feature, not an omission: revoking a user's last membership cannot cascade into their inbox because there is no edge to cascade along, so the ticket's "removing a user's last membership does not delete their inbox" is true by construction rather than by a guard or a cleanup job. A DMMF test fails if a later edit adds such a column.
+2. **The coarse capture `kind` (`INCOME`/`EXPENSE`) is not MUT-65's `received`/`owed`.** The finer distinction only means something once a client is — or deliberately is not — in the picture, and an unsorted entry never carries one. So Received/Owed, and every `customerId`/`projectId`/`title`/`dueDate`, are supplied at filing time. `kind` itself is fixed at capture, the convention `Expense.currency` already uses.
+3. **Capture does not reject a future date; filing applies whatever the destination route already applies — no more.** "Later than today" is only answerable in some organization's timezone, and capture has no organization, so the question is deferred to filing. At filing it is answered by the *destination's own existing rule*: `POST /v1/income` refuses a future date (MUT-65's `assertNotFuture`), so `file-as-income` does; `POST /v1/expenses` has never had such a check, so `file-as-expense` does not. The brief assumed MUT-42 had one and it does not — found during MUT-66's reconciliation. Filing is deliberately not made stricter than the door beside it: the same expense must not be accepted directly and refused through the inbox. Whether `POST /v1/expenses` *should* reject future dates is a separate question against MUT-42, not something for this ticket to decide by side effect. ADR-022's history is a record of what guessing a timezone costs.
+4. **Filing is two routes, not one.** `requireScope` is a static per-route declaration (ADR-037 decision 5); the scope a filing needs (`expenses:write` vs `payments:write`) depends on the entry's own kind, which is only known after loading it. A single route would need a scope resolved from request content, which is exactly what MUT-38/39 built this discipline to avoid. Calling the wrong one is `409 ENTRY_KIND_MISMATCH`.
+5. **The two `file*` repository methods are the store's only cross-repository transactions.** The entry is *claimed* by a delete inside the transaction — which proves ownership and kind and holds the row lock until commit — before the financial row is written. Two concurrent filings of one entry therefore produce exactly one record, and a financial write that throws rolls the delete back with it. The memory store simulates this by removing the entry synchronously before any await and restoring it on failure.
+6. **Filing keeps the existing `{ write: Domain }` guard classification of the record it creates**, while plain capture gets a new `'sessionOnly'` `MethodAccess` case — the first that is neither "any principal" nor a per-organization domain. This is what makes both writability ACs true with no inbox-specific logic: filing as an expense lands on any profile the person belongs to (expenses is profile-independent), filing as income is refused `READ_ONLY_PROFILE` on a Malafat-fed one (payments is one of MUT-65's three profile-dependent rows). No new `Domain` and no new scope were minted.
+7. **The four CRUD routes declare no scope and name no profile**, joining `ORGANIZATION_INDEPENDENT_ROUTES` beside `GET /v1/me`. Adding an `inbox` `Domain` was rejected: `GET /v1/me` emits `access` per hosted profile, so every profile would carry an identical redundant `inbox` entry for a resource that is not profile-scoped at all.
+8. **No `Idempotency-Key` on capture; both filing routes require one.** Filing is organization-scoped, so the existing `idempotency_keys` table and its session namespacing apply unmodified. Capture has no `auth.organization` to key under, and nothing in the AC asks for it — a scoped, deliberate departure from ADR-025 decision 5, which was written for the organization-scoped ledger. `POST /v1/sessions` and the `/admin/v1/users*` routes are the existing precedent.
+
+**Consequences**: MUT-68 and MUT-69 are unblocked — the keypad has an "unsorted" target to save to and a list to file from. The inbox is invisible to every summary by construction (no summary module references the table), asserted both behaviourally and by reading the sources. `countByUser` gives support a per-user figure without ever listing contents. `ExpenseRepository.create`'s row insert moved into `createExpenseRow(tx, …)` so it can be composed; MUT-65's `createPaymentTx`/`createAdjustmentTx` were already built for this and are reused unchanged.
+
+**Alternatives Considered**: a nullable `organizationId` on `Expense`/`Payment`/`Receivable` (rejected: MUT-65 loosened *client/matter* columns, which keeps the row inside an organization; teaching every reader of a ledger table to handle a null organization is a far larger and riskier change, and it reintroduces the FK that must be absent for the membership AC to hold structurally); keying the table `(userId, organizationId?)` (rejected for the same reason one level down); one filing route with a content-derived scope (rejected, decision 4); an `inbox` matrix domain (rejected, decision 7).
 
 ---
 

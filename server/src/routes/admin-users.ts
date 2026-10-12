@@ -150,7 +150,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       method: 'get',
       path: '/admin/v1/users/{userId}',
       tags: ['Admin'],
-      summary: 'Inspect a user and their memberships',
+      summary: 'Inspect a user, their memberships and their unsorted-inbox size',
       security: [{ adminToken: [] }],
       request: { params: UserIdParam },
       responses: {
@@ -162,7 +162,9 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const user = await mustGetUser(c.req.valid('param').userId);
       const memberships = await store.memberships.listByUser(user.id);
-      return c.json({ user: serializeUser(user), memberships: memberships.map(serializeMembership) }, 200);
+      // One indexed count, never a list: support needs to know an inbox is backing up, not what is in it (MUT-66).
+      const inboxEntryCount = await store.inboxEntries.countByUser(user.id);
+      return c.json({ user: serializeUser(user), memberships: memberships.map(serializeMembership), inboxEntryCount }, 200);
     },
   );
 

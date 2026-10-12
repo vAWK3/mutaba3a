@@ -964,6 +964,8 @@ export interface LedgerStore {
   expenses: ExpenseRepository;
   expenseCategories: ExpenseCategoryRepository;
   expenseReceipts: ExpenseReceiptRepository;
+  /** MUT-66: the unsorted inbox — the one repository scoped by user, not by organization. */
+  inboxEntries: InboxEntryRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -1197,4 +1199,102 @@ export interface ExpenseReceiptRepository {
   softDelete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
   /** Every live receipt of the expense, pending ones included; returns those it deleted (their objects are removed by the caller). */
   softDeleteByExpense(organizationId: string, expenseId: string, at: Date): Promise<ExpenseReceiptRecord[]>;
+}
+
+// ---- MUT-66: the unsorted inbox ---------------------------------------------
+
+/**
+ * Which of the two filing routes an entry is destined for. Coarser than
+ * MUT-65's `received | owed`: that finer choice needs a client (or its
+ * deliberate absence) in the picture, and an unsorted entry never carries one,
+ * so it is made at filing time, not at capture.
+ */
+export type InboxEntryKind = 'INCOME' | 'EXPENSE';
+
+/**
+ * One unsorted capture: an amount the person knows happened, before they have
+ * decided which profile it belongs to. The only user-owned row in the ledger —
+ * there is no `organizationId` here, and that absence is load-bearing (see
+ * `InboxEntryRepository`).
+ */
+export interface InboxEntryRecord {
+  id: string;
+  userId: string;
+  kind: InboxEntryKind;
+  amountMinor: bigint;
+  currency: string;
+  /** As the capturing device understood it; validated against a profile's timezone only at filing time. */
+  occurredOn: IsoDate;
+  note: string | null;
+  /** Persisted, not just audit metadata: an entry can sit unfiled, and the UI keeps showing how it arrived. */
+  captureSource: string | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateInboxEntryInput {
+  userId: string;
+  kind: InboxEntryKind;
+  amountMinor: bigint;
+  currency: string;
+  occurredOn: IsoDate;
+  note: string | null;
+  captureSource: string | null;
+}
+
+/**
+ * Absent key = unchanged; null clears an optional field. `kind` is deliberately
+ * absent: it is fixed at create, the same convention `Expense.currency` uses —
+ * an entry captured as money-out does not become money-in by an edit.
+ */
+export type UpdateInboxEntryPatch = Partial<Pick<CreateInboxEntryInput, 'amountMinor' | 'currency' | 'occurredOn' | 'note' | 'captureSource'>>;
+
+/** Inbox page newest first: (createdAt, id) descending. */
+export interface InboxEntryCursor {
+  createdAt: Date;
+  id: string;
+}
+
+export interface InboxEntryPage {
+  items: InboxEntryRecord[];
+  nextCursor: InboxEntryCursor | null;
+}
+
+/** The financial row a filing creates: MUT-65's two income shapes, already validated by the route. */
+export type IncomeWriteInput = { kind: 'received'; payment: CreatePaymentInput } | { kind: 'owed'; receivable: CreateAdjustmentReceivableInput };
+
+export type IncomeWriteResult = { kind: 'received'; payment: PaymentRecord; allocations: AllocationRecord[] } | { kind: 'owed'; receivable: ReceivableRecord };
+
+/**
+ * The unsorted inbox (MUT-66). Every method is scoped by `userId` — never by
+ * `organizationId` — so a cross-user read is impossible by construction, the
+ * same guarantee ADR-025 point 2 gives the organization-scoped ledger, one
+ * ownership axis over.
+ *
+ * The two `file*` methods are the only cross-repository transactions in this
+ * store: they create the real record and delete the entry together, so the
+ * ticket's "on success the entry is gone; on failure it stays untouched" holds
+ * at the data layer, not merely by the order the route does things. All
+ * destination-side validation (writability, link resolution, future dates)
+ * happens in the route, before either is ever called.
+ */
+export interface InboxEntryRepository {
+  create(input: CreateInboxEntryInput, at: Date): Promise<InboxEntryRecord>;
+  getById(userId: string, id: string): Promise<InboxEntryRecord | null>;
+  list(userId: string, page: { limit: number; cursor: InboxEntryCursor | null }): Promise<InboxEntryPage>;
+  update(userId: string, id: string, expectedVersion: number, patch: UpdateInboxEntryPatch, at: Date): Promise<UpdateResult<InboxEntryRecord>>;
+  /** Hard delete. False for an id this user never had, or already deleted — the two are never distinguished. */
+  delete(userId: string, id: string): Promise<boolean>;
+  /** One indexed COUNT(*), for the operator's per-user support figure. Never a list. */
+  countByUser(userId: string): Promise<number>;
+  /**
+   * Atomic: creates the expense and deletes this entry in one transaction.
+   * `not_found` covers an unknown id, another user's, the wrong kind, or one
+   * already filed — never distinguished, the same non-leaking convention the
+   * rest of the API uses.
+   */
+  fileAsExpense(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind; expense: CreateExpenseInput }, at: Date): Promise<{ kind: 'filed'; expense: ExpenseRecord } | { kind: 'not_found' }>;
+  /** The same shape for the Payment (received) or adjustment Receivable (owed) write. */
+  fileAsIncome(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind; write: IncomeWriteInput }, at: Date): Promise<{ kind: 'filed'; result: IncomeWriteResult } | { kind: 'not_found' }>;
 }

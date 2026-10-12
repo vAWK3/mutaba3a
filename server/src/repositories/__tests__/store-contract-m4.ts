@@ -242,6 +242,15 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
 
     // ---- MUT-65: personal profile income capture ----------------------------
 
+    /**
+     * receivables.createdByUserId is a UUID column in Postgres (it carries no
+     * FK, matching this table's other id columns), so a placeholder like
+     * 'user-1' passes against the memory store and is rejected by the real
+     * one. Kept as a constant so the two stores are exercised with the same
+     * value.
+     */
+    const CAPTURED_BY = '3f1b7c9e-5d42-4a18-9c3e-7b6a1d25f804';
+
     it('createAdjustment: a bare "Owed" receivable, origin ADJUSTMENT, no agreement, optionally no matter', async () => {
       const store = await makeStore();
       const a = await org(store, 'A');
@@ -249,13 +258,13 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       const p = await store.projects.create({ organizationId: a.id, customerId: c.id, name: 'Consulting', currency: 'ILS' }, at(1));
 
       const withMatter = await store.receivables.createAdjustment(
-        { organizationId: a.id, customerId: c.id, projectId: p.id, currency: 'ILS', netMinor: 50000n, vatMinor: 0n, grossMinor: 50000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Logo design', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(2), createdByUserId: 'user-1', requestId: null },
+        { organizationId: a.id, customerId: c.id, projectId: p.id, currency: 'ILS', netMinor: 50000n, vatMinor: 0n, grossMinor: 50000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Logo design', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(2), createdByUserId: CAPTURED_BY, requestId: null },
         at(2),
       );
-      expect(withMatter).toMatchObject({ origin: 'ADJUSTMENT', agreementId: null, originId: null, projectId: p.id, title: 'Logo design', createdByUserId: 'user-1', grossMinor: 50000n, status: 'OPEN', dueDate: '2026-11-15', deletedAt: null });
+      expect(withMatter).toMatchObject({ origin: 'ADJUSTMENT', agreementId: null, originId: null, projectId: p.id, title: 'Logo design', createdByUserId: CAPTURED_BY, grossMinor: 50000n, status: 'OPEN', dueDate: '2026-11-15', deletedAt: null });
 
       const noMatter = await store.receivables.createAdjustment(
-        { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 10000n, vatMinor: 0n, grossMinor: 10000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(3), createdByUserId: 'user-1', requestId: null },
+        { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 10000n, vatMinor: 0n, grossMinor: 10000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(3), createdByUserId: CAPTURED_BY, requestId: null },
         at(3),
       );
       expect(noMatter).toMatchObject({ projectId: null, title: null });
@@ -271,7 +280,7 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       const a = await org(store, 'A');
       const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
       const ghost = '00000000-0000-4000-8000-000000000000';
-      const base = { organizationId: a.id, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, vatTreatment: 'OUT_OF_SCOPE' as const, vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(0), createdByUserId: 'user-1', requestId: null };
+      const base = { organizationId: a.id, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, vatTreatment: 'OUT_OF_SCOPE' as const, vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(0), createdByUserId: CAPTURED_BY, requestId: null };
       await expect(store.receivables.createAdjustment({ ...base, customerId: ghost, projectId: null }, at(0))).rejects.toThrow();
       await expect(store.receivables.createAdjustment({ ...base, customerId: c.id, projectId: ghost }, at(0))).rejects.toThrow();
     });
@@ -282,7 +291,7 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
       const p = await store.projects.create({ organizationId: a.id, customerId: c.id, name: 'Consulting', currency: 'ILS' }, at(1));
       const r = await store.receivables.createAdjustment(
-        { organizationId: a.id, customerId: c.id, projectId: p.id, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Consult', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(2), createdByUserId: 'user-1', requestId: null },
+        { organizationId: a.id, customerId: c.id, projectId: p.id, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Consult', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(2), createdByUserId: CAPTURED_BY, requestId: null },
         at(2),
       );
       expect(await store.receivables.countOutstandingByProject(a.id, p.id)).toBe(1);
@@ -317,7 +326,7 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
       const adjustment = (ms: number) =>
         store.receivables.createAdjustment(
-          { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(ms), createdByUserId: 'user-1', requestId: null },
+          { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(ms), createdByUserId: CAPTURED_BY, requestId: null },
           at(ms),
         );
 
