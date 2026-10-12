@@ -13,7 +13,7 @@
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
-| **Table headers** | SortableHeader |
+| **Table headers** | SortableHeader, RowActionsHeader |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
@@ -310,6 +310,8 @@ Tests: `src/pages/landing/__tests__/`.
 ## Drawer Components
 
 ### Base Drawer Pattern
+**Shell**: `src/components/drawers/Drawer.tsx` (`title`, `onClose`, `children`, `footer?`). It renders `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide). The close button is `common.close` (TD-009). The portal's own shell, `src/hosted/components/Drawer.tsx`, does the same and takes `closeLabel` as a prop. Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
+
 All drawers follow this structure:
 
 ```tsx
@@ -742,6 +744,22 @@ ProjectDetailPage.
 
 ---
 
+### RowActionsHeader
+**Location**: `src/components/ui/RowActionsHeader.tsx` (+ `.css`)
+**Purpose**: The header cell of a table's row-actions column (Record payment and the row kebab). The column has no visible title, so the cell carries a visually hidden "Actions" (`common.actions`) and is never an empty header (axe `empty-table-header`, TD-009). It owns `.row-actions-header`, the shrink-to-fit width rule (`width: 1%; white-space: nowrap`). No props.
+
+```tsx
+<tr>
+  <th className="text-end">{t('transactions.columns.amount')}</th>
+  <RowActionsHeader />
+</tr>
+```
+
+**Used by**: IncomePage, ClientWorkSection, ClientPaymentsSection, ProjectDetailPage. Use it for any new table with a row-actions column; never write an empty `<th>`.
+**Tests**: `src/components/ui/__tests__/RowActionsHeader.test.tsx`
+
+---
+
 ## Display Components
 
 ### Card
@@ -925,11 +943,13 @@ Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactio
 
 ```tsx
 <DateRangeControl
-  value={{ from: dateFrom, to: dateTo }}
-  onChange={({ from, to }) => setFilters({ dateFrom: from, dateTo: to })}
-  presets={['this-month', 'last-month', 'this-year', 'custom']}
+  dateFrom={dateRange.dateFrom}
+  dateTo={dateRange.dateTo}
+  onChange={(from, to) => setDateRange({ dateFrom: from, dateTo: to })}
 />
 ```
+
+**Accessible names** (TD-009): the preset select is "Period" (`filters.period`), because it has no visible label beside it in the top bar. With Custom chosen, the date inputs are "From" and "To" (`filters.periodFrom` / `periodTo`).
 
 **Presets**:
 - `this-month`: Current calendar month

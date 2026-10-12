@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
+**Status**: Open
+**Added**: 2026-10-12 (found while checking the TD-009 fixes in the browser)
+**Priority**: Medium
+**Impact**: `SettingsPage` renders `<DataToolsSection />` after `.page-content`, as a sibling inside `.main-content`, which is a flex column with `overflow: hidden`. Data Tools takes its full natural height, so `.page-content`, the only scroll container, gets what's left. In an 800×600 window that was 276 px, about a third of the screen, for Language through Desktop App. Data Tools itself doesn't scroll and drops the page padding: it sits flush against the sidebar. The cause predates TD-009, which didn't change the layout.
+**Remediation**: Render `DataToolsSection` inside `.page-content`, after Desktop App, as one of its sections. Check that its `h2` and the padding match the other sections, and that the e2e Settings and axe specs still pass.
+**Effort**: Small
+
 ### TD-054: The test suite fails under Node 25+ (Homebrew's default `node`)
 **Status**: Open
 **Added**: 2026-10-12 (MUT-79)
@@ -676,25 +684,38 @@ Known violations, measured in Chromium, light theme:
   longer claim `role="banner"`, and the top bar's `<header>` inside `<main>` is
   not a landmark. Axe confirms it on all six surfaces; the rule was removed
   from `KNOWN_AXE_VIOLATIONS`.
-- `aria-dialog-name`, every drawer. `components/drawers/Drawer.tsx` sets
-  `role="dialog"` with no `aria-labelledby` pointing at its title.
-- `select-name`, on Income and the client profile (the period `<select>`)
-  and Settings (the default-currency `<select>`).
-- `empty-table-header`, on Income and the client profile: the row-actions
-  column header is empty.
-- `button-name`, on Settings: the business profile row's "more" (⋯) menu
-  button is icon-only.
-- `heading-order`, on Settings: the first section heading is an h3 directly
-  under the h1.
+- ~~`aria-dialog-name`, every drawer.~~ **Fixed 2026-10-12.** `Drawer` (and
+  the portal's own drawer) points `aria-labelledby` at its title.
+- ~~`select-name`, on Income, the client profile and Settings.~~ **Fixed
+  2026-10-12.** `DateRangeControl` is named "Period". Settings'
+  default-currency select has a real `<label for>`: with `aria-labelledby`,
+  axe's `label-title-only` reads the label as hidden once it is scrolled out
+  of the clipped shell.
+- ~~`empty-table-header`, on Income and the client profile.~~ **Fixed
+  2026-10-12.** `RowActionsHeader` carries a visually hidden "Actions".
+- ~~`button-name`, on Settings (the business profile's ⋯ button).~~ **Fixed
+  2026-10-12.** It reads "Actions for <name>".
+- ~~`heading-order`, on Settings.~~ **Fixed 2026-10-12.** The section titles
+  are `h2`.
+
+`KNOWN_AXE_VIOLATIONS` now lists only `color-contrast`.
+
+Found while fixing these, not caught by axe (the names exist, in English):
+- `RowActionsMenu`'s trigger is `aria-label="Actions"`, hard-coded English.
+  Its tests render without a `LanguageProvider`, so moving it to
+  `common.actions` needs a provider in those tests too.
+- `CurrencySummaryPopup`'s button is "Show currency breakdown", hard-coded
+  English, on Income's summary strip.
 
 Optional areas (Projects, Insights, Expenses, Retainers, Planning, Documents)
 have no axe coverage; they are off on a fresh install.
 
 **Remaining**:
 1. ~~Run axe-core or similar accessibility checker~~ ✅ Done
-2. Fix the violations above; remove each rule from `KNOWN_AXE_VIOLATIONS` as
-   its fix lands (the spec annotates a known rule that stops firing)
-3. Add ARIA labels to interactive elements
+2. ~~Fix the structural violations above~~ ✅ Done 2026-10-12; only
+   `color-contrast` is left (MUT-74). Remove it from `KNOWN_AXE_VIOLATIONS`
+   when the palette lands
+3. Translate the English-only accessible names listed above
 4. Test with screen reader
 5. Document accessibility features
 6. Axe coverage for the optional areas, switched on

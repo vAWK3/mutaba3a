@@ -15,6 +15,7 @@
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
+| **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009) |
 
 ---
 
@@ -1724,3 +1725,17 @@ Every Playwright test gets an empty IndexedDB, so the Welcome dialog always open
 ### Axe checks fail on new rules, not on known ones
 
 `expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
+
+## Accessibility patterns — added 2026-10-12 (TD-009)
+
+### A control with a visible label gets a real `<label for>`
+A select or input that has visible label text beside it is named by a `<label htmlFor={id}>`, with the id from `useId()`. A description underneath goes in `aria-describedby`. Don't use `aria-labelledby` for this. Axe's best-practice `label-title-only` checks a labelledby target's *on-screen* visibility, and the app shell clips at `.main-content`/`.app-shell` (`overflow: hidden`). So a label scrolled below the fold reads as hidden, and the rule fails. A `<label for>` is checked for screen-reader visibility only. Settings' rows style it with `.settings-label`, which is `display: block`. A control with no visible label, such as the top bar's period filter, takes an i18n'd `aria-label`.
+
+### Every accessible name goes through `t()`
+`aria-label`, visually hidden text and dialog titles are user-facing strings, so they live in `en.json` and `ar.json` like any other copy. For an icon-only button in a list, put the row's subject in the name with a variable ("Actions for {name}"), so a screen reader's button list tells the rows apart. Add new keys to `src/lib/i18n/__tests__/a11yKeys.test.ts`, which checks both locales.
+
+### Dialogs are named by their visible title
+A `role="dialog"` points `aria-labelledby` at its heading, using a `useId()` id, never a fixed string: two drawers can be open at once, such as Income with Record payment over it. `Drawer` does this for every drawer.
+
+### A column without a visible title still has a header
+The row-actions column uses `RowActionsHeader` (a visually hidden "Actions"), never an empty `<th>`. Axe's `empty-table-header` flags an empty one, and a screen reader announces a nameless column.

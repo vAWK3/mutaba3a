@@ -1317,3 +1317,37 @@ New harness affordances, both minimal and local to their test file: `harness(wra
 
 **Baseline after MUT-65 (2026-10-12)**: server `npm test` 1159 passed, 11 skipped. lint, typecheck, build and `openapi:check` pass.
 **Baseline after the MUT-65 post-review pass (2026-10-12)**: server `npm test` 1171 passed, 11 skipped (72 files). lint, typecheck, build and `openapi:check` pass. `npm run test:db` still not runnable here (no `MUTABA3A_TEST_DATABASE_URL`), so the new `softDeleteAdjustment` contract case has been executed against the memory store only; the Prisma `WHERE` clause change is unexecuted.
+
+### TD-009 — the structural axe violations on the core surfaces (2026-10-12)
+
+Plan: `.claude/designs/td-009-axe-structural-tests.md`. Each new assertion was written first and failed on the old code (16 of them; the English "Close" case already passed, because the label was hard-coded English).
+
+| File | Covers |
+|---|---|
+| `src/components/drawers/__tests__/Drawer.test.tsx` (new) | The drawer is a dialog named by its title, and the name follows a title change; two open drawers each have their own name; the close button is "Close" in English and "إغلاق" in Arabic |
+| `src/hosted/components/__tests__/Drawer.test.tsx` (new) | The portal's drawer is a dialog named by its title |
+| `src/components/filters/__tests__/DateRangeControl.test.tsx` | The preset select is a combobox named "Period"; with a custom range, the date inputs are labelled "From" and "To" |
+| `src/components/ui/__tests__/RowActionsHeader.test.tsx` (new) | It is a column header named "Actions", and the text is `.sr-only` |
+| `src/pages/income/__tests__/IncomePage.test.tsx` | The Income table has an "Actions" column header, and the period select is named |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | The work table and the payments table each have an "Actions" column header, and the work list's period select is named |
+| `src/pages/settings/__tests__/SettingsPage.a11y.test.tsx` (new) | The default-currency select is named by its `<label>` and described by its row's description; each profile's ⋯ button is "Actions for <name>", and `aria-expanded` follows it open; the eight section titles are `h2` under the `h1`, with no `h3` |
+| `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx` | The section title is a level-2 heading |
+| `src/lib/i18n/__tests__/a11yKeys.test.ts` (new) | `common.actions`, `common.close`, `filters.period`, `filters.periodFrom`, `filters.periodTo` and `settings.profile.actionsFor` are non-empty in en and ar; `{name}` is kept in both |
+| `e2e/support/axe.ts` | `KNOWN_AXE_VIOLATIONS` is only `color-contrast`, so any of the five fixed rules coming back fails `accessibility.spec.ts` |
+
+**Found by the e2e run, not by jsdom:** the first Settings fix named the select with `aria-labelledby`. That passed `select-name`, but axe's best-practice `label-title-only` fired. Axe's `labelVirtual` takes a labelledby target's *on-screen* visible text, and the label sat at y = 890, outside the 720 px `overflow: hidden` `.main-content`/`.app-shell`. A `<label for>` is checked for screen-reader visibility only, so it passes wherever it is scrolled. The unit test now asserts the label is a `LABEL`.
+
+**Verified in the browser** (dev server, 800×600 and 1024×768, English and Arabic):
+- The Settings section titles and the currency row look unchanged. `.settings-label` is `display: block`, so the `<label>` lays out like the `<div>`s: 20 px tall, with the select still 440 px wide.
+- In Arabic, the period select is "الفترة", the new-income drawer is labelled "إيراد جديد", and its close button is "إغلاق".
+
+**How e2e was run:** a throwaway config on port 5193 (`webServer: npx vite --port 5193 --strictPort`, TD-004), deleted afterwards along with `test-results/`.
+
+**Gate (2026-10-12, branch head 976093d on main 4eaa583):**
+- `npx playwright test`: 19/19. `accessibility.spec.ts` passed 7/7 again after the CSS change.
+- `npx vitest run` (Node 22, TD-054): 187 files, 2,875 passed, 4 skipped.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run typecheck`: clean.
+- `npm run build` and `npm run test:bundles`: OK.
+
+Main 8ef2df0 (MUT-65: `server/` and docs only) was merged in afterwards. Only lint and typecheck were re-run on the merged tree.
