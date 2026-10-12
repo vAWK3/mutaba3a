@@ -8,6 +8,8 @@ import type {
   AttachmentFilter,
   AttachmentRepository,
   AuditEventRecord,
+  CreditRecord,
+  JsonObject,
   AuditFilter,
   CreateAttachmentInput,
   AppendVersionInput,
@@ -27,6 +29,8 @@ import type {
   ApiKeyRecord,
   ApiKeyRepository,
   ApplySupplementInput,
+  CorrectOutcomeInput,
+  OutcomeWriteInput,
   AuditRepository,
   InstallmentRecord,
   ReceivableFilter,
@@ -290,7 +294,7 @@ export class PrismaLedgerStore implements LedgerStore {
         action: r.action,
         entityType: r.entityType,
         entityId: r.entityId,
-        ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as Record<string, unknown> } : {}),
+        ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as JsonObject } : {}),
         requestId: r.requestId,
         createdAt: r.createdAt,
       })),
@@ -605,6 +609,7 @@ export class PrismaLedgerStore implements LedgerStore {
         const receivable = await this.prisma.receivable.findUnique({ where: { id: current.receivableId } });
         return receivable ? { installment: current, receivable, created: false } : null;
       }
+      if (current.voidedAt) return null;
       const agreement = await this.prisma.agreement.findFirst({ where: { id: current.agreementId, organizationId } });
       if (!agreement) return null;
       try {
@@ -629,9 +634,9 @@ export class PrismaLedgerStore implements LedgerStore {
               createdAt: input.at,
             },
           });
-          // Only the first poster wins; the guard is the WHERE receivableId IS NULL.
+          // Only the first poster wins, and never on a voided line (a correction or cancel voiding it concurrently).
           const { count } = await tx.installment.updateMany({
-            where: { id: current.id, receivableId: null },
+            where: { id: current.id, receivableId: null, voidedAt: null },
             data: { receivableId: receivable.id, postedAt: input.at, postingDate: input.postingDate, version: { increment: 1 } },
           });
           if (count !== 1) throw new AlreadyPosted();
@@ -641,6 +646,7 @@ export class PrismaLedgerStore implements LedgerStore {
       } catch (err) {
         if (!(err instanceof AlreadyPosted)) throw err;
         const installment = await this.prisma.installment.findFirstOrThrow({ where: { id: installmentId } });
+        if (!installment.receivableId) return null; // voided under us: nothing posts.
         const receivable = await this.prisma.receivable.findUniqueOrThrow({ where: { id: installment.receivableId ?? '' } });
         return { installment, receivable, created: false };
       }
@@ -685,10 +691,81 @@ export class PrismaLedgerStore implements LedgerStore {
         }),
       ),
     listVersions: (organizationId, agreementId) => this.prisma.retainerVersion.findMany({ where: { organizationId, agreementId }, orderBy: { version: 'asc' } }),
+    updateContingencyTerms: async (organizationId, agreementId, expectedVersion, patch, at) => {
+      const current = await this.prisma.agreement.findFirst({ where: { id: agreementId, organizationId } });
+      if (!current) return { kind: 'not_found' as const };
+      const { count } = await this.prisma.agreement.updateMany({
+        where: { id: agreementId, organizationId, version: expectedVersion, outcome: null },
+        data: {
+          ...(patch.commissionRateBasisPoints !== undefined ? { commissionRateBasisPoints: patch.commissionRateBasisPoints } : {}),
+          ...(patch.upfrontTreatment !== undefined ? { upfrontTreatment: patch.upfrontTreatment } : {}),
+          version: { increment: 1 },
+          updatedAt: at,
+        },
+      });
+      const record = await this.prisma.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+      return count === 1 ? { kind: 'updated' as const, record } : { kind: 'stale' as const, record };
+    },
+    recordOutcome: (organizationId, agreementId, input: OutcomeWriteInput, at) =>
+      this.asStaleOnLockConflict(organizationId, agreementId, () =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // Agreement row first, then receivables: the same lock order as correctOutcome.
+          const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+          if (lockedAgreement.length === 0) return { kind: 'not_found' as const };
+          const current = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+          if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
+          // The conditional write is the guard: a second record, or one racing a terms change, matches no row.
+          const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: null }, data: outcomeData(input, at) });
+          if (count !== 1) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
+          if (input.commissionInstallment) await tx.installment.create({ data: { ...input.commissionInstallment, isCommission: true, organizationId, agreementId } });
+          const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+          return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
+        }),
+      )),
+    correctOutcome: (organizationId, agreementId, input: CorrectOutcomeInput, at) =>
+      this.asStaleOnLockConflict(organizationId, agreementId, () =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // The agreement row lock serializes corrections (and a record) against each other: a loser waits, then
+          // reads the winner's version and is stale, never half-way through someone else's credit.
+          const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+          if (lockedAgreement.length === 0) return { kind: 'not_found' as const };
+          const current = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+          const stale = async () => ({ kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit: null } });
+          if (current.version !== input.expectedVersion || current.outcome === null) return stale();
+          const replaced = input.replaceInstallmentId ? await tx.installment.findFirst({ where: { id: input.replaceInstallmentId, organizationId, agreementId, isCommission: true, voidedAt: null } }) : null;
+          // Gone, or posted since the bill was composed (its preview promised no credit): stale either way.
+          if (input.replaceInstallmentId && (!replaced || replaced.receivableId !== input.replaceReceivableId)) return stale();
+          if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return stale();
+          // Under the receivable's row lock, before anything is written: a payment or credit that landed after the
+          // preview refuses the whole correction (an allocation waits on this lock until we commit or roll back).
+          const locked = replaced?.receivableId ? await lockReceivable(tx, replaced.receivableId) : null;
+          if (locked && (locked.paidMinor > 0n || locked.creditedMinor > 0n)) return { kind: 'has_payments' as const, receivableId: locked.id };
+          // First write, and conditional: a lazy read that posted the old line since we read it matches no row.
+          if (replaced) {
+            const voided = await tx.installment.updateMany({ where: { id: replaced.id, receivableId: replaced.receivableId, voidedAt: null }, data: { voidedAt: at } });
+            if (voided.count !== 1) return stale();
+          }
+          // Cannot miss under the agreement lock; kept conditional so the invariant stays local.
+          const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: { not: null } }, data: outcomeData(input, at) });
+          if (count !== 1) throw new Error('correctOutcome: agreement moved under its row lock');
+          let credit: CreditRecord | null = null;
+          if (locked) {
+            const r = await tx.receivable.findUniqueOrThrow({ where: { id: locked.id } });
+            credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: r.id, amountMinor: r.grossMinor, netMinor: r.netMinor, vatMinor: r.vatMinor, ...input.credit, createdAt: at } });
+            await settleReceivable(tx, r.id, { creditedMinor: { increment: r.grossMinor } });
+          }
+          if (input.commissionInstallment) await tx.installment.create({ data: { ...input.commissionInstallment, isCommission: true, organizationId, agreementId } });
+          const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+          return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit } };
+        }),
+      )),
     cancel: async (organizationId, agreementId, input, at) => {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.agreement.updateMany({
-          where: { id: agreementId, organizationId, status: 'ACTIVE' },
+          // outcome: null — a contingency agreement whose outcome is recorded is never cancelled, even by a cancel racing the record.
+          where: { id: agreementId, organizationId, status: 'ACTIVE', outcome: null },
           data: { status: 'CANCELLED', cancelledAt: at, cancelEffectiveMonth: input.cancelEffectiveMonth, cancelEffectiveDate: input.cancelEffectiveDate ?? null, finalMonth: input.finalMonth, version: { increment: 1 }, updatedAt: at },
         });
         if (count === 1) await tx.installment.updateMany({ where: { agreementId, receivableId: null, voidedAt: null }, data: { voidedAt: at } });
@@ -750,6 +827,20 @@ export class PrismaLedgerStore implements LedgerStore {
       }
     },
   };
+
+  /**
+   * MUT-100 review: the outcome writes lock receivables, which can deadlock with an allocation locking them in another
+   * order. Postgres rolls the loser back, so nothing was written; answer `stale` (409, preview again) rather than a 500.
+   */
+  private async asStaleOnLockConflict<T>(organizationId: string, agreementId: string, write: () => Promise<T>): Promise<T | { kind: 'stale'; record: { agreement: AgreementRecord; installments: InstallmentRecord[]; credit: null } }> {
+    try {
+      return await write();
+    } catch (err) {
+      if (!isLockConflict(err)) throw err;
+      const agreement = await this.prisma.agreement.findFirstOrThrow({ where: { id: agreementId, organizationId } });
+      return { kind: 'stale', record: { agreement, installments: await this.prisma.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit: null } };
+    }
+  }
 
   readonly receivables: ReceivableRepository = {
     getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId, deletedAt: null } }),
@@ -1113,6 +1204,44 @@ function entityTypeWhere(filter: AuditFilter): { entityType?: Prisma.StringFilte
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
 type Tx = Prisma.TransactionClient;
 
+/**
+ * MUT-100 review D2: locks the posted upfront receivables the counted upfront was read from (in id order) and reports
+ * whether any is gone or moved since — a credit landing between the commit's compose and this write would otherwise
+ * bill against an upfront that no longer stands. Allocations and reversals lock receivables in request order, so a
+ * deadlock with one is possible; `asStaleOnLockConflict` turns it into a retryable `stale` instead of a 500.
+ */
+async function upfrontMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): Promise<boolean> {
+  if (seen.length === 0) return false;
+  const ids = [...seen.map((s) => s.id)].sort();
+  const rows = await tx.$queryRaw<Array<{ id: string; version: number }>>`SELECT "id"::text AS "id", "version" FROM "receivables" WHERE "id" = ANY(${ids}::uuid[]) AND "organizationId" = ${organizationId}::uuid ORDER BY "id" FOR UPDATE`;
+  const now = new Map(rows.map((r) => [r.id, r.version]));
+  return seen.some((s) => now.get(s.id) !== s.version);
+}
+
+/** Postgres aborted the transaction to break a deadlock or a serialization conflict (40P01 / 40001): safe to retry. */
+export function isLockConflict(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (err.code === 'P2034') return true;
+  const dbCode = (err.meta as { code?: unknown } | undefined)?.code;
+  return err.code === 'P2010' && (dbCode === '40P01' || dbCode === '40001');
+}
+
+/** The agreement columns a contingency outcome (or its correction) writes, with the totals and the version bump. */
+function outcomeData(input: OutcomeWriteInput, at: Date): Prisma.AgreementUpdateManyMutationInput {
+  return {
+    outcome: input.outcome,
+    outcomeDate: input.outcomeDate,
+    awardedAmountMinor: input.awardedAmountMinor,
+    outcomeNote: input.outcomeNote,
+    commissionRateBasisPoints: input.commissionRateBasisPoints,
+    upfrontTreatment: input.upfrontTreatment,
+    outcomeRecordedAt: at,
+    ...input.totals,
+    version: { increment: 1 },
+    updatedAt: at,
+  };
+}
+
 /** Row lock so capacity checks and sum updates serialise per receivable. */
 async function lockReceivable(tx: Tx, receivableId: string): Promise<{ id: string; status: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint }> {
   const rows = await tx.$queryRaw<Array<{ id: string; status: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint }>>`SELECT "id", "status", "grossMinor", "paidMinor", "creditedMinor" FROM "receivables" WHERE "id" = ${receivableId}::uuid FOR UPDATE`;
@@ -1225,7 +1354,7 @@ function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditE
     action: r.action,
     entityType: r.entityType,
     entityId: r.entityId,
-    ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as Record<string, unknown> } : {}),
+    ...(r.metadata && typeof r.metadata === 'object' ? { metadata: r.metadata as JsonObject } : {}),
     requestId: r.requestId,
     createdAt: r.createdAt,
   };

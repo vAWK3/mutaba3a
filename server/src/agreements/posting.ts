@@ -1,5 +1,5 @@
 import { dueDateFor, type IsoDate, type IsoMonth } from '../dates.js';
-import type { AgreementRecord, LedgerStore, Organization } from '../repositories/ports.js';
+import type { AgreementRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import { chargeDate, chargeMonths } from '../retainers/schedule.js';
 import { prorate } from '../retainers/proration.js';
 import { effectiveEndMonth, termsFor, termsTimeline } from '../retainers/terms.js';
@@ -106,6 +106,6 @@ export function chargeMonthsAcrossVersions(retainer: AgreementRecord, timeline: 
   return months;
 }
 
-async function audit(store: LedgerStore, organizationId: string, actor: PostingActor, action: string, entityType: string, entityId: string, metadata: Record<string, unknown>): Promise<void> {
+async function audit(store: LedgerStore, organizationId: string, actor: PostingActor, action: string, entityType: string, entityId: string, metadata: JsonObject): Promise<void> {
   await store.audit.append({ organizationId, actorType: actor.actorType, actorId: actor.actorId, action, entityType, entityId, metadata, requestId: actor.requestId });
 }

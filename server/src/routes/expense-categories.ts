@@ -6,7 +6,7 @@ import { presetFor } from '../expenses/presets.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { UniqueViolation } from '../repositories/memory.js';
-import type { LedgerStore, UpdateExpenseCategoryPatch } from '../repositories/ports.js';
+import type { JsonObject, LedgerStore, UpdateExpenseCategoryPatch } from '../repositories/ports.js';
 import {
   CreateExpenseCategoryRequestSchema,
   ExpenseCategoryIdParamSchema,
@@ -32,7 +32,7 @@ const categoryJson = { content: { 'application/json': { schema: ExpenseCategoryS
 export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  function audit(c: Context<AppEnv>, action: string, entityId: string, metadata: Record<string, unknown>) {
+  function audit(c: Context<AppEnv>, action: string, entityId: string, metadata: JsonObject) {
     const auth = sessionAuth(c);
     return store.audit.append({ organizationId: auth.organization.id, actorType: 'USER', actorId: auth.user.id, action, entityType: 'expense_category', entityId, metadata, requestId: c.get('requestId') });
   }

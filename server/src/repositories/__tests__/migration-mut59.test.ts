@@ -34,10 +34,16 @@ function execute(dbUrl: string, sql: string): void {
   execFileSync(PRISMA, ['db', 'execute', '--stdin', '--url', dbUrl], { input: sql, cwd: SERVER, stdio: ['pipe', 'pipe', 'pipe'] });
 }
 
+/**
+ * One transaction per file, as `prisma migrate deploy` applies them: pasted into a single script the history would be
+ * one implicit transaction, and Postgres refuses an enum value used in the transaction that added it (MUT-100's
+ * CONTINGENCY, eng review D3).
+ */
+const asDeployed = (files: readonly string[]) => files.map((sql) => `BEGIN;\n${sql}\n;\nCOMMIT;`).join('\n');
 /** Every migration but the repair, with M7 as production applied it. */
-const legacyHistory = () => migrationDirs().filter((d) => d !== REPAIR).map((d) => (d === M7 ? ORIGINAL_M7 : sqlOf(d))).join('\n;\n');
+const legacyHistory = () => asDeployed(migrationDirs().filter((d) => d !== REPAIR).map((d) => (d === M7 ? ORIGINAL_M7 : sqlOf(d))));
 /** Every migration as `main` has it, the repair included: a fresh database. */
-const freshHistory = () => migrationDirs().map(sqlOf).join('\n;\n');
+const freshHistory = () => asDeployed(migrationDirs().map(sqlOf));
 
 if (!url) {
   describe.skip('MUT-59 repair migration (set MUTABA3A_TEST_DATABASE_URL to run)', () => {

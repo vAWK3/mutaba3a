@@ -84,6 +84,8 @@ if (!url) {
       expect(byId[malafat]).toMatchObject({ origin: 'INTEGRATION', captureSource: null });
       expect(byId[captured]).toMatchObject({ origin: 'CAPTURE', captureSource: null });
 
+      // The rest of the history (MUT-100 onwards), one transaction per file as `prisma migrate deploy` applies it, ends at the schema.
+      for (const dir of dirs.slice(dirs.indexOf(MUT61) + 1)) execute(dbUrl, `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`);
       execFileSync(PRISMA, ['migrate', 'diff', '--from-url', dbUrl, '--to-schema-datamodel', join(SERVER, 'prisma/schema.prisma'), '--exit-code'], { cwd: SERVER, stdio: 'pipe' });
     });
   });

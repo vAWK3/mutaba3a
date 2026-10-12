@@ -28,6 +28,42 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Contingency fee agreements: upfront plus a % of the award (MUT-100)
+
+**Why:** litigation firms most often charge an upfront fee plus a negotiated percentage of what the court or a settlement awards, and the ledger could not hold it: FIXED and RECURRING both need their total at creation. Server-only; unblocks MAL-1077 (Malafat UI) and MUT-107 (contingency fee proposals). Brief: `.claude/designs/mut-100-contingency-agreements.md` (eng review, CEO review, eng re-review on 2026-10-12; review record alongside). ADR-059.
+
+**Run on this branch (Node 22):** `server/`: `npm run lint` clean, `npm run typecheck` clean, `npm run build` clean, `npm run openapi:check` up to date, `npm test` 1,470 passed / 17 skipped, full suite on Postgres (scratch database) 1,585 passed. Root: `npm run typecheck` clean, `npm run lint` 0 errors (12 pre-existing warnings), `npx vitest run` 3,422 passed / 4 skipped, `npm run hosted:types:check` matches, `npm run build:hosted` OK.
+
+### Added
+- **`AgreementType.CONTINGENCY`** through the existing `POST /v1/agreements(/preview)`: an optional `contingency { commissionRateBasisPoints 1..10000, upfrontTreatment SEPARATE | CREDITED }`; `amount` is the upfront, scheduled like a fixed fee's installments; ₪0 with no installments. Preview echoes `type` and `contingency`; the agreement carries `contingency { …terms, outcome AWAITING | AWARDED | NO_RECOVERY, outcomeDate, awarded, note, outcomeRecordedAt }`.
+- **`PATCH /v1/agreements/{id}/contingency`** (If-Match): rate and/or treatment before the outcome; audited `agreement.contingency_terms_changed {from, to}`.
+- **`POST /v1/agreements/{id}/outcome/preview`, `/outcome`, `/outcome/correct`.** AWARDED posts one commission installment (`isCommission`, DATE on the outcome date, VAT at the rate in force then); CREDITED subtracts the counted upfront and never refunds; NO_RECOVERY posts nothing. The token covers the bill's figures and, for a correction, the replaced receivable's version. A correction credits the old commission in full, voids it and posts the new one in one transaction, may fix the terms, and is refused with 409 `OUTCOME_HAS_PAYMENTS` once the commission has a payment or credit (re-checked under the receivable's row lock). `agreement.outcome_recorded` / `outcome_corrected` audit the figures as decimal strings.
+- **`ProjectSummary.contingency`** (the project's latest ACTIVE contingency agreement); **`Installment.isCommission`**.
+- Reasons: 409 `OUTCOME_ALREADY_RECORDED`, `OUTCOME_NOT_RECORDED`, `OUTCOME_HAS_PAYMENTS`; 422 `COMMISSION_RATE_INVALID`, `NOT_CONTINGENCY`, `OUTCOME_DATE_INVALID`, `COMMISSION_LABEL_REQUIRED`.
+- Migrations `20261013090000_mut100_agreement_type_contingency` (the enum value alone) and `20261013090100_mut100_contingency_terms` (two enums, seven agreement columns, `installments.isCommission`, a CHECK).
+- Store: `updateContingencyTerms`, `recordOutcome`, `correctOutcome` (memory + Prisma, classified in `STORE_ACCESS`).
+
+### Changed
+- **FIXED with `installments: []`** → 422 `details.reason = NO_INSTALLMENTS` (was the zod issue list) — the one intentional behaviour change (R5/D7).
+- Contingency counts as fixed-like for `kind` and `agreed`; such a project is **PENDING, never PAID_IN_FULL, while its outcome is awaited**.
+- Cancel accepts a contingency agreement before its outcome (409 `OUTCOME_ALREADY_RECORDED` after); supplements on it stay 422 `NOT_FIXED` with a contingency-specific message.
+- **API `1.16.0-mut100`** (the plan said 1.14.0; MUT-120 and MUT-61 took 1.14/1.15). Hosted types regenerated; the portal needs no change.
+
+### Technical
+- `AuditEventInput.metadata` is `JsonObject` (R9): seven audit helpers retyped; the retainer-cancel credit audit writes `amount: null` instead of a possibly-undefined value.
+- MUT-59's and MUT-61's migration tests apply history one transaction per file (pasted as one script, Postgres refused `CONTINGENCY` in the transaction that added it); MUT-61's applies the rest of the history before its schema diff. Assertions unchanged.
+- `TODOS.md` #7 records the deferred proposal flow (MUT-107/MAL-1094). New debt TD-097..099. `server/DEPLOYMENT.md` §6: post-release `pg_enum` check and the rollback rule.
+
+### Fixed in pre-landing review (2026-10-13, `/qa-reconcile` → `/review`: 7 specialists + adversarial; decisions D1–D4 by Basel)
+- **Double billing / commission on a cancelled agreement (D1):** `postInstallment` never posts a voided line; a correction locks the agreement row and voids conditionally (a racing loser is 409, never a 500 or `has_payments`); cancel refuses once an outcome is recorded, also when it races the record.
+- **Upfront moving between compose and write (D2):** the write re-checks each upfront receivable's version under lock → 409 `PREVIEW_STALE`.
+- **`correctionReason` left out of the token (D3).**
+- **The terms CHECK refused no NULL rate** (`NULL BETWEEN …` is NULL; a NULL CHECK passes) — explicit `IS NOT NULL`; the unapplied migration is edited in place.
+- Credits read in parallel; `COMMISSION_RATE_RULE` from the bounds; due-date override bounded; rollback runbook corrected (an old revision fails reads of CONTINGENCY rows: roll forward only).
+- Tests added: cancelled guard, credited-not-paid commission, terms stale after an outcome (store), correcting a never-posted commission, VAT-included CREDITED end to end, read-only key 403 on the three writes, Postgres race of two corrections, voided-line posting, cancel vs record. Each new route test was mutation-checked (fails with its fix reverted). New debt TD-100..103.
+- **Re-review (cycle 2, adversarial pass over the fix diff):** versions read before credits in compose; record locks the agreement first; lock conflicts in the outcome writes → 409 (`isLockConflict`); a replaced line that posted since compose → stale; MANUAL trigger voided by a concurrent cancel → 409. Mutation-checked.
+- **Re-run:** `server/` lint, typecheck, build, openapi:check clean; `npm test` 1,490 passed / 17 skipped; Postgres 1,613 passed (contract race tests stable over 3 runs); hosted types match.
+
 ## [Unreleased] - 2026-10-12 — deploy.sh runs post-roll data repairs (MUT-61 follow-up)
 
 **Why:** a migration's backfill runs before the new revision serves (deploy.sh step 3), so rows the old revision writes in between — or after a rollback — miss it. MUT-61's `origin` backfill had a manual DEPLOYMENT.md step for that window; it is now automatic.

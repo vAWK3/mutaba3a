@@ -78,6 +78,20 @@ enum PricingBasis {
 enum AgreementType {
   FIXED
   RECURRING
+  /// MUT-100: an upfront fee plus a commission (one rate) on the awarded amount.
+  CONTINGENCY
+}
+
+/// MUT-100: whether a contingency agreement's upfront stays on top of the commission or counts toward it.
+enum UpfrontTreatment {
+  SEPARATE
+  CREDITED
+}
+
+/// MUT-100: how a contingency case ended. No outcome yet = null on the agreement.
+enum ContingencyOutcome {
+  AWARDED
+  NO_RECOVERY
 }
 
 enum AgreementStatus {
@@ -477,39 +491,47 @@ model VatRate {
 }
 
 model Agreement {
-  id                   String          @id @default(uuid()) @db.Uuid
-  organizationId       String          @db.Uuid
-  organization         Organization    @relation(fields: [organizationId], references: [id])
-  projectId            String          @db.Uuid
-  project              Project         @relation(fields: [projectId], references: [id])
-  customerId           String          @db.Uuid
-  customer             Customer        @relation(fields: [customerId], references: [id])
-  type                 AgreementType
-  status               AgreementStatus @default(ACTIVE)
-  currency             String          @db.VarChar(3)
-  pricingBasis         PricingBasis
-  vatTreatment         VatTreatment
+  id                        String              @id @default(uuid()) @db.Uuid
+  organizationId            String              @db.Uuid
+  organization              Organization        @relation(fields: [organizationId], references: [id])
+  projectId                 String              @db.Uuid
+  project                   Project             @relation(fields: [projectId], references: [id])
+  customerId                String              @db.Uuid
+  customer                  Customer            @relation(fields: [customerId], references: [id])
+  type                      AgreementType
+  status                    AgreementStatus     @default(ACTIVE)
+  currency                  String              @db.VarChar(3)
+  pricingBasis              PricingBasis
+  vatTreatment              VatTreatment
   /// Frozen at creation; 0 for non-standard treatments.
-  vatRateBasisPoints   Int
+  vatRateBasisPoints        Int
   /// FIXED: contractual total in the pricing basis. RECURRING: the monthly amount.
-  amountMinor          BigInt
-  netMinor             BigInt
-  vatMinor             BigInt
-  grossMinor           BigInt
-  agreementDate        String          @db.VarChar(10)
-  description          String?
-  paymentTerms         PaymentTerms    @default(EOM)
-  startMonth           String?         @db.VarChar(7)
-  billingDay           Int?
-  endMonth             String?         @db.VarChar(7)
-  cancelEffectiveMonth String?         @db.VarChar(7)
+  amountMinor               BigInt
+  netMinor                  BigInt
+  vatMinor                  BigInt
+  grossMinor                BigInt
+  agreementDate             String              @db.VarChar(10)
+  description               String?
+  paymentTerms              PaymentTerms        @default(EOM)
+  startMonth                String?             @db.VarChar(7)
+  billingDay                Int?
+  endMonth                  String?             @db.VarChar(7)
+  cancelEffectiveMonth      String?             @db.VarChar(7)
   /// The day the retainer stopped (M5); cancelEffectiveMonth is its month.
-  cancelEffectiveDate  String?         @db.VarChar(10)
-  finalMonth           FinalMonth?
-  cancelledAt          DateTime?
-  version              Int             @default(1)
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @default(now())
+  cancelEffectiveDate       String?             @db.VarChar(10)
+  finalMonth                FinalMonth?
+  cancelledAt               DateTime?
+  // CONTINGENCY only (MUT-100); a CHECK in the migration requires rate 1..10000 and a treatment on CONTINGENCY rows.
+  commissionRateBasisPoints Int?
+  upfrontTreatment          UpfrontTreatment?
+  outcome                   ContingencyOutcome?
+  outcomeDate               String?             @db.VarChar(10)
+  awardedAmountMinor        BigInt?
+  outcomeNote               String?
+  outcomeRecordedAt         DateTime?
+  version                   Int                 @default(1)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @default(now())
 
   installments Installment[]
   charges      RetainerCharge[]
@@ -543,6 +565,8 @@ model Installment {
   postingDate     String?       @db.VarChar(10)
   receivableId    String?       @unique @db.Uuid
   voidedAt        DateTime?
+  /// MUT-100: the commission line a contingency outcome posts; never counted as upfront.
+  isCommission    Boolean       @default(false)
   version         Int           @default(1)
 
   @@unique([agreementId, position])

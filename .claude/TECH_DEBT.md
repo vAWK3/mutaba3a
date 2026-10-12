@@ -18,6 +18,64 @@
 
 ## Open Debt
 
+### TD-104: A payment allocation or reversal that loses a deadlock answers 500
+**Status**: Open
+**Ticket**: MUT-130
+**Added**: 2026-10-13 (MUT-100 re-review; payments code unchanged, newly reachable)
+**Priority**: Low
+**Impact**: since MUT-100 the outcome writes lock upfront receivables (id order) and allocations/reversals lock receivables in request order, so the two can deadlock. The outcome side already maps it to 409 (`isLockConflict` → stale); the payments side surfaces Prisma `P2010 / 40P01` as a 500. Nothing is written (rolled back) and the idempotency key is released, so a retry succeeds.
+**Fix**: lock receivables in sorted id order in `applyAllocations` / `payments.reverse`, and map `isLockConflict` to a retryable 409 in the payments store methods.
+
+### TD-100: No upper bound on money amounts — an oversized award is a 500, not a 422
+**Status**: Open
+**Ticket**: MUT-126
+**Added**: 2026-10-13 (MUT-100 review; pre-existing for every amount)
+**Priority**: Low
+**Impact**: `parseMoney` accepts any digit count, so an award (or an agreement amount) beyond Postgres BIGINT passes validation and fails inside the write with a Prisma error → 500. Nothing is written; the 5xx releases the idempotency key.
+**Fix**: a max-minor bound in `parseAmount` (one place for every caller), 422 `AMOUNT_INVALID`.
+
+### TD-101: Outcome audit events are appended after the write commits
+**Status**: Accepted
+**Ticket**: MUT-127
+**Added**: 2026-10-13 (MUT-100 review; the codebase-wide pattern, cf. TD-090)
+**Priority**: Low
+**Impact**: `agreement.outcome_recorded` / `outcome_corrected` (the dispute figures, CEO C2) and `receivable.credited` are written after the store transaction and the commission posting. A crash in between leaves the ledger right and those audit rows missing; a retry then meets `OUTCOME_ALREADY_RECORDED`.
+
+### TD-102: One live commission line per agreement is not enforced by the database
+**Status**: Accepted
+**Ticket**: MUT-128
+**Added**: 2026-10-13 (MUT-100 review)
+**Priority**: Low
+**Impact**: a correction replaces "the" live commission line; two would leave one uncredited. Today the agreement row lock, the version guards and the conditional void make a second impossible, but a partial unique index (`installments(agreementId) WHERE isCommission AND voidedAt IS NULL`) cannot be expressed in the Prisma 6 schema without the migration-drift tests flagging it.
+
+### TD-103: Summaries load installments one agreement (and one project) at a time
+**Status**: Open
+**Ticket**: MUT-129
+**Added**: 2026-10-13 (MUT-100 performance review; pre-existing, widened to CONTINGENCY)
+**Priority**: Low
+**Impact**: `projectSummary` awaits `listInstallments` per ACTIVE fixed-like agreement, and the customer summary calls it per project with its own proposal and agreement lists: about 3P + A sequential queries.
+**Fix**: one `installment.findMany({ agreementId: { in } })` per summary, grouped in memory; load a customer's agreements and proposals once.
+
+### TD-097: Contingency terms are sparse columns on `agreements`, and `CONTINGENCY` is a permanent enum value
+**Status**: Accepted
+**Added**: 2026-10-13 (MUT-100, CEO review S10)
+**Priority**: Low
+**Impact**: `agreements` carries seven CONTINGENCY-only nullable columns beside the RECURRING-only block; a CHECK keeps rate and treatment present on CONTINGENCY rows, nothing else enforces the outcome fields' shape. Postgres cannot drop an enum value, so `AgreementType.CONTINGENCY` stays even if the feature is withdrawn.
+**Fix if ever needed**: a per-type terms table, when a fourth agreement type arrives.
+
+### TD-098: Rolling the server back past MUT-100 breaks contingency reads and silently turns a contingency create into a FIXED one
+**Status**: Accepted
+**Added**: 2026-10-13 (MUT-100, CEO review S9)
+**Priority**: Medium (operational)
+**Impact**: once a CONTINGENCY row exists, an older revision (1) fails every read that returns it — its Prisma client has no `CONTINGENCY` enum value — so that organization's agreement lists and project/customer summaries break; (2) reads commission installments as ordinary ones; (3) strips the unknown `contingency` field from `POST /v1/agreements` and creates a FIXED agreement for the upfront alone. Unreachable until Malafat ships the option (MAL-1077).
+**Mitigation**: `server/DEPLOYMENT.md` §6 rollback row: before any CONTINGENCY row exists a rollback is harmless; after, roll forward only.
+
+### TD-099: Two ACTIVE contingency agreements on one project — the summary shows the latest only
+**Status**: Accepted
+**Added**: 2026-10-13 (MUT-100 plan, risk 4)
+**Priority**: Low
+**Impact**: nothing prevents a second contingency agreement on a project; `agreed` sums both, but `ProjectSummary.contingency` describes only the latest ACTIVE one, and the PENDING rule holds while any of them awaits an outcome. Documented, not prevented.
+
 ### TD-092: Pre-MUT-61 captured payments have no captureSource
 **Status**: Accepted
 **Added**: 2026-10-12 (MUT-61)

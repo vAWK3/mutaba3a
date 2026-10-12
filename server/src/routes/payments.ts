@@ -10,7 +10,7 @@ import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
 import { verifyPreviewToken } from '../preview-token.js';
 import { InsufficientCapacity } from '../repositories/memory.js';
-import { CAPTURE_UNDO_REASON, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
+import { CAPTURE_UNDO_REASON, type JsonObject, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
 import {
   AllocatePaymentRequestSchema,
   AllocationPreviewRequestSchema,
@@ -42,7 +42,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     return { organizationId: organization.id, apiKeyId: apiKey.id, requestId: c.get('requestId') };
   };
 
-  const audit = (a: Actor, action: string, entityType: string, entityId: string, metadata: Record<string, unknown>) =>
+  const audit = (a: Actor, action: string, entityType: string, entityId: string, metadata: JsonObject) =>
     store.audit.append({ organizationId: a.organizationId, actorType: 'API_KEY', actorId: a.apiKeyId, action, entityType, entityId, metadata, requestId: a.requestId });
 
   async function paymentView(organizationId: string, payment: PaymentRecord, today: IsoDate, people: ReadonlyMap<string, CapturedBy>) {

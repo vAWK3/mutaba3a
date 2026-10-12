@@ -2341,7 +2341,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preview a fixed-fee agreement: totals, installments, due dates, preview token
+         * Preview a fixed-fee or contingency agreement: totals, installments, due dates, preview token
          * @description Writes nothing. The token covers the body and the VAT rate in force on agreementDate, so a rate change before create is refused with 409 PREVIEW_STALE.
          */
         post: {
@@ -2428,7 +2428,7 @@ export interface paths {
                     projectId?: string;
                     customerId?: string;
                     status?: "ACTIVE" | "CANCELLED";
-                    type?: "FIXED" | "RECURRING";
+                    type?: components["schemas"]["AgreementType"];
                 };
                 header?: never;
                 path?: never;
@@ -2485,7 +2485,7 @@ export interface paths {
         };
         put?: never;
         /**
-         * Create a fixed-fee agreement from a preview
+         * Create a fixed-fee or contingency agreement from a preview
          * @description Same body as the preview plus its previewToken. IMMEDIATE installments and DATE installments whose date has arrived are posted as receivables at once.
          */
         post: {
@@ -2761,8 +2761,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Cancel a fixed-fee agreement while nothing is posted
-         * @description Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted. Retainers cancel through POST /v1/retainers/{id}/cancel.
+         * Cancel a fixed-fee or contingency agreement while nothing is posted
+         * @description Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted, and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. Retainers cancel through POST /v1/retainers/{id}/cancel.
          */
         post: {
             parameters: {
@@ -2783,6 +2783,411 @@ export interface paths {
             };
             responses: {
                 /** @description Cancelled (or already was) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AgreementDetail"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agreements/{agreementId}/contingency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a contingency agreement’s commission rate or upfront treatment before its outcome
+         * @description If-Match carries the version you read. After an outcome the terms are frozen (409 OUTCOME_ALREADY_RECORDED); a correction (POST …/outcome/correct) may fix them while the commission is unpaid.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ContingencyTermsPatchRequest"];
+                };
+            };
+            responses: {
+                /** @description Changed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AgreementDetail"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/agreements/{agreementId}/outcome/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a contingency outcome, or a correction of one: the commission, what the upfront covers, and the bill
+         * @description Writes nothing. mode is RECORD before an outcome exists and CORRECT after; send the same body (plus previewToken) to /outcome or /outcome/correct. The token covers the body, the agreement version, the VAT rate on outcomeDate, the counted upfront, the commission, the billable amount and — when correcting — the replaced receivable’s version, so a credit or payment in between is 409 PREVIEW_STALE.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ContingencyOutcomePreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description Preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContingencyOutcomePreview"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agreements/{agreementId}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a contingency outcome from a preview: AWARDED bills the commission once, NO_RECOVERY bills nothing
+         * @description The commission is an installment on the agreement, DATE-triggered on outcomeDate and posted at once with VAT at the rate in force on that date. Nothing posts when the bill is zero (NO_RECOVERY, or CREDITED with the upfront covering the commission). A second record is 409 OUTCOME_ALREADY_RECORDED.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ContingencyOutcomeRequest"];
+                };
+            };
+            responses: {
+                /** @description Recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AgreementDetail"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agreements/{agreementId}/outcome/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a recorded outcome while its commission is unpaid: credit the old commission in full and post the new one
+         * @description One transaction: the replaced commission’s receivable is credited in full (correctionReason becomes the credit’s reason), its line is voided, and the new outcome, terms and commission line are written; the new line posts at once. Refused with 409 OUTCOME_HAS_PAYMENTS once the commission has a payment or credit — re-checked under the receivable’s lock, so a payment racing the correction is refused too. The body may also fix commissionRateBasisPoints and upfrontTreatment.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ContingencyOutcomeCorrectRequest"];
+                };
+            };
+            responses: {
+                /** @description Corrected */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -8560,8 +8965,7 @@ export interface components {
             projectId: string;
             /** Format: uuid */
             customerId: string;
-            /** @enum {string} */
-            type: "FIXED" | "RECURRING";
+            type: components["schemas"]["AgreementType"];
             /** @enum {string} */
             status: "ACTIVE" | "CANCELLED";
             currency: components["schemas"]["Currency"];
@@ -8593,6 +8997,7 @@ export interface components {
                 /** @enum {string|null} */
                 finalMonth: "FULL" | "PRORATE" | "WAIVE" | null;
             } | null;
+            contingency: components["schemas"]["AgreementContingency"];
             /** Format: date-time */
             cancelledAt: string | null;
             version: number;
@@ -8602,7 +9007,24 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
+        AgreementType: "FIXED" | "RECURRING" | "CONTINGENCY";
+        /** @enum {string} */
         PaymentTerms: "IMMEDIATE" | "EOM" | "EOM_15" | "EOM_30" | "EOM_45" | "EOM_60";
+        AgreementContingency: {
+            commissionRateBasisPoints: number;
+            upfrontTreatment: components["schemas"]["UpfrontTreatment"];
+            /** @enum {string} */
+            outcome: "AWAITING" | "AWARDED" | "NO_RECOVERY";
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            outcomeDate: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            awarded: string | null;
+            note: string | null;
+            /** Format: date-time */
+            outcomeRecordedAt: string | null;
+        } | null;
+        /** @enum {string} */
+        UpfrontTreatment: "SEPARATE" | "CREDITED";
         Installment: {
             /** Format: uuid */
             id: string;
@@ -8627,6 +9049,7 @@ export interface components {
             postedAt: string | null;
             /** Format: uuid */
             receivableId: string | null;
+            isCommission: boolean;
             version: number;
         };
         InstallmentTrigger: {
@@ -8677,6 +9100,9 @@ export interface components {
             reason?: string;
         };
         AgreementPreviewResponse: {
+            /** @enum {string} */
+            type: "FIXED" | "CONTINGENCY";
+            contingency: components["schemas"]["ContingencyTerms"];
             totals: {
                 /** @description Canonical decimal string; exactly the currency's fractional digits */
                 amount: string;
@@ -8708,9 +9134,15 @@ export interface components {
                 /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                 dueDate: string;
                 status: components["schemas"]["ItemStatus"];
+                isCommission: boolean;
             }[];
             previewToken: string;
         };
+        ContingencyTerms: {
+            /** @description The commission on the award, 1..10000 (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID */
+            commissionRateBasisPoints: number;
+            upfrontTreatment: components["schemas"]["UpfrontTreatment"];
+        } | null;
         AgreementPreviewRequest: {
             /** Format: uuid */
             projectId: string;
@@ -8724,6 +9156,7 @@ export interface components {
             description?: string;
             paymentTerms?: components["schemas"]["PaymentTerms"];
             installments: components["schemas"]["InstallmentSpec"][];
+            contingency?: components["schemas"]["ContingencyTerms"];
         };
         InstallmentSpec: {
             label: string;
@@ -8772,6 +9205,94 @@ export interface components {
             };
         };
         CancelAgreementRequest: Record<string, never>;
+        ContingencyTermsPatchRequest: {
+            commissionRateBasisPoints?: number;
+            upfrontTreatment?: components["schemas"]["UpfrontTreatment"];
+        };
+        ContingencyOutcomePreview: {
+            /** @enum {string} */
+            mode: "RECORD" | "CORRECT";
+            outcome: components["schemas"]["ContingencyOutcome"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            awarded: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            outcomeDate: string;
+            commissionRateBasisPoints: number;
+            upfrontTreatment: components["schemas"]["UpfrontTreatment"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            commission: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            upfrontCounted: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            appliedUpfront: string;
+            billable: {
+                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                amount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                net: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                vat: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                gross: string;
+            };
+            vatRateBasisPoints: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            postingDate: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string | null;
+            replaces: {
+                /** Format: uuid */
+                installmentId: string;
+                /** Format: uuid */
+                receivableId: string | null;
+                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                gross: string;
+            } | null;
+            previewToken: string;
+        };
+        /** @enum {string} */
+        ContingencyOutcome: "AWARDED" | "NO_RECOVERY";
+        ContingencyOutcomePreviewRequest: {
+            outcome: components["schemas"]["ContingencyOutcome"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            awardedAmount?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            outcomeDate: string;
+            note?: string;
+            commissionLabel?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+            commissionRateBasisPoints?: number;
+            upfrontTreatment?: components["schemas"]["UpfrontTreatment"];
+            correctionReason?: string;
+        };
+        ContingencyOutcomeRequest: {
+            outcome: components["schemas"]["ContingencyOutcome"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            awardedAmount?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            outcomeDate: string;
+            note?: string;
+            commissionLabel?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+            previewToken: string;
+        };
+        ContingencyOutcomeCorrectRequest: {
+            outcome: components["schemas"]["ContingencyOutcome"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            awardedAmount?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            outcomeDate: string;
+            note?: string;
+            commissionLabel?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+            commissionRateBasisPoints?: number;
+            upfrontTreatment?: components["schemas"]["UpfrontTreatment"];
+            correctionReason: string;
+            previewToken: string;
+        };
         TriggerInstallmentResponse: {
             installment: components["schemas"]["Installment"];
             receivable: components["schemas"]["Receivable"];
@@ -9362,6 +9883,7 @@ export interface components {
             };
             status: components["schemas"]["ProjectSummaryStatus"];
             proposal: components["schemas"]["FeeProposalSummary"];
+            contingency: components["schemas"]["ProjectContingency"];
         };
         /** @enum {string} */
         ProjectSummaryStatus: "NONE" | "PENDING" | "OUTSTANDING" | "PARTIALLY_PAID" | "OVERDUE" | "PAID_IN_FULL" | "UP_TO_DATE" | "CANCELLED" | "SETTLED";
@@ -9378,6 +9900,16 @@ export interface components {
             proposedOn: string;
             /** Format: uuid */
             agreementId: string | null;
+        } | null;
+        ProjectContingency: {
+            /** Format: uuid */
+            agreementId: string;
+            commissionRateBasisPoints: number;
+            upfrontTreatment: components["schemas"]["UpfrontTreatment"];
+            /** @enum {string} */
+            outcome: "AWAITING" | "AWARDED" | "NO_RECOVERY";
+            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            awarded: string | null;
         } | null;
         ProjectSummaryResponse: components["schemas"]["ProjectSummary"] & {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */

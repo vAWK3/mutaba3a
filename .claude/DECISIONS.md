@@ -2509,3 +2509,41 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - A full-ink2 placeholder with no exemption (D7 B): empty fields would look filled.
 - Precaching Thmanyah in the service worker: ~1.2 MB on every install.
 - Renaming every `--text-*`/`--radius-*` use now: 620 sites, left to MUT-103 behind aliases.
+
+---
+
+## ADR-059: Contingency Fee Agreements: a Commission Is an Installment Posted When the Outcome Is Recorded, With VAT at the Rate on the Outcome Date (Narrow Override of M3 Decision 4)
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-100 (epic MUT-25; blocks MAL-1077 and the proposal follow-up MUT-107). Litigation firms charge an upfront fee plus a negotiated percentage of what the court or a settlement awards. The ledger had FIXED and RECURRING agreements, both needing their total at creation; the commission is unknown until the case ends. Product rulings (intake, 2026-10-12): bill once on the awarded amount, never per collection; with the upfront credited toward the commission, the firm keeps the upfront when the commission is smaller (no refund); one rate per agreement, editable until the outcome; Malafat is the only writer. Plan reviewed three times (eng, CEO in scope reduction, eng re-review) with every decision taken by Basel: `.claude/designs/mut-100-contingency-agreements.md` and `…-reviews.md`.
+
+**Decision**:
+1. **A third agreement type, `CONTINGENCY`**, created through the existing `POST /v1/agreements` with an optional `contingency { commissionRateBasisPoints (1..10000), upfrontTreatment (SEPARATE | CREDITED, no default) }`. The amount is the upfront, scheduled exactly like a fixed fee's installments; a 0 upfront has no installments. The terms are nullable columns on `agreements` (like the RECURRING-only block), guarded by a CHECK. No join table, no new route family: terms and outcome are sub-routes of `/v1/agreements/{id}`, inheriting its writability row, scopes and Malafat's `agreements-service`.
+2. **The commission is an installment** (`isCommission = true`) on the agreement, DATE-triggered on the outcome date and posted at once. Receivables, payments, allocations, credits, statuses and lazy-post crash healing all work on it unchanged: a crash between the outcome write and the post heals through `listUnpostedDue`, dated on the outcome date.
+3. **VAT on the commission is the rate in force on the outcome date** — a narrow override of M3 Decision 4 (an agreement's frozen rate) for the commission line only. The upfront and supplements of other types keep the frozen rate. Precedent: retainer term changes re-resolve the rate (M5).
+4. **The bill.** SEPARATE: billable = award × rate. CREDITED: billable = commission − min(counted upfront, commission). NO_RECOVERY bills nothing. "Counted upfront" is every live upfront installment, posted or not, paid or not, less the credits against them read from the stored credit rows (never re-split), so it matches the firm's credit notes. Half-up rounding as `vat.ts`.
+5. **What posts is what was previewed.** The outcome token covers the body, the agreement version, the VAT rate on the outcome date, the counted upfront, the commission and the billable amount, and for a correction the replaced receivable's id and version. A credit or payment that moves any of them is 409 `PREVIEW_STALE`.
+6. **A correction credits the old commission in full and posts a new one**, atomically with the void and the new outcome, and may also fix the rate or treatment. Allowed only while the commission is unpaid and uncredited: re-checked in the store under the receivable's row lock, refused as `has_payments` → 409 `OUTCOME_HAS_PAYMENTS`, never a 500. Nothing is deleted.
+7. **Summaries keep `kind`.** A contingency agreement is fixed-like (`kind: FIXED`, counts in `agreed`); an additive `ProjectSummary.contingency` carries the terms and outcome state. While an ACTIVE contingency agreement awaits its outcome the project is PENDING, never PAID_IN_FULL.
+8. **Migrations:** the enum value alone in one migration, everything that names it in the next (Postgres refuses a new enum value inside the transaction that added it). Audit metadata is typed JSON-only (`JsonObject`) so a bigint can never reach Prisma's `Json` column.
+
+**Consequences**:
+- `AgreementType` gains a permanent value and `agreements` gains seven sparse columns (TD-097).
+- An older server revision strips the unknown `contingency` field and would create a FIXED agreement silently: never roll back past MUT-100 while Malafat's contingency option is live (runbook in `server/DEPLOYMENT.md` §6, TD-098).
+- Fee proposals cannot yet describe a contingency deal; contingency agreements are created directly until MUT-107/MAL-1094.
+
+**Alternatives considered** (all in the review record):
+- A commission receivable written outside the installment model: would need its own posting, healing and status code.
+- The agreement's frozen rate for the commission: bills a 2026 judgment at a 2024 rate.
+- Recomputing upfront credits with `splitCredit`: can differ by an agora from the issued credit notes (D6).
+- One migration with a text-cast CHECK, or no CHECK (D3).
+- Terms frozen at the outcome with no correction path (D5): a rate typo would be permanent.
+
+**Amendment — pre-landing review (2026-10-13, `/qa-reconcile` + `/review`, decisions by Basel):**
+- **No posting on a voided line** (review D1): `postInstallment` refuses a voided, unposted installment in both stores; on Postgres the posting write also carries `voidedAt IS NULL`. Before, a correction or cancel voiding a commission line could race a lazy read posting it and leave both commissions billed.
+- **A correction serializes on the agreement row** (`SELECT … FOR UPDATE`) and voids the replaced line conditionally, as its first write; a line that moved is `stale`, never a 500. A racing loser is `stale` (409), not `has_payments`.
+- **Cancel never undoes a recorded outcome**: the store's cancel write carries `outcome IS NULL`; a cancel losing to a concurrent record is 409 `OUTCOME_ALREADY_RECORDED`.
+- **The counted upfront is re-checked inside the write** (review D2): the write carries each upfront receivable's id and version, locked and compared in the transaction; a credit landing after the commit computed the bill is 409 `PREVIEW_STALE`. This closes the last gap in decision 5.
+- **`correctionReason` is outside the preview token** (review D3): it is the credit note's text and moves no figure, so a preview with or without it matches the commit.
+- **Re-review (cycle 2):** compose reads the upfront versions *before* the credits, so a credit between the two reads still makes the write stale; record locks the agreement row first, like correct (one lock order: agreement → upfront receivables → commission); a deadlock or serialization failure in either write (40P01/40001, P2034) is `stale` → 409, not a 500; a correction carries the receivable its replaced line had when composed and is stale if that line posted since; a MANUAL trigger whose line a cancel voided under it is 409 `AGREEMENT_CANCELLED`, not 404.

@@ -35,7 +35,7 @@ import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSc
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 
-/** /v1/agreements — fixed-fee agreements, installments, supplements, cancel (M3 brief §2.3). */
+/** /v1/agreements — fixed-fee and contingency agreements, installments, supplements, cancel (M3 brief §2.3, MUT-100); contingency terms and outcomes are in contingency.ts. */
 export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
@@ -45,7 +45,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       method: 'post',
       path: '/v1/agreements/preview',
       tags: ['Agreements'],
-      summary: 'Preview a fixed-fee agreement: totals, installments, due dates, preview token',
+      summary: 'Preview a fixed-fee or contingency agreement: totals, installments, due dates, preview token',
       description: 'Writes nothing. The token covers the body and the VAT rate in force on agreementDate, so a rate change before create is refused with 409 PREVIEW_STALE.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:read')] as const,
@@ -67,7 +67,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       method: 'post',
       path: '/v1/agreements',
       tags: ['Agreements'],
-      summary: 'Create a fixed-fee agreement from a preview',
+      summary: 'Create a fixed-fee or contingency agreement from a preview',
       description: 'Same body as the preview plus its previewToken. IMMEDIATE installments and DATE installments whose date has arrived are posted as receivables at once.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:write'), idempotent(store, 'agreements.create')] as const,
@@ -152,7 +152,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);
-      if (agreement.type !== 'FIXED') throw validationError('NOT_FIXED', 'Supplements apply to fixed-fee agreements; cancel and recreate a retainer instead');
+      if (agreement.type !== 'FIXED') throw validationError('NOT_FIXED', agreement.type === 'CONTINGENCY' ? 'Supplements apply to fixed-fee agreements; reduce a contingency upfront with a credit, and bill extra work as a separate fixed agreement' : 'Supplements apply to fixed-fee agreements; cancel and recreate a retainer instead');
       if (agreement.status === 'CANCELLED') throw new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
       assertIsoDate(body.effectiveDate, 'effectiveDate');
       const deltaMinor = parseAmount(body.amount, agreement.currency as 'ILS' | 'USD' | 'EUR');
@@ -250,8 +250,8 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       method: 'post',
       path: '/v1/agreements/{agreementId}/cancel',
       tags: ['Agreements'],
-      summary: 'Cancel a fixed-fee agreement while nothing is posted',
-      description: 'Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted. Retainers cancel through POST /v1/retainers/{id}/cancel.',
+      summary: 'Cancel a fixed-fee or contingency agreement while nothing is posted',
+      description: 'Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted, and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. Retainers cancel through POST /v1/retainers/{id}/cancel.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:write'), idempotent(store, 'agreements.cancel')] as const,
       request: { params: AgreementIdParamSchema, headers: IdempotencyHeaderSchema, body: { required: false, content: { 'application/json': { schema: CancelAgreementRequestSchema } } } },
@@ -262,11 +262,14 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const agreement = await mustGet(store, organization.id, c.req.valid('param').agreementId);
-      if (agreement.type !== 'FIXED') throw validationError('NOT_FIXED', 'Use POST /v1/retainers/{id}/cancel for a retainer');
+      if (agreement.type === 'RECURRING') throw validationError('NOT_FIXED', 'Use POST /v1/retainers/{id}/cancel for a retainer');
       if (agreement.status === 'ACTIVE') {
+        if (agreement.outcome !== null) throw new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
         const installments = await store.agreements.listInstallments(organization.id, agreement.id);
         if (installments.some((i) => i.receivableId)) throw new ApiError('CONFLICT', 'Installments have been posted; cancellation needs adjustments (M4)', { reason: 'AGREEMENT_HAS_POSTED_RECEIVABLES' });
-        await store.agreements.cancel(organization.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, now);
+        const cancelled = await store.agreements.cancel(organization.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, now);
+        // The store refuses once a contingency outcome exists, even one recorded after the read above.
+        if (cancelled?.status === 'ACTIVE') throw new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
         await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'agreement.cancelled', entityType: 'agreement', entityId: agreement.id, requestId: c.get('requestId') });
       }
       const fresh = await mustGet(store, organization.id, agreement.id);

@@ -4,8 +4,8 @@ import { bucketize, customerStatus, fixedStatus, lastPaymentOn, projectFigures, 
 
 const rec = (over: Partial<ReceivableRecord>): ReceivableRecord => ({ id: 'r', organizationId: 'o', customerId: 'c', projectId: 'p', agreementId: 'a', origin: 'INSTALLMENT', originId: null, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, paidMinor: 0n, creditedMinor: 0n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, dueDate: '2026-10-20', postingDate: '2026-10-01', postedAt: new Date(0), status: 'OPEN', title: null, createdByUserId: null, deletedAt: null, version: 1, createdAt: new Date(0), ...over });
 const pay = (over: Partial<PaymentRecord>): PaymentRecord => ({ id: 'p', organizationId: 'o', customerId: 'c', projectId: null, number: 'PAY-2026-0001', currency: 'ILS', amountMinor: 500n, allocatedMinor: 0n, receivedOn: '2026-10-05', method: 'BANK', reference: null, notes: null, status: 'POSTED', reversedAt: null, reversalReason: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0), ...over });
-const agreement = (over: Partial<AgreementRecord>): AgreementRecord => ({ id: 'a', organizationId: 'o', projectId: 'p', customerId: 'c', type: 'FIXED', status: 'ACTIVE', currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, amountMinor: 3000n, netMinor: 3000n, vatMinor: 0n, grossMinor: 3000n, agreementDate: '2026-10-01', description: null, paymentTerms: 'EOM', startMonth: null, billingDay: null, endMonth: null, cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0), ...over });
-const inst = (over: Partial<InstallmentRecord>): InstallmentRecord => ({ id: 'i', organizationId: 'o', agreementId: 'a', position: 1, label: 'I', amountMinor: 1000n, netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'MANUAL', triggerDate: null, paymentTerms: null, dueDateOverride: null, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1, ...over });
+const agreement = (over: Partial<AgreementRecord>): AgreementRecord => ({ id: 'a', organizationId: 'o', projectId: 'p', customerId: 'c', type: 'FIXED', status: 'ACTIVE', currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, amountMinor: 3000n, netMinor: 3000n, vatMinor: 0n, grossMinor: 3000n, agreementDate: '2026-10-01', description: null, paymentTerms: 'EOM', startMonth: null, billingDay: null, endMonth: null, cancelEffectiveMonth: null, cancelEffectiveDate: null, finalMonth: null, cancelledAt: null, commissionRateBasisPoints: null, upfrontTreatment: null, outcome: null, outcomeDate: null, awardedAmountMinor: null, outcomeNote: null, outcomeRecordedAt: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0), ...over });
+const inst = (over: Partial<InstallmentRecord>): InstallmentRecord => ({ id: 'i', organizationId: 'o', agreementId: 'a', position: 1, label: 'I', amountMinor: 1000n, netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'MANUAL', triggerDate: null, paymentTerms: null, dueDateOverride: null, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, isCommission: false, version: 1, ...over });
 
 describe('buckets', () => {
   it('splits open receivables into overdue / due today / not yet due and ignores settled ones', () => {
@@ -68,5 +68,52 @@ describe('projectFigures', () => {
     const r = projectFigures({ agreements: [agreement({ type: 'RECURRING', startMonth: '2026-10', billingDay: 1 })], installments: [], receivables: [rec({ origin: 'RETAINER_CHARGE', dueDate: '2026-11-30' })], monthlyMinor: 2360n, today: '2026-10-20' });
     expect(r).toMatchObject({ kind: 'RETAINER', agreedMinor: null, monthlyMinor: 2360n, status: 'UP_TO_DATE' });
     expect(projectFigures({ agreements: [], installments: [], receivables: [], today: '2026-10-20' })).toMatchObject({ kind: 'NONE', status: 'NONE', agreedMinor: null, monthlyMinor: null });
+  });
+});
+
+describe('projectFigures with contingency agreements (MUT-100)', () => {
+  const contingency = (over: Partial<AgreementRecord> = {}) => agreement({ id: 'k', type: 'CONTINGENCY', grossMinor: 1770n, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', ...over });
+  const upfront = inst({ id: 'u', agreementId: 'k', grossMinor: 1770n, receivableId: 'ru' });
+  const paidUpfront = rec({ id: 'ru', agreementId: 'k', grossMinor: 1770n, paidMinor: 1770n, status: 'SETTLED' });
+
+  it('a contingency-only project is fixed-like: kind FIXED, agreed = the upfront, and the terms in a contingency block', () => {
+    const f = projectFigures({ agreements: [contingency()], installments: [upfront], receivables: [rec({ id: 'ru', agreementId: 'k', grossMinor: 1770n })], today: '2026-10-13' });
+    expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 1770n, contingency: { agreementId: 'k', commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', outcome: 'AWAITING', awardedMinor: null } });
+  });
+
+  it('awaiting the outcome with the upfront paid is PENDING, never PAID_IN_FULL', () => {
+    const f = projectFigures({ agreements: [contingency()], installments: [upfront], receivables: [paidUpfront], today: '2026-10-13' });
+    expect(f.status).toBe('PENDING');
+  });
+
+  it('after AWARDED the posted commission is owed like any fixed line: OUTSTANDING when nothing is paid, PARTIALLY_PAID once the upfront is', () => {
+    const awarded = contingency({ outcome: 'AWARDED', outcomeDate: '2026-10-12', awardedAmountMinor: 10_000_000n, grossMinor: 2_537_000n });
+    const commission = inst({ id: 'c', agreementId: 'k', position: 2, isCommission: true, grossMinor: 2_360_000n, receivableId: 'rc' });
+    const commissionReceivable = rec({ id: 'rc', agreementId: 'k', grossMinor: 2_360_000n, dueDate: '2026-10-31' });
+    const unpaid = projectFigures({ agreements: [awarded], installments: [upfront, commission], receivables: [rec({ id: 'ru', agreementId: 'k', grossMinor: 1770n, dueDate: '2026-10-31' }), commissionReceivable], today: '2026-10-13' });
+    expect(unpaid).toMatchObject({ status: 'OUTSTANDING', agreedMinor: 2_537_000n, contingency: { outcome: 'AWARDED', awardedMinor: 10_000_000n } });
+    const upfrontPaid = projectFigures({ agreements: [awarded], installments: [upfront, commission], receivables: [paidUpfront, commissionReceivable], today: '2026-10-13' });
+    expect(upfrontPaid.status).toBe('PARTIALLY_PAID');
+  });
+
+  it('a recorded outcome with everything paid is PAID_IN_FULL again', () => {
+    const settled = contingency({ outcome: 'NO_RECOVERY', outcomeDate: '2026-10-12' });
+    expect(projectFigures({ agreements: [settled], installments: [upfront], receivables: [paidUpfront], today: '2026-10-13' }).status).toBe('PAID_IN_FULL');
+  });
+
+  it('a FIXED hearing agreement and a contingency agreement: agreed sums both', () => {
+    const f = projectFigures({ agreements: [agreement({ id: 'h', grossMinor: 944n }), contingency()], installments: [upfront], receivables: [], today: '2026-10-13' });
+    expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 2714n });
+  });
+
+  it('only an ACTIVE contingency agreement shows; the latest wins when there are several; none → null', () => {
+    const f = projectFigures({ agreements: [contingency({ id: 'k1', commissionRateBasisPoints: 1000 }), contingency({ id: 'k2', commissionRateBasisPoints: 3000 }), contingency({ id: 'k3', status: 'CANCELLED' })], installments: [], receivables: [], today: '2026-10-13' });
+    expect(f.contingency).toMatchObject({ agreementId: 'k2', commissionRateBasisPoints: 3000 });
+    expect(projectFigures({ agreements: [agreement({})], installments: [], receivables: [], today: '2026-10-13' }).contingency).toBeNull();
+  });
+
+  it('regression (R5/D7): a FIXED + RETAINER mix → kind FIXED, monthly set, agreed = the FIXED sum', () => {
+    const f = projectFigures({ agreements: [agreement({ grossMinor: 3000n }), agreement({ id: 'r', type: 'RECURRING', grossMinor: 2360n, startMonth: '2026-10', billingDay: 1 })], installments: [], receivables: [], monthlyMinor: 2360n, today: '2026-10-13' });
+    expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 3000n, monthlyMinor: 2360n, contingency: null });
   });
 });
