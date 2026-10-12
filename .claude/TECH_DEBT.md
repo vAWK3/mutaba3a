@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-071: `src/lib/aggregations.ts` and its forecast types have never had an app consumer
+**Status**: Open
+**Added**: 2026-10-12 (found during MUT-58's consumer audit)
+**Priority**: Low
+**Impact**: `src/lib/aggregations.ts` (556 lines: `calculateForecastKPIs`, `calculateMonthActuals`, `calculateRunningBalance`, the `findUnpaidIncome*` finders and their date helpers) is imported only by its own 60-test file. It was added unwired in `9fb9fd7` ("redesign"); the forecast strip computed its own copy instead. The "Forecast KPI Types" block in `src/types/index.ts` (`AmountByCurrency`, `ForecastOptions`, `ForecastKPIs`, `MonthActuals`) is read only by that file, and `AttentionItem` by nothing; its comment still says it replaces `GuidanceItem`, which MUT-58 deleted. Not to be confused with `src/db/aggregations.ts`, which is live (`summarizeOwedByCurrency`, ADR-033). MUT-58 left all of it alone because the money-event read side never kept it alive.
+**Remediation**: Delete `src/lib/aggregations.ts`, its test and the five types, and add the paths to a guard test like `noDeadMoneyEventModules.test.ts`. Re-grep first: a future forecast ticket may want to wire it in instead.
+**Effort**: Small
+
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open
 **Added**: 2026-10-12 (found while checking the TD-009 fixes in the browser)
@@ -435,10 +443,11 @@ registry must never advertise coverage it does not have.
 **Outside the seam.** `IRepositoryProvider` covers 21 repositories. Not covered:
 `planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`planRepository.ts`),
 `scheduleGenerator`, `retainerMatching` (`retainerRepository.ts`) — the last two
-are not repositories. Also `moneyEventRepo`: it was left alone pending MUT-11,
-which then kept it because three mounted Overview components import it
-(ADR-029), so it is still outside the seam. `engagementRepo` was deleted with
-its module in MUT-10. See TODOS.md item 2.
+are not repositories. `moneyEventRepo` was left alone pending MUT-11, which
+kept it because three mounted Overview components imported it (ADR-029); MUT-8
+deleted those components and MUT-58 deleted the repository (2026-10-12), so it
+no longer needs a slot. `engagementRepo` was deleted with its module in MUT-10.
+See TODOS.md item 2.
 
 **Repository Interfaces Created**:
 - `IClientRepository`, `IProjectRepository`, `ICategoryRepository`
@@ -624,7 +633,7 @@ Bundle size has grown significantly. Total precache is 11.5MB (though most is la
 - **fonts-*.js**: 1,586 KB (527 KB gzipped) - 9 font families/weights bundled together
 - **index-B5kMr9UK.js**: 590 KB (163 KB gzipped) - PDF library (@react-pdf/renderer)
 - **index-ZWWaRq82.js**: 205 KB (48 KB gzipped) - Unknown, needs investigation
-- **monthDetection-*.js**: 101 KB (32 KB gzipped) - Date utilities
+- **monthDetection-*.js**: 101 KB (32 KB gzipped) - Date utilities (a shared chunk Rollup named after `lib/monthDetection.ts`, which MUT-58 deleted)
 - Vendor chunks well-organized (react, router, query, forms, db)
 - Page routes are lazy-loaded correctly
 
@@ -885,18 +894,6 @@ the receipts strings into singular/plural keys with "label: {count}" Arabic.
 
 ---
 
-### TD-034: The money-event read side has no consumer after MUT-8
-**Status**: Open (ticketed: MUT-58)
-**Priority**: Low
-**Introduced**: MUT-8, 2026-10-11 (ADR-036 §3)
-**Impact**: Home's forecast strip, month actuals and guidance feed were deleted by decision. They were the only readers of `src/hooks/useMoneyEventQueries.ts` (11 read hooks, zero consumers now) and, through them, `src/db/moneyEventRepository.ts` (842 lines). `invalidateMoneyEventQueries` still runs on four write paths and invalidates keys nothing reads, which wastes a little work on every save and misleads readers of those helpers.
-
-**Remediation**: MUT-58. Delete the hooks, the repository, the invalidation helper and its call sites, and their tests. Keep the Dexie tables (ADR-029). Add the paths to a guard test.
-
-**Effort**: Small
-
----
-
 ### TD-035: A locked income entry without a profile can't be assigned one
 **Status**: Open
 **Priority**: Low
@@ -943,6 +940,16 @@ empty option and list the profiles only), with a drawer test for each.
 
 ## Resolved Debt
 
+### TD-034: The money-event read side has no consumer after MUT-8
+**Status**: Resolved (2026-10-12, MUT-58)
+**Priority**: Low
+**Introduced**: MUT-8, 2026-10-11 (ADR-036 §3)
+**Impact**: Home's forecast strip, month actuals and guidance feed were deleted by decision. They were the only readers of `src/hooks/useMoneyEventQueries.ts` (11 read hooks, zero consumers now) and, through them, `src/db/moneyEventRepository.ts` (842 lines). `invalidateMoneyEventQueries` still runs on four write paths and invalidates keys nothing reads, which wastes a little work on every save and misleads readers of those helpers.
+
+**Remediation**: MUT-58. Delete the hooks, the repository, the invalidation helper and its call sites, and their tests. Keep the Dexie tables (ADR-029). Add the paths to a guard test.
+
+**Resolution**: Deleted `useMoneyEventQueries.ts`, `moneyEventRepository.ts`, `lib/monthDetection.ts` (its last importers were the MUT-8 components) and the twelve money-event and guidance types in `src/types/index.ts`, with their three test files. `invalidateMoneyEventQueries` had three call sites by then, not four: since MUT-5 the income hooks reuse `invalidateTransactionQueries`. All three are gone. The two MUT-6 assertions that a payment and Mark paid refresh the money-event keys now assert that no `money*` key is refreshed. The `moneyEventVersions` table and `MoneyEventVersion` stay: they belong to sync versioning, and the schema is unchanged (ADR-029). `src/__tests__/noDeadMoneyEventModules.test.ts` keeps all of it gone. The unwired forecast helpers found on the way are TD-071.
+
 ### TD-049: `isMacOS()` is true on an iPad and `isLinux()` is true on Android
 **Status**: Resolved (2026-10-12, MUT-79)
 **Added**: 2026-10-12 (MUT-76)
@@ -973,7 +980,9 @@ threshold and were extracted — `invalidateMoneyEventQueries` lives in
 `useMoneyEventQueries.ts`, beside the keys it owns, and the four write paths
 call it. The *income* key duplication described above is untouched and still
 open; the precedent for fixing it is to put the list in the module that owns
-the keys rather than in a new `src/hooks/invalidation.ts`.
+the keys rather than in a new `src/hooks/invalidation.ts`. (2026-10-12, MUT-58:
+`invalidateMoneyEventQueries` and the keys it listed were deleted with the
+money-event read side; the precedent stands.)
 
 **Note (2026-10-11, MUT-3):** the payment-record list key followed the same
 precedent: `invalidatePaymentRecordLists` lives in `useQueries.ts` beside the

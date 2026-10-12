@@ -28,6 +28,35 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-58: the money-event read side MUT-8 left without a screen is deleted
+
+**Scope:**
+- Deleted: `src/hooks/useMoneyEventQueries.ts`, `src/db/moneyEventRepository.ts`, `src/lib/monthDetection.ts`, and their tests `src/db/__tests__/moneyEvent.test.ts`, `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts`, `src/lib/__tests__/monthDetection.test.ts`
+- `src/types/index.ts` (the "Money Answers Types" block)
+- `src/hooks/useQueries.ts`, `useExpenseQueries.ts`, `useRetainerQueries.ts` (one import and one call each)
+- `src/hooks/__tests__/useQueries.test.tsx`, `useIncomeQueries.test.tsx`; `src/__tests__/noDeadMoneyEventModules.test.ts` (new)
+- Test plan: `.claude/designs/mut-58-prune-money-events-tests.md`
+
+**Why:** MUT-8 deleted Home's forecast strip, month actuals and guidance feed by decision (D10 = B, ADR-036 §3). They were the only readers of the money-event engine, so its eleven read hooks and the 842-line repository had no consumer. Every income, payment, expense and retainer write still refreshed nine query keys that nothing read. Closes TD-034.
+
+### Removed
+- **The money-event read side**: `useMoneyEvents`, `useDailyAggregates`, `useMonthSummary`, `useMonthKPIs`, `useMonthKPIsBothCurrencies`, `useGuidance`, `useDayEvents`, `useYearSummary`, `useYearSummaryBothCurrencies`, `useInvalidateMoneyEvents`, `moneyEventQueryKeys`, `invalidateMoneyEventQueries`, and `moneyEventRepo`, which had no provider or interface slot.
+- **The refresh on every write.** `invalidateMoneyEventQueries` had three call sites on main, not the four the ticket counted: `invalidateTransactionQueries`, `invalidateExpenseQueries` and `invalidateProjectedIncomeQueries`. `useIncomeQueries.ts` needed no change, since it has reused `invalidateTransactionQueries` since MUT-5.
+- **`src/lib/monthDetection.ts`**: its last importers were the MUT-8 components.
+- **The twelve money-event and guidance types**, from `MoneyDirection` to `MoneyEventFilters`, including `GuidanceItem`.
+- **Their tests**: 38 cases in three files.
+
+### Changed
+- The two MUT-6 tests asserting that a payment and Mark paid refresh the money-event keys now assert that no `money*` key is refreshed. Each sits next to a check that the write's own keys still are.
+
+### Kept
+- The `moneyEventVersions` table and the `MoneyEventVersion` type. They belong to sync versioning, not the read side. The Dexie schema and version are unchanged (ADR-029); the guard asserts that the table is still there.
+- `src/lib/aggregations.ts` and its forecast types (`ForecastKPIs`, `MonthActuals`, `ForecastOptions`, `AmountByCurrency`, `AttentionItem`). They never had an app consumer, but the money-event files didn't keep them alive either, so they are out of scope and recorded as TD-071.
+
+### Technical
+- `noDeadMoneyEventModules.test.ts` guards the deleted paths, any import or call of them anywhere in `src/` (tests included, since they are outside `tsc`), the removed types, and the table's retention.
+- Gate (Node 22): vitest 185 files, 2,843 passed, 4 skipped (was 187 / 2,875 / 4); Playwright 19/19 on port 5198; lint 0 errors; typecheck, `tsc -b`, build and `test:bundles` OK. Browser smoke on `web-mut58` covered income, mark paid and an expense across Home, Clients, Income and Expenses, with no console errors.
+
 ## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
 
 **Scope:**

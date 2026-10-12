@@ -1305,6 +1305,17 @@ never go (ADR-029); their row types move to `src/db/retained/` with a
 retention test, and user *files* get a plain export before their viewer goes
 (ADR-029 addendum).
 
+Two refinements from MUT-58 (the money-event read side). Re-run the audit on
+the branch you delete from, not the one the ticket was written against: the
+ticket counted four `invalidateMoneyEventQueries` call sites and main had three.
+And when the deleted code was *refreshed by write paths*, the tests that
+asserted the refresh are flipped, not just deleted: they now assert that no
+`money*` key is invalidated, next to a positive check that the write's own keys
+still are, so the negative cannot pass vacuously. The guard
+(`noDeadMoneyEventModules.test.ts`) also scans `src/` for the deleted names,
+because test files are outside `tsc` and a stale `vi.mock` path would not fail
+the typecheck.
+
 ---
 
 ### Reconcile on read when a write path skips a derived record (MUT-3, ADR-033)
