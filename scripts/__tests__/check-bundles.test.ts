@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { HOSTED_RULES, LOCAL_RULES, extractOrigins, findForbidden, newOrigins } from '../bundle-rules';
+import { HOSTED_RULES, LOCAL_RULES, cssUrls, extractOrigins, findForbidden, fontProblems, newOrigins, unresolvedUrls } from '../bundle-rules';
 
 /** hosted-portal.md §8: the checks that keep the local builds and the portal apart. */
 
@@ -52,5 +52,73 @@ describe('origins', () => {
 
   it('reports only origins that are not on the allowlist', () => {
     expect(newOrigins(new Set(['https://github.com', 'https://evil.example']), ['https://github.com'])).toEqual(['https://evil.example']);
+  });
+});
+
+/** MUT-102: Thmanyah ships byte-identical in every dist, every CSS url() resolves, and the body face is preloaded. */
+describe('brand fonts', () => {
+  describe('cssUrls', () => {
+    it('reads quoted and unquoted url()s, dropping data: URIs, fragments and query strings', () => {
+      const css = '@font-face{src:url(/assets/a-1.otf) format("opentype")}b{background:url("./b.png?v=2")}c{mask:url(\'data:image/svg+xml,x\')}d{filter:url(#f)}';
+      expect(cssUrls(css)).toEqual(['/assets/a-1.otf', './b.png']);
+    });
+  });
+
+  describe('unresolvedUrls', () => {
+    const dist = '/d';
+    const files = new Set(['/d/assets/a-1.otf', '/d/assets/b.woff2']);
+    const exists = (path: string) => files.has(path);
+
+    it('resolves absolute urls from the dist root and relative ones from the stylesheet', () => {
+      expect(unresolvedUrls('/d/assets/index.css', 'x{src:url(/assets/a-1.otf)}y{src:url(./b.woff2)}', dist, exists)).toEqual([]);
+    });
+
+    it('reports a url with no file, which Netlify would answer with index.html', () => {
+      expect(unresolvedUrls('/d/assets/index.css', 'x{src:url(/assets/gone-2.otf)}', dist, exists)).toEqual(['/assets/gone-2.otf']);
+    });
+
+    it('reports a url that escapes the dist', () => {
+      expect(unresolvedUrls('/d/assets/index.css', 'x{src:url(../../outside.otf)}', dist, () => true)).toEqual(['../../outside.otf']);
+    });
+  });
+
+  describe('fontProblems', () => {
+    const sources = { 'thmanyahsans-Regular.otf': 'aaa', 'thmanyahsans-Bold.otf': 'bbb' };
+    const files = [
+      { path: 'assets/thmanyahsans-Regular-Xy12.otf', sha256: 'aaa' },
+      { path: 'assets/thmanyahsans-Bold-Zz99.otf', sha256: 'bbb' },
+      { path: 'assets/ibm-plex-mono-latin-400-normal-1.woff2', sha256: 'ccc' },
+      { path: 'fonts/IBMPlexSansArabic-Regular.ttf', sha256: 'ddd' },
+    ];
+    const html = '<head><link rel="preload" as="font" type="font/otf" href="/assets/thmanyahsans-Regular-Xy12.otf" crossorigin></head>';
+    const check = (overrides: Partial<Parameters<typeof fontProblems>[0]> = {}) =>
+      fontProblems({ files, sources, html, preload: 'thmanyahsans-Regular.otf', ...overrides });
+
+    it('passes a dist that ships every face unchanged and preloads the body face (PDF fonts in fonts/ are not bundled)', () => {
+      expect(check()).toEqual([]);
+      expect(check({ html: html.replace('/assets/', './assets/') })).toEqual([]);
+    });
+
+    it.each(['assets/inter-latin-wght-normal-1.woff2', 'assets/source-serif-4-latin-2.woff2', 'assets/ibm-plex-sans-arabic-arabic-400-normal-3.woff2'])(
+      'flags the retired face %s',
+      (path) => {
+        expect(check({ files: [...files, { path, sha256: 'eee' }] })).toEqual([`retired font bundled: ${path}`]);
+      },
+    );
+
+    it('flags a missing face and an altered one', () => {
+      const altered = files.map((file) => (file.sha256 === 'bbb' ? { ...file, sha256: 'b0b' } : file));
+      expect(check({ files: altered })).toEqual([
+        'thmanyahsans-Bold.otf is not bundled byte-identical (sha256 bbb)',
+        'assets/thmanyahsans-Bold-Zz99.otf matches no delivered Thmanyah file (modified?)',
+      ]);
+    });
+
+    it('flags an entry with no preload, a preload without crossorigin, and a preload of the wrong file', () => {
+      const expected = ['the entry HTML has no crossorigin preload of thmanyahsans-Regular.otf'];
+      expect(check({ html: '<head></head>' })).toEqual(expected);
+      expect(check({ html: html.replace(' crossorigin', '') })).toEqual(expected);
+      expect(check({ html: html.replace('Regular-Xy12', 'Bold-Zz99') })).toEqual(expected);
+    });
   });
 });

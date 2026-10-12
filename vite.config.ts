@@ -1,6 +1,7 @@
-import { defineConfig, type Plugin, type UserConfig } from "vite";
+import { defineConfig, type HtmlTagDescriptor, type Plugin, type UserConfig } from "vite";
+import type { OutputBundle } from "rollup";
 import react from "@vitejs/plugin-react";
-import { VitePWA } from "vite-plugin-pwa";
+import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 
@@ -34,6 +35,77 @@ function emitHostedEntryAsIndex(): Plugin {
   };
 }
 
+/** The one face every build preloads (MUT-102, PD9): body text in both scripts. */
+export const BRAND_PRELOAD_FONT = "src/assets/fonts/thmanyahsans-Regular.otf";
+
+/**
+ * The emitted file for a bundled source asset, found by its original path
+ * (Rollup `originalFileNames`). Throws when it is missing, so a renamed font
+ * fails the build instead of shipping a dead preload.
+ */
+export function findEmittedAsset(bundle: OutputBundle, source: string): string {
+  for (const output of Object.values(bundle)) {
+    if (output.type === "asset" && output.originalFileNames.includes(source)) return output.fileName;
+  }
+  throw new Error(`mutaba3a:brand-font-preload: ${source} was not emitted; is it still used by src/styles/brand/fonts.css?`);
+}
+
+/** A font preload must be crossorigin, or the browser fetches the file twice. */
+export function fontPreloadTag(base: string, fileName: string): HtmlTagDescriptor {
+  return {
+    tag: "link",
+    attrs: { rel: "preload", as: "font", type: "font/otf", href: `${base}${fileName}`, crossorigin: true },
+    injectTo: "head",
+  };
+}
+
+/**
+ * Preloads Thmanyah Sans 400 in the built entry HTML (MUT-102, PD9). The
+ * file name carries a content hash, so the tag is added after bundling; the
+ * dev server serves the font from source and needs no preload.
+ */
+function brandFontPreload(): Plugin {
+  let base = "/";
+  return {
+    name: "mutaba3a:brand-font-preload",
+    enforce: "post",
+    configResolved(config) {
+      base = config.base;
+    },
+    transformIndexHtml: {
+      order: "post",
+      handler(_html, ctx) {
+        return ctx.bundle ? [fontPreloadTag(base, findEmittedAsset(ctx.bundle, BRAND_PRELOAD_FONT))] : [];
+      },
+    },
+  };
+}
+
+/**
+ * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
+ * licence forbids converting) is cached on first use instead of being
+ * precached on every install (MUT-102, PD10); offline works after one online
+ * visit.
+ */
+export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
+  navigateFallback: "/index.html",
+  // Only serve SPA shell for /app/* routes
+  navigateFallbackAllowlist: [/^\/app/],
+  navigateFallbackDenylist: [
+    /^\/download(\/|$)/,  // /download/* never gets SPA
+    /^\/api\//,           // future-proofing for API routes
+  ],
+  // Limit what files get precached
+  globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+  runtimeCaching: [
+    {
+      urlPattern: ({ request }) => request.destination === "font",
+      handler: "CacheFirst",
+      options: { cacheName: "fonts", expiration: { maxEntries: 12 } },
+    },
+  ],
+};
+
 /**
  * The hosted portal (MUT-43, hosted-portal.md §2, §7.5, §9): its own entry,
  * output and public dir, and no PWA plugin, so no service worker or offline
@@ -48,7 +120,7 @@ function hostedConfig(): UserConfig {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_MODE__: JSON.stringify("hosted"),
     },
-    plugins: [react(), emitHostedEntryAsIndex()],
+    plugins: [react(), emitHostedEntryAsIndex(), brandFontPreload()],
     clearScreen: false,
     server: {
       port: HOSTED_DEV_PORT,
@@ -128,21 +200,12 @@ export default defineConfig(({ mode }) => {
           },
         ],
       },
-      workbox: {
-        navigateFallback: "/index.html",
-        // Only serve SPA shell for /app/* routes
-        navigateFallbackAllowlist: [/^\/app/],
-        navigateFallbackDenylist: [
-          /^\/download(\/|$)/,  // /download/* never gets SPA
-          /^\/api\//,           // future-proofing for API routes
-        ],
-        // Limit what files get precached
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-      },
+      workbox: PWA_WORKBOX,
       devOptions: {
         enabled: false,  // Disable PWA in dev to avoid caching issues
       },
     }),
+    brandFontPreload(),
   ],
   clearScreen: false,
   server: {

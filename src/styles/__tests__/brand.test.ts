@@ -83,6 +83,21 @@ describe('fonts', () => {
     expect(imports).toEqual(['@fontsource/ibm-plex-mono/400.css', '@fontsource/ibm-plex-mono/500.css']);
     expect(css).not.toMatch(/https?:\/\//);
   });
+
+  it('retires Inter, Source Serif 4 and Plex Sans Arabic from package.json and the entries', () => {
+    const retired = /@fontsource(-variable)?\/(inter|source-serif-4|ibm-plex-sans-arabic)\b/;
+    const pkg = JSON.parse(readFileSync(repoPath('package.json'), 'utf8')) as Record<string, Record<string, string>>;
+    expect(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((name) => retired.test(name))).toEqual([]);
+    for (const file of ['src/main.tsx', 'src/hosted/main.tsx', 'src/vite-env.d.ts']) {
+      expect(readFileSync(repoPath(file), 'utf8'), file).not.toMatch(/@fontsource/);
+    }
+  });
+
+  it('both entries take their fonts from theme.css alone', () => {
+    for (const file of ['src/main.tsx', 'src/hosted/main.tsx']) {
+      expect(readFileSync(repoPath(file), 'utf8'), file).toMatch(/import ['"](\.\.?\/)+styles\/theme\.css['"]/);
+    }
+  });
 });
 
 const LIGHT: ThemeState = THEME_STATES['OS light'];
