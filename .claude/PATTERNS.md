@@ -1104,8 +1104,8 @@ Resolve **inside** the callback, never at module scope:
 // right — a later swap takes effect
 queryFn: () => getRepositories().base.transactions.list(filters)
 
-// wrong — captures whatever was active at import time, which is the exact bug
-// synced-repository.ts has today
+// wrong — captures whatever was active at import time, the bug the deleted
+// synced-repository.ts had (MUT-73)
 const repos = getRepositories();
 ```
 
@@ -1502,7 +1502,7 @@ compiled into every build). A vitest file reads the artifact from disk with
 `node:fs` and asserts the invariant another system enforces, so `npm test`
 fails before a release does.
 
-**Instances**: `src/sync/transport/__tests__/cimd-document.test.ts` (re-states
+**Instances**: `src/services/oauth/__tests__/cimd-document.test.ts` (re-states
 Malafat's CIMD rules), `src/lib/__tests__/updater-config.test.ts` (pins the
 updater pubkey to ADR-031's canonical key).
 
