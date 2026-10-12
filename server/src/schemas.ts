@@ -213,7 +213,12 @@ export const CreateUserResponseSchema = z
   .openapi('CreateUserResponse');
 
 export const UserDetailSchema = z
-  .object({ user: UserSummarySchema, memberships: z.array(MembershipSchema) })
+  .object({
+    user: UserSummarySchema,
+    memberships: z.array(MembershipSchema),
+    /** MUT-66: how many unsorted entries this person is holding — a support figure, never their contents. */
+    inboxEntryCount: z.number().int(),
+  })
   .openapi('UserDetail');
 
 export const UserListSchema = z.object({ users: z.array(UserSummarySchema) }).openapi('UserList');
