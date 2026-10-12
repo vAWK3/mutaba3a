@@ -15,7 +15,7 @@ import {
   toInstallmentSpecs,
   validationError,
 } from './compose.js';
-import { isCommissionRate, type UpfrontTreatment } from './contingency.js';
+import { COMMISSION_RATE_RULE, isCommissionRate, type UpfrontTreatment } from './contingency.js';
 import { postDueItems, type PostingActor } from './posting.js';
 
 /**
@@ -149,7 +149,7 @@ export async function composePreview(store: LedgerStore, organization: Organizat
   const amountMinor = parseAmount(body.amount, context.currency);
   const contingency = body.contingency ?? null;
   if (contingency && !isCommissionRate(contingency.commissionRateBasisPoints)) {
-    throw validationError('COMMISSION_RATE_INVALID', 'contingency.commissionRateBasisPoints must be an integer from 1 to 10000', { field: 'contingency.commissionRateBasisPoints' });
+    throw validationError('COMMISSION_RATE_INVALID', `contingency.${COMMISSION_RATE_RULE}`, { field: 'contingency.commissionRateBasisPoints' });
   }
   if (contingency ? amountMinor < 0n : amountMinor <= 0n) throw validationError('AMOUNT_INVALID', contingency ? 'the upfront (amount) must not be negative' : 'amount must be positive', { field: 'amount' });
   const specs = toInstallmentSpecs(body.installments, context.currency);

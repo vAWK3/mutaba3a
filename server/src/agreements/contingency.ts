@@ -31,6 +31,9 @@ export type ContingencyOutcome = (typeof CONTINGENCY_OUTCOMES)[number];
 export const MIN_COMMISSION_RATE_BASIS_POINTS = 1;
 export const MAX_COMMISSION_RATE_BASIS_POINTS = 10000;
 
+/** The 422 COMMISSION_RATE_INVALID message, built from the bounds so it cannot drift from them. */
+export const COMMISSION_RATE_RULE = `commissionRateBasisPoints must be an integer from ${MIN_COMMISSION_RATE_BASIS_POINTS} to ${MAX_COMMISSION_RATE_BASIS_POINTS}`;
+
 export function isCommissionRate(rateBasisPoints: number): boolean {
   return Number.isInteger(rateBasisPoints) && rateBasisPoints >= MIN_COMMISSION_RATE_BASIS_POINTS && rateBasisPoints <= MAX_COMMISSION_RATE_BASIS_POINTS;
 }

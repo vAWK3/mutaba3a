@@ -1,10 +1,9 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
-import { todayFor } from '../agreements/compose.js';
-import { isCommissionRate } from '../agreements/contingency.js';
+import { todayFor, validationError } from '../agreements/compose.js';
+import { COMMISSION_RATE_RULE, isCommissionRate } from '../agreements/contingency.js';
 import { agreementDetail } from '../agreements/create.js';
 import { assertActiveContingency, composeOutcome, outcomeAuditFigures, outcomeHasPayments, priorOutcomeFigures, type ComposedOutcome } from '../agreements/outcome.js';
-import { validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -95,7 +94,7 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const from = assertActiveContingency(agreement);
       if (agreement.outcome !== null) throw new ApiError('CONFLICT', 'The outcome is recorded; a correction may fix the terms', { reason: 'OUTCOME_ALREADY_RECORDED' });
       if (body.commissionRateBasisPoints !== undefined && !isCommissionRate(body.commissionRateBasisPoints)) {
-        throw validationError('COMMISSION_RATE_INVALID', 'commissionRateBasisPoints must be an integer from 1 to 10000', { field: 'commissionRateBasisPoints' });
+        throw validationError('COMMISSION_RATE_INVALID', COMMISSION_RATE_RULE, { field: 'commissionRateBasisPoints' });
       }
       const to = { rate: body.commissionRateBasisPoints ?? from.rate, treatment: body.upfrontTreatment ?? from.treatment };
       if (to.rate === from.rate && to.treatment === from.treatment) throw validationError('CHANGE_NOTHING_CHANGED', 'The terms are already these');

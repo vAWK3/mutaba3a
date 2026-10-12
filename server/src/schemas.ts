@@ -1,7 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
-import { CONTINGENCY_OUTCOMES, UPFRONT_TREATMENTS } from './agreements/contingency.js';
+import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
@@ -640,7 +640,7 @@ export const UpfrontTreatmentSchema = z.enum(UPFRONT_TREATMENTS).openapi('Upfron
 export const ContingencyOutcomeSchema = z.enum(CONTINGENCY_OUTCOMES).openapi('ContingencyOutcome');
 export const ContingencyTermsSchema = z
   .object({
-    commissionRateBasisPoints: z.number().int().openapi({ description: 'The commission on the award, 1..10000 (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID' }),
+    commissionRateBasisPoints: z.number().int().openapi({ description: `The commission on the award, ${MIN_COMMISSION_RATE_BASIS_POINTS}..${MAX_COMMISSION_RATE_BASIS_POINTS} (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID` }),
     upfrontTreatment: UpfrontTreatmentSchema,
   })
   .openapi('ContingencyTerms');

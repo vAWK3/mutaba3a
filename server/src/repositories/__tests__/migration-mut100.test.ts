@@ -84,6 +84,8 @@ if (!url) {
       await expect(insertAgreement('CONTINGENCY', ', "commissionRateBasisPoints", "upfrontTreatment"', ", 0, 'SEPARATE'")).rejects.toThrow(/agreements_contingency_terms_check/);
       await expect(insertAgreement('CONTINGENCY', ', "commissionRateBasisPoints", "upfrontTreatment"', ", 10001, 'SEPARATE'")).rejects.toThrow(/agreements_contingency_terms_check/);
       await expect(insertAgreement('CONTINGENCY', ', "commissionRateBasisPoints"', ', 2000')).rejects.toThrow(/agreements_contingency_terms_check/);
+      // A NULL rate must not slip through: `NULL BETWEEN 1 AND 10000` is NULL, and a CHECK that evaluates to NULL passes.
+      await expect(insertAgreement('CONTINGENCY', ', "upfrontTreatment"', ", 'SEPARATE'")).rejects.toThrow(/agreements_contingency_terms_check/);
       await insertAgreement('CONTINGENCY', ', "commissionRateBasisPoints", "upfrontTreatment"', ", 2000, 'CREDITED'");
       const commissions = await db.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*) AS n FROM installments WHERE "isCommission"`);
       expect(commissions[0]?.n).toBe(0n);

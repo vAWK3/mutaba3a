@@ -19,5 +19,6 @@ ADD COLUMN     "upfrontTreatment" "UpfrontTreatment";
 ALTER TABLE "installments" ADD COLUMN     "isCommission" BOOLEAN NOT NULL DEFAULT false;
 
 -- A CONTINGENCY row always carries a rate and a treatment (the application refuses both earlier; this is the floor).
+-- The explicit IS NOT NULL matters: `NULL BETWEEN 1 AND 10000` is NULL, and a CHECK that evaluates to NULL passes.
 ALTER TABLE "agreements" ADD CONSTRAINT "agreements_contingency_terms_check"
-  CHECK ("type" <> 'CONTINGENCY' OR ("commissionRateBasisPoints" BETWEEN 1 AND 10000 AND "upfrontTreatment" IS NOT NULL));
+  CHECK ("type" <> 'CONTINGENCY' OR ("commissionRateBasisPoints" IS NOT NULL AND "commissionRateBasisPoints" BETWEEN 1 AND 10000 AND "upfrontTreatment" IS NOT NULL));

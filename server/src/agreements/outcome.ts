@@ -4,8 +4,8 @@ import { formatMoney, type Currency } from '../money.js';
 import { previewToken } from '../preview-token.js';
 import type { AgreementRecord, CreateInstallmentInput, CreditRecord, InstallmentRecord, JsonObject, LedgerStore, Organization, ReceivableRecord } from '../repositories/ports.js';
 import { computeVat } from '../vat.js';
-import { assertIsoDate, installmentDueDate, parseAmount, resolveRate, validationError } from './compose.js';
-import { commissionMinor, isCommissionRate, planOutcome, upfrontCountedMinor, type ContingencyOutcome, type OutcomePlan, type UpfrontTreatment } from './contingency.js';
+import { assertIsoDate, assertNotAbsurdDate, installmentDueDate, parseAmount, resolveRate, validationError } from './compose.js';
+import { COMMISSION_RATE_RULE, commissionMinor, isCommissionRate, planOutcome, upfrontCountedMinor, type ContingencyOutcome, type OutcomePlan, type UpfrontTreatment } from './contingency.js';
 
 /**
  * Composition for a contingency outcome (MUT-100 plan §4): validates the
@@ -53,19 +53,20 @@ export async function composeOutcome(store: LedgerStore, organization: Organizat
   }
   const rate = body.commissionRateBasisPoints ?? current.rate;
   const treatment = body.upfrontTreatment ?? current.treatment;
-  if (!isCommissionRate(rate)) throw validationError('COMMISSION_RATE_INVALID', 'commissionRateBasisPoints must be an integer from 1 to 10000', { field: 'commissionRateBasisPoints' });
+  if (!isCommissionRate(rate)) throw validationError('COMMISSION_RATE_INVALID', COMMISSION_RATE_RULE, { field: 'commissionRateBasisPoints' });
 
   const outcomeDate = assertIsoDate(body.outcomeDate, 'outcomeDate');
   if (compareIsoDates(outcomeDate, agreement.agreementDate) < 0 || compareIsoDates(outcomeDate, today) > 0) {
     throw validationError('OUTCOME_DATE_INVALID', `outcomeDate must fall between the agreement date (${agreement.agreementDate}) and today (${today})`, { field: 'outcomeDate' });
   }
   const awardedMinor = awardOf(body, agreement.currency as Currency);
-  if (body.dueDate !== undefined) assertIsoDate(body.dueDate, 'dueDate');
+  if (body.dueDate !== undefined) assertNotAbsurdDate(assertIsoDate(body.dueDate, 'dueDate'), today, 'dueDate');
 
   const installments = await store.agreements.listInstallments(organization.id, agreement.id);
   const live = installments.filter((i) => i.voidedAt === null);
-  const credits = new Map<string, CreditRecord[]>();
-  for (const i of live) if (!i.isCommission && i.receivableId) credits.set(i.receivableId, await store.receivables.listCredits(organization.id, i.receivableId));
+  // One read per posted upfront line (≤ 59), issued together rather than one round trip after another.
+  const upfrontReceivableIds = live.filter((i) => !i.isCommission && i.receivableId !== null).map((i) => i.receivableId as string);
+  const credits = new Map<string, CreditRecord[]>(await Promise.all(upfrontReceivableIds.map(async (id) => [id, await store.receivables.listCredits(organization.id, id)] as const)));
   const counted = upfrontCountedMinor({ installments: live, creditsByReceivableId: credits, pricingBasis: agreement.pricingBasis });
   const plan = planOutcome({ outcome: body.outcome, treatment, awardedMinor, rateBasisPoints: rate, upfrontCountedMinor: counted });
 

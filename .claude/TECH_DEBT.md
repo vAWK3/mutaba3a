@@ -25,12 +25,12 @@
 **Impact**: `agreements` carries seven CONTINGENCY-only nullable columns beside the RECURRING-only block; a CHECK keeps rate and treatment present on CONTINGENCY rows, nothing else enforces the outcome fields' shape. Postgres cannot drop an enum value, so `AgreementType.CONTINGENCY` stays even if the feature is withdrawn.
 **Fix if ever needed**: a per-type terms table, when a fourth agreement type arrives.
 
-### TD-098: Rolling the server back past MUT-100 silently turns a contingency create into a FIXED one
+### TD-098: Rolling the server back past MUT-100 breaks contingency reads and silently turns a contingency create into a FIXED one
 **Status**: Accepted
 **Added**: 2026-10-13 (MUT-100, CEO review S9)
 **Priority**: Medium (operational)
-**Impact**: request schemas strip unknown keys, so an older revision accepts `POST /v1/agreements` with `contingency` and creates a FIXED agreement for the upfront alone. Unreachable until Malafat ships the option (MAL-1077).
-**Mitigation**: `server/DEPLOYMENT.md` §6 rollback row: before any CONTINGENCY row exists a rollback is harmless; after, hide the option in Malafat first and prefer a roll-forward.
+**Impact**: once a CONTINGENCY row exists, an older revision (1) fails every read that returns it — its Prisma client has no `CONTINGENCY` enum value — so that organization's agreement lists and project/customer summaries break; (2) reads commission installments as ordinary ones; (3) strips the unknown `contingency` field from `POST /v1/agreements` and creates a FIXED agreement for the upfront alone. Unreachable until Malafat ships the option (MAL-1077).
+**Mitigation**: `server/DEPLOYMENT.md` §6 rollback row: before any CONTINGENCY row exists a rollback is harmless; after, roll forward only.
 
 ### TD-099: Two ACTIVE contingency agreements on one project — the summary shows the latest only
 **Status**: Accepted

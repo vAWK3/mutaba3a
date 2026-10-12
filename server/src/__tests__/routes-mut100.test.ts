@@ -573,7 +573,8 @@ describe('correcting an outcome', () => {
 
     const raced = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome/correct`, json({ ...body, previewToken: preview.previewToken }, { ...auth, ...idem() }));
     expect(raced.status).toBe(409);
-    expect(['PREVIEW_STALE', 'OUTCOME_HAS_PAYMENTS']).toContain(await reason(raced));
+    // The settled-commission check runs before the token check, so the reason is always the actionable one.
+    expect(await reason(raced)).toBe('OUTCOME_HAS_PAYMENTS');
 
     const now = await previewOutcome(h, auth, detail.agreement.id, body);
     expect(now.status).toBe(409);

@@ -399,7 +399,6 @@ export interface VatRateRepository {
 }
 
 export type AgreementType = 'FIXED' | 'RECURRING' | 'CONTINGENCY';
-export type { ContingencyOutcome, UpfrontTreatment };
 export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
 export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
