@@ -57,10 +57,11 @@ export async function resolveIncomeLinks(store: LedgerStore, organizationId: str
     if (!resolved.customerId) throw validationError('CUSTOMER_REQUIRED', 'A client is required on this profile', { field: 'customerId' });
     const references = await store.externalReferences.findByEntities(organizationId, 'CUSTOMER', [resolved.customerId]);
     if (!references.some((r) => r.provider === 'MALAFAT')) throw validationError('CUSTOMER_NOT_LINKED', 'This client is not linked to Malafat', { field: 'customerId' });
-    // Malafat allocates only within a payment's currency, and a matter's currency is locked: a capture in another
-    // currency could never be allocated and would sit as unallocated money until someone reversed it.
+    // Malafat allocates only within a payment's currency, and a matter's receivables are in its currency: a capture in
+    // another currency could never be allocated to them. (A client-only capture is not checked — a client has no one
+    // currency — and a matter's currency can still change until it has an agreement; both accepted in the review.)
     const project = resolved.projectId ? await store.projects.getById(organizationId, resolved.projectId) : null;
-    if (project && project.currency !== currency) throw validationError('CURRENCY_MISMATCH', `This matter is in ${project.currency}`, { field: 'currency' });
+    if (project && project.currency !== currency) throw validationError('CURRENCY_MISMATCH', `This matter is in ${project.currency}`, { field: 'currency', projectCurrency: project.currency });
   }
   return resolved;
 }

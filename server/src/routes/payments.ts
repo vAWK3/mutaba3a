@@ -10,7 +10,7 @@ import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
 import { verifyPreviewToken } from '../preview-token.js';
 import { InsufficientCapacity } from '../repositories/memory.js';
-import type { LedgerStore, Organization, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
+import { CAPTURE_UNDO_REASON, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
 import {
   AllocatePaymentRequestSchema,
   AllocationPreviewRequestSchema,
@@ -354,6 +354,8 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const actor = actorOf(c);
       const now = c.get('now')();
       const today = todayFor(organization, now);
+      // MUT-61: the reason a person's own capture undo records is how that undo is told apart from this route's reversal.
+      if (c.req.valid('json').reason === CAPTURE_UNDO_REASON) throw validationError('REASON_RESERVED', `"${CAPTURE_UNDO_REASON}" is reserved for a person undoing their own capture`, { field: 'reason' });
       const payment = await mustGetPayment(organization.id, c.req.valid('param').paymentId);
       if (payment.status === 'REVERSED') throw new ApiError('CONFLICT', 'This payment is already reversed', { reason: 'ALREADY_REVERSED', reversedAt: payment.reversedAt?.toISOString() ?? null });
       const allocations = await store.payments.listAllocations(organization.id, payment.id);

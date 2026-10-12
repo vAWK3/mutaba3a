@@ -715,7 +715,7 @@ describe('review fixes — MUT-61 /review (D1–D3)', () => {
   it('publishes the reasons MUT-61 can answer', async () => {
     const { h } = await setup();
     const doc = await read(await h.app.request('/openapi.json'));
-    for (const reason of ['CUSTOMER_REQUIRED', 'CUSTOMER_NOT_LINKED', 'CURRENCY_MISMATCH', 'REVERSED_BY_MALAFAT']) expect(doc.info.description, reason).toContain(reason);
+    for (const reason of ['CUSTOMER_REQUIRED', 'CUSTOMER_NOT_LINKED', 'CURRENCY_MISMATCH', 'REVERSED_BY_MALAFAT', 'REASON_RESERVED']) expect(doc.info.description, reason).toContain(reason);
   });
 
   it('D2: undoing a capture Malafat reversed → 409 REVERSED_BY_MALAFAT, not a false 204; the person’s own repeat undo stays 204', async () => {
@@ -739,7 +739,7 @@ describe('review fixes — MUT-61 /review (D1–D3)', () => {
     h.calls.length = 0;
     const res = await create({ ...BASE_RECEIVED, currency: 'USD', customerId: c.id, projectId: matter.id }, m.id);
     expect(res.status).toBe(422);
-    expect((await read(res)).error.details).toMatchObject({ reason: 'CURRENCY_MISMATCH', field: 'currency' });
+    expect((await read(res)).error.details).toMatchObject({ reason: 'CURRENCY_MISMATCH', field: 'currency', projectCurrency: 'ILS' });
     expect(writesOf(h)).toEqual([]);
     expect((await create({ ...BASE_RECEIVED, customerId: c.id, projectId: matter.id }, m.id)).status).toBe(201);
 
@@ -797,5 +797,18 @@ describe('MUT-61 review D4: route-level regressions', () => {
     const r = await receivableOn(h, m.id, c.id, matter.id);
     expect((await del(r.id, m.id)).status).toBe(404);
     expect(await h.store.receivables.getById(m.id, r.id)).toMatchObject({ id: r.id, deletedAt: null });
+  });
+});
+
+describe('MUT-61 review D5: capture_undo is reserved', () => {
+  it('the key cannot reverse with the reason a person’s undo uses → 422 REASON_RESERVED, payment untouched', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const c = await malafatClient(h, mAuth);
+    const captured = await read(await create({ ...BASE_RECEIVED, customerId: c.id }, m.id));
+    const res = await h.app.request(`/v1/payments/${captured.id}/reverse`, json({ reason: 'capture_undo' }, { ...mAuth, ...idem() }));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'REASON_RESERVED', field: 'reason' });
+    expect(await h.store.payments.getById(m.id, captured.id)).toMatchObject({ status: 'POSTED' });
+    expect((await h.app.request(`/v1/payments/${captured.id}/reverse`, json({ reason: 'Recorded twice' }, { ...mAuth, ...idem() }))).status).toBe(200);
   });
 });
