@@ -17,6 +17,7 @@ import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButt
 import { CheckIcon, CopyIcon, DocumentIcon } from '../icons';
 import { useIncome, type IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDateRangePreset, cn } from '../../lib/utils';
@@ -56,6 +57,23 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
   // One filter object, so a change is one state update and one query key
   const [filters, setFilters] = useState<WorkFilters>(DEFAULT_FILTERS);
   const updateFilters = (patch: Partial<WorkFilters>) => setFilters((prev) => ({ ...prev, ...patch }));
+
+  // A save landing on this client resets this list's own filters (MUT-81,
+  // qa-reconcile finding): unlike /income's filters, these are local state,
+  // not in the URL, so Show navigating here would otherwise be able to land
+  // on a page where the row is still hidden behind a stale status/date/search
+  // filter, with no second message -- the dead end design decision 2A exists
+  // to prevent. Adjusted during render (react.dev's "Adjusting state when a
+  // prop changes"), not in an effect, so it takes effect before paint rather
+  // than one frame late.
+  const pendingFlash = useSavedFlashStore((s) => s.pending);
+  const [seenFlash, setSeenFlash] = useState(pendingFlash);
+  if (pendingFlash !== seenFlash) {
+    setSeenFlash(pendingFlash);
+    if (pendingFlash?.clientId === clientId) {
+      setFilters(DEFAULT_FILTERS);
+    }
+  }
 
   const queryFilters = useMemo(
     (): IncomeFilters => ({
