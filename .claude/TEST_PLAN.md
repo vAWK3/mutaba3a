@@ -1232,6 +1232,8 @@ Not covered: touch on a real device (Playwright drove a mouse), and trackpad swi
 
 **Baseline after MUT-80 (2026-10-12, before merging main)**: root `npx vitest run` under Node 22: 187 files, 2923 passed, 4 skipped. `npm run typecheck` and `npm run lint` (0 errors) pass, the 3 new Playwright specs pass, and `npm run test:bundles` passes.
 
+**After merging main** (TD-009's drawer naming and the release front door): the two `Drawer.tsx` conflicts resolved to the `DrawerFrame` wrappers, whose shell carries TD-009's `aria-labelledby`, `common.close` and `aria-hidden` icon. Typecheck passed, and lint reported 0 errors. All 22 Playwright specs pass, including axe on every surface and main's new `Drawer.test.tsx` files. A full vitest run at load average ~45 (other sessions) timed out 4 heavy tests, each at about 5s. Every file that timed out passed when re-run alone (2,941 tests across both runs; no assertion failed).
+
 ### MUT-79 — app frame: nothing floats over content (epic MUT-74)
 
 Test plan: `.claude/designs/mut-79-app-frame-tests.md`.
