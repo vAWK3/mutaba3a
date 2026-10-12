@@ -1507,6 +1507,12 @@ div.input-with-prefix {
   color: var(--muted);
 }
 
+/* The row's business, under "All businesses" (MUT-89): its own line */
+.home-row-business {
+  display: flex;
+  margin-block-start: 2px;
+}
+
 .home-row-date {
   white-space: nowrap;
   color: var(--text-secondary);
@@ -1955,6 +1961,13 @@ div.input-with-prefix {
 .client-index-bucket-row .client-index-name {
   font-weight: var(--weight-normal);
   color: var(--muted);
+}
+
+/* MUT-89: a row's businesses under "All businesses", on a line under the name */
+.client-index-businesses {
+  display: flex;
+  margin-block-start: var(--space-1);
+  font-weight: var(--weight-normal);
 }
 
 /* On a phone the client count sits above Owed now, so the strip's amounts

@@ -7,6 +7,7 @@ import { OwedNowSummary } from '../../components/clients/OwedNowSummary';
 import {
   toClientIndexRow,
   toOwedBucketRows,
+  toBusinessBucketRows,
   orderClientIndex,
   BUCKET_SCOPE,
   type ClientIndexItem,
@@ -29,7 +30,9 @@ import { useFxRate } from '../../hooks/useFxRate';
 import { getCrossProfileClientStats } from '../../db/crossProfileStats';
 import { combineOwed } from '../../db/aggregations';
 import type { SortDir } from '../../hooks/useSortState';
-import { useProfileFilter } from '../../hooks/useActiveProfile';
+import { useOwedLens } from '../../hooks/useActiveProfile';
+import { useProfileStore } from '../../lib/profileStore';
+import { BusinessTags } from '../../components/ui/ProfileBadge';
 import { useDrawerStore } from '../../lib/stores';
 import { owedEntriesSearch } from '../../lib/incomeSearch';
 import { formatAmount, formatDate, formatRelativeDate, cn } from '../../lib/utils';
@@ -66,6 +69,10 @@ export interface ClientsPageProps {
  * business's entries only, and what belongs to no listed client shows in two
  * muted rows after the clients, "No client" and "Archived clients".
  *
+ * With "All businesses" on (MUT-89, ADR-051) it counts every business: each
+ * row names the businesses its entries are in, and the muted rows come one
+ * per business, each opening Income in its own business (O4).
+ *
  * Since MUT-84 (ADR-050) it is the Clients layout's list pane: the layout owns
  * the top bar and opens a client beside this list on a wide window. The search
  * and sort live in the URL (`useClientsSearch`) and every client link keeps
@@ -93,21 +100,25 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
     [setUrlSearch, sortField, sortDir]
   );
 
-  // Active profile only (strict mode)
-  const profileId = useProfileFilter();
+  // The working business, or every business with All businesses on (MUT-89).
+  // Nothing is read until the businesses are known: no scope means every record.
+  const { scope, isAll, profilesById } = useOwedLens();
+  const setWorkingProfile = useProfileStore((s) => s.setWorkingProfile);
 
   // All clients (every profile), to count the total behind a search
   const { data: allClients = [] } = useClients(undefined);
 
-  const { data: index, isLoading } = useClientOwedIndex(profileId, search);
+  // Pending, not loading: a query waiting for the scope is not "loading" (D2)
+  const { data: index, isPending } = useClientOwedIndex(scope, search, { enabled: scope !== undefined });
 
-  // Cross-profile badges: only query if multiple profiles exist
+  // Cross-profile badges ("N entries" in other businesses): one business only.
+  // Under All businesses the row's business tags say it instead.
   const { data: profiles = [] } = useBusinessProfiles();
   const hasMultipleProfiles = profiles.filter((p) => !p.archivedAt).length > 1;
   const { data: crossProfileStats } = useQuery({
     queryKey: ['crossProfileClientStats'],
     queryFn: getCrossProfileClientStats,
-    enabled: hasMultipleProfiles,
+    enabled: hasMultipleProfiles && !isAll,
   });
 
   // Today's rates, used only to order owed now across currencies (ADR-035)
@@ -121,7 +132,10 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
   );
   // A search narrows the list to named clients: the muted rows hide and the
   // strip sums what is listed. Unsearched, the strip is Home's figure.
-  const buckets = useMemo(() => (index && !search ? toOwedBucketRows(index) : []), [index, search]);
+  const buckets = useMemo(() => {
+    if (!index || search) return [];
+    return isAll && index.byProfile ? toBusinessBucketRows(index.byProfile) : toOwedBucketRows(index);
+  }, [index, search, isAll]);
   const items = useMemo(
     () => orderClientIndex(rows, buckets, sortField, sortDir),
     [rows, buckets, sortField, sortDir]
@@ -221,7 +235,9 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
         >
           {row.name}
         </Link>
-        {crossProfileStats?.has(row.id) && (
+        {isAll ? (
+          <BusinessTags profileIds={row.profileIds} profilesById={profilesById} className="client-index-businesses" />
+        ) : crossProfileStats?.has(row.id) && (
           <div className="cross-profile-badges">
             {crossProfileStats.get(row.id)!.map((stat) => (
               <span key={stat.profileId} className="cross-profile-badge" title={stat.profileName}>
@@ -260,18 +276,39 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
     </tr>
   );
 
-  /** A muted row: owed now of no listed client, opening /income on those entries. */
+  /**
+   * A muted row: owed now of no listed client, opening /income on those
+   * entries. Under All businesses the row covers one business, and Income
+   * opens in it, keeping All businesses on for Home and Clients (O4).
+   */
   const renderBucketRow = (bucket: OwedBucketRow) => {
     const entries = owedEntriesSearch(BUCKET_SCOPE[bucket.kind]);
+    const workInBucketBusiness = () => {
+      if (bucket.profileId) setWorkingProfile(bucket.profileId);
+    };
     return (
       <tr
-        key={bucket.kind}
+        key={`${bucket.kind}:${bucket.profileId ?? ''}`}
         className="clickable client-index-bucket-row"
-        onClick={() => navigate({ to: '/income', search: entries })}
+        onClick={() => {
+          workInBucketBusiness();
+          navigate({ to: '/income', search: entries });
+        }}
       >
         <td>
-          <Link to="/income" search={entries} className="client-index-name" onClick={(e) => e.stopPropagation()}>
+          <Link
+            to="/income"
+            search={entries}
+            className="client-index-name"
+            onClick={(e) => {
+              e.stopPropagation();
+              workInBucketBusiness();
+            }}
+          >
             {tp(`clients.index.bucket.${bucket.kind}`, bucket.count)}
+            {bucket.profileId && (
+              <BusinessTags profileIds={[bucket.profileId]} profilesById={profilesById} className="client-index-businesses" />
+            )}
           </Link>
         </td>
         <td className="amount-cell" data-testid="client-owed">
@@ -297,7 +334,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
         <SearchInput value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
       </div>
 
-      {isLoading ? (
+      {isPending ? (
         <div className="loading">
           <div className="spinner" />
         </div>

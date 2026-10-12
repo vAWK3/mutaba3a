@@ -6,7 +6,7 @@ import { OnboardingOverlay } from '../../components/onboarding';
 import { EmptyState } from '../../components/ui';
 import { useTransactions, useClients } from '../../hooks/useQueries';
 import { useReceivables } from '../../hooks/useIncomeQueries';
-import { useProfileFilter } from '../../hooks/useActiveProfile';
+import { useOwedLens } from '../../hooks/useActiveProfile';
 import { summarizeOwedByCurrency } from '../../db/aggregations';
 import { useDrawerStore } from '../../lib/stores';
 import { useOnboardingStore } from '../../lib/onboardingStore';
@@ -20,6 +20,9 @@ import { useT } from '../../lib/i18n';
  * (Needs attention: overdue or due within 7 days, oldest first), and what came
  * in (the last 10 payments). Every row opens its client. Nothing else lives
  * here: forecasting, month actuals and expenses are not core.
+ *
+ * With "All businesses" on (MUT-89, ADR-051) it reads every business, per
+ * currency, never summed across currencies, and each row names its business.
  */
 export function OverviewPage() {
   const { openIncomeDrawer } = useDrawerStore();
@@ -27,20 +30,27 @@ export function OverviewPage() {
   const { skipped, isOnboardingComplete } = useOnboardingStore();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
-  // Active profile only (strict mode)
-  const profileId = useProfileFilter();
+  // The working business, or every business with All businesses on (MUT-89).
+  // Nothing is read until the businesses are known: no scope means every record.
+  const { scope, isAll, profilesById } = useOwedLens();
+  const hasScope = scope !== undefined;
+  const businesses = isAll ? profilesById : undefined;
 
   // A new user has no clients and no entries yet. Decided only once both
   // queries have answered, or the empty state and onboarding flash on every
-  // load while Dexie is still reading.
-  const { data: allClients = [], isLoading: clientsLoading } = useClients(profileId);
-  const { data: anyTransaction = [], isLoading: entriesLoading } = useTransactions({ limit: 1, profileId });
-  const isDeciding = clientsLoading || entriesLoading;
+  // load while Dexie is still reading. A query waiting for the scope is
+  // pending but not loading (TanStack Query 5), so pending decides (D2).
+  const { data: allClients = [], isPending: clientsPending } = useClients(scope, { enabled: hasScope });
+  const { data: anyTransaction = [], isPending: entriesPending } = useTransactions(
+    { limit: 1, profileId: scope },
+    { enabled: hasScope }
+  );
+  const isDeciding = !hasScope || clientsPending || entriesPending;
   const isNewUser = !isDeciding && allClients.length === 0 && anyTransaction.length === 0;
   const showOnboarding = isNewUser && !skipped && !isOnboardingComplete() && !onboardingDismissed;
 
-  // Owed now: every receivable in the profile, one helper for every screen (ADR-033)
-  const { data: receivables = [] } = useReceivables({ profileId });
+  // Owed now: every receivable in scope, one helper for every screen (ADR-033)
+  const { data: receivables = [] } = useReceivables({ profileId: scope }, { enabled: hasScope });
   const today = todayLocalISO();
   const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receivables, today]);
 
@@ -75,8 +85,8 @@ export function OverviewPage() {
               <OwedNowSummary owed={owed} />
             </div>
             <div className="home-two-column">
-              <HomeNeedsAttention profileId={profileId} />
-              <HomeRecentPayments profileId={profileId} />
+              <HomeNeedsAttention profileId={scope} businesses={businesses} />
+              <HomeRecentPayments profileId={scope} businesses={businesses} />
             </div>
           </>
         )}

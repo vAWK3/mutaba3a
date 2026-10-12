@@ -5,6 +5,9 @@
  * Owed now, Needs attention (overdue + due within 7 days, oldest first) and
  * the last 10 payments. Every row opens its client; a brand-new install gets
  * one primary action instead of zeroes.
+ *
+ * MUT-89 (ADR-051): with "All businesses" on, Home reads every business, per
+ * currency, and tags each row with its business.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -13,7 +16,8 @@ import { OverviewPage } from '../OverviewPage';
 import * as useQueries from '../../../hooks/useQueries';
 import * as useIncomeQueries from '../../../hooks/useIncomeQueries';
 import { formatDate } from '../../../lib/utils';
-import type { RecentPaymentRow, TransactionDisplay } from '../../../types';
+import { useProfileStore } from '../../../lib/profileStore';
+import type { BusinessProfile, RecentPaymentRow, TransactionDisplay } from '../../../types';
 
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -58,10 +62,24 @@ vi.mock('../../../lib/onboardingStore', () => ({
 vi.mock('../../../components/onboarding', () => ({
   OnboardingOverlay: () => <div data-testid="onboarding-overlay" />,
 }));
-vi.mock('../../../hooks/useActiveProfile', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../hooks/useActiveProfile')>()),
-  useProfileFilter: () => 'p1',
+// Home reads the owed screens' lens (MUT-89). `current: null` runs the real one.
+const lens = vi.hoisted(() => ({
+  current: null as null | { scope: string | string[] | undefined; isAll: boolean; profilesById: Map<string, unknown> },
 }));
+vi.mock('../../../hooks/useActiveProfile', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../hooks/useActiveProfile')>();
+  return { ...actual, useOwedLens: () => (lens.current ?? actual.useOwedLens()) as ReturnType<typeof actual.useOwedLens> };
+});
+
+const STAMP = '2026-01-01T00:00:00Z';
+const studio: BusinessProfile = { id: 'p1', name: 'Studio', isDefault: true, createdAt: STAMP, updatedAt: STAMP };
+const teaching: BusinessProfile = { id: 'p2', name: 'Teaching', createdAt: STAMP, updatedAt: STAMP };
+const businesses = new Map([
+  [studio.id, studio],
+  [teaching.id, teaching],
+]);
+const oneBusiness = () => ({ scope: 'p1', isAll: false, profilesById: businesses });
+const allBusinesses = () => ({ scope: ['p1', 'p2'], isAll: true, profilesById: businesses });
 
 // Today is pinned to 2026-10-11 below.
 const base = { createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', occurredAt: '2026-09-01' };
@@ -161,6 +179,7 @@ describe('OverviewPage (Home)', () => {
     vi.setSystemTime(new Date('2026-10-11T12:00:00'));
     onboarding.skipped = true;
     onboarding.complete = false;
+    lens.current = oneBusiness();
     mockData();
   });
 
@@ -188,8 +207,17 @@ describe('OverviewPage (Home)', () => {
 
     it('asks for the active profile\'s receivables and recent payments', () => {
       renderPage();
-      expect(useIncomeQueries.useReceivables).toHaveBeenCalledWith({ profileId: 'p1' });
+      expect(useIncomeQueries.useReceivables).toHaveBeenCalledWith({ profileId: 'p1' }, { enabled: true });
       expect(useQueries.useRecentPayments).toHaveBeenCalledWith('p1');
+    });
+
+    it('shows no business tags in one business', () => {
+      mockData({
+        receivables: [{ ...overdue, profileId: 'p1' }],
+        recent: [{ ...payments[0], profileId: 'p1' }],
+      });
+      renderPage();
+      expect(screen.queryByText('Studio')).toBeNull();
     });
 
     // MUT-82 (D5): Needs attention is selected from the receivables Owed now
@@ -294,7 +322,7 @@ describe('OverviewPage (Home)', () => {
     it('decides nothing while the profile is still loading: no empty state, no onboarding flash', () => {
       onboarding.skipped = false;
       mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
-      vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<
+      vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: true, isPending: true } as unknown as ReturnType<
         typeof useQueries.useClients
       >);
       const { container } = renderPage();
@@ -310,6 +338,77 @@ describe('OverviewPage (Home)', () => {
       mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
       renderPage();
       expect(screen.getByTestId('onboarding-overlay')).toBeInTheDocument();
+    });
+  });
+
+  describe('All businesses (MUT-89)', () => {
+    beforeEach(() => {
+      lens.current = allBusinesses();
+      mockData({
+        receivables: [
+          { ...overdue, profileId: 'p1' },
+          { ...dueToday, profileId: 'p2' },
+          { ...dueInSeven, profileId: 'p1' },
+          { ...notDueSoon, profileId: 'p2' },
+        ],
+        recent: [{ ...payments[0], profileId: 'p2' }, { ...payments[1], profileId: 'p1' }],
+      });
+    });
+
+    afterEach(() => {
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false });
+    });
+
+    it('reads every business, with one receivables query for Owed now and Needs attention (ADR-055)', () => {
+      renderPage();
+      const calls = vi.mocked(useIncomeQueries.useReceivables).mock.calls;
+      expect(calls.length).toBeGreaterThanOrEqual(2);
+      expect(calls.every(([filters]) => JSON.stringify(filters) === JSON.stringify({ profileId: ['p1', 'p2'] }))).toBe(true);
+      expect(useQueries.useRecentPayments).toHaveBeenCalledWith(['p1', 'p2']);
+    });
+
+    it('shows owed now per currency across businesses, never summed (AC2)', () => {
+      renderPage();
+      const owed = screen.getByRole('region', { name: 'Owed now' });
+      expect(within(owed).getAllByTestId('owed-now-amount').map((e) => e.textContent)).toEqual(['$1,900', '₪4,000', '€300']);
+    });
+
+    it('tags each Needs attention and Recent payments row with its business (AC2)', () => {
+      renderPage();
+      expect(rowWith(attentionSection(), 'Design sprint')).toHaveTextContent('Studio');
+      expect(rowWith(attentionSection(), 'Brand book')).toHaveTextContent('Teaching');
+      expect(rowWith(paymentsSection(), 'Homepage')).toHaveTextContent('Teaching');
+      expect(rowWith(paymentsSection(), 'Cash job')).toHaveTextContent('Studio');
+    });
+
+    it('waits for the businesses before reading or deciding (D2)', () => {
+      onboarding.skipped = false;
+      lens.current = { scope: undefined, isAll: false, profilesById: new Map() };
+      mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
+      vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: false, isPending: true } as unknown as ReturnType<
+        typeof useQueries.useClients
+      >);
+      const { container } = renderPage();
+
+      expect(useIncomeQueries.useReceivables).toHaveBeenCalledWith({ profileId: undefined }, { enabled: false });
+      expect(screen.queryByTestId('onboarding-overlay')).toBeNull();
+      expect(screen.queryByText('Nothing to track yet')).toBeNull();
+      expect(container.querySelector('.spinner')).toBeInTheDocument();
+    });
+
+    it('reads All on its very first render when the lens is kept, without waiting for the route (D3)', () => {
+      lens.current = null;
+      vi.spyOn(useQueries, 'useBusinessProfiles').mockReturnValue({ data: [studio, teaching], isLoading: false } as unknown as ReturnType<
+        typeof useQueries.useBusinessProfiles
+      >);
+      vi.spyOn(useQueries, 'useDefaultBusinessProfile').mockReturnValue({ data: studio, isLoading: false } as unknown as ReturnType<
+        typeof useQueries.useDefaultBusinessProfile
+      >);
+      useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: true, onOwedScreen: false });
+
+      renderPage();
+
+      expect(vi.mocked(useIncomeQueries.useReceivables).mock.calls[0][0]).toEqual({ profileId: ['p1', 'p2'] });
     });
   });
 });

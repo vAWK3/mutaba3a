@@ -16,9 +16,11 @@
 import { useLayoutEffect, useRef, type MouseEvent } from 'react';
 import { Link } from '@tanstack/react-router';
 import { RecordPaymentButton } from '../ui';
+import { BusinessTags } from '../ui/ProfileBadge';
 import { formatAmount } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import type { WorkRow } from '../clients/clientProfileRows';
+import type { BusinessProfile } from '../../types';
 
 /** The row's Record Payment button, which focus moves to and from (MUT-82). */
 export const ATTENTION_PAY_CLASS = 'home-attention-pay';
@@ -26,13 +28,15 @@ export const ATTENTION_PAY_CLASS = 'home-attention-pay';
 export interface HomeAttentionRowProps {
   row: WorkRow;
   locale: string;
+  /** Under All businesses, the businesses to tag the row with (MUT-89) */
+  businesses?: ReadonlyMap<string, BusinessProfile>;
   onOpen: (row: WorkRow) => void;
   onRecordPayment: (row: WorkRow) => void;
   onArrive: (id: string, element: HTMLTableRowElement) => void;
   onLeave: (id: string, element: HTMLTableRowElement) => void;
 }
 
-export function HomeAttentionRow({ row, locale, onOpen, onRecordPayment, onArrive, onLeave }: HomeAttentionRowProps) {
+export function HomeAttentionRow({ row, locale, businesses, onOpen, onRecordPayment, onArrive, onLeave }: HomeAttentionRowProps) {
   const t = useT();
   const rowRef = useRef<HTMLTableRowElement>(null);
   const handlers = useRef({ onArrive, onLeave });
@@ -55,6 +59,7 @@ export function HomeAttentionRow({ row, locale, onOpen, onRecordPayment, onArriv
     <>
       <span className="home-row-primary">{row.tx.clientName ?? t('overview.noClient')}</span>{' '}
       <span className="home-row-secondary">{row.title ?? t('clients.profile.work.untitled')}</span>
+      {businesses && <BusinessTags profileIds={[row.tx.profileId]} profilesById={businesses} className="home-row-business" />}
     </>
   );
 

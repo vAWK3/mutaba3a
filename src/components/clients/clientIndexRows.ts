@@ -8,11 +8,20 @@
  * names). Ties always fall back to name A–Z, then id, so the order is stable.
  *
  * Owed now that belongs to no listed client gets up to two muted rows after
- * the clients, whatever the sort (MUT-83, ADR-049).
+ * the clients, whatever the sort (MUT-83, ADR-049); under All businesses, one
+ * per business (MUT-89).
  */
 
 import { convertAmount } from '../../lib/fx';
-import type { ClientOwedIndex, ClientScope, ClientSummary, Currency, LastPayment, OwedByCurrency } from '../../types';
+import type {
+  ClientOwedIndex,
+  ClientScope,
+  ClientSummary,
+  Currency,
+  LastPayment,
+  OwedBusinessBuckets,
+  OwedByCurrency,
+} from '../../types';
 import type { SortDir } from '../../hooks/useSortState';
 
 export type ClientSortField = 'name' | 'owed' | 'overdue' | 'lastPayment' | 'activity';
@@ -36,6 +45,8 @@ export interface ClientIndexRow {
   lastActivityAt?: string;
   /** Owed-now ordering key; see owedRank */
   owedRank: number[];
+  /** The row's businesses, tagged under All businesses (MUT-89) */
+  profileIds: string[];
 }
 
 /**
@@ -72,6 +83,7 @@ export function toClientIndexRow(summary: ClientSummary, rates: RatesToIls): Cli
     lastPayment: summary.lastPayment,
     lastActivityAt: summary.lastActivityAt,
     owedRank: owedRank(summary.owed, rates),
+    profileIds: summary.profileIds ?? [],
   };
 }
 
@@ -118,6 +130,8 @@ export interface OwedBucketRow {
   overdue: { currency: Currency; amountMinor: number }[];
   /** No client: entries. Archived clients: clients. */
   count: number;
+  /** Under All businesses, the one business this row covers (MUT-89, O4) */
+  profileId?: string;
 }
 
 /** The muted rows to show, in fixed order; a bucket that owes nothing has none. */
@@ -128,6 +142,26 @@ export function toOwedBucketRows(index: Pick<ClientOwedIndex, OwedBucketKind>): 
     overdue: overdueLines(index[kind].owed),
     count: index[kind].count,
   }));
+}
+
+/**
+ * The muted rows under All businesses (MUT-89, O4): one per business that
+ * owes outside its clients, all No client rows first, businesses in the
+ * index's order. Each opens Income in its own business, so it lands on
+ * exactly what it counted.
+ */
+export function toBusinessBucketRows(byProfile: OwedBusinessBuckets[]): OwedBucketRow[] {
+  return BUCKET_KINDS.flatMap((kind) =>
+    byProfile
+      .filter((business) => business[kind].owed.length > 0)
+      .map((business) => ({
+        kind,
+        owed: business[kind].owed,
+        overdue: overdueLines(business[kind].owed),
+        count: business[kind].count,
+        profileId: business.profileId,
+      }))
+  );
 }
 
 export type ClientIndexItem = { type: 'client'; row: ClientIndexRow } | { type: 'bucket'; row: OwedBucketRow };

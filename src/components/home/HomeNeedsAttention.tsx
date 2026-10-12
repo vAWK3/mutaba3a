@@ -34,11 +34,14 @@ import { selectAttentionReceivables } from '../../lib/attention';
 import { captureRowExit } from '../../lib/motion/rowExit';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { HomeAttentionRow, ATTENTION_PAY_CLASS } from './HomeAttentionRow';
-import type { PaymentRecord } from '../../types';
+import type { BusinessProfile, PaymentRecord, ProfileScope } from '../../types';
 import './HomeNeedsAttention.css';
 
 export interface HomeNeedsAttentionProps {
-  profileId?: string;
+  /** Home's scope: the same filters as Owed now, so both read one query (ADR-055) */
+  profileId?: ProfileScope;
+  /** Under All businesses, the businesses to tag rows with (MUT-89) */
+  businesses?: ReadonlyMap<string, BusinessProfile>;
 }
 
 // Bidi isolate: keep a name or an amount whole inside a sentence of either direction
@@ -52,7 +55,7 @@ function neighbourAction(row: HTMLTableRowElement): HTMLElement | null {
   return neighbour?.querySelector<HTMLElement>(`.${ATTENTION_PAY_CLASS}`) ?? null;
 }
 
-export function HomeNeedsAttention({ profileId }: HomeNeedsAttentionProps) {
+export function HomeNeedsAttention({ profileId, businesses }: HomeNeedsAttentionProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -178,6 +181,7 @@ export function HomeNeedsAttention({ profileId }: HomeNeedsAttentionProps) {
                   key={row.id}
                   row={row}
                   locale={locale}
+                  businesses={businesses}
                   onOpen={open}
                   onRecordPayment={recordPayment}
                   onArrive={onArrive}

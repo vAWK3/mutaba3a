@@ -67,8 +67,37 @@ export function ProfileBadgeWithName({
         showTooltip={showTooltip && !showName}
       />
       {showName && (
-        <span className="profile-badge-name">{profile.name}</span>
+        <bdi className="profile-badge-name">{profile.name}</bdi>
       )}
+    </span>
+  );
+}
+
+interface BusinessTagsProps {
+  /** The businesses to name, in order; unknown or missing ids are skipped */
+  profileIds: readonly (string | undefined)[];
+  /** The live businesses by id */
+  profilesById: ReadonlyMap<string, BusinessProfile>;
+  className?: string;
+}
+
+/**
+ * The business tags of a row under "All businesses" (MUT-89, O5): one
+ * colour-and-name tag per business, so a client shared across businesses
+ * shows each. Renders nothing when none of the ids is a live business.
+ */
+export function BusinessTags({ profileIds, profilesById, className = '' }: BusinessTagsProps) {
+  const profiles = profileIds.flatMap((id) => {
+    const profile = id ? profilesById.get(id) : undefined;
+    return profile ? [profile] : [];
+  });
+  if (profiles.length === 0) return null;
+
+  return (
+    <span className={`business-tags ${className}`}>
+      {profiles.map((profile) => (
+        <ProfileBadgeWithName key={profile.id} profile={profile} size="sm" />
+      ))}
     </span>
   );
 }

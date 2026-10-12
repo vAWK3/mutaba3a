@@ -14,17 +14,22 @@
  * sort are one URL model (stood in for here; the URL itself is covered by
  * useClientsSearch.test.tsx), every client link keeps them, and the client
  * open beside the list is marked. The split view itself is ClientsLayout.test.
+ *
+ * MUT-89 (ADR-051): with "All businesses" on, the list reads every business,
+ * tags each row with its businesses, and splits the muted rows per business.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
 import * as useQueries from '../../../hooks/useQueries';
 import { formatDate } from '../../../lib/utils';
 import { combineOwed } from '../../../db/aggregations';
 import { owedEntriesSearch } from '../../../lib/incomeSearch';
+import { useProfileStore } from '../../../lib/profileStore';
+import * as crossProfileStats from '../../../db/crossProfileStats';
 import type { ClientsSearch } from '../../../components/clients/clientsSearch';
-import type { ClientSummary, OwedBucket } from '../../../types';
+import type { BusinessProfile, ClientSummary, OwedBucket, OwedBusinessBuckets } from '../../../types';
 
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -182,19 +187,25 @@ const NOTHING: OwedBucket = { owed: [], count: 0 };
 function mockSummaries(
   rows: ClientSummary[],
   isLoading = false,
-  { noClient = NOTHING, archivedClients = NOTHING }: { noClient?: OwedBucket; archivedClients?: OwedBucket } = {}
+  {
+    noClient = NOTHING,
+    archivedClients = NOTHING,
+    byProfile,
+  }: { noClient?: OwedBucket; archivedClients?: OwedBucket; byProfile?: OwedBusinessBuckets[] } = {}
 ) {
   const total = combineOwed([...rows.map((r) => r.owed), noClient.owed, archivedClients.owed]);
   vi.spyOn(useQueries, 'useClientOwedIndex').mockImplementation(
-    (_profileId?: string, search?: string) =>
+    (_profileId?: unknown, search?: string) =>
       ({
         data: {
           clients: rows.filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase())),
           total,
           noClient,
           archivedClients,
+          byProfile,
         },
         isLoading,
+        isPending: isLoading,
       }) as unknown as ReturnType<typeof useQueries.useClientOwedIndex>
   );
 }
@@ -233,6 +244,10 @@ describe('ClientsPage', () => {
       data: [],
       isLoading: false,
     } as unknown as ReturnType<typeof useQueries.useBusinessProfiles>);
+    vi.spyOn(useQueries, 'useDefaultBusinessProfile').mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    } as unknown as ReturnType<typeof useQueries.useDefaultBusinessProfile>);
   });
 
   describe('columns', () => {
@@ -555,6 +570,98 @@ describe('ClientsPage', () => {
 
       expect(screen.getByRole('link', { name: 'Acme' })).toBeInTheDocument();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('All businesses (MUT-89)', () => {
+    const STAMP = '2026-01-01T00:00:00Z';
+    const studio: BusinessProfile = { id: 'p1', name: 'Studio', isDefault: true, createdAt: STAMP, updatedAt: STAMP };
+    const teaching: BusinessProfile = { id: 'p2', name: 'Teaching', createdAt: STAMP, updatedAt: STAMP };
+    const studioNoClient: OwedBucket = { owed: [{ currency: 'ILS', owedMinor: 30_000, overdueMinor: 0 }], count: 2 };
+    const teachingNoClient: OwedBucket = { owed: [{ currency: 'ILS', owedMinor: 20_000, overdueMinor: 0 }], count: 1 };
+    const bucketLink = (label: RegExp) => screen.getByRole('link', { name: label });
+
+    beforeEach(() => {
+      vi.spyOn(useQueries, 'useBusinessProfiles').mockReturnValue({
+        data: [studio, teaching],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useBusinessProfiles>);
+      vi.spyOn(useQueries, 'useDefaultBusinessProfile').mockReturnValue({
+        data: studio,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useDefaultBusinessProfile>);
+      vi.spyOn(crossProfileStats, 'getCrossProfileClientStats').mockResolvedValue(
+        new Map([['acme', [{ profileId: 'p2', profileName: 'Teaching', txCount: 3, totalMinor: 100 }]]])
+      );
+      useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: true, onOwedScreen: true });
+      mockSummaries(
+        [{ ...acme, profileIds: ['p1', 'p2'] }, { ...beta, profileIds: ['p2'] }, { ...gamma, profileIds: ['p1'] }],
+        false,
+        {
+          noClient: combineBuckets(studioNoClient, teachingNoClient),
+          byProfile: [
+            { profileId: 'p1', noClient: studioNoClient, archivedClients: NOTHING },
+            { profileId: 'p2', noClient: teachingNoClient, archivedClients: NOTHING },
+          ],
+        }
+      );
+    });
+
+    afterEach(() => {
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false });
+    });
+
+    function combineBuckets(...buckets: OwedBucket[]): OwedBucket {
+      return { owed: combineOwed(buckets.map((b) => b.owed)), count: buckets.reduce((n, b) => n + b.count, 0) };
+    }
+
+    it('reads every business in the switcher (AC2)', () => {
+      renderPage();
+      expect(vi.mocked(useQueries.useClientOwedIndex).mock.calls[0][0]).toEqual(['p1', 'p2']);
+    });
+
+    it('tags a shared client with each of its businesses, and the others with theirs (AC2)', () => {
+      renderPage();
+      expect(within(rowFor('Acme')).getByText('Studio')).toBeInTheDocument();
+      expect(within(rowFor('Acme')).getByText('Teaching')).toBeInTheDocument();
+      expect(within(rowFor('Beta')).getByText('Teaching')).toBeInTheDocument();
+      expect(within(rowFor('Beta')).queryByText('Studio')).toBeNull();
+    });
+
+    it('shows the business tags instead of the "entries in other businesses" badges', async () => {
+      const { container } = renderPage();
+      // Give an enabled query the turn it would need to run
+      await act(async () => {});
+      expect(crossProfileStats.getCrossProfileClientStats).not.toHaveBeenCalled();
+      expect(container.querySelector('.cross-profile-badge')).toBeNull();
+    });
+
+    it('gives each business its own No client row, tagged, after the clients (O4)', () => {
+      renderPage();
+      expect(bucketLink(/No client · 2 entries.*Studio/)).toBeInTheDocument();
+      expect(bucketLink(/No client · 1 entry.*Teaching/)).toBeInTheDocument();
+      expect(names().slice(-2).map((n) => n?.startsWith('No client'))).toEqual([true, true]);
+    });
+
+    it('opens Income in that row\'s business and keeps All businesses on (O4)', () => {
+      renderPage();
+      fireEvent.click(bucketLink(/Teaching/).closest('tr')!);
+
+      expect(useProfileStore.getState()).toMatchObject({ activeProfileId: 'p2', allBusinesses: true });
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/income', search: owedEntriesSearch('none') });
+    });
+
+    it('sets the business before following a muted row\'s link too', () => {
+      renderPage();
+      fireEvent.click(bucketLink(/Teaching/));
+      expect(useProfileStore.getState().activeProfileId).toBe('p2');
+    });
+
+    it('keeps the cross-profile badges in one business', async () => {
+      useProfileStore.setState({ allBusinesses: false });
+      renderPage();
+      expect(await screen.findByText('3 entries')).toBeInTheDocument();
+      expect(screen.queryByText('Studio', { selector: '.profile-badge-name' })).toBeNull();
     });
   });
 });

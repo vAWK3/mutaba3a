@@ -12,13 +12,16 @@ import { useRecentPayments } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import type { RecentPaymentRow } from '../../types';
+import { BusinessTags } from '../ui/ProfileBadge';
+import type { BusinessProfile, ProfileScope, RecentPaymentRow } from '../../types';
 
 export interface HomeRecentPaymentsProps {
-  profileId?: string;
+  profileId?: ProfileScope;
+  /** Under All businesses, the businesses to tag rows with (MUT-89) */
+  businesses?: ReadonlyMap<string, BusinessProfile>;
 }
 
-export function HomeRecentPayments({ profileId }: HomeRecentPaymentsProps) {
+export function HomeRecentPayments({ profileId, businesses }: HomeRecentPaymentsProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
@@ -53,6 +56,9 @@ export function HomeRecentPayments({ profileId }: HomeRecentPaymentsProps) {
                     <span className="home-row-secondary">
                       {payment.transactionTitle ?? t('clients.profile.work.untitled')}
                     </span>
+                    {businesses && (
+                      <BusinessTags profileIds={[payment.profileId]} profilesById={businesses} className="home-row-business" />
+                    )}
                   </td>
                   <td className="home-row-date">{formatDate(payment.paidAt, locale)}</td>
                   <td className="amount-cell amount-positive">

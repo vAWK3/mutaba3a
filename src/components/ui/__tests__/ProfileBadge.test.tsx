@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ProfileBadge, ProfileBadgeWithName } from '../ProfileBadge';
+import { ProfileBadge, ProfileBadgeWithName, BusinessTags } from '../ProfileBadge';
 import type { BusinessProfile } from '../../../types';
 
 const mockProfile: BusinessProfile = {
@@ -119,5 +119,29 @@ describe('ProfileBadgeWithName', () => {
       const { container } = render(<ProfileBadgeWithName profile={mockProfile} size="md" />);
       expect(container.querySelector('.profile-badge-md')).toBeInTheDocument();
     });
+  });
+});
+
+describe('BusinessTags (MUT-89, O5)', () => {
+  const studio: BusinessProfile = { ...mockProfile, id: 'studio', name: 'Studio' };
+  const teaching: BusinessProfile = { ...mockProfile, id: 'teaching', name: 'تعليم' };
+  const byId = new Map([
+    [studio.id, studio],
+    [teaching.id, teaching],
+  ]);
+
+  it('names each business in the order given', () => {
+    const { container } = render(<BusinessTags profileIds={['teaching', 'studio']} profilesById={byId} />);
+    expect([...container.querySelectorAll('.profile-badge-name')].map((n) => n.textContent)).toEqual(['تعليم', 'Studio']);
+  });
+
+  it('isolates each name, so an Arabic name keeps its direction inside an English row', () => {
+    render(<BusinessTags profileIds={['teaching']} profilesById={byId} />);
+    expect(screen.getByText('تعليم').tagName).toBe('BDI');
+  });
+
+  it('leaves out a business it does not know, and renders nothing when none is left', () => {
+    const { container } = render(<BusinessTags profileIds={['gone', undefined]} profilesById={byId} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
