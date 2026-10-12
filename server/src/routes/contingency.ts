@@ -44,11 +44,15 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const audit = (a: Actor, action: string, entityType: string, entityId: string, metadata: JsonObject) =>
     store.audit.append({ organizationId: a.organization.id, actorType: 'API_KEY', actorId: a.apiKeyId, action, entityType, entityId, metadata, requestId: a.requestId });
 
-  /** A version check lost to a concurrent write: say what moved, from a fresh read. */
-  async function raced(organizationId: string, agreementId: string, expectOutcome: boolean): Promise<ApiError> {
-    const latest = await mustGet(store, organizationId, agreementId);
+  /**
+   * A write that lost to a concurrent one: say what moved, from a fresh read. When the agreement itself did not move,
+   * the ledger under the bill did (an upfront credit, or the replaced line posting): the figures are stale.
+   */
+  async function raced(organizationId: string, read: AgreementRecord, expectOutcome: boolean): Promise<ApiError> {
+    const latest = await mustGet(store, organizationId, read.id);
     if (!expectOutcome && latest.outcome !== null) return new ApiError('CONFLICT', 'An outcome was recorded concurrently', { reason: 'OUTCOME_ALREADY_RECORDED' });
     if (expectOutcome && latest.outcome === null) return new ApiError('CONFLICT', 'No outcome is recorded', { reason: 'OUTCOME_NOT_RECORDED' });
+    if (latest.version === read.version) return stalePreview();
     return new ApiError('CONFLICT', 'The agreement changed concurrently; preview again', { reason: 'VERSION_MISMATCH', currentVersion: latest.version });
   }
 
@@ -70,6 +74,7 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     upfrontTreatment: c.treatment,
     commissionInstallment: c.line,
     totals: c.totals,
+    upfrontReceivables: c.upfrontReceivables,
     expectedVersion: agreement.version,
   });
 
@@ -101,7 +106,11 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const patch: ContingencyTermsPatch = { ...(to.rate !== from.rate ? { commissionRateBasisPoints: to.rate } : {}), ...(to.treatment !== from.treatment ? { upfrontTreatment: to.treatment } : {}) };
       const result = await store.agreements.updateContingencyTerms(organization.id, agreement.id, c.get('expectedVersion'), patch, now);
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such agreement');
-      if (result.kind === 'stale') throw await raced(organization.id, agreement.id, false);
+      if (result.kind === 'stale') {
+        // If-Match carried the version: a mismatch is the caller's stale read, unless an outcome landed meanwhile.
+        if (result.record.outcome !== null) throw new ApiError('CONFLICT', 'An outcome was recorded concurrently', { reason: 'OUTCOME_ALREADY_RECORDED' });
+        throw new ApiError('CONFLICT', 'The agreement changed concurrently; retry', { reason: 'VERSION_MISMATCH', currentVersion: result.record.version });
+      }
       await audit({ organization, apiKeyId: apiKey.id, requestId: c.get('requestId') }, 'agreement.contingency_terms_changed', 'agreement', agreement.id, {
         from: { commissionRateBasisPoints: from.rate, upfrontTreatment: from.treatment },
         to: { commissionRateBasisPoints: to.rate, upfrontTreatment: to.treatment },
@@ -159,7 +168,7 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (!verifyPreviewToken(token, composed.tokenParts)) throw stalePreview();
       const result = await store.agreements.recordOutcome(organization.id, agreement.id, outcomeWrite(composed, agreement), now);
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such agreement');
-      if (result.kind === 'stale') throw await raced(organization.id, agreement.id, false);
+      if (result.kind === 'stale') throw await raced(organization.id, agreement, false);
       const ids = await postCommission(actor, agreement.id, result.record.installments, composed, now);
       await audit(actor, 'agreement.outcome_recorded', 'agreement', agreement.id, outcomeAuditFigures(composed, agreement.currency as Currency, ids));
       return c.json(await agreementDetail(store, organization, await mustGet(store, organization.id, agreement.id), today), 200);
@@ -198,7 +207,7 @@ export function contingencyRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       );
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such agreement');
       if (result.kind === 'has_payments') throw outcomeHasPayments(result.receivableId);
-      if (result.kind === 'stale') throw await raced(organization.id, agreement.id, true);
+      if (result.kind === 'stale') throw await raced(organization.id, agreement, true);
 
       const credit = result.record.credit;
       if (credit) {

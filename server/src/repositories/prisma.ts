@@ -609,6 +609,7 @@ export class PrismaLedgerStore implements LedgerStore {
         const receivable = await this.prisma.receivable.findUnique({ where: { id: current.receivableId } });
         return receivable ? { installment: current, receivable, created: false } : null;
       }
+      if (current.voidedAt) return null;
       const agreement = await this.prisma.agreement.findFirst({ where: { id: current.agreementId, organizationId } });
       if (!agreement) return null;
       try {
@@ -633,9 +634,9 @@ export class PrismaLedgerStore implements LedgerStore {
               createdAt: input.at,
             },
           });
-          // Only the first poster wins; the guard is the WHERE receivableId IS NULL.
+          // Only the first poster wins, and never on a voided line (a correction or cancel voiding it concurrently).
           const { count } = await tx.installment.updateMany({
-            where: { id: current.id, receivableId: null },
+            where: { id: current.id, receivableId: null, voidedAt: null },
             data: { receivableId: receivable.id, postedAt: input.at, postingDate: input.postingDate, version: { increment: 1 } },
           });
           if (count !== 1) throw new AlreadyPosted();
@@ -645,6 +646,7 @@ export class PrismaLedgerStore implements LedgerStore {
       } catch (err) {
         if (!(err instanceof AlreadyPosted)) throw err;
         const installment = await this.prisma.installment.findFirstOrThrow({ where: { id: installmentId } });
+        if (!installment.receivableId) return null; // voided under us: nothing posts.
         const receivable = await this.prisma.receivable.findUniqueOrThrow({ where: { id: installment.receivableId ?? '' } });
         return { installment, receivable, created: false };
       }
@@ -709,6 +711,7 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$transaction(async (tx) => {
           const current = await tx.agreement.findFirst({ where: { id: agreementId, organizationId } });
           if (!current) return { kind: 'not_found' as const };
+          if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
           // The conditional write is the guard: a second record, or one racing a terms change, matches no row.
           const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: null }, data: outcomeData(input, at) });
           if (count !== 1) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
@@ -720,25 +723,34 @@ export class PrismaLedgerStore implements LedgerStore {
     correctOutcome: (organizationId, agreementId, input: CorrectOutcomeInput, at) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
-          const current = await tx.agreement.findFirst({ where: { id: agreementId, organizationId } });
-          if (!current) return { kind: 'not_found' as const };
+          // The agreement row lock serializes corrections (and a record) against each other: a loser waits, then
+          // reads the winner's version and is stale, never half-way through someone else's credit.
+          const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+          if (lockedAgreement.length === 0) return { kind: 'not_found' as const };
+          const current = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
           const stale = async () => ({ kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit: null } });
           if (current.version !== input.expectedVersion || current.outcome === null) return stale();
           const replaced = input.replaceInstallmentId ? await tx.installment.findFirst({ where: { id: input.replaceInstallmentId, organizationId, agreementId, isCommission: true, voidedAt: null } }) : null;
-          if (input.replaceInstallmentId && !replaced) throw new ForeignKeyViolation('installments.id');
+          if (input.replaceInstallmentId && !replaced) return stale();
+          if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return stale();
           // Under the receivable's row lock, before anything is written: a payment or credit that landed after the
           // preview refuses the whole correction (an allocation waits on this lock until we commit or roll back).
           const locked = replaced?.receivableId ? await lockReceivable(tx, replaced.receivableId) : null;
           if (locked && (locked.paidMinor > 0n || locked.creditedMinor > 0n)) return { kind: 'has_payments' as const, receivableId: locked.id };
+          // First write, and conditional: a lazy read that posted the old line since we read it matches no row.
+          if (replaced) {
+            const voided = await tx.installment.updateMany({ where: { id: replaced.id, receivableId: replaced.receivableId, voidedAt: null }, data: { voidedAt: at } });
+            if (voided.count !== 1) return stale();
+          }
+          // Cannot miss under the agreement lock; kept conditional so the invariant stays local.
           const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: { not: null } }, data: outcomeData(input, at) });
-          if (count !== 1) return stale();
+          if (count !== 1) throw new Error('correctOutcome: agreement moved under its row lock');
           let credit: CreditRecord | null = null;
           if (locked) {
             const r = await tx.receivable.findUniqueOrThrow({ where: { id: locked.id } });
             credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: r.id, amountMinor: r.grossMinor, netMinor: r.netMinor, vatMinor: r.vatMinor, ...input.credit, createdAt: at } });
             await settleReceivable(tx, r.id, { creditedMinor: { increment: r.grossMinor } });
           }
-          if (replaced) await tx.installment.update({ where: { id: replaced.id }, data: { voidedAt: at } });
           if (input.commissionInstallment) await tx.installment.create({ data: { ...input.commissionInstallment, isCommission: true, organizationId, agreementId } });
           const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
           return { kind: 'updated' as const, record: { agreement, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }), credit } };
@@ -747,7 +759,8 @@ export class PrismaLedgerStore implements LedgerStore {
     cancel: async (organizationId, agreementId, input, at) => {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.agreement.updateMany({
-          where: { id: agreementId, organizationId, status: 'ACTIVE' },
+          // outcome: null — a contingency agreement whose outcome is recorded is never cancelled, even by a cancel racing the record.
+          where: { id: agreementId, organizationId, status: 'ACTIVE', outcome: null },
           data: { status: 'CANCELLED', cancelledAt: at, cancelEffectiveMonth: input.cancelEffectiveMonth, cancelEffectiveDate: input.cancelEffectiveDate ?? null, finalMonth: input.finalMonth, version: { increment: 1 }, updatedAt: at },
         });
         if (count === 1) await tx.installment.updateMany({ where: { agreementId, receivableId: null, voidedAt: null }, data: { voidedAt: at } });
@@ -1171,6 +1184,19 @@ function entityTypeWhere(filter: AuditFilter): { entityType?: Prisma.StringFilte
 
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
 type Tx = Prisma.TransactionClient;
+
+/**
+ * MUT-100 review D2: locks the posted upfront receivables the counted upfront was read from (in id order, the same
+ * order every caller uses) and reports whether any is gone or moved since — a credit landing between the commit's
+ * compose and this write would otherwise bill against an upfront that no longer stands.
+ */
+async function upfrontMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): Promise<boolean> {
+  if (seen.length === 0) return false;
+  const ids = [...seen.map((s) => s.id)].sort();
+  const rows = await tx.$queryRaw<Array<{ id: string; version: number }>>`SELECT "id"::text AS "id", "version" FROM "receivables" WHERE "id" = ANY(${ids}::uuid[]) AND "organizationId" = ${organizationId}::uuid ORDER BY "id" FOR UPDATE`;
+  const now = new Map(rows.map((r) => [r.id, r.version]));
+  return seen.some((s) => now.get(s.id) !== s.version);
+}
 
 /** The agreement columns a contingency outcome (or its correction) writes, with the totals and the version bump. */
 function outcomeData(input: OutcomeWriteInput, at: Date): Prisma.AgreementUpdateManyMutationInput {

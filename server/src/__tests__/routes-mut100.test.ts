@@ -380,7 +380,7 @@ describe('recording the outcome (acceptance examples)', () => {
     const { detail } = await create(h, auth, contingent(project.id));
     const agreement = (await h.store.agreements.getById(org.id, detail.agreement.id))!;
     const line = { position: 2, label: 'Commission', amountMinor: 2_000_000n, netMinor: 2_000_000n, vatMinor: 360_000n, grossMinor: 2_360_000n, vatTreatment: 'STANDARD_RATED' as const, rateBasisPoints: 1800, triggerType: 'DATE' as const, triggerDate: '2026-10-12', paymentTerms: null, dueDateOverride: null, isCommission: true };
-    const written = await h.store.agreements.recordOutcome(org.id, agreement.id, { outcome: 'AWARDED', outcomeDate: '2026-10-12', awardedAmountMinor: 10_000_000n, outcomeNote: null, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', commissionInstallment: line, totals: { amountMinor: 2_150_000n, netMinor: 2_150_000n, vatMinor: 387_000n, grossMinor: 2_537_000n }, expectedVersion: agreement.version }, h.clock.now);
+    const written = await h.store.agreements.recordOutcome(org.id, agreement.id, { outcome: 'AWARDED', outcomeDate: '2026-10-12', awardedAmountMinor: 10_000_000n, outcomeNote: null, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', commissionInstallment: line, totals: { amountMinor: 2_150_000n, netMinor: 2_150_000n, vatMinor: 387_000n, grossMinor: 2_537_000n }, upfrontReceivables: [], expectedVersion: agreement.version }, h.clock.now);
     expect(written.kind).toBe('updated');
     const healed = await read(await h.app.request(`/v1/agreements/${agreement.id}`, { headers: auth }));
     expect(healed.installments.find((i: Loose) => i.isCommission)).toMatchObject({ status: 'DUE', receivableId: expect.any(String) });
@@ -613,6 +613,127 @@ describe('correcting an outcome', () => {
     const again = await read(await previewOutcome(h, auth, detail.agreement.id, award({ correctionReason: 'x' })));
     const noReason = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome/correct`, json({ ...award(), previewToken: again.previewToken }, { ...auth, ...idem() }));
     expect(noReason.status).toBe(422);
+  });
+});
+
+describe('review fixes (D1–D4)', () => {
+  it('a cancelled contingency agreement refuses terms changes and outcomes with 409 AGREEMENT_CANCELLED', async () => {
+    const h = harness();
+    const { auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id, { amount: '0.00', installments: [] }));
+    const id = detail.agreement.id;
+    const cancelled = await read(await h.app.request(`/v1/agreements/${id}/cancel`, json({}, { ...auth, ...idem() })));
+    const patch = await h.app.request(`/v1/agreements/${id}/contingency`, json({ commissionRateBasisPoints: 2500 }, { ...auth, 'if-match': String(cancelled.agreement.version) }, 'PATCH'));
+    expect(patch.status).toBe(409);
+    expect(await reason(patch)).toBe('AGREEMENT_CANCELLED');
+    const preview = await previewOutcome(h, auth, id, award());
+    expect(preview.status).toBe(409);
+    expect(await reason(preview)).toBe('AGREEMENT_CANCELLED');
+    expect(await receivablesOf(h, auth, id)).toEqual([]);
+  });
+
+  it('a cancel that loses to a concurrent record is 409 OUTCOME_ALREADY_RECORDED, and nothing is voided', async () => {
+    const h = harness();
+    const { org, auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id, { amount: '0.00', installments: [] }));
+    const original = h.store.agreements.cancel.bind(h.store.agreements);
+    // The record lands between the route's read and the store's cancel.
+    (h.store.agreements as Loose).cancel = async (...args: Parameters<typeof original>) => {
+      const a = (await h.store.agreements.getById(org.id, detail.agreement.id))!;
+      await h.store.agreements.recordOutcome(org.id, a.id, { outcome: 'NO_RECOVERY', outcomeDate: '2026-10-12', awardedAmountMinor: null, outcomeNote: null, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', commissionInstallment: null, totals: { amountMinor: 0n, netMinor: 0n, vatMinor: 0n, grossMinor: 0n }, upfrontReceivables: [], expectedVersion: a.version }, h.clock.now);
+      return original(...args);
+    };
+    const res = await h.app.request(`/v1/agreements/${detail.agreement.id}/cancel`, json({}, { ...auth, ...idem() }));
+    expect(res.status).toBe(409);
+    expect(await reason(res)).toBe('OUTCOME_ALREADY_RECORDED');
+    expect((await h.store.agreements.getById(org.id, detail.agreement.id))?.status).toBe('ACTIVE');
+  });
+
+  it('a credit on the upfront landing after the commit computed the bill is PREVIEW_STALE, nothing written (D2)', async () => {
+    const h = harness();
+    const { org, auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id, { contingency: { commissionRateBasisPoints: 2000, upfrontTreatment: 'CREDITED' } }));
+    const upfront = detail.installments[0].receivableId;
+    const preview = await read(await previewOutcome(h, auth, detail.agreement.id, award()));
+    const original = h.store.agreements.recordOutcome.bind(h.store.agreements);
+    (h.store.agreements as Loose).recordOutcome = async (...args: Parameters<typeof original>) => {
+      await h.store.receivables.credit(org.id, upfront, { amountMinor: 11_800n, netMinor: 10_000n, vatMinor: 1_800n, reason: 'Goodwill', effectiveDate: '2026-10-13', requestId: null }, h.clock.now);
+      return original(...args);
+    };
+    const res = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome`, json({ ...award(), previewToken: preview.previewToken }, { ...auth, ...idem() }));
+    expect(res.status).toBe(409);
+    expect(await reason(res)).toBe('PREVIEW_STALE');
+    expect((await h.store.agreements.getById(org.id, detail.agreement.id))?.outcome).toBeNull();
+  });
+
+  it('a correction previewed without its reason commits with one (the reason is not in the token, D3)', async () => {
+    const h = harness();
+    const { auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id));
+    await record(h, auth, detail.agreement.id, award());
+    const preview = await read(await previewOutcome(h, auth, detail.agreement.id, award({ awardedAmount: '90000.00' })));
+    expect(preview.mode).toBe('CORRECT');
+    // A figure in the body still counts: a different award under the same token is stale.
+    const otherAward = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome/correct`, json({ ...award({ awardedAmount: '80000.00' }), correctionReason: 'Typo', previewToken: preview.previewToken }, { ...auth, ...idem() }));
+    expect(otherAward.status).toBe(409);
+    expect(await reason(otherAward)).toBe('PREVIEW_STALE');
+    const res = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome/correct`, json({ ...award({ awardedAmount: '90000.00' }), correctionReason: 'Typo', previewToken: preview.previewToken }, { ...auth, ...idem() }));
+    expect(res.status).toBe(200);
+  });
+
+  it('a credited-but-unpaid commission refuses a correction with 409 OUTCOME_HAS_PAYMENTS', async () => {
+    const h = harness();
+    const { auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id));
+    const first = await record(h, auth, detail.agreement.id, award());
+    const line = first.body.installments.find((i: Loose) => i.isCommission);
+    expect((await h.app.request(`/v1/receivables/${line.receivableId}/credits`, json({ amount: '100.00', reason: 'Goodwill' }, { ...auth, ...idem() }))).status).toBe(201);
+    const res = await previewOutcome(h, auth, detail.agreement.id, award({ awardedAmount: '90000.00', correctionReason: 'Typo' }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'OUTCOME_HAS_PAYMENTS', paid: '0.00', credited: '100.00' });
+  });
+
+  it('correcting a commission that never posted voids it with no credit and posts the new one', async () => {
+    const h = harness();
+    const { org, auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id));
+    const agreement = (await h.store.agreements.getById(org.id, detail.agreement.id))!;
+    const line = { position: 2, label: 'Commission', amountMinor: 2_000_000n, netMinor: 2_000_000n, vatMinor: 360_000n, grossMinor: 2_360_000n, vatTreatment: 'STANDARD_RATED' as const, rateBasisPoints: 1800, triggerType: 'DATE' as const, triggerDate: '2026-10-12', paymentTerms: null, dueDateOverride: null, isCommission: true };
+    await h.store.agreements.recordOutcome(org.id, agreement.id, { outcome: 'AWARDED', outcomeDate: '2026-10-12', awardedAmountMinor: 10_000_000n, outcomeNote: null, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', commissionInstallment: line, totals: { amountMinor: 2_150_000n, netMinor: 2_150_000n, vatMinor: 387_000n, grossMinor: 2_537_000n }, upfrontReceivables: [], expectedVersion: agreement.version }, h.clock.now);
+    const { preview, res, body } = await correct(h, auth, agreement.id, award({ awardedAmount: '90000.00', correctionReason: 'Typo' }));
+    expect(preview.replaces).toMatchObject({ receivableId: null, gross: '23600.00' });
+    expect(res.status).toBe(200);
+    const lines = body.installments.filter((i: Loose) => i.isCommission);
+    expect(lines.map((i: Loose) => [i.status, i.gross, i.receivableId === null])).toEqual([['VOID', '23600.00', true], ['DUE', '21240.00', false]]);
+    const commissions = (await receivablesOf(h, auth, agreement.id)).filter((r) => r.gross !== '1770.00');
+    expect(commissions.map((r) => [r.gross, r.credited])).toEqual([['21240.00', '0.00']]);
+  });
+
+  it('VAT included, CREDITED: the bill is computed in gross terms and the VAT taken out of it', async () => {
+    const h = harness();
+    const { auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id, { amount: '1770.00', pricingBasis: 'VAT_INCLUSIVE', installments: [{ label: 'Upfront', amount: '1770.00', trigger: { type: 'IMMEDIATE' } }], contingency: { commissionRateBasisPoints: 2000, upfrontTreatment: 'CREDITED' } }));
+    expect(detail.installments[0]).toMatchObject({ net: '1500.00', vat: '270.00', gross: '1770.00' });
+    const { preview, body } = await record(h, auth, detail.agreement.id, award({ awardedAmount: '118000.00' }));
+    expect(preview).toMatchObject({ commission: '23600.00', upfrontCounted: '1770.00', appliedUpfront: '1770.00', billable: { amount: '21830.00', net: '18500.00', vat: '3330.00', gross: '21830.00' } });
+    const line = body.installments.find((i: Loose) => i.isCommission);
+    expect((await receivablesOf(h, auth, detail.agreement.id)).find((r) => r.id === line.receivableId)).toMatchObject({ net: '18500.00', vat: '3330.00', gross: '21830.00' });
+  });
+
+  it('a key with agreements:read only cannot change terms, record or correct; it may preview', async () => {
+    const h = harness();
+    const { org, auth, project } = await firm(h);
+    const { detail } = await create(h, auth, contingent(project.id));
+    const readKey = await read(await h.app.request(`/admin/v1/organizations/${org.id}/api-keys`, json({ name: 'Reader', scopes: ['agreements:read'] }, admin)));
+    const reader = { authorization: `Bearer ${readKey.secret}` };
+    const id = detail.agreement.id;
+    const preview = await previewOutcome(h, reader, id, award());
+    expect(preview.status).toBe(200);
+    const token = (await read(preview)).previewToken;
+    expect((await h.app.request(`/v1/agreements/${id}/contingency`, json({ commissionRateBasisPoints: 2500 }, { ...reader, 'if-match': '1' }, 'PATCH'))).status).toBe(403);
+    expect((await h.app.request(`/v1/agreements/${id}/outcome`, json({ ...award(), previewToken: token }, { ...reader, ...idem() }))).status).toBe(403);
+    expect((await h.app.request(`/v1/agreements/${id}/outcome/correct`, json({ ...award(), correctionReason: 'x', previewToken: token }, { ...reader, ...idem() }))).status).toBe(403);
+    expect((await h.store.agreements.getById(org.id, id))?.outcome).toBeNull();
   });
 });
 

@@ -768,6 +768,7 @@ export class MemoryLedgerStore implements LedgerStore {
         if (!existing) return null;
         return { installment: { ...i }, receivable: { ...existing }, created: false };
       }
+      if (i.voidedAt) return null;
       const a = this.agrs.get(i.agreementId);
       if (!a) return null;
       const receivable = this.newReceivable({ organizationId, customerId: a.customerId, projectId: a.projectId, agreementId: a.id, origin: 'INSTALLMENT', originId: i.id, currency: a.currency, netMinor: i.netMinor, vatMinor: i.vatMinor, grossMinor: i.grossMinor, vatTreatment: i.vatTreatment, vatRateBasisPoints: i.rateBasisPoints, dueDate: input.dueDate, postingDate: input.postingDate, postedAt: input.at });
@@ -804,7 +805,7 @@ export class MemoryLedgerStore implements LedgerStore {
     cancel: async (organizationId, agreementId, input, at) => {
       const a = this.agrs.get(agreementId);
       if (!a || a.organizationId !== organizationId) return null;
-      if (a.status === 'ACTIVE') {
+      if (a.status === 'ACTIVE' && a.outcome === null) {
         a.status = 'CANCELLED';
         a.cancelledAt = at;
         a.cancelEffectiveMonth = input.cancelEffectiveMonth;
@@ -861,16 +862,18 @@ export class MemoryLedgerStore implements LedgerStore {
     recordOutcome: async (organizationId, agreementId, input: OutcomeWriteInput, at) => {
       const a = this.agrs.get(agreementId);
       if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
-      if (a.version !== input.expectedVersion || a.outcome !== null) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
+      if (a.version !== input.expectedVersion || a.outcome !== null || this.upfrontMoved(organizationId, input.upfrontReceivables)) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
       this.writeOutcome(a, input, at);
       return { kind: 'updated', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
     },
     correctOutcome: async (organizationId, agreementId, input: CorrectOutcomeInput, at) => {
       const a = this.agrs.get(agreementId);
       if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
-      if (a.version !== input.expectedVersion || a.outcome === null) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: null } };
       const replaced = input.replaceInstallmentId ? this.insts.get(input.replaceInstallmentId) : undefined;
-      if (input.replaceInstallmentId && (!replaced || replaced.agreementId !== agreementId || !replaced.isCommission || replaced.voidedAt)) throw new ForeignKeyViolation('installments.id');
+      const replacedGone = input.replaceInstallmentId !== null && (!replaced || replaced.agreementId !== agreementId || !replaced.isCommission || replaced.voidedAt !== null);
+      if (a.version !== input.expectedVersion || a.outcome === null || replacedGone || this.upfrontMoved(organizationId, input.upfrontReceivables)) {
+        return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: null } };
+      }
       const receivable = replaced?.receivableId ? this.recs.get(replaced.receivableId) : undefined;
       // Nothing is written before this check, so a refusal leaves the ledger exactly as it was.
       if (receivable && (receivable.paidMinor > 0n || receivable.creditedMinor > 0n)) return { kind: 'has_payments', receivableId: receivable.id };
@@ -886,6 +889,14 @@ export class MemoryLedgerStore implements LedgerStore {
       return { kind: 'updated', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: credit ? { ...credit } : null } };
     },
   };
+
+  /** True when any receivable the counted upfront was read from is gone or has moved since (MUT-100 review D2). */
+  private upfrontMoved(organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): boolean {
+    return seen.some((s) => {
+      const r = this.recs.get(s.id);
+      return !r || r.organizationId !== organizationId || r.version !== s.version;
+    });
+  }
 
   /** Outcome, terms, totals and version on the agreement, plus the commission line when there is one (MUT-100). */
   private writeOutcome(a: AgreementRecord, input: OutcomeWriteInput, at: Date): void {

@@ -267,7 +267,9 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         if (agreement.outcome !== null) throw new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
         const installments = await store.agreements.listInstallments(organization.id, agreement.id);
         if (installments.some((i) => i.receivableId)) throw new ApiError('CONFLICT', 'Installments have been posted; cancellation needs adjustments (M4)', { reason: 'AGREEMENT_HAS_POSTED_RECEIVABLES' });
-        await store.agreements.cancel(organization.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, now);
+        const cancelled = await store.agreements.cancel(organization.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, now);
+        // The store refuses once a contingency outcome exists, even one recorded after the read above.
+        if (cancelled?.status === 'ACTIVE') throw new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
         await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'agreement.cancelled', entityType: 'agreement', entityId: agreement.id, requestId: c.get('requestId') });
       }
       const fresh = await mustGet(store, organization.id, agreement.id);

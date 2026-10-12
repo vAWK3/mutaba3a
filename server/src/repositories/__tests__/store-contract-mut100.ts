@@ -79,6 +79,7 @@ export function describeLedgerStoreMut100Contract(name: string, makeStore: () =>
     upfrontTreatment: 'SEPARATE',
     commissionInstallment: commission(),
     totals: totalsWithCommission,
+    upfrontReceivables: [],
     expectedVersion,
     ...over,
   });
@@ -222,6 +223,88 @@ export function describeLedgerStoreMut100Contract(name: string, makeStore: () =>
       expect(await store.receivables.listCredits(o.id, receivable.id)).toEqual([]);
       const lines = await store.agreements.listInstallments(o.id, agreement.id);
       expect(lines.map((i) => [i.position, i.voidedAt])).toEqual([[1, null], [2, null]]);
+    });
+
+    it('updateContingencyTerms is stale once an outcome exists, even at the current version', async () => {
+      const store = await makeStore();
+      const { o, agreement } = await contingency(store);
+      const first = await store.agreements.recordOutcome(o.id, agreement.id, awarded(agreement.version), at(2));
+      if (first.kind !== 'updated') throw new Error(first.kind);
+      expect((await store.agreements.updateContingencyTerms(o.id, agreement.id, first.record.agreement.version, { commissionRateBasisPoints: 2500 }, at(3))).kind).toBe('stale');
+      expect(await store.agreements.getById(o.id, agreement.id)).toMatchObject({ commissionRateBasisPoints: 2000, version: first.record.agreement.version });
+    });
+
+    it('postInstallment never posts a voided line', async () => {
+      const store = await makeStore();
+      const o = await org(store);
+      const p = await project(store, o);
+      const { agreement, installments } = await store.agreements.create(agreementInput(o, p, [upfront({ triggerType: 'MANUAL' })]), at(1));
+      await store.agreements.cancel(o.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, at(2));
+      expect(await store.agreements.postInstallment(o.id, installments[0]!.id, { postingDate: '2026-10-13', dueDate: '2026-10-31', at: at(3) })).toBeNull();
+      expect((await store.agreements.getInstallment(o.id, installments[0]!.id))?.receivableId).toBeNull();
+      expect((await store.receivables.list(o.id, { projectId: p.id }, { limit: 10, cursor: null })).items).toEqual([]);
+    });
+
+    it('cancel leaves an agreement with a recorded outcome ACTIVE and its lines alone', async () => {
+      const store = await makeStore();
+      const { o, agreement } = await contingency(store);
+      const first = await store.agreements.recordOutcome(o.id, agreement.id, awarded(agreement.version), at(2));
+      if (first.kind !== 'updated') throw new Error(first.kind);
+      const after = await store.agreements.cancel(o.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, at(3));
+      expect(after).toMatchObject({ status: 'ACTIVE', outcome: 'AWARDED', version: first.record.agreement.version });
+      expect((await store.agreements.listInstallments(o.id, agreement.id)).map((i) => i.voidedAt)).toEqual([null, null]);
+    });
+
+    it('recordOutcome and correctOutcome are stale when an upfront receivable moved after the figures were computed (D2)', async () => {
+      const store = await makeStore();
+      const { o, agreement, installments } = await contingency(store);
+      const posted = await store.agreements.postInstallment(o.id, installments[0]!.id, { postingDate: '2026-10-13', dueDate: '2026-10-31', at: at(2) });
+      const seen = [{ id: posted!.receivable.id, version: posted!.receivable.version }];
+      await store.receivables.credit(o.id, posted!.receivable.id, { amountMinor: 11_800n, netMinor: 10_000n, vatMinor: 1_800n, reason: 'Goodwill', effectiveDate: '2026-10-13', requestId: null }, at(3));
+      expect((await store.agreements.recordOutcome(o.id, agreement.id, awarded(agreement.version, { upfrontReceivables: seen }), at(4))).kind).toBe('stale');
+      expect(await store.agreements.getById(o.id, agreement.id)).toMatchObject({ outcome: null, version: agreement.version });
+      expect(await store.agreements.listInstallments(o.id, agreement.id)).toHaveLength(1);
+
+      const fresh = (await store.receivables.getById(o.id, posted!.receivable.id))!;
+      const first = await store.agreements.recordOutcome(o.id, agreement.id, awarded(agreement.version, { upfrontReceivables: [{ id: fresh.id, version: fresh.version }] }), at(5));
+      expect(first.kind).toBe('updated');
+      if (first.kind !== 'updated') return;
+      await store.receivables.credit(o.id, fresh.id, { amountMinor: 100n, netMinor: 85n, vatMinor: 15n, reason: 'More', effectiveDate: '2026-10-13', requestId: null }, at(6));
+      const line = first.record.installments.find((i) => i.isCommission)!;
+      const correction = await store.agreements.correctOutcome(o.id, agreement.id, { ...awarded(first.record.agreement.version, { upfrontReceivables: [{ id: fresh.id, version: fresh.version }], commissionInstallment: commission({ position: 3 }) }), replaceInstallmentId: line.id, credit: { reason: 'Fix', effectiveDate: '2026-10-13', requestId: null } }, at(7));
+      expect(correction.kind).toBe('stale');
+      expect((await store.agreements.listInstallments(o.id, agreement.id)).find((i) => i.id === line.id)?.voidedAt).toBeNull();
+    });
+
+    it('correctOutcome is refused when the commission was credited (not paid), writing nothing', async () => {
+      const store = await makeStore();
+      const { o, agreement, line, receivable } = await recorded(store);
+      await store.receivables.credit(o.id, receivable.id, { amountMinor: 10_000n, netMinor: 8_475n, vatMinor: 1_525n, reason: 'Goodwill', effectiveDate: '2026-10-13', requestId: null }, at(4));
+      const refused = await store.agreements.correctOutcome(o.id, agreement.id, { ...awarded(agreement.version, { commissionInstallment: commission({ position: 3 }) }), replaceInstallmentId: line.id, credit: { reason: 'Fix', effectiveDate: '2026-10-13', requestId: null } }, at(5));
+      expect(refused).toEqual({ kind: 'has_payments', receivableId: receivable.id });
+      expect(await store.receivables.listCredits(o.id, receivable.id)).toHaveLength(1);
+    });
+
+    it('correctOutcome is stale, never a throw, when the line it replaces is already voided', async () => {
+      const store = await makeStore();
+      const { o, agreement, line } = await recorded(store);
+      const input = { ...awarded(agreement.version, { commissionInstallment: commission({ position: 3 }) }), replaceInstallmentId: line.id, credit: { reason: 'Fix', effectiveDate: '2026-10-13', requestId: null } };
+      expect((await store.agreements.correctOutcome(o.id, agreement.id, input, at(4))).kind).toBe('updated');
+      const after = (await store.agreements.getById(o.id, agreement.id))!;
+      const again = await store.agreements.correctOutcome(o.id, agreement.id, { ...input, expectedVersion: after.version, commissionInstallment: commission({ position: 4 }) }, at(5));
+      expect(again.kind).toBe('stale');
+    });
+
+    it('two corrections racing on one version: one wins, the other is stale, one credit', async () => {
+      const store = await makeStore();
+      const { o, agreement, line, receivable } = await recorded(store);
+      const input = (position: number) => ({ ...awarded(agreement.version, { commissionInstallment: commission({ position }) }), replaceInstallmentId: line.id, credit: { reason: 'Fix', effectiveDate: '2026-10-13', requestId: null } });
+      const results = await Promise.allSettled([store.agreements.correctOutcome(o.id, agreement.id, input(3), at(4)), store.agreements.correctOutcome(o.id, agreement.id, input(4), at(5))]);
+      expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+      const kinds = results.map((r) => (r as PromiseFulfilledResult<{ kind: string }>).value.kind).sort();
+      expect(kinds).toEqual(['stale', 'updated']);
+      expect(await store.receivables.listCredits(o.id, receivable.id)).toHaveLength(1);
+      expect((await store.agreements.listInstallments(o.id, agreement.id)).filter((i) => i.isCommission && !i.voidedAt)).toHaveLength(1);
     });
 
     it('correctOutcome is stale when no outcome has been recorded', async () => {

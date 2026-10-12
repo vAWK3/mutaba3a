@@ -2022,3 +2022,9 @@ Postgres refuses a new enum value inside the transaction that added it, so `ALTE
 ### Audit metadata is JSON by type
 `AuditEventInput.metadata` is `JsonObject`: a `bigint` or `Date` is a compile error, not a Prisma 500 after the write it describes (the memory store would have stored it happily). Money goes in as `formatMoney` strings, rates as integers. Widen to `Record<string, unknown>` only at the wire serializer, where the recursive type exhausts the route type checker.
 
+### A void and a post race: the posting write refuses a voided line, and the void is conditional
+Two writers can meet on one unposted installment: a lazy read posting it and a cancel or correction voiding it. `postInstallment`'s winning write carries `receivableId IS NULL AND voidedAt IS NULL`; a correction's void carries the `receivableId` it read and `voidedAt IS NULL`. Whichever commits second matches no row and stands down (`null` / `stale`), so a line is never both voided and billed. Prove the store-level guard with a contract row, not only a route test.
+
+### Serialize writes to one aggregate on its row lock, then read
+`correctOutcome` starts with `SELECT … FROM agreements … FOR UPDATE` and only then reads the version. A concurrent correction waits, then sees the new version and is `stale`; without the lock it got past the version check and failed later with a misleading reason. A Postgres contract test racing two calls with `Promise.allSettled` catches the difference (it failed 2 of 3 runs with the lock removed).
+

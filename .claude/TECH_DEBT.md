@@ -18,6 +18,32 @@
 
 ## Open Debt
 
+### TD-100: No upper bound on money amounts — an oversized award is a 500, not a 422
+**Status**: Open
+**Added**: 2026-10-13 (MUT-100 review; pre-existing for every amount)
+**Priority**: Low
+**Impact**: `parseMoney` accepts any digit count, so an award (or an agreement amount) beyond Postgres BIGINT passes validation and fails inside the write with a Prisma error → 500. Nothing is written; the 5xx releases the idempotency key.
+**Fix**: a max-minor bound in `parseAmount` (one place for every caller), 422 `AMOUNT_INVALID`.
+
+### TD-101: Outcome audit events are appended after the write commits
+**Status**: Accepted
+**Added**: 2026-10-13 (MUT-100 review; the codebase-wide pattern, cf. TD-090)
+**Priority**: Low
+**Impact**: `agreement.outcome_recorded` / `outcome_corrected` (the dispute figures, CEO C2) and `receivable.credited` are written after the store transaction and the commission posting. A crash in between leaves the ledger right and those audit rows missing; a retry then meets `OUTCOME_ALREADY_RECORDED`.
+
+### TD-102: One live commission line per agreement is not enforced by the database
+**Status**: Accepted
+**Added**: 2026-10-13 (MUT-100 review)
+**Priority**: Low
+**Impact**: a correction replaces "the" live commission line; two would leave one uncredited. Today the agreement row lock, the version guards and the conditional void make a second impossible, but a partial unique index (`installments(agreementId) WHERE isCommission AND voidedAt IS NULL`) cannot be expressed in the Prisma 6 schema without the migration-drift tests flagging it.
+
+### TD-103: Summaries load installments one agreement (and one project) at a time
+**Status**: Open
+**Added**: 2026-10-13 (MUT-100 performance review; pre-existing, widened to CONTINGENCY)
+**Priority**: Low
+**Impact**: `projectSummary` awaits `listInstallments` per ACTIVE fixed-like agreement, and the customer summary calls it per project with its own proposal and agreement lists: about 3P + A sequential queries.
+**Fix**: one `installment.findMany({ agreementId: { in } })` per summary, grouped in memory; load a customer's agreements and proposals once.
+
 ### TD-097: Contingency terms are sparse columns on `agreements`, and `CONTINGENCY` is a permanent enum value
 **Status**: Accepted
 **Added**: 2026-10-13 (MUT-100, CEO review S10)

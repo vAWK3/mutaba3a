@@ -54,6 +54,15 @@
 - MUT-59's and MUT-61's migration tests apply history one transaction per file (pasted as one script, Postgres refused `CONTINGENCY` in the transaction that added it); MUT-61's applies the rest of the history before its schema diff. Assertions unchanged.
 - `TODOS.md` #7 records the deferred proposal flow (MUT-107/MAL-1094). New debt TD-097..099. `server/DEPLOYMENT.md` §6: post-release `pg_enum` check and the rollback rule.
 
+### Fixed in pre-landing review (2026-10-13, `/qa-reconcile` → `/review`: 7 specialists + adversarial; decisions D1–D4 by Basel)
+- **Double billing / commission on a cancelled agreement (D1):** `postInstallment` never posts a voided line; a correction locks the agreement row and voids conditionally (a racing loser is 409, never a 500 or `has_payments`); cancel refuses once an outcome is recorded, also when it races the record.
+- **Upfront moving between compose and write (D2):** the write re-checks each upfront receivable's version under lock → 409 `PREVIEW_STALE`.
+- **`correctionReason` left out of the token (D3).**
+- **The terms CHECK refused no NULL rate** (`NULL BETWEEN …` is NULL; a NULL CHECK passes) — explicit `IS NOT NULL`; the unapplied migration is edited in place.
+- Credits read in parallel; `COMMISSION_RATE_RULE` from the bounds; due-date override bounded; rollback runbook corrected (an old revision fails reads of CONTINGENCY rows: roll forward only).
+- Tests added: cancelled guard, credited-not-paid commission, terms stale after an outcome (store), correcting a never-posted commission, VAT-included CREDITED end to end, read-only key 403 on the three writes, Postgres race of two corrections, voided-line posting, cancel vs record. Each new route test was mutation-checked (fails with its fix reverted). New debt TD-100..103.
+- **Re-run:** `server/` lint, typecheck, build, openapi:check clean; `npm test` 1,485 passed / 17 skipped; Postgres 1,607 passed; hosted types match.
+
 ## [Unreleased] - 2026-10-12 — deploy.sh runs post-roll data repairs (MUT-61 follow-up)
 
 **Why:** a migration's backfill runs before the new revision serves (deploy.sh step 3), so rows the old revision writes in between — or after a rollback — miss it. MUT-61's `origin` backfill had a manual DEPLOYMENT.md step for that window; it is now automatic.

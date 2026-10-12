@@ -1792,7 +1792,7 @@ Plan: `.claude/designs/mut-61-malafat-received-capture-tests.md`; regression con
 
 ## Hosted API — MUT-100: Contingency fee agreements (2026-10-13)
 
-Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression contract R5/D7 in the brief. Run (Node 22, `server/`): `npm test` 1,470 passed / 17 skipped; full suite on Postgres 1,585 passed.
+Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression contract R5/D7 in the brief. Run (Node 22, `server/`): `npm test` 1,485 passed / 17 skipped; full suite on Postgres 1,607 passed (after the pre-landing review fixes).
 
 | Area | File | What is pinned |
 |---|---|---|
@@ -1801,6 +1801,7 @@ Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression cont
 | Repository contract | `repositories/__tests__/store-contract-mut100.ts` (new; memory + Postgres) | terms persist; `updateContingencyTerms` / `recordOutcome` / `correctOutcome` all-or-nothing under the version; record stale once an outcome exists; correction credits in full, voids, writes new terms; `has_payments` with nothing written; unposted commission returned by `listUnpostedDue` |
 | Migrations | `repositories/__tests__/migration-mut100.test.ts` (new) | the two files apply in order, one transaction each, after a pre-existing agreement; the CHECK refuses a CONTINGENCY row without a valid rate or a treatment; no schema drift |
 | Routes | `__tests__/routes-mut100.test.ts` (new, 29 tests) | create both treatments and ₪0 upfront; FIXED `[]` → `NO_INSTALLMENTS`; PATCH terms (If-Match, nothing-changed, frozen after outcome); AC 1–5 end to end (23,600 / 21,830 / nothing / NO_RECOVERY / 17 % → 18 %); due-date default and override; credit between preview and record → `PREVIEW_STALE`; FIXED hearing agreement; second record, race, idempotent replay; crash heal; audit metadata pinned; validation rows; `VAT_RATE_MISSING`; correction (full credit + void + new line, terms fix, matrix), `OUTCOME_HAS_PAYMENTS` from the route and from the store; project summary block |
+| Review fixes | `routes-mut100.test.ts` › "review fixes (D1–D4)", `store-contract-mut100.ts` (7 rows added) | voided line never posts; cancel refuses after an outcome (store + racing route); upfront moved after compose → stale / `PREVIEW_STALE`; reason outside the token; credited-not-paid commission refused; correcting a never-posted line; VAT-included CREDITED; read-only key 403; two corrections racing on Postgres (one `updated`, one `stale`, one credit). Mutation-checked: each fails with its fix reverted |
 | Regression | every existing server suite | unchanged assertions; edits limited to the API version pins (`1.16.0-mut100`), record fixtures gaining the new fields, and the MUT-59/MUT-61 migration harnesses applying history one transaction per file |
 
 Session writes to the new routes (403 `READ_ONLY_PROFILE`) are covered by `writability-routes.test.ts`, which derives its cases from every route's declared security.

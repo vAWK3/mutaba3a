@@ -67,6 +67,8 @@ export async function composeOutcome(store: LedgerStore, organization: Organizat
   // One read per posted upfront line (≤ 59), issued together rather than one round trip after another.
   const upfrontReceivableIds = live.filter((i) => !i.isCommission && i.receivableId !== null).map((i) => i.receivableId as string);
   const credits = new Map<string, CreditRecord[]>(await Promise.all(upfrontReceivableIds.map(async (id) => [id, await store.receivables.listCredits(organization.id, id)] as const)));
+  // Re-checked under their row locks by the write (review D2): a credit landing after this read makes it stale.
+  const upfrontReceivables = (await store.receivables.getByIds(organization.id, upfrontReceivableIds)).map((r) => ({ id: r.id, version: r.version }));
   const counted = upfrontCountedMinor({ installments: live, creditsByReceivableId: credits, pricingBasis: agreement.pricingBasis });
   const plan = planOutcome({ outcome: body.outcome, treatment, awardedMinor, rateBasisPoints: rate, upfrontCountedMinor: counted });
 
@@ -79,7 +81,8 @@ export async function composeOutcome(store: LedgerStore, organization: Organizat
   const vatRateBasisPoints = line?.rateBasisPoints ?? 0;
   const postingDate = line ? outcomeDate : null;
   const dueDate = line ? installmentDueDate(line, agreement, outcomeDate) : null;
-  const tokenParts = [organization.id, 'outcome', agreement.id, agreement.version, mode, body, vatRateBasisPoints, counted, plan.commissionMinor, plan.billableMinor, replacedReceivable ? [replacedReceivable.id, replacedReceivable.version] : (replaced?.id ?? null)];
+  // correctionReason is the credit note's text and moves no figure, so a preview with or without it matches the commit (review D3).
+  const tokenParts = [organization.id, 'outcome', agreement.id, agreement.version, mode, { ...body, correctionReason: undefined }, vatRateBasisPoints, counted, plan.commissionMinor, plan.billableMinor, replacedReceivable ? [replacedReceivable.id, replacedReceivable.version] : (replaced?.id ?? null)];
   const token = previewToken(tokenParts);
 
   const fmt = (minor: bigint) => formatMoney({ minor, currency: agreement.currency as Currency });
@@ -89,6 +92,7 @@ export async function composeOutcome(store: LedgerStore, organization: Organizat
     ...outcomeFigures,
     note: body.note ?? null,
     totals,
+    upfrontReceivables,
     postingDate,
     dueDate,
     replaced,

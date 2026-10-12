@@ -623,6 +623,12 @@ export interface OutcomeWriteInput {
   commissionInstallment: CreateInstallmentInput | null;
   /** The agreement's totals after the write: every live installment, the new commission line included. */
   totals: { amountMinor: bigint; netMinor: bigint; vatMinor: bigint; grossMinor: bigint };
+  /**
+   * The posted upfront receivables the counted upfront was read from, at the versions read (review D2). Re-checked
+   * under their row locks inside the write: a credit (or payment) since then answers `stale`, so the bill written is
+   * never computed from an upfront that has since moved.
+   */
+  upfrontReceivables: ReadonlyArray<{ id: string; version: number }>;
   expectedVersion: number;
 }
 
@@ -699,13 +705,13 @@ export interface AgreementRepository {
   list(organizationId: string, filter: AgreementFilter, page: PageRequest): Promise<Page<AgreementRecord>>;
   listInstallments(organizationId: string, agreementId: string): Promise<InstallmentRecord[]>;
   getInstallment(organizationId: string, id: string): Promise<InstallmentRecord | null>;
-  /** Creates the receivable and marks the installment, atomically; a second call returns the first receivable with created=false. */
+  /** Creates the receivable and marks the installment, atomically; a second call returns the first receivable with created=false. Null for a voided, unposted line (a correction or cancel got there first). */
   postInstallment(organizationId: string, installmentId: string, input: PostingInput): Promise<{ installment: InstallmentRecord; receivable: ReceivableRecord; created: boolean } | null>;
   /** Unposted, non-voided installments on ACTIVE agreements that should have a receivable by `today`: DATE ones whose trigger date has arrived, and IMMEDIATE ones left unposted by a crash between create and post (M8, D16). Never MANUAL. */
   listUnpostedDue(organizationId: string, today: IsoDate): Promise<InstallmentRecord[]>;
   applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
   listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
-  /** FIXED: status CANCELLED, unposted installments voided. RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
+  /** FIXED / CONTINGENCY: status CANCELLED, unposted installments voided — never once a contingency outcome is recorded (returned unchanged). RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
   cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
   /** M5: appends a terms version (unique per agreement + version) and bumps the agreement version atomically; `conflict` when the agreement moved. */
   appendVersion(input: AppendVersionInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; version: RetainerVersionRecord }>>;

@@ -2539,3 +2539,10 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - Recomputing upfront credits with `splitCredit`: can differ by an agora from the issued credit notes (D6).
 - One migration with a text-cast CHECK, or no CHECK (D3).
 - Terms frozen at the outcome with no correction path (D5): a rate typo would be permanent.
+
+**Amendment — pre-landing review (2026-10-13, `/qa-reconcile` + `/review`, decisions by Basel):**
+- **No posting on a voided line** (review D1): `postInstallment` refuses a voided, unposted installment in both stores; on Postgres the posting write also carries `voidedAt IS NULL`. Before, a correction or cancel voiding a commission line could race a lazy read posting it and leave both commissions billed.
+- **A correction serializes on the agreement row** (`SELECT … FOR UPDATE`) and voids the replaced line conditionally, as its first write; a line that moved is `stale`, never a 500. A racing loser is `stale` (409), not `has_payments`.
+- **Cancel never undoes a recorded outcome**: the store's cancel write carries `outcome IS NULL`; a cancel losing to a concurrent record is 409 `OUTCOME_ALREADY_RECORDED`.
+- **The counted upfront is re-checked inside the write** (review D2): the write carries each upfront receivable's id and version, locked and compared in the transaction; a credit landing after the commit computed the bill is 409 `PREVIEW_STALE`. This closes the last gap in decision 5.
+- **`correctionReason` is outside the preview token** (review D3): it is the credit note's text and moves no figure, so a preview with or without it matches the commit.

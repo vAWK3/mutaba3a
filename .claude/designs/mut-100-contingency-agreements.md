@@ -14,6 +14,7 @@
 > - `upfrontCountedMinor` takes no `receivablesById` (Q3 wording): the credits map is keyed by the installments' own `receivableId`.
 > - **The four new routes live in `server/src/routes/contingency.ts`** (registered beside `agreementRoutes`), with their composition in `agreements/outcome.ts`; the plan put them in `routes/agreements.ts`. Paths, scopes and the writability row are unchanged; cancel and supplements stay in `agreements.ts`.
 > - **Migration test harnesses**: MUT-59's and MUT-61's tests pasted the whole migration history into one script — one implicit transaction — and Postgres refused `CONTINGENCY` there (D3's hazard, in the harness only). They now apply one transaction per file, as `prisma migrate deploy` does; assertions unchanged.
+> - **Pre-landing review (2026-10-13)** added: no posting on a voided line, an agreement row lock and a conditional void in `correctOutcome`, cancel refused after an outcome, the upfront re-checked under lock inside the write (D2), `correctionReason` outside the token (D3), and an explicit `IS NOT NULL` in the CHECK. ADR-059 amendment.
 > - **Status after an award**: with the upfront already paid, a posted unpaid commission makes the project PARTIALLY_PAID (the existing fixed-fee rule), not OUTSTANDING as §9 item 2 assumed; OUTSTANDING is the nothing-paid case.
 
 Repo: `~/Work/elMokhtbr/Mutaba3a/mini-crm`, package `server/` (hosted ledger, Hono + zod-openapi, Prisma/Postgres, Memory + Prisma stores behind `LedgerStore`).
