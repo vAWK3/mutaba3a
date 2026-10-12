@@ -8,7 +8,7 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { cn, formatAmount, formatDate, todayISO } from '../../lib/utils';
+import { cn, formatAmount, formatDate, isolate, todayISO } from '../../lib/utils';
 import { isFuturePaymentDate } from '../../lib/dates';
 import { describePaymentAmount, minorToAmountInput, type PaymentAmountState } from '../../lib/paymentEntry';
 import type { Currency, PaymentRecord } from '../../types';
@@ -43,14 +43,6 @@ interface PartialPaymentDrawerProps {
 }
 
 const FORM_ID = 'partial-payment-form';
-
-// Bidi isolates: keep an amount whole inside a sentence of either direction
-const FIRST_STRONG_ISOLATE = '\u2068';
-const POP_ISOLATE = '\u2069';
-
-function isolate(text: string): string {
-  return `${FIRST_STRONG_ISOLATE}${text}${POP_ISOLATE}`;
-}
 
 export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: PartialPaymentDrawerProps) {
   const t = useT();
