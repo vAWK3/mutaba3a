@@ -72,7 +72,7 @@ export function useProfileAwareAction(
       if (profiles.length === 1) {
         // Single profile: execute immediately
         options.onExecute(profiles[0].id);
-      } else if (!isAllProfiles && activeProfileId && activeProfileId !== 'all') {
+      } else if (!isAllProfiles && activeProfileId) {
         // Specific profile selected: execute with that profile
         options.onExecute(activeProfileId);
       } else {

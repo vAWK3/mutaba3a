@@ -18,6 +18,7 @@ import { useDrawerStore } from '../../lib/stores';
 import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
 import { formatAmount, formatDate, todayISO } from '../../lib/utils';
+import { useProfileStore } from '../../lib/profileStore';
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -486,6 +487,58 @@ describe('IncomeDrawer', () => {
       await waitFor(() => expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'true'));
       expect(screen.getByText('Date is required')).toBeInTheDocument();
       expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+  });
+
+  describe('opened from All businesses (MUT-89, AC4)', () => {
+    let secondProfileId: string;
+
+    beforeEach(async () => {
+      const second = await businessProfileRepo.create({ name: 'Second Business', defaultCurrency: 'USD' });
+      secondProfileId = second.id;
+      useProfileStore.setState({ activeProfileId: testProfileId, allBusinesses: true, onOwedScreen: true });
+    });
+
+    afterEach(() => {
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false });
+    });
+
+    it('asks which business up front, with none chosen, and will not save without one', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      const businessSelect = await screen.findByLabelText(/Business Profile/);
+      expect(businessSelect).toHaveValue('');
+      expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'false');
+
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+      expect(await screen.findByText('Profile is required')).toBeInTheDocument();
+      expect(await transactionRepo.list({})).toHaveLength(0);
+    });
+
+    it('takes the business the Add menu asked for', async () => {
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', defaultProfileId: secondProfileId } });
+      renderDrawer();
+
+      await screen.findByText('New Income');
+      expect(screen.queryByLabelText(/Business Profile/)).not.toBeInTheDocument();
+    });
+
+    it('works in the working business when opened away from Home and Clients', async () => {
+      const user = userEvent.setup();
+      useProfileStore.setState({ onOwedScreen: false });
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      await screen.findByText('New Income');
+      expect(screen.queryByLabelText(/Business Profile/)).not.toBeInTheDocument();
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+
+      await waitFor(async () => expect(await transactionRepo.list({})).toHaveLength(1));
+      expect((await transactionRepo.list({}))[0].profileId).toBe(testProfileId);
     });
   });
 

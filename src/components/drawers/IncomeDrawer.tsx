@@ -163,7 +163,7 @@ export function IncomeDrawer() {
   const initialProfileId = useMemo(() => {
     if (existingTx?.profileId) return existingTx.profileId;
     if (defaultProfileId) return defaultProfileId;
-    if (!isAllProfiles && activeProfileId && activeProfileId !== 'all') return activeProfileId;
+    if (!isAllProfiles && activeProfileId) return activeProfileId;
     if (profiles.length === 1) return profiles[0].id;
     return '';
   }, [existingTx, defaultProfileId, isAllProfiles, activeProfileId, profiles]);

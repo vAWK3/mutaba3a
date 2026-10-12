@@ -35,8 +35,8 @@ export function PlanningPage() {
   const { activeProfileId } = useProfileStore();
   const { data: profiles = [] } = useBusinessProfiles();
 
-  // Get the actual profile ID (activeProfileId can be 'all' or a specific ID)
-  const selectedProfileId = activeProfileId === 'all' ? undefined : activeProfileId;
+  // The working business: a concrete id, never "all" (MUT-89, ADR-051)
+  const selectedProfileId = activeProfileId || undefined;
 
   // Get plans for the selected profile (show both draft and active plans)
   const planFilters: PlanFilters = useMemo(

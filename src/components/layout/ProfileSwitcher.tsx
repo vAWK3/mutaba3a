@@ -17,10 +17,13 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const {
+    isAllProfiles,
     activeProfileId,
     activeProfile,
     profiles,
+    showAllProfilesOption,
     setActiveProfile,
+    setAllBusinesses,
     isLoading,
   } = useActiveProfile();
 
@@ -87,6 +90,12 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
     setIsOpen(false);
   };
 
+  // "All businesses" on Home and Clients (MUT-89, ADR-051); picking a business turns it off
+  const handleShowAllBusinesses = () => {
+    setAllBusinesses(true);
+    setIsOpen(false);
+  };
+
   if (isLoading) {
     return (
       <div className="profile-switcher profile-switcher-loading">
@@ -111,20 +120,24 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
     );
   }
 
-  // Display name for the current selection
-  const displayName = activeProfile?.name ?? profiles[0]?.name ?? '';
+  // Display name for the current selection: what this screen shows
+  const displayName = isAllProfiles
+    ? t('profileSwitcher.allProfiles')
+    : (activeProfile?.name ?? profiles[0]?.name ?? '');
 
   return (
     <div className={`profile-switcher-container ${collapsed ? 'collapsed' : ''}`} ref={containerRef}>
       <button
         ref={buttonRef}
-        className={`profile-switcher ${collapsed ? 'collapsed' : ''}`}
+        className={`profile-switcher ${collapsed ? 'collapsed' : ''} ${isAllProfiles ? 'all-profiles' : ''}`}
         onClick={handleToggleDropdown}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         title={collapsed ? displayName : undefined}
       >
-        {activeProfile ? (
+        {isAllProfiles ? (
+          <AllProfilesAvatar />
+        ) : activeProfile ? (
           <ProfileAvatar profile={activeProfile} />
         ) : (
           <div className="profile-switcher-avatar profile-switcher-avatar-empty">
@@ -144,14 +157,37 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
       {isOpen && (
         <div className={`profile-switcher-dropdown ${collapsed ? 'collapsed-dropdown' : ''} ${dropdownPosition === 'bottom' ? 'dropdown-bottom' : ''}`} role="listbox">
           <div className="profile-switcher-list">
+            {/* All businesses: Home and Clients only, with 2+ businesses (MUT-89) */}
+            {showAllProfilesOption && (
+              <>
+                <button
+                  className={`profile-switcher-option profile-switcher-option-all ${isAllProfiles ? 'active' : ''}`}
+                  onClick={handleShowAllBusinesses}
+                  role="option"
+                  aria-selected={isAllProfiles}
+                >
+                  <AllProfilesAvatar size="small" />
+                  <span className="profile-switcher-option-name">
+                    {t('profileSwitcher.allProfiles')}
+                  </span>
+                  {isAllProfiles && (
+                    <CheckIcon className="profile-switcher-check" />
+                  )}
+                </button>
+                <div className="profile-switcher-divider profile-switcher-divider-thin" />
+              </>
+            )}
+
             {/* Individual profiles */}
-            {profiles.map((profile) => (
+            {profiles.map((profile) => {
+              const isCurrent = !isAllProfiles && profile.id === activeProfileId;
+              return (
               <button
                 key={profile.id}
-                className={`profile-switcher-option ${profile.id === activeProfileId ? 'active' : ''}`}
+                className={`profile-switcher-option ${isCurrent ? 'active' : ''}`}
                 onClick={() => handleSwitchProfile(profile.id)}
                 role="option"
-                aria-selected={profile.id === activeProfileId}
+                aria-selected={isCurrent}
               >
                 <ProfileAvatar profile={profile} size="small" />
                 <span className="profile-switcher-option-name">
@@ -162,11 +198,12 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
                     </span>
                   )}
                 </span>
-                {profile.id === activeProfileId && (
+                {isCurrent && (
                   <CheckIcon className="profile-switcher-check" />
                 )}
               </button>
-            ))}
+              );
+            })}
           </div>
 
           <div className="profile-switcher-divider" />
@@ -212,6 +249,29 @@ function ProfileAvatar({ profile, size = 'medium' }: { profile: BusinessProfile;
       style={{ backgroundColor: profile.primaryColor || 'var(--color-accent)' }}
     >
       {initials}
+    </div>
+  );
+}
+
+function AllProfilesAvatar({ size = 'medium' }: { size?: 'small' | 'medium' }) {
+  const sizeClass = size === 'small' ? 'profile-switcher-avatar-sm' : '';
+
+  return (
+    <div className={`profile-switcher-avatar profile-switcher-avatar-all ${sizeClass}`}>
+      <svg
+        width="16"
+        height="16"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25a2.25 2.25 0 0 1-2.25 2.25h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"
+        />
+      </svg>
     </div>
   );
 }

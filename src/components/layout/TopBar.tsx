@@ -160,11 +160,22 @@ function AddMenu() {
   );
 }
 
-function ActiveProfileIndicator() {
-  const { activeProfile, profiles } = useActiveProfile();
+/** The business this page shows, or "All businesses" on Home and Clients while the lens is on (MUT-89) */
+export function ActiveProfileIndicator() {
+  const t = useT();
+  const { activeProfile, profiles, isAllProfiles } = useActiveProfile();
 
   // Only show if there are multiple profiles
   if (!activeProfile || profiles.length <= 1) return null;
+
+  if (isAllProfiles) {
+    const label = t('profileSwitcher.allProfiles');
+    return (
+      <div className="topbar-profile-indicator" title={label}>
+        <span className="topbar-profile-name">{label}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="topbar-profile-indicator" title={activeProfile.name}>
