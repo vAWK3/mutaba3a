@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { PrismaLedgerStore } from '../prisma.js';
 
 /**
@@ -15,6 +15,10 @@ import { PrismaLedgerStore } from '../prisma.js';
  * database that already has M8's shape. Each case runs on its own scratch
  * database built exactly as production got its schema.
  */
+// Replaying the whole migration history through `prisma db execute` takes seconds, and more while the rest of
+// test:db runs in parallel; the 5 s default turned load into failures (MUT-61 added a second file like this one).
+vi.setConfig({ testTimeout: 60_000 });
+
 const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const MIGRATIONS = join(SERVER, 'prisma/migrations');

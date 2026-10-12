@@ -265,6 +265,15 @@ export const HostedProfileSchema = z
     writerOfRecord: z.enum(['MALAFAT']).nullable(),
     /** The session column of the writability matrix, per domain. */
     access: z.record(z.string(), AccessSchema),
+    /** MUT-61: what POST /v1/income accepts on this profile — read this, never infer it from writerOfRecord. */
+    income: z
+      .object({
+        received: z.boolean(),
+        owed: z.boolean(),
+        /** For Received: `linked-required` means a client is required and must be one Malafat has linked (customer.externalReference set). */
+        customer: z.enum(['optional', 'linked-required']),
+      })
+      .openapi('IncomeCaptureRules'),
   })
   .openapi('HostedProfile');
 
@@ -947,6 +956,14 @@ export const ReconcileResponseSchema = z
 
 export const PaymentMethodSchema = z.enum(['CASH', 'BANK']).openapi('PaymentMethod');
 export const PaymentStatusSchema = z.enum(['POSTED', 'REVERSED']).openapi('PaymentStatus');
+/** Where a write came from (MUT-65). Audit metadata for most writes; persisted on an inbox entry (MUT-66) and on a captured payment (MUT-61). */
+export const CaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share']).openapi('CaptureSource');
+/** MUT-66 persists this on an inbox entry, so the serializer needs the type, not just the schema. */
+export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
+/** MUT-61: who put a payment on the ledger — Malafat's integration, or a person capturing money they were handed. */
+export const PaymentOriginSchema = z.enum(['integration', 'capture']).openapi('PaymentOrigin');
+/** MUT-61: how much of a payment has been applied; a REVERSED payment reads `unallocated` (see status). */
+export const AllocationStateSchema = z.enum(['unallocated', 'partial', 'allocated']).openapi('AllocationState');
 export const AllocationStrategySchema = z.enum(['OLDEST_FIRST', 'SETTLE_MATTERS']).openapi('AllocationStrategy');
 
 export const AllocationRequestSchema = z.object({ receivableId: uuid, amount: AmountSchema }).openapi('AllocationRequest');
@@ -1021,10 +1038,20 @@ export const PaymentSchema = z
     number: z.string(),
     /** Null for "Received" captured with no client (MUT-65). */
     customerId: uuid.nullable(),
+    /** MUT-61: the matter picked when the payment was captured — a hint until it is allocated, after which its allocations say where it went. Null for payments Malafat recorded. */
+    projectId: uuid.nullable(),
+    /** MUT-61: `capture` for money a person recorded (the phone, the portal); filter on it with `allocationState` to find what still needs allocating. */
+    origin: PaymentOriginSchema,
+    /** MUT-61: the capture surface, when the client sent one; always null for `integration`. */
+    captureSource: CaptureSourceSchema.nullable(),
+    /** MUT-61: who captured it; null for `integration`, or once that person's account is gone. */
+    capturedBy: z.object({ userId: uuid, displayName: z.string() }).nullable(),
     currency: CurrencySchema,
     amount: AmountSchema,
     allocated: AmountSchema,
     unallocated: AmountSchema,
+    /** MUT-61: from allocated vs amount. */
+    allocationState: AllocationStateSchema,
     receivedOn: IsoDateSchema,
     method: PaymentMethodSchema,
     reference: z.string().nullable(),
@@ -1046,11 +1073,15 @@ export const PaymentPageSchema = z.object({ items: z.array(PaymentSchema), nextC
 export const ListPaymentsQuerySchema = z.object({
   ...pageQuery,
   customerId: uuid.optional(),
-  /** Payments with at least one allocation on the project. */
+  /** Payments with at least one allocation on the project, or captured against it and not allocated yet (MUT-61). */
   projectId: uuid.optional(),
   status: PaymentStatusSchema.optional(),
   receivedBefore: IsoDateSchema.optional(),
   receivedAfter: IsoDateSchema.optional(),
+  /** MUT-61. */
+  origin: PaymentOriginSchema.optional(),
+  /** MUT-61: POSTED payments only. `?origin=capture&allocationState=unallocated` is what the phone left for Malafat to allocate. */
+  allocationState: AllocationStateSchema.optional(),
 });
 
 export const PaymentIdParamSchema = z.object({ paymentId: uuid });
@@ -1080,10 +1111,6 @@ export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, cr
 
 // ---- MUT-65: personal profile income capture (session-only) ----------------
 
-/** Where a write came from; recorded on the audit row only, never persisted on the entity itself. */
-export const CaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share']).openapi('CaptureSource');
-/** MUT-66 persists this on an inbox entry, so the serializer needs the type, not just the schema. */
-export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
 export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
 export const IncomeStatusSchema = z.enum(['unallocated', 'open', 'settled']).openapi('IncomeStatus');
 

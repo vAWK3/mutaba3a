@@ -223,7 +223,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       }
 
       const allocationViews = created.allocations.map((a) => serializeAllocation(a, settled, currency, today));
-      return c.json({ receivable: serializeReceivable(settled, today), payment: serializePayment(created.payment, allocationViews, null) }, 201);
+      return c.json({ receivable: serializeReceivable(settled, today), payment: serializePayment(created.payment, allocationViews, null, { userId: user.id, displayName: user.displayName }) }, 201);
     },
   );
 
