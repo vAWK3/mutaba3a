@@ -12,6 +12,12 @@ describe('profileAvatarStyle', () => {
     expect(profileAvatarStyle('')).toBeUndefined();
   });
 
+  it('ignores a colour the browser can’t read, so white initials never land on the default fill', () => {
+    expect(profileAvatarStyle('3b82f6')).toBeUndefined();
+    expect(profileAvatarStyle('#12')).toBeUndefined();
+    expect(profileAvatarStyle('blue-ish')).toBeUndefined();
+  });
+
   it('paints a chosen colour with white initials', () => {
     expect(profileAvatarStyle('#FF5500')).toEqual({ backgroundColor: '#FF5500', color: 'white' });
   });

@@ -302,6 +302,9 @@
 
 html {
   font-family: var(--font-en);
+  /* Never fake a bold: Plex Mono ships 400/500, so a figure inheriting 600 renders its 500 file
+     (Thmanyah has its own 700) */
+  font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

@@ -103,6 +103,17 @@ describe('fonts', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('never fakes a bold: html sets font-synthesis-weight none, so an inherited 600 on Plex Mono renders its 500 file', () => {
+    const declared: string[] = [];
+    parseCss(repoPath('src/styles/theme.css')).walkRules((rule) => {
+      if (!rule.selectors.includes('html')) return;
+      rule.walkDecls('font-synthesis-weight', (decl) => {
+        declared.push(decl.value);
+      });
+    });
+    expect(declared).toEqual(['none']);
+  });
+
   it('asks Plex Mono only for the weights it ships (400/500), so no figure is faux-bold', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles().filter((f) => f.endsWith('.css'))) {
@@ -718,13 +729,40 @@ describe('focus', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('filled buttons take the outer ring: the inset brand ring is near-invisible on a filled ground', () => {
+  /** The box-shadow each selector sets, across the given stylesheets. */
+  function shadows(...paths: string[]): Record<string, string> {
     const rules: Record<string, string> = {};
-    parseCss(repoPath('src/components/ui/Button.css')).walkRules((rule) => {
-      const shadow = rule.nodes.find((n) => n.type === 'decl' && n.prop === 'box-shadow') as { value: string } | undefined;
-      for (const selector of rule.selectors) if (shadow) rules[selector.trim()] = shadow.value;
-    });
-    expect([rules['.btn-primary:focus-visible'], rules['.btn-danger:focus-visible']]).toEqual(['var(--focus-ring-on-fill)', 'var(--focus-ring-on-fill)']);
+    for (const path of paths) {
+      parseCss(repoPath(path)).walkRules((rule) => {
+        const shadow = rule.nodes.find((n) => n.type === 'decl' && n.prop === 'box-shadow') as { value: string } | undefined;
+        for (const selector of rule.selectors) if (shadow) rules[selector.trim()] = shadow.value;
+      });
+    }
+    return rules;
+  }
+
+  it('filled buttons take the outer ring: the inset brand ring is near-invisible on a filled ground', () => {
+    const rules = shadows('src/components/ui/Button.css', 'src/index.css');
+    const filled = ['.btn-primary', '.btn-danger', '.btn-success', '.btn-warning'];
+    expect(filled.map((btn) => rules[`${btn}:focus-visible`])).toEqual(filled.map(() => 'var(--focus-ring-on-fill)'));
+  });
+
+  it('keeps the ring on a hovered, focused primary button: its hover shadow would otherwise replace it', () => {
+    expect(shadows('src/components/ui/Button.css')['.btn-primary:hover:not(:disabled):focus-visible']).toBe('var(--focus-ring-on-fill)');
+  });
+
+  it('draws focus rings from tokens, never a literal colour (a literal white vanishes on a light fill in dark mode)', () => {
+    const literal = /#[0-9a-f]{3,8}\b|rgba?\(|\bwhite\b|\bblack\b/i;
+    const offenders: string[] = [];
+    for (const file of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      parseCss(file).walkRules((rule) => {
+        if (!rule.selector.includes(':focus')) return;
+        rule.walkDecls(/^(box-shadow|outline|outline-color)$/, (decl) => {
+          if (literal.test(decl.value)) offenders.push(`${file.replace(`${repoPath('.')}/`, '')}: ${rule.selector} { ${decl.prop}: ${decl.value} }`);
+        });
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });
 

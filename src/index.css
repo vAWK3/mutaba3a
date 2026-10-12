@@ -2548,6 +2548,10 @@ div.input-with-prefix {
   color: var(--on-status);
 }
 
+.btn-warning:focus-visible {
+  box-shadow: var(--focus-ring-on-fill); /* a filled control: the inset ring would paint over it */
+}
+
 .btn-warning:hover {
   background: var(--warning);
   opacity: 0.9;
@@ -3005,6 +3009,10 @@ a.project-tag:hover {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.btn-success:focus-visible {
+  box-shadow: var(--focus-ring-on-fill); /* a filled control: the inset ring would paint over it */
 }
 
 .btn-success:hover {

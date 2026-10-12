@@ -81,6 +81,11 @@
   box-shadow: var(--btn-primary-shadow-hover);
 }
 
+.btn-primary:hover:not(:disabled):focus-visible {
+  /* The hover shadow above would replace the focus ring under a resting pointer */
+  box-shadow: var(--focus-ring-on-fill);
+}
+
 .btn-primary:active:not(:disabled) {
   background-color: var(--accent-solid-active);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
