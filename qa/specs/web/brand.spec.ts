@@ -220,8 +220,8 @@ const VIEWPORTS = [
  * is annotated too, so its entry can go.
  */
 const KNOWN_OVERFLOW: Record<string, string> = {
-  'Income@375': 'TD-082: the Income top bar, status tabs and table are wider than a phone (678px on main)',
-  'Payment drawer@375': 'TD-082: drawers are a fixed 480px (--drawer-width), wider than a phone (same on main)',
+  'Income@375': 'TD-083: the Income top bar, status tabs and table are wider than a phone (678px on main)',
+  'Payment drawer@375': 'TD-083: drawers are a fixed 480px (--drawer-width), wider than a phone (same on main)',
 };
 
 async function expectFits(page: Page, surface: string, width: number) {

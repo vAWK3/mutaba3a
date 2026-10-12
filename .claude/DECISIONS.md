@@ -26,7 +26,7 @@
 | ADR-015 | Profile-Scoped Expenses | Active | 2024-09 |
 | ADR-016 | Tauri for Desktop Distribution | Active | 2024-03 |
 | ADR-017 | React 19 with TypeScript Strict | Active | 2025-01 |
-| ADR-018 | CSS Variables for Theming | Active | 2024-03 |
+| ADR-018 | CSS Variables for Theming | Active; amended by ADR-058 (Brand v2, 2026-10-12) | 2024-03 |
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
 | ADR-020 | Vitest for Testing | Active | 2024-05 |
 | ADR-021 | Question-First UX Redesign | Active; §1 (navigation) superseded by ADR-034 | 2026-03 |
@@ -60,6 +60,7 @@
 | ADR-051 | "All Businesses" Is a Lens on Home and Clients Only; Every Other Screen Works in One Concrete Business (Overrides the Unrecorded April Strict Mode) | Active | 2026-10 |
 | ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 | ADR-053 | Device-to-Device Sync Is Retired; Local↔Hosted Sync Is Off the Roadmap (Supersedes ADR-011, ADR-012, ADR-013; Narrow Override of ADR-029) | Active | 2026-10 |
+| ADR-058 | Brand v2: `--m-*` Primitives From the Token JSON and One Semantic Map in theme.css; Light Text Clears 7:1; Thmanyah Is Bundled Unmodified (Amends ADR-018) | Active | 2026-10 |
 
 ---
 
@@ -491,9 +492,11 @@ for (const txId of document.linkedTransactionIds) {
 
 ## ADR-018: CSS Variables for Theming
 
-**Status**: Active
+**Status**: Active; amended by ADR-058 (2026-10-12)
 **Date**: 2024-03
 **Updated**: 2026-02 (canonical token naming clarified)
+
+> **Amended by ADR-058 (Brand v2, MUT-102).** `theme.css` is still the one token file and the names below still hold, but its colours, faces, sizes and radii now come from the `--m-*` primitives in `src/styles/brand/`, mapped once rather than in four copies; light text clears 7:1 (AAA), not AA. The `index.css` legacy `--color-*` note below is stale: those names are defined nowhere, and the references left are in `brand.test.ts`'s dead-reference allowlist for MUT-103. The implementation snippet shows the pre-Brand-v2 values.
 **Context**: Need dark mode and potential custom themes.
 
 **Decision**: Use CSS custom properties (variables) for all colors and spacing.
@@ -2399,3 +2402,39 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - Watch `useIsFetching()` globally for the resolve signal (rejected: races invalidation, counts unrelated queries — see point 2).
 - Have the message's Show button use `useActiveProfile`'s `setActiveProfile` (rejected: its membership guard silently refuses an id the profiles query has not loaded, landing Show on the old profile with an empty list).
 - Build the full anchored strip (design review 5B) in this same build (rejected for scope: none of the ticket's five literal acceptance criteria name a presentation surface, and `Toast` already satisfies all five with a proven, accessible, tested component).
+
+---
+
+## ADR-058: Brand v2: `--m-*` Primitives From the Token JSON and One Semantic Map in theme.css; Light Text Clears 7:1; Thmanyah Is Bundled Unmodified (Amends ADR-018)
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-102 (epic MUT-101). Basel delivered Brand v2 on 2026-10-12: a token JSON, CSS and Dart derived from it, Thmanyah Sans and Serif Display, and new marks. `theme.css` still carried the old look (cool grey, teal, Inter, Source Serif 4, a 13px body, 4–16px radii) and repeated every colour in four selector blocks; the brand CSS was placed but not imported. Settled before planning (memory `brand-v2-decisions`): AAA light inks canonical; Thmanyah for English and Arabic; the brand type scale everywhere, body 16; fonts self-hosted and unmodified, with the licence risk accepted (written OK from ask@thmanyah.com is a guardrail before a web release, not a blocker). Plan and eng review: `.claude/designs/mut-102-brand-v2-foundation.md` (PD0–PD11, D1–D8); tests: `…-tests.md`.
+
+**Decision**:
+1. **Two layers.** `src/styles/brand/mutaba3a-theme.css` holds primitives only (`--m-*`), switching light/dark in ADR-018's three selector states; `mutaba3a.tokens.json` is canonical and `brand.test.ts` › `drift` holds the CSS to it. `theme.css` imports it and `brand/fonts.css`, then maps **every** semantic token once, in one `:root` block. Only shadow strength, the overlay and `color-scheme` need a per-mode block. `theme.css` holds no colour literal (tested). `--m-shadow-tint` was factored out of the delivered card shadow (same values) so shadows and the overlay derive from it.
+2. **Light text clears 7:1, dark text 4.5:1**, checked by a Node evaluator over all four theme states (`brand.test.ts` › `contrast`) and by axe in a browser in light and dark (`qa/specs/web/brand.spec.ts`; `KNOWN_AXE_VIOLATIONS` no longer lists `color-contrast`).
+   - Purple used as text is `--accent-text` (primary-hover, 7.14:1); `--accent` (primary, 4.77:1) is for fills, borders and decoration only. A guard test forbids `color: var(--accent)`.
+   - Filled buttons use `--accent-solid` = primary-hover (cream on primary is only 4.84:1); hover and active mix toward ink, so contrast rises.
+   - The selected nav label is lavender-ink (7.01:1); primary-hover on lavender is only 5.52:1.
+   - **The one exemption is the placeholder:** 85% ink2 toward field-bg, 5.02:1 light / 4.66:1 dark, floor 4.5:1 (tested). At full ink2 a hint reads as a typed value; axe does not check `::placeholder`.
+3. **Faces.** Thmanyah Sans (body, both scripts), Thmanyah Serif Display (headings, at 700), IBM Plex Mono (figures, tabular). Thmanyah ships 400/500/700: a `--weight-semibold` (600) renders with the Bold file. Plex Mono ships 400/500 here, so a figure is 500, not 700.
+4. **Thmanyah is bundled from `src/assets/fonts`, byte-identical** to the delivered files (sha256 pinned in `brand.test.ts` and checked in every dist by `check-bundles`), never converted, subset or loaded from a CDN. Vite emits hashed copies under `/assets/` in the web, desktop and portal builds: the portal's existing `/assets/*` rule caches them immutably and the desktop app reads them offline (`check-bundles` proves every CSS `url()` resolves inside each dist). Plex Mono stays on `@fontsource` (OFL woff2). Every build preloads Thmanyah Sans 400 only (`brandFontPreload()` in `vite.config.ts`, found by its source path; a missing file fails the build). The PWA caches fonts on first use (CacheFirst, 12 entries) rather than precaching them.
+5. **Scale, radii and motion.** New `--text-label/body/headline/title/figure/display` (13/16/20/32/40/56), `--radius-card/hero/pill`, and motion tokens (`--ease-spring`, `--ease-overshoot`, `--duration-press/toggle/nav`, `--stagger-step`, `--press-scale`), zeroed under `prefers-reduced-motion`. The old `--text-*` and `--radius-*` names stay as aliases (TD-079) so 620 call sites need no rename now.
+6. **Regression contract.** Every custom property `theme.css` defined before the rewrite stays defined in all four states (`names`); every no-fallback `var(--x)` in `src` resolves, with the 48 dead references left in a shrink-only allowlist that MUT-103 empties (`references`); the ThemeToggle's Light/Dark/System paint the right canvas under OS light and OS dark (Playwright).
+7. **TD-048, font half.** The `:lang()` font rules style `<html>` only, so inline elements inherit (a `<span>` in a heading keeps the heading face). The `direction` half is unchanged and is MUT-109.
+
+**Consequences**:
+- One look across landing, app, desktop and portal; the semantic layer went from four copies to one (`theme.css` 862 → 545 lines).
+- First-visit font bytes rise (licence: no woff2). Measured on `vite preview` builds, landing at Fast 3G + 4× CPU, median of 5 cold runs: LCP **4116 ms on main → 4744 ms** (+628 ms); fonts transferred by then 180 KB → 236 KB. Reported, not gated (TD-081). The service-worker precache gets ~0.7 MB lighter.
+- MUT-106 registers the PDF fonts with `?url` imports from `src/assets/fonts`; the `IBMPlexMono-*.ttf` in `public/fonts` are PDF-only.
+- MUT-103 owns the sweep this foundation leaves: legacy aliases, component literals, semibold headings, ad-hoc amount classes and the dead-reference allowlist (TD-079).
+- A component colour literal on an acceptance-criteria surface was fixed here when axe caught it (the profile avatar's dead `--color-accent`, the Mac banner button, a global `.text-muted` leak from the CSV preview, the landing get-it links); the rest wait for MUT-103.
+
+**Alternatives Considered**:
+- Fonts in `public/fonts` behind a shared path, with a hosted copy plugin and a server cache rule (D4 B): more plumbing, and never immutable since names don't change. Without the server rule (D4 C): the portal re-downloads ~1 MB per load (`no-store`).
+- Converting to woff2 or subsetting: forbidden by the licence.
+- Keeping the app's 13px density: overridden by Basel (brand scale everywhere).
+- A full-ink2 placeholder with no exemption (D7 B): empty fields would look filled.
+- Precaching Thmanyah in the service worker: ~1.2 MB on every install.
+- Renaming every `--text-*`/`--radius-*` use now: 620 sites, left to MUT-103 behind aliases.

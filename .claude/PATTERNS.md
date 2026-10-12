@@ -850,42 +850,44 @@ onError: (error) => {
 
 ### Pattern: Canonical Design Tokens
 
-**Source**: `src/styles/theme.css` is the authoritative design token file.
+**Source**: `src/styles/theme.css` is the one token file (ADR-018), in two layers since Brand v2 (ADR-058):
+1. **Primitives** `--m-*` in `src/styles/brand/mutaba3a-theme.css`, from `mutaba3a.tokens.json`. Change a value in the JSON first, then the CSS (and the Dart in the Flutter repo); `brand.test.ts` › `drift` fails until they agree.
+2. **Semantic tokens** in `theme.css`, each mapped once onto `--m-*` (or a `color-mix(in oklch, …)` over them). No colour literal goes in `theme.css`, and components use semantic tokens, never `--m-*`.
 
-All new CSS must use canonical token names. Legacy tokens (`--color-*`, `--font-size-*`, `--font-weight-*`) exist in `index.css` for backwards compatibility but are deprecated.
+The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere: a reference to one is a dead style. `brand.test.ts` › `references` fails on any new undefined `var(--x)`; the ones left are allowlisted for MUT-103 (TD-079).
 
 **Quick Reference**:
 
 | Use Case | Canonical Token | Avoid |
 |----------|----------------|-------|
 | Body text | `color: var(--text)` | `--color-text` |
-| Secondary text | `color: var(--text-secondary)` | `--color-text-secondary` |
-| Muted/hint | `color: var(--muted)` | `--color-text-muted` |
-| Primary action | `background: var(--accent-solid)` | `--color-primary` |
-| Primary border/link | `color: var(--accent)` | `--color-primary` |
+| Secondary / muted text | `color: var(--text-secondary)` / `var(--muted)` (both ink2, 7:1) | `--color-text-muted`, opacity on text |
+| Purple text, links, text buttons | `color: var(--accent-text)` | `color: var(--accent)` (4.77:1; a guard test fails on it) |
+| Primary action (filled) | `background: var(--accent-solid); color: var(--on-accent)` | `--accent` + `white` |
+| Accent fill, border, decoration | `var(--accent)` | — |
+| Selected nav item | `background: var(--nav-item-active); color: var(--nav-item-active-text)` | purple text on lavender (5.52:1) |
 | Background | `background: var(--bg)` | `--color-bg` |
 | Card/elevated | `background: var(--surface)` | `--color-bg-elevated` |
-| Success | `color: var(--success)` | `--color-success` |
-| Warning | `color: var(--warning)` | `--color-warning` |
-| Error/danger | `color: var(--error)` | `--color-danger` |
+| Field | `background: var(--input-bg)` | `--surface` |
+| Status | `color: var(--success)` (or `--warning`, `--error`, `--info`) on its `-subtle` ground | `--color-success` |
 | Border | `border-color: var(--border)` | `--color-border` |
-| Font size | `font-size: var(--text-sm)` | `--font-size-sm` |
-| Font weight | `font-weight: var(--weight-medium)` | `--font-weight-medium` |
+| Font size | `font-size: var(--text-body)` (or the role: label, headline, title, figure, display) | a px literal |
+| Radius | `var(--radius-sm)`, `-md`, `-lg`, `-card`, `-hero`, `-pill` | a px literal |
 | Spacing | `padding: var(--space-4)` | Hardcoded `16px` |
 | Shadow | `box-shadow: var(--shadow-2)` | `--shadow-md` |
 | Focus | `box-shadow: var(--focus-ring)` | `outline: 2px solid` |
+| Motion | `transition: transform var(--duration-press) var(--ease-spring)`; scale by `var(--press-scale)` | literal ms (they don't zero under reduced motion) |
+| Amounts | `font-family: var(--font-mono); font-variant-numeric: tabular-nums` | the body face |
 
-**Typography Scale**:
+**Type scale** (brand roles; body 16 everywhere, ADR-058):
 ```css
---text-xs: 0.6875rem;   /* 11px */
---text-sm: 0.75rem;     /* 12px */
---text-base: 0.8125rem; /* 13px - default body */
---text-md: 0.875rem;    /* 14px */
---text-lg: 1rem;        /* 16px */
---text-xl: 1.125rem;    /* 18px */
---text-2xl: 1.25rem;    /* 20px */
---text-3xl: 1.5rem;     /* 24px */
---text-4xl: 1.875rem;   /* 30px */
+--text-label: 0.8125rem;   /* 13 */
+--text-body: 1rem;         /* 16 — body */
+--text-headline: 1.25rem;  /* 20 */
+--text-title: 2rem;        /* 32 */
+--text-figure: 2.5rem;     /* 40 */
+--text-display: 3.5rem;    /* 56 */
+/* Legacy aliases until MUT-103 (TD-079): xs, sm → label; base, md, lg → body; xl, 2xl → headline; 3xl, 4xl → title */
 ```
 
 **Spacing Scale** (8px base):
@@ -899,13 +901,15 @@ All new CSS must use canonical token names. Legacy tokens (`--color-*`, `--font-
 --space-8: 2rem;      /* 32px */
 ```
 
-**Font Families**:
+**Font Families** (all self-hosted; never a CDN):
 ```css
---font-en: "Inter Variable"       /* English body */
---font-ar: "IBM Plex Sans Arabic" /* Arabic body */
---font-heading: "Source Serif 4"  /* Headings (serif) */
---font-mono: "IBM Plex Mono"      /* Numbers, code */
+--font-en / --font-ar: "Thmanyah Sans"                  /* body, both scripts */
+--font-heading / --font-heading-ar: "Thmanyah Serif Display" /* h1–h6 at 700 */
+--font-mono: "IBM Plex Mono"                            /* figures, tabular */
 ```
+Thmanyah ships 400/500/700 and Plex Mono 400/500 here: ask for one of those weights (600 renders as 700). The faces are declared once in `src/styles/brand/fonts.css`; entries import only `theme.css`. The `.otf` files are the delivered bytes (licence: never convert or subset); `brand.test.ts` pins their sha256.
+
+**Light/dark:** a token that differs by mode is a primitive that switches in the brand file, so a semantic token maps once. Only shadow strength, the overlay and `color-scheme` sit in `theme.css`'s per-mode block, in the same three selectors (`:root`; `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`; `:root[data-theme="dark"]`). The test evaluator refuses any other selector that declares a custom property.
 
 ---
 

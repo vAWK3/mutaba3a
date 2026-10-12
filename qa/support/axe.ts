@@ -21,7 +21,7 @@ export const KNOWN_AXE_VIOLATIONS = {
   incomeDrawer: [],
   paymentDrawer: [],
   landing: [],
-  // The language switch sits above <main>, outside any landmark (MUT-43 layout; TD-081)
+  // The language switch sits above <main>, outside any landmark (MUT-43 layout; TD-082)
   portalSignIn: ['region'],
 } satisfies Record<string, string[]>;
 

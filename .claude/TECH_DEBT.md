@@ -18,6 +18,52 @@
 
 ## Open Debt
 
+### TD-083: Phone-width layout: the sidebar never collapses, Income overflows, drawers are a fixed 480px
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102; found by the 375px layout spec, and present on main `530aec2` before Brand v2)
+**Priority**: Medium
+**Impact**: At 375px the 240px sidebar stays open and the content beside it is clipped inside `<main>`. Income scrolls sideways: its top bar, status tabs and table are about 680px wide (714px with Brand v2's body 16). Every drawer is `--drawer-width` 480px, so it starts 105px off-screen (or ends 105px past the edge in Arabic). `qa/specs/web/brand.spec.ts` annotates the two overflows (`KNOWN_OVERFLOW`) instead of failing; it fails on any other.
+**Remediation**: Collapse the sidebar to the rail or a menu below a breakpoint; let the Income table scroll inside its own container and wrap the top bar and tabs; cap drawers at `min(var(--drawer-width), 100vw)`. Remove each `KNOWN_OVERFLOW` entry as it fits. Needs a ticket (the app is desktop-first; the iPhone app is Flutter).
+**Effort**: Medium
+
+### TD-082: The portal sign-in page's language switch sits outside any landmark
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102; the first portal axe spec)
+**Priority**: Low
+**Impact**: axe `region` (moderate) on `/sign-in` in both modes: `.hp-signin-top`, the EN/عربي switch above `<main>`, is in no landmark, so screen-reader landmark navigation skips it. Listed in `KNOWN_AXE_VIOLATIONS.portalSignIn`.
+**Remediation**: Wrap it in a `<header>` (banner) or move it inside `<main>`; then empty the list. Fits MUT-91 (portal re-cut).
+**Effort**: Small
+
+### TD-081: Landing LCP is 628 ms slower on a slow connection with the unmodified Thmanyah files
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102, ADR-058)
+**Priority**: Low
+**Impact**: `vite preview` builds, landing `/`, Fast 3G + 4× CPU, 5 cold runs: median LCP 4116 ms on main, 4744 ms with Brand v2. The LCP element is the subheadline text; the preloaded Thmanyah Sans 400 `.otf` (236 KB) competes with the JS for bandwidth, where Inter's woff2 subsets were smaller. The licence forbids woff2 conversion and subsetting, so the bytes can't shrink without Thmanyah's permission.
+**Remediation**: Measure without the preload on the landing page (the hero text may paint sooner in the fallback face); ask Thmanyah (ask@thmanyah.com, already owed for web embedding) whether a woff2 of the unmodified glyphs is allowed; MUT-108's immutable caching helps repeat visits only.
+**Effort**: Small to measure
+
+### TD-080: Input and card borders are below the 3:1 non-text contrast floor
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102)
+**Priority**: Low
+**Impact**: `--border` / `--input-border` is the brand `line` (1.18:1 on canvas in light, 1.78:1 in dark). WCAG 1.4.11 asks 3:1 for the boundary of a control that has no other visual cue. Inputs here also differ by fill (`--input-bg` is field-bg), which softens it, but a field on a field-bg surface has no visible edge. axe does not check non-text contrast.
+**Remediation**: Decide with the brand whether inputs take `--border-strong` or a darker `line` variant; add the pair to `brand.test.ts` › `contrast` at 3:1.
+**Effort**: Small
+
+### TD-079: Brand v2 leaves the legacy names and component literals for MUT-103's sweep
+**Status**: Open
+**Added**: 2026-10-12 (MUT-102, ADR-058)
+**Priority**: Medium
+**Impact**: The foundation re-points tokens; components still carry the old system:
+- **Legacy size and radius names** alias the brand scale: `--text-xs/sm` → label 13, `--text-base/md/lg` → body 16, `--text-xl/2xl` → headline 20, `--text-3xl/4xl` → title 32; `--radius-xl/2xl/full` → card/hero/pill. Some label/value pairs that differed now match.
+- **Layout tokens** (`--sidebar-width`, `--topbar-height`, `--drawer-width`, `--table-row-height`) are defined in both `theme.css` and `index.css` (the later wins; values identical).
+- **Headings** that set `--weight-semibold` render with Serif Display's Bold file (no 600), so they look right but compute 600.
+- **Amounts** outside the shared components (owed-now, `CurrencyAmounts`, the portal's `.hp-amount`, table `.amount-cell`) are not in Plex Mono: the 40-odd ad-hoc `*-amount`/`*-total` classes.
+- **Colour literals** in component CSS: e.g. `.btn-danger { color: white }` on `--error` is 1.52:1 in dark (rose-ink is light there); no AC surface shows one. `CSVValidationPreview.css` still hard-codes its notice colours.
+- **48 dead `var()` references** sit in `brand.test.ts`'s `KNOWN_DEAD_REFERENCES` (shrink-only).
+**Remediation**: MUT-103 migrates call sites to the brand role names, removes the aliases and the duplicate layout block, replaces literals with tokens, puts amounts on `--font-mono`, and empties the allowlist.
+**Effort**: Large
+
 ### TD-068: "All businesses" leftovers from the MUT-89 pre-landing review
 **Status**: Open
 **Added**: 2026-10-12 (MUT-89, ADR-051; the owner chose to record these rather than fix them)
@@ -286,11 +332,12 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Effort**: Small
 
 ### TD-048: `theme.css` sets `font-family` on every `:lang()` element, so inline elements inside headings lose the heading face
-**Status**: Open
+**Status**: Open (font half resolved by MUT-102; direction half → MUT-109)
 **Added**: 2026-10-11 (MUT-75)
 **Priority**: Low
 **Impact**: `html:lang(en), html:lang(en) body, :lang(en) { font-family: var(--font-en) }` (and the `:lang(ar)` twin, which also sets `direction`) matches *every* element, not just the root, so a `<span>` inside an `<h1>`/`<h2>` renders in Inter instead of inheriting the serif heading. Found when the landing hero's two `<span>` lines rendered sans while the `<h1>` computed Source Serif. Worked around locally with `font-family: inherit` on `.hero-headline-line`.
 **Remediation**: scope the rules to `html:lang(..)` and let inheritance do the rest; then sweep for any component that relied on the per-element reset (likely none — the root rule already sets the same family). Pairs with MUT-77 (type pairing).
+**Update (2026-10-12, MUT-102): font half resolved.** `theme.css` now sets the face on `<html>` only (`html:lang(..)`), so inline elements inherit; `brand.test.ts` › `tokens` forbids a `:lang()` font-family rule whose subject is not `html`, and `brand.spec.ts` checks the landing headline's inner lines compute Serif Display in EN and AR. The `.hero-headline-line { font-family: inherit }` workaround is removed. **The direction half below is open and is MUT-109** (20 `dir="ltr"` sites, five of them inputs).
 **Also (MUT-79):** the `:lang(ar)` rule's `direction: rtl` beats the `dir` attribute, so every `<bdi dir="ltr">` renders right to left in Arabic. Three amount spans depend on that today: `OwedNowSummary`, `ClientWorkSection` and `HomeNeedsAttention`. Their Arabic-locale strings (`‏2,400 US$`) only look right, in CLDR's order, *because* the attribute loses. Scoping `direction` to the root therefore has to drop their `dir="ltr"` in the same change, leaving plain `<bdi>` (auto). The top bar's FX formula is the one span that must stay LTR; it states `.fx-formula[dir='ltr'] { direction: ltr }`. Tried and reverted in MUT-79.
 
 ### TD-047: The expense, retainer and plan drawers read amounts with the lenient parsers
