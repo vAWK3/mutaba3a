@@ -1232,5 +1232,17 @@ Plan: `.claude/designs/mut-65-personal-profile-income-tests.md`. Four mutation c
 
 **Not run in this environment**: `npm run test:db` (the Prisma contract against Postgres, and the migration applying from an empty/pre-existing database) — no `MUTABA3A_TEST_DATABASE_URL`/`DATABASE_URL` configured here. The Prisma repository code and the migration SQL were written and reviewed against the schema and the existing M4 migration's conventions, but not executed.
 
+**Post-review pass (2026-10-12)** — four approved fixes, each written test-first and watched fail for the right reason before the fix:
+
+| Fix | Test | Red looked like |
+|---|---|---|
+| Settle refuses a non-ADJUSTMENT receivable (404) | `__tests__/receivables-settle.test.ts` — seeds a real installment-origin receivable through `agreements.create` + `postInstallment`, then settles it | 201: a Malafat installment settled from a session, bypassing the allocation engine |
+| Settle maps `InsufficientCapacity` → 409 `VERSION_MISMATCH` | same file — a store proxy arms the next `payments.create` to throw it (the `FOR UPDATE` re-read losing the race) | 500, and `idempotency.ts` releasing the key on a 5xx |
+| `softDeleteAdjustment` re-asserts the money guard in its `WHERE` | `repositories/__tests__/store-contract-m4.ts` (runs against **both** stores): paid and credited rows come back undeleted, a clean one still voids. Route level: `__tests__/income-routes.test.ts` stages the race with a one-shot `interleave` hook that fires a real settle between the undo's guard read and its write | contract: the paid row voided anyway; route: 204, with a POSTED payment allocated to a now-hidden receivable |
+| The customer summary counts matterless Owed | `__tests__/income-routes.test.ts` — the AC 3 test (title corrected; it had baked the gap in as expected behaviour) now asserts the client block's buckets and status before/after the due date, plus a second test for an Owed whose currency nothing else touches | buckets `0.00`/`SETTLED`; the second test: no USD block at all |
+
+New harness affordances, both minimal and local to their test file: `harness(wrap)` in `receivables-settle.test.ts` lets one test hand the app a stubbed store while assertions keep reading the real one; `h.interleave` in `income-routes.test.ts` registers a one-shot side effect to run immediately before a named store call.
+
 **Baseline after MUT-65 (2026-10-12)**: server `npm test` 1159 passed, 11 skipped. lint, typecheck, build and `openapi:check` pass.
+**Baseline after the MUT-65 post-review pass (2026-10-12)**: server `npm test` 1171 passed, 11 skipped (72 files). lint, typecheck, build and `openapi:check` pass. `npm run test:db` still not runnable here (no `MUTABA3A_TEST_DATABASE_URL`), so the new `softDeleteAdjustment` contract case has been executed against the memory store only; the Prisma `WHERE` clause change is unexecuted.
 

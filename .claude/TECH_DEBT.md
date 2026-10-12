@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-054: MUT-65's P2 review findings, deliberately left for a later pass
+**Status**: Open
+**Added**: 2026-10-12 (MUT-65 post-review pass)
+**Priority**: Low — none is exploitable on its own; each is a sharp edge, not a hole
+**Impact**: The MUT-65 reviews raised four P1s (all fixed in the post-review
+pass — see CHANGELOG) and this P2 list, held back under an explicit scope
+guard so the four fixes stayed reviewable:
+1. `repositories/memory.ts` FK checks look entities up by id without
+   re-asserting `organizationId` on some paths, so the memory store is more
+   permissive than Prisma's real foreign keys. Test-fidelity risk only.
+2. A `requestId` field carried on an input type that nothing reads.
+3. `GET /v1/me`'s `access` map advertises `read-write` on domains that have
+   no PATCH route, so "write" overstates what the session can actually do.
+4. The organization-independent-route guard is permissive by default rather
+   than listing what may skip the organization check.
+5. `dueDate` is unbounded — a capture can set one centuries out.
+6. The income request schema is a flat object with `kind`, not a
+   discriminated union, so Zod cannot refuse `kind: 'received'` carrying
+   `dueDate`; the route checks by hand instead.
+7. `sessionAccess()` / `sessionScopes()` are dead exports, superseded by the
+   `…For` variants MUT-65 introduced.
+**Fix**: one cleanup ticket, or fold each into whichever ticket next touches
+that file. Nothing here blocks MUT-65 shipping.
+
 ### TD-052: The hosted portal's "income isn't recorded" copy is now false for personal profiles
 **Status**: Open — follow-up filed, MUT-93
 **Added**: 2026-10-12 (MUT-65)
