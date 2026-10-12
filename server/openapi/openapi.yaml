@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.13.0-mut66
+  version: 1.14.0-mut61
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -189,6 +189,8 @@ components:
               - read-write
               - read
               - none
+        income:
+          $ref: "#/components/schemas/IncomeCaptureRules"
       required:
         - id
         - name
@@ -197,12 +199,29 @@ components:
         - timezone
         - writerOfRecord
         - access
+        - income
     Currency:
       type: string
       enum:
         - ILS
         - USD
         - EUR
+    IncomeCaptureRules:
+      type: object
+      properties:
+        received:
+          type: boolean
+        owed:
+          type: boolean
+        customer:
+          type: string
+          enum:
+            - optional
+            - linked-required
+      required:
+        - received
+        - owed
+        - customer
     ErrorEnvelope:
       type: object
       properties:
@@ -2461,6 +2480,26 @@ components:
           type: string
           nullable: true
           format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        origin:
+          $ref: "#/components/schemas/PaymentOrigin"
+        captureSource:
+          $ref: "#/components/schemas/CaptureSource"
+        capturedBy:
+          type: object
+          nullable: true
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+          required:
+            - userId
+            - displayName
         currency:
           $ref: "#/components/schemas/Currency"
         amount:
@@ -2475,6 +2514,8 @@ components:
           type: string
           pattern: ^-?\d+(\.\d+)?$
           description: Canonical decimal string; exactly the currency's fractional digits
+        allocationState:
+          $ref: "#/components/schemas/AllocationState"
         receivedOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -2520,10 +2561,15 @@ components:
         - id
         - number
         - customerId
+        - projectId
+        - origin
+        - captureSource
+        - capturedBy
         - currency
         - amount
         - allocated
         - unallocated
+        - allocationState
         - receivedOn
         - method
         - reference
@@ -2537,6 +2583,27 @@ components:
         - version
         - createdAt
         - updatedAt
+    PaymentOrigin:
+      type: string
+      enum:
+        - integration
+        - capture
+    CaptureSource:
+      type: string
+      nullable: true
+      enum:
+        - app
+        - siri
+        - widget
+        - quick_action
+        - share
+        - null
+    AllocationState:
+      type: string
+      enum:
+        - unallocated
+        - partial
+        - allocated
     PaymentMethod:
       type: string
       enum:
@@ -2603,14 +2670,6 @@ components:
         captureSource:
           $ref: "#/components/schemas/CaptureSource"
       additionalProperties: false
-    CaptureSource:
-      type: string
-      enum:
-        - app
-        - siri
-        - widget
-        - quick_action
-        - share
     AllocationPreviewResponse:
       type: object
       properties:
@@ -4045,9 +4104,7 @@ components:
           type: string
           nullable: true
         captureSource:
-          allOf:
-            - $ref: "#/components/schemas/CaptureSource"
-            - nullable: true
+          $ref: "#/components/schemas/CaptureSource"
         version:
           type: integer
         createdAt:
@@ -4116,9 +4173,7 @@ components:
           nullable: true
           maxLength: 2000
         captureSource:
-          allOf:
-            - $ref: "#/components/schemas/CaptureSource"
-            - nullable: true
+          $ref: "#/components/schemas/CaptureSource"
       additionalProperties: false
     FileAsExpenseRequest:
       type: object
@@ -7444,6 +7499,16 @@ paths:
           description: Calendar date in the organization timezone, YYYY-MM-DD
           name: receivedAfter
           in: query
+        - schema:
+            $ref: "#/components/schemas/PaymentOrigin"
+          required: false
+          name: origin
+          in: query
+        - schema:
+            $ref: "#/components/schemas/AllocationState"
+          required: false
+          name: allocationState
+          in: query
       responses:
         "200":
           description: A page
@@ -9094,7 +9159,7 @@ paths:
       tags:
         - Income
       summary: Capture money received or owed, directly — no agreement, no allocation dance
-      description: Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
+      description: What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
       security:
         - session: []
         - deviceSession: []
@@ -9150,7 +9215,7 @@ paths:
       tags:
         - Income
       summary: Undo an income entry this session created
-      description: 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or an allocated Received payment is refused with 409, since undoing one with real money applied is an edit, not an undo.
+      description: "204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound."
       security:
         - session: []
         - deviceSession: []

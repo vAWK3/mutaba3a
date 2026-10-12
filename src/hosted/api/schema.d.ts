@@ -4231,6 +4231,8 @@ export interface paths {
                     receivedBefore?: string;
                     /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                     receivedAfter?: string;
+                    origin?: components["schemas"]["PaymentOrigin"];
+                    allocationState?: components["schemas"]["AllocationState"];
                 };
                 header?: never;
                 path?: never;
@@ -6642,7 +6644,7 @@ export interface paths {
         put?: never;
         /**
          * Capture money received or owed, directly — no agreement, no allocation dance
-         * @description Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
+         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
          */
         post: {
             parameters: {
@@ -6725,7 +6727,7 @@ export interface paths {
         post?: never;
         /**
          * Undo an income entry this session created
-         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or an allocated Received payment is refused with 409, since undoing one with real money applied is an edit, not an undo.
+         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
          */
         delete: {
             parameters: {
@@ -8190,9 +8192,16 @@ export interface components {
             access: {
                 [key: string]: "read-write" | "read" | "none";
             };
+            income: components["schemas"]["IncomeCaptureRules"];
         };
         /** @enum {string} */
         Currency: "ILS" | "USD" | "EUR";
+        IncomeCaptureRules: {
+            received: boolean;
+            owed: boolean;
+            /** @enum {string} */
+            customer: "optional" | "linked-required";
+        };
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
@@ -9012,6 +9021,15 @@ export interface components {
             number: string;
             /** Format: uuid */
             customerId: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            origin: components["schemas"]["PaymentOrigin"];
+            captureSource: components["schemas"]["CaptureSource"];
+            capturedBy: {
+                /** Format: uuid */
+                userId: string;
+                displayName: string;
+            } | null;
             currency: components["schemas"]["Currency"];
             /** @description Canonical decimal string; exactly the currency's fractional digits */
             amount: string;
@@ -9019,6 +9037,7 @@ export interface components {
             allocated: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits */
             unallocated: string;
+            allocationState: components["schemas"]["AllocationState"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             receivedOn: string;
             method: components["schemas"]["PaymentMethod"];
@@ -9039,6 +9058,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /** @enum {string} */
+        PaymentOrigin: "integration" | "capture";
+        /** @enum {string|null} */
+        CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | null;
+        /** @enum {string} */
+        AllocationState: "unallocated" | "partial" | "allocated";
         /** @enum {string} */
         PaymentMethod: "CASH" | "BANK";
         /** @enum {string} */
@@ -9068,8 +9093,6 @@ export interface components {
             method?: components["schemas"]["PaymentMethod"];
             captureSource?: components["schemas"]["CaptureSource"];
         };
-        /** @enum {string} */
-        CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share";
         AllocationPreviewResponse: {
             /** Format: uuid */
             customerId: string;
@@ -9620,7 +9643,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn: string;
             note: string | null;
-            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            captureSource: components["schemas"]["CaptureSource"];
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -9646,7 +9669,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn?: string;
             note?: string | null;
-            captureSource?: components["schemas"]["CaptureSource"] & unknown;
+            captureSource?: components["schemas"]["CaptureSource"];
         };
         FileAsExpenseRequest: {
             /** Format: uuid */
