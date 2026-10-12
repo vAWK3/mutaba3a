@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-076: An untitled entry reads "—" on Income and "Untitled" on the client profile, and only titled rows open from the keyboard
+**Status**: Open
+**Added**: 2026-10-12 (MUT-62)
+**Priority**: Low
+**Impact**:
+- **Two words for untitled.** On `/income` and the project page's Transactions tab, an untitled entry shows a dash (`EMPTY_CELL`), as MUT-62's acceptance criteria ask. The client profile's Work list (MUT-3) shows "Untitled" (`clients.profile.work.untitled`) for the same entry. The owner chose the dash for `/income` on 2026-10-12 and asked that the profile not be changed.
+- **No full title on the profile.** The profile's Work list cuts long titles with CSS only. Its full text shows neither on hover nor on focus, unlike `TruncatedTitle`.
+- **Untitled rows can't be opened from the keyboard.** The rows of all three tables are mouse-only (`tr onClick`). MUT-62's title button gives a titled entry a keyboard path, but an untitled row's dash is plain text, so it has none.
+
+**Remediation**:
+1. Decide one word for untitled (dash or "Untitled") and use it in all three lists.
+2. Move the profile's Work list onto `TruncatedTitle`, keeping its project tag beside the title.
+3. Give an untitled row a keyboard path: a `TruncatedTitle`-style button showing the dash, named by `clients.profile.work.untitled`, or a focusable row.
+
+**Effort**: Small
+
 ### TD-066: Income's Received / Unpaid strip ignores the page's filters
 **Status**: Open
 **Added**: 2026-10-12 (MUT-83, seen in the browser check)

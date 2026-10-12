@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Show what you did in the Income list (MUT-62)
+
+**Why:** since MUT-5 the income entry is the work record, and its title ("What did you do?") is the drawer's first field. The `/income` list still read date · client · project · status · amount, so the work just logged wasn't visible there; only the client profile's Work list showed it. Found in MUT-5's browser pass, ticketed as a follow-up (epic MUT-1).
+
+**Not verified by the gate:** at the owner's request, lint, typecheck and tests were **not run** for this change; they wait for the combined run on main after every lane merges. `npm run typecheck` and `npm run lint` (0 errors) did pass once midway, before the instruction and before the last CSS/class edits and the merge of main. `incomeRows.test.ts` and `TruncatedTitle.test.tsx` passed once at that point. The IncomePage, title-search and project page tests were written but **never run**, and no e2e was written. With no test run on the final tree, every acceptance criterion is unverified by tests. AC4 (RTL) has no automated test at all, and AC1–AC4 were checked only in the browser (TEST_PLAN.md lists each).
+
+### Added
+- **A What column on `/income`, right after the date.** It shows each entry's title and reuses the client profile's Work-list label (`clients.profile.work.what`: "What" / "العمل").
+  - **Untitled or blank → a dash**, as the acceptance criteria ask. **This differs from the client profile**, which shows "Untitled" for the same entry. The owner chose the dash for `/income` and asked that the profile stay as it is (TD-076).
+- **`TruncatedTitle`** (`src/components/ui/TruncatedTitle.tsx` + `.css`): the title on one line, cut with an ellipsis, as a button that opens the entry.
+  - **Opening:** it opens the entry once (it stops the row's click), and it gives a titled row a keyboard path.
+  - **Full title:** when the title is cut, hover or keyboard focus shows it in full, in a tooltip portalled to `<body>`. The tooltip is hoverable, Escape and blur dismiss it, it flips above near the window's bottom, and it is nudged inside the window. It is `aria-hidden`, because the button's name is the full title.
+  - **Direction:** `dir="auto"` plus `unicode-bidi: plaintext`, so an English title in the Arabic UI (or the reverse) starts at its beginning. The attribute alone lost to theme.css's `:lang(ar)` rule (TD-048).
+- **`EMPTY_CELL`** (`src/lib/utils.ts`): one dash for an empty cell. `/income`'s missing project now uses it (`'-'` → `'—'`).
+- **`src/pages/income/incomeRows.ts`:** `toIncomeRow` (pre-shaped rows, built in `useMemo([transactions])`) and `incomeColumns(compact)`, two module-level column lists that drive both the header and every row (CLAUDE.md performance guardrails).
+- **`index.css`:**
+  - `td.work-cell` (`width: 40%; max-width: 0`) takes the spare width and cuts the title instead of widening the table.
+  - `td.date-cell` (`nowrap`) keeps the date on one line beside it.
+
+### Changed
+- **`IncomePage`** renders its table from `incomeColumns` with a `renderCell` switch. The cells and actions behave as before, apart from the new column and the dash.
+- **The project page's Transactions tab** (behind the Projects switch) gets the same What column after Date, with an income or expense title opening its own drawer, and `EMPTY_CELL` for a missing client or category. The legacy `/transactions` page is untouched: it redirects to `/income` (dead code, TD-025).
+- **Search:** no change. `transactionRepo.list` already matched titles, so a title word typed in `/income`'s search, or carried in `?q=`, finds the entry (checked in the browser with English and Arabic words).
+
+### At 375 px
+The Income table already scrolls sideways at this width (557 px of content in a 261 px box, before this change). What stays visible and is cut. It adds about 59 px, mostly its own padding, and shows the first few letters with an ellipsis. Project stays hidden on a compact table, as before. Rows keep the title on one line; the client name still wraps, as before.
+
+### Files
+`src/components/ui/TruncatedTitle.tsx`, `src/components/ui/TruncatedTitle.css`, `src/components/ui/index.ts`, `src/lib/utils.ts`, `src/index.css`, `src/pages/income/IncomePage.tsx`, `src/pages/income/incomeRows.ts`, `src/pages/projects/ProjectDetailPage.tsx`. Tests: `src/components/ui/__tests__/TruncatedTitle.test.tsx`, `src/pages/income/__tests__/incomeRows.test.ts`, `src/pages/income/__tests__/IncomePage.test.tsx`, `src/pages/income/__tests__/IncomePage.titleSearch.test.tsx`, `src/pages/projects/__tests__/ProjectDetailPage.test.tsx`. Knowledge: COMPONENT_REGISTRY, PATTERNS, SYSTEM_OVERVIEW, TECH_DEBT (TD-076), TEST_PLAN, `.claude/designs/mut-62-income-work-column-tests.md`. No ADR (ADR-056 unused).
+
+---
+
 ## [Unreleased] - 2026-10-12 — Retire `e2e/` for the `qa/` release-qa kit (MUT-97)
 
 **Why:** MAL-1007 built a reusable, stack-agnostic release-qa engine (`~/Work/tools/release-qa`, the `/release-qa` Claude skill) plus a per-repo `qa/` folder, with the explicit goal of also serving Mutaba3a. MUT-97 is that port: a feature catalog that replaces the old hand-run `e2e/*.spec.ts` suite with change-scoped runs, recorded video and an approve/reject review page.

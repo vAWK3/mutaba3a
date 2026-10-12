@@ -174,6 +174,13 @@
   - **Order:** owed now descending by default, ranked by today's exchange rate with nothing shown converted. Click a header to sort; the sort persists in the URL.
   - **Clicks and search:** a row opens the profile. A search narrows the list and hides the muted rows.
 - **Income (`/income`)** — the income list. Its filters (period, status tab, search, and client scope `none` / `archived`) are one model in the URL, so a link can open it filtered (MUT-83).
+  - **The What column (MUT-62).** Columns: date · What · client · project · status · amount; the project is hidden on a compact table.
+    - What shows each entry's title, the work record (MUT-5), under the client profile's label ("What" / "العمل"). An untitled or blank entry shows a dash.
+    - The title is cut to one line. It is a button that opens the entry, and when cut, hover and keyboard focus show the full title (`TruncatedTitle`).
+    - Search already matched titles in `transactionRepo.list`, so a title word finds its entry through the URL's `q`.
+    - Rows are shaped once per result (`toIncomeRow`), and the columns are one stable list (`incomeColumns`).
+    - The project page's Transactions tab has the same column.
+    - The client profile still says "Untitled" (TD-076).
 - **Adding income (MUT-5 / ADR-039)**: the income drawer is the work record.
   - **Fast path:** "What did you do?" (focused), the amount (currency prefix, LTR in Arabic, Arabic-Indic digits accepted, ambiguous input or a symbol naming another currency refused) and the client. Title, Tab, amount, Tab, client, Enter, Enter saves, even while a new client is still being created.
   - **More details:** status, due date, currency (USD/ILS/EUR), date, project, notes and the profile. Its summary line names the defaults in use. A new entry starts in its profile's currency.
@@ -541,3 +548,4 @@ mini-crm/
 | 2026-10-11 | 0.0.65 | MUT-44: hosted expense capture (shared form, drawer, pickers, receipts) — the portal's only write, closing epic MUT-34's build work |
 | 2026-10-11 | 0.0.65 | MUT-45: the API serves the hosted portal from its own origin (static assets, SPA fallback, CSP incl. the GCS upload host), `deploy.sh` and CI build it into the image; no custom domain — epic MUT-34's build work now reachable in a browser |
 | 2026-10-12 | 0.0.65 | MUT-83: the Clients list's Owed now equals Home's; per-business rows; No client / Archived clients rows; `/income` filters in the URL (ADR-049) |
+| 2026-10-12 | 0.0.65 | MUT-62: `/income` and the project Transactions tab show each entry's title (What), cut to one line with the full title on hover and focus (`TruncatedTitle`); untitled shows a dash |
