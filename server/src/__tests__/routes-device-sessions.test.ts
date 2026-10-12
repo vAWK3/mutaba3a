@@ -76,6 +76,8 @@ describe('POST /v1/device-sessions — device sign-in', () => {
     expect(body.token).toMatch(/^mds_[A-Za-z0-9_-]{43}$/);
     expect(body.user).toMatchObject({ id: p.id, email: p.email });
     expect(body.profiles.map((x: Loose) => x.id).sort()).toEqual([p.personalId, f.org.id].sort());
+    // MUT-120: the phone reads the marker, never infers it from writerOfRecord.
+    expect(body.profiles.filter((x: Loose) => x.isPersonalDefault).map((x: Loose) => x.id)).toEqual([p.personalId]);
 
     const user = await h.store.users.getById(p.id);
     expect(user?.lastSignInAt?.toISOString()).toBe(h.clock.now.toISOString());

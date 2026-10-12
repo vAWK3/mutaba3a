@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { MALAFAT_REQUIRED_SCOPES, missingScopes } from '../auth/scopes.js';
-import { ApiError } from '../errors.js';
+import { ApiError, personalProfileConflict } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
@@ -82,13 +82,18 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
       responses: {
         200: { description: 'Already bound to this tenant', content: { 'application/json': { schema: BindIntegrationResponseSchema } } },
         201: { description: 'Bound', content: { 'application/json': { schema: BindIntegrationResponseSchema } } },
-        409: { description: 'Bound to a different tenant, or the tenant is bound to another organization', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: {
+          description: 'Bound to a different tenant, the tenant is bound to another organization, or this is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)',
+          content: { 'application/json': { schema: ErrorEnvelopeSchema } },
+        },
         422: { description: 'Validation or idempotency-key failure', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...errorResponses,
       },
     }),
     async (c) => {
       const { organization, apiKey } = keyAuth(c);
+      // MUT-120: unreachable through the admin API (no key is issued for one), refused here too in case a key exists anyway.
+      if (organization.personalOwnerUserId) throw personalProfileConflict('A personal profile cannot be bound to an external system');
       const body = c.req.valid('json');
       const now = c.get('now')();
 

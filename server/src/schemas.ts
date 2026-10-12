@@ -35,6 +35,8 @@ export const OrganizationSchema = z
     slug: z.string(),
     defaultCurrency: CurrencySchema,
     timezone: z.string(),
+    /** MUT-120: the owning user on their personal profile; null on every firm. */
+    personalOwnerUserId: z.string().uuid().nullable(),
     createdAt: z.string().datetime(),
   })
   .openapi('Organization');
@@ -272,6 +274,8 @@ export const HostedProfileSchema = z
     writerOfRecord: z.enum(['MALAFAT']).nullable(),
     /** The session column of the writability matrix, per domain. */
     access: z.record(z.string(), AccessSchema),
+    /** MUT-120: true on the signed-in user's own personal profile (exactly one), false everywhere else. Clients read this, not writerOfRecord. */
+    isPersonalDefault: z.boolean(),
   })
   .openapi('HostedProfile');
 

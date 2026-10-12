@@ -233,6 +233,21 @@ describe('GET /v1/me', () => {
     expect(byId[b.org.id].access).toMatchObject({ customers: 'read-write', projects: 'read-write', payments: 'read-write', expenses: 'read-write', integration: 'none' });
   });
 
+  it('marks the caller’s own personal profile with isPersonalDefault, read-write where MUT-65 allows, and no firm (MUT-120)', async () => {
+    const h = harness();
+    const a = await firm(h);
+    await h.store.integrations.connect({ organizationId: a.org.id, provider: 'MALAFAT', externalTenantId: `tenant-${seq}`, displayName: 'Firm A', connectedByApiKeyId: a.keyId, at: h.clock.now });
+    const p = await person(h, a.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    const byId = Object.fromEntries(me.profiles.map((x: Loose) => [x.id, x]));
+    expect(Object.keys(byId).sort()).toEqual([p.personalId, a.org.id].sort());
+    expect(byId[p.personalId]).toMatchObject({ name: 'Personal', writerOfRecord: null, isPersonalDefault: true });
+    expect(byId[p.personalId].access).toMatchObject({ customers: 'read-write', projects: 'read-write', payments: 'read-write' });
+    expect(byId[a.org.id].isPersonalDefault).toBe(false);
+  });
+
   it('answers 401 UNAUTHENTICATED without a credential and SESSION_EXPIRED for an unknown cookie', async () => {
     const h = harness();
     const none = await h.app.request('/v1/me');

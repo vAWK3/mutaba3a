@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp, API_VERSION } from '../app.js';
+import { generateApiKey } from '../auth/api-key.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
@@ -235,6 +236,54 @@ describe('API key authentication', () => {
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
     expect((await read(limited)).error.code).toBe('RATE_LIMITED');
+  });
+});
+
+describe('personal profiles are never bound, keyed or shown as firms (MUT-120)', () => {
+  async function personalOrganization(h: Harness) {
+    const { user, personalOrganization: org } = await h.store.users.create({
+      email: `solo${++seq}@firm.ps`,
+      displayName: 'Solo',
+      passwordHash: 'x',
+      locale: 'en',
+      personal: { name: 'Personal', slug: `personal-${seq}-${Date.now()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+      at: h.clock.now,
+    });
+    return { user, org };
+  }
+
+  it('refuses to issue an API key for a personal organization, and still issues one for a firm', async () => {
+    const h = harness();
+    const { org } = await personalOrganization(h);
+    const res = await h.app.request(`/admin/v1/organizations/${org.id}/api-keys`, json({ name: 'Malafat', scopes: SCOPES }, admin));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.apiKeys.listByOrganization(org.id)).toEqual([]);
+    await provision(h);
+  });
+
+  it('shows personalOwnerUserId on the organization detail: the owner on a personal one, null on a firm', async () => {
+    const h = harness();
+    const { user, org } = await personalOrganization(h);
+    const personal = await read(await h.app.request(`/admin/v1/organizations/${org.id}`, { headers: admin }));
+    expect(personal.organization.personalOwnerUserId).toBe(user.id);
+    const { org: firm } = await provision(h);
+    const detail = await read(await h.app.request(`/admin/v1/organizations/${firm.id}`, { headers: admin }));
+    expect(detail.organization.personalOwnerUserId).toBeNull();
+  });
+
+  it('refuses to bind a personal organization to Malafat, even with a key planted below the admin API', async () => {
+    const h = harness();
+    const { org } = await personalOrganization(h);
+    const generated = generateApiKey('test');
+    await h.store.apiKeys.create({ organizationId: org.id, name: 'planted', environment: generated.environment, prefix: generated.prefix, keyHash: generated.keyHash, scopes: [...SCOPES], expiresAt: null });
+    const res = await h.app.request(
+      '/v1/integration/bind',
+      json({ provider: 'MALAFAT', externalTenantId: 'tenant-personal', displayName: 'Nope' }, { authorization: `Bearer ${generated.secret}`, 'idempotency-key': 'idem-personal-0001' }),
+    );
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.integrations.findByOrganizationAndProvider(org.id, 'MALAFAT')).toBeNull();
   });
 });
 

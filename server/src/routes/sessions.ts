@@ -135,6 +135,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
       timezone: organization.timezone,
       writerOfRecord,
       access,
+      // MUT-120: explicit, from the row already loaded; another user's personal profile is never this user's default.
+      isPersonalDefault: organization.personalOwnerUserId === user.id,
     });
   }
   return { user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale }, profiles };

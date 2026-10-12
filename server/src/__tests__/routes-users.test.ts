@@ -189,6 +189,30 @@ describe('personal profile (MUT-120)', () => {
     expect(personal.map((o) => o.personalOwnerUserId)).toEqual([user.id]);
   });
 
+  it('refuses to grant a personal profile to anyone but its owner', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const a = await createUser(h, org.id);
+    const b = await createUser(h, org.id);
+    const res = await h.app.request(`/admin/v1/users/${b.user.id}/memberships`, send('POST', { organizationId: a.personalProfile.id }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.memberships.find(b.user.id, a.personalProfile.id)).toBeNull();
+    const own = await h.app.request(`/admin/v1/users/${a.user.id}/memberships`, send('POST', { organizationId: a.personalProfile.id }));
+    expect(own.status).toBe(200);
+    expect((await read(own)).created).toBe(false);
+  });
+
+  it('refuses to create a user inside someone else’s personal profile, creating nobody', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const a = await createUser(h, org.id);
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'intruder@firm.ps', displayName: 'Intruder', organizationId: a.personalProfile.id }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.users.findByEmail('intruder@firm.ps')).toBeNull();
+  });
+
   it('audits as ADMIN: organization.created and user.created on the personal profile, user.created on the firm', async () => {
     const h = harness();
     const org = await organization(h);
