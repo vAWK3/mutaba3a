@@ -2,9 +2,9 @@
 
 Epic MUT-2. Owner decision of 2026-10-11: device sync is dropped product-wide, and local↔hosted sync is **off the roadmap** (not deferred).
 Worktree `.claude/worktrees/mut-73-retire-sync`, branch `feature/mut-73-retire-sync`, from local main `2b47bfb` (MUT-58 included).
-Reserved numbers: ADR-053..054, TD-072..073. Test plan: `mut-73-retire-sync-tests.md`.
+Reserved numbers: ADR-053..054, TD-074..075 (TD-072 and TD-073 went to MUT-66). Test plan: `mut-73-retire-sync-tests.md`.
 
-**Status: awaiting owner approval (CLAUDE.md Phase 1).** No product code has changed. The ticket drops user-database tables, deletes a Rust subsystem and supersedes an ADR, so §8 lists the decisions that need an answer before Phase 2.
+**Status: approved 2026-10-12, D1–D12 as recommended; implemented in Phase 2.** The ticket drops user-database tables, deletes a Rust subsystem and supersedes an ADR, so §8 lists the decisions the owner answered (all as recommended; ADR-054 stays unused).
 
 ---
 
@@ -204,7 +204,7 @@ None of the 5 specs (`accessibility`, `income-drawer`, `income-fast-path`, `navi
 4. **The LAN server listened on plain HTTP on 0.0.0.0** whenever it was started; the TLS crates were declared but unused. Deleting it removes a network listener and an mDNS advertisement.
 5. **A synced write could report failure for data that was saved.** The op-log append ran after the base write, outside its Dexie transaction. If the append threw (quota, closed DB), the hook rejected even though the payment was already stored, and a retry could **record the payment twice**. Base calls remove that path.
 6. **Visitor sample sessions leaked op-log rows.** ADR-042 says "leaves nothing behind", but `opLog` was not in `sessionTables()`. That leak ends here.
-7. **`migration-safety`'s `ALL_TABLES` already omits five live tables:** `paymentRecords`, `plans`, `planAssumptions`, `planScenarios`, `recurringOccurrences`. Its post-migration backup (which v21 triggers) therefore never contained payment records. This is pre-existing, and the user-facing JSON backup (`backup.ts`) is unaffected. Proposed TD-072 (D10).
+7. **`migration-safety`'s `ALL_TABLES` already omits five live tables:** `paymentRecords`, `plans`, `planAssumptions`, `planScenarios`, `recurringOccurrences`. Its post-migration backup (which v21 triggers) therefore never contained payment records. This is pre-existing, and the user-facing JSON backup (`backup.ts`) is unaffected. Proposed TD-074 (D10).
 
 ---
 
@@ -386,7 +386,7 @@ Each decision has a recommendation; "approve as recommended" answers them all.
 In Rust: **A (rec.)** `src-tauri/src/oauth/{mod.rs, callback.rs}`; B flat `oauth_callback.rs` with commands in `lib.rs`. `oauth_callback.rs` **stays** (the flow needs it), and so do the `axum`, `tokio`, `log` and opener crates.
 
 **D4. The OAuth client has no production caller** (§2.11 #2).
-- **A (rec.)** Keep it as the ticket says, and record TD-073 so its fate is decided deliberately. Desktop→Malafat sign-in is a separate product question.
+- **A (rec.)** Keep it as the ticket says, and record TD-075 so its fate is decided deliberately. Desktop→Malafat sign-in is a separate product question.
 - B: Delete it too. That changes the ticket, closes MUT-28's artefacts and makes TD-015 moot.
 
 **D5. How is `paired_devices.json` removed?**
@@ -419,7 +419,7 @@ Keep the cleanup permanently. It is ~20 lines, and a user can skip versions.
 - B: Remove them and see if it builds.
 
 **D10. `migration-safety` `ALL_TABLES` omits five live tables** (§2.11 #7).
-- **A (rec.)** Remove only the eight sync names here and record **TD-072** for the gap. It is pre-existing, and the user-facing backup is unaffected.
+- **A (rec.)** Remove only the eight sync names here and record **TD-074** for the gap. It is pre-existing, and the user-facing backup is unaffected.
 - B: Derive the list from `db.tables` now. That is one line and arguably safer, but it changes a non-sync path, which the guardrail says not to do.
 
 **D11. A bundle-level guard as well as the source guard?**
@@ -443,7 +443,7 @@ Keep the cleanup permanently. It is ~20 lines, and a user can skip versions.
   - TD-037 (op-log has no profile) → Resolved / moot;
   - TD-013 → the synced caveat and "8 synced decorators" are gone;
   - TD-016 → Rust test count (24 → 10 OAuth + the cleanup tests);
-  - new **TD-072** (D10) and **TD-073** (D4);
+  - new **TD-074** (D10) and **TD-075** (D4);
   - TD-015 stays (OAuth).
 - **TODOS.md** per D12.
 - **PATTERNS:**

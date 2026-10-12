@@ -107,7 +107,7 @@ The hook-level checks below prove each call site still lands there.
 | O3 | Rust `oauth::callback` tests | the same 10 green under the new module path: loopback-only bind, port fallback, all ports taken, single shot, raw query passthrough, error redirect passthrough, timeout releases the port |
 | O4 | **Desktop IPC smoke** (isolated identifier, §10) | In devtools: `__TAURI_INTERNALS__.invoke('bind_oauth_callback', { ports: [14100,14101,14102,14103] })` returns a port in that list. `curl "http://127.0.0.1:<port>/callback?code=abc&state=xyz"` gets the done page. `invoke('await_oauth_callback')` resolves to `code=abc&state=xyz`. `invoke('cancel_oauth_callback')` resolves, and a second bind gets the same port back. This proves the commands are registered and the `OAuthState` is managed, which unit tests can't |
 
-There is no end-to-end Malafat sign-in: the client has no UI caller (brief §2.11 #2, TD-073). "Sign-in still works" therefore means the flow's unit tests, the Rust listener tests and the live IPC smoke all pass after the move.
+There is no end-to-end Malafat sign-in: the client has no UI caller (brief §2.11 #2, TD-075). "Sign-in still works" therefore means the flow's unit tests, the Rust listener tests and the live IPC smoke all pass after the move.
 
 ## 5. JSON backup round trip
 
