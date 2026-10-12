@@ -855,6 +855,9 @@ model FeeProposal {
   withdrawnReason     String?
   /// The agreement the approval created (APPROVED).
   agreementId         String?           @unique @db.Uuid
+  /// MUT-107: both set on a contingency proposal, both null on a FIXED one (CHECK in migration).
+  commissionRateBasisPoints Int?
+  upfrontTreatment          UpfrontTreatment?
   requestId           String?
   version             Int               @default(1)
   createdAt           DateTime          @default(now())

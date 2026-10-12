@@ -191,7 +191,7 @@ describe('organization summary carries open proposals (M8, D17)', () => {
     expect(ils).toMatchObject({ outstanding: '0.00', overdue: '0.00', unallocated: '0.00', proposed: '12500.00', counts: { customers: 2, overdueCustomers: 0, unallocatedPayments: 0, openProposals: 2 } });
     const rows = Object.fromEntries(ils.customers.map((r: Loose) => [r.customerId, r]));
     expect(rows[f.customer.id]).toMatchObject({ outstanding: '0.00', status: 'SETTLED', proposals: [{ proposalId: a.id, projectId: f.project.id, amount: '10000.00', proposedOn: '2026-10-10' }] });
-    expect(rows[other.id].proposals).toEqual([{ proposalId: c.id, projectId: otherProject.id, amount: '2500.00', proposedOn: '2026-10-10' }]);
+    expect(rows[other.id].proposals).toEqual([{ proposalId: c.id, projectId: otherProject.id, amount: '2500.00', proposedOn: '2026-10-10', contingency: null }]);
     expect(summary.currencies[1]).toMatchObject({ currency: 'USD', proposed: '500.00', counts: { openProposals: 1 } });
     expect(summary.currencies[1].customers[0].proposals[0]).toMatchObject({ proposalId: b.id, amount: '500.00' });
     const only = await read(await h.app.request('/v1/summaries/organization?currency=USD', { headers: f.auth }));
@@ -269,8 +269,8 @@ describe('the M8 contract', () => {
   it('publishes 1.7.0-m8 with the three-state lifecycle, the approve body and the summary fields; the agree route and feeProposalId are gone', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(API_VERSION).toBe('1.16.0-mut100');
-    expect(doc.info.version).toBe('1.16.0-mut100');
+    expect(API_VERSION).toBe('1.17.0-mut107');
+    expect(doc.info.version).toBe('1.17.0-mut107');
     for (const path of ['/v1/fee-proposals', '/v1/fee-proposals/{proposalId}', '/v1/fee-proposals/{proposalId}/approve', '/v1/fee-proposals/{proposalId}/withdraw']) expect(doc.paths[path], path).toBeDefined();
     expect(doc.paths['/v1/fee-proposals/{proposalId}/agree']).toBeUndefined();
     expect(doc.components.schemas.FeeProposalStatus.enum).toEqual(['PROPOSED', 'APPROVED', 'WITHDRAWN']);

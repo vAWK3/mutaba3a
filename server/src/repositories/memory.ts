@@ -619,9 +619,12 @@ export class MemoryLedgerStore implements LedgerStore {
       const project = this.projs.get(input.projectId);
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('fee_proposals.projectId');
       if (await this.feeProposals.findOpenByProject(input.organizationId, input.projectId)) throw new UniqueViolation('fee_proposals.open_per_project');
+      const { commissionRateBasisPoints, upfrontTreatment, ...rest } = input;
       const record: FeeProposalRecord = {
         id: randomUUID(),
-        ...input,
+        ...rest,
+        commissionRateBasisPoints: commissionRateBasisPoints ?? null,
+        upfrontTreatment: upfrontTreatment ?? null,
         status: 'PROPOSED',
         clientApprovedOn: null,
         clientApprovalNote: null,
