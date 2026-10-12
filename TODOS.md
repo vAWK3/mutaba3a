@@ -57,3 +57,17 @@
 **Context:** Found 2026-10-12 during MUT-81's eng review (`/plan-eng-review`), decision D4.
 
 **Depends on / blocked by:** Nothing. Next time either file is open for an unrelated change.
+
+## 7. Contingency fee proposals: propose upfront + rate, approval creates the agreement — ticketed as MUT-107 (UI: MAL-1094)
+
+**What:** Let a fee proposal carry contingency terms (upfront, commission rate, upfront treatment) and have approval create a CONTINGENCY agreement in the same transaction. Design already reviewed: MUT-100 plan §11 (`.claude/designs/mut-100-contingency-agreements.md`), eng decisions D9 (Proposed counts the upfront only) and D10 (approve `schedule` optional, required only when the upfront > 0, 422 SCHEDULE_REQUIRED).
+
+**Why:** Since M8 a client's approval is how a fee agreement is born (MUT-40/MAL-943); without this, contingency deals are the one fee type created directly with no client-approval record.
+
+**Pros of fixing:** One negotiation flow for every fee type; the approval record exists for contingency deals too.
+
+**Cons / cost / risk:** Touches the proposal schema, the approve route, `CurrencySummary.proposed`, and needs the Malafat proposal dialogs (MAL-1094) so the API is not shipped unused.
+
+**Context:** Deferred from MUT-100 by the CEO review on 2026-10-12 because MAL-1077, the only consumer, excludes it. Start at `server/src/routes/fee-proposals.ts` approve; `composePreview` derives the agreement type from the body's `contingency`, so approval builds the preview body with it.
+
+**Depends on / blocked by:** MUT-100 (the CONTINGENCY type) and the paired Malafat proposal-UI ticket MAL-1094.
