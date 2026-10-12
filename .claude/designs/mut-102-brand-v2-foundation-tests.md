@@ -33,12 +33,12 @@ Gate runs on Node 22 (TD-054): `npx vitest run` · `npm run typecheck` · `npm r
 - font `runtimeCaching` rule exists, `CacheFirst`, cache `fonts`, max 12 entries, matches `request.destination === 'font'` only.
 - `globPatterns` has no `otf`.
 - the hosted plugin list contains `mutaba3a:brand-font-preload`.
-- `findPreloadFont()` (pure): hit by `originalFileNames`, miss → throws naming the source path, dev/no bundle → no tag; `preloadTag()` builds `<link rel="preload" as="font" type="font/otf" crossorigin>` with the base applied.
+- No build preloads a font (the preload plugin was dropped in the review round, D2: it cost ~700 ms of LCP).
 
 ### `scripts/__tests__/check-bundles.test.ts`
 - `cssUrls()` extracts `url()`s (quoted, unquoted, skips `data:` and fragments).
 - `unresolvedUrls()` reports a `url()` with no file in the dist (missing-file fixture) and passes a resolving one, relative to the CSS file.
-- `fontProblems()` flags a retired family file (Inter / SourceSerif / IBMPlexSansArabic), a missing or altered Thmanyah file (sha256 ≠ source), and an entry HTML with no Thmanyah Sans 400 preload or a preload pointing at a missing file.
+- `fontProblems()` flags a retired family file (Inter / SourceSerif / IBMPlexSansArabic), a missing or altered Thmanyah file (sha256 ≠ the pins in `src/assets/fonts/thmanyah.sha256.json`), and an entry HTML that preloads a font.
 
 ## Browser (release-qa Playwright, `qa/`)
 
@@ -58,6 +58,10 @@ Gate runs on Node 22 (TD-054): `npx vitest run` · `npm run typecheck` · `npm r
 ### Existing
 - `qa/support/axe.ts` `KNOWN_AXE_VIOLATIONS` loses `color-contrast` on every surface that now passes.
 - `drawer-motion.spec.ts` keeps passing (reduced motion guardrail).
+
+## Added in the review round
+- `brand.test.ts` › `rendered pairs`: every rule's own colour/background pair, in 4 states; shrink-only `KNOWN_LITERAL_PAIRS`.
+- Hue-drift, focus, font-placement, mono-weight, synthesis, visited and avatar-colour guards; see `.claude/TEST_PLAN.md` (MUT-102 review round).
 
 ## Manual
 - Desktop offline: `npm run tauri dev` with the network off — text renders in Thmanyah (screenshot). `check-bundles` proves the `dist-desktop` `url()`s resolve locally.

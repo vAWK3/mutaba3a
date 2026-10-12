@@ -23,6 +23,9 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 - **Purple primary as text is only AA** (4.78:1 on canvas). Wherever purple carries text, such as links, text buttons and selected-tab labels, use `primary-hover` instead. `primary` stays for fills and decoration. The iOS app does the same.
 - **Primitives only (MUT-102).** The delivered CSS ended with a "map onto existing app tokens" block covering about 30 tokens; it is removed, and `src/styles/theme.css` maps all of them once. Three additions, no new values: `--m-shadow-tint` is factored out of the card shadow's own colour so shadows and the overlay derive from it, and `--m-press-scale` / `--m-stagger-rise` / `--m-stagger-blur` come from the JSON's motion block.
 - **Filled buttons and the selected nav label (MUT-102).** Cream on `primary` is 4.84:1, so filled buttons use `primary-hover` (7.14:1), as the iOS app does; the selected nav label is `lavenderInk` on `lavender` (7.01:1). The one exemption from 7:1 is input placeholder text (85% `ink2` toward `fieldBg`, 5.02 / 4.66:1), so a hint never reads as a typed value.
+- **Text on lavender is lavender-ink; text on a filled status ink is the canvas (MUT-102 review).** Purple and ink2 are under 7:1 on lavender, and white fails on the status inks once they turn light in dark mode. Blends across hues mix in oklab, and tints stay light enough for ink2 to keep 7:1. The kit's inset focus ring is kept for unfilled controls; filled buttons get an outer ring, because the inset one barely shows on a fill.
+- **The figure stack falls back to Thmanyah Sans** (`--m-font-num: "IBM Plex Mono", "Thmanyah Sans", …`), so Arabic inside a figure cell keeps the brand face.
+- **No font preload (MUT-102, D2).** Preloading Thmanyah Sans 400 delayed landing LCP from 3964 to 4664 ms on a slow link; `font-display: swap` paints text at once.
 - **No CDN `@import`s.** The delivered CSS loaded Thmanyah from jsDelivr (`@dawod/thmanyah-font-web`) and Plex Mono from Google Fonts. Both lines are removed:
   - the Thmanyah licence forbids third-party redistribution;
   - `scripts/check-bundles.ts` and the portal CSP (`default-src 'self'`) reject new origins;
@@ -46,7 +49,7 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 
 ## Typography
 
-- **Thmanyah Sans:** body and UI text, in **both** Arabic and English. It has full Latin coverage.
+- **Thmanyah Sans:** body and UI text, in **both** Arabic and English. It has full Latin letter coverage, but **no ₪ glyph and no tabular figures (`tnum`)**. Set amounts in IBM Plex Mono, which has both.
 - **Thmanyah Serif Display 700:** display and titles.
 - **IBM Plex Mono:** figures and labels, with tabular numerals.
 - **Type scale**, applied everywhere including the dense app screens (decided 2026-10-12):

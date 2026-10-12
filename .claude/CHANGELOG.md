@@ -72,6 +72,48 @@
 - landing LCP, Fast 3G + 4× CPU, median of 5: 4116 ms on main → 4744 ms.
 - **Not run:** the manual desktop check with the network off (`npm run tauri dev`); `check-bundles` proves every `dist-desktop` font `url()` resolves locally.
 
+### Review round (qa-reconcile, 2026-10-12)
+
+`/qa-reconcile` with gstack `/review` used six specialists plus a red-team pass and an adversarial pass. They found that the 7:1 promise held for token pairs but not for the rules components render; the browser check is AA only. The owner chose to fix the blockers and regressions here (D1) and to drop the font preload (D2).
+
+**Fixed:**
+- **Purple text on lavender** (5.52:1) now uses `--on-accent-subtle`, which is lavender-ink. This covers the nav, + Add, the open client row, pills, chips, badges and alerts.
+- **Fills that turn light in dark mode.**
+  - Status fills use `--on-status`.
+  - Accent fills use `--accent-solid`/`--on-accent`: the update banner, the sidebar toggle, the download CTA, the PDF icon and the matching hover.
+  - Avatars without a business colour use the filled pair through `profileAvatarStyle()`. An unreadable colour is ignored.
+- **Focus.**
+  - The Clients profile pane had lost its focus ring (`inset var(--focus-ring)` was invalid).
+  - Filled buttons get `--focus-ring-on-fill`, and a hovered primary keeps it.
+  - Focus rules no longer use literal colours.
+- **Blends** across hues mix in oklab. In oklch, cream met lavender-grey at pink.
+- **Tints** are capped where ink2 keeps 7:1, and `--surface-3` carries primary text only.
+- **No faked bold:** `font-synthesis-weight: none` on `html`, and the mono rules ask for weight 500.
+- **Fonts and links.**
+  - index.css no longer re-sets the body face.
+  - The mono stack falls back to Thmanyah Sans.
+  - `:visited` applies only to unclassed links.
+- **Small fixes:** a CSS syntax error in `CSVValidationPreview.css`, and a missed `var(--accent, …)` text colour.
+- **Font preload dropped.** Landing LCP is now **3964 ms vs 4116 ms on main**; the preload measured 4664. `check-bundles` flags a font preload and reads the pinned hashes from `src/assets/fonts/thmanyah.sha256.json`.
+- **New tests:**
+  - rendered pairs, with a shrink-only list of literal pairs;
+  - token pairs composited over `--bg` and `--surface`;
+  - the oklch hue-drift guard;
+  - focus guards;
+  - font placement, mono weight and synthesis;
+  - the visited rule;
+  - the accent guard's fallback and multi-line forms;
+  - avatar tests;
+  - QA: the Clients pane ring, known overflows that fail if they grow, bounded theme toggling, and the portal heading read from translations.
+
+**Deferred** (TD-079 for MUT-103, plus TD-084–088): moving amounts to mono for tabular figures and ₪; AAA axe in the browser; the PWA font cache on first visit; the Safari 16.2 floor; heading sizes; user colour inks; bundle checks on the ship paths; the Serif Display provenance.
+
+**Run after the fixes (Node 22):**
+- `npx vitest run`: 226 files, 3,418+ passed;
+- typecheck clean; lint 0 errors;
+- `test:bundles` passed;
+- QA on `vite preview`: 90/90 with `--repeat-each=2`, after one ceiling fix.
+
 ---
 
 ## [Unreleased] - 2026-10-12 — "All businesses" on Home and Clients (MUT-89)

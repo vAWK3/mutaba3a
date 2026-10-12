@@ -4,7 +4,7 @@
 - **Blocks:** MUT-103 (app sweep), MUT-106 (invoice PDFs), MUT-77 (landing), MUT-91 (portal). **Blocked by:** none.
 - **Settled (memory `brand-v2-decisions`, do not re-open):** AAA light inks canonical · Thmanyah for EN and AR · brand scale everywhere (body 16) · fonts self-hosted and unmodified, licence risk accepted.
 - **Reserved:** ADR-058 · TD-079..TD-081 (main tops out at ADR-057 / TD-078 after MUT-89 merged at `b9af895`; re-check before use).
-- **Status:** built on `feature/mut-102-brand-foundation` (2026-10-12); see *Build notes* at the end. Awaiting `/qa-reconcile`.
+- **Status:** built on `feature/mut-102-brand-foundation` (2026-10-12), then fixed in the `/qa-reconcile` review round; see *Build notes* and *Review round* at the end.
 
 ## Problem
 
@@ -871,4 +871,40 @@ Commits on `feature/mut-102-brand-foundation` (from main `530aec2`), in plan ord
 - **Reduced motion:** unit-tested tokens; `drawer-motion.spec.ts` passes.
 - **Desktop offline:** `check-bundles` proves every `dist-desktop` CSS `url()` resolves locally and the preload is relative. The manual `npm run tauri dev` with the network off was **not run**.
 - **Licence:** the Serif Display files are still the copies MUT-105 flags as third-party; re-download from Thmanyah's official site and re-pin `THMANYAH_SHA256` once.
+
+# Review round — /qa-reconcile + gstack /review, 2026-10-12
+
+**What the reviewers ran:** five specialists (testing, maintainability, performance, design, simplification), a red team, and an in-host adversarial pass. Codex isn't installed, so there was no outside model.
+
+**The headline finding:** the 7:1 light-text AC held for token pairs but not for the rules components render. The browser axe check is AA only, so it passed 5.52:1 purple-on-lavender everywhere.
+
+**Owner decisions:**
+- **D1 = "Blockers + regressions":** fix everything this branch caused or that breaks an AC surface; defer the app-wide sweeps.
+- **D2 = "Drop the preload":** this reverses the ticket's "preload Thmanyah Sans 400" guardrail. LCP medians: high-priority preload 4664 ms, low 4356 ms, none 3964 ms; main 4116 ms.
+
+**Fixed (with tests, each red first):**
+- new tokens `--on-accent-subtle`, `--on-status` and `--focus-ring-on-fill`;
+- about 40 component rules;
+- avatars, through `profileAvatarStyle()`;
+- the Clients pane focus ring;
+- oklab blends and capped tints;
+- no faked bold;
+- index.css no longer sets the body face; the mono stack falls back to Thmanyah; `:visited` scoped;
+- a CSS syntax error;
+- pins moved to one JSON;
+- the preload removed.
+
+**Deferred** (TD-079 → MUT-103, TD-084–088):
+- amounts to mono, for `tnum` and ₪;
+- AAA in the browser;
+- the PWA first-visit cache;
+- the Safari 16.2 floor;
+- heading sizes;
+- user colour inks;
+- bundle checks on the ship paths;
+- Serif Display provenance.
+
+**Advisory, not applied:**
+- `postcss.list.comma` could replace the harness's own `splitTopLevel`;
+- hex/rgb parsing stays, because the rendered-pairs check reads literals.
 

@@ -210,7 +210,7 @@ tables.
 | Demo Mode | ✅ Complete | Sample data, time-frozen |
 | i18n | ✅ Complete | English, Arabic, RTL |
 | Dark Theme | ✅ Complete | CSS variables theming |
-| Brand v2 (MUT-102, ADR-058) | ✅ Complete | Two-layer tokens (`--m-*` from the brand JSON → one semantic map in `theme.css`); AAA light text (7:1), dark 4.5:1, checked in Node and by axe; Thmanyah Sans / Serif Display bundled unmodified from `src/assets/fonts` in web, desktop and portal (preloaded, runtime-cached in the PWA); Plex Mono figures; body 16, brand radii and motion tokens |
+| Brand v2 (MUT-102, ADR-058) | ✅ Complete | Two-layer tokens (`--m-*` from the brand JSON → one semantic map in `theme.css`); AAA light text (7:1), dark 4.5:1, checked in Node and by axe; Thmanyah Sans / Serif Display bundled unmodified from `src/assets/fonts` in web, desktop and portal (no preload: it cost ~700 ms of LCP; runtime-cached in the PWA); Plex Mono figures; body 16, brand radii and motion tokens |
 | Desktop App | ✅ Complete | Tauri macOS/Windows |
 | PWA | ✅ Complete | Offline-capable web app |
 | Device sync | ❌ Retired (MUT-73, ADR-053) | LAN pairing, `.msync` bundles, op-log and its tables deleted |

@@ -2413,20 +2413,50 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 
 **Decision**:
 1. **Two layers.** `src/styles/brand/mutaba3a-theme.css` holds primitives only (`--m-*`), switching light/dark in ADR-018's three selector states; `mutaba3a.tokens.json` is canonical and `brand.test.ts` › `drift` holds the CSS to it. `theme.css` imports it and `brand/fonts.css`, then maps **every** semantic token once, in one `:root` block. Only shadow strength, the overlay and `color-scheme` need a per-mode block. `theme.css` holds no colour literal (tested). `--m-shadow-tint` was factored out of the delivered card shadow (same values) so shadows and the overlay derive from it.
-2. **Light text clears 7:1, dark text 4.5:1**, checked by a Node evaluator over all four theme states (`brand.test.ts` › `contrast`) and by axe in a browser in light and dark (`qa/specs/web/brand.spec.ts`; `KNOWN_AXE_VIOLATIONS` no longer lists `color-contrast`).
+2. **Light text clears 7:1, dark text 4.5:1.** A Node evaluator checks all four theme states, for two things:
+   - **token pairs** (`brand.test.ts` › `contrast`), each composited over both `--bg` and `--surface`;
+   - **rendered pairs** (`brand.test.ts` › `rendered pairs`): every rule in `src` that sets both a text colour and an opaque background. Six literal-only CSV pairs sit in a shrink-only list for MUT-103.
+
+   axe checks light and dark in a browser, but at its default AA rule only (`color-contrast`, 4.5:1). Enforcing AAA in the browser is TD-086. `KNOWN_AXE_VIOLATIONS` no longer lists `color-contrast` for any app surface.
    - Purple used as text is `--accent-text` (primary-hover, 7.14:1); `--accent` (primary, 4.77:1) is for fills, borders and decoration only. A guard test forbids `color: var(--accent)`.
    - Filled buttons use `--accent-solid` = primary-hover (cream on primary is only 4.84:1); hover and active mix toward ink, so contrast rises.
-   - The selected nav label is lavender-ink (7.01:1); primary-hover on lavender is only 5.52:1.
+   - **Text on the lavender ground uses `--on-accent-subtle`** (lavender-ink, 7.01:1). This covers the selected nav item, chips, count pills, alerts and the open client row; primary-hover on lavender is only 5.52:1. On the open row, every coloured line takes lavender-ink.
+   - **Text on a filled status ink uses `--on-status`** (the canvas). This covers danger, success and warning buttons and a completed step. White fails once the inks turn light in dark mode, at about 1.5:1.
+   - **Grounds are capped where ink2 keeps 7:1.**
+     - `--bg-subtle` is 20% line.
+     - The row and nav tints are 10–15% lavender.
+     - `--surface-3`, a pressed ground darker than field-bg, carries primary text only.
+   - **Blends between colours of different hue mix `in oklab`.** In oklch, lavender-grey and cream meet at pink. A test refuses an oklch blend across more than 30° of hue.
+   - **Focus.**
+     - Filled buttons (primary, danger, success, warning) take `--focus-ring-on-fill`: an outer ring, set off by a gap of page colour, with `--focus` on `--bg` at 3:1 or more. The inset brand ring paints over a fill and barely shows.
+     - A hovered primary button keeps that ring.
+     - Focus rules never use a literal colour.
+   - **Visited links.** `a:not([class]):visited` styles only unclassed links, so a link styled as a button never turns lavender-ink.
    - **The one exemption is the placeholder:** 85% ink2 toward field-bg, 5.02:1 light / 4.66:1 dark, floor 4.5:1 (tested). At full ink2 a hint reads as a typed value; axe does not check `::placeholder`.
-3. **Faces.** Thmanyah Sans (body, both scripts), Thmanyah Serif Display (headings, at 700), IBM Plex Mono (figures, tabular). Thmanyah ships 400/500/700: a `--weight-semibold` (600) renders with the Bold file. Plex Mono ships 400/500 here, so a figure is 500, not 700.
-4. **Thmanyah is bundled from `src/assets/fonts`, byte-identical** to the delivered files (sha256 pinned in `brand.test.ts` and checked in every dist by `check-bundles`), never converted, subset or loaded from a CDN. Vite emits hashed copies under `/assets/` in the web, desktop and portal builds: the portal's existing `/assets/*` rule caches them immutably and the desktop app reads them offline (`check-bundles` proves every CSS `url()` resolves inside each dist). Plex Mono stays on `@fontsource` (OFL woff2). Every build preloads Thmanyah Sans 400 only (`brandFontPreload()` in `vite.config.ts`, found by its source path; a missing file fails the build). The PWA caches fonts on first use (CacheFirst, 12 entries) rather than precaching them.
+3. **Faces.** Thmanyah Sans for body text in both scripts, Thmanyah Serif Display for headings at 700, and IBM Plex Mono for figures.
+   - **Weights.** Thmanyah ships 400/500/700, so a `--weight-semibold` (600) renders with the Bold file. Plex Mono ships 400/500 here, so a figure is 500. `html` sets `font-synthesis-weight: none`, so a figure that inherits 600 renders the 500 file rather than a faked bold.
+   - **Mono fallback.** The mono stack falls back to Thmanyah Sans, so Arabic inside a figure cell keeps the brand face.
+   - **Glyph gaps.** Thmanyah has no `tnum` feature and no ₪ glyph. A `tabular-nums` rule in the body face does nothing, and ₪ comes from a system font. Amounts belong in Plex Mono, which has both; moving the remaining ones is MUT-103's job (TD-079).
+4. **Thmanyah is bundled from `src/assets/fonts`, byte-identical** to the delivered files (sha256 pinned in `brand.test.ts` and checked in every dist by `check-bundles`), never converted, subset or loaded from a CDN. Vite emits hashed copies under `/assets/` in the web, desktop and portal builds: the portal's existing `/assets/*` rule caches them immutably and the desktop app reads them offline (`check-bundles` proves every CSS `url()` resolves inside each dist). Plex Mono stays on `@fontsource` (OFL woff2).
+   - **No font is preloaded.** The ticket asked to preload Thmanyah Sans 400, but the measurement reversed it (D2, the owner's call). Results are on `vite preview` builds of the landing page, at Fast 3G with 4× CPU, median of 5 cold runs:
+
+     | Variant | LCP |
+     |---|---|
+     | Preload at high priority | 4664 ms |
+     | `fetchpriority=low` | 4356 ms |
+     | No preload | **3964 ms** |
+     | main | 4116 ms |
+
+     CLS was 0.009 in every variant. The app renders on the client, so the preload only took bandwidth from the code that paints; `swap` shows text at once. `check-bundles` flags an entry that preloads a font.
+   - **PWA font cache.** The PWA caches fonts on use (CacheFirst, 12 entries) rather than precaching them. The service worker registers after `load`, so the cache fills on the second online load (TD-087).
 5. **Scale, radii and motion.** New `--text-label/body/headline/title/figure/display` (13/16/20/32/40/56), `--radius-card/hero/pill`, and motion tokens (`--ease-spring`, `--ease-overshoot`, `--duration-press/toggle/nav`, `--stagger-step`, `--press-scale`), zeroed under `prefers-reduced-motion`. The old `--text-*` and `--radius-*` names stay as aliases (TD-079) so 620 call sites need no rename now.
 6. **Regression contract.** Every custom property `theme.css` defined before the rewrite stays defined in all four states (`names`); every no-fallback `var(--x)` in `src` resolves, with the 48 dead references left in a shrink-only allowlist that MUT-103 empties (`references`); the ThemeToggle's Light/Dark/System paint the right canvas under OS light and OS dark (Playwright).
 7. **TD-048, font half.** The `:lang()` font rules style `<html>` only, so inline elements inherit (a `<span>` in a heading keeps the heading face). The `direction` half is unchanged and is MUT-109.
 
 **Consequences**:
 - One look across landing, app, desktop and portal; the semantic layer went from four copies to one (`theme.css` 862 → 545 lines).
-- First-visit font bytes rise (licence: no woff2). Measured on `vite preview` builds, landing at Fast 3G + 4× CPU, median of 5 cold runs: LCP **4116 ms on main → 4744 ms** (+628 ms); fonts transferred by then 180 KB → 236 KB. Reported, not gated (TD-081). The service-worker precache gets ~0.7 MB lighter.
+- First-visit font bytes rise, because the licence forbids woff2. Landing LCP still improves: **4116 ms on main → 3964 ms** once the preload is gone (TD-081, resolved). The service-worker precache gets about 0.7 MB lighter.
+- The colour system needs `oklch()` and `color-mix()`, which means Safari 16.2 or later (TD-088).
 - MUT-106 registers the PDF fonts with `?url` imports from `src/assets/fonts`; the `IBMPlexMono-*.ttf` in `public/fonts` are PDF-only.
 - MUT-103 owns the sweep this foundation leaves: legacy aliases, component literals, semibold headings, ad-hoc amount classes and the dead-reference allowlist (TD-079).
 - A component colour literal on an acceptance-criteria surface was fixed here when axe caught it (the profile avatar's dead `--color-accent`, the Mac banner button, a global `.text-muted` leak from the CSV preview, the landing get-it links); the rest wait for MUT-103.

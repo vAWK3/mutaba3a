@@ -866,6 +866,9 @@ The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere
 | Primary action (filled) | `background: var(--accent-solid); color: var(--on-accent)` | `--accent` + `white` |
 | Accent fill, border, decoration | `var(--accent)` | — |
 | Selected nav item | `background: var(--nav-item-active); color: var(--nav-item-active-text)` | purple text on lavender (5.52:1) |
+| Any text on the lavender ground (`--accent-subtle`): chips, pills, the open row | `color: var(--on-accent-subtle)` (lavender-ink, 7:1) | `--accent-text` or `--muted` on lavender |
+| Text on a filled status ink (danger/success/warning button, done step) | `background: var(--error); color: var(--on-status)` | `color: white` (1.5:1 in dark, where the inks turn light) |
+| Focus on a filled control | `box-shadow: var(--focus-ring-on-fill)` | the inset `--focus-ring` (paints over the fill); `inset var(--focus-ring)` (invalid: the token is already inset) |
 | Background | `background: var(--bg)` | `--color-bg` |
 | Card/elevated | `background: var(--surface)` | `--color-bg-elevated` |
 | Field | `background: var(--input-bg)` | `--surface` |
@@ -876,7 +879,7 @@ The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere
 | Spacing | `padding: var(--space-4)` | Hardcoded `16px` |
 | Shadow | `box-shadow: var(--shadow-2)` | `--shadow-md` |
 | Focus | `box-shadow: var(--focus-ring)` | `outline: 2px solid` |
-| Motion | `transition: transform var(--duration-press) var(--ease-spring)`; scale by `var(--press-scale)` | literal ms (they don't zero under reduced motion) |
+| Motion | `transition: transform var(--duration-press) var(--ease-spring)`; scale by `var(--press-scale)` | literal ms (off-brand timing; the tokens also zero under reduced motion, and `--press-scale` goes to 1) |
 | Amounts | `font-family: var(--font-mono); font-variant-numeric: tabular-nums` | the body face |
 
 **Type scale** (brand roles; body 16 everywhere, ADR-058):
@@ -907,7 +910,11 @@ The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere
 --font-heading / --font-heading-ar: "Thmanyah Serif Display" /* h1–h6 at 700 */
 --font-mono: "IBM Plex Mono"                            /* figures, tabular */
 ```
-Thmanyah ships 400/500/700 and Plex Mono 400/500 here: ask for one of those weights (600 renders as 700). The faces are declared once in `src/styles/brand/fonts.css`; entries import only `theme.css`. The `.otf` files are the delivered bytes (licence: never convert or subset); `brand.test.ts` pins their sha256.
+Thmanyah ships 400/500/700 and Plex Mono 400/500 here: ask for one of those weights. A 600 renders as 700 in Thmanyah and as 500 in Plex Mono, because `html` disables bold synthesis. Thmanyah has no `tnum` and no ₪, so set amounts in `--font-mono`. The faces are declared once in `src/styles/brand/fonts.css`; entries import only `theme.css`. The `.otf` files are the delivered bytes (licence: never convert or subset); `brand.test.ts` pins their sha256.
+
+**Blends:** a `color-mix()` between colours of different hue uses `in oklab`. `in oklch` swings the hue the short way round, so lavender-grey and cream meet at pink. `brand.test.ts` refuses an oklch blend across more than 30° of hue.
+
+**Contrast is tested on rendered rules.** `brand.test.ts` › `rendered pairs` checks every rule that sets both a `color` and an opaque `background`. Keep a control's colour and background in the same rule where you can, so the check sees them.
 
 **Light/dark:** a token that differs by mode is a primitive that switches in the brand file, so a semantic token maps once. Only shadow strength, the overlay and `color-scheme` sit in `theme.css`'s per-mode block, in the same three selectors (`:root`; `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`; `:root[data-theme="dark"]`). The test evaluator refuses any other selector that declares a custom property.
 
