@@ -95,6 +95,18 @@ export function describeLedgerStoreM8Contract(name: string, makeStore: () => Pro
       expect(second.status).toBe('PROPOSED');
     });
 
+    it('MUT-107: persists and round-trips contingency terms; a FIXED proposal carries neither', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const p = await project(store, a);
+      const contingent = await store.feeProposals.create({ ...input(a, p), commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' }, at(1));
+      expect(contingent).toMatchObject({ commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' });
+      expect(await store.feeProposals.getById(a.id, contingent.id)).toMatchObject({ commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' });
+      await store.feeProposals.transition(a.id, contingent.id, ['PROPOSED'], { status: 'WITHDRAWN', withdrawnAt: at(2), withdrawnReason: null }, at(2));
+      const fixed = await store.feeProposals.create(input(a, p, 5_000_000n), at(3));
+      expect(fixed).toMatchObject({ commissionRateBasisPoints: null, upfrontTreatment: null });
+    });
+
     it('transition is conditional on PROPOSED and bumps the version; APPROVED and WITHDRAWN are terminal', async () => {
       const store = await makeStore();
       const a = await org(store, 'A');

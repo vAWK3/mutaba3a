@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Contingency fee proposals: propose upfront + rate, approval creates the agreement (MUT-107)
+
+**Why:** since M8, approving a fee proposal is how every agreement is born (MUT-40/MAL-943) except CONTINGENCY (MUT-100), which could only be created directly with no client-approval record. Design already reviewed and locked inside MUT-100's plan (§11, decisions D9/D10); deferred there because MAL-1077 excluded it. Server-only; pairs with Malafat ticket MAL-1094 (not yet built) for the UI. Brief: `.claude/designs/mut-107-contingency-fee-proposals.md`. ADR-060.
+
+**Run on this branch (Node 22):** `server/`: `npm run lint` clean, `npm run typecheck` clean, `npm test` 1,505 passed / 18 skipped, `npm run test:db` (Postgres, scratch databases) 1,630 passed.
+
+### Added
+- **`POST /v1/fee-proposals`**: optional `contingency { commissionRateBasisPoints 1..10000, upfrontTreatment SEPARATE | CREDITED }`; with it, `amount` is the proposed upfront and may be `0` (FIXED keeps `> 0`).
+- **`POST /v1/fee-proposals/{id}/approve`**: `amount` is the agreed upfront (`≥ 0` for a contingency proposal); optional `contingency` override builds the created agreement's terms (ADR-060 — the proposal itself keeps the originally proposed terms). Approval still creates the agreement in one transaction, now via `createAgreementFromPreview`'s existing contingency branch (no change there — it already derived `type` from the preview body).
+- `FeeProposal.contingency`, `FeeProposalSummary.contingency`, and the customer summary row's open-proposal `contingency` (nullable) — so Malafat can show "₪1,500 + 20%".
+- `fee_proposals.commissionRateBasisPoints` / `upfrontTreatment` (nullable, CHECK both-or-neither), reusing MUT-100's `UpfrontTreatment` enum. Migration `20261013100000_mut107_contingency_fee_proposals`.
+- Reason: 422 `SCHEDULE_REQUIRED`.
+
+### Changed
+- **`ApproveFeeProposalRequest.schedule`** is now optional, required only when the agreed amount is `> 0` (422 `SCHEDULE_REQUIRED` — intentional, also applies to FIXED, per D10). Every existing approve call in `routes-m7`/`routes-m8` always sends a schedule, so both suites pass unchanged.
+- `CurrencySummary.proposed` needed no code change — it already sums the column a contingency proposal's upfront lives in (D9); only a new test pins one FIXED + one CONTINGENCY proposal summing correctly.
+- **API `1.17.0-mut107`**.
+
+### Technical
+- New test files: `src/__tests__/routes-mut107.test.ts`, `src/repositories/__tests__/migration-mut107.test.ts`; a MUT-107 case added to `store-contract-m8.ts`.
+- `migration-mut100.test.ts` now applies the rest of the migration history before its final schema diff (matching `migration-mut61.test.ts`'s existing pattern) — it previously stopped right after its own two files, which broke the first time a later migration (this one) was added.
+- `TODOS.md` #7 closed on the API side (MAL-1094 remains); new debt #8 — audit event ordering can tie-break on a random id when two events share a real-clock millisecond (pre-existing, surfaced by this ticket's added test load, not caused by its logic; not fixed here to avoid unrelated scope).
+
 ## [Unreleased] - 2026-10-13 — Contingency fee agreements: upfront plus a % of the award (MUT-100)
 
 **Why:** litigation firms most often charge an upfront fee plus a negotiated percentage of what the court or a settlement awards, and the ledger could not hold it: FIXED and RECURRING both need their total at creation. Server-only; unblocks MAL-1077 (Malafat UI) and MUT-107 (contingency fee proposals). Brief: `.claude/designs/mut-100-contingency-agreements.md` (eng review, CEO review, eng re-review on 2026-10-12; review record alongside). ADR-059.

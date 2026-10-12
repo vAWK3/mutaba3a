@@ -2531,7 +2531,7 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 **Consequences**:
 - `AgreementType` gains a permanent value and `agreements` gains seven sparse columns (TD-097).
 - An older server revision strips the unknown `contingency` field and would create a FIXED agreement silently: never roll back past MUT-100 while Malafat's contingency option is live (runbook in `server/DEPLOYMENT.md` §6, TD-098).
-- Fee proposals cannot yet describe a contingency deal; contingency agreements are created directly until MUT-107/MAL-1094.
+- Fee proposals cannot yet describe a contingency deal; contingency agreements are created directly until MUT-107/MAL-1094. **Resolved on the API side by MUT-107 (ADR-060); MAL-1094 (Malafat UI) is the remaining half.**
 
 **Alternatives considered** (all in the review record):
 - A commission receivable written outside the installment model: would need its own posting, healing and status code.
@@ -2547,3 +2547,19 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - **The counted upfront is re-checked inside the write** (review D2): the write carries each upfront receivable's id and version, locked and compared in the transaction; a credit landing after the commit computed the bill is 409 `PREVIEW_STALE`. This closes the last gap in decision 5.
 - **`correctionReason` is outside the preview token** (review D3): it is the credit note's text and moves no figure, so a preview with or without it matches the commit.
 - **Re-review (cycle 2):** compose reads the upfront versions *before* the credits, so a credit between the two reads still makes the write stale; record locks the agreement row first, like correct (one lock order: agreement → upfront receivables → commission); a deadlock or serialization failure in either write (40P01/40001, P2034) is `stale` → 409, not a 500; a correction carries the receivable its replaced line had when composed and is stale if that line posted since; a MANUAL trigger whose line a cancel voided under it is 409 `AGREEMENT_CANCELLED`, not 404.
+
+## ADR-060: Contingency Fee Proposals Carry Only the Proposed Terms — an Approval's Override Lands on the Agreement, Not Back on the Proposal
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-107 (epic MUT-25), the design kept for the follow-up ticket in MUT-100's plan §11, decisions D9/D10 already locked there. A fee proposal can now carry contingency terms (`commissionRateBasisPoints`, `upfrontTreatment`) so a client approval can create a CONTINGENCY agreement, matching how approval already creates FIXED ones (MUT-40/MAL-943). The brief's one remaining ambiguity: approval already lets an `amount` override replace the proposed figure for the created agreement without rewriting `proposedAmountMinor`; §11 says a `contingency` override works "mirroring" that, but names only one nullable column pair on `fee_proposals`, not a second "agreed" pair the way `agreedAmountMinor` sits beside `proposedAmountMinor`.
+
+**Decision**: `fee_proposals.commissionRateBasisPoints`/`upfrontTreatment` hold the *proposed* terms only, written once at create and never rewritten by approval. An approval's optional `contingency` override is used solely to build the created agreement's terms (`PreviewBody.contingency` → `composePreview` → `agreements.commissionRateBasisPoints`/`upfrontTreatment`, both already existing from MUT-100); it is never written back onto the proposal row. `FeeProposal.contingency` therefore keeps showing the originally proposed terms even after an overridden approval — the agreement itself (`GET /v1/agreements/{id}`) is the record of what was actually agreed, exactly as `agreedAmountMinor` already is for the amount. A `contingency` override sent against a proposal that was never proposed as contingency is refused with 422 `NOT_CONTINGENCY` (reusing the MUT-100 reason) rather than silently creating one.
+
+**Consequences**:
+- No second "agreed terms" column pair on `fee_proposals`; the migration stays exactly the one §11 scoped (nullable `commissionRateBasisPoints`/`upfrontTreatment`, CHECK both-or-neither).
+- A client reading `FeeProposal.contingency` after an overridden approval sees the original ask, not the final deal — by design; the agreement is the source of truth for the agreed terms, same split as `proposedAmount` vs `agreedAmount`.
+- `ApproveProposalInput` (ports.ts) needed no new fields; both stores' `approveProposal` write path is untouched from MUT-100.
+
+**Alternatives considered**:
+- A second `agreedCommissionRateBasisPoints`/`agreedUpfrontTreatment` pair on `fee_proposals`, mirroring `agreedAmountMinor` exactly: rejected as unscoped by §11's literal migration line, and redundant with the created agreement already holding the agreed terms.

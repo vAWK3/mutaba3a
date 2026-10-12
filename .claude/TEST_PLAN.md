@@ -1804,6 +1804,18 @@ Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression cont
 | Review fixes | `routes-mut100.test.ts` › "review fixes (D1–D4)", `store-contract-mut100.ts` (7 rows added) | voided line never posts; cancel refuses after an outcome (store + racing route); upfront moved after compose → stale / `PREVIEW_STALE`; reason outside the token; credited-not-paid commission refused; correcting a never-posted line; VAT-included CREDITED; read-only key 403; two corrections racing on Postgres (one `updated`, one `stale`, one credit). Mutation-checked: each fails with its fix reverted |
 | Regression | every existing server suite | unchanged assertions; edits limited to the API version pins (`1.16.0-mut100`), record fixtures gaining the new fields, and the MUT-59/MUT-61 migration harnesses applying history one transaction per file |
 
+## Hosted API — MUT-107: Contingency fee proposals (2026-10-13)
+
+Plan: `.claude/designs/mut-107-contingency-fee-proposals.md` (MUT-100 plan §11, D9/D10 already locked). Run (Node 22, `server/`): `npm test` 1,505 passed / 18 skipped; `npm run test:db` (Postgres, scratch databases) 1,630 passed.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Routes | `__tests__/routes-mut107.test.ts` (new, 14 tests) | propose contingency at ₪1,500 and ₪0; out-of-range rate → `COMMISSION_RATE_INVALID`; negative upfront → `AMOUNT_INVALID`; FIXED propose at ₪0 still refused (regression); one open proposal per project across types; approve with and without a terms override (agreement carries the override, the proposal keeps the originally proposed terms — ADR-060); ₪0 upfront approve with no schedule → 201, no installments; upfront > 0 with no schedule → `SCHEDULE_REQUIRED`; a ₪0 approve with a schedule sent anyway → `NON_POSITIVE_INSTALLMENT` (the pre-existing schedule guard already covers it, confirmed rather than reimplemented); FIXED approve with no schedule → `SCHEDULE_REQUIRED` (the reviewed D10 regression); FIXED approve with a `contingency` override → `NOT_CONTINGENCY`; negative agreed amount → `AMOUNT_INVALID` |
+| Summaries | `routes-mut107.test.ts` (organization summary describe block) | one FIXED (10,000) + one CONTINGENCY (1,500 upfront) proposal sum to 11,500 in `proposed`; the customer row's proposal entry carries `contingency` |
+| Repository contract | `store-contract-m8.ts` (1 row added; memory + Postgres) | `feeProposals.create` persists and round-trips `commissionRateBasisPoints`/`upfrontTreatment`; a FIXED proposal carries neither |
+| Migration | `repositories/__tests__/migration-mut107.test.ts` (new) | applies cleanly on top of the full history (including MUT-100's two-file enum split, sequenced correctly); the CHECK rejects one-set-one-null on a raw insert; a both-or-neither row round-trips; no schema drift |
+| Regression | every existing server suite | unchanged assertions; edits limited to the API version pin (`1.17.0-mut107`), one `routes-m8.test.ts` assertion gaining the new `contingency: null` field, and `migration-mut100.test.ts` gaining the same "apply the rest of history before the schema diff" step `migration-mut61.test.ts` already had (it previously stopped right after its own files, which only broke once a later migration — this one — was added) |
+
 Session writes to the new routes (403 `READ_ONLY_PROFILE`) are covered by `writability-routes.test.ts`, which derives its cases from every route's declared security.
 
 ### MUT-102 — Brand v2 foundation (epic MUT-101, 2026-10-12)
