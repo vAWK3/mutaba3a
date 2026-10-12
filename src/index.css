@@ -2113,6 +2113,19 @@ div.input-with-prefix {
   cursor: pointer;
 }
 
+/* A record's title (TruncatedTitle, MUT-62) takes the spare width and is cut
+   to fit, so a long title never widens the table. Same technique as the
+   client profile's Work list. */
+.data-table td.work-cell {
+  width: 40%;
+  max-width: 0;
+}
+
+/* A date stays on one line beside it, rather than giving the title its width */
+.data-table td.date-cell {
+  white-space: nowrap;
+}
+
 .data-table .amount-cell {
   text-align: right;
   font-family: var(--font-mono);

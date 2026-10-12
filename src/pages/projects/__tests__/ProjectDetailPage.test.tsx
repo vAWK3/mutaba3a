@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProjectDetailPage } from '../ProjectDetailPage';
@@ -43,6 +43,7 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.columns.category': 'Category',
       'transactions.columns.amount': 'Amount',
       'transactions.columns.status': 'Status',
+      'clients.profile.work.what': 'What',
       'transactions.type.income': 'Income',
       'transactions.type.expense': 'Expense',
       'transactions.type.receivable': 'Receivable',
@@ -718,6 +719,70 @@ describe('ProjectDetailPage', () => {
 
       // $2,000.00 remaining of a $2,500.00 receivable.
       expect(screen.getByRole('button', { name: /record payment/i })).toHaveTextContent('2,000');
+    });
+  });
+
+  // MUT-62: income rows show what was done here too, as on /income
+  describe('What column (MUT-62)', () => {
+    const titled: TransactionDisplay[] = [
+      { ...mockTransactions[0], title: 'Homepage build' },
+      { ...mockTransactions[1], title: undefined },
+      { ...mockTransactions[2], title: 'Server for the staging site' },
+    ];
+
+    async function openTransactionsTab() {
+      const user = userEvent.setup();
+      const useQueries = await import('../../../hooks/useQueries');
+      vi.spyOn(useQueries, 'useProject').mockReturnValue({
+        data: mockProject,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useProject>);
+      vi.spyOn(useQueries, 'useProjectSummary').mockReturnValue({
+        data: mockSummary,
+      } as unknown as ReturnType<typeof useQueries.useProjectSummary>);
+      vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
+        data: titled,
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
+
+      renderWithProviders(<ProjectDetailPage />);
+      await user.click(screen.getByText('Transactions'));
+      await screen.findByText('Hosting');
+      return user;
+    }
+
+    const workCell = (rowIndex: number) => within(screen.getAllByRole('row')[rowIndex + 1]).getAllByRole('cell')[1];
+
+    it('heads the column "What", right after the date', async () => {
+      await openTransactionsTab();
+
+      const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+      expect(headers.slice(0, 3)).toEqual(['Date', 'What', 'Type']);
+    });
+
+    it('shows the title, or a dash when there is none', async () => {
+      await openTransactionsTab();
+
+      expect(workCell(0)).toHaveTextContent('Homepage build');
+      expect(workCell(1)).toHaveTextContent(/^—$/);
+      expect(workCell(2)).toHaveTextContent('Server for the staging site');
+    });
+
+    it('opens the income drawer from an income title, once', async () => {
+      const user = await openTransactionsTab();
+
+      await user.click(screen.getByRole('button', { name: 'Homepage build' }));
+
+      expect(mockOpenIncomeDrawer).toHaveBeenCalledTimes(1);
+      expect(mockOpenIncomeDrawer).toHaveBeenCalledWith({ mode: 'edit', transactionId: 'tx-1' });
+    });
+
+    it('opens the expense drawer from an expense title, once', async () => {
+      const user = await openTransactionsTab();
+
+      await user.click(screen.getByRole('button', { name: 'Server for the staging site' }));
+
+      expect(mockOpenExpenseDrawer).toHaveBeenCalledTimes(1);
+      expect(mockOpenExpenseDrawer).toHaveBeenCalledWith({ mode: 'edit', expenseId: 'tx-3' });
     });
   });
 });

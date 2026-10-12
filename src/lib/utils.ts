@@ -310,6 +310,12 @@ export function getDateRangePreset(preset: 'this-month' | 'last-month' | 'this-y
   }
 }
 
+/**
+ * What a table cell shows when it has nothing to show (MUT-62): an untitled
+ * entry's What, a missing project. One dash for every language.
+ */
+export const EMPTY_CELL = '—';
+
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ');
 }
