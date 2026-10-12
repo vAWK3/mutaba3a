@@ -1,0 +1,59 @@
+app: web
+area: brand
+title: Brand v2 (tokens, type, contrast)
+tier: core
+paths:
+  - src/styles/**
+  - src/assets/fonts/**
+  - src/index.css
+  - src/main.tsx
+  - vite.config.ts
+features:
+  - id: contrast-app
+    title: Home, the payment drawer, Income, the income drawer, Clients beside a profile and Settings pass axe in light and dark, colour contrast included (MUT-102)
+    tier: core
+    legacy: [MUT-102]
+    steps:
+      - Log two clients' income, one overdue
+      - In light mode, then in dark mode, open each surface and run axe
+    expect:
+      - No axe violation on any surface, colour-contrast included
+  - id: contrast-landing
+    title: The landing page passes axe in light and dark, colour contrast included
+    tier: core
+    steps:
+      - Open / in light mode, then in dark mode
+    expect:
+      - No axe violation, colour-contrast included
+  - id: type
+    title: Thmanyah Sans body text, Serif Display 700 headings and Plex Mono tabular amounts, in English and Arabic, with no font CDN
+    tier: core
+    steps:
+      - Open Home, Income, Clients and the landing page, in English then Arabic
+    expect:
+      - The body computes Thmanyah Sans at 16px and the face is loaded
+      - Page headings and the landing headline (inner lines too, TD-048) compute Thmanyah Serif Display 700
+      - Amounts compute IBM Plex Mono with tabular-nums
+      - Every font and stylesheet request is same-origin
+  - id: theme-states
+    title: Under OS light and OS dark, the theme toggle's Light, Dark and System each paint the right canvas, and focus shows a ring
+    tier: secondary
+    paths:
+      - src/lib/theme/**
+      - src/components/layout/ThemeToggle.tsx
+    steps:
+      - Emulate OS light, then OS dark
+      - Toggle Light, Dark, System
+      - Tab to a button
+    expect:
+      - The computed --bg is the light or dark canvas the state calls for, in all four states
+      - The focused button has a box-shadow focus ring
+  - id: layout
+    title: At 375px and 1280px, in English and Arabic, Home, Clients, Income, a drawer and Settings fit the window
+    tier: secondary
+    steps:
+      - Set the window to 375 × 812, then 1280 × 720, in each language
+      - Open each surface
+    expect:
+      - The page never scrolls sideways and the drawer sits inside the window
+      - A screenshot of each surface is attached for review

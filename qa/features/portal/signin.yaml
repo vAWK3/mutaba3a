@@ -1,0 +1,26 @@
+app: portal
+area: signin
+title: Portal sign-in
+tier: core
+paths:
+  - src/hosted/pages/auth/**
+  - src/hosted/hosted.css
+  - src/styles/**
+  - src/assets/fonts/**
+features:
+  - id: type
+    title: Sign-in is Thmanyah Sans with a Serif Display 700 heading, in English and Arabic, and loads no font from another origin (MUT-102)
+    tier: core
+    legacy: [MUT-102]
+    steps:
+      - Stub /v1 to 401 and open /sign-in, in English then Arabic
+    expect:
+      - The body computes Thmanyah Sans and the heading Thmanyah Serif Display 700
+      - Every font and stylesheet request is same-origin
+  - id: contrast
+    title: Sign-in passes axe in light and dark, colour contrast included
+    tier: core
+    steps:
+      - Open /sign-in in light mode, then in dark mode
+    expect:
+      - No axe violation, colour-contrast included
