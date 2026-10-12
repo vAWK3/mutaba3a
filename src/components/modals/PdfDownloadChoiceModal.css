@@ -58,8 +58,8 @@
 }
 
 .pdf-choice-option--primary .pdf-choice-option-icon {
-  background: var(--accent);
-  color: white;
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 .pdf-choice-option-content {

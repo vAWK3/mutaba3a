@@ -1,6 +1,9 @@
 /**
  * Theme tokens (ADR-018, amended by ADR-058 for Brand v2).
  *
+ * Blends between colours of different hue mix `in oklab`: `in oklch` swings the hue the short way
+ * round, so lavender-grey and cream meet at pink. brand.test.ts › tokens enforces it.
+ *
  * Two layers:
  * 1. Primitives: `--m-*` in ./brand/mutaba3a-theme.css, from mutaba3a.tokens.json. They switch
  *    between light and dark there, in three states: light `:root`; OS dark
@@ -131,11 +134,12 @@
 :root {
   /* Grounds */
   --bg: var(--m-canvas);
-  --bg-subtle: color-mix(in oklch, var(--m-line) 40%, var(--m-canvas));
+  --bg-subtle: color-mix(in oklab, var(--m-line) 20%, var(--m-canvas)); /* the most line ink2 keeps 7:1 on */
   --surface: var(--m-surface);
-  --surface-hover: color-mix(in oklch, var(--m-field-bg) 60%, var(--m-surface));
+  --surface-hover: color-mix(in oklab, var(--m-field-bg) 60%, var(--m-surface));
   --surface-2: var(--m-field-bg);
-  --surface-3: color-mix(in oklch, var(--m-line) 50%, var(--m-field-bg));
+  /* A pressed/active ground, darker than field-bg: --text only (ink2 can't keep 7:1 on it) */
+  --surface-3: color-mix(in oklab, var(--m-line) 50%, var(--m-field-bg));
 
   /* Text. All secondary text is ink2 (7:1 on every light ground). */
   --text: var(--m-ink);
@@ -147,67 +151,78 @@
 
   /* Borders and dividers */
   --border: var(--m-line);
-  --border-strong: color-mix(in oklch, var(--m-line) 70%, var(--m-ink2));
-  --border-subtle: color-mix(in oklch, var(--m-line) 60%, transparent);
-  --divider: color-mix(in oklch, var(--m-line) 80%, transparent);
+  --border-strong: color-mix(in oklab, var(--m-line) 70%, var(--m-ink2));
+  --border-subtle: color-mix(in oklab, var(--m-line) 60%, transparent);
+  --divider: color-mix(in oklab, var(--m-line) 80%, transparent);
 
   /* Accent. --accent is for fills, borders and decoration only; purple text uses --accent-text
      (primary-hover clears 7:1 where primary is 4.78:1). Filled buttons use primary-hover too. */
   --accent: var(--m-primary);
   --accent-text: var(--m-primary-hover);
   --accent-hover: var(--m-primary-hover);
-  --accent-active: color-mix(in oklch, var(--m-primary-hover) 85%, var(--m-ink));
+  --accent-active: color-mix(in oklab, var(--m-primary-hover) 85%, var(--m-ink));
   --accent-subtle: var(--m-lavender);
-  --accent-muted: color-mix(in oklch, var(--m-lavender) 85%, var(--m-lavender-ink));
+  /* Text on the lavender ground (selected nav, chips, the open row): lavender-ink, 7:1.
+     Purple (--accent-text) on lavender is only 5.52:1. */
+  --on-accent-subtle: var(--m-lavender-ink);
+  --accent-muted: color-mix(in oklab, var(--m-lavender) 85%, var(--m-lavender-ink));
 
   --accent-solid: var(--m-primary-hover);
-  --accent-solid-hover: color-mix(in oklch, var(--m-primary-hover) 85%, var(--m-ink));
-  --accent-solid-active: color-mix(in oklch, var(--m-primary-hover) 75%, var(--m-ink));
+  --accent-solid-hover: color-mix(in oklab, var(--m-primary-hover) 85%, var(--m-ink));
+  --accent-solid-active: color-mix(in oklab, var(--m-primary-hover) 75%, var(--m-ink));
   --on-accent: var(--m-on-primary);
+
+  /* Text on a filled status ink (a danger button, a completed step): the canvas, which every
+     status ink clears 7:1 against in light and 4.5:1 in dark. White fails once the inks turn light. */
+  --on-status: var(--m-canvas);
 
   --btn-primary-border: transparent;
   --btn-primary-border-hover: transparent;
 
   /* Secondary accent: the brand has no second hue, so it is the lavender family */
   --accent-2: var(--m-lavender-ink);
-  --accent-2-hover: color-mix(in oklch, var(--m-lavender-ink) 85%, var(--m-ink));
+  --accent-2-hover: color-mix(in oklab, var(--m-lavender-ink) 85%, var(--m-ink));
   --accent-2-subtle: var(--m-lavender);
 
   /* Status: chip ink on chip ground */
   --success: var(--m-mint-ink);
-  --success-hover: color-mix(in oklch, var(--m-mint-ink) 85%, var(--m-ink));
+  --success-hover: color-mix(in oklab, var(--m-mint-ink) 85%, var(--m-ink));
   --success-subtle: var(--m-mint);
-  --success-muted: color-mix(in oklch, var(--m-mint) 85%, var(--m-mint-ink));
+  --success-muted: color-mix(in oklab, var(--m-mint) 85%, var(--m-mint-ink));
 
   --warning: var(--m-butter-ink);
-  --warning-hover: color-mix(in oklch, var(--m-butter-ink) 85%, var(--m-ink));
+  --warning-hover: color-mix(in oklab, var(--m-butter-ink) 85%, var(--m-ink));
   --warning-subtle: var(--m-butter);
-  --warning-muted: color-mix(in oklch, var(--m-butter) 85%, var(--m-butter-ink));
+  --warning-muted: color-mix(in oklab, var(--m-butter) 85%, var(--m-butter-ink));
 
   --error: var(--m-rose-ink);
-  --error-hover: color-mix(in oklch, var(--m-rose-ink) 85%, var(--m-ink));
+  --error-hover: color-mix(in oklab, var(--m-rose-ink) 85%, var(--m-ink));
   --error-subtle: var(--m-rose);
-  --error-muted: color-mix(in oklch, var(--m-rose) 85%, var(--m-rose-ink));
+  --error-muted: color-mix(in oklab, var(--m-rose) 85%, var(--m-rose-ink));
 
   --info: var(--m-lavender-ink);
-  --info-hover: color-mix(in oklch, var(--m-lavender-ink) 85%, var(--m-ink));
+  --info-hover: color-mix(in oklab, var(--m-lavender-ink) 85%, var(--m-ink));
   --info-subtle: var(--m-lavender);
-  --info-muted: color-mix(in oklch, var(--m-lavender) 85%, var(--m-lavender-ink));
+  --info-muted: color-mix(in oklab, var(--m-lavender) 85%, var(--m-lavender-ink));
 
   /* Interaction */
   --focus: var(--m-focus);
   --focus-ring: var(--m-focus-ring);
+  /* The brand ring is inset, so on a filled control it paints over the fill and barely shows.
+     Filled buttons take an outer ring, set off from the fill by a gap of page colour. */
+  --focus-ring-on-fill: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus);
   --selection-bg: var(--m-lavender);
   --selection-text: inherit;
 
   --link: var(--m-primary-hover);
-  --link-hover: color-mix(in oklch, var(--m-primary-hover) 80%, var(--m-ink));
+  --link-hover: color-mix(in oklab, var(--m-primary-hover) 80%, var(--m-ink));
   --link-visited: var(--m-lavender-ink);
 
   /* Tables */
   --table-header-bg: var(--m-field-bg);
-  --table-row-hover: color-mix(in oklch, var(--m-lavender) 35%, transparent);
-  --table-row-selected: color-mix(in oklch, var(--m-lavender) 60%, transparent);
+  /* Tints stay light enough for ink2 at 7:1 (lavender above ~15% drops it below) */
+  --table-row-hover: color-mix(in oklab, var(--m-lavender) 10%, transparent);
+  --table-row-selected: color-mix(in oklab, var(--m-lavender) 15%, transparent);
   --table-border: var(--divider);
 
   /* Badges */
@@ -223,9 +238,9 @@
   /* Sidebar. The selected label is lavender-ink: primary-hover on lavender is only 5.53:1. */
   --sidebar-bg: var(--m-surface);
   --sidebar-border: var(--border);
-  --nav-item-hover: color-mix(in oklch, var(--m-lavender) 45%, transparent);
+  --nav-item-hover: color-mix(in oklab, var(--m-lavender) 15%, transparent);
   --nav-item-active: var(--m-lavender);
-  --nav-item-active-text: var(--m-lavender-ink);
+  --nav-item-active-text: var(--on-accent-subtle);
 
   /* Inputs */
   --input-bg: var(--m-field-bg);
@@ -243,37 +258,37 @@
    ============================================ */
 :root {
   color-scheme: light;
-  --shadow-1: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 6%, transparent), 0 1px 3px color-mix(in oklch, var(--m-shadow-tint) 8%, transparent);
-  --shadow-3: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 8%, transparent), 0 20px 48px color-mix(in oklch, var(--m-shadow-tint) 12%, transparent);
-  --shadow-inset: inset 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 6%, transparent);
-  --btn-primary-shadow: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 8%, transparent);
+  --shadow-1: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 6%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 8%, transparent);
+  --shadow-3: 0 4px 12px color-mix(in oklab, var(--m-shadow-tint) 8%, transparent), 0 20px 48px color-mix(in oklab, var(--m-shadow-tint) 12%, transparent);
+  --shadow-inset: inset 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 6%, transparent);
+  --btn-primary-shadow: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 8%, transparent);
   --btn-primary-shadow-hover: var(--m-shadow-primary);
-  --overlay: color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
-  --drawer-shadow: -4px 0 24px color-mix(in oklch, var(--m-shadow-tint) 12%, transparent);
+  --overlay: color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
+  --drawer-shadow: -4px 0 24px color-mix(in oklab, var(--m-shadow-tint) 12%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --shadow-1: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklch, var(--m-shadow-tint) 30%, transparent);
-    --shadow-3: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 20px 48px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
-    --shadow-inset: inset 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
-    --btn-primary-shadow: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
-    --btn-primary-shadow-hover: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
-    --overlay: color-mix(in oklch, var(--m-shadow-tint) 60%, transparent);
-    --drawer-shadow: -4px 0 24px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+    --shadow-1: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 30%, transparent);
+    --shadow-3: 0 4px 12px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 20px 48px color-mix(in oklab, var(--m-shadow-tint) 45%, transparent);
+    --shadow-inset: inset 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
+    --btn-primary-shadow: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
+    --btn-primary-shadow-hover: 0 4px 12px color-mix(in oklab, var(--m-shadow-tint) 45%, transparent);
+    --overlay: color-mix(in oklab, var(--m-shadow-tint) 60%, transparent);
+    --drawer-shadow: -4px 0 24px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --shadow-1: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklch, var(--m-shadow-tint) 30%, transparent);
-  --shadow-3: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 20px 48px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
-  --shadow-inset: inset 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
-  --btn-primary-shadow: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
-  --btn-primary-shadow-hover: 0 4px 12px color-mix(in oklch, var(--m-shadow-tint) 45%, transparent);
-  --overlay: color-mix(in oklch, var(--m-shadow-tint) 60%, transparent);
-  --drawer-shadow: -4px 0 24px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent);
+  --shadow-1: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 30%, transparent);
+  --shadow-3: 0 4px 12px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 20px 48px color-mix(in oklab, var(--m-shadow-tint) 45%, transparent);
+  --shadow-inset: inset 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
+  --btn-primary-shadow: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
+  --btn-primary-shadow-hover: 0 4px 12px color-mix(in oklab, var(--m-shadow-tint) 45%, transparent);
+  --overlay: color-mix(in oklab, var(--m-shadow-tint) 60%, transparent);
+  --drawer-shadow: -4px 0 24px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
 }
 
 /* ============================================
@@ -383,7 +398,9 @@ a:hover {
   color: var(--link-hover);
 }
 
-a:visited {
+/* Unclassed links only: a classed link is styled as a control (a button, a CTA), and
+   `a:visited` would out-rank its single-class colour once the URL is in the history. */
+a:not([class]):visited {
   color: var(--link-visited);
 }
 

@@ -30,11 +30,16 @@ describe('ProfileBadge', () => {
       expect(badge).toHaveStyle({ backgroundColor: '#FF5500' });
     });
 
-    it('should use default accent color when no primaryColor', () => {
+    it('leaves a business without a colour to the stylesheet’s filled pair (MUT-102)', () => {
       const noColorProfile = { ...mockProfile, primaryColor: undefined };
       render(<ProfileBadge profile={noColorProfile} />);
       const badge = screen.getByText('M');
-      expect(badge).toHaveStyle({ backgroundColor: 'var(--accent)' });
+      expect(badge).not.toHaveAttribute('style');
+    });
+
+    it('gives a chosen colour white initials', () => {
+      render(<ProfileBadge profile={mockProfile} />);
+      expect(screen.getByText('M')).toHaveStyle({ color: 'rgb(255, 255, 255)' });
     });
   });
 

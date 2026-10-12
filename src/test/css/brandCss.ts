@@ -11,7 +11,8 @@
  *   selectors and throws on any other that declares a custom property, which
  *   keeps `theme.css` simple enough to reason about.
  * - **Source scans:** custom-property definitions and no-fallback `var()`
- *   references across `src`, for the dead-reference guard.
+ *   references across `src`, for the dead-reference guard; and the
+ *   text/background pairs that component rules actually render.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -192,10 +193,15 @@ function parseRgbFn(text: string): Rgba {
   return { r: channel(parts[0]), g: channel(parts[1]), b: channel(parts[2]), a: parts[3] === undefined ? 1 : number(parts[3]) };
 }
 
-/** `color-mix(in oklch, A p%, B q%)`, per CSS Color 5: premultiplied, shorter hue arc. */
+/**
+ * `color-mix(in oklch|oklab, A p%, B q%)`, per CSS Color 5: premultiplied;
+ * oklch takes the shorter hue arc, oklab mixes the a/b axes straight across.
+ */
 function parseColorMix(text: string): Oklch {
   const [space, ...stops] = splitTopLevel(fnArgs(text), ',');
-  if (space !== 'in oklch' || stops.length !== 2) throw new Error(`Only color-mix(in oklch, A, B) is supported: "${text}"`);
+  if ((space !== 'in oklch' && space !== 'in oklab') || stops.length !== 2) {
+    throw new Error(`Only color-mix(in oklch|oklab, A, B) is supported: "${text}"`);
+  }
   const [first, second] = stops.map((stop) => {
     const match = /^(.*\S)\s+(\d*\.?\d+)%$/.exec(stop);
     return match ? { color: toOklch(match[1]), pct: Number(match[2]) } : { color: toOklch(stop), pct: undefined };
@@ -204,7 +210,21 @@ function parseColorMix(text: string): Oklch {
   const p2 = second.pct ?? 100 - p1;
   const sum = p1 + p2;
   if (sum <= 0) throw new Error(`color-mix percentages sum to 0: "${text}"`);
-  return mixOklch(first.color, second.color, p1 / sum, Math.min(sum, 100) / 100);
+  const mix = space === 'in oklab' ? mixOklab : mixOklch;
+  return mix(first.color, second.color, p1 / sum, Math.min(sum, 100) / 100);
+}
+
+function mixOklab(a: Oklch, b: Oklch, weightA: number, alphaScale: number): Oklch {
+  const weightB = 1 - weightA;
+  const alpha = a.alpha * weightA + b.alpha * weightB;
+  if (alpha === 0) return { l: 0, c: 0, h: null, alpha: 0 };
+  const axis = (color: Oklch, trig: (x: number) => number) => color.c * trig((color.h ?? 0) * DEG);
+  const mixAxis = (va: number, vb: number) => (va * a.alpha * weightA + vb * b.alpha * weightB) / alpha;
+  const l = mixAxis(a.l, b.l);
+  const okA = mixAxis(axis(a, Math.cos), axis(b, Math.cos));
+  const okB = mixAxis(axis(a, Math.sin), axis(b, Math.sin));
+  const c = Math.hypot(okA, okB);
+  return { l, c, h: c < ACHROMATIC ? null : (Math.atan2(okB, okA) / DEG + 360) % 360, alpha: alpha * alphaScale };
 }
 
 function mixOklch(a: Oklch, b: Oklch, weightA: number, alphaScale: number): Oklch {
@@ -225,8 +245,10 @@ function mixOklch(a: Oklch, b: Oklch, weightA: number, alphaScale: number): Oklc
   };
 }
 
+const NAMED: Record<string, string> = { white: '#ffffff', black: '#000000' };
+
 function toOklch(text: string): Oklch {
-  const value = text.trim().toLowerCase();
+  const value = NAMED[text.trim().toLowerCase()] ?? text.trim().toLowerCase();
   if (value === 'transparent') return { l: 0, c: 0, h: null, alpha: 0 };
   if (value.startsWith('#')) return rgbaToOklch(parseHex(value));
   if (value.startsWith('rgb')) return rgbaToOklch(parseRgbFn(value));
@@ -238,6 +260,11 @@ function toOklch(text: string): Oklch {
 /** A fully resolved colour value (no `var()`) as sRGB. Throws if it is not a colour. */
 export function parseColor(text: string): Rgba {
   return oklchToRgba(toOklch(text));
+}
+
+/** A fully resolved colour value as OKLCH (`h` is null when achromatic). */
+export function parseOklch(text: string): { l: number; c: number; h: number | null; alpha: number } {
+  return toOklch(text);
 }
 
 export function toHex({ r, g, b }: Rgba): string {
@@ -279,8 +306,6 @@ export const THEME_STATES = {
   'forced light under OS dark': { os: 'dark', dataTheme: 'light' },
   'forced dark under OS light': { os: 'light', dataTheme: 'dark' },
 } as const satisfies Record<string, ThemeState>;
-
-export type ThemeStateName = keyof typeof THEME_STATES;
 
 /** Which of the four states render light. */
 export function schemeOf(state: ThemeState): Scheme {
@@ -495,4 +520,36 @@ export function bareVarReferences(files: string[]): Map<string, string[]> {
     }
   }
   return refs;
+}
+
+/** A rule that sets both a text colour and a background, as written. */
+export interface ColorPair {
+  file: string;
+  line: number;
+  selector: string;
+  color: string;
+  background: string;
+}
+
+/**
+ * The text/background pairs component rules render: every rule that declares
+ * both `color` and `background(-color)`. A rule that sets only one of them
+ * (a hover that changes just the fill) is not seen; the token pair lists
+ * cover those.
+ */
+export function colorPairs(file: string): ColorPair[] {
+  const pairs: ColorPair[] = [];
+  parseCss(file).walkRules((rule) => {
+    let color: string | undefined;
+    let background: string | undefined;
+    rule.each((node) => {
+      if (node.type !== 'decl') return;
+      if (node.prop === 'color') color = node.value;
+      if (node.prop === 'background' || node.prop === 'background-color') background = node.value;
+    });
+    if (color && background) {
+      pairs.push({ file, line: rule.source?.start?.line ?? 0, selector: rule.selector.replace(/\s+/g, ' '), color, background });
+    }
+  });
+  return pairs;
 }

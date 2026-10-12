@@ -37,7 +37,7 @@
 
 .demo-info svg {
   flex-shrink: 0;
-  color: var(--accent, #3b82f6);
+  color: var(--accent-text);
 }
 
 .demo-info-title {

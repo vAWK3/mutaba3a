@@ -80,6 +80,14 @@ for (const scheme of SCHEMES) {
         await expectOnlyKnownAxeViolations(page, 'clientsSplit');
       });
 
+      await step('Enter moves focus into the profile, and the pane shows a focus ring', async () => {
+        await clientLink(page, 'Acme Studio').focus();
+        await page.keyboard.press('Enter');
+        const profile = page.getByRole('region', { name: 'Client profile' });
+        await expect(profile).toBeFocused();
+        expect(await profile.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe('none');
+      });
+
       await step('Check Settings', async () => {
         await page.goto('/app/settings');
         await expect(page.getByRole('main').getByRole('heading', { name: 'Theme' })).toBeVisible();
@@ -134,7 +142,8 @@ for (const language of ['en', 'ar'] as const) {
         );
       });
 
-      await step('Amounts on Home, Income and Clients are Plex Mono with tabular figures', async () => {
+      // Plex Mono's digits are all one width, so a figure in it is tabular whatever font-variant-numeric says
+      await step('Amounts on Home, Income and Clients are Plex Mono (monospaced, so tabular)', async () => {
         const amounts: [string, Locator][] = [
           ['Home owed now', page.getByTestId('owed-now-amount').first()],
         ];
@@ -189,7 +198,9 @@ for (const os of SCHEMES) {
         ['System', CANVAS[os]],
       ] as const) {
         await step(`Toggle to ${mode}`, async () => {
-          while ((await toggle.getAttribute('aria-label')) !== `Theme: ${mode}`) await toggle.click();
+          // Three modes: at most two presses reach any of them
+          for (let i = 0; i < 3 && (await toggle.getAttribute('aria-label')) !== `Theme: ${mode}`; i++) await toggle.click();
+          await expect(toggle).toHaveAttribute('aria-label', `Theme: ${mode}`);
           await expect.poll(() => rootTokenNumbers(page, '--bg')).toEqual(numbersIn(expected));
         });
       }
@@ -219,18 +230,31 @@ const VIEWPORTS = [
  * A listed surface is annotated instead of failed; one that stops overflowing
  * is annotated too, so its entry can go.
  */
-const KNOWN_OVERFLOW: Record<string, string> = {
-  'Income@375': 'TD-083: the Income top bar, status tabs and table are wider than a phone (678px on main)',
-  'Payment drawer@375': 'TD-083: drawers are a fixed 480px (--drawer-width), wider than a phone (same on main)',
+const KNOWN_OVERFLOW: Record<string, { note: string; maxContentWidth: number }> = {
+  // 678px on main; up to 726px with Brand v2's body 16 (Arabic, measured 2026-10-12). Fails if it grows.
+  'Income@375': { note: 'TD-083: the Income top bar, status tabs and table are wider than a phone', maxContentWidth: 726 },
+  // --drawer-width is 480px: the drawer is 105px wider than the window, same on main
+  'Payment drawer@375': { note: 'TD-083: drawers are a fixed 480px (--drawer-width), wider than a phone', maxContentWidth: 480 },
 };
+
+/** The widest thing sticking out: the page's content width, or a dialog's width. */
+async function contentWidth(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    Math.max(
+      document.documentElement.scrollWidth,
+      ...[...document.querySelectorAll('[role="dialog"]')].map((d) => Math.round(d.getBoundingClientRect().width)),
+    ),
+  );
+}
 
 async function expectFits(page: Page, surface: string, width: number) {
   const known = KNOWN_OVERFLOW[`${surface}@${width}`];
   if (!known) return expectNoHorizontalOverflow(page, surface);
   const problems = await fitProblems(page);
+  expect(await contentWidth(page), `${surface} at ${width}px got wider than its known overflow`).toBeLessThanOrEqual(known.maxContentWidth);
   test.info().annotations.push({
     type: problems.length > 0 ? 'known-overflow' : 'known-overflow-gone',
-    description: `${surface} at ${width}px: ${known}${problems.length > 0 ? ` (${problems.join('; ')})` : ' — fits now; remove from KNOWN_OVERFLOW'}`,
+    description: `${surface} at ${width}px: ${known.note}${problems.length > 0 ? ` (${problems.join('; ')})` : ' — fits now; remove from KNOWN_OVERFLOW'}`,
   });
 }
 

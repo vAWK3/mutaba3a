@@ -1,6 +1,7 @@
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import './ProfileContextChip.css';
+import { profileAvatarStyle } from './profileAvatarStyle';
 
 /**
  * ProfileContextChip
@@ -66,7 +67,7 @@ function ProfileAvatar({ profile }: { profile: BusinessProfile }) {
   return (
     <div
       className="profile-context-chip-avatar profile-context-chip-avatar-initials"
-      style={{ backgroundColor: profile.primaryColor || 'var(--accent)' }}
+      style={profileAvatarStyle(profile.primaryColor)}
     >
       {initials}
     </div>

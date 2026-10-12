@@ -65,10 +65,17 @@
 .clients-index-table tr.client-index-row-open td,
 .clients-index-table tr.client-index-row-open:hover td {
   background: var(--accent-subtle);
+  color: var(--on-accent-subtle); /* lavender-ink: ink2 and purple are under 7:1 on lavender */
 }
 
-.clients-index-table tr.client-index-row-open .client-index-name {
-  color: var(--accent-text);
+/* On the lavender ground every coloured line takes lavender-ink (7:1): ink2, purple and the
+   status inks are all under 7:1 on lavender. The words still say overdue or settled. */
+.clients-index-table tr.client-index-row-open .client-index-name,
+.clients-index-table tr.client-index-row-open .client-index-subline,
+.clients-index-table tr.client-index-row-open .client-index-settled,
+.clients-index-table tr.client-index-row-open .text-muted,
+.clients-index-table tr.client-index-row-open .text-danger {
+  color: var(--on-accent-subtle);
 }
 
 /* Enter or → moves focus into the profile: show where it went, inside the
@@ -78,5 +85,5 @@
 }
 
 .clients-split-profile:focus-visible {
-  box-shadow: inset var(--focus-ring);
+  box-shadow: var(--focus-ring); /* already inset */
 }

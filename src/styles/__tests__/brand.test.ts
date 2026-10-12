@@ -3,18 +3,24 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 import tokensJson from '../brand/mutaba3a.tokens.json';
+import thmanyahPins from '../../assets/fonts/thmanyah.sha256.json';
 import {
   THEME_STATES,
   Tokens,
   bareVarReferences,
+  colorPairs,
   contrast,
   customPropertyDefinitions,
   fontFaces,
   loadStylesheet,
+  parseCss,
   parseColor,
+  parseOklch,
   repoPath,
+  schemeOf,
   sourceFiles,
   stylesheetFromCss,
   toHex,
@@ -27,19 +33,8 @@ import {
  * keep. One `describe` per contract (eng review D2).
  */
 
-/**
- * The delivered Thmanyah files, pinned by sha256. The licence forbids any
- * modification (no subsetting, no woff2), so a changed hash is a licence
- * problem, not a refresh. Re-pin only when Thmanyah's official files replace
- * these (the Serif Display provenance gap on MUT-102).
- */
-const THMANYAH_SHA256: Record<string, string> = {
-  'thmanyahsans-Regular.otf': 'f45a420632384b42a37ec9b24298ddc6502faa52d55d973144779262ebc023dc',
-  'thmanyahsans-Medium.otf': 'f2762ffbe17351193e3d630dd10f0c3a965e6c873998dfdeda2bd0dcad7985c6',
-  'thmanyahsans-Bold.otf': '72cc27021cc1a503e5c03b072df8b16d55c78983e5fd73a4cdf92b5a600af2f7',
-  'thmanyah-serif-display-regular.otf': '1f5c735a6c05cce9fe9b2459d5aedb1d039541d50b726304bd617a69587bf112',
-  'thmanyah-serif-display-bold.otf': 'ac2f056441891276792ab6d828d8ad9169ef44ecea60d6ccf126b25361f0ee9d',
-};
+/** The delivered Thmanyah files, pinned by sha256 in one file that `check-bundles` reads too. */
+const THMANYAH_SHA256: Record<string, string> = thmanyahPins.files;
 
 const THEME_CSS = repoPath('src/styles/theme.css');
 const BRAND_CSS = repoPath('src/styles/brand/mutaba3a-theme.css');
@@ -53,6 +48,10 @@ function sha256(file: string): string {
 describe('fonts', () => {
   it.each(Object.entries(THMANYAH_SHA256))('bundles %s byte-identical to the delivered file', (name, hash) => {
     expect(sha256(`${FONTS_DIR}/${name}`)).toBe(hash);
+  });
+
+  it('src/assets/fonts holds exactly the pinned Thmanyah files, so nothing unpinned can pass as delivered', () => {
+    expect(readdirSync(FONTS_DIR).filter((name) => /thmanyah.*\.otf$/i.test(name)).sort()).toEqual(Object.keys(THMANYAH_SHA256).sort());
   });
 
   it('keeps no Thmanyah copy in public/ (the portal cannot see it; one location only)', () => {
@@ -91,6 +90,30 @@ describe('fonts', () => {
     for (const file of ['src/main.tsx', 'src/hosted/main.tsx', 'src/vite-env.d.ts']) {
       expect(readFileSync(repoPath(file), 'utf8'), file).not.toMatch(/@fontsource/);
     }
+  });
+
+  it('sets the page face in theme.css only: no other stylesheet sets font-family on html, body or :root', () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles().filter((f) => f.endsWith('.css') && f !== repoPath('src/styles/theme.css'))) {
+      parseCss(file).walkRules((rule) => {
+        const roots = rule.selectors.filter((sel) => /^(html|body|:root)(:lang\([a-z-]+\))?$/.test(sel.trim()));
+        if (roots.length > 0 && rule.nodes.some((n) => n.type === 'decl' && n.prop === 'font-family')) offenders.push(`${file}: ${rule.selector}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('asks Plex Mono only for the weights it ships (400/500), so no figure is faux-bold', () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      parseCss(file).walkRules((rule) => {
+        const decl = (prop: string) => rule.nodes.find((n) => n.type === 'decl' && n.prop === prop) as { value: string } | undefined;
+        if (!decl('font-family')?.value.includes('var(--font-mono)')) return;
+        const weight = decl('font-weight')?.value ?? '';
+        if (/var\(--weight-(semibold|bold)\)|^[6-9]00$|bold/.test(weight)) offenders.push(`${file}: ${rule.selector} (${weight})`);
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('both entries take their fonts from theme.css alone', () => {
@@ -148,6 +171,19 @@ describe('harness', () => {
 
     it('interpolates hue along the shorter arc', () => {
       expect(hexOf('color-mix(in oklch, oklch(0.6 0.1 350), oklch(0.6 0.1 10))')).toBe(hexOf('oklch(0.6 0.1 0)'));
+    });
+
+    it('in oklab mixes straight across, so two near-neutrals of different hue stay neutral', () => {
+      const lavenderGrey = 'oklch(0.92 0.015 300)';
+      const cream = 'oklch(0.975 0.014 80)';
+      expect(parseOklch(`color-mix(in oklab, ${lavenderGrey} 40%, ${cream})`).c).toBeLessThan(0.006);
+      expect(parseOklch(`color-mix(in oklch, ${lavenderGrey} 40%, ${cream})`).c).toBeGreaterThan(0.012);
+      expect(hexOf(`color-mix(in oklab, ${purple} 30%, ${purple})`)).toBe(hexOf(purple));
+    });
+
+    it('reads white and black by name', () => {
+      expect(hexOf('white')).toBe('#FFFFFF');
+      expect(hexOf('black')).toBe('#000000');
     });
 
     it('an achromatic colour takes the other colour’s hue', () => {
@@ -402,7 +438,7 @@ describe('tokens', () => {
     expect(failures).toEqual([]);
   });
 
-  it.each(STATES)('every colour token is a --m-* primitive, a color-mix over them, or transparent (%s)', (_name, state) => {
+  it.each(STATES)('every colour token is a --m-* primitive, a color-mix (oklab/oklch) over them, or transparent (%s)', (_name, state) => {
     const tokens = new Tokens(theme, state);
     const isColor = (name: string) => {
       try {
@@ -418,7 +454,7 @@ describe('tokens', () => {
       const refs = [...raw.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1]);
       const leftover = raw
         .replace(/var\(--[\w-]+\)/g, '')
-        .replace(/color-mix\(in oklch/g, '')
+        .replace(/color-mix\(in okl(?:ab|ch)/g, '')
         .replace(/\d*\.?\d+%/g, '')
         .replace(/\btransparent\b/g, '')
         .replace(/[(),\s]/g, '');
@@ -432,7 +468,7 @@ describe('tokens', () => {
     const tokens = new Tokens(theme, LIGHT);
     const radii = own.filter((name) => name.startsWith('--radius-'));
     expect(radii.length).toBeGreaterThan(6);
-    for (const name of radii) expect([12, 14, 18, 24, 28, 999], name).toContain(tokens.px(name));
+    for (const name of radii) expect(Object.values(tokensJson.radius), name).toContain(tokens.px(name));
   });
 
   it('body text is 16px and the type roles equal the JSON scale', () => {
@@ -462,7 +498,8 @@ describe('tokens', () => {
         overshoot: tokens.resolve('--ease-overshoot'),
       };
     };
-    expect(motion(LIGHT)).toMatchObject({ press: 120, toggle: 350, nav: 420, stagger: 50, scale: 0.96 });
+    const { spring, overshoot, press, stagger } = tokensJson.motion;
+    expect(motion(LIGHT)).toMatchObject({ press: press.ms, toggle: overshoot.ms, nav: spring.ms, stagger: stagger.ms, scale: press.scale });
     expect(motion(LIGHT).spring).toMatch(/^cubic-bezier\(/);
     expect(motion(LIGHT).overshoot).toMatch(/^cubic-bezier\(/);
     for (const state of [LIGHT, DARK]) {
@@ -482,6 +519,41 @@ describe('tokens', () => {
     expect(offenders).toEqual([]);
   });
 
+  it.each(STATES)('mixes colours of different hue in oklab, so a blend never swings through an unrelated hue (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    const drifting: string[] = [];
+    for (const name of own) {
+      const raw = tokens.raw(name);
+      for (let at = raw.indexOf('color-mix(in oklch,'); at >= 0; at = raw.indexOf('color-mix(in oklch,', at + 1)) {
+        let depth = 0;
+        let end = at;
+        for (; end < raw.length; end++) {
+          if (raw[end] === '(') depth++;
+          else if (raw[end] === ')' && --depth === 0) break;
+        }
+        const stops = postcss.list.comma(raw.slice(raw.indexOf('(', at) + 1, end)).slice(1);
+        const hues = stops.map((stop) => parseOklch(tokens.substitute(stop.replace(/\s+\d*\.?\d+%$/, ''))));
+        if (hues.some((c) => c.h === null || c.c < 0.005)) continue;
+        const gap = Math.abs(((hues[0].h! - hues[1].h! + 540) % 360) - 180);
+        if (gap > 30) drifting.push(`${name}: ${Math.round(gap)}° apart`);
+      }
+    }
+    expect(drifting).toEqual([]);
+  });
+
+  it('the mono stack falls back to Thmanyah Sans, so Arabic in a figure cell keeps the brand face', () => {
+    const stack = new Tokens(theme, LIGHT).resolve('--font-mono').split(',').map((f) => f.replace(/["']/g, '').trim());
+    expect(stack.slice(0, 2)).toEqual(['IBM Plex Mono', 'Thmanyah Sans']);
+  });
+
+  it('colours visited links only when they carry no class, so a styled link (a button) never turns lavender-ink', () => {
+    const visited: string[] = [];
+    themeRoot.walkRules((rule) => {
+      for (const selector of rule.selectors) if (selector.includes(':visited')) visited.push(selector.trim());
+    });
+    expect(visited).toEqual(['a:not([class]):visited']);
+  });
+
   it('retires the Inter-only font-feature-settings', () => {
     let found = false;
     themeRoot.walkDecls('font-feature-settings', () => {
@@ -491,31 +563,54 @@ describe('tokens', () => {
   });
 });
 
-const SURFACES = ['--bg', '--surface', '--input-bg', '--table-header-bg'];
+/** Grounds any text sits on. Translucent tints are composited over both --bg and --surface. */
+const SURFACES = [
+  '--bg', '--surface', '--input-bg', '--table-header-bg', '--bg-subtle', '--surface-hover', '--surface-2',
+  '--table-row-hover', '--table-row-selected', '--nav-item-hover',
+];
+
+/** Pressed/active grounds darker than field-bg: primary text only. */
+const STRONG_TEXT_SURFACES = ['--surface-3'];
 
 /** Text on its ground. Light must reach 7:1 (AAA), dark 4.5:1 (AA). */
 const TEXT_PAIRS: [string, string][] = [
   ...['--text', '--text-secondary', '--muted', '--muted-2'].flatMap((fg) => SURFACES.map((bg): [string, string] => [fg, bg])),
+  ...STRONG_TEXT_SURFACES.map((bg): [string, string] => ['--text', bg]),
+  // Primary text (amounts) on the lavender selected ground
+  ['--text', '--accent-subtle'],
   ...['--accent-text', '--link'].flatMap((fg) => ['--bg', '--surface'].map((bg): [string, string] => [fg, bg])),
   ...['--accent-solid', '--accent-solid-hover', '--accent-solid-active'].map((bg): [string, string] => ['--on-accent', bg]),
+  // Text on the lavender ground (selected nav, chips, the selected row): lavender-ink, not purple
+  ...['--accent-subtle', '--input-bg', '--bg', '--surface'].map((bg): [string, string] => ['--on-accent-subtle', bg]),
   ['--nav-item-active-text', '--nav-item-active'],
   ...['paid', 'unpaid', 'overdue', 'neutral'].map((badge): [string, string] => [`--badge-${badge}-text`, `--badge-${badge}-bg`]),
   ...['success', 'warning', 'error', 'info'].flatMap((tone) =>
-    ['--bg', '--surface', `--${tone}-subtle`].map((bg): [string, string] => [`--${tone}`, bg]),
+    ['--bg', '--surface', `--${tone}-subtle`, '--table-row-selected'].map((bg): [string, string] => [`--${tone}`, bg]),
+  ),
+  // Text on a filled status control (a danger button, a done step): --on-status
+  ...['success', 'warning', 'error', 'info'].flatMap((tone) =>
+    [`--${tone}`, `--${tone}-hover`].map((bg): [string, string] => ['--on-status', bg]),
   ),
 ];
 
 describe('contrast', () => {
   const theme = loadStylesheet(THEME_CSS);
+  const floorFor = (state: ThemeState) => (schemeOf(state) === 'light' ? 7 : 4.5);
+  /** The worse of the pair over --bg and over --surface: a translucent ground can sit on either. */
+  const ratio = (tokens: Tokens, fg: string, bg: string) =>
+    Math.min(...['--bg', '--surface'].map((base) => contrast(tokens.color(fg), tokens.color(bg), tokens.color(base))));
 
   it.each(STATES)('every text pair clears its floor: 7:1 light, 4.5:1 dark (%s)', (_name, state) => {
     const tokens = new Tokens(theme, state);
-    const floor = (state.dataTheme === 'none' ? state.os : state.dataTheme) === 'light' ? 7 : 4.5;
-    const base = tokens.color('--bg');
-    const failing = TEXT_PAIRS.map(([fg, bg]) => ({ pair: `${fg} on ${bg}`, ratio: contrast(tokens.color(fg), tokens.color(bg), base) }))
-      .filter(({ ratio }) => ratio < floor)
-      .map(({ pair, ratio }) => `${pair}: ${ratio.toFixed(2)}`);
+    const failing = TEXT_PAIRS.map(([fg, bg]) => ({ pair: `${fg} on ${bg}`, ratio: ratio(tokens, fg, bg) }))
+      .filter((pair) => pair.ratio < floorFor(state))
+      .map((pair) => `${pair.pair}: ${pair.ratio.toFixed(2)}`);
     expect(failing).toEqual([]);
+  });
+
+  it.each(STATES)('a filled control’s focus ring stands out from the page: --focus on --bg ≥ 3:1 (%s)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    expect(contrast(tokens.color('--focus'), tokens.color('--bg'))).toBeGreaterThanOrEqual(3);
   });
 
   it.each(STATES)('purple text uses primary-hover (%s)', (_name, state) => {
@@ -535,16 +630,132 @@ describe('contrast', () => {
 });
 
 /**
+ * What component rules actually render: every rule in src that sets both a
+ * text colour and an opaque background, evaluated in the four theme states.
+ * The token pair list above can't see a rule that pairs tokens no one listed
+ * (purple text on lavender, white on a status ink that turns light in dark).
+ * Translucent grounds are skipped here: what they sit on is not in the rule.
+ */
+/**
+ * Rules whose text and background are both hard-coded literals, below 7:1 (counted 2026-10-12).
+ * They don't move with the theme; MUT-103's literal sweep moves them onto tokens and deletes
+ * them here. Shrink-only: a new failure, or an entry that passes, fails the test.
+ */
+const KNOWN_LITERAL_PAIRS = [
+  'src/components/csv/CSVValidationPreview.css .status-icon.status-new',
+  'src/components/csv/CSVValidationPreview.css .status-icon.status-duplicate',
+  'src/components/csv/CSVValidationPreview.css .status-icon.status-error',
+  'src/components/csv/CSVValidationPreview.css .type-badge',
+  'src/components/csv/CSVValidationPreview.css .issue.error',
+  'src/components/csv/CSVValidationPreview.css .issue.warning',
+];
+
+describe('rendered pairs', () => {
+  const theme = loadStylesheet(THEME_CSS);
+  const files = sourceFiles().filter((file) => file.endsWith('.css') && !file.startsWith(repoPath('src/styles/')));
+
+  it('every stylesheet in src parses', () => {
+    const broken = files.filter((file) => {
+      try {
+        parseCss(file);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(broken).toEqual([]);
+  });
+
+  /** Every rule below its floor in one state, keyed `file selector`, with the measurement. */
+  function failingRules(state: ThemeState): Map<string, string> {
+    const tokens = new Tokens(theme, state);
+    const floor = schemeOf(state) === 'light' ? 7 : 4.5;
+    const resolve = (value: string) => {
+      try {
+        return parseColor(tokens.substitute(value.trim()));
+      } catch {
+        return null;
+      }
+    };
+    const failing = new Map<string, string>();
+    for (const file of files) {
+      let pairs;
+      try {
+        pairs = colorPairs(file);
+      } catch {
+        continue;
+      }
+      for (const pair of pairs) {
+        const fg = resolve(pair.color);
+        const bg = resolve(pair.background);
+        if (!fg || !bg || bg.a < 1) continue;
+        const value = contrast(fg, bg);
+        if (value < floor) {
+          const path = pair.file.replace(`${repoPath('.')}/`, '');
+          failing.set(`${path} ${pair.selector}`, `${path}:${pair.line} ${pair.selector} — ${pair.color} on ${pair.background}: ${value.toFixed(2)}`);
+        }
+      }
+    }
+    return failing;
+  }
+
+  it.each(STATES)('every rule’s text clears its floor on its own background: 7:1 light, 4.5:1 dark (%s)', (_name, state) => {
+    const failing = failingRules(state);
+    expect([...failing].filter(([key]) => !KNOWN_LITERAL_PAIRS.includes(key)).map(([, detail]) => detail)).toEqual([]);
+  });
+
+  it('lists only literal pairs that still fail (remove fixed ones from KNOWN_LITERAL_PAIRS)', () => {
+    const failing = failingRules(LIGHT);
+    expect(KNOWN_LITERAL_PAIRS.filter((key) => !failing.has(key))).toEqual([]);
+  });
+});
+
+describe('focus', () => {
+  it('never prefixes the focus ring with inset: the token already starts with it, and "inset inset" is invalid (no ring at all)', () => {
+    const offenders = sourceFiles()
+      .filter((file) => file.endsWith('.css'))
+      .filter((file) => /inset\s+var\(--focus-ring/.test(readFileSync(file, 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+
+  it('filled buttons take the outer ring: the inset brand ring is near-invisible on a filled ground', () => {
+    const rules: Record<string, string> = {};
+    parseCss(repoPath('src/components/ui/Button.css')).walkRules((rule) => {
+      const shadow = rule.nodes.find((n) => n.type === 'decl' && n.prop === 'box-shadow') as { value: string } | undefined;
+      for (const selector of rule.selectors) if (shadow) rules[selector.trim()] = shadow.value;
+    });
+    expect([rules['.btn-primary:focus-visible'], rules['.btn-danger:focus-visible']]).toEqual(['var(--focus-ring-on-fill)', 'var(--focus-ring-on-fill)']);
+  });
+});
+
+/**
  * `color: var(--accent)` puts purple text at 4.78:1 on canvas, below AAA. Text
  * uses --accent-text (primary-hover); --accent is for fills, borders and
  * decoration (PD3). Matches the whole `color` property only, in CSS and in
  * TSX inline styles (CQ3).
  */
-const ACCENT_AS_TEXT = /(?<![-\w])color\s*:\s*['"`]?var\(--accent\)/;
+const ACCENT_AS_TEXT = /(?<![-\w])color\s*:\s*['"`]?var\(--accent\s*[,)]/;
+
+/** Line numbers of every match in the whole text, so a declaration split across lines is still found. */
+function accentTextLines(text: string): number[] {
+  const global = new RegExp(ACCENT_AS_TEXT.source, 'g');
+  return [...text.matchAll(global)].map((m) => text.slice(0, m.index).split('\n').length);
+}
 
 describe('accent-text guard', () => {
-  it.each(['color: var(--accent);', "{ color: 'var(--accent)' }", 'a{color:var(--accent)}', '  color : "var(--accent)"'])('catches %s', (code) => {
+  it.each([
+    'color: var(--accent);',
+    "{ color: 'var(--accent)' }",
+    'a{color:var(--accent)}',
+    '  color : "var(--accent)"',
+    'color: var(--accent, #7c3aed);',
+    "{ color: 'var(--accent, purple)' }",
+  ])('catches %s', (code) => {
     expect(ACCENT_AS_TEXT.test(code)).toBe(true);
+  });
+
+  it('catches a colour declaration split across lines, at the right line', () => {
+    expect(accentTextLines('a {\n  color:\n    var(--accent);\n}')).toEqual([2]);
   });
 
   it.each(['border-color: var(--accent);', 'color: var(--accent-text);', 'background-color: var(--accent);', 'color: var(--accent-solid);', '--link-color: var(--accent);', 'outline-color: var(--accent)'])(
@@ -556,14 +767,8 @@ describe('accent-text guard', () => {
 
   it('no stylesheet or component colours text with --accent', () => {
     const offenders = sourceFiles()
-      .filter((file) => /\.(css|tsx)$/.test(file))
-      .flatMap((file) =>
-        readFileSync(file, 'utf8')
-          .split('\n')
-          .map((line, i) => ({ line, at: `${file.replace(`${repoPath('.')}/`, '')}:${i + 1}` }))
-          .filter(({ line }) => ACCENT_AS_TEXT.test(line))
-          .map(({ at }) => at),
-      );
+      .filter((file) => /\.(css|tsx?)$/.test(file))
+      .flatMap((file) => accentTextLines(readFileSync(file, 'utf8')).map((line) => `${file.replace(`${repoPath('.')}/`, '')}:${line}`));
     expect(offenders).toEqual([]);
   });
 });

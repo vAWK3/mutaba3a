@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
@@ -9,8 +12,14 @@ import { SCHEMES, computedFont, loadedFaces, watchFontRequests } from '../../sup
  * portal remembers only an explicit language choice (PORTAL_LANGUAGE_KEY).
  */
 
+/** PORTAL_LANGUAGE_KEY in src/hosted/i18n/HostedLanguageProvider.tsx */
 const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
-const HEADING = { en: 'Sign in', ar: 'تسجيل الدخول' } as const;
+
+/** The portal's own sign-in title, read from its translation files so a copy change needs no spec change. */
+const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
+const title = (language: 'en' | 'ar') =>
+  (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as { hosted: { auth: { title: string } } }).hosted.auth.title;
+const HEADING = { en: title('en'), ar: title('ar') } as const;
 
 async function openSignIn(page: Page, language: 'en' | 'ar') {
   await page.route('**/v1/**', (route) =>

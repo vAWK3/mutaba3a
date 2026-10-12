@@ -18,8 +18,16 @@
 }
 
 .btn:focus-visible {
-  /* Use bright accent for focus ring (--accent stays bright in dark mode) */
   box-shadow: var(--focus-ring);
+}
+
+/* The brand ring is inset: on a filled button it would paint over the fill and barely show */
+.btn-primary:focus-visible {
+  box-shadow: var(--focus-ring-on-fill);
+}
+
+.btn-danger:focus-visible {
+  box-shadow: var(--focus-ring-on-fill);
 }
 
 /*
@@ -114,7 +122,7 @@
 /* Danger Variant */
 .btn-danger {
   background-color: var(--error);
-  color: white;
+  color: var(--on-status);
   border: 1px solid transparent;
 }
 

@@ -43,8 +43,8 @@ body,
 }
 
 body {
-  /* Canonical variables from theme.css */
-  font-family: var(--font-en);
+  /* Canonical variables from theme.css; the face comes from <html> (theme.css), so
+     html:lang(ar) reaches the body too */
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   color: var(--text);
@@ -436,20 +436,20 @@ td {
   background: var(--accent-subtle);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   transition: all var(--transition-fast);
 }
 
 .new-action-btn:hover {
-  background: var(--accent);
-  color: var(--on-accent, white);
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 .new-action-btn.active {
-  background: var(--accent);
-  color: var(--on-accent, white);
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 .new-action-btn .nav-icon {
@@ -584,8 +584,8 @@ td {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
-  background: var(--accent);
-  color: white;
+  background: var(--accent-solid);
+  color: var(--on-accent);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -626,8 +626,8 @@ td {
 }
 
 .nav-item.active {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
+  background: var(--nav-item-active);
+  color: var(--nav-item-active-text);
 }
 
 .nav-icon {
@@ -921,7 +921,7 @@ td {
   height: 14px;
   border-radius: 50%;
   background: var(--accent-subtle);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
   font-size: 9px;
   font-weight: var(--weight-semibold);
 }
@@ -1068,7 +1068,7 @@ td {
 
 .segment-tab-active .segment-tab-count {
   background: var(--accent-subtle);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
 }
 
 /* Currency Tabs */
@@ -1331,7 +1331,7 @@ div.input-with-prefix {
 
 .btn-danger {
   background: var(--error);
-  color: white;
+  color: var(--on-status);
 }
 
 .btn-danger:hover {
@@ -1676,7 +1676,7 @@ div.input-with-prefix {
 
 .income-status-tab-active .income-status-count {
   background: var(--accent-subtle);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
 }
 
 /* MUT-83: the client scope a link opened /income with; one tap clears it */
@@ -2545,7 +2545,7 @@ div.input-with-prefix {
 /* Warning button */
 .btn-warning {
   background: var(--warning);
-  color: white;
+  color: var(--on-status);
 }
 
 .btn-warning:hover {
@@ -2562,7 +2562,7 @@ div.input-with-prefix {
 
 .alert-info {
   background: var(--accent-subtle);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
   border: 1px solid var(--accent);
 }
 
@@ -3001,7 +3001,7 @@ a.project-tag:hover {
 /* Success button variant */
 .btn-success {
   background: var(--success);
-  color: white;
+  color: var(--on-status);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -3095,7 +3095,7 @@ a.project-tag:hover {
 
 .report-preset.active {
   background: var(--accent-subtle);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
 }
 
 .reports-content {
@@ -3697,7 +3697,7 @@ a.project-tag:hover {
 
 .matching-context-amount {
   font-family: var(--font-mono);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium); /* Plex Mono ships 400/500 */
   color: var(--success);
   margin-inline-start: var(--space-3);
   flex-shrink: 0;
@@ -3716,8 +3716,8 @@ a.project-tag:hover {
 }
 
 .matching-context-change:hover {
-  background: var(--accent);
-  color: white;
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 /* Matching List */
@@ -3996,7 +3996,7 @@ a.project-tag:hover {
 
 .matching-confirmation-card-amount {
   font-family: var(--font-mono);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium); /* Plex Mono ships 400/500 */
   margin-top: var(--space-2);
 }
 

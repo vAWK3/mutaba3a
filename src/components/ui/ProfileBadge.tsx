@@ -1,5 +1,6 @@
 import type { BusinessProfile } from '../../types';
 import './ProfileBadge.css';
+import { profileAvatarStyle } from './profileAvatarStyle';
 
 /**
  * ProfileBadge Component
@@ -39,7 +40,7 @@ export function ProfileBadge({
   return (
     <span
       className={`profile-badge profile-badge-${size} ${className}`}
-      style={{ backgroundColor: profile.primaryColor || 'var(--accent)' }}
+      style={profileAvatarStyle(profile.primaryColor)}
       title={showTooltip ? profile.name : undefined}
       aria-label={decorative ? undefined : profile.name}
       aria-hidden={decorative || undefined}

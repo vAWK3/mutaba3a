@@ -4,6 +4,7 @@ import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import './ProfileSwitcher.css';
+import { profileAvatarStyle } from '../ui/profileAvatarStyle';
 
 /** Estimates for choosing whether the dropdown opens up or down */
 const OPTION_HEIGHT = 44;
@@ -252,7 +253,7 @@ function ProfileAvatar({ profile, size = 'medium' }: { profile: BusinessProfile;
   return (
     <div
       className={`profile-switcher-avatar profile-switcher-avatar-initials ${sizeClass}`}
-      style={profile.primaryColor ? { backgroundColor: profile.primaryColor, color: 'white' } : undefined}
+      style={profileAvatarStyle(profile.primaryColor)}
     >
       {initials}
     </div>

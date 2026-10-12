@@ -31,7 +31,7 @@
 
   --m-font-display: "Thmanyah Serif Display", serif;
   --m-font-body: "Thmanyah Sans", system-ui, sans-serif;
-  --m-font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --m-font-num: "IBM Plex Mono", "Thmanyah Sans", ui-monospace, monospace; /* Thmanyah before the system mono: Arabic inside a figure cell keeps the brand face */
 
   --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px;
   --m-radius-card: 24px; --m-radius-hero: 28px; --m-radius-pill: 999px;

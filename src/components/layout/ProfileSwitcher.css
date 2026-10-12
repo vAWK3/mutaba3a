@@ -68,7 +68,7 @@
   align-items: center;
   justify-content: center;
   background: var(--accent-subtle);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
 }
 
 /* All Profiles button styling */

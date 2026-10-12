@@ -33,7 +33,7 @@
 .split-workspace-mode-label {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  color: var(--accent-text);
+  color: var(--on-accent-subtle);
   background: var(--accent-subtle);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
@@ -56,9 +56,9 @@
 }
 
 .btn-primary .kbd {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
+  background: color-mix(in oklab, var(--on-accent) 15%, transparent);
+  border-color: color-mix(in oklab, var(--on-accent) 20%, transparent);
+  color: var(--on-accent);
 }
 
 /* Split Panels Container */

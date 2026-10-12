@@ -20,7 +20,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  /* Without a business colour: the filled pair; a colour comes inline (profileAvatarStyle) */
+  background-color: var(--accent-solid);
+  color: var(--on-accent);
   font-size: 9px;
   font-weight: 600;
 }

@@ -17,7 +17,6 @@ const tokens = JSON.parse(fs.readFileSync(tokensFile, 'utf8'));
 export const CANVAS = { light: tokens.color.canvas.oklch as string, dark: tokens.colorDark.canvas.oklch as string };
 
 export const SCHEMES = ['light', 'dark'] as const;
-export type Scheme = (typeof SCHEMES)[number];
 
 /** Faces the page has finished loading, as "Family weight" (e.g. "Thmanyah Sans 400"). */
 export async function loadedFaces(page: Page): Promise<string[]> {
