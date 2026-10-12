@@ -173,6 +173,18 @@ export function serializeAgreement(a: AgreementRecord) {
       a.type === 'RECURRING' && a.startMonth && a.billingDay
         ? { startMonth: a.startMonth, billingDay: a.billingDay, endMonth: a.endMonth, cancelEffectiveMonth: a.cancelEffectiveMonth, cancelEffectiveDate: a.cancelEffectiveDate, finalMonth: a.finalMonth }
         : null,
+    contingency:
+      a.type === 'CONTINGENCY' && a.commissionRateBasisPoints !== null && a.upfrontTreatment !== null
+        ? {
+            commissionRateBasisPoints: a.commissionRateBasisPoints,
+            upfrontTreatment: a.upfrontTreatment,
+            outcome: a.outcome ?? ('AWAITING' as const),
+            outcomeDate: a.outcomeDate,
+            awarded: a.awardedAmountMinor === null ? null : amt(a.awardedAmountMinor, a.currency),
+            note: a.outcomeNote,
+            outcomeRecordedAt: iso(a.outcomeRecordedAt),
+          }
+        : null,
     cancelledAt: iso(a.cancelledAt),
     version: a.version,
     createdAt: a.createdAt.toISOString(),
@@ -206,6 +218,7 @@ export function serializeInstallment(v: InstallmentView) {
     status: v.status,
     postedAt: iso(i.postedAt),
     receivableId: i.receivableId,
+    isCommission: i.isCommission,
     version: i.version,
   };
 }

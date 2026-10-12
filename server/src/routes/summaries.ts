@@ -145,7 +145,7 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const installments: InstallmentRecord[] = [];
     let monthlyMinor: bigint | null = null;
     for (const a of agreements) {
-      if (a.type === 'FIXED' && a.status === 'ACTIVE') installments.push(...(await store.agreements.listInstallments(organization.id, a.id)));
+      if ((a.type === 'FIXED' || a.type === 'CONTINGENCY') && a.status === 'ACTIVE') installments.push(...(await store.agreements.listInstallments(organization.id, a.id)));
       if (a.type === 'RECURRING' && a.status === 'ACTIVE') monthlyMinor = latestTerms(termsTimeline(a, await store.agreements.listVersions(organization.id, a.id))).grossMinor;
     }
     return { figures: projectFigures({ agreements, installments, receivables, monthlyMinor, today }), proposal: currentProposal(proposals) };
@@ -180,6 +180,9 @@ function projectWire(project: ProjectRecord, view: ProjectView) {
     pending: { count: f.pending.count, amount: fmt(f.pending.amountMinor) },
     status: f.status,
     proposal: serializeFeeProposalSummary(view.proposal),
+    contingency: f.contingency
+      ? { agreementId: f.contingency.agreementId, commissionRateBasisPoints: f.contingency.commissionRateBasisPoints, upfrontTreatment: f.contingency.upfrontTreatment, outcome: f.contingency.outcome, awarded: f.contingency.awardedMinor === null ? null : fmt(f.contingency.awardedMinor) }
+      : null,
   };
 }
 

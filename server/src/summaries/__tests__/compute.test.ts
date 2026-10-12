@@ -70,3 +70,50 @@ describe('projectFigures', () => {
     expect(projectFigures({ agreements: [], installments: [], receivables: [], today: '2026-10-20' })).toMatchObject({ kind: 'NONE', status: 'NONE', agreedMinor: null, monthlyMinor: null });
   });
 });
+
+describe('projectFigures with contingency agreements (MUT-100)', () => {
+  const contingency = (over: Partial<AgreementRecord> = {}) => agreement({ id: 'k', type: 'CONTINGENCY', grossMinor: 1770n, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', ...over });
+  const upfront = inst({ id: 'u', agreementId: 'k', grossMinor: 1770n, receivableId: 'ru' });
+  const paidUpfront = rec({ id: 'ru', agreementId: 'k', grossMinor: 1770n, paidMinor: 1770n, status: 'SETTLED' });
+
+  it('a contingency-only project is fixed-like: kind FIXED, agreed = the upfront, and the terms in a contingency block', () => {
+    const f = projectFigures({ agreements: [contingency()], installments: [upfront], receivables: [rec({ id: 'ru', agreementId: 'k', grossMinor: 1770n })], today: '2026-10-13' });
+    expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 1770n, contingency: { agreementId: 'k', commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', outcome: 'AWAITING', awardedMinor: null } });
+  });
+
+  it('awaiting the outcome with the upfront paid is PENDING, never PAID_IN_FULL', () => {
+    const f = projectFigures({ agreements: [contingency()], installments: [upfront], receivables: [paidUpfront], today: '2026-10-13' });
+    expect(f.status).toBe('PENDING');
+  });
+
+  it('after AWARDED the posted commission is owed like any fixed line: OUTSTANDING when nothing is paid, PARTIALLY_PAID once the upfront is', () => {
+    const awarded = contingency({ outcome: 'AWARDED', outcomeDate: '2026-10-12', awardedAmountMinor: 10_000_000n, grossMinor: 2_537_000n });
+    const commission = inst({ id: 'c', agreementId: 'k', position: 2, isCommission: true, grossMinor: 2_360_000n, receivableId: 'rc' });
+    const commissionReceivable = rec({ id: 'rc', agreementId: 'k', grossMinor: 2_360_000n, dueDate: '2026-10-31' });
+    const unpaid = projectFigures({ agreements: [awarded], installments: [upfront, commission], receivables: [rec({ id: 'ru', agreementId: 'k', grossMinor: 1770n, dueDate: '2026-10-31' }), commissionReceivable], today: '2026-10-13' });
+    expect(unpaid).toMatchObject({ status: 'OUTSTANDING', agreedMinor: 2_537_000n, contingency: { outcome: 'AWARDED', awardedMinor: 10_000_000n } });
+    const upfrontPaid = projectFigures({ agreements: [awarded], installments: [upfront, commission], receivables: [paidUpfront, commissionReceivable], today: '2026-10-13' });
+    expect(upfrontPaid.status).toBe('PARTIALLY_PAID');
+  });
+
+  it('a recorded outcome with everything paid is PAID_IN_FULL again', () => {
+    const settled = contingency({ outcome: 'NO_RECOVERY', outcomeDate: '2026-10-12' });
+    expect(projectFigures({ agreements: [settled], installments: [upfront], receivables: [paidUpfront], today: '2026-10-13' }).status).toBe('PAID_IN_FULL');
+  });
+
+  it('a FIXED hearing agreement and a contingency agreement: agreed sums both', () => {
+    const f = projectFigures({ agreements: [agreement({ id: 'h', grossMinor: 944n }), contingency()], installments: [upfront], receivables: [], today: '2026-10-13' });
+    expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 2714n });
+  });
+
+  it('only an ACTIVE contingency agreement shows; the latest wins when there are several; none → null', () => {
+    const f = projectFigures({ agreements: [contingency({ id: 'k1', commissionRateBasisPoints: 1000 }), contingency({ id: 'k2', commissionRateBasisPoints: 3000 }), contingency({ id: 'k3', status: 'CANCELLED' })], installments: [], receivables: [], today: '2026-10-13' });
+    expect(f.contingency).toMatchObject({ agreementId: 'k2', commissionRateBasisPoints: 3000 });
+    expect(projectFigures({ agreements: [agreement({})], installments: [], receivables: [], today: '2026-10-13' }).contingency).toBeNull();
+  });
+
+  it('regression (R5/D7): a FIXED + RETAINER mix → kind FIXED, monthly set, agreed = the FIXED sum', () => {
+    const f = projectFigures({ agreements: [agreement({ grossMinor: 3000n }), agreement({ id: 'r', type: 'RECURRING', grossMinor: 2360n, startMonth: '2026-10', billingDay: 1 })], installments: [], receivables: [], monthlyMinor: 2360n, today: '2026-10-13' });
+    expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 3000n, monthlyMinor: 2360n, contingency: null });
+  });
+});

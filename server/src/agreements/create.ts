@@ -15,10 +15,11 @@ import {
   toInstallmentSpecs,
   validationError,
 } from './compose.js';
+import { isCommissionRate, type UpfrontTreatment } from './contingency.js';
 import { postDueItems, type PostingActor } from './posting.js';
 
 /**
- * Creating a fixed-fee agreement from a composed preview (M3 brief §2.3),
+ * Creating a fixed-fee or contingency agreement from a composed preview (M3 brief §2.3, MUT-100),
  * shared by `POST /v1/agreements` and `POST /v1/fee-proposals/{id}/approve`
  * (M8 brief §6, D14): the store transaction writes the agreement and its
  * installments (and, when approving, moves the proposal to APPROVED or
@@ -63,7 +64,7 @@ export async function createAgreementFromPreview(
       organizationId: organization.id,
       projectId: preview.context.project.id,
       customerId: preview.context.customer.id,
-      type: 'FIXED',
+      type: preview.type,
       currency: preview.context.currency,
       pricingBasis: body.pricingBasis,
       vatTreatment: preview.context.defaultTreatment,
@@ -78,6 +79,7 @@ export async function createAgreementFromPreview(
       startMonth: null,
       billingDay: null,
       endMonth: null,
+      ...(preview.contingency ? { commissionRateBasisPoints: preview.contingency.commissionRateBasisPoints, upfrontTreatment: preview.contingency.upfrontTreatment } : {}),
       installments,
       approveProposal,
     },
@@ -90,6 +92,7 @@ export async function createAgreementFromPreview(
     gross: formatMoney({ minor: created.agreement.grossMinor, currency: preview.context.currency }),
     installments: installments.length,
     ...(approveProposal ? { feeProposalId: approveProposal.id } : {}),
+    ...(preview.contingency ? { type: preview.type, commissionRateBasisPoints: preview.contingency.commissionRateBasisPoints, upfrontTreatment: preview.contingency.upfrontTreatment } : {}),
   });
 
   // IMMEDIATE installments post now; DATE ones whose date has arrived post through the same lazy path (which, since D16, also heals an IMMEDIATE one a crash left here).
@@ -132,7 +135,11 @@ export type PreviewBody = {
   description?: string | undefined;
   paymentTerms: 'IMMEDIATE' | 'EOM' | 'EOM_15' | 'EOM_30' | 'EOM_45' | 'EOM_60';
   installments: ReadonlyArray<{ label: string; amount?: string | undefined; percentBasisPoints?: number | undefined; vatTreatment?: 'STANDARD_RATED' | 'ZERO_RATED' | 'EXEMPT' | 'OUT_OF_SCOPE' | undefined; trigger: { type: 'IMMEDIATE' | 'DATE' | 'MANUAL'; date?: string | undefined }; paymentTerms?: 'IMMEDIATE' | 'EOM' | 'EOM_15' | 'EOM_30' | 'EOM_45' | 'EOM_60' | undefined; dueDate?: string | undefined }>;
+  /** MUT-100: present = CONTINGENCY (amount is the upfront, ≥ 0); absent = FIXED. */
+  contingency?: { commissionRateBasisPoints: number; upfrontTreatment: UpfrontTreatment } | undefined;
 };
+
+const NO_TOTALS = { amountMinor: 0n, netMinor: 0n, vatMinor: 0n, grossMinor: 0n };
 
 export async function composePreview(store: LedgerStore, organization: Organization, body: PreviewBody, today: string) {
   assertIsoDate(body.agreementDate, 'agreementDate');
@@ -140,9 +147,15 @@ export async function composePreview(store: LedgerStore, organization: Organizat
   const context = await loadAgreementContext(store, organization, { projectId: body.projectId, currency: body.currency, vatTreatment: body.vatTreatment, agreementDate: body.agreementDate });
   const rateBasisPoints = await resolveRate(store, organization.id, body.agreementDate, context.defaultTreatment, body.installments.map((i) => i.vatTreatment));
   const amountMinor = parseAmount(body.amount, context.currency);
-  if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
+  const contingency = body.contingency ?? null;
+  if (contingency && !isCommissionRate(contingency.commissionRateBasisPoints)) {
+    throw validationError('COMMISSION_RATE_INVALID', 'contingency.commissionRateBasisPoints must be an integer from 1 to 10000', { field: 'contingency.commissionRateBasisPoints' });
+  }
+  if (contingency ? amountMinor < 0n : amountMinor <= 0n) throw validationError('AMOUNT_INVALID', contingency ? 'the upfront (amount) must not be negative' : 'amount must be positive', { field: 'amount' });
   const specs = toInstallmentSpecs(body.installments, context.currency);
-  const { items, totals } = scheduleOrThrow({ amountMinor, pricingBasis: body.pricingBasis, defaultTreatment: context.defaultTreatment, rateBasisPoints, installments: specs });
+  // A contingency agreement with no upfront schedules nothing; every other empty list is NO_INSTALLMENTS from the schedule.
+  const noUpfront = contingency !== null && amountMinor === 0n && specs.length === 0;
+  const { items, totals } = noUpfront ? { items: [], totals: NO_TOTALS } : scheduleOrThrow({ amountMinor, pricingBasis: body.pricingBasis, defaultTreatment: context.defaultTreatment, rateBasisPoints, installments: specs });
   const draft = { paymentTerms: body.paymentTerms, agreementDate: body.agreementDate };
   const installments = items.map((i) => {
     const asRecord = { triggerType: i.trigger.type, triggerDate: i.trigger.date ?? null, dueDateOverride: i.dueDate ?? null, paymentTerms: i.paymentTerms ?? null };
@@ -161,15 +174,21 @@ export async function composePreview(store: LedgerStore, organization: Organizat
       paymentTerms: i.paymentTerms ?? null,
       dueDate,
       status: 'PENDING' as const,
+      isCommission: false,
     };
   });
   const fmt = (minor: bigint) => formatMoney({ minor, currency: context.currency });
+  const type = contingency ? ('CONTINGENCY' as const) : ('FIXED' as const);
   return {
     context,
+    type,
+    contingency,
     scheduled: items,
     totals,
     vatRateBasisPoints: rateBasisPoints,
     wire: {
+      type,
+      contingency,
       totals: { amount: fmt(totals.amountMinor), net: fmt(totals.netMinor), vat: fmt(totals.vatMinor), gross: fmt(totals.grossMinor) },
       vatRateBasisPoints: rateBasisPoints,
       vatTreatment: context.defaultTreatment,

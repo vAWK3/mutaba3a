@@ -1,3 +1,4 @@
+import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/contingency.js';
 import type { IsoDate } from '../dates.js';
 import type { AgreementRecord, InstallmentRecord, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
 
@@ -80,6 +81,15 @@ export function customerStatus(b: Buckets): CustomerStatus {
   return 'UP_TO_DATE';
 }
 
+/** MUT-100: the project's ACTIVE contingency agreement, as the summary shows it. */
+export interface ProjectContingency {
+  agreementId: string;
+  commissionRateBasisPoints: number;
+  upfrontTreatment: UpfrontTreatment;
+  outcome: 'AWAITING' | ContingencyOutcome;
+  awardedMinor: bigint | null;
+}
+
 export interface ProjectFigures {
   kind: ProjectKind;
   /** Fixed: the active agreement's gross total (or the latest one's when all are cancelled). */
@@ -92,7 +102,11 @@ export interface ProjectFigures {
   buckets: Buckets;
   pending: { count: number; amountMinor: bigint };
   status: ProjectStatus;
+  contingency: ProjectContingency | null;
 }
+
+/** Fixed-like for `kind` and `agreed` (MUT-100 D6): a contingency agreement's total is its upfront, plus the commission once billed. */
+const isFixedLike = (a: Pick<AgreementRecord, 'type'>) => a.type === 'FIXED' || a.type === 'CONTINGENCY';
 
 export function projectFigures(input: { agreements: readonly AgreementRecord[]; installments: readonly InstallmentRecord[]; receivables: readonly ReceivableRecord[]; monthlyMinor?: bigint | null; today: IsoDate }): ProjectFigures {
   const buckets = bucketize(input.receivables, input.today);
@@ -107,20 +121,30 @@ export function projectFigures(input: { agreements: readonly AgreementRecord[]; 
   const pendingItems = input.installments.filter((i) => i.receivableId === null && i.voidedAt === null);
   const pending = { count: pendingItems.length, amountMinor: pendingItems.reduce((s, i) => s + i.grossMinor, 0n) };
   const retainer = input.agreements.find((a) => a.type === 'RECURRING' && a.status === 'ACTIVE') ?? input.agreements.find((a) => a.type === 'RECURRING') ?? null;
-  const fixed = input.agreements.find((a) => a.type === 'FIXED' && a.status === 'ACTIVE') ?? input.agreements.find((a) => a.type === 'FIXED') ?? null;
-  if (!retainer && !fixed) return { kind: 'NONE', agreedMinor: null, monthlyMinor: null, postedMinor, paidMinor, creditedMinor, buckets, pending, status: 'NONE' };
+  const fixed = input.agreements.find((a) => isFixedLike(a) && a.status === 'ACTIVE') ?? input.agreements.find(isFixedLike) ?? null;
+  const contingency = contingencyOf(input.agreements);
+  if (!retainer && !fixed) return { kind: 'NONE', agreedMinor: null, monthlyMinor: null, postedMinor, paidMinor, creditedMinor, buckets, pending, status: 'NONE', contingency };
   if (retainer && !fixed) {
-    return { kind: 'RETAINER', agreedMinor: null, monthlyMinor: input.monthlyMinor ?? retainer.grossMinor, postedMinor, paidMinor, creditedMinor, buckets, pending, status: retainerStatus(retainer, buckets) };
+    return { kind: 'RETAINER', agreedMinor: null, monthlyMinor: input.monthlyMinor ?? retainer.grossMinor, postedMinor, paidMinor, creditedMinor, buckets, pending, status: retainerStatus(retainer, buckets), contingency };
   }
-  const agreedMinor = input.agreements.filter((a) => a.type === 'FIXED' && a.status === 'ACTIVE').reduce((s, a) => s + a.grossMinor, 0n) || fixed!.grossMinor;
-  return { kind: 'FIXED', agreedMinor, monthlyMinor: retainer ? (input.monthlyMinor ?? retainer.grossMinor) : null, postedMinor, paidMinor, creditedMinor, buckets, pending, status: fixedStatus(buckets, paidMinor, pending.count, postedMinor) };
+  const agreedMinor = input.agreements.filter((a) => isFixedLike(a) && a.status === 'ACTIVE').reduce((s, a) => s + a.grossMinor, 0n) || fixed!.grossMinor;
+  const awaitingOutcome = input.agreements.some((a) => a.type === 'CONTINGENCY' && a.status === 'ACTIVE' && a.outcome === null);
+  return { kind: 'FIXED', agreedMinor, monthlyMinor: retainer ? (input.monthlyMinor ?? retainer.grossMinor) : null, postedMinor, paidMinor, creditedMinor, buckets, pending, status: fixedStatus(buckets, paidMinor, pending.count, postedMinor, awaitingOutcome), contingency };
 }
 
-export function fixedStatus(b: Buckets, paidMinor: bigint, pendingCount: number, postedMinor: bigint): FixedProjectStatus {
+/** A paid upfront is not "paid in full" while the commission is still to come (MUT-100). */
+export function fixedStatus(b: Buckets, paidMinor: bigint, pendingCount: number, postedMinor: bigint, awaitingOutcome = false): FixedProjectStatus {
   if (b.overdue > 0n) return 'OVERDUE';
   if (b.outstanding > 0n) return paidMinor > 0n ? 'PARTIALLY_PAID' : 'OUTSTANDING';
-  if (pendingCount > 0 || postedMinor === 0n) return 'PENDING';
+  if (pendingCount > 0 || postedMinor === 0n || awaitingOutcome) return 'PENDING';
   return 'PAID_IN_FULL';
+}
+
+/** The latest ACTIVE contingency agreement (agreements arrive oldest first); `agreed` still sums them all. */
+function contingencyOf(agreements: readonly AgreementRecord[]): ProjectContingency | null {
+  const a = agreements.filter((x) => x.type === 'CONTINGENCY' && x.status === 'ACTIVE').at(-1);
+  if (!a || a.commissionRateBasisPoints === null || a.upfrontTreatment === null) return null;
+  return { agreementId: a.id, commissionRateBasisPoints: a.commissionRateBasisPoints, upfrontTreatment: a.upfrontTreatment, outcome: a.outcome ?? 'AWAITING', awardedMinor: a.awardedAmountMinor };
 }
 
 export function retainerStatus(agreement: Pick<AgreementRecord, 'status'>, b: Buckets): RetainerProjectStatus {

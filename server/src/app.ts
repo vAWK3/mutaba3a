@@ -26,6 +26,7 @@ import { incomeRoutes } from './routes/income.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { agreementRoutes } from './routes/agreements.js';
+import { contingencyRoutes } from './routes/contingency.js';
 import { customerRoutes } from './routes/customers.js';
 import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
@@ -94,7 +95,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.15.0-mut61';
+export const API_VERSION = '1.16.0-mut100';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -201,6 +202,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', vatRoutes(store));
   app.route('/', feeProposalRoutes(store));
   app.route('/', agreementRoutes(store));
+  app.route('/', contingencyRoutes(store));
   app.route('/', installmentRoutes(store));
   app.route('/', retainerRoutes(store));
   app.route('/', receivableRoutes(store));

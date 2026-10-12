@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
+import { CONTINGENCY_OUTCOMES, UPFRONT_TREATMENTS } from './agreements/contingency.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
@@ -543,6 +544,10 @@ export const CONFLICT_REASONS = [
   'REVERSED_BY_MALAFAT',
   // MUT-66: filing an entry through the route for the other kind.
   'ENTRY_KIND_MISMATCH',
+  // MUT-100: contingency outcomes
+  'OUTCOME_ALREADY_RECORDED',
+  'OUTCOME_NOT_RECORDED',
+  'OUTCOME_HAS_PAYMENTS',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -616,6 +621,11 @@ export const VALIDATION_REASONS = [
   'REASON_RESERVED',
   'EXTERNAL_REFERENCE_NOT_ALLOWED',
   'PAYMENT_HAS_NO_CUSTOMER',
+  // MUT-100: contingency agreements
+  'COMMISSION_RATE_INVALID',
+  'NOT_CONTINGENCY',
+  'OUTCOME_DATE_INVALID',
+  'COMMISSION_LABEL_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -625,6 +635,15 @@ export const FinalMonthSchema = z.enum(['FULL', 'PRORATE', 'WAIVE']).openapi('Fi
 export const TriggerTypeSchema = z.enum(['IMMEDIATE', 'DATE', 'MANUAL']).openapi('TriggerType');
 /** MUT-100: CONTINGENCY = an upfront fee plus a commission on the award, billed when the outcome is recorded. */
 export const AgreementTypeSchema = z.enum(['FIXED', 'RECURRING', 'CONTINGENCY']).openapi('AgreementType');
+/** MUT-100: SEPARATE = the upfront stays on top of the commission; CREDITED = it counts toward the commission (never refunded). */
+export const UpfrontTreatmentSchema = z.enum(UPFRONT_TREATMENTS).openapi('UpfrontTreatment');
+export const ContingencyOutcomeSchema = z.enum(CONTINGENCY_OUTCOMES).openapi('ContingencyOutcome');
+export const ContingencyTermsSchema = z
+  .object({
+    commissionRateBasisPoints: z.number().int().openapi({ description: 'The commission on the award, 1..10000 (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID' }),
+    upfrontTreatment: UpfrontTreatmentSchema,
+  })
+  .openapi('ContingencyTerms');
 
 export const VatRateSchema = z
   .object({ id: uuid, rateBasisPoints: z.number().int().min(0).max(10000), effectiveFrom: IsoDateSchema, createdAt: z.string().datetime() })
@@ -654,7 +673,7 @@ export const InstallmentSpecSchema = z
 export const AgreementPreviewRequestSchema = z
   .object({
     projectId: uuid,
-    /** Contractual amount in the pricing basis, project currency. */
+    /** Contractual amount in the pricing basis, project currency. With `contingency`: the upfront, which may be 0 (then `installments` is empty). */
     amount: AmountSchema,
     currency: CurrencySchema.optional(),
     pricingBasis: PricingBasisSchema,
@@ -663,7 +682,10 @@ export const AgreementPreviewRequestSchema = z
     agreementDate: IsoDateSchema,
     description: z.string().max(500).optional(),
     paymentTerms: PaymentTermsSchema.default('EOM'),
-    installments: z.array(InstallmentSpecSchema).min(1).max(MAX_INSTALLMENTS),
+    /** An empty list is 422 NO_INSTALLMENTS unless this is a contingency agreement with a 0 upfront. */
+    installments: z.array(InstallmentSpecSchema).max(MAX_INSTALLMENTS),
+    /** MUT-100: present = a CONTINGENCY agreement (upfront in `amount`, commission on the award when the outcome is recorded); absent = FIXED. */
+    contingency: ContingencyTermsSchema.optional(),
   })
   .openapi('AgreementPreviewRequest');
 
@@ -689,6 +711,8 @@ export const InstallmentSchema = z
     status: ItemStatusSchema,
     postedAt: z.string().datetime().nullable(),
     receivableId: uuid.nullable(),
+    /** MUT-100: the commission line a contingency outcome posted. */
+    isCommission: z.boolean(),
     version: z.number().int(),
   })
   .openapi('Installment');
@@ -727,6 +751,20 @@ export const AgreementSchema = z
     retainer: z
       .object({ startMonth: IsoMonthSchema, billingDay: z.number().int(), endMonth: IsoMonthSchema.nullable(), cancelEffectiveMonth: IsoMonthSchema.nullable(), cancelEffectiveDate: IsoDateSchema.nullable(), finalMonth: z.enum(['FULL', 'PRORATE', 'WAIVE']).nullable() })
       .nullable(),
+    /** MUT-100: CONTINGENCY only; null on every other type. */
+    contingency: z
+      .object({
+        commissionRateBasisPoints: z.number().int(),
+        upfrontTreatment: UpfrontTreatmentSchema,
+        outcome: z.enum(['AWAITING', ...CONTINGENCY_OUTCOMES]),
+        outcomeDate: IsoDateSchema.nullable(),
+        /** AWARDED: the award, in the pricing basis. */
+        awarded: AmountSchema.nullable(),
+        note: z.string().nullable(),
+        outcomeRecordedAt: z.string().datetime().nullable(),
+      })
+      .nullable()
+      .openapi('AgreementContingency'),
     cancelledAt: z.string().datetime().nullable(),
     version: z.number().int(),
     createdAt: z.string().datetime(),
@@ -740,6 +778,9 @@ export const AgreementDetailSchema = z
 
 export const AgreementPreviewResponseSchema = z
   .object({
+    /** MUT-100: CONTINGENCY when the request carried `contingency`. */
+    type: z.enum(['FIXED', 'CONTINGENCY']),
+    contingency: ContingencyTermsSchema.nullable(),
     totals: z.object({ amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema }),
     vatRateBasisPoints: z.number().int(),
     vatTreatment: VatTreatmentSchema,
@@ -789,6 +830,68 @@ export const TriggerInstallmentRequestSchema = z.object({ dueDate: IsoDateSchema
 export const TriggerInstallmentResponseSchema = z.object({ installment: InstallmentSchema, receivable: z.lazy(() => ReceivableSchema), created: z.boolean() }).openapi('TriggerInstallmentResponse');
 
 export const CancelAgreementRequestSchema = z.object({}).openapi('CancelAgreementRequest');
+
+// ---- MUT-100: contingency terms and outcomes ----------------------------------
+
+export const ContingencyTermsPatchRequestSchema = z
+  .object({ commissionRateBasisPoints: z.number().int().optional(), upfrontTreatment: UpfrontTreatmentSchema.optional() })
+  .openapi('ContingencyTermsPatchRequest');
+
+const outcomeFields = {
+  outcome: ContingencyOutcomeSchema,
+  /** AWARDED: required, > 0, in the agreement's pricing basis and currency. NO_RECOVERY: must be absent. */
+  awardedAmount: AmountSchema.optional(),
+  /** On or after the agreement date, not after today. The commission posts on this date at the VAT rate in force on it. */
+  outcomeDate: IsoDateSchema,
+  note: z.string().max(500).optional(),
+  /** AWARDED: the commission line's label, localized by the caller (422 COMMISSION_LABEL_REQUIRED when missing). */
+  commissionLabel: z.string().min(1).max(80).optional(),
+  /** Overrides the commission's due date; default = the outcome date plus the agreement's payment terms. */
+  dueDate: IsoDateSchema.optional(),
+};
+const correctionFields = {
+  /** A correction may also fix the terms (R3/D5); outside a correction 409 OUTCOME_NOT_RECORDED. */
+  commissionRateBasisPoints: z.number().int().optional(),
+  upfrontTreatment: UpfrontTreatmentSchema.optional(),
+};
+
+export const ContingencyOutcomePreviewRequestSchema = z
+  .object({ ...outcomeFields, ...correctionFields, correctionReason: z.string().min(1).max(500).optional() })
+  .openapi('ContingencyOutcomePreviewRequest');
+
+export const ContingencyOutcomeRequestSchema = z.object({ ...outcomeFields, previewToken: z.string().length(64) }).openapi('ContingencyOutcomeRequest');
+
+export const ContingencyOutcomeCorrectRequestSchema = z
+  .object({ ...outcomeFields, ...correctionFields, /** Becomes the reason on the replaced commission's credit; caller-localized. */ correctionReason: z.string().min(1).max(500), previewToken: z.string().length(64) })
+  .openapi('ContingencyOutcomeCorrectRequest');
+
+const billableSchema = z.object({ amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema });
+
+export const ContingencyOutcomePreviewSchema = z
+  .object({
+    /** RECORD before an outcome exists; CORRECT after (send the same body to /outcome/correct). */
+    mode: z.enum(['RECORD', 'CORRECT']),
+    outcome: ContingencyOutcomeSchema,
+    awarded: AmountSchema.nullable(),
+    outcomeDate: IsoDateSchema,
+    commissionRateBasisPoints: z.number().int(),
+    upfrontTreatment: UpfrontTreatmentSchema,
+    /** Award × rate, half up. */
+    commission: AmountSchema,
+    /** Live upfront installments less the credits on them (stored splits), in the pricing basis. */
+    upfrontCounted: AmountSchema,
+    /** CREDITED: min(upfrontCounted, commission); SEPARATE: 0. */
+    appliedUpfront: AmountSchema,
+    /** What posts: commission − appliedUpfront, with VAT at the rate in force on the outcome date. All zero = nothing posts. */
+    billable: billableSchema,
+    vatRateBasisPoints: z.number().int(),
+    postingDate: IsoDateSchema.nullable(),
+    dueDate: IsoDateSchema.nullable(),
+    /** CORRECT: the commission line being replaced (credited in full when it posted). */
+    replaces: z.object({ installmentId: uuid, receivableId: uuid.nullable(), gross: AmountSchema }).nullable(),
+    previewToken: z.string().length(64),
+  })
+  .openapi('ContingencyOutcomePreview');
 
 export const ReceivableSchema = z
   .object({
@@ -1339,6 +1442,11 @@ export const ProjectSummarySchema = z
     status: ProjectSummaryStatusSchema,
     /** M7: the open fee proposal, else the latest approved one, else null. */
     proposal: FeeProposalSummarySchema.nullable(),
+    /** MUT-100: the project's ACTIVE contingency agreement (the latest, if several), else null. It counts in `agreed`; `kind` stays FIXED. */
+    contingency: z
+      .object({ agreementId: uuid, commissionRateBasisPoints: z.number().int(), upfrontTreatment: UpfrontTreatmentSchema, outcome: z.enum(['AWAITING', ...CONTINGENCY_OUTCOMES]), awarded: AmountSchema.nullable() })
+      .nullable()
+      .openapi('ProjectContingency'),
   })
   .openapi('ProjectSummary');
 
