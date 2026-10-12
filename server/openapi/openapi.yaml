@@ -6951,7 +6951,7 @@ paths:
       tags:
         - Receivables
       summary: Settle a receivable directly, with one payment and one allocation
-      description: "For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates."
+      description: "For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404."
       security:
         - session: []
       parameters:

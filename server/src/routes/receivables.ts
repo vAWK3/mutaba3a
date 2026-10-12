@@ -156,7 +156,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Receivables'],
       summary: 'Settle a receivable directly, with one payment and one allocation',
       description:
-        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates.',
+        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.',
       security: [{ session: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.settle')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(SettleReceivableRequestSchema) },
@@ -168,7 +168,11 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
-      if (!receivable) throw new ApiError('NOT_FOUND', 'No such receivable');
+      // Only ever an app-captured "Owed" (origin ADJUSTMENT). An INSTALLMENT or RETAINER_CHARGE belongs to
+      // Malafat's allocation engine, and a disconnected integration would otherwise hand this session
+      // payments:write over that whole historical ledger. 404, not 403 — same non-leaking discipline as
+      // DELETE /v1/income/{id} (routes/income.ts).
+      if (!receivable || receivable.origin !== 'ADJUSTMENT') throw new ApiError('NOT_FOUND', 'No such receivable');
       const currency = receivable.currency as Currency;
       const outstanding = outstandingMinor(receivable);
       if (outstanding <= 0n) throw validationError('RECEIVABLE_NOT_OPEN', 'Nothing is outstanding on this receivable');

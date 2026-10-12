@@ -72,6 +72,44 @@ async function setup() {
   return { h, p, m, as };
 }
 
+/**
+ * A receivable the app did not capture: posted from a FIXED agreement's
+ * installment, so `origin === 'INSTALLMENT'`. Written straight to the store,
+ * the way routes-m4.test.ts / the M4 store contract seed their fixtures —
+ * there is no session route that can produce one.
+ */
+async function installmentReceivable(h: Harness, organizationId: string) {
+  const at = h.clock.now;
+  const customer = await h.store.customers.create({ organizationId, name: 'Acme', email: null, phone: null, notes: null, vatTreatment: 'EXEMPT' }, at);
+  const project = await h.store.projects.create({ organizationId, customerId: customer.id, name: 'Case', currency: 'ILS' }, at);
+  const { installments } = await h.store.agreements.create(
+    {
+      organizationId,
+      projectId: project.id,
+      customerId: customer.id,
+      type: 'FIXED',
+      currency: 'ILS',
+      pricingBasis: 'VAT_EXCLUSIVE',
+      vatTreatment: 'EXEMPT',
+      vatRateBasisPoints: 0,
+      amountMinor: 50000n,
+      netMinor: 50000n,
+      vatMinor: 0n,
+      grossMinor: 50000n,
+      agreementDate: '2026-10-08',
+      description: null,
+      paymentTerms: 'EOM',
+      startMonth: null,
+      billingDay: null,
+      endMonth: null,
+      installments: [{ position: 1, label: 'I1', amountMinor: 50000n, netMinor: 50000n, vatMinor: 0n, grossMinor: 50000n, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'IMMEDIATE', triggerDate: null, paymentTerms: null, dueDateOverride: null }],
+    },
+    at,
+  );
+  const posted = await h.store.agreements.postInstallment(organizationId, installments[0]!.id, { postingDate: '2026-10-08', dueDate: '2026-10-31', at });
+  return posted!.receivable;
+}
+
 const settle = (h: Harness, as: ReturnType<typeof person> extends Promise<infer T> ? T : never, profile: string, receivableId: string, body: Record<string, unknown> = {}) =>
   h.app.request(`/v1/receivables/${receivableId}/settle`, json(body, { ...as(profile), ...idem() }));
 
@@ -155,6 +193,18 @@ describe('POST /v1/receivables/{id}/settle', () => {
     const { receivableId } = await owed(other, otherAs, otherOrgs.p.id);
     const res = await settle(h, as, p.id, receivableId);
     expect(res.status).toBe(404);
+  });
+
+  it('a non-ADJUSTMENT receivable (an installment, Malafat’s to settle through the allocation engine) → 404, nothing written', async () => {
+    const { h, p, as } = await setup();
+    const receivable = await installmentReceivable(h, p.id);
+    const res = await settle(h, as, p.id, receivable.id);
+    expect(res.status).toBe(404);
+    expect((await read(res)).error.code).toBe('NOT_FOUND');
+    // Untouched: no payment, no allocation, no movement on the receivable.
+    expect(await h.store.receivables.getById(p.id, receivable.id)).toMatchObject({ status: 'OPEN', paidMinor: 0n });
+    const list = await read(await h.app.request('/v1/payments', { headers: as(p.id) }));
+    expect(list.items).toEqual([]);
   });
 
   it('settling an already-SETTLED receivable → 422 RECEIVABLE_NOT_OPEN (reused from credit’s existing check)', async () => {
