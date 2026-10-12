@@ -371,4 +371,26 @@ describe('ClientDrawer', () => {
       }, { timeout: 3000 });
     });
   });
+
+  // MUT-89: under All businesses the Add menu asks which business; the drawer takes that answer
+  it('prefills the business the Add menu asked for', async () => {
+    await businessProfileRepo.create({
+      name: 'Studio', email: 'studio@example.com', businessType: 'none',
+      defaultCurrency: 'USD', defaultLanguage: 'en', isDefault: true,
+    });
+    const teaching = await businessProfileRepo.create({
+      name: 'Teaching', email: 'teaching@example.com', businessType: 'none',
+      defaultCurrency: 'USD', defaultLanguage: 'en', isDefault: false,
+    });
+    useDrawerStore.setState({ clientDrawer: { isOpen: true, mode: 'create', defaultProfileId: teaching.id } });
+
+    render(
+      <TestWrapper>
+        <ClientDrawer />
+      </TestWrapper>
+    );
+
+    const businessSelect = await screen.findByDisplayValue('Teaching');
+    expect(businessSelect).toHaveValue(teaching.id);
+  });
 });
