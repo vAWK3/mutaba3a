@@ -2,9 +2,11 @@
  * OAuth 2.1 authorization-code client for Malafat (*.malafat.app).
  *
  * MUT-28 spike. Mutaba3a registers as a public CIMD client and obtains a
- * per-tenant token so it can sync money data to a firm's workspace. Malafat
- * already runs the server side (apps/web/src/features/oauth/), so this module
- * is only the client half of a flow that already exists.
+ * per-tenant token for a firm's workspace. Malafat already runs the server
+ * side (apps/web/src/features/oauth/), so this module is only the client half
+ * of a flow that already exists. Its first planned consumer, op-log sync, was
+ * retired with device sync (MUT-73, ADR-053); nothing in the app calls the
+ * flow yet (TD-075). Moved from src/sync/transport/ to src/services/oauth/.
  *
  *   discoverAuthorizationServer(origin)        RFC 8414, per-tenant document
  *        │

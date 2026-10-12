@@ -28,6 +28,78 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-73: device-to-device sync is retired (ADR-053)
+
+**Scope (web, desktop and Tauri; the hosted server, the portal, JSON backup and the Flutter app are untouched):**
+- Deleted:
+  - `src/sync/**` except OAuth: HLC, op-log engine, conflict resolver, synced decorators, sync store, bundle encoder and crypto, with 4 test files and 131 cases;
+  - `src/components/sync/**` (12 files);
+  - `src/hooks/usePairingSession.ts`;
+  - `src-tauri/src/sync/**` except OAuth: 7 files, 2,484 lines, 14 tests.
+- Moved: `src/sync/transport/oauth-{client,flow,pkce}.ts` and their 4 test files to `src/services/oauth/`; `src-tauri/src/sync/oauth_callback.rs` to `src-tauri/src/oauth/callback.rs`.
+- New:
+  - `src-tauri/src/oauth/mod.rs` and `src-tauri/src/retired_sync.rs`;
+  - `src/__tests__/noSyncModules.test.ts` and `src/db/__tests__/migration-v21.test.ts`;
+  - `.claude/designs/mut-73-retire-sync.md` and its test plan.
+- Edited:
+  - `AppShell.tsx`, `SettingsPage.tsx`, `provider.ts`, `interfaces.ts`, `database.ts` (v21), `migration-safety.ts`;
+  - `useQueries.ts`, `useIncomeQueries.ts`, `features.ts`, `tokenStore.ts`, `lib.rs`;
+  - `Cargo.toml` / `Cargo.lock`, `package.json` / `package-lock.json`, `scripts/bundle-rules.ts`;
+  - 9 test files, `README.md`, `TODOS.md`.
+
+**Why:** device sync was broken in ways users could not see:
+- transaction creates and edits were never captured (MUT-46);
+- payments were captured but never applied (MUT-55);
+- expenses never synced;
+- conflicts could not be resolved from any screen.
+
+The phone app is going hosted-only (MUT-63), so the owner dropped sync product-wide on 2026-10-11. Local↔hosted sync is off the roadmap, not deferred.
+
+### Removed
+- **Settings' Sync section** (Wi-Fi pairing, export and import of `.msync` bundles, the conflict count), the **conflict banner** and the **pairing, export-bundle and import-bundle modals**. All of it was hard-coded English, so Arabic users saw it untranslated. The sync status chip was already mounted nowhere.
+- The **op-log and everything that wrote it**: `initializeSync()` no longer runs on every app load, and no write appends an op or calls the desktop over IPC.
+- **The Tauri sync server:**
+  - a plain-HTTP listener on `0.0.0.0` and mDNS discovery;
+  - pairing and paired-device persistence;
+  - bundle crypto;
+  - 17 IPC commands and `SyncState`.
+- **15 crates:** `mdns-sd`, `ring`, `argon2`, `base64`, `uuid`, `rand`, `hostname`, `chrono`, `thiserror`, `sha2`, `local-ip-address`, `urlencoding`, and `axum-server`, `rustls`, `rcgen` (nothing used these three). `rustls` is now built with `ring` only, from the updater, and `aws-lc-sys` leaves the build.
+- **The `qrcode.react` npm dependency.**
+- **Dexie v21 drops the eight sync tables:** `localDevice`, `trustedPeers`, `opLog`, `peerCursors`, `entityFieldMeta`, `moneyEventVersions`, `conflictQueue`, `syncHistory`. This is an explicit, narrow override of ADR-029 (ADR-053). A backup saved before the upgrade still restores: the sync tables are skipped.
+
+### Changed
+- **Mark paid, partial payments, payment create/edit/delete and business-profile archive** call the base repository instead of the sync decorator (8 call sites). They write the same rows. A failed op-log append can no longer reject a payment that was already stored.
+- `getRepositories()` returns `{ base }`, and `ISyncedRepositories` is gone. TD-013's "synced does not follow a swap" caveat is resolved by deletion.
+- **The Malafat OAuth client moved** to `src/services/oauth/` (TS) and `src-tauri/src/oauth/` (Rust, with its own `OAuthState`). Command names and behaviour are unchanged. It has no caller yet (TD-075).
+- **Every desktop launch deletes `paired_devices.json` and `paired_devices.tmp`** from the app config directory. This is best effort: a missing file is success, anything else is logged and never blocks startup.
+- **`npm run test:bundles` fails** if `.msync`, `start_sync_server` or "Export Sync Bundle" ever ships again.
+
+### Technical
+- **Decisions:**
+  - ADR-053 supersedes ADR-011, ADR-012 and ADR-013;
+  - it overrides ADR-029 for the eight sync tables only;
+  - it closes the local↔hosted sync thread in ADR-023, ADR-024 and ADR-037;
+  - notes on ADR-029, ADR-032, ADR-038 and ADR-039.
+- **Debt and TODOS:**
+  - TD-074: `migration-safety`'s hand-kept table list misses five live tables;
+  - TD-075: the OAuth client has no caller;
+  - TD-003 and TD-037 resolved;
+  - TODOS items 1 and 3 retired (MUT-46 and MUT-55 close with this ticket).
+- **Found during the desktop smoke, not caused by MUT-73:** the shipped `capabilities/default.json` grants no updater permission, so the in-app update check is rejected with "not allowed" in every build. Reported for a ticket.
+- **Gates.**
+  - Before the owner's skip instructions arrived, the gates ran once on this branch at `eaedf2f`. Results:
+    - vitest: 2,857 passed;
+    - Playwright: 26/26 on port 5198, on the `e2e/` suite MUT-97 has since retired in favour of `qa/` (replaced by the combined `qa/` run on main);
+    - `test:bundles`: passed;
+    - lint: 0 errors;
+    - typecheck and `tsc -b`: clean;
+    - `cargo test`: 15 passed, 0 warnings;
+    - `clippy -D warnings`: clean;
+    - debug Tauri build under `com.elmokhtbr.mutaba3a.mut73`: green.
+  - After the instructions, **lint, typecheck, clippy and tests were not run at the owner's request**, pending the combined run on main. That covers the final merge of main into this branch. TEST_PLAN lists the acceptance criteria that rest on tests not re-run since.
+
+---
+
 ## [Unreleased] - 2026-10-12 — Show what you did in the Income list (MUT-62)
 
 **Why:** since MUT-5 the income entry is the work record, and its title ("What did you do?") is the drawer's first field. The `/income` list still read date · client · project · status · amount, so the work just logged wasn't visible there; only the client profile's Work list showed it. Found in MUT-5's browser pass, ticketed as a follow-up (epic MUT-1).

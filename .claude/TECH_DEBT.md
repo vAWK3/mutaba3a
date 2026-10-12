@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-074: `migration-safety`'s hand-kept table list misses five live tables
+**Status**: Open
+**Added**: 2026-10-12 (MUT-73, found in the audit; brief decision D10)
+**Priority**: Low
+**Impact**: `ALL_TABLES` in `src/db/migration-safety.ts` decides what the post-migration snapshot in the `mutaba3a_backup` IndexedDB contains. It has never listed `paymentRecords`, `plans`, `planAssumptions`, `planScenarios` or `recurringOccurrences`, so those snapshots, including the one the Dexie v21 upgrade writes, hold no payment records. The user-facing JSON backup (`src/db/backup.ts`) is not affected: it reads `db.tables` and is complete. `importBackupFromFile`, the only restore path for these snapshots, has no UI caller. MUT-73 removed the eight sync names from the list and changed nothing else, to keep a deletion ticket from changing a non-sync path.
+**Remediation**: Derive the list from `db.tables` (one line), or delete the snapshot machinery if the JSON backup is the only one anyone restores. Either way, add a test that the snapshot covers every table in the schema.
+**Effort**: Small
+
+### TD-075: The Malafat OAuth client has no caller
+**Status**: Open
+**Added**: 2026-10-12 (MUT-73, brief decision D4)
+**Priority**: Low (a product decision, not a defect)
+**Impact**: `src/services/oauth/` (`connectWorkspace`, `getValidAccessToken`, `disconnectWorkspace`; 570 lines plus 74 test cases) and `src-tauri/src/oauth/` (the loopback listener and its three IPC commands) are only called from tests. They were built (MUT-28) for op-log sync over Malafat OAuth, which ADR-053 took off the roadmap. MUT-73 kept them as the ticket asked and moved them out of the sync tree. Until something calls them, they cost upkeep and a 127.0.0.1 listener's worth of attack surface that never opens, and TD-015 (durable tokens) has nothing to serve.
+**Remediation**: Decide whether the desktop app should ever sign in to a Malafat workspace. If yes, ticket the screen that calls `connectWorkspace` (and TD-015 with it). If no, delete both modules, the three commands, the opener plugin and its `*.malafat.app` permission, and `public/.well-known/oauth-client.json`.
+**Effort**: Small either way; the decision is the work.
+
 ### TD-076: An untitled entry reads "—" on Income and "Untitled" on the client profile, and only titled rows open from the keyboard
 **Status**: Open
 **Added**: 2026-10-12 (MUT-62)
@@ -33,7 +49,6 @@
 3. Give an untitled row a keyboard path: a `TruncatedTitle`-style button showing the dash, named by `clients.profile.work.untitled`, or a focusable row.
 
 **Effort**: Small
-
 ### TD-066: Income's Received / Unpaid strip ignores the page's filters
 **Status**: Open
 **Added**: 2026-10-12 (MUT-83, seen in the browser check)
@@ -334,7 +349,8 @@ same reason. Rewritten to `find()` by a distinguishing field instead of by
 position, like MUT-42's fix.
 
 ### TD-037: The Sync Op-Log Has No Notion of a Profile
-**Status**: Accepted (recorded by MUT-36; deliberately not built)
+**Status**: Resolved — moot (2026-10-12, MUT-73). The op-log was deleted with device sync, and ADR-053 took local↔hosted sync off the roadmap, so profile-selective sync will never be asked for. Kept here for history; see the Resolved Debt entry.
+**Was**: Accepted (recorded by MUT-36; deliberately not built)
 **Added**: 2026-10-11
 **Priority**: Low today — becomes a blocker the day profile-selective sync is proposed
 **Impact**: Profile-selective sync ("sync my firm profile, not my personal one")
@@ -486,7 +502,8 @@ Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds fo
 - ✅ Repository interfaces created (`src/db/interfaces.ts`)
 - ✅ All repository operations documented with TypeScript interfaces
 - ✅ **Conformance is now enforced by the compiler** — `src/db/provider.ts`
-  applies `satisfies` to all 21 base repositories and all 8 synced decorators.
+  applies `satisfies` to all 21 base repositories and all 8 synced decorators
+  (the 8 decorators were deleted with device sync in MUT-73, ADR-053).
   Deleting or renaming a repository method fails `npm run typecheck`.
 - ✅ Migration Safety Layer implemented (`src/db/migration-safety.ts`)
 - Schema version at 14 with all tables defined
@@ -505,7 +522,12 @@ Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds fo
 > Lesson: "documented" and "checked" are different states; only the second
 > survives contact with a refactor.
 
-**Known gap — the seam is only half swappable.**
+> **Resolved by deletion (2026-10-12, MUT-73).** The gap below no longer
+> exists: device sync was retired (ADR-053), the `synced` family and its
+> decorators are gone, and `getRepositories()` returns `{ base }` only, which
+> `setRepositories()` swaps completely.
+
+**Known gap — the seam is only half swappable.** *(historical, see above)*
 `gstack-shortcut(dec-5f2c2123)`: the decorators in
 `src/sync/core/synced-repository.ts` bind the Dexie singletons at module load
 (`clientRepo.list.bind(clientRepo)`), so `setRepositories()` redirects `base`
@@ -569,7 +591,8 @@ See TODOS.md item 2.
 ---
 
 ### TD-003: Live Sync Not Yet Activated
-**Status**: In Progress
+**Status**: Resolved — won't do (2026-10-12, MUT-73). Device sync, live and bundle alike, was retired (ADR-053). Kept here for history; see the Resolved Debt entry.
+**Was**: In Progress
 **Priority**: High
 **Introduced**: 2024-06
 **Updated**: 2026-02-09
@@ -1027,6 +1050,10 @@ empty option and list the profiles only), with a drawer test for each.
 
 ## Resolved Debt
 
+### TD-003 and TD-037: device sync is retired (won't do / moot)
+**Status**: Resolved (2026-10-12, MUT-73, ADR-053)
+**Resolution**: TD-003 tracked activating live LAN sync and TD-037 the op-log's missing profile scope. MUT-73 deleted device sync instead: `src/sync`, `src/components/sync`, the Tauri sync server and the eight sync tables (Dexie v21). Nothing remains for either entry to fix. Their original text stays in place under Open Debt with a Resolved status, so links keep working.
+
 ### TD-034: The money-event read side has no consumer after MUT-8
 **Status**: Resolved (2026-10-12, MUT-58)
 **Priority**: Low
@@ -1131,6 +1158,12 @@ written. The Rust test target therefore failed to compile, and nothing noticed �
 which means CI never ran `cargo test`. MUT-28 declared the dependency and all 14
 pre-existing tests (pairing, persistence, crypto) now pass. The gap to close is
 the CI step, not the dependency.
+
+> **Update (2026-10-12, MUT-73).** The pairing, persistence and crypto tests were
+> deleted with device sync (ADR-053). `cargo test` now runs 15: the 10 OAuth
+> listener tests (`src-tauri/src/oauth/callback.rs`) and 5 for the retired-sync
+> file cleanup (`src-tauri/src/retired_sync.rs`), which keeps `tempfile` as the
+> dev-dependency. CI still does not run them.
 
 ### TD-014: Remaining UTC Date Derivations Outside Receivables
 **Status**: Open

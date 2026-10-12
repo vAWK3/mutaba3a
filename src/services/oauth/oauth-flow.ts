@@ -30,7 +30,7 @@ import {
   type TokenSet,
   type OAuthClientConfig,
 } from './oauth-client';
-import { needsRefresh, type TokenStore } from '../../services/tokenStore';
+import { needsRefresh, type TokenStore } from '../tokenStore';
 
 export interface OAuthFlowDeps {
   /** Bind a loopback listener; resolves with the port actually bound. */
@@ -113,7 +113,7 @@ export async function connectWorkspace(
  * Return a usable access token, refreshing first if it is close to expiring.
  *
  * Deliberately does NOT start an interactive sign-in. Opening a browser from
- * what the caller thinks is a background sync would be a surprise; the caller
+ * what the caller thinks is a background request would be a surprise; the caller
  * catches WorkspaceDisconnectedError and decides whether to prompt.
  */
 export async function getValidAccessToken(

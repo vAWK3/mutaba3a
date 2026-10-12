@@ -1,5 +1,8 @@
 //! OAuth loopback callback listener
 //!
+//! Moved out of the retired sync module by MUT-73 (ADR-053); the listener is
+//! unchanged.
+//!
 //! MUT-28. The authorize page must open in the user's real browser, not in the
 //! app webview — an embedded user-agent can read the user's Malafat session,
 //! which OAuth 2.1 BCP forbids. That means the authorization code comes back to
@@ -7,10 +10,9 @@
 //!
 //! Three properties are deliberate:
 //!
-//! BINDS 127.0.0.1 ONLY, never 0.0.0.0. The LAN sync server in server.rs is
-//! meant to be reachable by a paired device; this one must not be reachable by
-//! anything off-machine. An authorization code is a bearer credential for the
-//! few seconds it lives.
+//! BINDS 127.0.0.1 ONLY, never 0.0.0.0. It must not be reachable by anything
+//! off-machine: an authorization code is a bearer credential for the few
+//! seconds it lives.
 //!
 //! SINGLE SHOT. The first callback is taken and the sender is consumed; a
 //! second request gets a page and nothing else. Replaying a redirect must not
@@ -20,7 +22,7 @@
 //! cannot be ephemeral as RFC 8252 would prefer — it has to be one of the ports
 //! listed in our published CIMD document. The caller passes that list and we
 //! take the first one we can bind. Keep it in step with
-//! `OAUTH_LOOPBACK_PORTS` in src/sync/transport/oauth-client.ts.
+//! `OAUTH_LOOPBACK_PORTS` in src/services/oauth/oauth-client.ts.
 //!
 //! State validation is NOT done here. The raw query string is handed to the
 //! frontend, which compares `state` before believing anything in it — see

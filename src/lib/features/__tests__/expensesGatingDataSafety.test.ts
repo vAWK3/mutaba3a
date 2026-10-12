@@ -36,7 +36,7 @@ describe('expense data after MUT-14: the switch is inert and every table round-t
       expect((await readFeatureFlags()).expenses).toBe(on);
     }
     expect(await snapshot()).toEqual(before);
-    expect(db.verno).toBe(20);
+    expect(db.verno).toBe(21);
   });
 
   it('receipts, vendors, recurring rules and month-close rows survive a backup → clear → restore', async () => {
