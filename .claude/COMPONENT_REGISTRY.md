@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -310,27 +310,34 @@ Tests: `src/pages/landing/__tests__/`.
 ## Drawer Components
 
 ### Base Drawer Pattern
-**Shell**: `src/components/drawers/Drawer.tsx` (`title`, `onClose`, `children`, `footer?`). It renders `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide). The close button is `common.close` (TD-009). The portal's own shell, `src/hosted/components/Drawer.tsx`, does the same and takes `closeLabel` as a prop. Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
-
-All drawers follow this structure:
+Every drawer renders `Drawer` (`src/components/drawers/Drawer.tsx`; the portal's is `src/hosted/components/Drawer.tsx`, which takes `closeLabel`) and is mounted by its owner while its store says open. It is a `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide), and its close button is `common.close` (TD-009). Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
 
 ```tsx
 interface DrawerProps {
-  open: boolean;
-  onClose: () => void;
-  // Entity-specific props
+  title: string;          // names the dialog (aria-labelledby)
+  onClose: () => void;    // Escape, ✕ and the overlay call it at once
+  children: ReactNode;
+  footer?: ReactNode;
 }
 
-// Usage via controller (URL-driven)
-<TransactionDrawerController />
-
-// Or direct (programmatic)
-<TransactionDrawer
-  open={isOpen}
-  onClose={handleClose}
-  transactionId={id}
-/>
+// AppShell
+{incomeDrawer.isOpen && <IncomeDrawer />}
+// IncomeDrawer
+<Drawer title={t('transactions.newIncome')} onClose={closeIncomeDrawer} footer={…}>…</Drawer>
 ```
+
+Unmount it whenever you like: the exit animation plays after it has gone (ADR-044).
+
+### DrawerFrame (MUT-80, ADR-044)
+**Location**: `src/components/ui/drawer/` — `DrawerFrame.tsx` (shell), `useDrawerMotion.ts` (enter, drag, release, interrupt, exit), `useDrawerFocus.ts` (trap and return), `drawerGesture.ts` (pure rules: `classifyDrag`, `closingDelta`, `displayOffset`, `releaseTarget`, `overlayOpacity`, `exitDistance`, `isNoDragTarget`), `drawerMotion.ts` (`DRAWER_SPRING`, `paintDrawer`, `springTo`, `fadeTo`, `playSnapshotExit`), `exitSnapshot.ts` (`captureExitSnapshot`).
+**Purpose**: the one slide-over shell for both builds. Both `Drawer`s wrap it; the local one passes `t('common.close')`, the portal its own label.
+**Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
+**Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `e2e/drawer-motion.spec.ts`.
+
+### Motion physics and focusables (MUT-80)
+- `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
+- `src/lib/dom/focusable.ts`: `FOCUSABLE_SELECTOR`, `focusablesWithin(root)` (skips disabled, `tabindex="-1"`, `[hidden]`, and, where supported, invisible elements). Used by `useMenuButton`'s dialog mode and the drawer trap.
 
 ---
 
@@ -388,6 +395,41 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 - `src/components/__tests__/IncomeDrawer.test.tsx`
 - `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx`
 - `e2e/income-fast-path.spec.ts`
+
+---
+
+### PartialPaymentDrawer ("Record payment")
+**Location**: `src/components/drawers/PartialPaymentDrawer.tsx` + `PartialPaymentDrawer.css`. It is mounted in `AppShell` while `partialPaymentDrawer.isOpen`.
+**Purpose**: record a payment against an income entry, or edit a recorded one. It is the only UI that writes a `PaymentRecord` (ADR-038). Its layout follows P1 (MUT-86, ADR-047): it leads with what's left.
+
+```tsx
+openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
+editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
+// Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
+```
+
+**Layout** (classes prefixed `pay-drawer-`; `index.css` already has global `.payment-row` and `.payment-amount`):
+- **Title:** "Record Payment · {amount} left" (`titleLeft`, the amount in bidi isolates). In edit mode it is "Edit Payment".
+- **Amount:** one large `.input-with-prefix` field, LTR in Arabic. Its label is visually hidden. It is prefilled with `minorToAmountInput` ("3550", "887.50") and selected on open.
+- **Live line** (`aria-live="polite"`, describes the input): "Paid in full", "{amount} still owed", or the overpayment message. Other amount errors show only after Record is pressed.
+- **Date:** a "Payment date · Today ›" row that opens the date field in its place. **Notes:** "+ Add note", which opens a focused field. Edit mode opens Notes when the record has one.
+- **Footer:** Cancel plus Record Payment (create) or Update Payment (edit). With nothing left to record, the footer is Close and there is no form.
+- **Payment history:** below the form, only when the entry has records. Each row has edit and delete.
+
+**Rules** (pure, in `src/lib/paymentEntry.ts`, unit-tested):
+- `describePaymentAmount(raw, currency, allowedMinor)`. Allowed is the remaining balance, plus the record's own amount when editing.
+- `minorToAmountInput(minor)`
+- Dates go through `isFuturePaymentDate` (`lib/dates.ts`), the same helper the repository uses.
+
+**Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
+
+**Props**: `transactionId`, `onClose`. MUT-82 opens it the same way.
+
+**Tests**:
+- `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx`
+- `src/lib/__tests__/paymentEntry.test.ts`
+- `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts`
+- `e2e/record-payment.spec.ts`
 
 ---
 
@@ -1294,7 +1336,9 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `routes/expenses.ts`, `routes/expense-categories.ts` (MUT-42) | the 13 session-only expense operations (CRUD, receipts on the M6 flow, categories, `GET /v1/summaries/expenses`); MUT-65 threads an optional `captureSource` into `expense.created`'s audit metadata | the portal (MUT-44) |
 | `income/compose.ts` (MUT-65) | `resolveIncomeLinks(store, organizationId, kind, { customerId, projectId })` (expenses/compose.ts's `resolveLinks` rule, plus "Owed requires a customer"), `dueDateForOwed(occurredOn, explicit)` (EOM_15 via the existing `dueDateFor`), `owedVatFields(amountMinor)` (always `OUT_OF_SCOPE`, zero rate), `assertNotFuture(date, today, field)` (a new, stricter check than `assertNotAbsurdDate` — see ADR-038 addendum) | `routes/income.ts`, `routes/receivables.ts`'s settle route |
 | `routes/income.ts` (MUT-65) | `POST /v1/income` (Received, optionally clientless/matter-linked; Owed, a bare `ADJUSTMENT` receivable), `DELETE /v1/income/{id}` (undo: void an unsettled Owed, or reverse an unallocated Received — idempotent, never leaks another user's/profile's row) — session-only, `payments:write` | the phone capture app (MUT-68), MUT-66's inbox filing |
-| `auth/store-guard.ts` (MUT-39, MUT-65) | `STORE_ACCESS` (every repository method classified read / control / operator / `{ write: Domain }`; typed over `LedgerStore`), `principalStoreGuard(principal, profileWriter)`, `storeRefusal` (now calls `mayWriteFor`, MUT-65), `requestScopedStore(base)` (the store every route factory gets), `unguarded(store)` (only via `lazyPostingOf`); MUT-42 adds `{ read: Domain }` (refused where the column is `none`) and classifies the 17 expense methods; MUT-65 classifies `receivables.{createAdjustment,softDeleteAdjustment,getByIdIncludingDeleted}` | `app.ts`, `authenticate()` |
+| `inbox/compose.ts`, `inbox/cursor.ts`, `inbox/routes-keys.ts` (MUT-66) | `parseInboxAmount(text, currency)` (positive, currency digits), `inboxDate(value)` (a valid date — deliberately NOT a future-date check: capture has no profile, so no timezone; filing applies it), `assertKind(entry, expected)` (409 `ENTRY_KIND_MISMATCH`, before any store call); `encodeInboxCursor`/`decodeInboxCursor` (keyset on `(createdAt, id)`, its own envelope key so another collection's cursor is refused); `INBOX_ORGANIZATION_INDEPENDENT_ROUTES` (the four CRUD keys, merged in `app.ts` as device-sessions' set is) | `routes/inbox.ts`, `app.ts` |
+| `routes/inbox.ts` (MUT-66) | `GET`/`POST /v1/inbox`, `PATCH`/`DELETE /v1/inbox/{entryId}` (no profile header, no scope — `identity`-shaped, like `GET /v1/me`); `POST /v1/inbox/{entryId}/file-as-expense` (`expenses:write`) and `…/file-as-income` (`payments:write`), both `Idempotency-Key`-required and profile-scoped. Filing reuses `expenses/compose.ts`'s `resolveLinks`/`assertCategoryChoosable` and `income/compose.ts`'s `resolveIncomeLinks`/`dueDateForOwed`/`owedVatFields`/`assertNotFuture` verbatim — no rule is reimplemented | the phone capture app (MUT-68 keypad, MUT-69 recents/undo) |
+| `auth/store-guard.ts` (MUT-39, MUT-65, MUT-66) | `STORE_ACCESS` (every repository method classified read / control / operator / `sessionOnly` / `{ write: Domain }`; typed over `LedgerStore`), `principalStoreGuard(principal, profileWriter)`, `storeRefusal` (now calls `mayWriteFor`, MUT-65), `requestScopedStore(base)` (the store every route factory gets), `unguarded(store)` (only via `lazyPostingOf`); MUT-42 adds `{ read: Domain }` (refused where the column is `none`) and classifies the 17 expense methods; MUT-65 classifies `receivables.{createAdjustment,softDeleteAdjustment,getByIdIncludingDeleted}`; MUT-66 adds the `'sessionOnly'` case (a signed-in person's own resource, on no profile and in no matrix domain) and classifies `inboxEntries` — capture `sessionOnly`, `countByUser` `operator`, the two filings keeping the `{ write: Domain }` of the record they create | `app.ts`, `authenticate()` |
 | `auth/middleware.ts` (MUT-38 rewrite, MUT-39, MUT-65) | `authenticate()` (one principal per request, enforces each route's OpenAPI `security`, sets the request's store guard, maps a session on a key-only Malafat write to READ_ONLY_PROFILE), `buildRouteAccessIndex(definitions, app.routes)` (principals + tagged scopes), `requireScope` (tagged; either principal), `requiredScopeOf`, `keyAuth(c)` for key-only handlers, `sessionAuth(c)` for session-only ones (MUT-42), `actorOf(c)` for routes that accept either principal and must audit the real caller (MUT-65: `POST /v1/customers`/`/v1/projects`), `lazyPostingOf(c, store)` for lazy posting in reads (`postingActorOf(c)` stays for key-only creates), `AuthContext = ApiKeyAuth \| SessionAuth` (session carries `writerOfRecord`, now from `sessionScopesFor`), `c.get('identity')` | every /v1 route |
 | `routes/sessions.ts` (MUT-38, MUT-65) | `POST /v1/sessions`, `DELETE /v1/sessions/current`, `GET /v1/me` (its `access` map now per-organization via `sessionAccessFor`); `ORGANIZATION_INDEPENDENT_ROUTES` | the portal (MUT-43) |
 | `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |

@@ -8,6 +8,7 @@ import {
   isOverdueReceivable,
   daysOverdue,
   isDueSoon,
+  isFuturePaymentDate,
   type ReceivableLike,
 } from '../dates';
 
@@ -214,6 +215,38 @@ describe('dates', () => {
       expect(isDueSoon(tx({ status: 'paid', dueDate: TODAY }), TODAY)).toBe(false);
       expect(isDueSoon(tx({ kind: 'expense', dueDate: TODAY }), TODAY)).toBe(false);
       expect(isDueSoon(tx({ dueDate: undefined }), TODAY)).toBe(false);
+    });
+  });
+
+  // ADR-038 (as amended by MUT-5): a payment is future only when its calendar
+  // day is after today. Shared by the repository and the payment drawer (MUT-86).
+  // Timestamps are built from local Dates so the cases hold in any TZ.
+  describe('isFuturePaymentDate', () => {
+    it('compares a date-only value as is', () => {
+      expect(isFuturePaymentDate('2026-10-04', TODAY)).toBe(false);
+      expect(isFuturePaymentDate(TODAY, TODAY)).toBe(false);
+      expect(isFuturePaymentDate('2026-10-06', TODAY)).toBe(true);
+    });
+
+    it('treats a local-evening timestamp as today even when its UTC date is tomorrow', () => {
+      const evening = new Date(2026, 9, 5, 23, 30).toISOString();
+      expect(isFuturePaymentDate(evening, TODAY)).toBe(false);
+    });
+
+    it('treats a timestamp on tomorrow\'s local date as future', () => {
+      const tomorrowMorning = new Date(2026, 9, 6, 9, 0).toISOString();
+      expect(isFuturePaymentDate(tomorrowMorning, TODAY)).toBe(true);
+    });
+
+    it('treats an unreadable timestamp dated after today as future', () => {
+      expect(isFuturePaymentDate('2026-10-06Tnonsense', TODAY)).toBe(true);
+    });
+
+    it('reads today from the clock when it is omitted', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 9, 5, 9, 0));
+      expect(isFuturePaymentDate('2026-10-05')).toBe(false);
+      expect(isFuturePaymentDate('2026-10-06')).toBe(true);
     });
   });
 

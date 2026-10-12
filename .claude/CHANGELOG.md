@@ -28,6 +28,110 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-66: the unsorted inbox, and filing an entry onto a profile
+
+**Scope (server only; the portal and the offline app are untouched):**
+- New: `server/src/routes/inbox.ts`, `server/src/inbox/compose.ts`, `server/src/inbox/cursor.ts`, `server/src/inbox/routes-keys.ts`
+- `server/prisma/schema.prisma` + `server/prisma/migrations/20261012140000_mut66_inbox/` (one enum, one table, one index — purely additive)
+- `server/src/repositories/ports.ts`, `prisma.ts`, `memory.ts` (the `InboxEntryRepository`)
+- `server/src/auth/store-guard.ts` (the `'sessionOnly'` case), `schemas.ts`, `serializers.ts`, `app.ts`, `routes/admin-users.ts`
+- Tests: `store-contract-inbox.ts` + its memory/Prisma runners, `inbox-ownership.test.ts`, `inbox/__tests__/compose.test.ts`, `__tests__/inbox-routes.test.ts`, `inbox-filing.test.ts`, `inbox-isolation.test.ts`; `store-guard.test.ts` and `route-security.test.ts` extended
+- Design: `.claude/designs/mut-66-unsorted-inbox.md` + `-tests.md`
+
+**Why:** MUT-63's promise is "log it in seconds", and the fastest way to break it is a capture flow that stops to ask which business the money belongs to. "General" at intake now means *unsorted*: a durable place to put an amount the moment it happens, with filing deferred to whenever the person is ready. Named blocker of MUT-68 and MUT-69.
+
+### Added
+- **`GET/POST /v1/inbox`, `PATCH/DELETE /v1/inbox/{entryId}`** — a person's own unsorted captures (kind, amount, currency, date, optional note and capture source). They send no `X-Mutaba3a-Profile` and declare no scope, reading `identity` exactly as `GET /v1/me` does, and join the organization-independent route set through their own module. A future `occurredOn` is accepted here on purpose: with no profile there is no timezone in which "today" means anything.
+- **`POST /v1/inbox/{entryId}/file-as-expense` and `…/file-as-income`** — the entry becomes a real record on one chosen profile. Amount, currency, date and note come from the entry; only what it could not know is sent in the body, including the Received/Owed choice, which needs a client in the picture and so cannot be made at capture. Both require `Idempotency-Key` and reuse the existing middleware unmodified.
+- **`InboxEntry`**, the first user-owned table: no `organizationId`, no FK to `Organization` or `Membership` (ADR-048). Keyset-paged `(createdAt desc, id desc)`.
+- **`inboxEntryCount` on `GET /admin/v1/users/{userId}`** — one indexed count for support, never the contents.
+- **`'sessionOnly'`** `MethodAccess`, the first guard case that is neither "any principal" nor a per-organization domain. `ENTRY_KIND_MISMATCH` joins `CONFLICT_REASONS`.
+
+### Changed
+- `ExpenseRepository.create`'s row insert moved into `createExpenseRow(tx, …)` so filing can compose it inside its own transaction. Behaviour is unchanged. Income reuses MUT-65's `createPaymentTx`/`createAdjustmentTx`, which were built for exactly this.
+- API version `1.12.0-mut65` → `1.13.0-mut66`; `openapi.yaml` regenerated with the six operations.
+
+### Fixed
+- `store-contract-m4.ts` passed the literal `'user-1'` as `createdByUserId`. That column is a UUID in Postgres, so three MUT-65 cases passed against the memory store and failed against the real one — found because this was the first local `test:db` run with MUT-65's migration applied. See TD-072 and TD-073 for the two related gaps left open.
+
+### Technical
+- **Filing is refused in exactly the places a direct create is, and no more.** The design assumed MUT-42 already rejected future-dated expenses; it does not, so `file-as-expense` does not either, while `file-as-income` does because `POST /v1/income` does. Both are asserted against the direct route's own response rather than against a hardcoded status.
+- Filing is the store's only cross-repository transaction. The entry is claimed by a delete *inside* the transaction, which proves ownership and kind and holds the row lock until commit: two concurrent filings of one entry yield exactly one record, and a financial write that throws rolls the delete back with it. Both halves are proven against real Postgres, not only the in-memory simulation.
+- AC 5 is asserted twice: fifty inbox entries leave both summaries byte-identical, and the summary sources — enumerated from the directory, not hardcoded — contain no reference to the inbox at all.
+- Gates: server lint, typecheck, build, `openapi:check`, `npm test` (1310) and `npm run test:db` (1397, all 82 files) green; root lint, typecheck and build green.
+
+## [Unreleased] - 2026-10-12 — MUT-86: the Record payment drawer leads with what's left, with one primary button
+
+**Scope:**
+- `src/components/drawers/PartialPaymentDrawer.tsx` (rewritten form; history rows on theme tokens) + `PartialPaymentDrawer.css` (new)
+- `src/lib/paymentEntry.ts` (new: `describePaymentAmount`, `minorToAmountInput`)
+- `src/lib/dates.ts` (`isFuturePaymentDate`, moved from `src/db/repository.ts`, which now imports it)
+- `src/lib/i18n/translations/{en,ar}.json`: new `transactions.partialPayment.titleLeft`, `paidInFull`, `stillOwed`, `addNote`; `markFullyPaid` removed
+- `e2e/record-payment.spec.ts` (new); `e2e/support/axe.ts` (`paymentDrawer` surface)
+- Tests: `PartialPaymentDrawer.test.tsx` (rewritten, 33), `paymentEntry.test.ts` (new, 19), `paymentDrawerKeys.test.ts` (new, 5), `dates.test.ts` (+5)
+- Test plan `.claude/designs/mut-86-payment-drawer-tests.md`; ADR-047 (supersedes ADR-038 §5); TD-062, TD-063; TD-047 updated
+
+### Changed
+- **The drawer opens on the answer.** The title names the balance, for example "Record Payment · ₪3,550 left". One large amount field holds that balance, selected so that typing replaces it. A line under the field updates on every keystroke: "Paid in full" or "₪1,775 still owed". It reads Arabic-Indic digits. Typing more than is owed shows the overpayment message straight away.
+- **The date reads "Payment date · Today ›"**, or the chosen date. Pressing the row opens the date field in its place. **Notes sit behind "+ Add note"**, which opens a focused Notes field.
+- **One primary button.** Record Payment records and closes the drawer, so opening it and pressing Record Payment settles the entry for today ("Paid? Two taps."). Enter in the amount does the same. A partial payment closes the drawer too; before, the drawer stayed open with an empty amount.
+- The amount is read with MUT-5's strict parser (`parseAmountInput`), not the lenient filter. "1,2" is refused with "Enter an amount like 1200 or 1,200.50", and "€100" in a dollar entry with the currency-mismatch message.
+- Payment history appears below the form, only when the entry has payments. Its rows use theme tokens, so they read in dark mode. Before, they fell back to a light grey.
+- With nothing left to record (create mode), the drawer says "Paid in full", lists the history and offers Close, instead of a form whose button could only be refused.
+
+### Removed
+- **Mark Fully Paid**, which duplicated Record Payment and dropped the notes, along with its `markFullyPaid` key in both locales.
+- The 25 / 50 / 100% chips, which printed "₪887.5".
+- The Amount / Received so far / Remaining box (its label and value ran together).
+- The empty "No payments recorded yet" history, and the form's "Record Payment" sub-heading.
+
+### Fixed
+- **An edit no longer turns into a second payment.** An edit opened before the entry's records had loaded used to mount as a create form, prefilled with the remaining balance and titled "Edit Payment". Pressing its button recorded a new payment. The drawer now waits for the record.
+- **An emptied payment date is refused** with "Date is required". Before, it was saved as an empty date.
+
+### Technical
+- `isFuturePaymentDate` (ADR-038, as amended) lives in `lib/dates.ts`, and both the repository and the drawer call it. The drawer's own `dateInput > todayISO()` comparison is gone.
+- The new classes are prefixed `pay-drawer-`. `index.css` already has global `.payment-row` and `.payment-amount` rules (fixed widths, used by the document forms), and these squeezed the amount field to 120 px.
+- Found while checking in the browser, and logged rather than fixed:
+  - `formatAmount` prints a lone tenth ("$887.5") everywhere, including the new title (TD-062).
+  - Sample-data part-paid entries carry a received amount with no payment record, so the first payment recorded on one drops it and Owed now rises (TD-063).
+
+**Why:** decision P1 of the Apple-design brief. The drawer had two buttons for one outcome, one of which lost the notes. Its labels ran into their values. The chips printed "₪887.5". It showed an empty history.
+
+---
+
+## [Unreleased] - 2026-10-12 — MUT-80: Drawers open, close and drag on springs, and leave the way they came
+
+**Scope:**
+- `src/components/ui/drawer/` (new): `DrawerFrame.tsx`, `useDrawerMotion.ts`, `useDrawerFocus.ts`, `drawerGesture.ts`, `drawerMotion.ts`, `exitSnapshot.ts`
+- `src/lib/motion/physics.ts` (new), `src/lib/dom/focusable.ts` (new); `src/hooks/useMenuButton.ts` uses `focusablesWithin`
+- `src/components/drawers/Drawer.tsx`, `src/hosted/components/Drawer.tsx`: thin wrappers around `DrawerFrame`
+- `src/index.css`: the drawer's `slideIn` / `slideInRTL` keyframes and the overlay's `fadeIn` animation removed; `touch-action: pan-y`, `.is-dragging`, no focus outline on the panel
+- `package.json`: `motion` 13.4.4 (exact)
+- Tests: `physics`, `focusable`, `drawerGesture`, `exitSnapshot`, `DrawerFrame` (new, 66 tests); `e2e/drawer-motion.spec.ts` (new, 3 specs)
+- Test plan `.claude/designs/mut-80-drawer-springs-tests.md` (decisions D1–D17); ADR-044
+
+### Added
+- **Drawers move on springs.** They spring in from their edge (response 0.3, damping 1.0) with the overlay dimming in step.
+- **Drawers leave the way they came.** Escape, ✕, the overlay, Save and Cancel all slide the drawer out along its own edge from wherever it was.
+- **Drag to dismiss.** A horizontal drag follows the pointer 1:1 from where it was grabbed and rubber-bands past fully open. On release, momentum is projected: past half the width it closes, otherwise it springs back carrying the release velocity. A press catches a moving drawer where it is.
+- Vertical scrolling inside a drawer, text selection in its fields and horizontally scrolling regions still work, because a press only becomes a drag after 10px of mostly horizontal movement.
+- In Arabic the edge is mirrored. Under reduced motion, every move is a 150ms cross-fade.
+- **Focus trap.** Tab and Shift+Tab wrap inside an open drawer, and focus returns to the button that opened it. There was no trap before.
+
+### Changed
+- Closing stays immediate for every caller (`onClose` contract unchanged). The exit is an inert, `aria-hidden` snapshot of the last frame, so it never shows reset or reloading content (ADR-044).
+- The local and portal drawers share one frame, so the portal inherits all of the above (brief HP1).
+
+### Technical
+- New dependency `motion@13.4.4`, using only the vanilla `animate` and `motionValue`. Web entry chunk 193.93 → 216.51 kB gzip (+22.6 kB).
+- Removing the drawer's global `slideIn` keyframe leaves `ProfilePickerModal.css` the only `slideIn`. The two had collided by name.
+
+**Why:** decision R2 of the Apple-design brief. The drawer vanished in one frame on close, and couldn't be dragged or caught.
+
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-58: the money-event read side MUT-8 left without a screen is deleted
 
 **Scope:**

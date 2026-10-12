@@ -27,6 +27,8 @@ function outcome(guard: ReturnType<typeof principalStoreGuard>, repo: string, me
 function expected(access: MethodAccess, principal: 'apiKey' | 'session', writer: 'MALAFAT' | null): string {
   if (access === 'read' || access === 'control') return 'allowed';
   if (access === 'operator') return 'PRINCIPAL_NOT_ACCEPTED:null';
+  // MUT-66: a signed-in person's own resource; no profile and no matrix domain apply.
+  if (access === 'sessionOnly') return principal === 'session' ? 'allowed' : 'PRINCIPAL_NOT_ACCEPTED:null';
   if ('read' in access) return row(access.read)[principal] === 'none' ? 'PRINCIPAL_NOT_ACCEPTED:null' : 'allowed';
   const r = row(access.write);
   // MUT-65: the three profile-dependent domains are read-write for a session on a personal profile (writer === null), read-only on a Malafat-fed one — a wrapper over the matrix, not a matrix edit.
@@ -76,6 +78,8 @@ describe('STORE_ACCESS', () => {
     const operator = entries.filter(([, , a]) => a === 'operator').map(([r, m]) => `${r}.${m}`).sort();
     expect(operator).toEqual([
       'apiKeys.create',
+      // MUT-66: the support-only per-user inbox count; the inbox itself is the person's, not the operator's.
+      'inboxEntries.countByUser',
       'memberships.grant',
       'memberships.revoke',
       'organizations.create',
@@ -106,6 +110,56 @@ describe('storeRefusal on the three profile-dependent rows (MUT-65)', () => {
   it('the new receivables.createAdjustment/softDeleteAdjustment are classified payments:write', () => {
     expect(STORE_ACCESS.receivables.createAdjustment).toEqual({ write: 'payments' });
     expect(STORE_ACCESS.receivables.softDeleteAdjustment).toEqual({ write: 'payments' });
+  });
+});
+
+describe('the inbox (MUT-66)', () => {
+  it('accepts a session and no other principal for the five session-only methods', () => {
+    expect(storeRefusal('session', null, 'sessionOnly')).toBeNull();
+    expect(storeRefusal('session', 'MALAFAT', 'sessionOnly')).toBeNull();
+    expect(storeRefusal('apiKey', null, 'sessionOnly')?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+
+  it('classifies the inbox’s own methods: sessionOnly to capture, operator to count, the ledger’s own domains to file', () => {
+    expect(STORE_ACCESS.inboxEntries).toEqual({
+      create: 'sessionOnly',
+      getById: 'sessionOnly',
+      list: 'sessionOnly',
+      update: 'sessionOnly',
+      delete: 'sessionOnly',
+      countByUser: 'operator',
+      fileAsExpense: { write: 'expenses' },
+      fileAsIncome: { write: 'payments' },
+    });
+  });
+
+  it('refuses an API key a filing exactly where it already refuses the direct create', () => {
+    // expenses' apiKey column is `none`, so this is PRINCIPAL_NOT_ACCEPTED, not a read-only-profile case.
+    expect(storeRefusal('apiKey', null, STORE_ACCESS.inboxEntries.fileAsExpense)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+    expect(storeRefusal('apiKey', null, STORE_ACCESS.expenses.create)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+
+  /**
+   * The load-bearing assertion behind the design's claim that filing needed no
+   * inbox-specific writability logic: filing-as-income is refused on a
+   * Malafat-fed profile purely because its classification is the same
+   * `{ write: 'payments' }` the direct create carries.
+   */
+  it('refuses filing as income on a Malafat-fed profile, and allows it on a personal one — straight off the matrix', () => {
+    const refusal = storeRefusal('session', 'MALAFAT', STORE_ACCESS.inboxEntries.fileAsIncome);
+    expect(refusal?.code).toBe('READ_ONLY_PROFILE');
+    expect(refusal?.details).toEqual({ domain: 'payments', writerOfRecord: 'MALAFAT' });
+    expect(storeRefusal('session', null, STORE_ACCESS.inboxEntries.fileAsIncome)).toBeNull();
+  });
+
+  it('lets filing as an expense land on any profile the person belongs to, Malafat-fed included', () => {
+    expect(storeRefusal('session', 'MALAFAT', STORE_ACCESS.inboxEntries.fileAsExpense)).toBeNull();
+    expect(storeRefusal('session', null, STORE_ACCESS.inboxEntries.fileAsExpense)).toBeNull();
+  });
+
+  it('mints no new matrix domain for the inbox', () => {
+    expect(WRITABILITY_MATRIX.map((r) => r.domain)).not.toContain('inbox');
+    expect(WRITABILITY_MATRIX).toHaveLength(10);
   });
 });
 

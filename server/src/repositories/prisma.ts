@@ -68,6 +68,12 @@ import type {
   ExpenseReceiptRepository,
   ExpenseRecord,
   ExpenseRepository,
+  CreateExpenseInput,
+  IncomeWriteInput,
+  IncomeWriteResult,
+  InboxEntryCursor,
+  InboxEntryKind,
+  InboxEntryRepository,
 } from './ports.js';
 
 /**
@@ -864,7 +870,8 @@ export class PrismaLedgerStore implements LedgerStore {
   // ---- MUT-42: expenses ----------------------------------------------------
 
   readonly expenses: ExpenseRepository = {
-    create: (input, at) => translate(() => this.prisma.expense.create({ data: { ...input, createdAt: at, updatedAt: at } })),
+    // The row insert itself lives in createExpenseRow so MUT-66's filing can run it inside its own transaction.
+    create: (input, at) => createExpenseRow(this.prisma, input, at),
     getById: (organizationId, id) => this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null } }),
     list: async (organizationId, filter, page) => {
       const rows: ExpenseRecord[] = await this.prisma.expense.findMany({
@@ -952,6 +959,93 @@ export class PrismaLedgerStore implements LedgerStore {
         return live.map((r) => ({ ...r, deletedAt: at }));
       }),
   };
+
+  // ---- MUT-66: the unsorted inbox ------------------------------------------
+
+  readonly inboxEntries: InboxEntryRepository = {
+    create: (input, at) => translate(() => this.prisma.inboxEntry.create({ data: { ...input, createdAt: at, updatedAt: at } })),
+    getById: (userId, id) => this.prisma.inboxEntry.findFirst({ where: { id, userId } }),
+    list: async (userId, page) => {
+      const rows = await this.prisma.inboxEntry.findMany({
+        where: { userId, ...inboxCursorWhere(page.cursor) },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const items = rows.slice(0, page.limit);
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null };
+    },
+    update: async (userId, id, expectedVersion, patch, at) => {
+      const data: Prisma.InboxEntryUncheckedUpdateManyInput = { version: { increment: 1 }, updatedAt: at };
+      for (const [k, v] of Object.entries(patch)) if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+      const { count } = await translate(() => this.prisma.inboxEntry.updateMany({ where: { id, userId, version: expectedVersion }, data }));
+      const record = await this.prisma.inboxEntry.findFirst({ where: { id, userId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    delete: async (userId, id) => {
+      const { count } = await this.prisma.inboxEntry.deleteMany({ where: { id, userId } });
+      return count === 1;
+    },
+    countByUser: (userId) => this.prisma.inboxEntry.count({ where: { userId } }),
+    fileAsExpense: (params, at) =>
+      this.prisma.$transaction(async (tx) => {
+        if (!(await claimInboxEntryTx(tx, params))) return { kind: 'not_found' as const };
+        return { kind: 'filed' as const, expense: await createExpenseRow(tx, params.expense, at) };
+      }),
+    fileAsIncome: async (params, at) => {
+      // Same single retry payments.create uses: two filings in the first payment of a year can collide on the number counter.
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await this.prisma.$transaction(async (tx) => {
+            if (!(await claimInboxEntryTx(tx, params))) return { kind: 'not_found' as const };
+            return { kind: 'filed' as const, result: await writeIncomeTx(tx, params.write, at) };
+          });
+        } catch (err) {
+          if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
+          throw err;
+        }
+      }
+    },
+  };
+}
+
+/**
+ * The expense row insert, inside whatever transaction the caller supplies —
+ * `expenses.create` passes the client itself (an implicit one-statement
+ * transaction), MUT-66's filing passes its own open `tx` so the insert and the
+ * inbox-entry delete commit or roll back together.
+ */
+function createExpenseRow(tx: Tx | PrismaClient, input: CreateExpenseInput, at: Date): Promise<ExpenseRecord> {
+  return translate(() => tx.expense.create({ data: { ...input, createdAt: at, updatedAt: at } }));
+}
+
+/**
+ * Takes the entry out, inside the filing transaction: the delete both proves
+ * the entry was this user's and of the expected kind, and holds its row lock
+ * until commit — so of two concurrent filings of the same entry, the second
+ * matches zero rows and answers `not_found` rather than writing a second
+ * financial record. False means unknown id, another user's, already filed, or
+ * the wrong kind; the caller never distinguishes them.
+ */
+async function claimInboxEntryTx(tx: Tx, params: { userId: string; inboxEntryId: string; kind: InboxEntryKind }): Promise<boolean> {
+  const { count } = await tx.inboxEntry.deleteMany({ where: { id: params.inboxEntryId, userId: params.userId, kind: params.kind } });
+  return count === 1;
+}
+
+/** MUT-65's two income writes, composed into the filing transaction rather than reimplemented. */
+async function writeIncomeTx(tx: Tx, write: IncomeWriteInput, at: Date): Promise<IncomeWriteResult> {
+  if (write.kind === 'received') {
+    const { payment, allocations } = await createPaymentTx(tx, write.payment, at);
+    return { kind: 'received', payment, allocations };
+  }
+  return { kind: 'owed', receivable: await createAdjustmentTx(tx, write.receivable, at) };
+}
+
+/** Newest first: rows strictly before the cursor in (createdAt, id) descending order. */
+function inboxCursorWhere(cursor: InboxEntryCursor | null): Prisma.InboxEntryWhereInput {
+  if (!cursor) return {};
+  return { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] };
 }
 
 function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {

@@ -3,10 +3,12 @@ import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
+import type { CaptureSource } from './schemas.js';
 import type {
   ExpenseCategoryRecord,
   ExpenseReceiptRecord,
   ExpenseRecord,
+  InboxEntryRecord,
   FeeProposalRecord,
   AttachmentRecord,
   AgreementRecord,
@@ -470,5 +472,22 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
     notes: null,
     dueDate: r.dueDate,
     status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
+  };
+}
+
+// ---- MUT-66: the unsorted inbox ---------------------------------------------
+
+export function serializeInboxEntry(e: InboxEntryRecord) {
+  return {
+    id: e.id,
+    kind: e.kind.toLowerCase() as 'income' | 'expense',
+    amount: amt(e.amountMinor, e.currency),
+    currency: e.currency as Currency,
+    occurredOn: e.occurredOn,
+    note: e.note,
+    captureSource: e.captureSource as CaptureSource | null,
+    version: e.version,
+    createdAt: e.createdAt.toISOString(),
+    updatedAt: e.updatedAt.toISOString(),
   };
 }

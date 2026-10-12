@@ -11,8 +11,8 @@
 |----------|----------|
 | **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
 | **State** | URL State, Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place |
-| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets |
+| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3), Ungrouped amount prefills (`minorToAmountInput`, MUT-86) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
 | **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009) |
@@ -1786,3 +1786,87 @@ Anything read back by `$(...)` must print its UI to stderr and only the answer t
 ### Reuse the rollout, own only the order
 
 `make` does not reimplement a deploy. The server roll stays `server/scripts/deploy.sh`; the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied, so the list of files carrying the version has one definition. When sourcing a script that also runs interactively, guard its entry point (`[[ "${BASH_SOURCE[0]}" == "${0}" ]]`) and namespace your own variables — `deploy.sh` defines `$GREEN` and friends as literal `\033` strings for `echo -e`, which silently corrupts a `printf '%s'` caller that uses the same names.
+## Motion patterns — added 2026-10-12 (MUT-80, ADR-044)
+
+### A close is immediate; the exit is presentation
+Never delay a state change for an animation. A drawer's `onClose` runs at once and its owner unmounts it. The exit is played by an inert, `aria-hidden` clone of the last frame (`captureExitSnapshot`), so it can't show reset or reloading content and can't be clicked. Only a motion the component commits itself (a drag dismiss) runs live and calls back at the end, which is what makes it catchable.
+
+### Animate from a motion value; write styles yourself; clear them at rest
+Drive `transform`/`opacity` from `motionValue`s with `.on('change', paint)`, not React state; React never renders per frame. At rest, clear the inline transform (and opacity at 1): a transform makes the element the containing block for `position: fixed` descendants. To interrupt, `stop()` the controls and read `value.get()`, which is the presentation value. Read `getVelocity()` *before* `stop()`. A stopped animation never fires `onComplete`, so a cancelled exit can't call back.
+
+### Gesture rules are pure; physics is shared
+Thresholds, release decisions, rubber-banding and opacity mapping are pure functions (`drawerGesture.ts`) with unit tests. Physics that any draggable thing reuses lives in `src/lib/motion/physics.ts`. Push a sample at `pointerup`, so a pause before release reads as zero velocity. On `pointercancel` use zero velocity: its coordinates are unreliable.
+
+### No layout, no motion
+A motion that needs a measured size (`offsetWidth`) skips itself when the size is 0. That keeps jsdom component tests synchronous without a test-only branch. Tests that exercise motion stub `offsetWidth` for the element (`DrawerFrame.test.tsx`).
+
+### Telling a real unmount from StrictMode's rehearsal
+In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
+
+### Hidden documents pause motion
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+
+---
+
+## App patterns added by MUT-86 (2026-10-12)
+
+### A live line and its errors read one classification
+When a field shows a live answer under it (the payment drawer's "Paid in full" or "₪1,775 still owed"), classify the typed text once, with a pure function that returns a tagged union (`describePaymentAmount`). The live line and the submit check both switch on that one result, so the line can never promise what the button then refuses. Show answers and definitive problems (an overpayment) live. Show states a valid value passes through while it is being typed (an unreadable "1,2" on the way to "1,200", an empty field) only after submit, and clear them on the next change.
+
+### A quiet row opens into its field in place
+A secondary field with a sensible default (the payment date, "Today ›") or one that is usually empty ("+ Add note") is a quiet button that is replaced by the labelled field when pressed. Focus moves to the field only when the user opened it: set a `focusTarget` state in the click handler and focus it in an effect keyed on that state. A field open from the start, such as an edited record's notes, never steals focus from the main field. Mirror chevrons in RTL with `[dir="rtl"] … { transform: scaleX(-1) }`.
+
+### Prefill an amount ungrouped, with cents as two digits
+Under MUT-5's strict grammar, deleting a digit from a prefilled "3,550" leaves "3,55", which can't be read. Prefill amount fields with `minorToAmountInput`: "3550" or "887.50". It uses integer arithmetic, never `String(minor / 100)`, which gives "887.5".
+
+### A co-located stylesheet prefixes its classes with the component
+`index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, used by the document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.
+
+
+
+---
+
+## Inbox patterns — added 2026-10-12 (MUT-66)
+
+### A user-owned resource, where everything else is organization-owned
+
+`InboxEntry` is the first server-side row that belongs to a person rather than to an organization. The shape to copy, if there is ever a second:
+
+- **Every repository method takes `userId` first**, exactly where the ledger's take `organizationId`. Cross-user reads are then impossible by construction, not by a filter someone has to remember — the same guarantee ADR-025 point 2 gives the ledger, one ownership axis over.
+- **No FK to `Organization` or `Membership` at all.** This is what makes "survives losing every membership" a structural fact instead of a guard or a cleanup job. Guard it with a DMMF test (`inbox-ownership.test.ts`), so a later edit that adds an innocent-looking `organizationId` fails immediately rather than surfacing as a support ticket about vanished rows.
+- **Its routes send no `X-Mutaba3a-Profile` and declare no scope**, following `GET /v1/me`, and join the organization-independent set through their own exported module rather than editing `routes/sessions.ts`.
+- **In the store guard it is `'sessionOnly'`** — neither `control` ("any principal": an API key has no person behind it, so no inbox) nor a matrix `Domain` (which is per-organization by construction).
+
+### Claim-then-write: a cross-repository transaction that cannot double-write
+
+When one call must create a record *and* consume the thing it came from, do not check-then-act. Delete the source row **inside** the transaction first, and let the delete be the check:
+
+```ts
+const { count } = await tx.inboxEntry.deleteMany({ where: { id, userId, kind } });
+if (count !== 1) return { kind: 'not_found' };          // unknown, foreign, wrong kind, or already filed
+return { kind: 'filed', expense: await createExpenseRow(tx, input, at) };
+```
+
+The delete proves ownership and holds the row lock until commit, so of two concurrent calls exactly one proceeds; and because the financial insert is in the same transaction, a failure rolls the delete back with it. One shape gives both "exactly once" and "on failure it stays untouched".
+
+The in-memory store simulates it by removing the entry **synchronously, before any await** (so two concurrent calls cannot both see it) and restoring it in a `catch`.
+
+### Splitting a repository create so it can be composed
+
+To let an existing create participate in a larger transaction, extract its row insert to take an explicit handle and leave the public method as the one-statement caller:
+
+```ts
+create: (input, at) => createExpenseRow(this.prisma, input, at),   // implicit transaction
+// filing: createExpenseRow(tx, input, at) inside its own $transaction
+```
+
+Behaviour is unchanged and no rule is duplicated — only the transaction boundary moves outward. `settleReceivable(tx, …)`, `createPaymentTx` and `createAdjustmentTx` are the existing instances of this idiom.
+
+### Validate everything before the transaction opens
+
+All destination-side validation — writability, link resolution, category/customer/project existence, future dates — runs in the route, before the repository method that would consume the source row is called at all. "On failure it stays untouched" is then structural: a refusal never reaches the code that could delete it, and `READ_ONLY_PROFILE`/`INSUFFICIENT_SCOPE` are refused in middleware before the handler runs. Assert it with a spy proving zero store calls, not only by observing the row afterwards.
+
+### Prove an isolation claim structurally, not just behaviourally
+
+"Unsorted entries never change any summary" is asserted twice: once by comparing whole summary responses before and after filling an inbox, and once by reading the summary sources — enumerated from the directory so a module added later is covered — and finding no reference to the table. The second keeps the first from being a coincidence that a future query could quietly break.
+
