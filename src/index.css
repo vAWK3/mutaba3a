@@ -3009,6 +3009,7 @@ a.project-tag:hover {
 }
 
 .settings-label {
+  display: block; /* also a <label> (the default-currency row), laid out like the <div>s */
   font-weight: var(--weight-medium);
 }
 

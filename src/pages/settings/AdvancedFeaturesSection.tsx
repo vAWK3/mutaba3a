@@ -15,7 +15,7 @@ export function AdvancedFeaturesSection() {
 
   return (
     <div className="settings-section" data-testid="settings-features">
-      <h3 className="settings-section-title">{t('settings.features.title')}</h3>
+      <h2 className="settings-section-title">{t('settings.features.title')}</h2>
       <p className="settings-description" style={{ marginBottom: 12 }}>
         {t('settings.features.description')}
       </p>

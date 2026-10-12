@@ -45,7 +45,8 @@ describe('AdvancedFeaturesSection', () => {
     installFakeSettings();
     render(<AdvancedFeaturesSection />, { wrapper: Wrapper });
 
-    expect(screen.getByText(en.settings.features.title)).toBeInTheDocument();
+    // Settings' section titles are h2 under the page's h1 (TD-009 heading-order)
+    expect(screen.getByRole('heading', { level: 2, name: en.settings.features.title })).toBeInTheDocument();
     const switches = await screen.findAllByRole('switch');
     expect(switches).toHaveLength(FEATURE_KEYS.length);
     FEATURE_KEYS.forEach((key, index) => {

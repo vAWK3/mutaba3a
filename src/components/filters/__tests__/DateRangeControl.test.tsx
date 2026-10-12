@@ -23,6 +23,9 @@ describe('DateRangeControl', () => {
       'filters.thisYear': 'This Year',
       'filters.allTime': 'All Time',
       'filters.custom': 'Custom',
+      'filters.period': 'Period',
+      'filters.periodFrom': 'From',
+      'filters.periodTo': 'To',
     };
     return translations[key] || key;
   });
@@ -166,6 +169,32 @@ describe('DateRangeControl', () => {
     fireEvent.change(toInput, { target: { value: '2026-03-25' } });
 
     expect(mockOnChange).toHaveBeenCalledWith('2026-03-05', '2026-03-25');
+  });
+
+  // TD-009: axe's select-name fired on Income and the client profile
+  it('names the preset select for assistive tech', () => {
+    render(
+      <DateRangeControl
+        dateFrom="2026-03-01"
+        dateTo="2026-03-31"
+        onChange={mockOnChange}
+      />
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Period' })).toBeInTheDocument();
+  });
+
+  it('names the two custom-range date inputs', () => {
+    render(
+      <DateRangeControl
+        dateFrom="2026-03-05"
+        dateTo="2026-03-20"
+        onChange={mockOnChange}
+      />
+    );
+
+    expect(screen.getByLabelText('From')).toHaveValue('2026-03-05');
+    expect(screen.getByLabelText('To')).toHaveValue('2026-03-20');
   });
 
   it('should use correct translations', () => {

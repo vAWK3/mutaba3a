@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { SearchInput, StatusSegment, DateRangeControl } from '../filters';
-import { RowActionsMenu, PaymentStatusBadge, RecordPaymentButton, AmountWithConversion, EmptyState, type RowAction } from '../ui';
+import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton, AmountWithConversion, EmptyState, type RowAction } from '../ui';
 import { CheckIcon, CopyIcon, DocumentIcon } from '../icons';
 import { useIncome, type IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
@@ -173,7 +173,7 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
                     <th>{t('clients.profile.work.what')}</th>
                     <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                     <th>{t('transactions.columns.status')}</th>
-                    <th className="row-actions-header"></th>
+                    <RowActionsHeader />
                   </tr>
                 </thead>
                 <tbody>

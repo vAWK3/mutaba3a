@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useId, type ReactNode } from 'react';
 
 /**
  * The portal's own slide-over shell (MUT-44 design brief §6a point 5). Not an
@@ -18,6 +18,9 @@ export interface DrawerProps {
 }
 
 export function Drawer({ title, onClose, children, footer, closeLabel }: DrawerProps) {
+  // The dialog is named by its visible title (TD-009, axe aria-dialog-name)
+  const titleId = useId();
+
   useEffect(() => {
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -29,9 +32,9 @@ export function Drawer({ title, onClose, children, footer, closeLabel }: DrawerP
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} />
-      <div className="drawer" role="dialog" aria-modal="true">
+      <div className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="drawer-header">
-          <h2 className="drawer-title">{title}</h2>
+          <h2 className="drawer-title" id={titleId}>{title}</h2>
           <button type="button" className="drawer-close" onClick={onClose} aria-label={closeLabel}>
             <CloseIcon />
           </button>

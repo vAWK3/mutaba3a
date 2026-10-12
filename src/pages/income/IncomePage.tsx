@@ -12,7 +12,7 @@
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
+import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
@@ -184,7 +184,7 @@ export function IncomePage() {
                   {!isCompact && <th>{t('transactions.columns.project')}</th>}
                   <th>{t('transactions.columns.status')}</th>
                   <th className="text-end">{t('transactions.columns.amount')}</th>
-                  <th className="row-actions-header"></th>
+                  <RowActionsHeader />
                 </tr>
               </thead>
               <tbody>

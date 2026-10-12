@@ -3,7 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Every app page breaks this today: the brand teal fails 4.5:1 (white on
 // #1d8a84, the active nav label, the profile avatar). The duplicate banner
-// landmarks went with MUT-79's frame (no role="banner" on the bars).
+// landmarks went with MUT-79's frame (no role="banner" on the bars); the
+// unnamed drawer dialog, selects, icon button and row-actions header, and
+// Settings' h1 -> h3 jump, were fixed on 2026-10-12 (TD-009).
 const APP_SHELL = ['color-contrast'];
 
 /**
@@ -15,14 +17,11 @@ export const KNOWN_AXE_VIOLATIONS = {
   homeFirstRun: [...APP_SHELL],
   home: [...APP_SHELL],
   clients: [...APP_SHELL],
-  // the period <select> has no name; the row-actions column header is empty
-  clientProfile: [...APP_SHELL, 'select-name', 'empty-table-header'],
-  income: [...APP_SHELL, 'select-name', 'empty-table-header'],
-  // the default-currency <select> has no name, the business profile's icon
-  // button has no text, and the first section heading is an h3 under the h1
-  settings: [...APP_SHELL, 'select-name', 'button-name', 'heading-order'],
-  // the drawer has role="dialog" but no aria-labelledby; Save is brand teal
-  incomeDrawer: ['aria-dialog-name', 'color-contrast'],
+  clientProfile: [...APP_SHELL],
+  income: [...APP_SHELL],
+  settings: [...APP_SHELL],
+  // Save is brand teal
+  incomeDrawer: ['color-contrast'],
 } satisfies Record<string, string[]>;
 
 export type AxeSurface = keyof typeof KNOWN_AXE_VIOLATIONS;

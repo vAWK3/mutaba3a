@@ -81,6 +81,8 @@ vi.mock('../../../lib/i18n', () => {
     'filters.status.paid': 'Paid',
     'filters.status.unpaid': 'Unpaid',
     'filters.status.overdue': 'Overdue',
+    'filters.period': 'Period',
+    'common.actions': 'Actions',
   };
   const t = (key: string, vars?: Record<string, string | number>) =>
     (translations[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(vars?.[name] ?? ''));
@@ -288,6 +290,15 @@ describe('ClientDetailPage', () => {
       for (const tab of ['Summary', 'Receivables', 'Transactions', 'Projects']) {
         expect(screen.queryByRole('button', { name: tab })).toBeNull();
       }
+    });
+
+    // TD-009: axe's empty-table-header and select-name fired on the profile
+    it('names the row-actions column of both tables and the period filter', () => {
+      renderPage();
+
+      expect(within(workSection()).getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
+      expect(within(paymentsSection()).getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
+      expect(within(workSection()).getByRole('combobox', { name: 'Period' })).toBeInTheDocument();
     });
 
     it('shows the client contact details in the header', () => {
