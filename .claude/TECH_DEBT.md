@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-069: Expenses Needs attention only looks back 90 days
+**Status**: Open
+**Added**: 2026-10-12 (MUT-87)
+**Priority**: Medium
+**Impact**: `getDueOccurrences` (`src/services/recurringExpenseService.ts`) asks for occurrences from 90 days ago to 30 days ahead. A payment missed more than 90 days ago never appears, so a rule started six months ago and never marked shows "Aug, Sep, Oct not marked" and silently drops April to July. MUT-87's one-row-per-rule now names the months, which makes the gap visible but does not cause it. The window predates MUT-87; changing it is a product decision (how far back should "not marked" reach: the rule's start, the last resolved payment, a fixed year?).
+**Remediation**: Decide the window with the owner. The likely answer is "since the rule's start date, or the day after its last resolved payment", which needs no new storage: `generateExpectedDates` already clamps to the rule's start. Check the cost for a long-running rule (at most twelve rows a year per rule).
+**Effort**: Small once decided
+
+### TD-070: The shared drawer is 480 px wide on a 375 px phone
+**Status**: Open
+**Added**: 2026-10-12 (found while checking MUT-87 at 375 px)
+**Priority**: Medium
+**Impact**: `.drawer` takes `width: var(--drawer-width)` (480 px) with no `max-width`, so at phone width every drawer is wider than the screen. In LTR its start edge (the title, the checkboxes) is cut off; in RTL its end edge is. `document.scrollWidth` stays 375, so nothing scrolls to reveal it. Seen on `RecurringMarkPaidDrawer` (MUT-87), and the same for the income, expense and payment drawers. MUT-87 may not touch the shared `Drawer` (MUT-80 rewrote its internals in parallel), so it is logged here.
+**Remediation**: In the shared drawer CSS, `width: min(var(--drawer-width), 100vw)` (and check MUT-80's drag offsets use the rendered width, not the variable). Verify at 375 px in English and Arabic on the income drawer and the mark-paid drawer.
+**Effort**: Small
+
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open
 **Added**: 2026-10-12 (found while checking the TD-009 fixes in the browser)

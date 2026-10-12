@@ -1351,3 +1351,30 @@ Plan: `.claude/designs/td-009-axe-structural-tests.md`. Each new assertion was w
 - `npm run build` and `npm run test:bundles`: OK.
 
 Main 8ef2df0 (MUT-65: `server/` and docs only) was merged in afterwards. Only lint and typecheck were re-run on the merged tree.
+
+### MUT-87 — Expenses Needs attention, one row per recurring rule (epic MUT-74, 2026-10-12)
+
+Plan: `.claude/designs/mut-87-recurring-rows-tests.md` (T1–T30). ADR-052.
+
+| File | Covers |
+|---|---|
+| `src/components/expenses/__tests__/recurringAttention.test.ts` (new, 15) | Grouping: one payment, several out of order (oldest first), several rules (ordered by oldest payment, title, id; never mixed), the row's fields, empty input; per-currency totals (no zero, USD → ILS → EUR, never combined); month lists in English and Arabic, the year only across two years, date-only values read as local dates; snooze dates across month and year ends |
+| `src/lib/__tests__/currencyAmounts.test.ts` (new, 2) | `orderCurrencyAmounts` order and zero handling |
+| `src/services/__tests__/recurringExpenseService.batch.test.ts` (new, 12, fake-indexeddb) | `confirmPayments` writes one expense per payment on its own expected date and links each occurrence; a partial selection leaves the rest due; **a failure on the second write leaves no expense and no occurrence**; an unknown rule writes nothing; an edited amount is the expense amount and `actualAmountMinor`, an unedited one leaves it unset; `skipOccurrences` (one, all, all or nothing); `snoozeOccurrences` (a date, a past date rejects the batch); `frequency` on virtual occurrences |
+| `src/hooks/__tests__/useRecurringExpenseQueries.test.tsx` (3 replaced) | The batch hooks call their service function once and invalidate occurrences, due occurrences, the rule's history, and expenses only on confirm |
+| `src/hooks/__tests__/useExpenseQueries.test.tsx` (+1) | Editing a rule invalidates `dueOccurrences` and `virtualOccurrences` |
+| `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` (new, 5, real dictionaries) | One row per rule with months, period amount, total and lateness; a one-payment rule ("Oct not marked", "Skip", "Snooze…"); the header's count and side-by-side totals in `<bdi dir="ltr">`; Mark Paid and the ⋯ menu by keyboard (focus on open, arrows, Escape back to the button) and each item's handler; Arabic month names, LTR amounts and the `few` plural form |
+| `src/components/drawers/__tests__/RecurringMarkPaidDrawer.test.tsx` (new, 10, real dictionaries) | All payments checked with their dates; Mark 3 paid sends each expected date; partial selection and the counted button; none checked disables it; an edited amount is sent, an unreadable, zero or other-currency amount blocks saving with the field error; per-payment Skip asks first; per-payment Snooze through the snooze view and back; Snooze all with a quick pick; a date not after today is refused; Cancel closes; Arabic |
+| `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` (+4) | The grouped section replaces the cards; Mark Paid opens the drawer on the rule; ⋯ › Skip all asks and skips every payment; ⋯ › Edit rule opens the expense drawer on the rule |
+| `src/lib/i18n/__tests__/recurringAttentionKeys.test.ts` (new, 5) | Every new string in en and ar with its placeholders; every counted string has `one`/`other` in English and all six forms in Arabic |
+| `src/__tests__/noDeadExpenseModules.test.ts` (+1) | The two recurring modals stay deleted and unexported |
+
+**Verified in the browser** (dev server `web-mut87`, Expenses switched on, two monthly rules started in July and September): the grouped rows, the header totals ($240 and ₪7,000 side by side), the ⋯ menu by keyboard, Mark 2 of 3 paid (IndexedDB holds expenses dated 2026-08-05 and 2026-10-05, the row then reads "Sep not marked"), a per-payment snooze and back, and Snooze all, in English and Arabic (RTL), light and dark, at 1024 px and 375 px. At 375 px every drawer is wider than the screen (TD-070, the shared `Drawer`). The "Total expenses" strip stayed ₪0 after marking expenses paid: it sums the wrong table (reported, not changed).
+
+**e2e:** not run. No Playwright spec covers the Expenses page (it is an optional area, off on a fresh install); `navigation.spec.ts` only asserts it is absent from the sidebar by default, which this ticket doesn't change.
+
+**Gate (2026-10-12, Node 22, branch on main 5674515):**
+- `npx vitest run`: 193 files, 2,930 passed, 4 skipped. A first run under load timed out 6 tests in four untouched files (IncomeDrawer, hosted views, ClientDetailPage, OverviewPage, 5 s timeouts); those four files pass alone, and the second full run passed.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run typecheck`: clean.
+- `npm run test:bundles`: OK.

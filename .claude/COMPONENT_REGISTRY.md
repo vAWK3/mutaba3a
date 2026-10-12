@@ -10,16 +10,17 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
+| **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | OwedNowSummary, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
+| **Money** | OwedNowSummary, CurrencyAmounts, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -450,6 +451,22 @@ navigate({ search: { newProject: true, clientId } }); // Create
 
 ---
 
+### RecurringMarkPaidDrawer
+**Location**: `src/components/drawers/RecurringMarkPaidDrawer.tsx` (+ `.css`)
+**Purpose**: The small drawer behind an Expenses Needs attention row (MUT-87, ADR-052). It lists one recurring rule's missed payments, oldest first, all checked, each with its month, its expected date and an amount field prefilled with the rule's amount (`input-with-prefix`, so it stays LTR in Arabic). **Mark N paid** writes one expense per checked payment, dated on its own expected date, in one all-or-nothing write (`useConfirmRecurringPayments`); an amount is sent only when edited. Each payment has its own **Skip** (asks first) and **Snooze**. Snoozing is the drawer's second view: a date (default a week out, must be after today) and quick picks named by `Intl.RelativeTimeFormat`. Opened with `initialView="snooze"` (the row's ⋯ › Snooze all) it snoozes every payment and Cancel closes; from a payment it snoozes that one and Back returns to the list, which keeps its checks and edited amounts. Uses the shared `Drawer` as is: one `<Drawer>` for both views, so switching views doesn't replay the open animation.
+
+```tsx
+// Page state: { ruleId, view } | null; the group is looked up live, so a skipped payment drops out
+{drawerGroup && (
+  <RecurringMarkPaidDrawer key={`${ruleId}:${view}`} group={drawerGroup} initialView={view} onClose={close} />
+)}
+```
+
+Calls the batch hooks itself (`useConfirmRecurringPayments`, `useSkipRecurringOccurrences`, `useSnoozeRecurringOccurrences`). Closes itself when nothing would be left (all marked, the last skipped, all snoozed).
+Tests: `src/components/drawers/__tests__/RecurringMarkPaidDrawer.test.tsx`.
+
+---
+
 ### RetainerDrawer
 **Location**: `src/components/drawers/RetainerDrawer.tsx`
 **Purpose**: Create/edit retainer agreements.
@@ -859,6 +876,26 @@ Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactio
 
 ---
 
+## Expenses Components
+
+### RecurringAttentionList
+**Location**: `src/components/expenses/RecurringAttentionList.tsx` (+ `.css`); shaping in `src/components/expenses/recurringAttention.ts`
+**Purpose**: Expenses › Needs attention as **one row per recurring rule** (MUT-87, decision E1, ADR-052): "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", the oldest payment's lateness under the amount ("68d overdue", "Due today", as Home says it). One primary **Mark Paid** per row; Skip all, Snooze all… and Edit recurring rule in a ⋯ menu built on `useMenuButton()` (menu opens under its button on the end edge, so it mirrors in RTL; rows are a `<ul>`, not a scrolling table, so nothing clips it). The header carries the number of rules and the total per currency (`CurrencyAmounts`). Presentational: the page passes the groups and the four handlers.
+
+```tsx
+const groups = useMemo(() => groupOccurrencesByRule(dueOccurrences), [dueOccurrences]);
+<RecurringAttentionList groups={groups} onMarkPaid={open} onSnoozeAll={openSnooze} onSkipAll={skipAll} onEditRule={edit} />
+```
+
+`recurringAttention.ts` (pure, tested): `groupOccurrencesByRule` (rule → missed payments oldest first; rows by oldest payment, then title, then id), `currencyTotals`, `formatMonthList` / `formatMonthYear` / `formatDateOnly` (date-only values read as **local** dates, `Intl` month names and `Intl.ListFormat`; the year is added only when the payments span two years), `snoozeDateAfter`, `amountInputValue` and `readPaymentAmount` (the app's one amount parser; a symbol naming another currency is refused).
+Tests: `src/components/expenses/__tests__/RecurringAttentionList.test.tsx`, `recurringAttention.test.ts`.
+
+### RecurringOccurrenceCard / RecurringOccurrenceList
+**Location**: `src/components/ui/RecurringOccurrenceCard.tsx`
+**Purpose**: Read-only since MUT-87: one projected recurring payment with its state, for the Expenses forecast (`compact`). Its Mark Paid / Skip / Snooze / Edit rule buttons were replaced by `RecurringAttentionList` and `RecurringMarkPaidDrawer`; `RecurringConfirmModal` and `RecurringSnoozeModal` were deleted.
+
+---
+
 ## Table Components
 
 > **Correction (2026-10-11, found during MUT-36).** `DataTable` and
@@ -1090,6 +1127,20 @@ Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in
 
 ---
 
+### CurrencyAmounts
+**Location**: `src/components/ui/CurrencyAmounts.tsx` (+ `.css`); entries from `orderCurrencyAmounts` in `src/lib/currencyAmounts.ts`
+**Purpose**: Amounts in several currencies side by side, one `<bdi dir="ltr">` per currency, never converted or combined (ADR-004), like Owed now but without its label and overdue lines (MUT-87). `orderCurrencyAmounts(totals)` keeps the non-zero currencies in USD → ILS → EUR order; its order is a `Record<Currency, number>`, so a new currency without a place fails to compile.
+
+```tsx
+<CurrencyAmounts amounts={orderCurrencyAmounts({ USD: 24000, ILS: 350000 })} />
+// $240  ₪3,500
+```
+
+**Use when**: a total or a header figure covers several currencies (the Expenses Needs attention total). **Not**: `OwedNowSummary` for Owed now itself; `UnifiedAmount` / `CurrencySummaryPopup`, which convert. The Expenses page's "Total expenses" strip still uses `CurrencySummaryPopup`, and sums the wrong table (reported with MUT-87, not changed).
+Tests: through `RecurringAttentionList.test.tsx`; the helper in `src/lib/__tests__/currencyAmounts.test.ts`.
+
+---
+
 ### UnifiedAmount
 **Location**: `src/components/ui/UnifiedAmount.tsx`
 **Purpose**: Display multi-currency totals (USD + ILS + EUR) as unified ILS amount with breakdown.
@@ -1240,7 +1291,7 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 |---|---|---|
 | `src/lib/i18n/core.tsx` (**shared**, MUT-43) | `I18nProvider` (controlled: `translations`, `language`, `setLanguage`), `createTranslator` (`t` with `.has`), `useLanguage`, `useT`, `useDirection`, `getLocale`, `getDirection`, `detectSystemLanguage` | the app's `LanguageProvider` (context.tsx), `HostedLanguageProvider`, every `useT()` caller |
 | `src/lib/i18n/plural.ts` (**shared**) | `tp` via `useTp()`, `createPluralTranslator`, `pluralKey` (CLDR forms through `Intl.PluralRules`) | portal (`hosted.auth.rateLimited`); available to the app |
-| `src/components/expenses/` (**shared**, MUT-44) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
+| `src/components/expenses/` (**shared**, MUT-44; `RecurringAttentionList` and `recurringAttention` there are app-only, MUT-87) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
 | `api/client.ts` | `api.*` (one function per operation, now incl. expense CRUD + categories + summary + receipt start/complete/download/delete), `request` (GET/POST/PATCH/DELETE, `idempotencyKey`/`ifMatchVersion` options), `ApiError` (`status`, `code`, `details`, `retryAfterSeconds`), `setUnauthorisedHandler`, schema type aliases | every portal hook and page |
 | `format/DecimalAmount.tsx` | `DecimalAmount` (`<bdi dir="ltr">`), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
 | `format/dates.ts` | `formatDay` (calendar date, never shifted), `formatInstant` (in the organization's zone), `formatSize`, `todayLocalISO` (MUT-44, browser-local calendar date — the expense drawer's default `occurredOn`) | views |

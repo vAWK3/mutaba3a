@@ -14,7 +14,9 @@ After this ticket:
 2. **One primary button, Mark paid.** It opens a small drawer (the shared `Drawer`, unchanged) listing the rule's missed payments, oldest first, all checked, each with its date and an amount field prefilled with the rule's amount. Saving writes one expense per checked payment, dated on that payment's expected date, in one all-or-nothing write.
 3. **Skip, Snooze, Edit rule move to a ⋯ menu** (`useMenuButton`): Skip and Snooze there apply to all of the rule's missed payments. Inside the drawer each payment has its own Skip and Snooze.
 4. **Snooze is a view of the same drawer** (date + quick picks), for one payment or all of them. `RecurringConfirmModal` and `RecurringSnoozeModal` lose their last consumer and are deleted; `RecurringOccurrenceCard` keeps only the read-only form the forecast uses.
-5. **The section total shows each non-zero currency side by side**, never combined, like Owed now. The page's "Total Expenses" strip follows the same rule (brief craft fix: "Expenses total shows one currency with the rest behind ⓘ").
+5. **The section total shows each non-zero currency side by side**, never combined, like Owed now, in the Needs attention header.
+
+The page's "Total Expenses" strip is left alone. While reading it for the brief's craft fix ("Expenses total shows one currency with the rest behind ⓘ") it turned out to sum `db.transactions` rows of kind `expense` (`transactionRepo.getOverviewTotalsByCurrency`), not the `db.expenses` rows the ledger lists since MUT-14. Restyling it would show a wrong figure more clearly; fixing its source is outside this ticket (logged as debt, see the report).
 
 ## Implementation decisions
 
@@ -27,7 +29,7 @@ After this ticket:
 | D5 | The ⋯ menu uses `useMenuButton()` (menu kind): items are `role="menuitem"`, `tabIndex={-1}`; the menu renders next to its button (rows are a list, not a scrolling table, so nothing clips it). Skip all asks first (native confirm, as Skip did); Snooze all opens the drawer on its snooze view; Edit rule opens the expense drawer on the rule (unchanged). |
 | D6 | Totals: `currencyTotals(groups)` returns non-zero currencies in USD → ILS → EUR order; `CurrencyAmounts` (new, `components/ui`) renders each as its own `<bdi dir="ltr">`. Amounts are never added across currencies. |
 | D7 | Strings: new keys under `expenses.recurring.attention.*`, en and ar. Counted strings are CLDR plural objects through `tp()` (en `one`/`other`, ar all six). Month names and dates come from `Intl.DateTimeFormat`, month lists from `Intl.ListFormat`, quick snooze picks from `Intl.RelativeTimeFormat`. Amounts inside sentences are isolated with U+2068/U+2069 (written as escapes). |
-| D8 | Mutation hooks: `useConfirmRecurringPayments`, `useSkipRecurringOccurrences`, `useSnoozeRecurringOccurrences` replace the single-payment hooks, whose only consumer was the old cards. They invalidate the same keys as before (and `['expenses']` for confirm), never `invalidateMoneyEventQueries`. `useExpenseQueries.ts` is not touched. |
+| D8 | Mutation hooks: `useConfirmRecurringPayments`, `useSkipRecurringOccurrences`, `useSnoozeRecurringOccurrences` replace the single-payment hooks, whose only consumer was the old cards. They invalidate the same keys as before (and `['expenses']` for confirm), never `invalidateMoneyEventQueries`. One additive change in `useExpenseQueries.ts`, found in the browser: creating or editing a rule (the ⋯ menu's Edit rule) did not refresh `dueOccurrences` / `virtualOccurrences`, so the row kept the old amount until a reload; `invalidateRecurringRuleQueries` now invalidates both. |
 
 ## Rules under test
 
@@ -60,7 +62,8 @@ After this ticket:
 | T25 | Skip on a payment asks first, then skips only that payment; Snooze on a payment opens the snooze view for that payment and saves its date | component | same |
 | T26 | Opened on the snooze view (Snooze all from ⋯), it snoozes every payment; Cancel closes | component | same |
 | T27 | The drawer in Arabic: dialog named by the rule title, month names and the button text in Arabic | component | same |
-| T28 | The page shows the grouped section (not cards), Mark paid opens the drawer, Skip all confirms and skips every payment; the total strip shows each non-zero currency | component (page) | `pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` |
+| T28 | The page shows the grouped section (not cards), Mark paid opens the drawer, Skip all confirms and skips every payment | component (page) | `pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` |
+| T30 | Editing a rule (`useUpdateRecurringRule`) refreshes the due and virtual occurrences | hook | `hooks/__tests__/useExpenseQueries.test.tsx` |
 | T29 | Every new key exists in en and ar; every plural key has `one` + `other` in en and all six forms in ar; `{count}`/`{months}`/`{title}`/`{amount}` placeholders survive translation | unit | `lib/i18n/__tests__/recurringAttentionKeys.test.ts` |
 
 ## Edge cases
@@ -75,5 +78,7 @@ After this ticket:
 
 ## Out of scope (logged, not changed)
 
-- `getDueOccurrences` looks back only 90 days, so a payment missed four months ago never shows. Pre-existing; changing the window is a product decision.
+- `getDueOccurrences` looks back only 90 days, so a payment missed four months ago never shows. Pre-existing; changing the window is a product decision (TD-069).
 - The recurring service still derives "today" from the UTC date (TD-014).
+- The shared `Drawer` is 480 px wide on a 375 px phone (TD-070); the shared `Drawer` is not changed here.
+- The page's "Total expenses" strip sums `db.transactions`, not the ledger's `db.expenses` (found again by MUT-58's smoke test; owned by the parent session).

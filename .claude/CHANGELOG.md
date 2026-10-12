@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-87: Expenses Needs attention is one row per recurring rule
+
+**Why:** three missed months of one recurring expense were three identical cards and 12 buttons for one decision (decision E1, `.claude/designs/landing-apple-redesign.md`). ADR-052. Test plan: `.claude/designs/mut-87-recurring-rows-tests.md`.
+
+**Scope:**
+- `src/components/expenses/recurringAttention.ts` (new: grouping, totals, month labels, snooze dates, amount reading), `RecurringAttentionList.tsx` + `.css` (new)
+- `src/components/drawers/RecurringMarkPaidDrawer.tsx` + `.css` (new)
+- `src/components/ui/CurrencyAmounts.tsx` + `.css` (new), `src/lib/currencyAmounts.ts` (new)
+- `src/services/recurringExpenseService.ts` (`confirmPayments`, `skipOccurrences`, `snoozeOccurrences`; `frequency` on virtual occurrences), `src/db/interfaces.ts` + `src/db/expenseRepository.ts` (`recurringOccurrences.runAtomically`), `src/types/index.ts` (`VirtualOccurrenceDisplay.frequency`)
+- `src/hooks/useRecurringExpenseQueries.ts` (batch hooks replace the single-payment ones), `src/hooks/useExpenseQueries.ts` (one additive change, below)
+- `src/pages/expenses/ExpensesLedgerPage.tsx`; `src/components/ui/RecurringOccurrenceCard.tsx` + `.css` (read-only)
+- Removed: `src/components/modals/RecurringConfirmModal.tsx` + `.css` (both modals), their export from `components/modals/index.ts`
+- `src/lib/i18n/translations/{en,ar}.json`: `expenses.recurring.attention.*` added; five orphaned `expenses.recurring.occurrence.*` leaves (`confirmPayment`, `actualDate`, `editAmount`, `notes`, `notesPlaceholder`) removed
+
+### Changed
+- **One row per rule.** "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", with the oldest payment's lateness under the amount, read like Home's Needs attention. The section header shows the number of rules and the total of each currency side by side (`CurrencyAmounts`), never combined.
+- **One primary action, Mark Paid,** opens a small drawer: the rule's missed payments, oldest first, all checked, each with its date and an amount prefilled with the rule's amount. **Mark N paid** writes one expense per checked payment, **dated on its own expected date** (the old modal dated them today), in one all-or-nothing write.
+- **Skip, Snooze and Edit rule moved to a ⋯ menu** (`useMenuButton`: focus on open, arrows, Escape returns focus) and apply to all of the rule's missed payments; Skip asks first. In the drawer each payment has its own Skip and Snooze. Snoozing is a view of the same drawer, with quick picks in the user's language.
+- The forecast's cards are read-only.
+
+### Fixed
+- **Editing or creating a recurring rule now refreshes Needs attention and the forecast.** `invalidateRecurringRuleQueries` (`useExpenseQueries.ts`) didn't invalidate `dueOccurrences` / `virtualOccurrences`, so a rule edited from the row's ⋯ › Edit rule kept its old amount until a reload. Found in the browser check.
+
+### Removed
+- `RecurringConfirmModal` and `RecurringSnoozeModal` (no consumer left). The confirm modal's paid-date and notes fields go with it (each expense is dated on its expected date; notes stay editable on the expense).
+
+### Technical
+- `recurringOccurrences.runAtomically(work)`: one Dexie `rw` transaction over `recurringRules`, `recurringOccurrences` and `expenses`; the batch service functions loop over the existing single-payment functions inside it.
+- Tests (+55 net): grouping and labels (15), currency order (2), batches on fake-indexeddb incl. rollback (12), batch hooks (3, replacing 3), list (5), drawer (10), page (4), i18n keys (5), rule-edit refresh (1), modals-gone guard (1). Full suite: 193 files, 2,930 passed, 4 skipped.
+- Debt: TD-069 (Needs attention looks back only 90 days), TD-070 (the shared drawer is 480 px wide on a 375 px phone).
+- Found, not changed: the page's "Total expenses" strip sums `db.transactions`, not the ledger's `db.expenses` (also found by MUT-58's smoke test).
+
 ## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
 
 **Scope:**
