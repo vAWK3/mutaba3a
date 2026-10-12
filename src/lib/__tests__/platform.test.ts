@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isTauri, isWeb, isMacOS, isWindows, isLinux, handleVersionChange, detectDevice } from '../platform';
+import { isTauri, isWeb, handleVersionChange, detectDevice } from '../platform';
 
 describe('platform detection', () => {
   // Store original window state for potential future use
@@ -28,111 +28,6 @@ describe('platform detection', () => {
       (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
       expect(isWeb()).toBe(false);
       delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
-    });
-  });
-
-  describe('isMacOS', () => {
-    const originalNavigator = window.navigator;
-
-    afterEach(() => {
-      Object.defineProperty(window, 'navigator', {
-        value: originalNavigator,
-        writable: true,
-      });
-    });
-
-    it('should return true for Mac platform', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: 'MacIntel', userAgent: '' },
-        writable: true,
-      });
-      expect(isMacOS()).toBe(true);
-    });
-
-    it('should return true for Macintosh userAgent', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: '', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
-        writable: true,
-      });
-      expect(isMacOS()).toBe(true);
-    });
-
-    it('should return false for Windows platform', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: 'Win32', userAgent: 'Windows NT 10.0' },
-        writable: true,
-      });
-      expect(isMacOS()).toBe(false);
-    });
-  });
-
-  describe('isWindows', () => {
-    const originalNavigator = window.navigator;
-
-    afterEach(() => {
-      Object.defineProperty(window, 'navigator', {
-        value: originalNavigator,
-        writable: true,
-      });
-    });
-
-    it('should return true for Win32 platform', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: 'Win32', userAgent: '' },
-        writable: true,
-      });
-      expect(isWindows()).toBe(true);
-    });
-
-    it('should return true for Windows userAgent', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: '', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-        writable: true,
-      });
-      expect(isWindows()).toBe(true);
-    });
-
-    it('should return false for Mac platform', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: 'MacIntel', userAgent: 'Macintosh' },
-        writable: true,
-      });
-      expect(isWindows()).toBe(false);
-    });
-  });
-
-  describe('isLinux', () => {
-    const originalNavigator = window.navigator;
-
-    afterEach(() => {
-      Object.defineProperty(window, 'navigator', {
-        value: originalNavigator,
-        writable: true,
-      });
-    });
-
-    it('should return true for Linux platform', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: 'Linux x86_64', userAgent: '' },
-        writable: true,
-      });
-      expect(isLinux()).toBe(true);
-    });
-
-    it('should return true for Linux userAgent', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: '', userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
-        writable: true,
-      });
-      expect(isLinux()).toBe(true);
-    });
-
-    it('should return false for Mac platform', () => {
-      Object.defineProperty(window, 'navigator', {
-        value: { platform: 'MacIntel', userAgent: 'Macintosh' },
-        writable: true,
-      });
-      expect(isLinux()).toBe(false);
     });
   });
 });

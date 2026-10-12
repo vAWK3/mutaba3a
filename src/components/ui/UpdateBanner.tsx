@@ -72,7 +72,7 @@ export function UpdateBanner() {
   }
 
   return (
-    <div className="update-banner" role="banner" data-testid="update-banner">
+    <div className="update-banner" role="status" data-testid="update-banner">
       <span className="update-banner-message">{message}</span>
       <div className="update-banner-actions">
         {primaryAction && (

@@ -9,7 +9,7 @@ import {
   useArchiveBusinessProfile,
 } from '../../hooks/useQueries';
 import { useT, useLanguage } from '../../lib/i18n';
-import { useTheme, type ThemeMode } from '../../lib/theme';
+import { useTheme, THEME_MODES } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { SyncSection } from '../../components/sync';
@@ -234,7 +234,7 @@ export function SettingsPage() {
               <div className="settings-label">{t('settings.theme.description')}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
+              {THEME_MODES.map((mode) => (
                 <button
                   key={mode}
                   className={`btn btn-sm ${theme === mode ? 'btn-primary' : 'btn-secondary'}`}
@@ -446,13 +446,13 @@ export function SettingsPage() {
           ) : updateError ? (
             <div className="text-muted">{t('settings.updates.checkFailed')}</div>
           ) : hasUpdate ? (
-            <div className="update-banner">
-              <div className="update-banner-content">
-                <div className="update-banner-title">{t('settings.updates.updateAvailable')}</div>
-                <div className="update-banner-versions">
-                  {t('settings.updates.currentVersion')}: <span className="update-banner-version">{APP_VERSION}</span>
+            <div className="settings-update-card">
+              <div className="settings-update-card-content">
+                <div className="settings-update-card-title">{t('settings.updates.updateAvailable')}</div>
+                <div className="settings-update-card-versions">
+                  {t('settings.updates.currentVersion')}: <span className="settings-update-card-version">{APP_VERSION}</span>
                   {' → '}
-                  {t('settings.updates.latestVersion')}: <span className="update-banner-version">{latestVersion}</span>
+                  {t('settings.updates.latestVersion')}: <span className="settings-update-card-version">{latestVersion}</span>
                 </div>
               </div>
               <a href="/download" className="btn btn-primary">

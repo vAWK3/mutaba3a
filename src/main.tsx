@@ -28,11 +28,13 @@ import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import "./components/ui/ErrorBoundary.css";
 import { handleVersionChange } from "./lib/platform";
+import { removeRetiredStorageKeys } from "./lib/retiredStorage";
 
 // Handle version changes early (clears update caches when app updates)
 // This ensures users who install a new DMG see the correct version
 declare const __APP_VERSION__: string | undefined;
 handleVersionChange(__APP_VERSION__ || "0.0.0");
+removeRetiredStorageKeys();
 
 // Lazy load landing pages (only imported in web build, tree-shaken from desktop)
 const LandingPage =

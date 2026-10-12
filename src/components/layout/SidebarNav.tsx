@@ -12,6 +12,7 @@ import { useMenuButton } from "../../hooks/useMenuButton";
 import { DocumentIcon as SharedDocumentIcon } from "../icons";
 import type { FeatureKey } from "../../types";
 import { visibleAddMenuActions, type AddMenuAction } from "./addMenuActions";
+import { ThemeToggle } from "./ThemeToggle";
 
 // Storage key for collapsed state
 const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
@@ -311,7 +312,11 @@ export function SidebarNav() {
         {!collapsed && (
           <div className="nav-section-header">{t("nav.sections.system")}</div>
         )}
-        {systemItems.map((item) => renderNavItem(item, true))}
+        {/* Appearance sits on Settings' row: nothing floats over content (MUT-79) */}
+        <div className="sidebar-footer-row">
+          {systemItems.map((item) => renderNavItem(item, true))}
+          <ThemeToggle />
+        </div>
       </div>
 
       {/* Expand toggle (visible only when collapsed) */}

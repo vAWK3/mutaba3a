@@ -30,6 +30,9 @@ vi.mock('../../../hooks/useActiveProfile', () => ({
 
 vi.mock('../../ui/ProfileQuickPicker', () => ({ ProfileQuickPicker: () => null }));
 
+// The readout has its own tests (FxRateReadout.test.tsx); here it only marks its place
+vi.mock('../FxRateReadout', () => ({ FxRateReadout: () => <span data-testid="fx-readout" /> }));
+
 function installFakeSettings(initial: Partial<Settings> = {}) {
   const row: Settings = { ...DEFAULT_SETTINGS, ...initial };
   const settings = { get: vi.fn(async () => ({ ...row })), update: vi.fn(async () => {}) };
@@ -105,5 +108,11 @@ describe('TopBar Add menu (MUT-15)', () => {
     installFakeSettings();
     await renderTopBar({ hideAddMenu: true });
     expect(screen.queryByRole('button', { name: /common\.add/ })).toBeNull();
+  });
+
+  it('shows the exchange rate in the top bar, with or without the Add menu (MUT-79)', async () => {
+    installFakeSettings();
+    await renderTopBar({ hideAddMenu: true });
+    expect(screen.getByRole('banner')).toContainElement(screen.getByTestId('fx-readout'));
   });
 });
