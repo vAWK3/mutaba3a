@@ -24,6 +24,7 @@ import { LanguageProvider } from '../../../lib/i18n';
 import { createAppQueryClient } from '../../../lib/queryClient';
 import { useDrawerStore } from '../../../lib/stores';
 import { useToastStore } from '../../../lib/toastStore';
+import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { formatLocalDate, todayLocalISO } from '../../../lib/dates';
 import { db } from '../../../db/database';
 import { clientRepo, transactionRepo } from '../../../db/repository';
@@ -254,6 +255,23 @@ describe('Home: Record payment from Needs attention (MUT-82)', () => {
       await waitFor(() => expect(within(attention()).queryByText('Logo redesign')).toBeNull());
       await waitFor(() => expect(payButton('$200')).toHaveFocus());
     });
+
+    // MUT-81 (eng review D10): the drawer calls markSaved unconditionally,
+    // but a row that correctly leaves via captureRowExit already has complete
+    // feedback (the slide-out, the Undo toast) -- the after-save flash must
+    // not ALSO fire "Saved to Acme Studio . Show" under it.
+    it('MUT-81: does not raise the after-save flash for a row the payment settled', async () => {
+      useSavedFlashStore.getState().clear();
+      const user = userEvent.setup();
+      renderHome();
+      await waitForHome();
+
+      await user.click(payButton('₪3,550'));
+      await user.click(await drawerRecordButton());
+
+      await waitFor(() => expect(within(attention()).queryByText('Logo redesign')).toBeNull());
+      expect(useSavedFlashStore.getState().pending).toBeNull();
+    });
   });
 
   it('keeps the row on a partial payment and shows what is still left', async () => {
@@ -272,6 +290,31 @@ describe('Home: Record payment from Needs attention (MUT-82)', () => {
     expect(within(attention()).getByText('Logo redesign')).toBeInTheDocument();
     expect(owedAmounts()).toBe('$200 ₪3,750');
     expect(plain(screen.getByRole('status').textContent)).toContain('Recorded ₪1,000 from Acme Studio');
+  });
+
+  // MUT-81: a partial payment keeps the row, so the flash's tint is the only
+  // after-save feedback it gets -- unlike a full payment, nothing else
+  // already tells this story.
+  it('MUT-81: tints the row a partial payment kept', async () => {
+    useSavedFlashStore.getState().clear();
+    const user = userEvent.setup();
+    renderHome();
+    await waitForHome();
+
+    await user.click(payButton('₪3,550'));
+    const amount = await within(dialog()).findByLabelText('Payment amount');
+    await user.clear(amount);
+    await user.type(amount, '1000');
+    await user.click(await drawerRecordButton());
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(useSavedFlashStore.getState().pending).toMatchObject({ kind: 'payment', clientId: expect.any(String) })
+    );
+    await waitFor(() => {
+      const row = within(attention()).getByText('Logo redesign').closest('tr');
+      expect(row).toHaveClass('row-flash');
+    });
   });
 
   it('Undo brings back the row, Owed now and the entry exactly, and focus to the row', async () => {

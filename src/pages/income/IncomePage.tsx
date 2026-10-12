@@ -24,6 +24,7 @@ import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, Pay
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
+import { useSavedFlashRows } from '../../hooks/useSavedFlash';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useIncomeFilters } from '../../hooks/useIncomeFilters';
 import type { IncomeFilters } from '../../hooks/useIncomeQueries';
@@ -84,10 +85,15 @@ export function IncomePage() {
     return query;
   }, [profileId, dateRange, statusFilter, search, clientScope]);
 
-  const { data: transactions = [], isLoading } = useIncome(queryFilters);
+  const { data: transactions = [], isLoading, isFetching } = useIncome(queryFilters);
 
   // Shaped once per result, so a render that isn't a new result reshapes nothing
   const rows = useMemo(() => transactions.map((tx) => toIncomeRow(tx)), [transactions]);
+  const isFlashed = useSavedFlashRows(
+    'income-page',
+    rows.map((row) => row.id),
+    { isLoading, isFetching }
+  );
   // One of two module-level lists: the same objects on every render
   const columns = incomeColumns(isCompact);
 
@@ -304,7 +310,7 @@ export function IncomePage() {
                 {rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="clickable"
+                    className={cn('clickable', isFlashed(row.id) && 'row-flash')}
                     onClick={() => handleRowClick(row.id)}
                   >
                     {columns.map((column) => (

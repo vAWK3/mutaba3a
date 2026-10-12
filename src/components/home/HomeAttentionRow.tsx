@@ -16,7 +16,7 @@
 import { useLayoutEffect, useRef, type MouseEvent } from 'react';
 import { Link } from '@tanstack/react-router';
 import { RecordPaymentButton } from '../ui';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount, cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import type { WorkRow } from '../clients/clientProfileRows';
 
@@ -26,13 +26,17 @@ export const ATTENTION_PAY_CLASS = 'home-attention-pay';
 export interface HomeAttentionRowProps {
   row: WorkRow;
   locale: string;
+  /** This row is the one a save just landed on (MUT-81): a soft tint plus a
+   *  leading rail, fading over ~1.5s. Never true for a row a full payment is
+   *  about to remove -- that row gets captureRowExit's slide-out instead. */
+  flashed?: boolean;
   onOpen: (row: WorkRow) => void;
   onRecordPayment: (row: WorkRow) => void;
   onArrive: (id: string, element: HTMLTableRowElement) => void;
   onLeave: (id: string, element: HTMLTableRowElement) => void;
 }
 
-export function HomeAttentionRow({ row, locale, onOpen, onRecordPayment, onArrive, onLeave }: HomeAttentionRowProps) {
+export function HomeAttentionRow({ row, locale, flashed, onOpen, onRecordPayment, onArrive, onLeave }: HomeAttentionRowProps) {
   const t = useT();
   const rowRef = useRef<HTMLTableRowElement>(null);
   const handlers = useRef({ onArrive, onLeave });
@@ -59,7 +63,7 @@ export function HomeAttentionRow({ row, locale, onOpen, onRecordPayment, onArriv
   );
 
   return (
-    <tr ref={rowRef} className="clickable" onClick={() => onOpen(row)}>
+    <tr ref={rowRef} className={cn('clickable', flashed && 'row-flash')} onClick={() => onOpen(row)}>
       <td className="home-row-main">
         {clientId ? (
           <Link to="/clients/$clientId" params={{ clientId }} className="home-attention-open" onClick={stop}>

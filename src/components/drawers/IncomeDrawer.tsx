@@ -14,7 +14,9 @@ import {
   useDocument,
   usePaymentRecords,
   useSettings,
+  useClients,
 } from '../../hooks/useQueries';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useNavigate } from '@tanstack/react-router';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
@@ -131,10 +133,16 @@ export function IncomeDrawer() {
   const { data: settings } = useSettings();
   const paymentRecordsQuery = usePaymentRecords(mode === 'edit' ? transactionId : undefined);
   const paymentRecords = paymentRecordsQuery.data ?? [];
+  // Same cache entry ClientTypeahead already warms (both call useClients()
+  // with no profileId), so this is a synchronous read, not a new fetch --
+  // the after-save flash (MUT-81) captures the client's name at save time
+  // rather than the announcer looking it up again when it resolves.
+  const { data: clients = [] } = useClients();
 
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
+  const markSaved = useSavedFlashStore((s) => s.markSaved);
 
   // Document lock (MUT-13): an entry exported on a document is immutable in
   // the repository regardless of the Invoices switch; the drawer says so up
@@ -317,6 +325,8 @@ export function IncomeDrawer() {
       notes: data.notes,
     };
 
+    const clientName = values.clientId ? clients.find((c) => c.id === values.clientId)?.name : undefined;
+
     try {
       if (mode === 'edit') {
         // An edit never falls through to creating a new entry
@@ -328,6 +338,7 @@ export function IncomeDrawer() {
           id: transactionId,
           data: buildIncomeUpdate(values, { now: nowISO(), existing: existingTx, hasRecords }),
         });
+        markSaved({ kind: 'income', ids: [transactionId], clientId: values.clientId, clientName, profileId: values.profileId });
       } else {
         const newTx = await createMutation.mutateAsync(buildIncomeCreate(values, nowISO()));
         // Show toast with undo for duplicated transactions
@@ -341,6 +352,9 @@ export function IncomeDrawer() {
             },
             duration: 5000,
           });
+        }
+        if (newTx?.id) {
+          markSaved({ kind: 'income', ids: [newTx.id], clientId: values.clientId, clientName, profileId: values.profileId });
         }
       }
       closeIncomeDrawer();
