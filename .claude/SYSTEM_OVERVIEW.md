@@ -12,10 +12,10 @@
 
 ### Core Philosophy
 - **Privacy by Design**: Zero telemetry, no cloud dependency, data never leaves the device
-- **Offline-First**: Full functionality without internet; sync is optional and user-controlled
+- **Offline-First**: Full functionality without internet; moving data to another device is an explicit JSON backup and restore
 - **Desktop-First UX**: Feels like a tool/cockpit, not a website; drawer-first interactions
 - **Multi-Currency Native**: Track income/expenses in original currencies; FX conversions explicit
-- **Local-Only Sync**: Device-to-device via LAN or encrypted file bundles; no cloud middleman
+- **No Sync**: Device-to-device sync (LAN, `.msync` bundles) was retired in MUT-73 (ADR-053), and local↔hosted sync is off the roadmap. A local profile and a hosted profile never exchange data
 
 ### Target Users
 - Freelancers managing multiple clients and projects
@@ -54,21 +54,16 @@
 ├────────────────────────────────────┼────────────────────────────────────┤
 │                          Storage Layer                                   │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐     │
-│  │     Dexie       │  │   Sync OpLog    │  │   File System       │     │
-│  │  (IndexedDB)    │  │ (Append-only)   │  │  (Tauri fs plugin)  │     │
+│  │     Dexie       │  │  JSON Backup    │  │   File System       │     │
+│  │  (IndexedDB)    │  │ (export/restore)│  │  (Tauri fs plugin)  │     │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────┘     │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           Sync Layer (P2P)                               │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐   │
-│  │    HLC      │ │   OpLog     │ │  Conflict   │ │     Bundle      │   │
-│  │  (Clock)    │ │  (CRDT-ish) │ │  Resolver   │ │  (File Sync)    │   │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────┘   │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+The sync layer (HLC, op-log, conflict resolver, bundles, LAN server) that sat
+below this diagram was deleted in MUT-73 (ADR-053); Dexie v21 dropped its eight
+tables.
 
 ### Layer Responsibilities
 
@@ -78,7 +73,6 @@
 | **State** | Data fetching, caching, UI state | TanStack Query, Zustand, URL |
 | **Repository** | Business logic, data access abstraction | Custom Repo pattern |
 | **Storage** | Persistence, indexing | Dexie (IndexedDB) |
-| **Sync** | Cross-device synchronization | HLC, OpLog, Bundle encoding |
 
 ---
 
@@ -163,7 +157,7 @@
 
 ### Implemented (v0.0.48)
 
-- **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone, and MUT-58 deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, and the refresh every write path ran for it). The `moneyEventVersions` sync table stays (ADR-029).
+- **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone, and MUT-58 deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, and the refresh every write path ran for it). The `moneyEventVersions` sync table stayed then (ADR-029); MUT-73 dropped it with the other sync tables in Dexie v21 (ADR-053).
 - **Clients index (MUT-7 / ADR-035)** — `/clients` answers "who owes me, and who is late". The strip shows the client count and Owed now for everyone listed. The columns are Client · Owed Now (per currency, or Settled) · Overdue (per currency, with the oldest item's age) · Last Payment (date and amount, or Never paid) · Last Activity. The default order is owed now descending, ranked by today's exchange rate with nothing shown converted. Click a header to sort; the sort persists in the URL. A row opens the profile.
 - **Adding income (MUT-5 / ADR-039)**: the income drawer is the work record.
   - **Fast path:** "What did you do?" (focused), the amount (currency prefix, LTR in Arabic, Arabic-Indic digits accepted, ambiguous input or a symbol naming another currency refused) and the client. Title, Tab, amount, Tab, client, Enter, Enter saves, even while a new client is still being created.
@@ -176,7 +170,7 @@
 - **Client profile (MUT-3 / ADR-033)** — `/clients/:id` is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, invoice actions while Invoices is on, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). The retainers card follows while Retainers is on.
 - **Drawer motion (MUT-80 / ADR-044)**: every drawer (local and portal) renders the shared `DrawerFrame`. It springs in from its edge, follows a horizontal drag with a rubber band, and dismisses on a release past half (projected momentum); a press catches it mid-motion. Closing is immediate: the exit is an inert snapshot sliding out along the same edge (mirrored in RTL; cross-fades under reduced motion). Focus is trapped while open and returns to the trigger. `motion@13.4.4` is a dependency.
 - **Unassigned records (2026-10-11)**: records saved without a `profileId` show in no profile's lists. `OrphanedRecordsBanner` (AppShell) counts them with `runIntegrityCheck`; its **Review now** opens `OrphanedRecordsDrawer` in place, which lists the clients, projects, income and expenses involved and assigns them all to the default profile or one by one, each starting on its linked client's profile. "Unassigned" is defined once (`isOrphaned`, `src/db/orphanedRecords.ts`). Clients and Projects no longer open a modal by themselves. Locked income entries can't be assigned yet (TD-035).
-- **Optional areas (Advanced features, MUT-12 / ADR-032)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo, sync) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/documents*` and `/retainers` redirect home while off; the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Data tools). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home.
+- **Optional areas (Advanced features, MUT-12 / ADR-032)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/documents*` and `/retainers` redirect home while off; the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Data tools). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -194,14 +188,12 @@
 | Dark Theme | ✅ Complete | CSS variables theming |
 | Desktop App | ✅ Complete | Tauri macOS/Windows |
 | PWA | ✅ Complete | Offline-capable web app |
-| Sync Foundation | ✅ Complete | OpLog, HLC, conflict types defined |
+| Device sync | ❌ Retired (MUT-73, ADR-053) | LAN pairing, `.msync` bundles, op-log and its tables deleted |
 
 ### In Progress / Planned
 
 | Feature | Status | Priority |
 |---------|--------|----------|
-| WiFi Sync (LAN) | 🔄 Foundation ready | High |
-| Bundle Sync (File) | 🔄 Types defined | High |
 | Reports Presets | 🔄 Routes exist | Medium |
 | FX Rate Import | 🔄 Manual only | Low |
 | SQLite Migration | 📋 Designed | Future |
@@ -287,10 +279,9 @@ npm run tauri build      # macOS/Windows bundles
 - **No server-side database** — user owns their data completely
 - **No telemetry, analytics, or tracking** of any kind
 
-### Sync Security
-- **Device pairing** requires physical presence (QR code or pairing code)
-- **Bundle files** encrypted with user-chosen passphrase (AES-256)
-- **LAN sync** uses device identity keys (Ed25519) for authentication
+### No Device Sync
+- **No LAN listener and no mDNS advertisement**: the desktop's sync server was deleted (MUT-73, ADR-053). The only listener left is the one-shot OAuth callback on 127.0.0.1, which nothing in the app opens yet (TD-075)
+- **Paired-device tokens are removed**: every desktop launch deletes the retired `paired_devices.json` from the app config directory
 - **No data transmitted** without explicit user action
 
 ### Document Immutability
@@ -329,28 +320,13 @@ npm run tauri build      # macOS/Windows bundles
    └─> Guided tips (first transaction, first client)
 ```
 
-### Device Sync Onboarding
+### Moving to Another Device
 
 ```
-1. Sync Settings Page
-   └─> "Add Device" button
-
-2. Choose Method
-   ├─> WiFi (LAN)
-   │   └─> QR code on new device
-   │   └─> Scan from trusted device
-   │   └─> Verify fingerprints match
-   │
-   └─> File Bundle
-       └─> Export encrypted bundle
-       └─> Transfer via USB/AirDrop/email
-       └─> Import on new device
-       └─> Enter passphrase
-
-3. Sync Complete
-   └─> Devices paired
-   └─> Future syncs automatic (LAN) or manual (file)
+Settings › Data tools › Export Backup  →  move the JSON file  →  Settings › Data tools › Import Backup
 ```
+
+Device-to-device sync was retired in MUT-73 (ADR-053).
 
 ---
 
@@ -471,11 +447,6 @@ mini-crm/
 │   │   ├── stores.ts         # Zustand stores
 │   │   ├── dates.ts          # Date-only logic: overdue, due-soon (ADR-022)
 │   │   └── utils.ts          # Formatting helpers
-│   │
-│   ├── sync/                  # Sync system
-│   │   ├── core/             # HLC, OpLog, conflict resolution
-│   │   ├── transport/        # Bundle encoding, crypto
-│   │   └── stores/           # Sync state
 │   │
 │   ├── types/                 # Type definitions
 │   ├── demo/                  # Demo mode
