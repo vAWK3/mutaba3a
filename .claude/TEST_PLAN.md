@@ -1691,3 +1691,22 @@ All four passed on the first run (`release-qa pw --record`, retries off), and ea
 - Arabic (RTL): the same full and partial flows, the amount typed in Arabic-Indic digits ("١٠٠٠" → "يبقى ‏2,550 ₪ مستحقًا"), the toast "تم تسجيل ‏3,550 ₪ من Acme Studio · تراجع".
 - Found and fixed there: a payment drawer opened while another drawer's exit snapshot was still in the page submitted the snapshot's form (duplicate `id="partial-payment-form"`); snapshots now strip ids.
 - Light/dark, EN/AR, 1280 and 375 px, the slide-out mid-frame and the drawer were checked from Playwright screenshots (headless, so the motion runs). At 375 px the Record Payment button moves to its own line (container query); there is no page-level horizontal scroll.
+
+### MUT-81 — After saving, show where the entry or payment landed (epic MUT-74, 2026-10-12)
+Plan: `.claude/designs/mut-81-after-save-feedback.md` (two `/plan-eng-review` passes, one `/plan-design-review` pass). ADR-057, TD-077, TD-078.
+
+| File | Covers |
+|---|---|
+| `src/lib/__tests__/savedFlashStore.test.ts` (new) | `flashTarget`/`matchesFlash` pure; `markSaved` sets/resets state, a second save replaces the first; claim on a settled matching report, not on an unsettled one; unclaimed only once every registered list has reported settled with no match; one claim is enough even if another list never has the row; deregistering the only unsettled list lets resolution proceed; the backstop fires unclaimed with zero registered lists, and a claim before it cancels it; the tint clock starts at the claiming report, not at `markSaved`; `rearm` restarts the clock and sets `messaged`; `clear` resets everything; never written to `localStorage` |
+| `src/hooks/__tests__/useSavedFlash.test.tsx` (new) | `useSavedFlashRows` claims a visible row once settled; does not report settled while loading; deregisters on unmount, letting resolution proceed without it; `useSavedFlashResolution` exposes `pending`/`claimed`/`flashIds` |
+| `src/components/layout/__tests__/SavedFlashAnnouncer.test.tsx` (new) | Renders nothing while unresolved; announces "Saved" politely once claimed and raises no message; raises the message with Show when nothing claims the row; Show switches the active profile, navigates, and re-arms so the original message can't fire twice; never shows the same message twice for one save |
+| `src/lib/i18n/__tests__/savedFlashKeys.test.ts` (new) | `savedFlash.*` keys non-empty in en and ar, with `{client}` kept |
+| `src/lib/__tests__/utils.test.ts` | `isolate()`: wraps in FSI (U+2068…U+2069); does not force a strong right-to-left string to render left-to-right (the case the LRI it replaces got wrong) |
+| `src/components/clients/__tests__/OwedNowSummary.test.tsx` | `:65` (renamed from "keeps amounts left-to-right…") now expects the shared `isolate()`'s FSI codepoint — a deliberate tripwire against a silent revert to the old LRI |
+| `src/components/__tests__/IncomeDrawer.test.tsx` | Captures the saved entry for the flash with the client's name resolved at save time (create); captures an edit too |
+| `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | Captures a recorded payment (`ids: [record.id, transactionId]`) and an updated one; skips the flash when the transaction has no `profileId` (defensive, legacy data) |
+| `src/components/home/__tests__/HomeNeedsAttention.test.tsx` | A full payment raises **no** flash (the drawer's unconditional `markSaved` is undone by `clear()` in the branch `captureRowExit` already fires); a partial payment tints the row it keeps (`tr.row-flash`) |
+
+**Scope note.** The design review (`/plan-design-review`) approved eleven refinements beyond the ticket's five literal acceptance criteria; this build implements the mechanism and all five criteria, and discloses the rest as TD-077 (anchored-strip presentation, kept as the existing Toast instead) and TD-078 (pagination, the Owed-now tick, currency-block collapse, and a focus chain outside Home) rather than silently dropping them.
+
+**What was run.** `npm run lint`: 0 errors (12 pre-existing warnings, none in changed files). `npm run typecheck`: clean (both `tsconfig.app.json` and `tsconfig.hosted.json`). `npx vitest run`: 218 files, 3,186 passed, 4 skipped (pre-existing). `npm run build`: clean (the one chunk-size warning is pre-existing, unrelated to this change). **Not run:** `npm run test:e2e` / `release-qa` — no browser spec was written for this ticket in this session.

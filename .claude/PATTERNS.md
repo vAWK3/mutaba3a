@@ -1934,3 +1934,16 @@ When an action removes the element that will hold focus (the drawer returns focu
 
 ### A card that gets narrow reflows by container query
 A list inside a card that is narrow on a phone and also in a two-column layout on a small window (Home's cards) reflows with `container-type: inline-size` on the card and `@container (max-width: …)`, not a viewport media query. For a table, switch `table`/`tbody` to `display: block` and each `tr` to a grid, move the borders from cells to rows, and give the action cell `grid-column: 1 / -1`.
+
+---
+
+## App patterns added by MUT-81 (2026-10-12)
+
+### A save is claimed by whichever list renders it, resolved from what the lists report -- never a global fetch counter
+When a save needs to be found again by any one of several lists that might render it (a client profile's entry row and its payment row; a page that might or might not currently show it), give every list a `useSavedFlashRows(listId, ids, queryResult)` call that registers itself and reports `settled = !isLoading && !isFetching` on its own render. A shared store resolves "claimed" the instant any registered list's settled ids intersect the pending save, and "not claimed" only once **every** registered list has reported settled with no match. Watching a single global `useIsFetching()` for 1→0 looks simpler but is wrong: it counts every unrelated query on the page, and TanStack Query has a documented case where invalidating during an in-flight initial fetch reuses that fetch's promise and settles with no trailing refetch, so the global counter can hit zero while a list still holds pre-save data. Derive `settled` inside the hook, not from a value the caller passes in, so no list can get it wrong by using `!isLoading` alone. See `src/lib/savedFlashStore.ts`, `src/hooks/useSavedFlash.ts` (ADR-057).
+
+### An unconditional drawer call covers callers that pass no opt-in callback
+Some callers of a shared drawer pass an optional callback for a side effect (Home's `onRecorded`, for Undo); others pass none at all. If a second feature needs the same "a save happened" signal for every caller, it cannot ride the optional callback -- it must call from inside the drawer itself, unconditionally, after the mutation resolves. A caller that needs to suppress that signal for one specific case (Home's full-payment row, which already has complete feedback from its own slide-out) does so by undoing the effect synchronously in its own optional callback, which runs in the same tick right after -- not by asking the drawer to skip the call in the first place. Confirm which callers actually pass the optional callback with a grep before assuming it is a universal hook point (MUT-81 eng review: `ClientWorkSection` and `IncomePage` pass none).
+
+### A background wash needs a second channel when the app already uses that token for "selected"
+A transient "this just changed" highlight that reuses an existing subtle-background token (`--accent-subtle`) will look identical to every other place that token already means "selected" or "active" -- and a flat wash is easy to miss if the eye is not already on the row. Add a second, cheap signal that reads in peripheral vision: a 3px leading rail on the logical inline-start edge (`box-shadow: inset 3px 0 0 var(--accent)`), so it mirrors correctly under `dir="rtl"` for free.

@@ -28,6 +28,37 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — After saving, show where the entry or payment landed (MUT-81)
+
+**Why:** After saving income or a payment, the drawer closed and the list updated with no highlight and no message. With a filter active, another profile selected, or a long list, the entry landed out of view with nothing to say where — the "entered it and can't find it" problem. Two `/plan-eng-review` passes (the second re-verified against MUT-82 and MUT-84 after they landed mid-review) and one `/plan-design-review` pass preceded the build: `.claude/designs/mut-81-after-save-feedback.md`.
+
+### Added
+- **`src/lib/savedFlashStore.ts`** (new): the one store carrying a save's ids, kind, client and profile from a drawer to whichever list renders it. Resolution is list-reported settled (every registered list must report before an unclaimed save raises its message), never a global `useIsFetching()` count — that races TanStack Query's own invalidation (ADR-057).
+- **`src/hooks/useSavedFlash.ts`** (new): `useSavedFlashRows(listId, ids, queryResult)` — one call per list, registers it and reports its own settled state; `useSavedFlashResolution()` for the announcer.
+- **`src/components/layout/SavedFlashAnnouncer.tsx`** (new, mounted once in `AppShell`): a visually-hidden, polite "Saved" when the row is visible; the existing `Toast` naming where the save went, with Show, when it is not. Show switches the active profile through the raw `profileStore` (never `useActiveProfile`'s wrapper, which silently refuses an id its own query has not loaded), navigates to the client profile or `/income` with its filters reset, and re-arms the flash so the message can't repeat.
+- **`tr.row-flash`** (`src/index.css`): a 1.5s `--accent-subtle` fade plus a 3px leading rail on the logical inline-start edge — the wash alone is already this app's "selected" look in 15 other places. Reduced motion holds the tint, skips the fade.
+- **`isolate()`**, exported from `src/lib/utils.ts` (U+2068 FSI … U+2069 PDI): the shared home for a bidi-isolate helper that existed as four private copies, two of them the wrong codepoint (U+2066 LRI, which always forces left-to-right — wrong for an Arabic client name). `OwedNowSummary.tsx` and `PartialPaymentDrawer.tsx` migrated; `RecurringAttentionList.tsx` and `RecurringMarkPaidDrawer.tsx` (already-FSI) are left for a follow-up (`TODOS.md` #6).
+- Five lists wired with one `useSavedFlashRows` call each: `HomeNeedsAttention`, `HomeRecentPayments`, `ClientWorkSection`, `ClientPaymentsSection`, `IncomePage`.
+
+### Changed
+- `IncomeDrawer` and `PartialPaymentDrawer` call `markSaved` after a successful create or update, before closing. The client's name is captured from data already in the query cache at save time, never looked up again later.
+- `PartialPaymentDrawer`'s call is unconditional: `ClientWorkSection` and `IncomePage` open it with no `onRecorded` callback at all, so the drawer itself is the only place that can know a save happened for those two screens.
+- `HomeNeedsAttention`'s full-payment branch calls `useSavedFlashStore.getState().clear()` right after the drawer's unconditional `markSaved` — that row already leaves via `captureRowExit` (ADR-055) with complete feedback (the slide-out, the Undo toast), and without this the flash would otherwise raise a confusing message under it, misfiring specifically for a payment that falls outside `useRecentPayments`'s last-10 window.
+
+### Technical
+- `ADR-057` records the mechanism and its five rejected alternatives.
+- `TD-077` (accepted): the message is the existing `Toast`, not the design review's anchored strip (5B) — none of the ticket's five acceptance criteria name a presentation surface.
+- `TD-078` (accepted): pagination, the Owed-now tick, currency-block collapse, and a non-Home focus chain are approved design-review decisions this build did not implement.
+
+### Verified
+- `npm run lint`: 0 errors (12 pre-existing warnings, none in changed files). `npm run typecheck`: clean. `npx vitest run`: 218 files, 3,186 passed, 4 skipped. `npm run build`: clean.
+- Not run: `npm run test:e2e` / `release-qa` (no browser spec written for this ticket).
+
+### Files
+`src/lib/savedFlashStore.ts` (new), `src/hooks/useSavedFlash.ts` (new), `src/components/layout/SavedFlashAnnouncer.tsx` (new), `src/components/drawers/IncomeDrawer.tsx`, `src/components/drawers/PartialPaymentDrawer.tsx`, `src/components/home/HomeNeedsAttention.tsx`, `src/components/home/HomeAttentionRow.tsx`, `src/components/home/HomeRecentPayments.tsx`, `src/components/clients/ClientWorkSection.tsx`, `src/components/clients/ClientPaymentsSection.tsx`, `src/pages/income/IncomePage.tsx`, `src/components/clients/OwedNowSummary.tsx`, `src/lib/utils.ts`, `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`, `src/components/layout/AppShell.tsx`; knowledge: `DECISIONS.md` (ADR-057), `TECH_DEBT.md` (TD-077, TD-078), `COMPONENT_REGISTRY.md`, `PATTERNS.md`, `TEST_PLAN.md`, `SYSTEM_OVERVIEW.md`, `TODOS.md` (#6)
+
+---
+
 ## [Unreleased] - 2026-10-12 — The MUT-82 and MUT-84 browser checks, now in `qa/`
 
 **Why:** MUT-82's five Playwright tests were dropped when MUT-97 retired `e2e/` (TD-064 item 7). MUT-84's split-view spec was planned but never written (TD-067). MUT-86's four checks were not lost: MUT-86 merged before MUT-97, which ported them as `web.record-payment.*`, so nothing was needed there. This adds the missing coverage to `qa/` and changes no app code.

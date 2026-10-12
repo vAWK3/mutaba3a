@@ -33,6 +33,27 @@
 **Impact**: `src/services/oauth/` (`connectWorkspace`, `getValidAccessToken`, `disconnectWorkspace`; 570 lines plus 74 test cases) and `src-tauri/src/oauth/` (the loopback listener and its three IPC commands) are only called from tests. They were built (MUT-28) for op-log sync over Malafat OAuth, which ADR-053 took off the roadmap. MUT-73 kept them as the ticket asked and moved them out of the sync tree. Until something calls them, they cost upkeep and a 127.0.0.1 listener's worth of attack surface that never opens, and TD-015 (durable tokens) has nothing to serve.
 **Remediation**: Decide whether the desktop app should ever sign in to a Malafat workspace. If yes, ticket the screen that calls `connectWorkspace` (and TD-015 with it). If no, delete both modules, the three commands, the opener plugin and its `*.malafat.app` permission, and `public/.well-known/oauth-client.json`.
 **Effort**: Small either way; the decision is the work.
+
+### TD-077: The after-save message is the existing floating Toast, not design review's anchored strip
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-81, ADR-057 point 6; design review decision 5B)
+**Priority**: Low
+**Impact**: Brief decision A1 (epic MUT-74) says "nothing floats over content," and MUT-79 shipped it for the FX widget, theme toggle and the Mac-app bar. MUT-81's `/plan-design-review` pass found the same tension in its own message and proposed an anchored strip in flow above the list instead (`SavedFlashStrip`, decision 5B), which also has room to say *why* a row is missing (its own filter, another business, a page number) rather than only that it is. The build reused `Toast` instead: none of the ticket's five literal acceptance criteria name a presentation surface, and `Toast` already has `role="status"`, `aria-live`, and action support, so it satisfies all five.
+**Remediation**: Build `SavedFlashStrip` per the design review's decisions 5B/6A/9A/4A/2A (`.claude/designs/mut-81-after-save-feedback.md`) and swap it in for the Toast call in `SavedFlashAnnouncer`. The underlying store (`savedFlashStore.ts`) needs no change; only the announcer's render branch for the unclaimed case does.
+**Effort**: Medium (one new component, its styles, and the responsive/RTL cases the design review specified)
+
+### TD-078: MUT-81's design-review refinements are unbuilt — pagination, the Owed-now tick, currency-block collapse, and a non-Home focus chain
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-81)
+**Priority**: Low
+**Impact**: `.claude/designs/mut-81-after-save-feedback.md` carries several approved decisions beyond the ticket's five literal acceptance criteria that this build did not implement:
+- **Pagination** (D7/D8/11A) for `ClientWorkSection` and `IncomePage`, both still defaulting to All Time with no bound — `src/components/ui/Pagination.tsx` still has zero UI callers. This was itself a scope addition the eng review pulled into MUT-81 from an unrelated performance finding, not part of the original ticket.
+- **The Owed-now count-up tick** (design 1A/3A) when a save changes the figure — `OwedNowSummary` still snaps to the new value.
+- **Currency-block collapse** (design 3A, eng review D9A's `captureBlockExit`) when a save clears or opens a currency entirely.
+- **A dedicated keyboard-focus chain** (design 10A) for the client profile, `/income`, and Show's cross-navigation — ADR-055 §6 already covers Home's full-payment path; the other three screens have no equivalent today, so a keyboard user's focus can fall to the page after a save there.
+**Remediation**: Each is independently buildable against the landed `savedFlashStore`/`useSavedFlashRows` mechanism; none requires touching it. Pick up from the named design decisions.
+**Effort**: Medium in total (pagination and the focus chain are the two with real behavioural weight; the tick and the block collapse are polish)
+
 ### TD-076: An untitled entry reads "—" on Income and "Untitled" on the client profile, and only titled rows open from the keyboard
 **Status**: Open
 **Added**: 2026-10-12 (MUT-62)

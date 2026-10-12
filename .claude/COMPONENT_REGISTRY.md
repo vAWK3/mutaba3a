@@ -1252,6 +1252,34 @@ toast.info('Syncing...');
 
 ---
 
+### SavedFlash (store + hook + announcer) — MUT-81, ADR-057
+**Store**: `src/lib/savedFlashStore.ts`
+**Hook**: `src/hooks/useSavedFlash.ts`
+**Announcer**: `src/components/layout/SavedFlashAnnouncer.tsx` (mounted once in `AppShell`)
+**Purpose**: After saving income or a payment, tint the row if it is on screen, or say where it went if it is not. One mechanism for every save path and every list, so no list reimplements the claim logic.
+
+```tsx
+// A drawer, after a successful create or update
+import { useSavedFlashStore } from '@/lib/savedFlashStore';
+const markSaved = useSavedFlashStore((s) => s.markSaved);
+markSaved({ kind: 'income', ids: [newTx.id], clientId, clientName, profileId });
+
+// A list that renders rows with ids
+import { useSavedFlashRows } from '@/hooks/useSavedFlash';
+const isFlashed = useSavedFlashRows('my-list-id', rows.map((r) => r.id), { isLoading, isFetching });
+// <tr className={cn('clickable', isFlashed(row.id) && 'row-flash')}>
+```
+
+- `markSaved` is unconditional in both `IncomeDrawer` and `PartialPaymentDrawer`: ClientWorkSection and IncomePage open the payment drawer with no callback, so the drawer is the only place that can know.
+- A list's `settled` state is derived inside `useSavedFlashRows` from the query result (`!isLoading && !isFetching`), never passed in loose, so no caller can race a refetch.
+- Resolution is list-reported settled (every registered list must report before an unclaimed save raises its message) — never a global `useIsFetching()` count, which races TanStack invalidation (see ADR-057).
+- `tr.row-flash` (`src/index.css`): a 1.5s `--accent-subtle` fade plus a 3px leading rail (an inset box-shadow on the logical inline-start edge, so it mirrors in RTL); `--accent-subtle` alone is already the app's "selected" look in 15 other places. Reduced motion holds the tint, skips the fade.
+- The announcer renders a visually-hidden `role="status" aria-live="polite"` "Saved" when claimed; otherwise it raises the existing `Toast` with a Show action that switches the active profile (via the raw `profileStore`, never `useActiveProfile`'s wrapper), navigates, and re-arms the flash so the message can't repeat.
+- **Not yet built** (see TD-077, TD-078): the design review's anchored-strip presentation, the Owed-now tick, currency-block collapse, pagination for the two unbounded lists, and a dedicated focus chain outside Home.
+- Tests: `src/lib/__tests__/savedFlashStore.test.ts`, `src/hooks/__tests__/useSavedFlash.test.tsx`, `src/components/layout/__tests__/SavedFlashAnnouncer.test.tsx`, plus integration coverage in `IncomeDrawer.test.tsx`, `PartialPaymentDrawer.test.tsx` and `HomeNeedsAttention.test.tsx`.
+
+---
+
 ### Modal
 **Location**: `src/components/modals/Modal.tsx`
 **Purpose**: Generic modal dialog.

@@ -523,3 +523,4 @@ mini-crm/
 | 2026-10-12 | 0.0.65 | MUT-62: `/income` and the project Transactions tab show each entry's title (What), cut to one line with the full title on hover and focus (`TruncatedTitle`); untitled shows a dash |
 | 2026-10-12 | 0.0.65 | MUT-84: Clients split view on wide windows (layout route, `BREAKPOINTS.clientsSplit`, keyboard walk, list search/sort in the URL) (ADR-050) |
 | 2026-10-12 | 0.0.65 | MUT-82: Record Payment from Home's Needs attention with Undo; row slide-out (`rowExit`); toast groups and pause; drawer `onRecorded`; exit snapshots drop ids (ADR-055) |
+| 2026-10-12 | 0.0.65 | MUT-81: after-save feedback — a saved row tints if visible, a toast names where it went if not, with Show; one shared `savedFlashStore`/`useSavedFlashRows` claim mechanism across five lists; shared `isolate()` (FSI) replaces two private bidi copies (ADR-057) |
