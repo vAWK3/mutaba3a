@@ -311,6 +311,33 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       expect(await store.receivables.getByIdIncludingDeleted(other.id, r.id)).toBeNull();
     });
 
+    it('softDeleteAdjustment: refuses a receivable money has already landed on, and says so by leaving it undeleted (MUT-65 undo/settle race)', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
+      const adjustment = (ms: number) =>
+        store.receivables.createAdjustment(
+          { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(ms), createdByUserId: 'user-1', requestId: null },
+          at(ms),
+        );
+
+      // The guard lives in the WHERE clause, not only in the caller: a settle that lands between
+      // routes/income.ts's paid/credited pre-check and this write must not leave a POSTED payment
+      // allocated to a row every read path then hides.
+      const paid = await adjustment(1);
+      await store.payments.create(payment(a.id, c.id, 2000n, [{ receivableId: paid.id, amountMinor: 2000n }]), at(2));
+      expect(await store.receivables.softDeleteAdjustment(a.id, paid.id, at(3))).toMatchObject({ id: paid.id, deletedAt: null, paidMinor: 2000n });
+      expect(await store.receivables.getById(a.id, paid.id)).toMatchObject({ id: paid.id, deletedAt: null });
+
+      const credited = await adjustment(4);
+      await store.receivables.credit(a.id, credited.id, { amountMinor: 1000n, netMinor: 1000n, vatMinor: 0n, reason: 'waived', effectiveDate: '2026-10-08', requestId: null }, at(5));
+      expect(await store.receivables.softDeleteAdjustment(a.id, credited.id, at(6))).toMatchObject({ id: credited.id, deletedAt: null, creditedMinor: 1000n });
+
+      // An untouched one still voids, so the guard is the money and nothing else.
+      const clean = await adjustment(7);
+      expect(await store.receivables.softDeleteAdjustment(a.id, clean.id, at(8))).toMatchObject({ id: clean.id, deletedAt: at(8) });
+    });
+
     it('Received can stand alone with no client, and optionally carries a matter', async () => {
       const store = await makeStore();
       const a = await org(store, 'A');

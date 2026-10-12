@@ -23,6 +23,8 @@ const SAME_ORIGIN = { origin: 'http://localhost' };
 function harness() {
   const store = new MemoryLedgerStore();
   const calls: Array<{ repo: string; method: string }> = [];
+  /** `repo.method` → a one-shot side effect to run immediately before that store call, so a race can be staged deterministically. */
+  const interleave = new Map<string, () => Promise<unknown>>();
   const recording = new Proxy(store, {
     get(target, repo) {
       const value: unknown = Reflect.get(target, repo, target);
@@ -34,7 +36,11 @@ function harness() {
           if (typeof method !== 'string' || typeof fn !== 'function') return fn;
           return (...args: unknown[]) => {
             calls.push({ repo, method });
-            return (fn as (...a: unknown[]) => unknown).apply(r, args);
+            const key = `${repo}.${method}`;
+            const hook = interleave.get(key);
+            if (!hook) return (fn as (...a: unknown[]) => unknown).apply(r, args);
+            interleave.delete(key);
+            return hook().then(() => (fn as (...a: unknown[]) => unknown).apply(r, args));
           };
         },
       });
@@ -52,7 +58,7 @@ function harness() {
     // A generous idle/absolute expiry: the read-surface tests advance the clock days ahead to cross a due date; session-expiry behaviour itself is routes-sessions.test.ts's job, not this file's.
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: true, trustedProxyHops: 1 },
   });
-  return { app, store, calls, clock };
+  return { app, store, calls, clock, interleave };
 }
 type Harness = ReturnType<typeof harness>;
 
@@ -291,6 +297,26 @@ describe('DELETE /v1/income/{id} — undo (AC 9)', () => {
     const res = await del(received.id);
     expect(res.status).toBe(409);
     expect((await read(res)).error.details).toMatchObject({ reason: 'ALREADY_ALLOCATED' });
+  });
+
+  it('a settle landing between the paid/credited check and the write → 409 ALREADY_SETTLED; the entry stays visible, money and all', async () => {
+    const { h, p, u, create, del } = await setup();
+    const c = await customer(h, u, p.id);
+    const owed = await read(await create({ ...BASE_OWED, customerId: c.id, amount: '500.00' }));
+
+    // The race, staged exactly: the settle fires inside the undo request, after its guard read and before its write.
+    h.interleave.set('receivables.softDeleteAdjustment', async () => {
+      const settled = await h.app.request(`/v1/receivables/${owed.id}/settle`, json({}, { ...u.as(p.id), ...idem() }));
+      expect(settled.status).toBe(201);
+    });
+
+    const res = await del(owed.id);
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'ALREADY_SETTLED' });
+    // Not voided: a POSTED payment is allocated to this row, and every read path must keep showing it.
+    expect(await h.store.receivables.getById(p.id, owed.id)).toMatchObject({ deletedAt: null, paidMinor: 50000n, status: 'SETTLED' });
+    const list = await read(await h.app.request(`/v1/receivables?customerId=${c.id}`, { headers: u.as(p.id) }));
+    expect(list.items.map((x: Loose) => x.id)).toContain(owed.id);
   });
 
   it('an id created by another user (second membership on the same personal profile) → 404', async () => {

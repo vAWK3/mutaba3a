@@ -876,7 +876,8 @@ export class MemoryLedgerStore implements LedgerStore {
     softDeleteAdjustment: async (organizationId, id, at) => {
       const r = this.recs.get(id);
       if (!r || r.organizationId !== organizationId) return null;
-      if (!r.deletedAt) r.deletedAt = at;
+      // Mirrors the Prisma WHERE clause: money on the row refuses the void, and the undeleted record says so.
+      if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n) r.deletedAt = at;
       return { ...r };
     },
   };

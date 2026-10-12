@@ -704,11 +704,16 @@ export interface ReceivableRepository {
   /** MUT-65: "Owed", written directly as origin ADJUSTMENT, agreementId null. */
   createAdjustment(input: CreateAdjustmentReceivableInput, at: Date): Promise<ReceivableRecord>;
   /**
-   * MUT-65 undo: a plain soft-delete. The caller (routes/income.ts) restricts
-   * this to `origin === 'ADJUSTMENT' && paidMinor === 0n && creditedMinor === 0n`
-   * before calling it — kept generic here so the guard logic lives in one
-   * visible place, matching MUT-42 D5's shape for expenses. Null for an id the
-   * organization never had; the same record (unchanged) when already deleted.
+   * MUT-65 undo: a soft-delete that refuses a receivable money has landed on.
+   * The caller (routes/income.ts) checks `origin === 'ADJUSTMENT'` and the
+   * ownership rule; the `paidMinor === 0n && creditedMinor === 0n` part is
+   * re-asserted here, atomically, so a settle landing between that check and
+   * this write cannot hide a row a POSTED payment is allocated to.
+   *
+   * Null for an id the organization never had. Otherwise the record as it now
+   * stands: `deletedAt` set means it was voided (or already was); `deletedAt`
+   * still null means the money guard refused, and the caller answers 409
+   * ALREADY_SETTLED.
    */
   softDeleteAdjustment(organizationId: string, id: string, at: Date): Promise<ReceivableRecord | null>;
 }

@@ -785,8 +785,11 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     // MUT-65: "Owed", written directly, not through an Agreement/Installment.
     createAdjustment: (input: CreateAdjustmentReceivableInput, at) => this.prisma.$transaction((tx) => createAdjustmentTx(tx, input, at)),
+    // The money guard is re-asserted in the WHERE, not trusted from the caller's earlier read: a settle
+    // landing in between would otherwise hide a row a POSTED payment is allocated to. Same shape as
+    // payments.reverse re-asserting `status: 'POSTED'`. A refusal shows up as a row that comes back undeleted.
     softDeleteAdjustment: async (organizationId, id, at) => {
-      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
   };

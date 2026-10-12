@@ -122,7 +122,10 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         if (receivable.origin !== 'ADJUSTMENT' || receivable.createdByUserId !== user.id) throw new ApiError('NOT_FOUND', 'No such income entry');
         if (receivable.deletedAt) return c.body(null, 204);
         if (receivable.paidMinor > 0n || receivable.creditedMinor > 0n) throw new ApiError('CONFLICT', 'This entry has already been settled', { reason: 'ALREADY_SETTLED' });
-        await store.receivables.softDeleteAdjustment(organization.id, receivable.id, now);
+        // The store re-asserts that guard atomically; a row that comes back still undeleted means a settle
+        // won the race since the check above, and this is the same refusal, not a silent 204.
+        const voided = await store.receivables.softDeleteAdjustment(organization.id, receivable.id, now);
+        if (voided && !voided.deletedAt) throw new ApiError('CONFLICT', 'This entry has already been settled', { reason: 'ALREADY_SETTLED' });
         await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'income.owed.voided', entityType: 'receivable', entityId: receivable.id, requestId: c.get('requestId') });
         return c.body(null, 204);
       }
