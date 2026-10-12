@@ -1543,11 +1543,38 @@ Plan: `.claude/designs/mut-83-owed-parity-tests.md`. ADR-049. Every new assertio
 - `npm run test:bundles`: passed.
 - `npx playwright test`: 21/21.
 
+### MUT-62 — the What column on /income (epic MUT-1, 2026-10-12)
+
+Plan: `.claude/designs/mut-62-income-work-column-tests.md`. **At the owner's request, lint, typecheck and tests were not run as a gate; they wait for the combined run on main after every lane merges.** The owner also stopped new test writing midway. The tests below were written first, against the planned code (red checkpoint `a43852b`). The e2e test (plan T14) was never written.
+
+| File | Covers | Run? |
+|---|---|---|
+| `src/pages/income/__tests__/incomeRows.test.ts` (new) | T1–T2: `toIncomeRow` (title trimmed, blank → none, Arabic kept, overdue only > 0, part-paid received, `canMarkPaid`); `incomeColumns` order, compact drops only Project, What's header key, same array on every call | Green once, before the stop-testing instruction |
+| `src/components/ui/__tests__/TruncatedTitle.test.tsx` (new) | T3–T7: a button named by the full title with `dir="auto"`; click/Enter opens once and doesn't bubble to the row; when cut, hover shows the tooltip, it survives moving onto it, focus shows it, Escape/blur/scroll hide it; placement left in LTR, right in RTL; no tooltip when the title fits | Green once, before the stop-testing instruction |
+| `src/pages/income/__tests__/IncomePage.test.tsx` | T8–T11: "What" right after Date; titles (Arabic too); dash for untitled and blank; dash for a missing project; the title button opens the entry once by click and Enter; compact keeps What, drops Project, cells line up; rows shaped once per result (`toIncomeRow` spied) | **Never run** |
+| `src/pages/income/__tests__/IncomePage.titleSearch.test.tsx` (new, fake-indexeddb) | T12, AC3: real Dexie and the real `useIncome`, with only the router stood in for. A URL `q` holding a title word lists just that entry; typing writes `q` and narrows; matching ignores case; Arabic finds Arabic; client-name search still finds untitled entries | **Never run** |
+| `src/pages/projects/__tests__/ProjectDetailPage.test.tsx` | T13: What after Date on the Transactions tab; title or dash; the title opens the income or expense drawer once | **Never run** |
+
+**Acceptance criteria with no passing test on the final tree** (none of the suites ran after the code was finished):
+- **AC1, column and dash:** IncomePage tests written, never run.
+- **AC2, truncation and the full title on hover and focus:** `TruncatedTitle` passed once; that the row stays one line is checked only in the browser.
+- **AC3, search by a title word:** an integration test written, never run.
+- **AC4, RTL mirror and Arabic titles:** no automated test; checked only in the browser.
+- **AC5, shaped rows and stable columns:** `incomeRows` passed once; the page-level `useMemo` test was never run.
+
+**Verified in the browser** (`web-mut62`, entries added in the dev database and removed afterwards):
+- **Titles:** a short title, a 100-character title, an untitled entry, a blank title, a long Arabic title and a mixed Arabic/Latin title, in both EN and AR (RTL) and in light and dark.
+- **Column:** What sits after Date, mirrored in RTL. The dash shows for untitled and blank titles.
+- **Truncation:** long titles cut to one line. Hover and Tab focus show the full title; Escape hides it, and Enter opens the drawer once. A title that fits shows no tooltip. Near the window's bottom the tooltip flips above the title.
+- **Search:** "stationery" and "بصرية" each narrowed the list to their entry via `?q=`.
+- **Project tab:** the Transactions tab shows the column, and clicking a title opens the income drawer once.
+- **375 px (AR, dark):** see the CHANGELOG for how the column behaves.
+
 ### MUT-84 — Clients split view on wide windows (epic MUT-74, 2026-10-12)
 
 Plan: `.claude/designs/mut-84-clients-split-view-tests.md`. ADR-050. TD-067.
 
-**Not run, at the owner's request.** The owner asked every lane of the epic to skip lint, typecheck and tests until all lanes have merged, then run them once on main. The tests below were written first and failed on the old code (checkpoint `6401562`: 8 files red). The targeted suites passed once mid-build (11 files, 178 tests), before the stop order. They have not run since the breakpoint moved from 1200 to 1280 px and main (MUT-97) was merged in. The full suite, `test:bundles` and any `qa/` run were never run. The split view's browser-level spec was not written (TD-067).
+**Not run, at the owner's request.** The owner asked every lane of the epic to skip lint, typecheck and tests until all lanes have merged, then run them once on main. The tests below were written first and failed on the old code (checkpoint `6401562`: 8 files red). The targeted suites passed once mid-build (11 files, 178 tests), before the stop order. They have not run since the breakpoint moved from 1200 to 1280 px and main (MUT-97) was merged in. The full suite, `test:bundles` and any `qa/` run were never run. The split view's browser-level spec (T19: the keyboard walk, Enter/Escape and ←/→ between the panes, the status line, Back after a walk, a deep link with a sort, a resize that keeps the profile, Arabic, axe) was never written and nothing was added under `e2e/`. It is **to port to `qa/` (MUT-97 kit)** as a `split-view` entry in `qa/features/web/clients.yaml` with its spec in `qa/specs/web/clients.spec.ts` (TD-067).
 
 | File | Covers |
 |---|---|

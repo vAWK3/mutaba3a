@@ -15,3 +15,4 @@ export { RecurringOccurrenceCard, RecurringOccurrenceList } from './RecurringOcc
 export { PaymentStatusBadge } from './PaymentStatusBadge';
 export { RecordPaymentButton, type RecordPaymentButtonProps } from './RecordPaymentButton';
 export { SortableHeader, type SortableHeaderProps } from './SortableHeader';
+export { TruncatedTitle, type TruncatedTitleProps } from './TruncatedTitle';

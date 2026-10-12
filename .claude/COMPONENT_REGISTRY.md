@@ -14,6 +14,7 @@
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
+| **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
@@ -841,6 +842,50 @@ ProjectDetailPage.
 
 **Used by**: IncomePage, ClientWorkSection, ClientPaymentsSection, ProjectDetailPage. Use it for any new table with a row-actions column; never write an empty `<th>`.
 **Tests**: `src/components/ui/__tests__/RowActionsHeader.test.tsx`
+
+---
+
+### TruncatedTitle
+**Location**: `src/components/ui/TruncatedTitle.tsx` (+ `.css`)
+**Purpose**: A record's title in a table row (MUT-62). It sits on one line and is cut with an ellipsis. It is a `<button>` that opens the record, so a keyboard can reach the row; its click stops propagation, so the row's own click doesn't open the record a second time. When the text is cut (`scrollWidth > clientWidth`), hover or keyboard focus shows the whole title in a tooltip. The tooltip:
+- is portalled to `<body>`, because `.data-table` scrolls and would clip it;
+- opens below the title from its inline start (the left edge, or the right edge when `<html dir="rtl">`), flips above when there's no room below, and is nudged inside the window with `nudgeInside`;
+- follows WCAG 1.4.13: the pointer can move onto it (it waits `HIDE_GRACE_MS` before hiding), Escape dismisses it, and blur, scroll and resize hide it;
+- is `aria-hidden`, because the button's accessible name is already the full title.
+
+The text takes its direction from its own first letter (`dir="auto"` plus `unicode-bidi: plaintext`, which beats theme.css's `:lang(ar) { direction: rtl }`, TD-048). An English title in the Arabic UI, or an Arabic one in the English UI, therefore starts at its beginning and ends in the ellipsis. A title that fits gets no tooltip.
+
+```tsx
+<td className="work-cell">
+  {row.title ? (
+    <TruncatedTitle title={row.title} onOpen={() => openEntry(row.id)} />
+  ) : (
+    <span className="text-muted">{EMPTY_CELL}</span>
+  )}
+</td>
+```
+
+Put it in a `td.work-cell` (`index.css`: `width: 40%; max-width: 0`), so the cell takes the spare width and cuts the title instead of widening the table. Give the date cell `date-cell` (`white-space: nowrap`), so the date doesn't wrap to make room for the title.
+**Used by**: IncomePage (the What column), ProjectDetailPage (the Transactions tab). The client profile's Work list still truncates with CSS only, with no tooltip (TD-076).
+**Tests**: `src/components/ui/__tests__/TruncatedTitle.test.tsx`
+
+### EMPTY_CELL
+**Location**: `src/lib/utils.ts`
+**Purpose**: The one dash (`—`) a table cell shows when it has nothing to show: an untitled entry's What, a missing project, client or category (MUT-62). The same glyph in every language. Use it in place of a literal `'-'` or `'—'` in new cells.
+
+### toIncomeRow / incomeColumns
+**Location**: `src/pages/income/incomeRows.ts`
+**Purpose**: `/income`'s pre-shaped rows and stable columns (MUT-62, CLAUDE.md performance guardrails).
+- **`toIncomeRow(tx)`** carries what every cell shows:
+  - the title, trimmed, with blank becoming undefined;
+  - client, project, status and payment status;
+  - overdue days, only when above 0;
+  - what was received on a part-paid entry;
+  - `canMarkPaid`;
+  - the entry itself, for `RecordPaymentButton`.
+- **The page shapes once per result**, in `useMemo([transactions])`.
+- **`incomeColumns(compact)`** returns one of two module-level arrays. The wide array is date · What · client · project · status · amount · actions; the compact one drops project. Each column has an i18n header key (`clients.profile.work.what` for What) and its header and cell classes. The header and every row render from the same array, so they can't drift.
+**Tests**: `src/pages/income/__tests__/incomeRows.test.ts`
 
 ---
 
