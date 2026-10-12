@@ -1351,3 +1351,25 @@ Plan: `.claude/designs/td-009-axe-structural-tests.md`. Each new assertion was w
 - `npm run build` and `npm run test:bundles`: OK.
 
 Main 8ef2df0 (MUT-65: `server/` and docs only) was merged in afterwards. Only lint and typecheck were re-run on the merged tree.
+
+### Release tooling — `make release web` / `make release server` (ADR-043, 2026-10-12)
+
+No automated tests. These scripts deploy; a test suite for them would either mock away the only thing they do or actually push and roll. They are verified by running the non-destructive halves and by reading the destructive half's dry run. What was verified on 2026-10-12, on `main` at `4eaa583`:
+
+| Checked | How | Result |
+|---|---|---|
+| `make help`, target dispatch | `make help`; `make --dry-run release web`; `make --dry-run release server` | pass |
+| An unknown target is rejected | `make release desktop` | exits 2, "unknown release target" |
+| Shell/Makefile syntax | `bash -n` on all three scripts; `make --dry-run` | pass |
+| Preflight catches a real dirty tree | `make preflight-web` with 8 uncommitted files | fails, lists them |
+| Preflight catches parked worktrees | same run, 2 epic worktrees checked out | fails, names both |
+| Preflight catches stale deps | `scripts/preflight.sh web` before `npm ci` | fails ("package-lock.json is newer than node_modules") — this is what the missing `openapi-typescript` binary looked like before the check existed |
+| …and passes once fixed | after `npm ci` | passes |
+| Server tools/credentials/config | `make preflight-server` | gcloud, ADC, docker, terraform, cloud-sql-proxy, tfvars all detected; `GCP_PROJECT_ID` and `TF_STATE_BUCKET` derived and cross-checked; `gs://…` confirmed readable |
+| The version prompt | `scripts/bump-version.sh server` with `9` then `2` | re-prompts on `9`, bumps minor `0.1.0 → 0.2.0` on `2`; reverted |
+| Non-interactive bumps | `BUMP=patch make bump-web`; `BUMP=keep`; `BUMP=custom BUMP_VERSION=9.9` | `0.0.65 → 0.0.66` across all five manifests **including `Cargo.lock`**; keep is a no-op; `9.9` rejected; reverted |
+| No terminal, no release | piped stdin, `/dev/tty` unopenable | bump and confirm both refuse with "set BUMP=…" / "re-run with AUTO=1" rather than hanging or defaulting to yes |
+| Server gates | `make check-server` | pass — lint, typecheck, **1210 tests**, `openapi:check` up to date, build |
+| Web gates | `make check-web` | lint (0 errors, 19 warnings), typecheck, **2857 tests**, and `test:bundles` (3 builds + the leak guard) all pass; **`hosted:types:check` fails** — pre-existing drift on `main`, logged as TD-058 |
+
+Not exercised, by nature: the push, `server/scripts/deploy.sh`, and the Netlify build. The confirmation in front of each is the tested part.

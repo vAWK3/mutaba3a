@@ -201,6 +201,16 @@
 
 ## 5. Deployment Architecture
 
+### Release entry points (since 2026-10-12, ADR-043)
+
+| Command | Rolls out | How |
+|---------|-----------|-----|
+| `make release web` | the frontend + landing at mutaba3a.app | gates → version prompt → a commit holding only the version files → `git push origin main`; Netlify builds `main` |
+| `make release server` | the hosted API + the portal it serves | gates → version prompt → commit + push → `server/scripts/deploy.sh` (image → `prisma migrate deploy` → `terraform apply` → smoke) |
+| `npm run release` | the desktop app (DMG, notarized, GitHub release) | unchanged; `scripts/release.ts` over `deploy.sh` |
+
+`scripts/preflight.sh` gates the first two and refuses to release from a tree that does not describe itself — wrong branch, uncommitted changes, an unmerged branch, a parked worktree, behind `origin`, the wrong `node` major, stale `node_modules` — then checks that target's tools, credentials and config (`make doctor` runs all of it read-only). Where the server deploy points is derived from `production.tfvars` and the last `terraform init`, and verified rather than trusted; `deploy.env` overrides it.
+
 ### Build Targets
 
 ```
