@@ -1,7 +1,7 @@
 # MUT-84 — Clients open in a split view beside the list on wide windows: test plan
 
 - **Ticket:** MUT-84 (epic MUT-74) · **Brief:** `landing-apple-redesign.md` C1 (approved 2026-10-11) · **ADR:** ADR-050 · **TD:** TD-067
-- **Status (2026-10-12):** T1–T18 written test-first (red at `6401562`), passed once mid-build; not run since, at the owner's request (one combined run on main after every lane merges). T19 not written: the owner stopped new tests, and MUT-97 replaced `e2e/` with `qa/` (TD-067). The breakpoint landed at 1280 px, not the 1200 first planned (measured in the browser).
+- **Status (2026-10-12):** T1–T18 written test-first (red at `6401562`), passed once mid-build; not run since, at the owner's request (one combined run on main after every lane merges). T19 not written: the owner stopped new tests, and MUT-97 replaced `e2e/` with `qa/` (TD-067). The breakpoint landed at 1280 px, not the 1200 first planned (measured in the browser). **Update 2026-10-12:** T1–T18 ran green in the combined check on main (`eeacd57`); T19 is written as four `qa/` features, `web.clients.split-view{,-deep-link,-resize,-rtl}`, all passing (TD-067 resolved).
 - **Relevant decisions:** ADR-003 (drawer-first), ADR-008 (URL-driven UI state), ADR-033 (client profile), ADR-035 (list order), ADR-044 (motion, reduced motion), ADR-049 (muted rows, sort in the URL)
 
 ## What is there today (2026-10-12, main `9f6a282`)
@@ -57,7 +57,7 @@
 | T16 | ClientsPage: existing MUT-7 and MUT-83 behaviour unchanged with `useClientsSearch` stood in by an in-memory model; the sort and search are written through it; a row click keeps the list's search; rows carry `data-client-id` (muted rows don't); the open client's link has `aria-current="page"` | component | `src/pages/clients/__tests__/ClientsPage.test.tsx` |
 | T17 | ClientDetailPage renders no top bar of its own; its sections are unchanged | component | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` |
 | T18 | i18n: the `clients.split.*` keys exist in en and ar; the announcement keeps `{name}` | unit | `src/lib/i18n/__tests__/clientsSplitKeys.test.ts` |
-| T19 | **e2e (not written, TD-067; now a `qa/` feature):** at 1280 px, a click opens the profile beside the list; ↓/↑ walk with the URL and `aria-current` following; Enter/Escape and →/← move focus between the panes; the status line names the client; Back from a walk returns to the full list; a deep link with `?sort=name` opens both panes sorted; resizing to 375 px and back keeps a value typed in the profile; in Arabic the list sits on the right and ← moves into the profile; axe on the split view adds no rule | e2e | `e2e/clients-split-view.spec.ts` |
+| T19 | **e2e (not written, TD-067; now a `qa/` feature):** at 1280 px, a click opens the profile beside the list; ↓/↑ walk with the URL and `aria-current` following; Enter/Escape and →/← move focus between the panes; the status line names the client; Back from a walk returns to the full list; a deep link with `?sort=name` opens both panes sorted; resizing to 375 px and back keeps a value typed in the profile; in Arabic the list sits on the right and ← moves into the profile; axe on the split view adds no rule | e2e | `qa/specs/web/clients.spec.ts` (`web.clients.split-view`, `-deep-link`, `-resize`, `-rtl`) |
 
 ## Edge cases
 
