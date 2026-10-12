@@ -33,6 +33,8 @@ const app = createApp({
     pepper: config.SESSION_TOKEN_PEPPER,
     idleMinutes: config.SESSION_IDLE_MINUTES,
     absoluteHours: config.SESSION_ABSOLUTE_HOURS,
+    deviceIdleDays: config.DEVICE_SESSION_IDLE_DAYS,
+    deviceAbsoluteDays: config.DEVICE_SESSION_ABSOLUTE_DAYS,
     // Plain-HTTP local development only; everywhere else the cookie is Secure and __Host- bound.
     secureCookie: config.NODE_ENV !== 'development',
     ...(config.PORTAL_ORIGIN ? { portalOrigin: config.PORTAL_ORIGIN } : {}),

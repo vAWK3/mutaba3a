@@ -14,6 +14,29 @@ export function generateSessionToken(): string {
   return randomBytes(SESSION_TOKEN_BYTES).toString('base64url');
 }
 
+/** cookie: the browser portal session (MUT-38); device: a native app's bearer token (MUT-64). */
+export type SessionKind = 'cookie' | 'device';
+
+/**
+ * A device session's bearer token (MUT-64). `mds_` is visually and
+ * structurally distinct from an API key's `mut_` prefix, so authenticate()
+ * routes a bearer token by its prefix instead of guessing — trying it as one
+ * kind of credential, then the other.
+ */
+const DEVICE_SESSION_PREFIX = 'mds_';
+
+export function generateDeviceSessionToken(): string {
+  return DEVICE_SESSION_PREFIX + randomBytes(SESSION_TOKEN_BYTES).toString('base64url');
+}
+
+export function isDeviceSessionToken(token: string): boolean {
+  return token.startsWith(DEVICE_SESSION_PREFIX) && token.length === DEVICE_SESSION_PREFIX.length + 43;
+}
+
+/** Longer than a browser session (SIGN_IN_POLICY's cookie lifetime lives in SessionSettings): capture happens days apart. */
+export const DEFAULT_DEVICE_IDLE_DAYS = 30;
+export const DEFAULT_DEVICE_ABSOLUTE_DAYS = 180;
+
 /**
  * HMAC-SHA256 under SESSION_TOKEN_PEPPER, hex. Random 256-bit tokens need no
  * pepper for secrecy; it exists so that rotating it signs everyone out at once.

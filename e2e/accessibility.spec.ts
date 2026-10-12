@@ -1,94 +1,74 @@
 import { test, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { logIncome, openFreshApp, openNewIncomeDrawer } from './support/app';
+import { expectOnlyKnownAxeViolations } from './support/axe';
 
+// Axe on the core surfaces (MUT-15): Home, Clients, a client's profile,
+// Income, Settings and the income drawer. Projects and Insights are optional
+// areas, off on a fresh install, so their routes send you home.
+// Each surface may only break the rules listed for it in support/axe.ts (TD-009).
 test.describe('Accessibility', () => {
-  test('Overview page should not have any automatically detectable accessibility issues', async ({ page }) => {
-    await page.goto('/');
+  test.describe('on a fresh install', () => {
+    test('Home, first run (Get Started)', async ({ page }) => {
+      await openFreshApp(page, '/');
+      await expect(page.getByRole('heading', { name: 'Get Started' })).toBeVisible();
 
-    // Wait for page to be ready
-    await expect(page.getByRole('heading', { name: /overview/i })).toBeVisible();
+      await expectOnlyKnownAxeViolations(page, 'homeFirstRun');
+    });
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .exclude('.recharts-wrapper') // Exclude charts as they have known issues
-      .analyze();
+    test('Settings', async ({ page }) => {
+      await openFreshApp(page, '/settings');
+      await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Data Management' })).toBeVisible();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+      await expectOnlyKnownAxeViolations(page, 'settings');
+    });
+
+    test('Income drawer, with More details open', async ({ page }) => {
+      await openFreshApp(page, '/income');
+      const drawer = await openNewIncomeDrawer(page);
+      await drawer.getByRole('button', { name: 'More details' }).click();
+      await expect(drawer.getByRole('group', { name: 'Status' })).toBeVisible();
+
+      await expectOnlyKnownAxeViolations(page, 'incomeDrawer', '[role="dialog"]');
+    });
   });
 
-  test('Transactions page should not have any automatically detectable accessibility issues', async ({ page }) => {
-    await page.goto('/transactions');
+  // One logged entry, so each page renders its real content, not an empty state
+  test.describe('with an entry logged', () => {
+    test.beforeEach(async ({ page }) => {
+      await openFreshApp(page, '/income');
+      await logIncome(page, { title: 'Logo redesign', amount: '1200', client: 'Acme Studio' });
+    });
 
-    // Wait for page to be ready
-    await expect(page.getByRole('heading', { name: /transactions/i })).toBeVisible();
+    test('Home', async ({ page }) => {
+      await page.goto('/app/');
+      await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Needs Attention' })).toBeVisible();
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .analyze();
+      await expectOnlyKnownAxeViolations(page, 'home');
+    });
 
-    expect(accessibilityScanResults.violations).toEqual([]);
-  });
+    test('Clients', async ({ page }) => {
+      await page.goto('/app/clients');
+      await expect(page.getByRole('link', { name: 'Acme Studio' }).first()).toBeVisible();
 
-  test('Projects page should not have any automatically detectable accessibility issues', async ({ page }) => {
-    await page.goto('/projects');
+      await expectOnlyKnownAxeViolations(page, 'clients');
+    });
 
-    // Wait for page to be ready
-    await expect(page.getByRole('heading', { name: /projects/i })).toBeVisible();
+    test('Client profile', async ({ page }) => {
+      await page.goto('/app/clients');
+      await page.getByRole('link', { name: 'Acme Studio' }).first().click();
+      await expect(page.getByRole('heading', { name: 'Work and billing' })).toBeVisible();
+      await expect(page.getByText('Logo redesign')).toBeVisible();
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .analyze();
+      await expectOnlyKnownAxeViolations(page, 'clientProfile');
+    });
 
-    expect(accessibilityScanResults.violations).toEqual([]);
-  });
+    test('Income', async ({ page }) => {
+      await page.goto('/app/income');
+      await expect(page.getByRole('row').filter({ hasText: 'Acme Studio' })).toBeVisible();
 
-  test('Clients page should not have any automatically detectable accessibility issues', async ({ page }) => {
-    await page.goto('/clients');
-
-    // Wait for page to be ready
-    await expect(page.getByRole('heading', { name: /clients/i })).toBeVisible();
-
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .analyze();
-
-    expect(accessibilityScanResults.violations).toEqual([]);
-  });
-
-  test('Reports page should not have any automatically detectable accessibility issues', async ({ page }) => {
-    await page.goto('/reports');
-
-    // Wait for page to be ready
-    await expect(page.getByRole('heading', { name: /reports/i })).toBeVisible();
-
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .analyze();
-
-    expect(accessibilityScanResults.violations).toEqual([]);
-  });
-
-  test('Settings page should not have any automatically detectable accessibility issues', async ({ page }) => {
-    await page.goto('/settings');
-
-    // Wait for page to be ready
-    await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
-
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .analyze();
-
-    expect(accessibilityScanResults.violations).toEqual([]);
-  });
-
-  test('Transaction drawer should have proper ARIA labels', async ({ page }) => {
-    await page.goto('/transactions');
-
-    // Open the transaction drawer
-    await page.getByRole('button', { name: /add transaction|new/i }).click();
-
-    // Wait for drawer to open
-    await expect(page.getByText(/new transaction/i)).toBeVisible();
-
-    // Run accessibility check on the drawer
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .include('[role="dialog"], .drawer, [class*="drawer"]') // Focus on drawer
-      .analyze();
-
-    expect(accessibilityScanResults.violations).toEqual([]);
+      await expectOnlyKnownAxeViolations(page, 'income');
+    });
   });
 });

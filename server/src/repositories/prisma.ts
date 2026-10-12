@@ -167,6 +167,7 @@ export class PrismaLedgerStore implements LedgerStore {
             data: {
               userId: input.userId,
               tokenDigest: input.tokenDigest,
+              kind: input.kind,
               createdAt: input.at,
               lastSeenAt: input.at,
               idleExpiresAt: input.idleExpiresAt,
@@ -1092,6 +1093,7 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     id: row.id,
     userId: row.userId,
     tokenDigest: row.tokenDigest,
+    kind: row.kind,
     createdAt: row.createdAt,
     lastSeenAt: row.lastSeenAt,
     idleExpiresAt: row.idleExpiresAt,

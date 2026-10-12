@@ -490,6 +490,8 @@ describe('Button', () => {
 
 ### 4. E2E Tests (Planned)
 
+> The live suite is `e2e/*.spec.ts`, listed under "E2E port-over" below (2026-10-12). This section is the original plan.
+
 **Scope**: Full user flows from UI to database.
 
 **Tool**: Playwright (recommended for cross-browser)
@@ -1236,3 +1238,47 @@ Checked by hand in the browser (2026-10-12, sample data):
 
 **Baseline after MUT-79 (2026-10-12)**: root `npx vitest run` **under Node 22** 182 files, 2857 passed, 4 skipped; `npm run typecheck`, `npm run lint` (0 errors, 16 pre-existing warnings) and `npm run test:bundles` pass. Under Node 26, files that touch `localStorage` fail even on main (TD-054).
 
+### MUT-64 — device sessions, native app sign-in for hosted accounts (`server/`, epic MUT-63)
+
+Plan: `.claude/designs/mut-64-device-sessions-tests.md`. Written red first per file; each new file confirmed failing for the right reason (missing export/route) before implementation.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Token shape | `src/auth/__tests__/sessions.test.ts` | `mds_` + 43 base64url chars, no repeats; same `sessionDigest` under the same pepper as a cookie token; `isDeviceSessionToken` true/false table incl. an API-key-shaped string |
+| Shared sign-in core | `src/auth/__tests__/sign-in.test.ts` | success threads `sessionKind`/lifetime into the session row; wrong password / unknown email / disabled user all `INVALID_CREDENTIALS`; lockout refuses the right password without a verify; throttle clears and `recordSignIn` fires on success; audit row carries `metadata.sessionKind` |
+| Middleware dispatch | `src/auth/__tests__/middleware.test.ts` (new) | a device bearer reaches `GET /v1/me` with full session access; refused on an apiKey-only route (`/v1/audit`); unknown/expired/revoked device session → `SESSION_EXPIRED`; device bearer + cookie together → ambiguous; a device token never parses as an API key and vice versa; missing/non-member `X-Mutaba3a-Profile` with a device bearer → 422/404, same as a cookie session |
+| Device-session routes | `src/__tests__/routes-device-sessions.test.ts` (new) | sign-in returns a token with no `Set-Cookie`; succeeds with no `Origin` header at all (the CSRF exemption is real, not accidentally-passing); unknown email / wrong password identical; lockout matches the portal's window; per-IP 429; validation 422; sign-out revokes, reuse afterward refused; no credential / an API key on sign-out → `UNAUTHENTICATED` / `PRINCIPAL_NOT_ACCEPTED` |
+| Route security (extended) | `src/__tests__/route-security.test.ts` | `deviceSession` accepts exactly the cookie-session surface minus cookie sign-out plus device sign-out; a device bearer is refused on every key-only operation (READ_ONLY_PROFILE / PRINCIPAL_NOT_ACCEPTED, same as a cookie session); an API key is refused on every device-session-only operation; a device bearer is let through on every operation that declares it |
+| Expense CRUD via device token | `src/__tests__/routes-expenses.test.ts` | one focused case: create, edit (`PATCH`) and delete an expense authenticated with a device bearer instead of a cookie — the ticket's named acceptance example |
+| Admin revocation | `src/__tests__/routes-sessions.test.ts` (extended) | password reset, disable, and explicit "revoke all" each hold a cookie session and a device session for the same user and prove both are revoked; the explicit revoke-all count reflects both (`2`, not `1`) |
+| Storage contract (memory + Postgres) | `store-contract-sessions.ts` (extended) | `kind` round-trips through `create`/`findByDigest`; `revokeAllForUser` revokes a cookie and a device session together in one call |
+| Config | `src/__tests__/config.test.ts` (extended) | `DEVICE_SESSION_IDLE_DAYS`/`DEVICE_SESSION_ABSOLUTE_DAYS` default to 30/180, bounds enforced |
+| ADR-037 invariant (regression) | `src/__tests__/no-self-registration.test.ts` | unchanged; confirmed the new route names don't trip the forbidden-word regex |
+
+**Baseline after MUT-64 (2026-10-12)**: server `npm test` 1110 passed, 11 skipped; server `npm run typecheck`/`npm run lint` clean; `store-contract-sessions.ts` also run against a local Postgres (`mutaba3a_dev_mut64`) via the Prisma-backed store; root `npm run typecheck` (app + hosted programs), `npm run openapi:check` and `npm run hosted:types:check` all clean.
+
+
+### E2E port-over — the stale Playwright specs on the current UI (TD-004, 2026-10-12)
+
+The 13 cases that failed on main (stale paths without `/app`, pages that no longer exist, the pre-MUT-5 drawer) are each updated or removed. Helpers live in `e2e/support/`:
+- `openFreshApp(page, path)` waits for the Welcome dialog and skips it, which creates the default USD profile;
+- `openNewIncomeDrawer(page)` opens the drawer from the top bar's "+ Add" › Income;
+- `logIncome(page, …)` logs an entry for a new client;
+- `expectOnlyKnownAxeViolations(page, surface)` fails on any axe rule not listed for that surface in `KNOWN_AXE_VIOLATIONS` (TD-009).
+
+| File | Was | Now |
+|---|---|---|
+| `e2e/accessibility.spec.ts` | 7 cases: Overview, Transactions, Projects, Clients, Reports, Settings, transaction drawer. None reached its page | 7 cases. On a fresh install: Home first run (Get Started), Settings, the income drawer with More details open. With one entry logged: Home, Clients, the client profile, Income. Projects and Reports were removed: optional areas, off by default, whose routes send you home. Transactions was removed: `/transactions` redirects to Income |
+| `e2e/settings.spec.ts` | 4 cases: language, theme, data management, theme toggle. The theme case passed without reaching Settings: `/settings` is outside the `/app` basepath, and its loose text matches hit whatever rendered there | 3 cases: switching to Arabic sets `lang="ar"` and `dir="rtl"`, and English restores them; Dark, Light and System set and clear `html[data-theme]`; Data Management › Export JSON › Export downloads `mutaba3a-Default-Profile-<date>.csv`. The "show theme" case is folded into the theme switch |
+| `e2e/income-drawer.spec.ts` (was `transaction.spec.ts`) | 3 cases: create income, empty-amount error, Income/Expense/Receivable type switch | 3 cases: an amount alone saves an entry that shows as Unpaid, with No client, in the Income list; Save with no amount shows "Amount is required" and keeps the drawer open; under More details, Due Date shows for Earned and Invoiced and hides for Received. The type switch no longer exists: a receivable is unpaid income, and expenses are an optional area |
+| `e2e/navigation.spec.ts` | passed alone, failed once under parallel load | Uses `openFreshApp`. The old one-off `isVisible()` check could run before the Welcome dialog mounted, and the dialog then swallowed the first sidebar click |
+
+**Verified:**
+- 19/19 pass with `income-fast-path.spec.ts`, which is unchanged.
+- The suite also passes `--repeat-each 3` (57/57) and `--repeat-each 2` (38/38, after the rebase onto MUT-64/MUT-78), and on a cold dev server started by Playwright. The slowest test took 12 s.
+- Mutation check: taking `heading-order` off the Settings allowlist fails that case. The failure names the rule, its help text and the element.
+- `eslint e2e` and `tsc --strict` over `e2e/` are clean. `e2e/` is in no tsconfig program, so `npm run typecheck` doesn't cover it.
+
+**How it was run:** the committed `playwright.config.ts` pins 5173 (TD-004). The runs used a throwaway config with `webServer: npx vite --port 5193 --strictPort` and `reuseExistingServer`, deleted afterwards along with `test-results/`.
+
+**Gate (2026-10-12, on main 89a0adb plus this branch):** `npm run lint` shows 0 errors and 16 warnings, none in `e2e/`. `npm run typecheck` is clean. `npx vitest run`: 176 files, 2,832 passed, 4 skipped. `npm run build` is OK.

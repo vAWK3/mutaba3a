@@ -76,6 +76,10 @@ components:
       in: cookie
       name: __Host-mut_session
       description: "Hosted-portal session (MUT-38). Set by POST /v1/sessions; httpOnly, SameSite=Strict, same origin only. Organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user's memberships."
+    deviceSession:
+      type: http
+      scheme: bearer
+      description: "Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user's memberships."
     adminToken:
       type: apiKey
       in: header
@@ -252,6 +256,15 @@ components:
       required:
         - email
         - password
+    DeviceSession:
+      allOf:
+        - $ref: "#/components/schemas/Me"
+        - type: object
+          properties:
+            token:
+              type: string
+          required:
+            - token
     IntegrationStatusResponse:
       type: object
       properties:
@@ -4188,6 +4201,7 @@ paths:
       summary: The signed-in person and the hosted profiles they may open
       security:
         - session: []
+        - deviceSession: []
       responses:
         "200":
           description: Me
@@ -4197,6 +4211,65 @@ paths:
                 $ref: "#/components/schemas/Me"
         "401":
           description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/device-sessions:
+    post:
+      tags:
+        - Device sessions
+      summary: Sign in from a native app (returns a bearer token)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInRequest"
+      responses:
+        "201":
+          description: Signed in; the token is shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSession"
+        "401":
+          description: INVALID_CREDENTIALS — the same answer for every refusal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/device-sessions/current:
+    delete:
+      tags:
+        - Device sessions
+      summary: Sign out (revokes the device-session token server-side)
+      security:
+        - deviceSession: []
+      responses:
+        "204":
+          description: Signed out
+        "401":
+          description: No valid device session
           content:
             application/json:
               schema:
@@ -4452,6 +4525,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -4526,6 +4600,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -4780,6 +4855,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -4865,6 +4941,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -5165,6 +5242,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       responses:
         "200":
           description: Rates
@@ -5315,6 +5393,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -5399,6 +5478,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -5702,6 +5782,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -5787,6 +5868,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -6169,6 +6251,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -6528,6 +6611,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -6626,6 +6710,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -6750,6 +6835,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -6919,6 +7005,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -7009,6 +7096,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -7260,6 +7348,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             $ref: "#/components/schemas/Currency"
@@ -7305,6 +7394,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -7357,6 +7447,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -7602,6 +7693,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -7688,6 +7780,7 @@ paths:
       security:
         - apiKey: []
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -7792,6 +7885,7 @@ paths:
       summary: List expenses, newest first
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: integer
@@ -7896,6 +7990,7 @@ paths:
       description: In its original amount and currency, never converted. Personal versus firm-associated is the profile, optionally narrowed by customerId/projectId; with projectId alone the customer is the project's.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -7950,6 +8045,7 @@ paths:
       summary: An expense with its receipts
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8001,6 +8097,7 @@ paths:
       description: Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8071,6 +8168,7 @@ paths:
       description: 204 again for an expense already deleted; 404 for an id this profile never had.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8119,6 +8217,7 @@ paths:
       description: PDF, JPEG or PNG up to 10 MB; at most 10 per expense. PUT the bytes to upload.url with upload.headers, then POST …/receipts/{receiptId}/complete. The object key never contains the filename.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8183,6 +8282,7 @@ paths:
       description: 422 UPLOAD_INCOMPLETE when no object exists yet; 422 UPLOAD_MISMATCH when its size or content type differ from what was declared. Idempotent once READY.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8246,6 +8346,7 @@ paths:
       summary: A short-lived signed download URL for a READY receipt
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8309,6 +8410,7 @@ paths:
       summary: Delete a receipt (soft; the object is removed)
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8369,6 +8471,7 @@ paths:
       description: Defaults to this month in the organization timezone; from and to are inclusive. One block per currency — never summed across currencies. customerId null = spending linked to no client.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8425,6 +8528,7 @@ paths:
       description: "The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the general one otherwise. Archived categories only with includeArchived=true."
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8472,6 +8576,7 @@ paths:
       description: 409 CATEGORY_NAME_TAKEN when the profile already has the name in any letter case.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -8533,6 +8638,7 @@ paths:
       description: An archived category stays on the expenses that have it but cannot be newly chosen.
       security:
         - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string

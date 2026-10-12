@@ -1,15 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { openFreshApp } from './support/app';
 
 test.describe('Navigation', () => {
   // MUT-15: a fresh install's sidebar is the core four; optional areas are
   // off by default, so none of their entries (or the legacy ones) appear.
   test('a fresh install shows Home, Clients, Income, Settings and each one navigates', async ({ page }) => {
-    await page.goto('/app/');
-    const welcome = page.getByRole('dialog');
-    if (await welcome.isVisible().catch(() => false)) {
-      await welcome.getByRole('button', { name: /skip for now/i }).click();
-      await expect(welcome).toBeHidden();
-    }
+    await openFreshApp(page, '/');
 
     const sidebar = page.locator('aside.sidebar');
     await expect(sidebar.locator('a.nav-item')).toHaveText(['Home', 'Clients', 'Income', 'Settings']);

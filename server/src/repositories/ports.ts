@@ -1,5 +1,6 @@
 import type { ApiKeyEnvironment } from '../auth/api-key.js';
 import type { KeyScope } from '../auth/scopes.js';
+import type { SessionKind } from '../auth/sessions.js';
 import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
 
@@ -850,6 +851,8 @@ export interface SessionRecord {
   id: string;
   userId: string;
   tokenDigest: string;
+  /** cookie: the browser portal session; device: a native app's bearer token (MUT-64). */
+  kind: SessionKind;
   createdAt: Date;
   lastSeenAt: Date;
   idleExpiresAt: Date;
@@ -862,6 +865,7 @@ export interface SessionRecord {
 export interface CreateSessionInput {
   userId: string;
   tokenDigest: string;
+  kind: SessionKind;
   at: Date;
   idleExpiresAt: Date;
   absoluteExpiresAt: Date;

@@ -1,9 +1,9 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
-import { clientIp, generateSessionToken, isSameOriginRequest, sessionCookieName, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
-import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '../auth/users.js';
+import { signIn, warmDummyHash } from '../auth/sign-in.js';
+import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
+import type { PasswordHasher } from '../auth/users.js';
 import { sessionAccess } from '../auth/writability.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
@@ -29,7 +29,6 @@ export interface SessionRouteOptions {
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
 export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/me', 'DELETE /v1/sessions/current']);
 
-const USER_AGENT_MAX = 200;
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv> {
@@ -37,25 +36,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
-
-  // One hash with the configured parameters, made on first use, so an unknown email costs what a known one does.
-  let dummy: Promise<string> | undefined;
-  const dummyHash = () => (dummy ??= passwordHasher.hash(generateOneTimePassword()));
-  void dummyHash(); // warm it now, so the first unknown email is not slower than the rest
-
-  async function auditToMembers(c: Context<AppEnv>, user: UserRecord, action: 'user.signed_in' | 'user.locked_out') {
-    for (const m of await store.memberships.listByUser(user.id)) {
-      await store.audit.append({
-        organizationId: m.organizationId,
-        actorType: action === 'user.signed_in' ? 'USER' : 'SYSTEM',
-        actorId: action === 'user.signed_in' ? user.id : null,
-        action,
-        entityType: 'user',
-        entityId: user.id,
-        requestId: c.get('requestId'),
-      });
-    }
-  }
+  warmDummyHash(passwordHasher);
 
   app.openapi(
     createRoute({
@@ -85,37 +66,15 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       }
 
       const { email, password } = c.req.valid('json');
-      const key = normalizeEmail(email);
-      const user = await store.users.findByEmail(key);
-      const locked = throttle.isLocked(key, now) || (user?.lockedUntil ? user.lockedUntil.getTime() > now.getTime() : false);
-      const matches = await passwordHasher.verify(user?.passwordHash ?? (await dummyHash()), password);
-
-      if (!user || locked || !matches || user.status !== 'ACTIVE') {
-        if (!locked) {
-          const lockUntil = throttle.recordFailure(key, now);
-          if (user) {
-            await store.users.recordFailedSignIn(user.id, now, lockUntil);
-            if (lockUntil) await auditToMembers(c, user, 'user.locked_out');
-          }
-        }
-        throw new ApiError('INVALID_CREDENTIALS', 'That email and password do not match');
-      }
-
-      throttle.clear(key);
-      const signedIn = (await store.users.recordSignIn(user.id, now)) ?? user;
-      const token = generateSessionToken();
-      const absoluteExpiresAt = new Date(now.getTime() + settings.absoluteHours * 3_600_000);
-      await store.sessions.create({
-        userId: user.id,
-        tokenDigest: sessionDigest(settings.pepper, token),
-        at: now,
-        idleExpiresAt: new Date(Math.min(now.getTime() + settings.idleMinutes * 60_000, absoluteExpiresAt.getTime())),
-        absoluteExpiresAt,
-        userAgent: c.req.header('user-agent')?.slice(0, USER_AGENT_MAX) ?? null,
-      });
+      const { user, token } = await signIn(
+        c,
+        { store, passwordHasher, throttle, pepper: settings.pepper },
+        { email, password },
+        'cookie',
+        { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
+      );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      await auditToMembers(c, signedIn, 'user.signed_in');
-      return c.json(await buildMe(store, signedIn), 201);
+      return c.json(await buildMe(store, user), 201);
     },
   );
 
@@ -145,7 +104,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       path: '/v1/me',
       tags: ['Sessions'],
       summary: 'The signed-in person and the hosted profiles they may open',
-      security: [{ session: [] }],
+      security: [{ session: [] }, { deviceSession: [] }],
       responses: {
         200: { description: 'Me', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('No valid session'),
@@ -158,7 +117,8 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
   return app;
 }
 
-async function buildMe(store: LedgerStore, user: UserRecord) {
+/** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */
+export async function buildMe(store: LedgerStore, user: UserRecord) {
   const access = sessionAccess();
   const profiles = [];
   for (const membership of await store.memberships.listByUser(user.id)) {

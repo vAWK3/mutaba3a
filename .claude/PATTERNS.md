@@ -1391,6 +1391,34 @@ post due items with `const posting = lazyPostingOf(c, store)` →
 for a session; MUT-39). Never read `auth.apiKey` directly, and never call
 `unguarded()` anywhere else — a test pins its one caller.
 
+### Two bearer-token kinds are told apart by a distinct prefix, never by trying one then the other (MUT-64)
+An API key (`mut_<env>_<prefix>_<secret>`) and a device session
+(`mds_<secret>`) both arrive as `Authorization: Bearer <token>`.
+`authenticate()` branches on `isDeviceSessionToken(token)` (a prefix check)
+*before* attempting either verifier — never "try as a key, fall back to a
+session" — so a malformed or wrong-kind token gets the right error without a
+second, wasted lookup, and the two verifiers can't be confused with each
+other (a pinned test runs each token shape through the other's parser).
+Once verified, a device session is the exact same `'session'` `Principal` a
+cookie session is (same `writability.ts`/`store-guard.ts`, no new literal) —
+only the *transport* is new, not the authorization model. The two share a
+`validateSessionRecord` core in `middleware.ts` (digest lookup, expiry, user
+validity, touch) parameterized by idle window and rate-limit key prefix, and
+a `finishSessionAuth` tail (identity, profile selection, store guard) that
+both the cookie and device-bearer paths call — only the cookie-specific CSRF
+check sits outside it, since a device bearer has no comparable signal.
+
+### A shared credential-verification core beats two copies (MUT-64)
+The portal's cookie sign-in and the native app's device-session sign-in need
+the *identical* throttle/lockout/dummy-hash-timing/audit flow — the kind of
+"common behavior, not just similar-looking code" worth extracting on its own,
+let alone being the highest-risk logic in the ticket. `auth/sign-in.ts`'s
+`signIn()` takes the one real difference (`SessionKind`, and the lifetime to
+stamp) as parameters; both route files call it and do only their own
+transport-specific finish (set a cookie vs. return a token in the body). The
+existing route's test suite passing unmodified after the extraction is the
+regression proof it didn't change behavior.
+
 ### Store access is classified once; the guard lives in the store (MUT-39)
 Every `LedgerStore` repository method has an entry in `STORE_ACCESS`
 (`auth/store-guard.ts`): `read`, `control` (bookkeeping any request needs —
@@ -1669,3 +1697,13 @@ When an effect consumes a URL parameter (reads it, strips it with `replaceState`
 
 To undo a session without tracking every write, record when it started, and only start it on a database with none of the person's data. Leaving then removes the session's seeded rows by prefix and everything else by `createdAt >= startedAt`; imported or restored rows keep their older `createdAt` and survive (ADR-042).
 
+
+## E2E patterns — added 2026-10-12 (TD-004)
+
+### A spec starts from a fresh install with `openFreshApp`
+
+Every Playwright test gets an empty IndexedDB, so the Welcome dialog always opens once the profile query answers. `openFreshApp(page, path)` (`e2e/support/app.ts`) goes to `/app${path}`, clicks the dialog's "Skip for now" (which creates the default USD profile) and waits for the dialog to close. Never guard the skip with a one-off `isVisible()`: under parallel load the dialog can mount after the check and swallow the next click. Open the drawer from the top bar's "+ Add" › Income (`openNewIncomeDrawer`), which every page has; the empty-state "Add Income" button disappears once there is data. Scope buttons to `main` when the FX banner has one with the same name ("System").
+
+### Axe checks fail on new rules, not on known ones
+
+`expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.

@@ -65,6 +65,55 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — E2E: the stale Playwright specs run against the current UI (TD-004)
+
+**Scope:**
+- `e2e/accessibility.spec.ts`, `e2e/settings.spec.ts` (rewritten); `e2e/transaction.spec.ts` → `e2e/income-drawer.spec.ts` (rewritten); `e2e/navigation.spec.ts` (Welcome race)
+- `e2e/support/app.ts`, `e2e/support/axe.ts` (new)
+- TD-004, TD-009, TEST_PLAN, PATTERNS
+
+### Fixed
+- **The 13 failing e2e cases are updated or removed; the suite passes 19/19.** They opened paths outside the `/app` basepath and looked for pages, headings and a drawer that no longer exist (Overview, Transactions, Reports, Projects, the Income/Expense/Receivable switch).
+- `navigation.spec.ts` checked for the Welcome dialog once with `isVisible()`. Under parallel load the dialog could mount after the check and swallow the first sidebar click. It now waits for the dialog.
+
+### Changed
+- **Axe covers the core surfaces**: Home (first run, and with an entry), Clients, a client's profile, Income, Settings, and the income drawer with More details open. The pages that existed all have violations today. The owner chose to baseline them, not fix them here, so each surface lists the rules it is known to break (`KNOWN_AXE_VIOLATIONS`, all described in TD-009). Any other rule fails the test.
+- **Settings now checks what the controls do**, not just that they're visible: Arabic sets `lang`/`dir` and English restores them; Dark, Light and System set and clear `html[data-theme]`; Export downloads the default profile's CSV.
+- **The income drawer by mouse**: an amount alone saves an Unpaid entry with No client; an empty amount shows "Amount is required"; Due Date hides when the status is Received. The keyboard path stays in `income-fast-path.spec.ts`.
+
+### Removed
+- Axe checks for Projects and Reports. They are optional areas, off on a fresh install, and their routes send you home. Transactions is gone too, because `/transactions` redirects to Income.
+- The Income/Expense/Receivable type-switch case. A receivable is unpaid income (Earned or Invoiced), and expenses are their own optional area.
+
+## [Unreleased] - 2026-10-12 — MUT-64: device sessions — native app sign-in for hosted accounts
+
+**Scope:** `server/` only:
+- `prisma/schema.prisma` and migration `20261011213616_mut64_device_sessions` (`SessionKind` enum, `sessions.kind`)
+- `src/auth/{sessions,sign-in,middleware}.ts` (new: `sign-in.ts`), `src/routes/{sessions,device-sessions}.ts` (new: `device-sessions.ts`)
+- `src/routes/{customers,projects,payments,receivables,agreements,attachments,summaries,retainers,vat,fee-proposals,expenses,expense-categories}.ts` (security array only)
+- `src/{app,index,config,schemas}.ts`, `src/repositories/{ports,memory,prisma}.ts`
+- `openapi/openapi.yaml`, root `src/hosted/api/schema.d.ts`, `.env.example`
+- tests: `src/auth/__tests__/{sessions,sign-in,middleware}.test.ts` (new `sign-in.test.ts`, new `middleware.test.ts`), `src/__tests__/{routes-device-sessions,route-security,routes-sessions,routes-expenses,config}.test.ts` (new `routes-device-sessions.test.ts`), `src/repositories/__tests__/store-contract-sessions.ts`
+- `.claude/designs/mut-64-device-sessions{,-tests}.md` (new), ADR-037 amendment
+
+### Added
+- **A bearer-token principal for native apps.** `POST /v1/device-sessions` (email + password, same throttle/lockout/anti-enumeration timing as the portal) returns a token (`mds_<secret>`, prefix distinct from an API key's `mut_`) instead of setting a cookie. `DELETE /v1/device-sessions/current` revokes it.
+- **Exactly a portal session's access.** A device session is the `'session'` `Principal` for the writability matrix — same scopes, same store guard, same `X-Mutaba3a-Profile` organization selection — reachable on every route a cookie session is (13 route files' OpenAPI `security` gain `{ deviceSession: [] }`), minus the cookie-only `DELETE /v1/sessions/current`.
+- **Revocable the same way a cookie session is.** One `sessions` table (`kind: 'cookie' | 'device'`) means the operator's password reset, disable, and explicit "revoke sessions" all cover device sessions with zero changes to `admin-users.ts`.
+- **No same-origin check for a device token.** `authenticate()`'s CSRF/`Sec-Fetch-Site` enforcement stays scoped to the cookie branch; a native app has no comparable signal.
+- **Device-session lifetime**: 30-day idle, 180-day absolute (`DEVICE_SESSION_IDLE_DAYS`/`DEVICE_SESSION_ABSOLUTE_DAYS`, optional, default applied) — longer than a cookie's 120 min/12 h, since capture happens days apart.
+- **Audit gains `metadata.sessionKind`** on `user.signed_in`/`user.locked_out`, so an operator can tell a device sign-in from a portal one.
+- **Contract.** New `deviceSession` bearer security scheme; `SESSION_EXPIRED` reused for an invalid/expired/revoked device token (not a new code).
+
+### Changed
+- **`auth/sign-in.ts` (new)**: the credential-verification core (dummy-hash timing, throttle/lockout, audit) extracted out of `routes/sessions.ts` so the cookie and device routes share one tested implementation instead of two copies. `routes/sessions.ts`'s existing test suite passes unmodified — the proof the extraction didn't change cookie sign-in behavior.
+- **`middleware.ts`**: `authenticateSession`/the new `authenticateDeviceSessionToken` share a `validateSessionRecord` core; a `finishSessionAuth` helper is the tail both the cookie and device-bearer paths call after their own credential check.
+
+### Verified
+- Server gates: lint, typecheck, `openapi:check`, `hosted:types:check`.
+- `npm test` (server): 1110 passed, 11 skipped. Root `npm run typecheck` (app + hosted programs): clean.
+- `store-contract-sessions.ts` run against both `MemoryLedgerStore` and the Prisma-backed store (local Postgres).
+
 ## [Unreleased] - 2026-10-12 — MUT-78: "Open the web app" lands straight in sample data, with no dialogs
 
 **Scope:**

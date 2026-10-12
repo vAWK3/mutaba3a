@@ -1,45 +1,53 @@
 import { test, expect } from '@playwright/test';
+import { openFreshApp } from './support/app';
 
 test.describe('Settings', () => {
-  test('should show language settings', async ({ page }) => {
-    await page.goto('/settings');
-
-    // Check language section exists
-    await expect(page.getByText(/language/i)).toBeVisible();
+  test.beforeEach(async ({ page }) => {
+    await openFreshApp(page, '/settings');
   });
 
-  test('should show theme settings', async ({ page }) => {
-    await page.goto('/settings');
+  test('switches the language to Arabic (right-to-left) and back', async ({ page }) => {
+    const main = page.getByRole('main');
+    const html = page.locator('html');
+    await expect(main.getByRole('heading', { name: 'Language' })).toBeVisible();
 
-    // Check theme section exists
-    await expect(page.getByText(/theme/i)).toBeVisible();
-    await expect(page.getByText(/light/i)).toBeVisible();
-    await expect(page.getByText(/dark/i)).toBeVisible();
+    await main.getByRole('button', { name: 'العربية' }).click();
+    await expect(html).toHaveAttribute('lang', 'ar');
+    await expect(html).toHaveAttribute('dir', 'rtl');
+
+    await main.getByRole('button', { name: 'English' }).click();
+    await expect(html).toHaveAttribute('lang', 'en');
+    await expect(html).toHaveAttribute('dir', 'ltr');
   });
 
-  test('should show data management section', async ({ page }) => {
-    await page.goto('/settings');
+  test('switches between the dark, light and system themes', async ({ page }) => {
+    // Scoped to main: the FX banner has its own "System" button
+    const main = page.getByRole('main');
+    const html = page.locator('html');
+    await expect(main.getByRole('heading', { name: 'Theme' })).toBeVisible();
 
-    // Check data management section exists
-    await expect(page.getByText(/data management/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /export/i })).toBeVisible();
+    await main.getByRole('button', { name: 'Dark', exact: true }).click();
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+
+    await main.getByRole('button', { name: 'Light', exact: true }).click();
+    await expect(html).toHaveAttribute('data-theme', 'light');
+
+    // System drops the attribute and lets prefers-color-scheme decide
+    await main.getByRole('button', { name: 'System', exact: true }).click();
+    await expect(html).not.toHaveAttribute('data-theme');
   });
 
-  test('should toggle between themes', async ({ page }) => {
-    await page.goto('/settings');
+  test('Data Management exports the default profile', async ({ page }) => {
+    const main = page.getByRole('main');
+    await expect(main.getByRole('heading', { name: 'Data Management' })).toBeVisible();
 
-    // Find and click the dark theme option
-    const darkThemeButton = page.getByRole('button', { name: /dark/i });
-    await darkThemeButton.click();
+    await main.getByRole('button', { name: 'Export JSON' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Export Data' });
+    await expect(dialog).toBeVisible();
 
-    // Verify dark theme is applied (check for dark class on html/body)
-    await expect(page.locator('html').or(page.locator('body'))).toHaveAttribute('data-theme', 'dark');
-
-    // Click light theme
-    const lightThemeButton = page.getByRole('button', { name: /light/i });
-    await lightThemeButton.click();
-
-    // Verify light theme is applied
-    await expect(page.locator('html').or(page.locator('body'))).toHaveAttribute('data-theme', 'light');
+    // CSV is the format the dialog picks first
+    const download = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Export Default Profile' }).click();
+    expect((await download).suggestedFilename()).toMatch(/^mutaba3a-Default-Profile-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });

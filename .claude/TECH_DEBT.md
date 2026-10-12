@@ -26,6 +26,13 @@
 **Remediation**: Either pass `--no-experimental-webstorage` to the test workers (checked: `NODE_OPTIONS=--no-experimental-webstorage` makes the suite pass on 26.5.1), for example through vitest's `execArgv`, or pin Node 22 with `.nvmrc` plus `engines`. Doing both is fine.
 **Effort**: Small
 
+### TD-052: Malafat's vendored OpenAPI contract not re-verified against the new deviceSession scheme
+**Status**: Open
+**Added**: 2026-10-12 (MUT-64)
+**Priority**: Low
+**Impact**: MUT-64 adds a `deviceSession` bearer security scheme to the published OpenAPI contract (pure addition — no existing scheme changes shape, Malafat only ever uses `apiKey`). ADR-037 decision 9 set the precedent that a contract change gets Malafat's vendored parser refreshed and confirmed tolerant before it ships; that verification lives in the Malafat repo, outside this one's reach, and wasn't run as part of this ticket.
+**Remediation**: before the next deploy that includes this change, refresh Malafat's vendored envelope from `server/openapi/openapi.yaml` and confirm its parser doesn't choke on the unrecognized scheme name. Very likely a non-event given the addition is purely additive.
+
 ### TD-051: A first run stacks two first-run surfaces
 **Status**: Open
 **Added**: 2026-10-12 (MUT-78)
@@ -435,7 +442,7 @@ Sync infrastructure is in place (HLC, OpLog, types, conflict resolution). Bundle
 **Status**: In Progress
 **Priority**: Medium
 **Introduced**: 2024-05
-**Updated**: 2026-02-09
+**Updated**: 2026-10-12
 **Impact**: Critical flows not validated automatically
 
 **Description**:
@@ -458,13 +465,27 @@ is the landing page) and look for pages and headings that no longer exist
 `webServer`/`baseURL` also hard-code port 5173, which concurrent worktrees
 contend for.
 
+**State on 2026-10-12 (e2e port-over)**: the 13 stale cases are ported or
+removed and the whole suite passes (19/19; also `--repeat-each 3` and from a
+cold dev server). `accessibility.spec.ts` covers the core surfaces with a
+per-surface allowlist of known axe rules (TD-009); `settings.spec.ts`
+switches language and theme and downloads the CSV export;
+`transaction.spec.ts` became `income-drawer.spec.ts` (amount-only save,
+"Amount is required", Due Date vs Received); `navigation.spec.ts` lost a
+race on the Welcome dialog. Shared helpers live in `e2e/support/`. Until
+the port is configurable, run from a worktree with a throwaway config on a
+free port (`webServer: npx vite --port <port> --strictPort`) and delete it
+afterwards.
+
 **Remaining**:
-1. Port `accessibility`, `settings` and `transaction` specs to `/app/*` and the
-   current pages; make the port configurable (`E2E_BASE_URL`)
+1. Make the port configurable (`E2E_BASE_URL`) so worktrees stop needing a
+   throwaway config
 2. Add more E2E tests for:
    - Generate invoice
-   - Export data
-   - Demo mode toggle
+   - Import data (export is covered: the CSV download)
+   - Record payment from the Income list and the client profile
+   - The visitor sample entry (`/app/clients?sample=1`, MUT-78) and "Start with your own"
+   - Demo mode toggle (`?demo=1`)
 3. Add to CI pipeline (GitHub Actions)
 4. Expand browser coverage (Firefox, Safari)
 
@@ -556,7 +577,7 @@ Bundle size has grown significantly. Total precache is 11.5MB (though most is la
 **Status**: In Progress
 **Priority**: Medium
 **Introduced**: 2024-05
-**Updated**: 2026-02-09
+**Updated**: 2026-10-12
 **Impact**: App may not be fully accessible
 
 **Description**:
@@ -569,12 +590,45 @@ No formal accessibility audit has been performed. Some ARIA attributes exist but
   - Transaction drawer accessibility
 - Automated checks will catch common issues (WCAG violations)
 
+**State on 2026-10-12 (e2e port-over)**: those checks never reached a page
+(stale paths). `e2e/accessibility.spec.ts` now runs axe on Home (first run
+and with an entry), Clients, a client's profile, Income, Settings and the
+income drawer with More details open. Each surface may only break the rules
+listed for it in `KNOWN_AXE_VIOLATIONS` (`e2e/support/axe.ts`); any other
+rule fails the test. Owner's call: baseline and track here, fix separately.
+Known violations, measured in Chromium, light theme:
+- `color-contrast`, every page. White on the brand teal `#1d8a84` is 4.18:1:
+  primary buttons, "+ Add", the drawer's Save, and the client name links on
+  white. The active nav label and the sidebar "New" label (`#1d8a84` on
+  `#e8f3f3`) are 3.69:1. The profile avatar initials are 1.04:1. The FX
+  banner's "Live" chip is 2.95:1. The "Unpaid" status badge (`#d97706` on
+  `#fbf1e6`) is 2.85:1. Positive amounts (`#16a34a` on white) are 3.29:1.
+  Muted text (`#94a3b8`, the Clients "last payment" dash) is 2.56:1. This
+  belongs with MUT-74's palette work.
+- `landmark-no-duplicate-banner`, every page. The top bar, the FX banner and
+  the desktop-app banner are each a `banner` landmark.
+- `aria-dialog-name`, every drawer. `components/drawers/Drawer.tsx` sets
+  `role="dialog"` with no `aria-labelledby` pointing at its title.
+- `select-name`, on Income and the client profile (the period `<select>`)
+  and Settings (the default-currency `<select>`).
+- `empty-table-header`, on Income and the client profile: the row-actions
+  column header is empty.
+- `button-name`, on Settings: the business profile row's "more" (⋯) menu
+  button is icon-only.
+- `heading-order`, on Settings: the first section heading is an h3 directly
+  under the h1.
+
+Optional areas (Projects, Insights, Expenses, Retainers, Planning, Documents)
+have no axe coverage; they are off on a fresh install.
+
 **Remaining**:
 1. ~~Run axe-core or similar accessibility checker~~ ✅ Done
-2. Fix critical issues identified by axe-core
+2. Fix the violations above; remove each rule from `KNOWN_AXE_VIOLATIONS` as
+   its fix lands (the spec annotates a known rule that stops firing)
 3. Add ARIA labels to interactive elements
 4. Test with screen reader
 5. Document accessibility features
+6. Axe coverage for the optional areas, switched on
 
 **Effort**: Medium
 

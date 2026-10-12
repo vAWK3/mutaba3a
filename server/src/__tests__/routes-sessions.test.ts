@@ -77,6 +77,14 @@ async function signIn(h: Harness, email: string, password: string, headers: Reco
 
 const withSession = (token: string, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...extra });
 
+/** MUT-64: a device-session token for the same person, so "operator actions end sessions" can prove it covers both kinds. */
+async function deviceSignIn(h: Harness, email: string, password: string) {
+  const res = await h.app.request('/v1/device-sessions', json({ email, password }));
+  const { token } = (await read(res)) as { token: string };
+  return { token };
+}
+const withDevice = (token: string) => ({ authorization: `Bearer ${token}` });
+
 describe('POST /v1/sessions — sign in', () => {
   it('sets a __Host- httpOnly Strict cookie, returns Me without the token, records the sign-in', async () => {
     const h = harness();
@@ -290,37 +298,43 @@ describe('DELETE /v1/sessions/current — sign out', () => {
 });
 
 describe('operator actions end sessions', () => {
-  it('a password reset revokes every session of that user', async () => {
+  it('a password reset revokes every session of that user, cookie and device alike (MUT-64)', async () => {
     const h = harness();
     const f = await firm(h);
     const p = await person(h, f.org.id);
     const one = await signIn(h, p.email, p.password);
     const two = await signIn(h, p.email, p.password);
+    const device = await deviceSignIn(h, p.email, p.password);
     await h.app.request(`/admin/v1/users/${p.id}/password`, json({}, admin));
     for (const s of [one, two]) expect((await h.app.request('/v1/me', { headers: withSession(s.token) })).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
   });
 
-  it('disable revokes sessions and refuses sign-in; enable lets the user back in', async () => {
+  it('disable revokes sessions and refuses sign-in, cookie and device alike; enable lets the user back in', async () => {
     const h = harness();
     const f = await firm(h);
     const p = await person(h, f.org.id);
     const { token } = await signIn(h, p.email, p.password);
+    const device = await deviceSignIn(h, p.email, p.password);
     await h.app.request(`/admin/v1/users/${p.id}/disable`, json({}, admin));
     expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
     expect((await signIn(h, p.email, p.password)).res.status).toBe(401);
     await h.app.request(`/admin/v1/users/${p.id}/enable`, json({}, admin));
     expect((await signIn(h, p.email, p.password)).res.status).toBe(201);
   });
 
-  it('the operator can revoke all sessions explicitly', async () => {
+  it('the operator can revoke all sessions explicitly, cookie and device alike (MUT-64)', async () => {
     const h = harness();
     const f = await firm(h);
     const p = await person(h, f.org.id);
     const { token } = await signIn(h, p.email, p.password);
+    const device = await deviceSignIn(h, p.email, p.password);
     const res = await h.app.request(`/admin/v1/users/${p.id}/sessions/revoke`, json({}, admin));
     expect(res.status).toBe(200);
-    expect((await read(res)).revoked).toBe(1);
+    expect((await read(res)).revoked).toBe(2);
     expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
     expect((await h.app.request('/admin/v1/users/00000000-0000-4000-8000-000000000000/sessions/revoke', json({}, admin))).status).toBe(404);
   });
 });

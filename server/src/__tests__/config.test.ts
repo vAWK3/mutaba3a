@@ -61,6 +61,22 @@ describe('loadConfig — sessions (MUT-38)', () => {
   });
 });
 
+describe('loadConfig — device sessions (MUT-64)', () => {
+  it('defaults idle to 30 days, absolute to 180 days', () => {
+    const config = loadConfig(base);
+    expect(config).toMatchObject({ DEVICE_SESSION_IDLE_DAYS: 30, DEVICE_SESSION_ABSOLUTE_DAYS: 180 });
+  });
+
+  it.each([
+    ['DEVICE_SESSION_IDLE_DAYS', '0'],
+    ['DEVICE_SESSION_IDLE_DAYS', '366'],
+    ['DEVICE_SESSION_ABSOLUTE_DAYS', '0'],
+    ['DEVICE_SESSION_ABSOLUTE_DAYS', '731'],
+  ])('refuses %s=%s', (name, value) => {
+    expect(() => loadConfig({ ...base, [name]: value })).toThrow(name);
+  });
+});
+
 describe('loadConfig — portal serving (MUT-45)', () => {
   it('defaults to no portal dist dir (API-only)', () => {
     expect(loadConfig(base).PORTAL_DIST_DIR).toBeUndefined();

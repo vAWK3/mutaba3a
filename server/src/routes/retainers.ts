@@ -163,7 +163,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/retainers/{agreementId}/charges',
       tags: ['Retainers'],
       summary: 'The retainer and its charges to date',
-      security: [{ apiKey: [] }, { session: [] }],
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:read')] as const,
       request: { params: AgreementIdParamSchema },
       responses: { 200: { description: 'Charges', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
