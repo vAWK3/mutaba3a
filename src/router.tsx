@@ -39,10 +39,12 @@ const rootRoute = createRootRoute({
   ),
 });
 
-// Overview route
+// Overview route. Home and Clients are the owed screens: "All businesses"
+// applies to them only (MUT-89, ADR-051), read by AppShell's useOwedScreenSync.
 const overviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  staticData: { owedLens: true },
   component: OverviewPage,
 });
 
@@ -95,6 +97,8 @@ const projectDetailRoute = createRoute({
 const clientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients',
+  // An owed screen (MUT-89); a client beside the list sits under this layout
+  staticData: { owedLens: true },
   validateSearch: parseClientsSearch,
   component: lazyPage(() => import('./pages/clients/ClientsLayout'), 'ClientsLayout'),
 });
@@ -373,5 +377,9 @@ export const router = createRouter({
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
+  }
+  interface StaticDataRouteOption {
+    /** Home and Clients: the screens "All businesses" applies to (MUT-89, ADR-051) */
+    owedLens?: boolean;
   }
 }

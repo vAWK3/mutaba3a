@@ -69,7 +69,7 @@ interface ProfileState {
 **The screen flag comes from the route, in one place** (eng review D1: smaller arrangement).
 - The `/` and `/clients` routes in `src/router.tsx` carry `staticData: { owedLens: true }`. This is TanStack Router's built-in route tagging; a `StaticDataRouteOption` module augmentation gives it a type.
 - `/clients` is the layout route, so `/clients/:id` inherits the tag. That is right: on a wide window the list sits beside the profile (ADR-050), and the profile already counts every business (ADR-049 §3).
-- A few lines in `AppShell.tsx`, next to `useLeaveDisabledArea()`, read `useMatches()` and write `onOwedScreen` to the store in a `useLayoutEffect`, so the chrome never paints a stale lens. There is no pathname list and no basepath stripping. **Only the chrome reads this flag** (switcher, top bar, drawers); Home's and Clients' data never waits for it (eng review D3).
+- `useOwedScreenSync()` (in `useActiveProfile.ts`), called in `AppShell.tsx` next to `useLeaveDisabledArea()`, reads `useMatches()` and writes `onOwedScreen` to the store in a `useLayoutEffect`, so the chrome never paints a stale lens. There is no pathname list and no basepath stripping. **Only the chrome reads this flag** (switcher, top bar, drawers); Home's and Clients' data never waits for it (eng review D3).
 - Hooks and drawers read the store, never the router. So `useActiveProfile` stays router-free and every existing test that renders it without a router keeps working.
 
 **`useActiveProfile()` keeps its shape. Two fields become real again:**
@@ -119,7 +119,7 @@ interface ProfileState {
   - In All on an owed screen, `isAllProfiles` makes `initialProfileId` `''`. The required business field then shows up front (`profileInFastPath`), and save is blocked until a business is picked.
   - A `defaultProfileId` (from the Add menu's picker) still prefills it.
   - Tests pin this down.
-- **Every other page** (Income, Expenses, Projects, Insights, Planning): its queries wait for a resolved business id and never read with a blank one. Each has a loading test: no records and no empty-state flash before the id arrives (eng review D8).
+- **Every other page** (Income, Expenses, Projects, Insights, Planning): its queries wait for a resolved business id and never read with a blank one (eng review D8). This is built as **one gate in `AppShell`**: the routed page mounts only once businesses have loaded (owner's choice during the build), with one `AppShell` gate test.
 - **i18n:** change `profileSwitcher.allProfiles` to "All businesses" / "كل الأعمال", and add keys for the per-business muted rows and the indicator. Tags use `<bdi>` for mixed-direction names.
 
 ### 5.4 Files
@@ -133,7 +133,8 @@ interface ProfileState {
 - Query hooks: `src/hooks/useQueries.ts`, `src/hooks/useIncomeQueries.ts` (filter types and `enabled`)
 - Shell: `src/components/layout/AppShell.tsx`, `ProfileSwitcher.tsx` (+ css), `TopBar.tsx`
 - Dead-sentinel cleanup (D6): `src/components/drawers/IncomeDrawer.tsx`, `src/hooks/useProfileAwareAction.ts`, plus the same dead `=== 'all'` check at `src/pages/planning/PlanningPage.tsx:39`
-- Loading gate on single-business pages (D8): `src/pages/income/IncomePage.tsx`, `src/pages/expenses/ExpensesLedgerPage.tsx`, `src/pages/projects/ProjectsPage.tsx`, `src/pages/insights/InsightsPage.tsx`, `src/pages/planning/PlanningPage.tsx`, with a loading test each
+- Loading gate (D8): one `BusinessesGate` in `src/components/layout/AppShell.tsx`, which covers every page; `PlanningPage.tsx` only loses its dead `'all'` check (D6)
+- Route sync (D1): `useOwedScreenSync` lives beside `useOwedLens` in `src/hooks/useActiveProfile.ts` (the `useLeaveDisabledArea` precedent: a hook next to its concern, called from AppShell); still no new source file
 - Home: `src/pages/overview/OverviewPage.tsx`, `src/components/home/HomeNeedsAttention.tsx`, `HomeAttentionRow.tsx`, `HomeRecentPayments.tsx`
 - Clients: `src/pages/clients/ClientsPage.tsx`, `src/components/clients/clientIndexRows.ts`
 - Strings: `src/lib/i18n/translations/{en,ar}.json`
@@ -639,7 +640,7 @@ Accepted scope:
 - None of them reads with a blank business while businesses load.
 - Each page gets a loading test: no records and no empty-state flash before the id resolves.
 - No TODOS.md item. TD-068 is not needed for this gap.
-History: none
+History: build-time mechanism (Basel, 2026-10-12, during /eng-build): one gate in `AppShell` instead of five per-page gates. The routed page mounts only once businesses have loaded, as the sample-preparing hold already does. One `AppShell` gate test replaces the five per-page loading tests. The behaviour is unchanged, and it covers every page, including future ones.
 
 ## Owner decisions
 
