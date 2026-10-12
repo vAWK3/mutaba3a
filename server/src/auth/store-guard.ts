@@ -19,11 +19,16 @@ import { mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type P
  *                 every guard, which keeps ADR-037 decision 1 true below the routes.
  *  - `{ write }` — a write in one matrix domain; allowed only where the
  *                 principal's column is `read-write`.
+ *  - `sessionOnly` — a signed-in person's own resource, belonging to no
+ *                 organization and so to no matrix domain (MUT-66's inbox, the
+ *                 first of its kind). Distinct from `control`, which accepts
+ *                 any principal: an API key has no person behind it and so has
+ *                 no inbox to reach.
  *
  * The map is typed over LedgerStore, so a new store method does not compile
  * until it is classified here.
  */
-export type MethodAccess = 'read' | 'control' | 'operator' | { read: Domain } | { write: Domain };
+export type MethodAccess = 'read' | 'control' | 'operator' | 'sessionOnly' | { read: Domain } | { write: Domain };
 
 type Repositories = Omit<LedgerStore, 'ping'>;
 export type StoreAccess = { readonly [R in keyof Repositories]: { readonly [M in keyof Repositories[R]]-?: MethodAccess } };
@@ -145,6 +150,27 @@ export const STORE_ACCESS: StoreAccess = {
     softDelete: { write: 'expenses' },
     softDeleteByExpense: { write: 'expenses' },
   },
+  /**
+   * MUT-66. Capturing is the person's own business, on no profile — hence
+   * `sessionOnly`, the one classification that is neither "any principal" nor
+   * a matrix domain. Filing keeps the *existing* `{ write: Domain }` shape of
+   * the record it creates, deliberately: that is what makes filing refused in
+   * exactly the places a direct create already is — filing as an expense lands
+   * on any profile the person belongs to, filing as income is refused
+   * READ_ONLY_PROFILE on a Malafat-fed one — with no inbox-specific
+   * writability logic anywhere.
+   */
+  inboxEntries: {
+    create: 'sessionOnly',
+    getById: 'sessionOnly',
+    list: 'sessionOnly',
+    update: 'sessionOnly',
+    delete: 'sessionOnly',
+    // Only /admin's per-user support lookup calls this.
+    countByUser: 'operator',
+    fileAsExpense: { write: 'expenses' },
+    fileAsIncome: { write: 'payments' },
+  },
 };
 
 export interface StoreGuard {
@@ -155,11 +181,16 @@ export interface StoreGuard {
 /** The decision for one classified method, for a principal on a profile whose writer of record is `profileWriter`. */
 export function storeRefusal(principal: Principal, profileWriter: ProfileWriter, access: MethodAccess): ApiError | null {
   if (access === 'read' || access === 'control') return null;
+  if (access === 'sessionOnly') return principal === 'session' ? null : principalNotAccepted();
   if (access === 'operator' || ('read' in access && !mayRead(principal, access.read))) {
-    return new ApiError('PRINCIPAL_NOT_ACCEPTED', 'This operation does not accept this kind of credential');
+    return principalNotAccepted();
   }
   if ('read' in access) return null;
   return mayWriteFor(principal, access.write, profileWriter) ? null : writeRefusal(access.write, profileWriter);
+}
+
+function principalNotAccepted(): ApiError {
+  return new ApiError('PRINCIPAL_NOT_ACCEPTED', 'This operation does not accept this kind of credential');
 }
 
 export function principalStoreGuard(principal: Principal, profileWriter: ProfileWriter): StoreGuard {
