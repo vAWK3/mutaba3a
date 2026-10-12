@@ -584,6 +584,7 @@ export interface VirtualOccurrence {
 export interface VirtualOccurrenceDisplay extends VirtualOccurrence {
   // Resolved from rule
   ruleTitle: string;
+  frequency: ExpenseFrequency;     // "$80 monthly" on the Needs attention row (MUT-87)
   vendor?: string;
   vendorName?: string;
   categoryId?: string;

@@ -5,7 +5,7 @@
  * - Virtual occurrences (computed from rules)
  * - Due/overdue occurrences (needs attention)
  * - Persisted occurrences
- * - Payment confirmation, skipping, snoozing
+ * - Payment confirmation, skipping, snoozing (in batches, MUT-87)
  * - Rule CRUD operations
  */
 
@@ -20,13 +20,13 @@ function useRecurringMutationWithToast<TData, TError extends Error, TVariables>(
 import {
   getVirtualOccurrences,
   getDueOccurrences,
-  confirmPayment,
-  skipOccurrence,
-  snoozeOccurrence,
+  confirmPayments,
+  skipOccurrences,
+  snoozeOccurrences,
   createRecurringRule,
-  type ConfirmPaymentParams,
-  type SkipOccurrenceParams,
-  type SnoozeOccurrenceParams,
+  type ConfirmPaymentsParams,
+  type SkipOccurrencesParams,
+  type SnoozeOccurrencesParams,
   type CreateRecurringRuleParams,
 } from '../services/recurringExpenseService';
 import { getRepositories } from '../db';
@@ -147,82 +147,63 @@ export function useRecurringRule(id: string | undefined) {
 // ============================================================================
 
 /**
- * Confirm payment for a recurring expense occurrence.
- * Creates an expense and marks the occurrence as resolved_paid.
+ * What a recurring payment's resolution changes: the occurrence lists, the
+ * Needs attention rows and the rule's history; marking paid also writes
+ * expenses. Never the money-event keys (MUT-58 removes those).
  */
-export function useConfirmRecurringPayment() {
+function invalidateOccurrenceQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  ruleId: string,
+  { expensesWritten }: { expensesWritten: boolean }
+) {
+  queryClient.invalidateQueries({ queryKey: ['virtualOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: ['dueOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: ['recurringOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: recurringExpenseQueryKeys.ruleHistory(ruleId) });
+  if (expensesWritten) {
+    queryClient.invalidateQueries({ queryKey: ['expenses'] });
+  }
+}
+
+/**
+ * Mark several payments of a rule paid: one expense per payment, each dated on
+ * its expected date, in one all-or-nothing write (MUT-87).
+ */
+export function useConfirmRecurringPayments() {
   const queryClient = useQueryClient();
 
   return useRecurringMutationWithToast({
-    mutationFn: (params: ConfirmPaymentParams) => confirmPayment(params),
-    onSuccess: (_expense: unknown, params: ConfirmPaymentParams) => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({
-        queryKey: ['virtualOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['dueOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['recurringOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: recurringExpenseQueryKeys.ruleHistory(params.ruleId),
-      });
-      // Also invalidate expense queries
-      queryClient.invalidateQueries({
-        queryKey: ['expenses'],
-      });
+    mutationFn: (params: ConfirmPaymentsParams) => confirmPayments(params),
+    onSuccess: (_expenses: unknown, params: ConfirmPaymentsParams) => {
+      invalidateOccurrenceQueries(queryClient, params.ruleId, { expensesWritten: true });
     },
   });
 }
 
 /**
- * Skip a recurring expense occurrence.
+ * Skip one or several payments of a rule, all or nothing (MUT-87).
  */
-export function useSkipRecurringOccurrence() {
+export function useSkipRecurringOccurrences() {
   const queryClient = useQueryClient();
 
   return useRecurringMutationWithToast({
-    mutationFn: (params: SkipOccurrenceParams) => skipOccurrence(params),
-    onSuccess: (_: unknown, params: SkipOccurrenceParams) => {
-      queryClient.invalidateQueries({
-        queryKey: ['virtualOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['dueOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['recurringOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: recurringExpenseQueryKeys.ruleHistory(params.ruleId),
-      });
+    mutationFn: (params: SkipOccurrencesParams) => skipOccurrences(params),
+    onSuccess: (_: unknown, params: SkipOccurrencesParams) => {
+      invalidateOccurrenceQueries(queryClient, params.ruleId, { expensesWritten: false });
     },
   });
 }
 
 /**
- * Snooze a recurring expense occurrence.
+ * Snooze one or several payments of a rule until a date, all or nothing (MUT-87).
  */
-export function useSnoozeRecurringOccurrence() {
+export function useSnoozeRecurringOccurrences() {
   const queryClient = useQueryClient();
 
   return useRecurringMutationWithToast({
-    mutationFn: (params: SnoozeOccurrenceParams) => snoozeOccurrence(params),
-    onSuccess: (_: unknown, params: SnoozeOccurrenceParams) => {
-      queryClient.invalidateQueries({
-        queryKey: ['virtualOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['dueOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['recurringOccurrences'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: recurringExpenseQueryKeys.ruleHistory(params.ruleId),
-      });
+    mutationFn: (params: SnoozeOccurrencesParams) => snoozeOccurrences(params),
+    onSuccess: (_: unknown, params: SnoozeOccurrencesParams) => {
+      invalidateOccurrenceQueries(queryClient, params.ruleId, { expensesWritten: false });
     },
   });
 }

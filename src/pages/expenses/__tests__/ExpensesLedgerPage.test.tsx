@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createRouter, createRootRoute, createRoute } from '@tanstack/react-router';
 import { ExpensesLedgerPage } from '../ExpensesLedgerPage';
@@ -32,6 +32,11 @@ vi.mock('../../../lib/i18n', () => ({
       'common.duplicate': 'Duplicate',
       'common.delete': 'Delete',
       'expenses.confirmDelete': 'Are you sure you want to delete this expense?',
+      'expenses.recurring.occurrence.needsAttention': 'Needs Attention',
+      'expenses.recurring.occurrence.markPaid': 'Mark Paid',
+      'expenses.recurring.occurrence.skip': 'Skip',
+      'expenses.recurring.occurrence.snooze': 'Snooze',
+      'expenses.recurring.editRule': 'Edit recurring rule',
     };
     return translations[key] || key;
   },
@@ -70,13 +75,26 @@ vi.mock('../../../lib/stores', () => ({
   }),
 }));
 
-// Mock recurring expense hooks
+// Mock recurring expense hooks. MUT-87: the due occurrences are settable per
+// test, and the batch mutations record what the page asked for.
+const recurringState: { due: unknown[] } = { due: [] };
+const { mockConfirmPayments, mockSkipOccurrences, mockSnoozeOccurrences } = vi.hoisted(() => ({
+  mockConfirmPayments: vi.fn(),
+  mockSkipOccurrences: vi.fn(),
+  mockSnoozeOccurrences: vi.fn(),
+}));
 vi.mock('../../../hooks/useRecurringExpenseQueries', () => ({
-  useDueOccurrences: () => ({ data: [], isLoading: false }),
+  useDueOccurrences: () => ({ data: recurringState.due, isLoading: false }),
   useVirtualOccurrences: () => ({ data: [], isLoading: false }),
-  useConfirmRecurringPayment: () => ({ mutateAsync: vi.fn() }),
-  useSkipRecurringOccurrence: () => ({ mutateAsync: vi.fn() }),
-  useSnoozeRecurringOccurrence: () => ({ mutateAsync: vi.fn() }),
+  useConfirmRecurringPayments: () => ({ mutate: mockConfirmPayments, isPending: false }),
+  useSkipRecurringOccurrences: () => ({ mutate: mockSkipOccurrences, isPending: false }),
+  useSnoozeRecurringOccurrences: () => ({ mutate: mockSnoozeOccurrences, isPending: false }),
+}));
+
+// Counted strings (MUT-87) read "key:count" here; the real forms are tested
+// with the dictionaries in RecurringAttentionList.test.tsx.
+vi.mock('../../../lib/i18n/plural', () => ({
+  useTp: () => (key: string, count: number) => `${key}:${count}`,
 }));
 
 // Mock delete mutation
@@ -195,6 +213,7 @@ function renderWithProviders() {
 describe('ExpensesLedgerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    recurringState.due = [];
     activeProfileState.profile = testProfile;
     vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
       data: mockExpenses,
@@ -542,6 +561,72 @@ describe('ExpensesLedgerPage', () => {
 
         confirmSpy.mockRestore();
       });
+    });
+  });
+
+  describe('Needs attention (MUT-87, T28)', () => {
+    const due = (expectedDate: string) => ({
+      ruleId: 'rule-hosting',
+      profileId: 'profile-1',
+      expectedDate,
+      amountMinor: 8000,
+      currency: 'USD',
+      computedState: 'overdue',
+      ruleTitle: 'Server hosting',
+      frequency: 'monthly',
+      daysUntilDue: -30,
+      isOverdue: true,
+      isUpcoming: false,
+      effectiveAmount: 8000,
+      effectiveCurrency: 'USD',
+    });
+
+    beforeEach(() => {
+      recurringState.due = [due('2026-08-05'), due('2026-09-05'), due('2026-10-05')];
+    });
+
+    it('shows one row for the rule instead of one card per month', async () => {
+      renderWithProviders();
+
+      const section = await screen.findByRole('region', { name: 'Needs Attention' });
+      expect(within(section).getAllByRole('listitem')).toHaveLength(1);
+      expect(within(section).getAllByRole('button', { name: 'Mark Paid' })).toHaveLength(1);
+      expect(within(section).queryByRole('button', { name: 'Skip' })).toBeNull();
+      expect(document.querySelector('.recurring-occurrence-card')).toBeNull();
+    });
+
+    it('opens the mark-paid drawer on the rule', async () => {
+      renderWithProviders();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Mark Paid' }));
+
+      const drawer = await screen.findByRole('dialog', { name: 'Server hosting' });
+      expect(within(drawer).getAllByRole('checkbox')).toHaveLength(3);
+    });
+
+    it('skips every payment of the rule from the ⋯ menu after asking', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      renderWithProviders();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'expenses.recurring.attention.actionsFor' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'expenses.recurring.attention.skipAll:3' }));
+
+      expect(confirmSpy).toHaveBeenCalledWith('expenses.recurring.attention.confirmSkipAll:3');
+      expect(mockSkipOccurrences).toHaveBeenCalledWith({
+        ruleId: 'rule-hosting',
+        profileId: 'profile-1',
+        expectedDates: ['2026-08-05', '2026-09-05', '2026-10-05'],
+      });
+      confirmSpy.mockRestore();
+    });
+
+    it('opens the expense drawer on the rule from Edit rule', async () => {
+      renderWithProviders();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'expenses.recurring.attention.actionsFor' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Edit recurring rule' }));
+
+      expect(mockOpenExpenseDrawer).toHaveBeenCalledWith({ mode: 'edit', recurringRuleId: 'rule-hosting' });
     });
   });
 });

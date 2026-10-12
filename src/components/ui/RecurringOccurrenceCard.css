@@ -11,15 +11,6 @@
   transition: all 0.15s ease;
 }
 
-.recurring-occurrence-card[role="button"] {
-  cursor: pointer;
-}
-
-.recurring-occurrence-card[role="button"]:hover {
-  background: var(--bg-secondary);
-  border-color: var(--border-hover);
-}
-
 .recurring-occurrence-card.compact {
   padding: 0.75rem;
   gap: 0.5rem;
@@ -126,18 +117,6 @@
 .occurrence-state.state-projected {
   background: var(--bg-secondary);
   color: var(--text-secondary);
-}
-
-/* Actions */
-.occurrence-actions {
-  display: flex;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.occurrence-actions .btn {
-  flex: 1;
 }
 
 /* List */

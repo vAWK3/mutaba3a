@@ -653,16 +653,11 @@
       "untilDate": "Until Date",
       "noEnd": "No End",
       "occurrence": {
-        "confirmPayment": "Confirm Payment",
         "skip": "Skip",
         "snooze": "Snooze",
         "snoozeUntil": "Snooze until",
         "markPaid": "Mark Paid",
         "expectedOn": "Expected on",
-        "actualDate": "Actual Date",
-        "editAmount": "Edit Amount",
-        "notes": "Notes",
-        "notesPlaceholder": "Any notes about this payment...",
         "state": {
           "projected": "Projected"
         },
@@ -673,6 +668,40 @@
         "empty": "No upcoming recurring expenses",
         "needsAttention": "Needs Attention",
         "confirmSkip": "Are you sure you want to skip this expense? This action cannot be undone."
+      },
+      "attention": {
+        "perPeriod": {
+          "monthly": "{amount} monthly",
+          "yearly": "{amount} yearly"
+        },
+        "notMarked": "{months} not marked",
+        "total": "Total not marked",
+        "actionsFor": "Actions for {title}",
+        "hint": "Each payment is saved as an expense on its own date.",
+        "amountFor": "Amount for {month}",
+        "skipMonth": "Skip {month}",
+        "snoozeMonth": "Snooze {month}",
+        "snoozeWhat": "{months} will come back on this date.",
+        "snoozeAfterToday": "Pick a date after today",
+        "quickPicks": "Quick picks",
+        "back": "Back",
+        "markPaidNone": "Mark paid",
+        "markPaidCount": {
+          "one": "Mark {count} paid",
+          "other": "Mark {count} paid"
+        },
+        "skipAll": {
+          "one": "Skip",
+          "other": "Skip all {count}"
+        },
+        "snoozeAll": {
+          "one": "Snooze…",
+          "other": "Snooze all {count}…"
+        },
+        "confirmSkipAll": {
+          "one": "Skip {months} for {title}? It won't be recorded as an expense, and this can't be undone.",
+          "other": "Skip {count} payments for {title} ({months})? They won't be recorded as expenses, and this can't be undone."
+        }
       },
       "forecast": "Upcoming Expenses",
       "editRule": "Edit recurring rule"

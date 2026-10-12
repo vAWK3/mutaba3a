@@ -87,6 +87,9 @@ function invalidateRecurringRuleQueries(queryClient: ReturnType<typeof useQueryC
   queryClient.invalidateQueries({ queryKey: ['recurringRule'] });
   queryClient.invalidateQueries({ queryKey: ['activeRecurringRules'] });
   queryClient.invalidateQueries({ queryKey: ['expenseForecast'] });
+  // The Needs attention rows and the forecast are computed from the rules (MUT-87)
+  queryClient.invalidateQueries({ queryKey: ['dueOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: ['virtualOccurrences'] });
 }
 
 function invalidateExpenseCategoryQueries(queryClient: ReturnType<typeof useQueryClient>) {

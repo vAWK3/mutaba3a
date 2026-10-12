@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { useExpense, useRecurringRule } from '../useExpenseQueries';
+import { useExpense, useRecurringRule, useUpdateRecurringRule } from '../useExpenseQueries';
 import { getRepositories } from '../../db';
 
 // The by-id hooks resolve their repositories through getRepositories(), so the
@@ -10,7 +10,7 @@ import { getRepositories } from '../../db';
 vi.mock('../../db', () => {
   const base = {
     expenses: { get: vi.fn() },
-    recurringRules: { get: vi.fn() },
+    recurringRules: { get: vi.fn(), update: vi.fn() },
   };
   return { getRepositories: () => ({ base, synced: {} }) };
 });
@@ -80,5 +80,27 @@ describe.each(byIdHooks)('$name', ({ hook, get }) => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+});
+
+// MUT-87: a rule edited from a Needs attention row's ⋯ menu (Edit rule) must
+// refresh that row; the due and virtual occurrences are computed from the rule.
+describe('useUpdateRecurringRule', () => {
+  it('refreshes the occurrence lists computed from the rule', async () => {
+    (base.recurringRules.update as MockedGet).mockResolvedValue(undefined);
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useUpdateRecurringRule(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: 'rule-1', data: { amountMinor: 9000 } });
+    });
+
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toContainEqual(['dueOccurrences']);
+    expect(keys).toContainEqual(['virtualOccurrences']);
   });
 });

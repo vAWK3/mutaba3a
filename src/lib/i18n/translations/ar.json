@@ -653,16 +653,11 @@
       "untilDate": "حتى تاريخ",
       "noEnd": "بدون انتهاء",
       "occurrence": {
-        "confirmPayment": "تأكيد الدفع",
         "skip": "تخطي",
         "snooze": "تأجيل",
         "snoozeUntil": "تأجيل حتى",
         "markPaid": "تم الدفع",
         "expectedOn": "متوقع في",
-        "actualDate": "التاريخ الفعلي",
-        "editAmount": "تعديل المبلغ",
-        "notes": "ملاحظات",
-        "notesPlaceholder": "أي ملاحظات عن هذا الدفع...",
         "state": {
           "projected": "متوقع"
         },
@@ -673,6 +668,56 @@
         "empty": "لا توجد مصروفات متكررة قادمة",
         "needsAttention": "تحتاج انتباه",
         "confirmSkip": "هل أنت متأكد من تخطي هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء."
+      },
+      "attention": {
+        "perPeriod": {
+          "monthly": "{amount} شهريًا",
+          "yearly": "{amount} سنويًا"
+        },
+        "notMarked": "لم يُسجَّل دفع {months}",
+        "total": "إجمالي غير المسجَّل",
+        "actionsFor": "إجراءات {title}",
+        "hint": "تُسجَّل كل دفعة كمصروف بتاريخها.",
+        "amountFor": "مبلغ {month}",
+        "skipMonth": "تخطي {month}",
+        "snoozeMonth": "تأجيل {month}",
+        "snoozeWhat": "سيعود {months} في هذا التاريخ.",
+        "snoozeAfterToday": "اختر تاريخًا بعد اليوم",
+        "quickPicks": "اختيارات سريعة",
+        "back": "رجوع",
+        "markPaidNone": "تسجيل الدفع",
+        "markPaidCount": {
+          "zero": "تسجيل الدفع",
+          "one": "تسجيل دفعة واحدة",
+          "two": "تسجيل دفعتين",
+          "few": "تسجيل {count} دفعات",
+          "many": "تسجيل {count} دفعة",
+          "other": "تسجيل {count} دفعة"
+        },
+        "skipAll": {
+          "zero": "تخطي",
+          "one": "تخطي",
+          "two": "تخطي الدفعتين",
+          "few": "تخطي {count} دفعات",
+          "many": "تخطي {count} دفعة",
+          "other": "تخطي {count} دفعة"
+        },
+        "snoozeAll": {
+          "zero": "تأجيل…",
+          "one": "تأجيل…",
+          "two": "تأجيل الدفعتين…",
+          "few": "تأجيل {count} دفعات…",
+          "many": "تأجيل {count} دفعة…",
+          "other": "تأجيل {count} دفعة…"
+        },
+        "confirmSkipAll": {
+          "zero": "تخطي دفعات {title} ({months})؟ لن تُسجَّل كمصروفات، ولا يمكن التراجع عن ذلك.",
+          "one": "تخطي دفعة {months} لـ{title}؟ لن تُسجَّل كمصروف، ولا يمكن التراجع عن ذلك.",
+          "two": "تخطي دفعتَي {title} ({months})؟ لن تُسجَّلا كمصروفات، ولا يمكن التراجع عن ذلك.",
+          "few": "تخطي {count} دفعات لـ{title} ({months})؟ لن تُسجَّل كمصروفات، ولا يمكن التراجع عن ذلك.",
+          "many": "تخطي {count} دفعة لـ{title} ({months})؟ لن تُسجَّل كمصروفات، ولا يمكن التراجع عن ذلك.",
+          "other": "تخطي {count} دفعة لـ{title} ({months})؟ لن تُسجَّل كمصروفات، ولا يمكن التراجع عن ذلك."
+        }
       },
       "forecast": "المصروفات القادمة",
       "editRule": "تعديل القاعدة المتكررة"
