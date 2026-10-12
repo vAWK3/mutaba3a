@@ -280,6 +280,23 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
     expect(payments).toHaveLength(1);
   });
 
+  /** A filed entry's audit row must read the same as one written directly, field for field. */
+  it('writes the same audit metadata shape as POST /v1/income does', async () => {
+    const s = await setup();
+    const c = await customer(s, s.p.id);
+    const entry = await s.capture({ ...INCOME_ENTRY, captureSource: undefined });
+    const filedId = (await read(await s.fileIncome(entry.id, { kind: 'received', customerId: c.id }))).id;
+    const directId = (await read(await s.h.app.request('/v1/income', json({ kind: 'received', amount: '250.00', currency: 'ILS', occurredOn: '2026-10-08', customerId: c.id }, s.as(s.p.id, idem()))))).id;
+
+    const events = await s.h.store.audit.listByOrganization(s.p.id, 50);
+    const metaOf = (id: string) => events.find((e) => e.entityId === id && e.entityType === 'payment')?.metadata as Record<string, unknown>;
+    const filedMeta = metaOf(filedId);
+    const directMeta = metaOf(directId);
+
+    expect(Object.keys(filedMeta).sort()).toEqual([...Object.keys(directMeta), 'filedFromInbox'].sort());
+    for (const key of Object.keys(directMeta)) expect(filedMeta[key], key).toEqual(directMeta[key]);
+  });
+
   it('records how the entry was captured on the income audit row', async () => {
     const s = await setup();
     const entry = await s.capture(INCOME_ENTRY);
@@ -287,6 +304,8 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
     const events = await s.h.store.audit.listByOrganization(s.p.id, 50);
     const row = events.find((e) => e.entityId === filed.id && e.entityType === 'payment');
     expect(row?.metadata).toMatchObject({ captureSource: 'widget', filedFromInbox: true });
+    // The amount must be the entry's own money, formatted as POST /v1/income formats it — not the kind.
+    expect(row?.metadata).toMatchObject({ amount: '250.00', currency: 'ILS' });
   });
 });
 

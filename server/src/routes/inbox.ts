@@ -8,7 +8,7 @@ import { ifMatch } from '../if-match.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
 import { assertNotFuture, dueDateForOwed, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
-import type { Currency } from '../money.js';
+import { formatMoney, type Currency } from '../money.js';
 import type { InboxEntryRecord, LedgerStore, UpdateInboxEntryPatch } from '../repositories/ports.js';
 import {
   CreateInboxEntryRequestSchema,
@@ -249,7 +249,9 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (filed.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such inbox entry');
 
       const metadata = {
-        amount: body.kind,
+        // The entry's own amount, formatted as routes/income.ts formats it — the audit row for a filed
+        // entry must read the same as one written directly, not carry the kind in the amount's place.
+        amount: formatMoney({ minor: entry.amountMinor, currency: entry.currency as Currency }),
         currency: entry.currency,
         customerId: links.customerId,
         projectId: links.projectId,
