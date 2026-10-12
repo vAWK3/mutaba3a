@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-066: Income's Received / Unpaid strip ignores the page's filters
+**Status**: Open
+**Added**: 2026-10-12 (MUT-83, seen in the browser check)
+**Priority**: Low
+**Impact**: The strip above the Income list is `useOverviewTotalsByCurrency(dateFrom, dateTo, profileId)`. It follows the period, but not the status tab, the search or MUT-83's client scope. It also counts archived income (TD-030's lineage). So `/income?client=none`, opened from the Clients list's "No client" row, shows the whole business's Unpaid (₪43,388.8 in the sample) above a one-row list of ₪500, and that Unpaid differs from Owed now. This predates MUT-83, which only made the client-scoped view reachable.
+**Remediation**: Either make the strip follow the list's filters (one read over the same `useIncome` filters, with Unpaid as `summarizeOwedByCurrency`), or label it as the whole period's figures. Decide with whoever next touches Income's layout.
+**Effort**: Small
+
+### TD-065: A shared client's row on Clients can show less than its profile page
+**Status**: Open (accepted for now; revisit with MUT-89)
+**Added**: 2026-10-12 (MUT-83, ADR-049)
+**Priority**: Low
+**Impact**: Since ADR-049, each business's Clients list counts only that business's entries. The client profile page (`/clients/:id`) still adds up the client's entries in every business: Owed now, Work and billing, Payments. For a client shared across businesses, a row can say $700 while the profile says $1,500. The owner accepted this trade-off for parity with Home. The row's cross-profile badges ("N entries" per other business) hint at it, but nothing on the profile says which business each figure belongs to.
+**Remediation**: With MUT-89 ("All businesses" lens, business tags on rows), give the profile page the same business context: tag each entry and payment with its business, or show Owed now per business when the client has entries in more than one. Don't scope the profile to one business without an owner decision: it is the one place that shows everything a client owes.
+**Effort**: Medium
+
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open
 **Added**: 2026-10-12 (found while checking the TD-009 fixes in the browser)

@@ -51,6 +51,7 @@
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
+| ADR-049 | Each Business's Clients List Counts Only That Business's Entries; Its Owed Now Equals Home's, With "No Client" and "Archived Clients" Rows | Active | 2026-10 |
 
 ---
 
@@ -1936,3 +1937,63 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Alternatives Considered**: start empty with the sample optional (rejected by Basel: an empty app doesn't show the value the page just promised); keep the demo flow and fix its bugs (rejected: an internal tool's confirm dialog as a visitor's first sight); delete only `demo_` rows on leaving (rejected: rows the visitor added to a sample business would be orphaned on a profile that no longer exists).
 
+---
+
+## ADR-049: Each Business's Clients List Counts Only That Business's Entries; Its Owed Now Equals Home's, With "No Client" and "Archived Clients" Rows
+
+**Status**: Active
+**Date**: 2026-10-12
+**Numbering**: ADR-043 to ADR-048 are reserved by the epic's parallel lanes; this lane holds ADR-049.
+**Context**: MUT-83 (epic MUT-74), brief `.claude/designs/landing-apple-redesign.md` decision H2, approved by Basel 2026-10-11. Test plan: `.claude/designs/mut-83-owed-parity-tests.md`.
+
+Home and the Clients list both show an **Owed now** block that looks the same, but they summed different things:
+- **Home** (ADR-036 §5) sums every unpaid entry *recorded in* the business (`tx.profileId`).
+- **The Clients list** (MUT-7) summed, for each live client *created in* the business (`client.profileId`), that client's unpaid entries *in every business*.
+
+The audit found four kinds of debt behind the gap, not the two the ticket named:
+- **D1**: an entry with no client.
+- **D2**: an entry of an archived client.
+- **D3**: an entry recorded here for a client created in another business. Clients are shared: the income drawer's client picker lists every business's clients.
+- **D4**: an entry recorded in another business for a client created here.
+
+Home counted D1 to D3; the Clients strip counted only D4.
+
+**Owner decision (Basel, 2026-10-12, option A, over B "keep rows all-business" and C "a third 'other businesses' row")**: each business's Clients list counts only that business's entries.
+
+**Decision**:
+1. **One input set.** The Clients list reads the business's entries through `transactionRepo.list`, the read behind Home's Owed now. It splits them with `partitionOwedNow(entries, clients, today)` (`src/db/aggregations.ts`) into:
+   - one group per live client;
+   - **No client**: no `clientId`, or one whose client row is gone. `clientScopeOf` is the single definition, shared with the `/income` filter.
+   - **Archived clients**.
+
+   The strip's total is `summarizeOwedByCurrency` over the same entries, so it equals Home's per currency by construction. Every entry lands in exactly one part, so the rows add up to the strip (ADR-033 §2). The read is `clientSummaryRepo.listOwedIndex`, and Home is unchanged.
+2. **Which clients are listed in business P**:
+   - P's own live clients, as before, including ones with no entries;
+   - plus live clients created in another business that have at least one entry recorded in P.
+
+   Archived clients are never listed.
+3. **Every column on a row counts only P's entries**: owed now, overdue and its oldest age, last payment, and last activity. **The client profile page stays all-businesses**, unchanged.
+4. **Two muted rows** sit after every client, whatever the sort column or direction, and each shows only when non-zero:
+   - "No client · N entries", where N counts entries with a balance;
+   - "Archived clients · N", where N counts archived clients with a balance.
+
+   They are not ranked by ADR-035, which still orders the real clients. Each shows Owed now and Overdue per currency.
+5. **Each muted row opens the entries behind it**: `/income?client=none|archived` with status Unpaid over all time, because Owed now has no period. `/income`'s filters become one model mirrored to the URL (`src/lib/incomeSearch.ts`, `useIncomeFilters`), written with `replace`. With no parameters the page behaves as before. A chip names the client scope and clears it.
+6. **A search** narrows the list to matching clients. The strip then sums what is listed and the muted rows hide, so parity is a property of the unsearched list.
+7. **The helper takes entries and clients, not a business**, so the "All businesses" lens (MUT-89) can pass several businesses' entries in.
+
+**Relation to other ADRs**:
+- **ADR-036 is unchanged**: Home's rule is the one the Clients list now follows. Its §5 says the clients index strip "sums only the clients it lists, so the two can differ". That described the MUT-7 list before this ADR; this ADR replaces that description, and nothing in Home's rule.
+- **ADR-033 §1** (one helper) and **ADR-035** (ordering the real clients) stand.
+
+**Consequences**:
+- For a shared client, a business's row can show less than the client's profile page, which adds up every business. That trade-off was accepted, and TD-065 tracks revisiting it with MUT-89.
+- A client created in one business appears in the Clients list of every business where it has an entry.
+- Archiving a client moves its debt from its row to Archived clients; the strip doesn't change.
+- `clientSummaryRepo.list` keeps its all-business semantics for Insights and Reports.
+
+**Alternatives Considered**:
+- **B: keep rows all-business.** The strip would equal Home, but the rows would not add up to it for shared clients.
+- **C: a third muted row**, "Clients from other businesses". It is not in the approved brief and hides a client that owes here behind a bucket.
+- **Explain the gap on Home** (H2's rejected option).
+- **A second query for the strip** (rejected by the ticket: two queries can drift).

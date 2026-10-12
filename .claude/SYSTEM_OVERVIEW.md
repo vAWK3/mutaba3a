@@ -144,7 +144,9 @@
   allowed: the lock protects the invoice facts, not payment tracking
 - **Owed Now** = remaining balance of unpaid, non-deleted, non-archived income,
   per currency, overdue part split out — one helper, `summarizeOwedByCurrency`
-  (ADR-033), for every screen that shows it
+  (ADR-033), for every screen that shows it. Home and the Clients list sum the
+  same entries (those recorded in the business), so their figures are equal
+  (ADR-049)
 - **A client's payment history** = its `PaymentRecord`s plus one derived
   `entry` row per income whose received amount no record covers (income saved
   as Received writes none; ADR-033, TD-029)
@@ -156,7 +158,14 @@
 ### Implemented (v0.0.48)
 
 - **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone; MUT-58 prunes the money-event read side they leave unused.
-- **Clients index (MUT-7 / ADR-035)** — `/clients` answers "who owes me, and who is late". The strip shows the client count and Owed now for everyone listed. The columns are Client · Owed Now (per currency, or Settled) · Overdue (per currency, with the oldest item's age) · Last Payment (date and amount, or Never paid) · Last Activity. The default order is owed now descending, ranked by today's exchange rate with nothing shown converted. Click a header to sort; the sort persists in the URL. A row opens the profile.
+- **Clients index (MUT-7 / ADR-035, MUT-83 / ADR-049)** — `/clients` answers "who owes me, and who is late".
+  - **Strip:** the client count and Owed now. Owed now equals Home's for every currency.
+  - **Columns:** Client · Owed Now (per currency, or Settled) · Overdue (per currency, with the oldest item's age) · Last Payment (date and amount, or Never paid) · Last Activity.
+  - **One business only:** every figure counts only the active business's entries. A client created in another business is listed here when it has an entry here.
+  - **Muted rows:** what belongs to no listed client shows as "No client · N entries" and "Archived clients · N", always last. Each opens `/income` filtered to those unpaid entries.
+  - **Order:** owed now descending by default, ranked by today's exchange rate with nothing shown converted. Click a header to sort; the sort persists in the URL.
+  - **Clicks and search:** a row opens the profile. A search narrows the list and hides the muted rows.
+- **Income (`/income`)** — the income list. Its filters (period, status tab, search, and client scope `none` / `archived`) are one model in the URL, so a link can open it filtered (MUT-83).
 - **Adding income (MUT-5 / ADR-039)**: the income drawer is the work record.
   - **Fast path:** "What did you do?" (focused), the amount (currency prefix, LTR in Arabic, Arabic-Indic digits accepted, ambiguous input or a symbol naming another currency refused) and the client. Title, Tab, amount, Tab, client, Enter, Enter saves, even while a new client is still being created.
   - **More details:** status, due date, currency (USD/ILS/EUR), date, project, notes and the profile. Its summary line names the defaults in use. A new entry starts in its profile's currency.
@@ -511,3 +520,4 @@ mini-crm/
 | 2026-10-11 | 0.0.65 | MUT-43: hosted portal build target (sign-in, session states, six read views), bundle-separation check, i18n core split |
 | 2026-10-11 | 0.0.65 | MUT-44: hosted expense capture (shared form, drawer, pickers, receipts) — the portal's only write, closing epic MUT-34's build work |
 | 2026-10-11 | 0.0.65 | MUT-45: the API serves the hosted portal from its own origin (static assets, SPA fallback, CSP incl. the GCS upload host), `deploy.sh` and CI build it into the image; no custom domain — epic MUT-34's build work now reachable in a browser |
+| 2026-10-12 | 0.0.65 | MUT-83: the Clients list's Owed now equals Home's; per-business rows; No client / Archived clients rows; `/income` filters in the URL (ADR-049) |

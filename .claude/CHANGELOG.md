@@ -28,6 +28,52 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-83: Owed now on Home and Clients always match
+
+**Why:** Home and the Clients list showed the same-looking Owed now block with different numbers and no explanation.
+- Home counts income with no client, income of archived clients and income recorded for a client created in another business.
+- The Clients list counted none of those, but did count a client's debts from other businesses.
+
+Owner decision A (2026-10-12) and ADR-049 resolve it. The brief is H2 in `landing-apple-redesign.md`.
+
+**Scope:**
+- `src/db/aggregations.ts`:
+  - new `owedNowRemaining`, `clientScopeOf` and `partitionOwedNow`;
+  - `summarizeOwedByCurrency` now uses `owedNowRemaining`.
+- `src/db/repository.ts`:
+  - new `clientSummaryRepo.listOwedIndex`;
+  - `transactionRepo.list` accepts `clientScope`.
+- `src/db/interfaces.ts`, `src/types/index.ts`: added `ClientScope`, `OwedBucket` and `ClientOwedIndex`, plus `QueryFilters.clientScope`.
+- `src/hooks/useQueries.ts`: added `useClientOwedIndex`, keyed `['clientSummaries', 'owedIndex', …]`.
+- `src/hooks/useIncomeQueries.ts`: added `IncomeFilters.clientScope`.
+- `src/lib/incomeSearch.ts` and `src/hooks/useIncomeFilters.ts` (both new).
+- `src/router.tsx`: `/income` gets `validateSearch`.
+- `src/components/clients/clientIndexRows.ts`: added `toOwedBucketRows`, `orderClientIndex` and `BUCKET_SCOPE`.
+- Pages: `src/pages/clients/ClientsPage.tsx` and `src/pages/income/IncomePage.tsx`.
+- `src/index.css`: muted rows, the scope chip, and the phone layout of the Clients strip.
+- `src/lib/i18n/translations/{en,ar}.json`.
+- `e2e/owed-parity.spec.ts` (new).
+- Test plan: `.claude/designs/mut-83-owed-parity-tests.md`.
+
+### Changed
+- **The Clients strip equals Home's Owed now, per currency.** Both come from the same entries:
+  - `listOwedIndex` reads the business's entries through `transactionRepo.list`, the read behind Home;
+  - `partitionOwedNow` splits them into the client rows plus two muted rows;
+  - the strip is `summarizeOwedByCurrency` over all of them.
+- **Each business's Clients list counts only that business's entries.**
+  - It lists the business's own clients, plus clients created elsewhere that have an entry here.
+  - Owed now, overdue, last payment and activity on a row are this business's only.
+  - The client profile page stays all-businesses (TD-065).
+- **`/income`'s filters live in the URL as one object**: period, status, search and client scope, written with `replace`. With no parameters the page is as before. A chip names a client scope and clears it. An empty scoped list says nothing matched instead of "No income yet".
+- **On a phone the Clients strip wraps.** The client count sits above Owed now, so a five-digit shekel figure no longer runs past the card.
+
+### Added
+- **"No client · N entries" and "Archived clients · N" rows** after the clients, muted, shown only when non-zero, and always last under any sort. They are labelled in English and Arabic, with Arabic plural forms. Each opens `/income` on the unpaid entries behind it, over all time.
+- `transactionRepo.list({ clientScope: 'none' | 'archived' })`. "None" includes entries whose client row is gone, the same rule as the No client row.
+
+### Technical
+- TD-065 (shared client: row vs profile) and TD-066 (Income's strip ignores the page's filters) added.
+
 ## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
 
 **Scope:**

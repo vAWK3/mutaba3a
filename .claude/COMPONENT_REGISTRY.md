@@ -17,9 +17,9 @@
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
-| **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
+| **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income) |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | OwedNowSummary, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
+| **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -959,6 +959,25 @@ Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactio
 
 ---
 
+### useIncomeFilters + incomeSearch (URL filters for /income, MUT-83)
+**Location**: `src/hooks/useIncomeFilters.ts`, `src/lib/incomeSearch.ts`
+**Purpose**: `/income`'s filters as one model in the URL: `dateFrom`/`dateTo` (both or neither), `status` (`unpaid` / `received` / `overdue`), `q` and `client` (`none` / `archived`).
+- `useIncomeFilters()` returns `{ search, setSearch(patch) }`. `setSearch` writes with `replace`, and a field set to `undefined` or `''` is removed.
+- `parseIncomeSearch` is the route's `validateSearch`. It drops unknown values and reads a numeric `q` as text.
+- `resolveIncomeFilters` fills in the defaults: this month, All, no search, every client.
+- `owedEntriesSearch(scope)` is the link the Clients list's muted rows open: Unpaid, all time.
+
+```tsx
+const { search, setSearch } = useIncomeFilters();
+const filters = useMemo(() => resolveIncomeFilters(search), [search]);
+<Link to="/income" search={owedEntriesSearch('none')}>…</Link>
+```
+
+**Extend, don't copy**: a new `/income` filter is one more field in `IncomeSearch`, `parseIncomeSearch` and `resolveIncomeFilters`. `useTransactionFilters` is a `useState` model with no URL and no current consumer; it is not this.
+**Tests**: `src/lib/__tests__/incomeSearch.test.ts`, `src/hooks/__tests__/useIncomeFilters.test.tsx` (real memory router), `src/pages/income/__tests__/IncomePage.test.tsx`.
+
+---
+
 ### SearchInput
 **Location**: `src/components/filters/SearchInput.tsx`
 **Purpose**: Debounced search input.
@@ -1084,9 +1103,45 @@ const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receiva
 <OwedNowSummary owed={owed} />
 ```
 
-**Use when**: showing what is owed now. Used by the client profile and, as the clients index strip (MUT-7), over `combineOwed(summaries.map((s) => s.owed))`. Home (MUT-8) uses it over every receivable in the active profile. Not for period totals (paid income, expenses): those are not "now" figures.
+**Use when**: showing what is owed now.
+- The client profile uses it.
+- Home (MUT-8) uses it over every receivable in the active profile.
+- The clients index strip uses it over `useClientOwedIndex(...).total`. That is the same figure as Home's (MUT-83, ADR-049), or `combineOwed` of the matching rows while a search is active.
+
+Not for period totals (paid income, expenses): those are not "now" figures.
 **Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
 Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
+
+---
+
+### partitionOwedNow / clientScopeOf (helpers, MUT-83)
+**Location**: `src/db/aggregations.ts`
+
+**`partitionOwedNow(entries, clients, today)`** splits the entries one Owed now figure is made of into:
+- `entriesByClient`: every live entry of each live client, in any state;
+- `noClient`: `{ owed, count }`, where count is entries with a balance;
+- `archivedClients`: `{ owed, count }`, where count is clients with a balance;
+- `total`: `summarizeOwedByCurrency` over all the entries.
+
+The parts always add up to `total`. It takes entries and clients rather than a business, so a lens over several businesses (MUT-89) can reuse it.
+
+**`clientScopeOf(tx, clientsById)`** is the one definition of whose list an entry belongs on: `'none'` (no client, or its row is gone), `'archived'`, or `undefined` (a live client). `transactionRepo.list({ clientScope })` filters with it too.
+
+`owedNowRemaining(tx)` is what one entry adds to Owed now (`summarizeOwedByCurrency` sums it).
+
+**Reads built on them**: `clientSummaryRepo.listOwedIndex({ profileId, search })` → `ClientOwedIndex`, through the `useClientOwedIndex(profileId, search)` hook (key `['clientSummaries', 'owedIndex', …]`).
+**Tests**: `src/db/__tests__/aggregations.test.ts`, `src/db/__tests__/clientOwedIndex.test.ts` (parity with Home).
+
+---
+
+### Clients index muted rows (`toOwedBucketRows`, `orderClientIndex`, `BUCKET_SCOPE`)
+**Location**: `src/components/clients/clientIndexRows.ts`
+**Purpose**:
+- `toOwedBucketRows(index)` turns an index's `noClient` and `archivedClients` into the muted rows to show, in fixed order, dropping a bucket that owes nothing.
+- `orderClientIndex(rows, buckets, field, dir)` returns the display order: clients sorted by the chosen column (ADR-035), then the muted rows, which never take part in the sort.
+- `BUCKET_SCOPE` maps a bucket to the `/income` client scope it opens.
+
+**Tests**: `src/components/clients/__tests__/clientIndexRows.test.ts`.
 
 ---
 

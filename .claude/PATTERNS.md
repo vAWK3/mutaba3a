@@ -9,8 +9,8 @@
 
 | Category | Patterns |
 |----------|----------|
-| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
-| **State** | URL State, Zustand Stores, Form State |
+| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3), Same figure, same entries, split (MUT-83) |
+| **State** | URL State (one parsed model per page, MUT-83), Zustand Stores, Form State |
 | **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place |
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
 | **Sync** | HLC Operations, Conflict Resolution |
@@ -1739,3 +1739,22 @@ A `role="dialog"` points `aria-labelledby` at its heading, using a `useId()` id,
 
 ### A column without a visible title still has a header
 The row-actions column uses `RowActionsHeader` (a visually hidden "Actions"), never an empty `<th>`. Axe's `empty-table-header` flags an empty one, and a screen reader announces a nameless column.
+
+## App patterns added by MUT-83 (2026-10-12)
+
+### Two screens that show the same figure read the same entries, then split them
+When two screens show the same money figure, such as Home's and the Clients list's Owed now (ADR-049), both read the same set of entries through the same repository call. A screen that breaks the figure down does so with a pure partition of that set: `partitionOwedNow(entries, clients, today)` puts every entry in exactly one part. Its total is the one helper (`summarizeOwedByCurrency`) over the whole set, so it equals the other screen's figure by construction, and the parts add up to it. Never compute the total by adding up the parts from a second query, and never filter the set differently on one screen. A parity test seeds a fixture with every kind of row that could fall between the screens (no client, gone client, archived client, archived entry, another business's entries) and asserts both reads are equal. Pass the partition entries and clients, not a business id, so a multi-business lens can reuse it.
+
+### A row that isn't a record says so, and never sorts with the records
+Debts that belong to no listed client are muted rows ("No client · N", "Archived clients · N"), shown only when non-zero. They are appended after the sorted records by a function that returns tagged items (`orderClientIndex` → `{ type: 'client' | 'bucket' }`). A big bucket can't rank above a client, and the column sort never sees it. Each one opens the list of the entries behind it.
+
+### A page's filters are one URL model with a pure parser
+A main-app page whose filters a link must be able to set keeps them as one object in the URL:
+- **A pure module** (`src/lib/incomeSearch.ts`) holds the type, the parser (`parseIncomeSearch`, also the route's `validateSearch`), the merge that drops cleared fields, and the resolver that fills in defaults.
+- **A small hook** (`useIncomeFilters`) reads with `useSearch({ strict: false })` and writes with `navigate({ search: prev => merge(prev, patch), replace: true })`.
+
+Rules:
+- With no parameters the page must behave exactly as before.
+- The parser drops unknown values instead of throwing. The router parses `?q=2026` as a number, so read it back as text.
+- Write only the fields that differ from the defaults.
+- Test the hook once on a real memory router. In page tests, stand in for it with an in-memory `useState`, so the page's existing interaction tests keep working without a router.
