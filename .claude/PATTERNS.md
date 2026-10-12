@@ -1305,6 +1305,17 @@ never go (ADR-029); their row types move to `src/db/retained/` with a
 retention test, and user *files* get a plain export before their viewer goes
 (ADR-029 addendum).
 
+Two refinements from MUT-58 (the money-event read side). Re-run the audit on
+the branch you delete from, not the one the ticket was written against: the
+ticket counted four `invalidateMoneyEventQueries` call sites and main had three.
+And when the deleted code was *refreshed by write paths*, the tests that
+asserted the refresh are flipped, not just deleted: they now assert that no
+`money*` key is invalidated, next to a positive check that the write's own keys
+still are, so the negative cannot pass vacuously. The guard
+(`noDeadMoneyEventModules.test.ts`) also scans `src/` for the deleted names,
+because test files are outside `tsc` and a stale `vi.mock` path would not fail
+the typecheck.
+
 ---
 
 ### Reconcile on read when a write path skips a derived record (MUT-3, ADR-033)
@@ -1739,6 +1750,63 @@ A `role="dialog"` points `aria-labelledby` at its heading, using a `useId()` id,
 
 ### A column without a visible title still has a header
 The row-actions column uses `RowActionsHeader` (a visually hidden "Actions"), never an empty `<th>`. Axe's `empty-table-header` flags an empty one, and a screen reader announces a nameless column.
+
+---
+
+## Release patterns — added 2026-10-12 (ADR-043)
+
+### Gate before you build, confirm before you commit
+
+A release target runs in a fixed order, and the order is the point:
+
+```
+preflight  →  gates  →  version prompt  →  build  →  confirm  →  commit/push/roll
+```
+
+- **Preflight is cheap and first.** Every reason a release should not happen — wrong branch, dirty tree, unmerged branch, parked worktree, behind `origin`, wrong `node`, stale `node_modules`, a missing tool or credential — is found in under a second, before anything spends minutes building. `scripts/preflight.sh` reports *every* failure and exits once, rather than dying on the first; an operator fixes the whole list in one pass.
+- **Gates that cannot fail the build run before the version bump**, so a failure leaves the working tree exactly as it was. The build runs *after*, because the version is compiled into the bundle (`__APP_VERSION__`).
+- **The irreversible step is last and asks.** `scripts/confirm.sh` defaults to no and fails closed when there is no terminal: a release never proceeds because a prompt could not be shown. `AUTO=1` is the only way past it.
+
+### Every override is a named variable
+
+A check that can be bypassed silently is not a check. Preflight's escape hatches are `ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE` — each downgrades exactly one check to a warning and prints why it was downgraded. There is no blanket `--force`.
+
+### Derive configuration, then verify it
+
+Do not ask an operator for a value the repository already knows. `GCP_PROJECT_ID` is read from `project_id` in `<environment>.tfvars`, `TF_STATE_BUCKET` from the backend of the last `terraform init`. Because a derived value could be wrong, preflight re-derives both independently and **fails on a mismatch** — a project that disagrees with the tfvars would push an image to one project and apply infrastructure in another. Derivation removes setup friction; verification is what makes it safe.
+
+### Prompt output goes to stderr
+
+Anything read back by `$(...)` must print its UI to stderr and only the answer to stdout — otherwise the menu is captured instead of shown, and the caller receives the menu text as the answer. Read from `/dev/tty` where there is one, falling back to stdin, and probe the terminal by *opening* it (`exec 3</dev/tty`) rather than testing the path: `/dev/tty` can exist and still refuse to open.
+
+### A release commit names only the release
+
+`git add` lists the version files explicitly — never `git add .`, which sweeps whatever was dirty into a commit labelled as a release. Preflight's clean-tree check is what makes an explicit list sufficient.
+
+### Reuse the rollout, own only the order
+
+`make` does not reimplement a deploy. The server roll stays `server/scripts/deploy.sh`; the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied, so the list of files carrying the version has one definition. When sourcing a script that also runs interactively, guard its entry point (`[[ "${BASH_SOURCE[0]}" == "${0}" ]]`) and namespace your own variables — `deploy.sh` defines `$GREEN` and friends as literal `\033` strings for `echo -e`, which silently corrupts a `printf '%s'` caller that uses the same names.
+## Motion patterns — added 2026-10-12 (MUT-80, ADR-044)
+
+### A close is immediate; the exit is presentation
+Never delay a state change for an animation. A drawer's `onClose` runs at once and its owner unmounts it. The exit is played by an inert, `aria-hidden` clone of the last frame (`captureExitSnapshot`), so it can't show reset or reloading content and can't be clicked. Only a motion the component commits itself (a drag dismiss) runs live and calls back at the end, which is what makes it catchable.
+
+### Animate from a motion value; write styles yourself; clear them at rest
+Drive `transform`/`opacity` from `motionValue`s with `.on('change', paint)`, not React state; React never renders per frame. At rest, clear the inline transform (and opacity at 1): a transform makes the element the containing block for `position: fixed` descendants. To interrupt, `stop()` the controls and read `value.get()`, which is the presentation value. Read `getVelocity()` *before* `stop()`. A stopped animation never fires `onComplete`, so a cancelled exit can't call back.
+
+### Gesture rules are pure; physics is shared
+Thresholds, release decisions, rubber-banding and opacity mapping are pure functions (`drawerGesture.ts`) with unit tests. Physics that any draggable thing reuses lives in `src/lib/motion/physics.ts`. Push a sample at `pointerup`, so a pause before release reads as zero velocity. On `pointercancel` use zero velocity: its coordinates are unreliable.
+
+### No layout, no motion
+A motion that needs a measured size (`offsetWidth`) skips itself when the size is 0. That keeps jsdom component tests synchronous without a test-only branch. Tests that exercise motion stub `offsetWidth` for the element (`DrawerFrame.test.tsx`).
+
+### Telling a real unmount from StrictMode's rehearsal
+In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
+
+### Hidden documents pause motion
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+
+---
 
 ## App patterns added by MUT-86 (2026-10-12)
 

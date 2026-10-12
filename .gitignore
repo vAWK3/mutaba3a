@@ -70,6 +70,8 @@ web_modules/
 .env.*
 !.env.example
 release.env
+deploy.env
+!deploy.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

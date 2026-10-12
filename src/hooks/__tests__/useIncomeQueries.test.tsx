@@ -373,11 +373,11 @@ describe('Mutation Hooks', () => {
     });
 
     /**
-     * The Overview KPI strip and attention feed read money-event keys derived
-     * from this very transaction. Until MUT-6 QA nothing invalidated them, so
-     * the home page kept pre-payment numbers after every write.
+     * MUT-58: the money-event keys lost their last reader when Home's forecast
+     * strip and guidance feed were deleted (ADR-036), so Mark paid no longer
+     * refreshes them.
      */
-    it('should invalidate the derived money-event views', async () => {
+    it('should not invalidate the retired money-event views', async () => {
       (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'tx-1' });
 
       const queryClient = new QueryClient({
@@ -399,9 +399,8 @@ describe('Mutation Hooks', () => {
         ([arg]) => (arg as { queryKey: unknown[] }).queryKey[0]
       );
 
-      expect(invalidated).toEqual(
-        expect.arrayContaining(['moneyMonthKPIsBoth', 'moneyGuidance', 'moneyEvents'])
-      );
+      expect(invalidated).toEqual(expect.arrayContaining(['income', 'transactions']));
+      expect(invalidated.filter((key) => String(key).startsWith('money'))).toEqual([]);
     });
   });
 });
