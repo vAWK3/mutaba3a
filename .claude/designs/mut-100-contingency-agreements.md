@@ -12,6 +12,9 @@
 > - **Terms overrides belong to a correction only**: a preview or record in RECORD mode that carries `commissionRateBasisPoints` / `upfrontTreatment` gets 409 `OUTCOME_NOT_RECORDED` (terms change before an outcome through `PATCH /contingency`). Cancelling after an outcome gets 409 `OUTCOME_ALREADY_RECORDED`.
 > - **A concurrent loser** of two racing records gets 409 `OUTCOME_ALREADY_RECORDED` when the winner recorded an outcome, else `VERSION_MISMATCH`.
 > - `upfrontCountedMinor` takes no `receivablesById` (Q3 wording): the credits map is keyed by the installments' own `receivableId`.
+> - **The four new routes live in `server/src/routes/contingency.ts`** (registered beside `agreementRoutes`), with their composition in `agreements/outcome.ts`; the plan put them in `routes/agreements.ts`. Paths, scopes and the writability row are unchanged; cancel and supplements stay in `agreements.ts`.
+> - **Migration test harnesses**: MUT-59's and MUT-61's tests pasted the whole migration history into one script — one implicit transaction — and Postgres refused `CONTINGENCY` there (D3's hazard, in the harness only). They now apply one transaction per file, as `prisma migrate deploy` does; assertions unchanged.
+> - **Status after an award**: with the upfront already paid, a posted unpaid commission makes the project PARTIALLY_PAID (the existing fixed-fee rule), not OUTSTANDING as §9 item 2 assumed; OUTSTANDING is the nothing-paid case.
 
 Repo: `~/Work/elMokhtbr/Mutaba3a/mini-crm`, package `server/` (hosted ledger, Hono + zod-openapi, Prisma/Postgres, Memory + Prisma stores behind `LedgerStore`).
 Ticket: MUT-100 (Story, parent MUT-25, Backlog). Blocks MAL-1077 (Malafat UI). No blockers.

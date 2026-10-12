@@ -2002,3 +2002,23 @@ When what a write accepts depends on the profile, compute it in one pure functio
 ### An invariant lives in a unique index; every door refuses with one helper
 MUT-120's "one personal profile per user, never anyone else's" is enforced twice. The database holds the hard guarantee: `organizations.personalOwnerUserId` is `@unique`, and the memory store mirrors it as a `UniqueViolation`, so no code path can create a second one. Each door that could break the softer rules (granting, creating a user inside it, issuing a key, binding) refuses through the same `personalProfileConflict()`, so the wire shape is identical everywhere and a new door has one obvious call. The refusal reuses an existing error code with a `details.reason`, because a new code would be a contract change the API's consumers map.
 
+## Hosted API patterns added by MUT-100 (2026-10-13)
+
+### A bill that is known only later is an installment with a DATE trigger
+A contingency commission is unknown until the outcome, so it is not a field on the agreement but an installment added when the outcome is recorded (`isCommission`), DATE-triggered on the outcome date and posted at once. Everything downstream — receivables, payments, credits, statuses, and `listUnpostedDue` healing a crash between the write and the post, with the right posting date — comes for free. Reach for this before writing a receivable outside the installment model.
+
+### When a figure depends on ledger state, the preview token covers the figure
+An agreement token covers body + rate because its figures are a function of those. The outcome's bill also depends on credits on the upfront and, for a correction, the replaced receivable, which do not move the agreement's version. Hash the computed figures (counted upfront, commission, billable) and the replaced receivable's version into the token, so any credit or payment in between is 409 `PREVIEW_STALE` and what posts is always what was shown (`agreements/outcome.ts`).
+
+### Read issued splits from the stored rows, never re-split a sum
+"Upfront less its credits" sums each `CreditRecord.netMinor` (or `amountMinor` when VAT is included) as stored; splitting the summed gross again can round an agora away from the credit notes the firm issued.
+
+### A refusal re-checked inside the transaction returns a typed result, never an exception that escapes as 500
+`correctOutcome` locks the replaced commission's receivable before writing anything and returns `{ kind: 'has_payments' }` when money landed on it; the route maps it to 409 `OUTCOME_HAS_PAYMENTS`. Same shape as `UpdateResult`'s `stale`.
+
+### A new enum value gets its own migration; migration tests apply history one file per transaction
+Postgres refuses a new enum value inside the transaction that added it, so `ALTER TYPE … ADD VALUE` sits alone and everything that names the value comes in the next migration. A test that rebuilds a database from history must apply each file in its own transaction (`BEGIN; … COMMIT;` per file), as `prisma migrate deploy` does; one pasted script is one implicit transaction. A test that diffs a partial history against `schema.prisma` applies the rest of the history first.
+
+### Audit metadata is JSON by type
+`AuditEventInput.metadata` is `JsonObject`: a `bigint` or `Date` is a compile error, not a Prisma 500 after the write it describes (the memory store would have stored it happily). Money goes in as `formatMoney` strings, rates as integers. Widen to `Record<string, unknown>` only at the wire serializer, where the recursive type exhausts the route type checker.
+
