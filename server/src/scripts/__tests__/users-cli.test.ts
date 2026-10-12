@@ -53,7 +53,9 @@ describe('users CLI (npm run provision:user and friends)', () => {
     const code = await h.run(['create', '--email', 'solo@firm.ps', '--name', 'Solo', '--currency', 'USD', '--timezone', 'Asia/Hebron']);
     expect(code).toBe(0);
     const user = (await h.store.users.findByEmail('solo@firm.ps'))!;
-    const [membership] = await h.store.memberships.listByUser(user.id);
+    const memberships = await h.store.memberships.listByUser(user.id);
+    expect(memberships).toHaveLength(1);
+    const [membership] = memberships;
     const personal = (await h.store.organizations.getById(membership!.organizationId))!;
     expect(personal).toMatchObject({ personalOwnerUserId: user.id, defaultCurrency: 'USD', timezone: 'Asia/Hebron' });
     expect(h.out).toContain(`personal ${personal.id} Personal`);

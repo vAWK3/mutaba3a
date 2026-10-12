@@ -9991,6 +9991,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /admin/v1/users/{userId}/password:
     post:
       tags:

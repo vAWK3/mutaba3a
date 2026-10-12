@@ -248,6 +248,31 @@ describe('GET /v1/me', () => {
     expect(byId[a.org.id].isPersonalDefault).toBe(false);
   });
 
+  it('lists firm profiles first and the caller’s personal profile last, deterministically (MUT-120 review)', async () => {
+    const h = harness();
+    const a = await firm(h);
+    const b = await firm(h);
+    const p = await person(h, a.org.id);
+    await h.app.request(`/admin/v1/users/${p.id}/memberships`, json({ organizationId: b.org.id }, admin));
+    const { token } = await signIn(h, p.email, p.password);
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    // Not sorted on purpose: the portal opens profiles[0], so the order is the contract.
+    expect(me.profiles.map((x: Loose) => x.id)).toEqual([a.org.id, b.org.id, p.personalId]);
+  });
+
+  it('never marks another user’s personal profile as the caller’s default (MUT-120 review)', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const owner = await person(h, f.org.id);
+    const other = await person(h, f.org.id);
+    // Planted below the admin API, which refuses this grant.
+    await h.store.memberships.grant(other.id, owner.personalId, h.clock.now);
+    const { token } = await signIn(h, other.email, other.password);
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    expect(me.profiles.filter((x: Loose) => x.isPersonalDefault).map((x: Loose) => x.id)).toEqual([other.personalId]);
+    expect(me.profiles.find((x: Loose) => x.id === owner.personalId)?.isPersonalDefault).toBe(false);
+  });
+
   it('answers 401 UNAUTHENTICATED without a credential and SESSION_EXPIRED for an unknown cookie', async () => {
     const h = harness();
     const none = await h.app.request('/v1/me');

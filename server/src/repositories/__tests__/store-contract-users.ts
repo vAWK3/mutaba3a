@@ -65,6 +65,21 @@ export function describeLedgerStoreUsersContract(name: string, makeStore: () => 
       ).rejects.toBeInstanceOf(UniqueViolation);
     });
 
+    it('refuses a personal organization for an unknown user (MUT-120)', async () => {
+      const store = await makeStore();
+      await expect(
+        store.organizations.create({ name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', personalOwnerUserId: '00000000-0000-4000-8000-000000000000' }),
+      ).rejects.toBeInstanceOf(ForeignKeyViolation);
+    });
+
+    it('rolls the user back when the personal slug is already taken (MUT-120)', async () => {
+      const store = await makeStore();
+      const o = await org(store);
+      const clash = input(undefined, { personal: { ...personal(), slug: o.slug } });
+      await expect(store.users.create(clash)).rejects.toBeInstanceOf(UniqueViolation);
+      expect(await store.users.findByEmail(clash.email)).toBeNull();
+    });
+
     it('marks firm organizations with no personal owner (MUT-120)', async () => {
       const store = await makeStore();
       const o = await org(store);
@@ -78,7 +93,8 @@ export function describeLedgerStoreUsersContract(name: string, makeStore: () => 
       const first = input(o.id);
       await store.users.create(first);
       const retry = input(o.id, { email: first.email });
-      await expect(store.users.create(retry)).rejects.toBeInstanceOf(UniqueViolation);
+      // The admin route reports "email already exists" only when the constraint names email (MUT-120 review).
+      await expect(store.users.create(retry)).rejects.toSatisfy((err: unknown) => err instanceof UniqueViolation && err.constraint.includes('email'));
       expect(await store.organizations.getBySlug(retry.personal.slug)).toBeNull();
     });
 

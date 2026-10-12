@@ -284,6 +284,10 @@ describe('personal profiles are never bound, keyed or shown as firms (MUT-120)',
     expect(res.status).toBe(409);
     expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
     expect(await h.store.integrations.findByOrganizationAndProvider(org.id, 'MALAFAT')).toBeNull();
+    // MUT-120 review: refused by API-key authentication itself, so no key-authed route reads the books.
+    const ledger = await h.app.request('/v1/customers', bearer(generated.secret));
+    expect(ledger.status).toBe(409);
+    expect((await read(ledger)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
   });
 });
 

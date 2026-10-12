@@ -125,7 +125,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
     if (!organization) continue;
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
     const writerOfRecord = malafat?.status === 'CONNECTED' ? ('MALAFAT' as const) : null;
-    // MUT-65: per-organization, not a constant — three rows' access depend on whether this profile is personal or Malafat-fed.
+    // MUT-65: per-organization, not a constant — three rows' access depend on whether a Malafat writer of record feeds this profile (not on isPersonalDefault).
     const access = Object.fromEntries(WRITABILITY_MATRIX.map((row) => [row.domain, sessionAccessFor(row.domain, writerOfRecord)]));
     profiles.push({
       id: organization.id,
@@ -139,5 +139,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
       isPersonalDefault: organization.personalOwnerUserId === user.id,
     });
   }
+  // MUT-120: the personal membership is created in the same instant as the firm's, so membership order alone ties on a
+  // random id. Firms keep membership order and the caller's personal profile goes last (stable sort); the portal opens profiles[0].
+  profiles.sort((a, b) => Number(a.isPersonalDefault) - Number(b.isPersonalDefault));
   return { user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale }, profiles };
 }

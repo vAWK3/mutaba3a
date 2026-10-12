@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { MALAFAT_REQUIRED_SCOPES, missingScopes } from '../auth/scopes.js';
-import { ApiError, personalProfileConflict } from '../errors.js';
+import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
@@ -92,8 +92,6 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
     }),
     async (c) => {
       const { organization, apiKey } = keyAuth(c);
-      // MUT-120: unreachable through the admin API (no key is issued for one), refused here too in case a key exists anyway.
-      if (organization.personalOwnerUserId) throw personalProfileConflict('A personal profile cannot be bound to an external system');
       const body = c.req.valid('json');
       const now = c.get('now')();
 

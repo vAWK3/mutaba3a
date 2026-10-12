@@ -96,7 +96,7 @@ describe('POST /admin/v1/users', () => {
     await createUser(h, org.id, 'partner@firm.ps');
     const res = await h.app.request('/admin/v1/users', send('POST', { email: ' PARTNER@firm.ps', displayName: 'Again', organizationId: org.id }));
     expect(res.status).toBe(409);
-    expect((await read(res)).error.code).toBe('CONFLICT');
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', message: 'A user with this email already exists' });
   });
 
   it('answers 404 for an unknown organization and creates nobody', async () => {
@@ -169,6 +169,29 @@ describe('personal profile (MUT-120)', () => {
     expect(res.status).toBe(422);
     expect((await read(res)).error.code).toBe('VALIDATION_FAILED');
     expect(await h.store.users.findByEmail('half@firm.ps')).toBeNull();
+  });
+
+  it.each([
+    [{ defaultCurrency: 'ILS', timezone: 'Asia/Jerusalim' }, false],
+    [{ timezone: 'Mars/Olympus_Mons' }, true],
+  ])('answers 422 for an unknown IANA timezone %j (firm: %s), creating nobody (MUT-120 review)', async (partial, withFirm) => {
+    const h = harness();
+    const org = withFirm ? await organization(h) : null;
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'tz@firm.ps', displayName: 'TZ', ...(org ? { organizationId: org.id } : {}), ...partial }));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.code).toBe('VALIDATION_FAILED');
+    expect(await h.store.users.findByEmail('tz@firm.ps')).toBeNull();
+  });
+
+  it('refuses to revoke a user’s own personal-profile membership, and keeps it (MUT-120 review)', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user, personalProfile } = await createUser(h, org.id);
+    const res = await h.app.request(`/admin/v1/users/${user.id}/memberships/${personalProfile.id}`, send('DELETE'));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.memberships.find(user.id, personalProfile.id)).not.toBeNull();
+    expect((await h.app.request(`/admin/v1/users/${user.id}/memberships/${org.id}`, send('DELETE'))).status).toBe(200);
   });
 
   it('lets a request currency and timezone override the firm’s', async () => {
@@ -359,9 +382,10 @@ describe('audit', () => {
     const h = harness();
     const org = await organization(h);
     const { user, personalProfile } = await createUser(h, org.id);
-    // MUT-120: the personal membership has to go too before the user has none.
+    // MUT-120: the personal membership has to go too before the user has none. The admin API refuses
+    // that revoke, so the no-membership state is reached at the store, as an operator repair would.
     await h.app.request(`/admin/v1/users/${user.id}/memberships/${org.id}`, send('DELETE'));
-    await h.app.request(`/admin/v1/users/${user.id}/memberships/${personalProfile.id}`, send('DELETE'));
+    await h.store.memberships.revoke(user.id, personalProfile.id);
     const before = [h.store.auditCount(org.id), h.store.auditCount(personalProfile.id)];
     expect((await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST'))).status).toBe(200);
     expect([h.store.auditCount(org.id), h.store.auditCount(personalProfile.id)]).toEqual(before);

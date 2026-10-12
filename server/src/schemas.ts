@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
-import { PAYMENT_TERMS } from './dates.js';
+import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { ITEM_STATUSES } from './agreements/status.js';
@@ -205,7 +205,7 @@ export const CreateUserRequestSchema = z
     /** The personal profile's currency (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
     defaultCurrency: CurrencySchema.optional(),
     /** The personal profile's IANA timezone (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
-    timezone: z.string().min(1).optional(),
+    timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
   })
   .openapi('CreateUserRequest');
 
@@ -282,6 +282,7 @@ export const HostedProfileSchema = z
 export const MeSchema = z
   .object({
     user: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), locale: UserLocaleSchema }),
+    /** Firm profiles in membership order (oldest first), then the caller's own personal profile last (MUT-120). */
     profiles: z.array(HostedProfileSchema),
   })
   .openapi('Me');

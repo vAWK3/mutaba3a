@@ -59,7 +59,7 @@ const PERSONAL_PROFILE_NAME: Record<UserLocale, string> = { en: 'Personal', ar: 
  * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
  * with neither there is nothing to default to, so the request is invalid.
  */
-export function resolvePersonalSettings(
+function resolvePersonalSettings(
   request: { defaultCurrency?: string | undefined; timezone?: string | undefined },
   firm: Pick<Organization, 'defaultCurrency' | 'timezone'> | null,
 ): { defaultCurrency: string; timezone: string } | null {
@@ -163,7 +163,10 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
           201,
         );
       } catch (err) {
-        if (err instanceof UniqueViolation) throw new ApiError('CONFLICT', 'A user with this email already exists');
+        // MUT-120: the transaction also writes the personal organization, so only an email clash is reported as one.
+        if (err instanceof UniqueViolation) {
+          throw new ApiError('CONFLICT', err.constraint.includes('email') ? 'A user with this email already exists' : 'A conflicting record already exists; retry the request');
+        }
         if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'Organization not found');
         throw err;
       }
@@ -257,12 +260,17 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       responses: {
         200: { description: 'Removed, or there was nothing to remove', content: { 'application/json': { schema: RemoveMembershipResponseSchema } } },
         404: notFound,
+        409: { description: 'The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
     async (c) => {
       const { userId, organizationId } = c.req.valid('param');
       const user = await mustGetUser(userId);
+      // MUT-120: a user always keeps their own personal profile; it cannot be revoked away from them.
+      if ((await store.organizations.getById(organizationId))?.personalOwnerUserId === user.id) {
+        throw personalProfileConflict('A user keeps their own personal profile; it cannot be revoked');
+      }
       const removed = await store.memberships.revoke(user.id, organizationId);
       if (removed) await audit(c, [organizationId], user.id, 'membership.revoked');
       return c.json({ removed }, 200);

@@ -147,10 +147,10 @@ describe('the operator can see how big an inbox is (AC 6)', () => {
   it('still reports the inbox after the person’s last membership is revoked', async () => {
     const s = await setup();
     await s.capture(ENTRY);
-    // MUT-120: the personal profile's membership goes too, so the person has none left.
-    for (const m of (await s.detail()).memberships as { organizationId: string }[]) {
-      await s.app.request(`/admin/v1/users/${s.userId}/memberships/${m.organizationId}`, { method: 'DELETE', headers: admin });
-    }
+    // MUT-120: the personal profile's membership goes too, so the person has none left. The admin API
+    // refuses that one (it is the user's own), so it is removed at the store.
+    await s.app.request(`/admin/v1/users/${s.userId}/memberships/${s.p.id}`, { method: 'DELETE', headers: admin });
+    for (const m of await s.store.memberships.listByUser(s.userId)) await s.store.memberships.revoke(s.userId, m.organizationId);
 
     const detail = await s.detail();
     expect(detail.memberships).toEqual([]);
