@@ -490,6 +490,8 @@ describe('Button', () => {
 
 ### 4. E2E Tests (Planned)
 
+> The live suite is `e2e/*.spec.ts`, listed under "E2E port-over" below (2026-10-12). This section is the original plan.
+
 **Scope**: Full user flows from UI to database.
 
 **Tool**: Playwright (recommended for cross-browser)
@@ -1232,3 +1234,28 @@ Plan: `.claude/designs/mut-64-device-sessions-tests.md`. Written red first per f
 
 **Baseline after MUT-64 (2026-10-12)**: server `npm test` 1110 passed, 11 skipped; server `npm run typecheck`/`npm run lint` clean; `store-contract-sessions.ts` also run against a local Postgres (`mutaba3a_dev_mut64`) via the Prisma-backed store; root `npm run typecheck` (app + hosted programs), `npm run openapi:check` and `npm run hosted:types:check` all clean.
 
+
+### E2E port-over — the stale Playwright specs on the current UI (TD-004, 2026-10-12)
+
+The 13 cases that failed on main (stale paths without `/app`, pages that no longer exist, the pre-MUT-5 drawer) are each updated or removed. Helpers live in `e2e/support/`:
+- `openFreshApp(page, path)` waits for the Welcome dialog and skips it, which creates the default USD profile;
+- `openNewIncomeDrawer(page)` opens the drawer from the top bar's "+ Add" › Income;
+- `logIncome(page, …)` logs an entry for a new client;
+- `expectOnlyKnownAxeViolations(page, surface)` fails on any axe rule not listed for that surface in `KNOWN_AXE_VIOLATIONS` (TD-009).
+
+| File | Was | Now |
+|---|---|---|
+| `e2e/accessibility.spec.ts` | 7 cases: Overview, Transactions, Projects, Clients, Reports, Settings, transaction drawer. None reached its page | 7 cases. On a fresh install: Home first run (Get Started), Settings, the income drawer with More details open. With one entry logged: Home, Clients, the client profile, Income. Projects and Reports were removed: optional areas, off by default, whose routes send you home. Transactions was removed: `/transactions` redirects to Income |
+| `e2e/settings.spec.ts` | 4 cases: language, theme, data management, theme toggle. The theme case passed without reaching Settings: `/settings` is outside the `/app` basepath, and its loose text matches hit whatever rendered there | 3 cases: switching to Arabic sets `lang="ar"` and `dir="rtl"`, and English restores them; Dark, Light and System set and clear `html[data-theme]`; Data Management › Export JSON › Export downloads `mutaba3a-Default-Profile-<date>.csv`. The "show theme" case is folded into the theme switch |
+| `e2e/income-drawer.spec.ts` (was `transaction.spec.ts`) | 3 cases: create income, empty-amount error, Income/Expense/Receivable type switch | 3 cases: an amount alone saves an entry that shows as Unpaid, with No client, in the Income list; Save with no amount shows "Amount is required" and keeps the drawer open; under More details, Due Date shows for Earned and Invoiced and hides for Received. The type switch no longer exists: a receivable is unpaid income, and expenses are an optional area |
+| `e2e/navigation.spec.ts` | passed alone, failed once under parallel load | Uses `openFreshApp`. The old one-off `isVisible()` check could run before the Welcome dialog mounted, and the dialog then swallowed the first sidebar click |
+
+**Verified:**
+- 19/19 pass with `income-fast-path.spec.ts`, which is unchanged.
+- The suite also passes `--repeat-each 3` (57/57) and `--repeat-each 2` (38/38, after the rebase onto MUT-64/MUT-78), and on a cold dev server started by Playwright. The slowest test took 12 s.
+- Mutation check: taking `heading-order` off the Settings allowlist fails that case. The failure names the rule, its help text and the element.
+- `eslint e2e` and `tsc --strict` over `e2e/` are clean. `e2e/` is in no tsconfig program, so `npm run typecheck` doesn't cover it.
+
+**How it was run:** the committed `playwright.config.ts` pins 5173 (TD-004). The runs used a throwaway config with `webServer: npx vite --port 5193 --strictPort` and `reuseExistingServer`, deleted afterwards along with `test-results/`.
+
+**Gate (2026-10-12, on main 89a0adb plus this branch):** `npm run lint` shows 0 errors and 16 warnings, none in `e2e/`. `npm run typecheck` is clean. `npx vitest run`: 176 files, 2,832 passed, 4 skipped. `npm run build` is OK.

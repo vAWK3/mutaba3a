@@ -1668,3 +1668,13 @@ When an effect consumes a URL parameter (reads it, strips it with `replaceState`
 
 To undo a session without tracking every write, record when it started, and only start it on a database with none of the person's data. Leaving then removes the session's seeded rows by prefix and everything else by `createdAt >= startedAt`; imported or restored rows keep their older `createdAt` and survive (ADR-042).
 
+
+## E2E patterns — added 2026-10-12 (TD-004)
+
+### A spec starts from a fresh install with `openFreshApp`
+
+Every Playwright test gets an empty IndexedDB, so the Welcome dialog always opens once the profile query answers. `openFreshApp(page, path)` (`e2e/support/app.ts`) goes to `/app${path}`, clicks the dialog's "Skip for now" (which creates the default USD profile) and waits for the dialog to close. Never guard the skip with a one-off `isVisible()`: under parallel load the dialog can mount after the check and swallow the next click. Open the drawer from the top bar's "+ Add" › Income (`openNewIncomeDrawer`), which every page has; the empty-state "Add Income" button disappears once there is data. Scope buttons to `main` when the FX banner has one with the same name ("System").
+
+### Axe checks fail on new rules, not on known ones
+
+`expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.

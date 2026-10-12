@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — E2E: the stale Playwright specs run against the current UI (TD-004)
+
+**Scope:**
+- `e2e/accessibility.spec.ts`, `e2e/settings.spec.ts` (rewritten); `e2e/transaction.spec.ts` → `e2e/income-drawer.spec.ts` (rewritten); `e2e/navigation.spec.ts` (Welcome race)
+- `e2e/support/app.ts`, `e2e/support/axe.ts` (new)
+- TD-004, TD-009, TEST_PLAN, PATTERNS
+
+### Fixed
+- **The 13 failing e2e cases are updated or removed; the suite passes 19/19.** They opened paths outside the `/app` basepath and looked for pages, headings and a drawer that no longer exist (Overview, Transactions, Reports, Projects, the Income/Expense/Receivable switch).
+- `navigation.spec.ts` checked for the Welcome dialog once with `isVisible()`. Under parallel load the dialog could mount after the check and swallow the first sidebar click. It now waits for the dialog.
+
+### Changed
+- **Axe covers the core surfaces**: Home (first run, and with an entry), Clients, a client's profile, Income, Settings, and the income drawer with More details open. The pages that existed all have violations today. The owner chose to baseline them, not fix them here, so each surface lists the rules it is known to break (`KNOWN_AXE_VIOLATIONS`, all described in TD-009). Any other rule fails the test.
+- **Settings now checks what the controls do**, not just that they're visible: Arabic sets `lang`/`dir` and English restores them; Dark, Light and System set and clear `html[data-theme]`; Export downloads the default profile's CSV.
+- **The income drawer by mouse**: an amount alone saves an Unpaid entry with No client; an empty amount shows "Amount is required"; Due Date hides when the status is Received. The keyboard path stays in `income-fast-path.spec.ts`.
+
+### Removed
+- Axe checks for Projects and Reports. They are optional areas, off on a fresh install, and their routes send you home. Transactions is gone too, because `/transactions` redirects to Income.
+- The Income/Expense/Receivable type-switch case. A receivable is unpaid income (Earned or Invoiced), and expenses are their own optional area.
+
 ## [Unreleased] - 2026-10-12 — MUT-64: device sessions — native app sign-in for hosted accounts
 
 **Scope:** `server/` only:
