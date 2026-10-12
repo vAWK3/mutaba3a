@@ -831,7 +831,7 @@ ProjectDetailPage.
 
 ## Home Components
 
-Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone.
+Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone. MUT-58 then deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, `lib/monthDetection`, the money-event and guidance types, and the `invalidateMoneyEventQueries` call on every write path); `src/__tests__/noDeadMoneyEventModules.test.ts` keeps that gone too.
 
 ### HomeNeedsAttention
 **Location**: `src/components/home/HomeNeedsAttention.tsx`
@@ -1355,6 +1355,7 @@ interface in `src/db/interfaces.ts`. Rename or delete a repository method and
 interception point.
 
 **Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
-`scheduleGenerator`, `retainerMatching`, and `moneyEventRepo`. `engagementRepo`
-is gone with the module (MUT-10); `moneyEventRepo` survived MUT-11 because the
-Overview page depends on it, and remains outside the seam. See TODOS.md item 2.
+`scheduleGenerator` and `retainerMatching`. `engagementRepo` is gone with the
+module (MUT-10). `moneyEventRepo` survived MUT-11 only because the old Overview
+read it; once MUT-8 deleted those components it had no reader, and MUT-58
+deleted it with `useMoneyEventQueries` (ADR-036 §3). See TODOS.md item 2.

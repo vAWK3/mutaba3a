@@ -1095,6 +1095,14 @@ tools › Export receipts, one ZIP with `<profile>/<month>/<file>`), then delete
 Rows still stay (ADR-029 §1): `monthCloseStatuses` keeps its retained schema in
 `src/db/retained/monthCloseSchema.ts` with a retention test, like engagements.
 
+**Note 2026-10-12 — MUT-58: §4's shared code is gone too.** `moneyEventRepository`
+stayed because three Overview components read it. ADR-036 §3 deleted those
+components, and MUT-58 then deleted the repository, `useMoneyEventQueries` and
+the money-event types, which had no reader left. This applies §4; it does not
+override it. Money events were derived, so no table was involved. The
+`moneyEventVersions` sync table is unrelated and stays (§1), and
+`noDeadMoneyEventModules.test.ts` asserts it is still in the schema.
+
 ---
 
 ## ADR-030: Overpayment Is Rejected; Locked Transactions Still Accept Payments
