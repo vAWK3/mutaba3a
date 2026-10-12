@@ -9,9 +9,9 @@
 
 | Category | Patterns |
 |----------|----------|
-| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
+| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3), All-or-nothing batches through `runAtomically` (MUT-87) |
 | **State** | URL State, Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets, One row per decision (MUT-87), One `<Drawer>` for a drawer's views (MUT-87) |
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3), Ungrouped amount prefills (`minorToAmountInput`, MUT-86) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
@@ -1822,8 +1822,6 @@ Under MUT-5's strict grammar, deleting a digit from a prefilled "3,550" leaves "
 ### A co-located stylesheet prefixes its classes with the component
 `index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, used by the document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.
 
-
-
 ---
 
 ## Inbox patterns — added 2026-10-12 (MUT-66)
@@ -1870,3 +1868,15 @@ All destination-side validation — writability, link resolution, category/custo
 
 "Unsorted entries never change any summary" is asserted twice: once by comparing whole summary responses before and after filling an inbox, and once by reading the summary sources — enumerated from the directory so a module added later is covered — and finding no reference to the table. The second keeps the first from being a coincidence that a future query could quietly break.
 
+---
+
+## App patterns added by MUT-87 (2026-10-12)
+
+### A batch of writes is all or nothing, through the repository
+When one user action writes several rows (marking three months paid writes three expenses and three occurrences), run it in one storage transaction so a failure leaves nothing half done. Services can't open one themselves: they reach storage only through `getRepositories()` (ADR-002). The repository offers a unit of work instead, `recurringOccurrences.runAtomically(work)`, and the service loops over the **existing** single-row functions inside it (`confirmPayments` → `confirmPayment`), so the rules for one row are written once. The Dexie implementation is `db.transaction('rw', [every table the work touches, reads included], work)`; repository calls inside join it through Dexie's zone. `work` may await only repository calls: a timer or a `fetch` inside commits the transaction early. Test it with fake-indexeddb by making the second write reject (`vi.spyOn(repo, 'create').mockImplementationOnce(original).mockRejectedValueOnce(...)`) and asserting the tables are empty (ADR-052).
+
+### One row per decision, not one card per item
+A list that asks the user to act should show one row per thing they decide about, not one card per underlying record. The Expenses Needs attention list groups a rule's missed payments into one row ("Aug, Sep, Oct not marked · $240") with one primary action; the less common actions go in a ⋯ menu (`useMenuButton`) and apply to the whole group; per-item choices live in the drawer the primary action opens. The grouping is a pure, tested function the page calls in `useMemo` (`groupOccurrencesByRule`), and the drawer looks its group up live by key, so an item resolved inside it drops out.
+
+### One `<Drawer>` for a drawer's views
+A drawer with a second step (the mark-paid drawer's snooze view) renders a single `<Drawer>` and swaps its body and footer by state. Returning a different component that each renders its own `<Drawer>` remounts the shell, which replays the open animation and loses state the first view held (checks, typed amounts). Keep that state in the component that owns the `<Drawer>`.

@@ -38,3 +38,17 @@ describe('expense surface after MUT-14', () => {
     expect(barrel).not.toContain('RecurringRuleDrawer');
   });
 });
+
+/**
+ * MUT-87: the per-month recurring cards' modals were replaced by the
+ * mark-paid drawer (one row per rule). Nothing may bring them back.
+ */
+describe('recurring Needs attention after MUT-87', () => {
+  it('the per-month confirm and snooze modals no longer exist', () => {
+    expect(existsSync(join(ROOT, 'components/modals/RecurringConfirmModal.tsx'))).toBe(false);
+    expect(existsSync(join(ROOT, 'components/modals/RecurringConfirmModal.css'))).toBe(false);
+    const barrel = readFileSync(join(ROOT, 'components/modals/index.ts'), 'utf8');
+    expect(barrel).not.toContain('RecurringConfirmModal');
+    expect(barrel).not.toContain('RecurringSnoozeModal');
+  });
+});

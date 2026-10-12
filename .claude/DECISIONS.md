@@ -55,6 +55,7 @@
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
+| ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 
 ---
 
@@ -2041,3 +2042,21 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Alternatives Considered**: a nullable `organizationId` on `Expense`/`Payment`/`Receivable` (rejected: MUT-65 loosened *client/matter* columns, which keeps the row inside an organization; teaching every reader of a ledger table to handle a null organization is a far larger and riskier change, and it reintroduces the FK that must be absent for the membership AC to hold structurally); keying the table `(userId, organizationId?)` (rejected for the same reason one level down); one filing route with a content-derived scope (rejected, decision 4); an `inbox` matrix domain (rejected, decision 7).
 
+---
+
+## ADR-052: Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-87 (epic MUT-74), decision E1 of `.claude/designs/landing-apple-redesign.md`, approved by Basel 2026-10-11. The Expenses page's Needs attention list showed one card per missed payment of a recurring rule, each with Mark Paid, Skip, Snooze and Edit recurring rule. Three missed months of server hosting were three identical cards and 12 buttons for one decision. Mark Paid opened a modal that dated the expense **today** unless the user changed the date, so catching up on three months put three expenses on one day. Test plan: `.claude/designs/mut-87-recurring-rows-tests.md`.
+
+**Decision**:
+1. **One row per rule.** `groupOccurrencesByRule` (`src/components/expenses/recurringAttention.ts`) is the one pure grouping: rule → its missed payments, oldest first; rows ordered by their oldest payment, then title, then id. The row reads "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", with the oldest payment's lateness under the amount ("68d overdue"), as Home's Needs attention says it. `VirtualOccurrenceDisplay` gains `frequency` for "monthly"/"yearly"; occurrence generation is unchanged.
+2. **One primary action.** Mark paid opens `RecurringMarkPaidDrawer` (the shared `Drawer`, unchanged), listing the payments, all checked, each with its date and an amount field prefilled with the rule's amount. **Each checked payment becomes one expense dated on its own expected date** (overrides the old modal's default of today). The amount stays editable per payment, keeping the recurring brief's "amount can be edited before confirming"; it is sent only when changed, so `actualAmountMinor` records a real override. The old modal's paid-date and notes fields are dropped (the rule's default notes still apply; the expense stays editable in the ledger).
+3. **All or nothing.** `confirmPayments`, `skipOccurrences` and `snoozeOccurrences` (`recurringExpenseService.ts`) loop over the existing single-payment functions inside `recurringOccurrences.runAtomically(work)`, a new repository method. The Dexie implementation is one `rw` transaction over `recurringRules`, `recurringOccurrences` and `expenses`; repository calls inside join it, and a throw rolls every write back. `work` may await only repository calls.
+4. **Skip, Snooze and Edit rule live in a ⋯ menu** (`useMenuButton`, ADR-034 §4) and apply to all of the rule's missed payments; Skip asks first. Inside the drawer each payment has its own Skip (asks first) and Snooze. Snoozing is a view of the same drawer (date, quick picks via `Intl.RelativeTimeFormat`), for one payment or, opened from ⋯, for all of them. `RecurringConfirmModal` and `RecurringSnoozeModal` lost their last consumer and are deleted; `RecurringOccurrenceCard` keeps only the read-only form the forecast uses.
+5. **The section total shows each non-zero currency side by side**, never combined (ADR-004), in USD → ILS → EUR order like Owed now: `currencyTotals(groups)` over `orderCurrencyAmounts`, rendered by `CurrencyAmounts`. It is computed from the due occurrences only; it does not share `useOverviewTotalsByCurrency` (whose page-level "Total expenses" strip sums the wrong table — reported, not changed here).
+
+**Consequences**: Catching up on a rule is one decision and one write; a failure leaves the rule exactly as it was. Expenses from a catch-up land in the months they belong to, so a month's ledger and by-category totals are right. A user who paid on a different day edits the expense afterwards. Any future multi-row recurring write goes through `runAtomically`.
+
+**Alternatives Considered**: one compact row per month (rejected at approval, E1); keep the four-button cards (rejected, E1); date catch-up expenses today, as the modal did (rejected: the AC asks for each expected date, and today misfiles every month but the current one); drop amount editing to keep the drawer minimal (rejected: removes a capability the recurring brief requires, with no decision to remove it); keep the snooze modal and stack it over the drawer (rejected: two layers, and the drawer's Escape would close the wrong one); open the transaction in the service with `db` directly (rejected: services reach storage only through `getRepositories()`, ADR-002).

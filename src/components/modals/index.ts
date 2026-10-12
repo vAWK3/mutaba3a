@@ -4,5 +4,4 @@ export { ExportDataModal } from './ExportDataModal';
 export { ImportDataModal } from './ImportDataModal';
 export { ProfilePickerModal } from './ProfilePickerModal';
 export { WelcomeModal } from './WelcomeModal';
-export { RecurringConfirmModal, RecurringSnoozeModal } from './RecurringConfirmModal';
 export { MigrationWizard } from './MigrationWizard';

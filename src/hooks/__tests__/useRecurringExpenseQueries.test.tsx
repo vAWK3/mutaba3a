@@ -10,9 +10,9 @@ import {
   useActiveRecurringRules,
   useRecurringRule,
 
-  useConfirmRecurringPayment,
-  useSkipRecurringOccurrence,
-  useSnoozeRecurringOccurrence,
+  useConfirmRecurringPayments,
+  useSkipRecurringOccurrences,
+  useSnoozeRecurringOccurrences,
   useCreateRecurringRule,
   usePauseRecurringRule,
   useResumeRecurringRule,
@@ -25,9 +25,9 @@ import * as expenseRepository from '../../db/expenseRepository';
 vi.mock('../../services/recurringExpenseService', () => ({
   getVirtualOccurrences: vi.fn(),
   getDueOccurrences: vi.fn(),
-  confirmPayment: vi.fn(),
-  skipOccurrence: vi.fn(),
-  snoozeOccurrence: vi.fn(),
+  confirmPayments: vi.fn(),
+  skipOccurrences: vi.fn(),
+  snoozeOccurrences: vi.fn(),
   createRecurringRule: vi.fn(),
   getRuleHistory: vi.fn(),
 }));
@@ -289,74 +289,86 @@ describe('Mutation Hooks', () => {
     vi.clearAllMocks();
   });
 
-  describe('useConfirmRecurringPayment', () => {
-    it('should confirm payment', async () => {
-      const mockExpense = { id: 'expense-1' };
-      (recurringService.confirmPayment as ReturnType<typeof vi.fn>).mockResolvedValue(mockExpense);
+  // MUT-87: the Needs attention drawer marks, skips and snoozes several
+  // payments of one rule at once; each batch is one all-or-nothing write.
+  function createSpyWrapper() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const invalidatedKeys = () => invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    return { wrapper, invalidatedKeys };
+  }
 
-      const { result } = renderHook(
-        () => useConfirmRecurringPayment(),
-        { wrapper: createWrapper() }
-      );
+  describe('useConfirmRecurringPayments (T16)', () => {
+    it('confirms the selected payments in one call and refreshes occurrences and expenses', async () => {
+      (recurringService.confirmPayments as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: 'expense-1' }]);
+      const { wrapper, invalidatedKeys } = createSpyWrapper();
+      const { result } = renderHook(() => useConfirmRecurringPayments(), { wrapper });
 
-      await act(async () => {
-        await result.current.mutateAsync({
-          ruleId: 'rule-1',
-          profileId: 'profile-1',
-          expectedDate: '2026-03-15',
-        });
-      });
-
-      expect(recurringService.confirmPayment).toHaveBeenCalledWith({
+      const params = {
         ruleId: 'rule-1',
         profileId: 'profile-1',
-        expectedDate: '2026-03-15',
+        payments: [{ expectedDate: '2026-08-05' }, { expectedDate: '2026-09-05', amountMinor: 9000 }],
+      };
+      await act(async () => {
+        await result.current.mutateAsync(params);
       });
+
+      expect(recurringService.confirmPayments).toHaveBeenCalledTimes(1);
+      expect(recurringService.confirmPayments).toHaveBeenCalledWith(params);
+      expect(invalidatedKeys()).toEqual(
+        expect.arrayContaining([
+          ['virtualOccurrences'],
+          ['dueOccurrences'],
+          ['recurringOccurrences'],
+          recurringExpenseQueryKeys.ruleHistory('rule-1'),
+          ['expenses'],
+        ])
+      );
     });
   });
 
-  describe('useSkipRecurringOccurrence', () => {
-    it('should skip occurrence', async () => {
-      const mockOccurrence = { id: 'occ-1', status: 'resolved_skipped' };
-      (recurringService.skipOccurrence as ReturnType<typeof vi.fn>).mockResolvedValue(mockOccurrence);
+  describe('useSkipRecurringOccurrences (T16)', () => {
+    it('skips the payments in one call and refreshes occurrences, not expenses', async () => {
+      (recurringService.skipOccurrences as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      const { wrapper, invalidatedKeys } = createSpyWrapper();
+      const { result } = renderHook(() => useSkipRecurringOccurrences(), { wrapper });
 
-      const { result } = renderHook(
-        () => useSkipRecurringOccurrence(),
-        { wrapper: createWrapper() }
-      );
-
+      const params = { ruleId: 'rule-1', profileId: 'profile-1', expectedDates: ['2026-08-05', '2026-09-05'] };
       await act(async () => {
-        await result.current.mutateAsync({
-          ruleId: 'rule-1',
-          profileId: 'profile-1',
-          expectedDate: '2026-03-15',
-        });
+        await result.current.mutateAsync(params);
       });
 
-      expect(recurringService.skipOccurrence).toHaveBeenCalled();
+      expect(recurringService.skipOccurrences).toHaveBeenCalledWith(params);
+      expect(invalidatedKeys()).toEqual(
+        expect.arrayContaining([['virtualOccurrences'], ['dueOccurrences'], recurringExpenseQueryKeys.ruleHistory('rule-1')])
+      );
+      expect(invalidatedKeys()).not.toContainEqual(['expenses']);
     });
   });
 
-  describe('useSnoozeRecurringOccurrence', () => {
-    it('should snooze occurrence', async () => {
-      const mockOccurrence = { id: 'occ-1', status: 'snoozed' };
-      (recurringService.snoozeOccurrence as ReturnType<typeof vi.fn>).mockResolvedValue(mockOccurrence);
+  describe('useSnoozeRecurringOccurrences (T16)', () => {
+    it('snoozes the payments in one call', async () => {
+      (recurringService.snoozeOccurrences as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      const { wrapper, invalidatedKeys } = createSpyWrapper();
+      const { result } = renderHook(() => useSnoozeRecurringOccurrences(), { wrapper });
 
-      const { result } = renderHook(
-        () => useSnoozeRecurringOccurrence(),
-        { wrapper: createWrapper() }
-      );
-
+      const params = {
+        ruleId: 'rule-1',
+        profileId: 'profile-1',
+        expectedDates: ['2026-08-05'],
+        snoozeUntil: '2026-10-19',
+      };
       await act(async () => {
-        await result.current.mutateAsync({
-          ruleId: 'rule-1',
-          profileId: 'profile-1',
-          expectedDate: '2026-03-15',
-          snoozeUntil: '2026-03-20',
-        });
+        await result.current.mutateAsync(params);
       });
 
-      expect(recurringService.snoozeOccurrence).toHaveBeenCalled();
+      expect(recurringService.snoozeOccurrences).toHaveBeenCalledWith(params);
+      expect(invalidatedKeys()).toEqual(expect.arrayContaining([['virtualOccurrences'], ['dueOccurrences']]));
     });
   });
 

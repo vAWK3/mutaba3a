@@ -296,6 +296,7 @@ export async function getVirtualOccurrences(
 
         // Resolved names
         ruleTitle: rule.title,
+        frequency: rule.frequency,
         vendor: rule.vendor,
         vendorName: vendor?.canonicalName,
         categoryId: rule.categoryId,
@@ -543,6 +544,80 @@ export async function snoozeOccurrence(params: SnoozeOccurrenceParams): Promise<
   }
 
   return occurrence!;
+}
+
+// ============================================================================
+// Batch Actions (MUT-87)
+// ============================================================================
+//
+// The Needs attention drawer acts on several payments of one rule at once.
+// Each batch reuses the single-payment function above for every payment, and
+// runs inside one repository transaction: every write lands, or none does
+// (ADR-052).
+
+export interface ConfirmPaymentsParams {
+  ruleId: string;
+  profileId: string;
+  /** Each payment is dated on its own expected date; amountMinor only when edited */
+  payments: Array<{ expectedDate: string; amountMinor?: number }>;
+}
+
+/**
+ * Mark several payments of a rule paid: one expense per payment, each dated on
+ * its expected date, all or nothing.
+ */
+export async function confirmPayments(params: ConfirmPaymentsParams): Promise<Expense[]> {
+  const { ruleId, profileId, payments } = params;
+  if (payments.length === 0) return [];
+
+  return getRepositories().base.recurringOccurrences.runAtomically(async () => {
+    const expenses: Expense[] = [];
+    for (const { expectedDate, amountMinor } of payments) {
+      expenses.push(await confirmPayment({ ruleId, profileId, expectedDate, amountMinor }));
+    }
+    return expenses;
+  });
+}
+
+export interface SkipOccurrencesParams {
+  ruleId: string;
+  profileId: string;
+  expectedDates: string[];
+}
+
+/** Skip several payments of a rule, all or nothing. No expense is written. */
+export async function skipOccurrences(params: SkipOccurrencesParams): Promise<RecurringOccurrence[]> {
+  const { ruleId, profileId, expectedDates } = params;
+  if (expectedDates.length === 0) return [];
+
+  return getRepositories().base.recurringOccurrences.runAtomically(async () => {
+    const skipped: RecurringOccurrence[] = [];
+    for (const expectedDate of expectedDates) {
+      skipped.push(await skipOccurrence({ ruleId, profileId, expectedDate }));
+    }
+    return skipped;
+  });
+}
+
+export interface SnoozeOccurrencesParams {
+  ruleId: string;
+  profileId: string;
+  expectedDates: string[];
+  snoozeUntil: string;            // ISO date string
+}
+
+/** Snooze several payments of a rule until one date, all or nothing. */
+export async function snoozeOccurrences(params: SnoozeOccurrencesParams): Promise<RecurringOccurrence[]> {
+  const { ruleId, profileId, expectedDates, snoozeUntil } = params;
+  if (expectedDates.length === 0) return [];
+
+  return getRepositories().base.recurringOccurrences.runAtomically(async () => {
+    const snoozed: RecurringOccurrence[] = [];
+    for (const expectedDate of expectedDates) {
+      snoozed.push(await snoozeOccurrence({ ruleId, profileId, expectedDate, snoozeUntil }));
+    }
+    return snoozed;
+  });
 }
 
 // ============================================================================

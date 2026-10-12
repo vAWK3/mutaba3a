@@ -1,0 +1,15 @@
+/* Several currencies side by side, never combined (MUT-87) */
+.currency-amounts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* An amount stays left to right inside Arabic text; out-ranks :lang(ar) */
+.currency-amounts > .currency-amount {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
