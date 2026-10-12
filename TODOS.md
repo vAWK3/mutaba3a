@@ -43,3 +43,17 @@
 **Context:** Found 2026-10-10 during the MUT-6 eng review; created by MUT-6's prefill rather than pre-existing. Decide after MUT-18 ships, since fixing the date may change whether the control is worth keeping.
 
 **Depends on / blocked by:** MUT-18 (`markPaid` hardcodes `paidAt`). Decide after it lands.
+
+## 6. Two more private copies of the bidi `isolate` helper
+
+**What:** `src/components/expenses/RecurringAttentionList.tsx:25` and `src/components/drawers/RecurringMarkPaidDrawer.tsx:45` each define their own `isolate` (U+2068 FSI … U+2069 PDI), identical to the one `src/lib/utils.ts` now exports.
+
+**Why:** MUT-81's eng review found four private copies total, two of which (`OwedNowSummary.tsx`, `PartialPaymentDrawer.tsx`) used a different, wrong codepoint (U+2066 LRI) and were migrated as part of that ticket. These two were already correct (same FSI codepoint as the shared helper), so the review scoped the migration narrower (D4: "Extract + migrate the two MUT-81 opens") rather than touching files outside that ticket's blast radius.
+
+**Pros of fixing:** One definition instead of three; the recurring-expenses area stops carrying logic that exists elsewhere in the codebase.
+
+**Cons / cost / risk:** None functional — both copies are already correct. Purely a dedup.
+
+**Context:** Found 2026-10-12 during MUT-81's eng review (`/plan-eng-review`), decision D4.
+
+**Depends on / blocked by:** Nothing. Next time either file is open for an unrelated change.
