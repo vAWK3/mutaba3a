@@ -9,20 +9,21 @@ import {
   CLIENT_SORT_FIELDS,
   type ClientIndexRow,
 } from '../clientIndexRows';
-import type { ClientSummary, OwedBucket } from '../../../types';
+import type { ClientOwedIndexRow, OwedBucket } from '../../../types';
 
-const summary = (overrides: Partial<ClientSummary> = {}): ClientSummary => ({
+const summary = (overrides: Partial<ClientOwedIndexRow> = {}): ClientOwedIndexRow => ({
   id: 'c-1',
   name: 'Acme',
   activeProjectCount: 0,
   paidIncomeMinor: 0,
   unpaidIncomeMinor: 0,
   owed: [],
+  profileIds: [],
   ...overrides,
 });
 
 const rates = { USD: 3, EUR: 4 };
-const row = (overrides: Partial<ClientSummary> = {}, withRates = rates) =>
+const row = (overrides: Partial<ClientOwedIndexRow> = {}, withRates = rates) =>
   toClientIndexRow(summary(overrides), withRates);
 const order = (rows: ClientIndexRow[], ...args: Parameters<typeof compareClientRows>) =>
   [...rows].sort(compareClientRows(...args)).map((r) => r.name);
@@ -160,7 +161,7 @@ describe('compareClientRows', () => {
  * client get up to two muted rows, always after the clients.
  */
 describe('a row\'s businesses (MUT-89)', () => {
-  it('carries the businesses the index tagged it with, or none', () => {
+  it('carries the businesses the index tagged it with', () => {
     expect(row({ profileIds: ['studio', 'teaching'] }).profileIds).toEqual(['studio', 'teaching']);
     expect(row().profileIds).toEqual([]);
   });

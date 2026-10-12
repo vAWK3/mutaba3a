@@ -2,11 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import type { ProfileQuickPickerProps } from '../../hooks/useProfileAwareAction';
-import { nudgeInside } from '../layout/popoverPosition';
+import { nudgeInside, POPOVER_EDGE_MARGIN } from '../layout/popoverPosition';
 import './ProfileQuickPicker.css';
-
-/** Gap kept between the picker and the window's edges */
-const EDGE_MARGIN = 8;
 
 /**
  * ProfileQuickPicker
@@ -74,7 +71,7 @@ export function ProfileQuickPicker({
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     if (!anchor || !popover) return;
-    const dx = nudgeInside(popover.getBoundingClientRect(), { left: 0, right: window.innerWidth }, EDGE_MARGIN);
+    const dx = nudgeInside(popover.getBoundingClientRect(), { left: 0, right: window.innerWidth }, POPOVER_EDGE_MARGIN);
     popover.style.translate = dx === 0 ? '' : `${dx}px 0`;
     popover.querySelector<HTMLElement>('[role="option"]')?.focus();
   }, [anchor]);

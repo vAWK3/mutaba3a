@@ -38,7 +38,7 @@ import { owedEntriesSearch } from '../../lib/incomeSearch';
 import { formatAmount, formatDate, formatRelativeDate, cn } from '../../lib/utils';
 import { useT, useLanguage, useDirection, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
-import type { ClientSummary, Currency } from '../../types';
+import type { ClientOwedIndexRow, Currency } from '../../types';
 
 /** Direction a column sorts in when first clicked: names A–Z, money and dates biggest/newest first. */
 const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
@@ -49,7 +49,7 @@ const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
   activity: 'desc',
 };
 
-const NO_SUMMARIES: ClientSummary[] = [];
+const NO_SUMMARIES: ClientOwedIndexRow[] = [];
 
 export interface ClientsPageProps {
   /** The client open beside the list or in place of it: its row is marked and its link is the current page (MUT-84) */

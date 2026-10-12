@@ -15,8 +15,8 @@
 import { convertAmount } from '../../lib/fx';
 import type {
   ClientOwedIndex,
+  ClientOwedIndexRow,
   ClientScope,
-  ClientSummary,
   Currency,
   LastPayment,
   OwedBusinessBuckets,
@@ -72,7 +72,7 @@ export function owedRank(owed: OwedByCurrency[], rates: RatesToIls): number[] {
 const overdueLines = (owed: OwedByCurrency[]) =>
   owed.filter((o) => o.overdueMinor > 0).map((o) => ({ currency: o.currency, amountMinor: o.overdueMinor }));
 
-export function toClientIndexRow(summary: ClientSummary, rates: RatesToIls): ClientIndexRow {
+export function toClientIndexRow(summary: ClientOwedIndexRow, rates: RatesToIls): ClientIndexRow {
   return {
     id: summary.id,
     name: summary.name,
@@ -83,7 +83,7 @@ export function toClientIndexRow(summary: ClientSummary, rates: RatesToIls): Cli
     lastPayment: summary.lastPayment,
     lastActivityAt: summary.lastActivityAt,
     owedRank: owedRank(summary.owed, rates),
-    profileIds: summary.profileIds ?? [],
+    profileIds: summary.profileIds,
   };
 }
 

@@ -6,8 +6,6 @@
 
 import type { ProfileScope } from '../types';
 
-export type { ProfileScope };
-
 /**
  * Returns true if the record is NOT soft-deleted (safe to include in results).
  */

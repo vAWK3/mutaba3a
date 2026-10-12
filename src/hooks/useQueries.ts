@@ -93,6 +93,15 @@ export const queryKeys = {
   recentPayments: (profileId?: ProfileScope, limit?: number) => ['paymentRecords', 'recent', { profileId, limit }] as const,
 };
 
+/**
+ * A read that may wait: Home and Clients pass `enabled: false` until the
+ * "All businesses" lens knows its businesses (MUT-89, D2), because an absent
+ * business means every record.
+ */
+export interface QueryGate {
+  enabled?: boolean;
+}
+
 // Transaction hooks
 /**
  * @deprecated Use `useIncome` from `useIncomeQueries.ts` for income-specific queries.
@@ -106,15 +115,6 @@ export const queryKeys = {
  *
  * For expenses, use hooks from `useExpenseQueries.ts`.
  */
-/**
- * A read that may wait: Home and Clients pass `enabled: false` until the
- * "All businesses" lens knows its businesses (MUT-89, D2), because an absent
- * business means every record.
- */
-export interface QueryGate {
-  enabled?: boolean;
-}
-
 export function useTransactions(filters: QueryFilters, { enabled }: QueryGate = {}) {
   return useQuery({
     queryKey: queryKeys.transactions(filters),
@@ -241,11 +241,10 @@ export function usePaymentsByClient(
  * ['paymentRecords'], so invalidatePaymentRecordLists refreshes it after any
  * payment or income write.
  */
-export function useRecentPayments(profileId?: ProfileScope, limit = 10, { enabled }: QueryGate = {}) {
+export function useRecentPayments(profileId?: ProfileScope, limit = 10) {
   return useQuery({
     queryKey: queryKeys.recentPayments(profileId, limit),
     queryFn: () => getRepositories().base.paymentRecords.listRecent({ profileId, limit }),
-    enabled,
   });
 }
 

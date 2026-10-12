@@ -1,3 +1,6 @@
+/** How close a popover may come to the edges of its bounds, in px */
+export const POPOVER_EDGE_MARGIN = 8;
+
 interface HorizontalSpan {
   left: number;
   right: number;

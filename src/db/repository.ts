@@ -28,8 +28,9 @@ import type {
   PaymentByClientRow,
   RecentPaymentRow,
   PaymentByClientFilters,
+  ProfileScope,
 } from '../types';
-import { excludeDeleted, scopeToProfile, type ProfileScope } from './baseQuery';
+import { excludeDeleted, scopeToProfile } from './baseQuery';
 import { todayLocalISO, isOverdueReceivable, daysOverdue, isFuturePaymentDate } from '../lib/dates';
 import { selectAttentionReceivables } from '../lib/attention';
 import {

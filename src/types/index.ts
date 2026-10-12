@@ -238,12 +238,6 @@ export interface ClientSummary {
   /** lastPayment.paidAt */
   lastPaymentAt?: string;
   lastActivityAt?: string;
-  /**
-   * The clients index only (MUT-89): the businesses of the client's entries in
-   * the index's scope, in scope order, or its own business when it has none.
-   * The tags "All businesses" shows on the row.
-   */
-  profileIds?: string[];
   // Per-currency report totals (present when list() has no currency filter).
   // Read by the Insights and Reports client tables. Unlike `owed`, unpaid here
   // still counts archived income (TD-030).
@@ -272,9 +266,19 @@ export interface OwedBucket {
  * The clients index of one business (MUT-83, ADR-049): every figure comes
  * from the entries recorded in that business, the same set Home's Owed now sums.
  */
+/** A clients-index row: a client's summary and the businesses it is tagged with */
+export interface ClientOwedIndexRow extends ClientSummary {
+  /**
+   * The businesses of the client's entries in the index's scope, in scope
+   * order, or its own business when it has none: the tags "All businesses"
+   * shows on the row (MUT-89).
+   */
+  profileIds: string[];
+}
+
 export interface ClientOwedIndex {
   /** The listed clients; every column counts only this business's entries */
-  clients: ClientSummary[];
+  clients: ClientOwedIndexRow[];
   /** Owed now over every entry in the business: equals Home's (ADR-036 §5) */
   total: OwedByCurrency[];
   noClient: OwedBucket;
