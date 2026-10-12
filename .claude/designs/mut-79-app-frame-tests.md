@@ -15,6 +15,9 @@
 | D6 | `UpdateBanner` (desktop only) also moves from `position: fixed` into flow at the bottom of `<main>`; AC 1 covers it. Its old `left: var(--sidebar-width)` was wrong while the sidebar was collapsed. |
 | D7 | `FxRateBanner` (tsx and css), its `mutaba3a_fx_banner_state` key, its drag and position state, and the keys `fx.showBanner`, `fx.minimize`, `fx.drag` and `fx.bannerTitle` are deleted. `removeRetiredStorageKeys()` runs once at startup and removes the old key from users' storage. |
 | D8 | The test setup stubs `fetch` with a rejecting guard, so the readout (now in every page test's `TopBar`) never reaches the FX API. Tests that need `fetch` already stub it themselves. |
+| D9 | *(found in the browser)* `<main>` clips its absolute children, so the RTL popover was cut off at 575 px. A layout effect shifts the panel by `nudgeInside(panel, main, 8)`, a pure function. |
+| D10 | *(found in the browser)* `theme.css`'s `:lang(ar) { direction: rtl }` beats `dir="ltr"` (TD-048), which turned the formula into `₪3.06 = $1`. The formula states `.fx-formula[dir='ltr'] { direction: ltr }`. A global fix was tried and reverted: existing Arabic amounts rely on the bug (see TD-048). |
+| D11 | Settings' update card was also `.update-banner`, so it is renamed `.settings-update-card`; otherwise its margin and border would leak onto the in-flow desktop bar. |
 
 **Out of scope:** these are transient overlays by design: drawers, modals, menus and popovers, and toasts. The internal demo-mode bar pads `.app-shell` and does not overlap content.
 
@@ -37,6 +40,7 @@
 | T13 | The Mac bar shows on a Mac browser; it is hidden on an iPad (MacIntel + touch), on Windows, in Tauri, and after dismissal | component |
 | T14 | Dismissing the Mac bar hides it and persists, so a remount stays hidden; a throwing `localStorage` neither crashes nor shows the bar after dismissal in the same mount | component |
 | T15 | `removeRetiredStorageKeys` removes `mutaba3a_fx_banner_state`, leaves other keys alone, and survives a throwing storage | unit |
+| T16 | `nudgeInside`: a panel that fits is not moved; past the right or left edge it moves back inside with the margin; wider than the bounds it is pinned left | unit |
 
 ## Edge cases
 

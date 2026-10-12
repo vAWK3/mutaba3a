@@ -1261,6 +1261,35 @@ A button that opens a list of actions uses `useMenuButton()` and spreads
 and call `menu.close()` before running their action. The hook owns focus on
 open, arrow/Home/End movement, Escape (refocus the button), Tab and
 outside-click closing; do not add per-menu document listeners.
+A small panel of information plus a control or two (the top bar's exchange
+rate) is the same button in dialog mode: `useMenuButton({ kind: 'dialog' })`,
+with a labelled `role="dialog"` panel (MUT-79). Don't use a menu for content
+that isn't a list of actions.
+
+### Nothing floats over content (MUT-79, decision A1)
+The app frame is in flow. Bars that belong to the whole app go inside `<main>`
+in `AppShell`. Notices go at the top, before the page (`SampleDataBar`,
+`FeatureNoticeBanner`). Offers and updates go at the bottom, after the page,
+with `margin-top: auto` (`MacDownloadBanner`, `UpdateBanner`). None of them is
+`position: fixed`. Settings-like controls go into the frame itself: the FX
+rate in `TopBar`, the theme toggle in the sidebar footer. Only transient
+overlays may cover the page: drawers, modals, menus, popovers and toasts. A
+top-bar popover lives inside `<main>`, which has `overflow: hidden`, so keep
+it inside with `nudgeInside`. To check by hand, sweep the visible `fixed` /
+`sticky` (and outside-`absolute`) elements that intersect `<main>` at 1440,
+1024, 768 and 375 px; the list should be empty.
+
+### Retiring a feature that stored something (MUT-79)
+When you delete a feature, add its localStorage keys to
+`RETIRED_LOCAL_STORAGE_KEYS` (`src/lib/retiredStorage.ts`), so existing
+browsers drop them at startup.
+
+### Tests never reach the network (MUT-79)
+`src/test/setup.ts` replaces `fetch` with a guard that rejects. A component
+whose query calls an API (the FX rate) then takes its offline path in every
+page test. A test that needs responses stubs `fetch` itself with
+`vi.stubGlobal('fetch', …)`. Run the suite with Node 22, as CI does; Node 25+
+hides jsdom's `localStorage` (TD-054).
 
 ### Pruning after a UI deletion (MUT-14)
 Run the consumer audit (exports and repository methods with zero references

@@ -19,7 +19,7 @@
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | OwedNowSummary, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateBanner, CurrencyBadge |
+| **Money** | OwedNowSummary, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -68,6 +68,13 @@
 - Collapsible to a 64px rail (choice kept in `localStorage.sidebarCollapsed`); toggles in normal flow; a hairline separates core from "More"
 - **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
 - New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
+- **Footer (MUT-79):** Settings and `ThemeToggle` share `.sidebar-footer-row` (stacked on the 64px rail).
+
+### ThemeToggle
+**Location**: `src/components/layout/ThemeToggle.tsx`
+**Purpose**: The appearance switch beside Settings (MUT-79, A1). Each press moves to `nextThemeMode(theme)`, cycling through `THEME_MODES` (Light → Dark → System), the same list and the same `useTheme()` state as Settings → Theme. Its icon is per mode (sun, moon, monitor), and it is named `nav.theme` ("Theme: Dark").
+
+Tests: `src/components/layout/__tests__/ThemeToggle.test.tsx`, `src/lib/theme/__tests__/themeModes.test.ts`, `SidebarNav.features.test.tsx` (placement).
 
 ---
 
@@ -90,7 +97,17 @@
 | `breadcrumbs?` | BreadcrumbItem[] | Navigation trail |
 | `actions?` | ReactNode | Right-side action buttons |
 
-The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon.
+The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon. The right side starts with `FxRateReadout` on every page (MUT-79), whether or not the Add menu is shown.
+
+### FxRateReadout
+**Location**: `src/components/layout/FxRateReadout.tsx` (+ `.css`)
+**Purpose**: The top bar's exchange rate (MUT-79, A1), replacing the floating `FxRateBanner`. `$1 = ₪3.06 ▾` (USD→ILS, 2 decimals, locale digits) opens a `useMenuButton({ kind: 'dialog' })` panel labelled "Exchange rate". The panel shows USD and EUR to 4 decimals, each source (Live / Cached / Unavailable), "Rates for <date>" (the date is parsed as local), "Updated: <relative>", and Refresh rates (both refetch; disabled while loading). The formulas are `<bdi dir="ltr" class="fx-formula">`; see TD-048 for why the class is needed. A layout effect applies `nudgeInside` to keep the panel inside `<main>`, which clips it on a narrow window.
+
+Tests: `src/components/layout/__tests__/FxRateReadout.test.tsx`, `popoverPosition.test.ts`.
+
+### nudgeInside
+**Location**: `src/components/layout/popoverPosition.ts`
+**Purpose**: Pure: how far to shift a panel sideways (px) so it sits inside its bounds with a margin. A panel wider than the bounds is pinned to the left edge. Reuse it for any top-bar popover that `<main>`'s `overflow: hidden` could clip.
 
 ---
 
@@ -118,7 +135,21 @@ Tests: `src/hooks/__tests__/usePrefersReducedMotion.test.ts`.
 
 ### detectDevice / currentDevice
 **Location**: `src/lib/platform.ts`
-**Purpose**: Pure `detectDevice({ userAgent, platform, maxTouchPoints })` → `'mac' | 'windows' | 'ios' | 'android' | 'linux' | 'unknown'`, telling an iPad from a Mac and Android from Linux; `currentDevice()` reads `navigator`. Used by the landing hero and `DownloadPage`. Cannot tell Intel from Apple Silicon.
+**Purpose**: Pure `detectDevice({ userAgent, platform, maxTouchPoints })` → `'mac' | 'windows' | 'ios' | 'android' | 'linux' | 'unknown'`, telling an iPad from a Mac and Android from Linux; `currentDevice()` reads `navigator`. Used by the landing hero, `DownloadPage` and `MacDownloadBanner` (MUT-79, which removed the substring checks `isMacOS`/`isWindows`/`isLinux`, TD-049). Cannot tell Intel from Apple Silicon.
+
+### MacDownloadBanner / UpdateBanner (frame bars)
+**Location**: `src/components/ui/MacDownloadBanner.tsx`, `UpdateBanner.tsx`
+**Purpose**: The app's bottom bars, rendered after the page inside `<main>`. They are in flow (`margin-top: auto`), not fixed, so they never cover content (MUT-79). The Mac bar shows when `currentDevice() === 'mac'`, the app is not in Tauri, and `localStorage.hideDownloadBanner` isn't set; storage errors are ignored. The update bar is desktop only (`role="status"`). Settings' own update card is `.settings-update-card`, not `.update-banner`.
+
+Tests: `src/components/ui/__tests__/MacDownloadBanner.test.tsx`, `src/components/__tests__/UpdateBanner.test.tsx`.
+
+### THEME_MODES / nextThemeMode
+**Location**: `src/lib/theme/modes.ts` (exported from `lib/theme`)
+**Purpose**: The one ordered list of appearance modes (`light`, `dark`, `system`), rendered by Settings and cycled by `ThemeToggle` (MUT-79).
+
+### removeRetiredStorageKeys
+**Location**: `src/lib/retiredStorage.ts`, called once in `main.tsx`
+**Purpose**: Deletes localStorage keys whose feature is gone (`mutaba3a_fx_banner_state`, MUT-79). Add a key here when you delete a feature that stored one.
 
 ### useMenuButton
 **Location**: `src/hooks/useMenuButton.ts`
@@ -135,6 +166,8 @@ const menu = useMenuButton();
 ```
 
 Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; arrows wrap; Home/End jump; Escape closes and refocuses the button; Tab and a mousedown outside close. Used by `SidebarNav` and `TopBar`. `RowActionsMenu` still has its own listeners (TD-031). Tests: `hooks/__tests__/useMenuButton.test.tsx`.
+
+**Dialog mode (MUT-79):** `useMenuButton({ kind: 'dialog' })` is for a small non-modal panel of information and controls (`FxRateReadout`). It gives `aria-haspopup="dialog"`, a panel `role="dialog"` with `tabIndex=-1` (the consumer adds `aria-labelledby`), and on open focuses the first enabled control, or the panel itself. There is no arrow movement. Tab closes only when it leaves past the last control (Shift+Tab: past the first). Escape and an outside press work as for a menu. Used by `FxRateReadout`.
 
 ---
 
@@ -1093,19 +1126,8 @@ Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in
 
 ---
 
-### FxRateBanner
-**Location**: `src/components/money/FxRateBanner.tsx`
-**Purpose**: Display FX rate used for conversions.
-
-```tsx
-<FxRateBanner
-  baseCurrency="USD"
-  quoteCurrency="ILS"
-  rate={3.67}
-  effectiveDate="2024-01-15"
-/>
-// Renders: "1 USD = 3.67 ILS (as of Jan 15)"
-```
+### ~~FxRateBanner~~ (removed, MUT-79)
+The floating, draggable FX panel; replaced by `FxRateReadout` in the top bar (see Layout).
 
 ---
 
