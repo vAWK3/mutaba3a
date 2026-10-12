@@ -4,6 +4,7 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
+import { allocationStateOf } from './payments/allocation-state.js';
 import type {
   ExpenseCategoryRecord,
   ExpenseReceiptRecord,
@@ -289,15 +290,26 @@ export function serializeAllocation(a: AllocationRecord, receivable: ReceivableR
   };
 }
 
-export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType<typeof serializeAllocation>>, replacedByPaymentId: string | null) {
+/** MUT-61: the person behind a captured payment, as Malafat shows them. */
+export interface CapturedBy {
+  userId: string;
+  displayName: string;
+}
+
+export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType<typeof serializeAllocation>>, replacedByPaymentId: string | null, capturedBy: CapturedBy | null) {
   return {
     id: p.id,
     number: p.number,
     customerId: p.customerId,
+    projectId: p.projectId,
+    origin: p.origin === 'CAPTURE' ? ('capture' as const) : ('integration' as const),
+    captureSource: p.captureSource as CaptureSource | null,
+    capturedBy,
     currency: p.currency as Currency,
     amount: amt(p.amountMinor, p.currency),
     allocated: amt(p.allocatedMinor, p.currency),
     unallocated: amt(p.status === 'REVERSED' ? 0n : p.amountMinor - p.allocatedMinor, p.currency),
+    allocationState: allocationStateOf(p),
     receivedOn: p.receivedOn,
     method: p.method,
     reference: p.reference,

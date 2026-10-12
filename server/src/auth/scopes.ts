@@ -30,11 +30,12 @@ export const SCOPES = [
 export type KeyScope = (typeof SCOPES)[number];
 
 /**
- * Scopes only a user session holds (MUT-42 D4): the expenses row of the
- * writability matrix, which Malafat's key has no column in. Never issuable to
- * a key, never in SCOPES, so the vocabulary Malafat sees is unchanged.
+ * Scopes only a user session holds (MUT-42 D4): the expenses and capture
+ * (MUT-61) rows of the writability matrix, which Malafat's key has no column
+ * in. Never issuable to a key, never in SCOPES, so the vocabulary Malafat sees
+ * is unchanged.
  */
-export const SESSION_ONLY_SCOPES = ['expenses:read', 'expenses:write'] as const;
+export const SESSION_ONLY_SCOPES = ['expenses:read', 'expenses:write', 'capture:write'] as const;
 export type SessionOnlyScope = (typeof SESSION_ONLY_SCOPES)[number];
 
 /** Anything requireScope can demand. */

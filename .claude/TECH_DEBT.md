@@ -18,6 +18,36 @@
 
 ## Open Debt
 
+### TD-092: Pre-MUT-61 captured payments have no captureSource
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-61)
+**Priority**: Low
+**Impact**: Payments captured before the MUT-61 migration (MUT-65 income, MUT-66 filing, settle) are backfilled `origin: CAPTURE` but keep `captureSource: null`; the surface lived only in `income.received`/`receivable.settled` audit metadata. Malafat's list shows them as captured with no surface. These rows exist only on personal profiles (Malafat-fed profiles refused session payments until MUT-61), and MUT-65/66 are not yet deployed, so production is likely empty.
+**Fix if ever needed**: a one-off script copying `metadata.captureSource` from each payment's audit row.
+
+### TD-093: No index for an organization-wide "unallocated phone payments" list
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-61)
+**Priority**: Low
+**Impact**: `GET /v1/payments?origin=capture&allocationState=unallocated` without `customerId` scans the organization's payments (the `[organizationId, createdAt, id]` index orders, nothing narrows `origin`). MAL-1097 lists per client, which `[organizationId, customerId]` serves. Revisit with `@@index([organizationId, origin, status])` if Malafat adds a firm-wide inbox.
+
+### TD-095: A capture refused with a 4xx replays that 4xx for the same Idempotency-Key
+**Status**: Open
+**Added**: 2026-10-12 (MUT-61 /review; pre-existing behaviour)
+**Priority**: Medium (for MUT-68/MUT-123)
+**Impact**: `idempotency.ts` stores 4xx responses: Hono's `onError` turns a thrown `ApiError` into a response before `next()` returns, so the release-on-throw path never runs. A state-dependent refusal — `CUSTOMER_NOT_LINKED` until Malafat links the client — replays for ever if the phone's outbox retries with the same key. The phone must mint a new key after any 4xx (an edit-and-resend), or the server must stop storing 4xx. Decide with MUT-68/MUT-123.
+
+### TD-096: Captures that can never be allocated — client-only off-currency, and personal-era captures after connecting
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-61 /review)
+**Priority**: Low
+**Impact**: (1) On a Malafat-fed profile a client-only capture may be in a currency the client owes nothing in (only a named matter fixes the currency). (2) A profile that was personal and later connects Malafat keeps its MUT-65 captures as `origin: CAPTURE`, including clientless ones Malafat cannot allocate (`PAYMENT_HAS_NO_CUSTOMER`); they appear in an unfiltered `?origin=capture&allocationState=unallocated`. MAL-1097 lists per client, so neither shows there. Revisit if Malafat adds a firm-wide queue.
+
+### TD-094: Filing an unsorted Received onto a Malafat-fed profile is still refused
+**Status**: Open
+**Added**: 2026-10-12 (MUT-61)
+**Priority**: Low
+**Impact**: `POST /v1/income` now accepts Received on a Malafat-fed profile, but `POST /v1/inbox/{id}/file-as-income` still requires `payments:write` and is refused `READ_ONLY_PROFILE` there (MUT-69's AC relies on this). The two doors now differ for Received. Deliberately out of MUT-61's scope; a follow-up would move file-as-income's Received branch onto `capture` + `incomeCaptureRulesFor` (ADR-048 decision 4 means a separate route or a split by kind).
 ### TD-088: The colour system needs Safari 16.2+ (oklch, color-mix) and 16.4+ (font-synthesis-weight)
 **Status**: Open
 **Added**: 2026-10-12 (MUT-102 review, red-team finding)

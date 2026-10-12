@@ -690,6 +690,11 @@ model Payment {
   requestId         String?
   /// Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor.
   createdByUserId   String?       @db.Uuid
+  /// MUT-61: INTEGRATION when Malafat's key recorded it, CAPTURE when a person did (POST /v1/income, inbox filing).
+  /// Durable where createdByUserId is not: that column is SetNull when the user goes.
+  origin            PaymentOrigin @default(INTEGRATION)
+  /// MUT-61: the surface a capture came from (CaptureSourceSchema: app, siri, …); null when not sent, and always for INTEGRATION.
+  captureSource     String?       @db.VarChar(20)
   createdBy         User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   version           Int           @default(1)
   createdAt         DateTime      @default(now())
@@ -702,6 +707,12 @@ model Payment {
   @@index([organizationId, projectId])
   @@index([organizationId, createdAt, id])
   @@map("payments")
+}
+
+/// MUT-61: who put a payment on the ledger — Malafat's integration, or a person capturing money they were handed.
+enum PaymentOrigin {
+  INTEGRATION
+  CAPTURE
 }
 
 model PaymentAllocation {

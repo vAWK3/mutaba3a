@@ -727,6 +727,8 @@ export interface ReceivableRepository {
 
 export type PaymentMethod = 'CASH' | 'BANK';
 export type PaymentStatus = 'POSTED' | 'REVERSED';
+/** MUT-61: who put a payment on the ledger. */
+export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE';
 
 export interface PaymentRecord {
   id: string;
@@ -752,6 +754,10 @@ export interface PaymentRecord {
   requestId: string | null;
   /** Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor. */
   createdByUserId: string | null;
+  /** MUT-61: INTEGRATION when Malafat's key recorded it, CAPTURE when a person did. */
+  origin: PaymentOrigin;
+  /** MUT-61: the capture surface (CaptureSourceSchema), or null — always null for INTEGRATION. */
+  captureSource: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -784,8 +790,42 @@ export interface CreatePaymentInput {
   replacesPaymentId: string | null;
   requestId: string | null;
   createdByUserId: string | null;
+  /** MUT-61: required, so every writer says which it is. */
+  origin: PaymentOrigin;
+  captureSource: string | null;
   allocations: AllocationInput[];
 }
+
+/**
+ * MUT-61: a person's own "Received" — what `payments.capture` accepts. No
+ * allocations, no replacement, no bank reference: by type, not by convention,
+ * so the store-guard row that admits it (`capture`) can never write anything
+ * Malafat would have to untangle.
+ */
+export interface CaptureReceivedInput {
+  organizationId: string;
+  customerId: string | null;
+  projectId: string | null;
+  currency: string;
+  amountMinor: bigint;
+  receivedOn: IsoDate;
+  method: PaymentMethod;
+  notes: string | null;
+  requestId: string | null;
+  createdByUserId: string;
+  captureSource: string | null;
+}
+
+/** The reversal reason `payments.undoCapture` records (and the route audits). */
+export const CAPTURE_UNDO_REASON = 'capture_undo';
+
+/**
+ * MUT-61: what `payments.undoCapture` did. `not-found` covers every payment that
+ * is not this person's own capture in this organization, so a caller cannot
+ * probe for other people's payments. `already-reversed` is only this person's own earlier undo; a capture the
+ * integration reversed (any other reason) is `reversed-elsewhere`, so the person is never told they undid it.
+ */
+export type UndoCaptureResult = 'reversed' | 'already-reversed' | 'reversed-elsewhere' | 'allocated' | 'not-found';
 
 export interface CreditInput {
   amountMinor: bigint;
@@ -803,10 +843,23 @@ export interface CreditRecord extends CreditInput {
   createdAt: Date;
 }
 
+/**
+ * MUT-61: how much of a payment is applied — `allocationStateOf` (payments/allocation-state.ts). A REVERSED payment
+ * reads `unallocated` (reverse() zeroes allocatedMinor); the `allocationState` list filter matches POSTED payments only.
+ */
+export type AllocationState = 'unallocated' | 'partial' | 'allocated';
+
 export interface PaymentFilter {
   customerId?: string;
-  /** A payment whose own `projectId` names this project (MUT-65), OR one with at least one allocation on it. */
+  /**
+   * A payment with at least one allocation on this project, OR (MUT-65) one whose own `projectId` names it — the
+   * latter only while it has no allocations at all (MUT-61 D2): a captured matter is a hint until Malafat allocates.
+   */
   projectId?: string;
+  /** MUT-61. */
+  origin?: PaymentOrigin;
+  /** MUT-61: implies status POSTED. */
+  allocationState?: AllocationState;
   status?: PaymentStatus;
   receivedBefore?: IsoDate;
   receivedAfter?: IsoDate;
@@ -827,6 +880,14 @@ export interface PaymentRepository {
   reverse(organizationId: string, paymentId: string, reason: string, at: Date): Promise<{ payment: PaymentRecord; changed: boolean } | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
+  /** MUT-61: a person's own Received — POSTED, origin CAPTURE, no allocations. Same numbering as create. */
+  capture(input: CaptureReceivedInput, at: Date): Promise<PaymentRecord>;
+  /**
+   * MUT-61: reverse this person's own capture, only while nothing is allocated — one conditional write, so an
+   * allocation that lands at the same moment either wins (→ `allocated`) or finds the payment reversed. Never
+   * unwinds an allocation, unlike `reverse`.
+   */
+  undoCapture(organizationId: string, paymentId: string, userId: string, at: Date): Promise<{ result: UndoCaptureResult; payment: PaymentRecord | null }>;
 }
 
 export interface ExternalReferenceRepository {

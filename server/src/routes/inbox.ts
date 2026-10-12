@@ -7,7 +7,7 @@ import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
-import { assertNotFuture, dueDateForOwed, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
+import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { InboxEntryRecord, LedgerStore, UpdateInboxEntryPatch } from '../repositories/ports.js';
 import {
@@ -234,14 +234,15 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Filed', content: { 'application/json': { schema: IncomeResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization, user, writerOfRecord } = sessionAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'INCOME');
       assertNotFuture(entry.occurredOn, todayFor(organization, now), 'occurredOn');
-      // MUT-65's own validators, called exactly as routes/income.ts calls them — not reimplemented.
-      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
+      // MUT-65's own validators, reused rather than reimplemented. This route stays on payments:write, so a Malafat-fed
+      // profile is refused before this line and only personal-profile rules ever apply here (TD-094).
+      const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, entry.currency, incomeCaptureRulesFor(writerOfRecord));
 
       const filed = await store.inboxEntries.fileAsIncome(
         { userId: user.id, inboxEntryId: entry.id, kind: 'INCOME', write: incomeWrite(entry, body, links, organization.id, user.id, now, c.get('requestId')) },
@@ -257,6 +258,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         customerId: links.customerId,
         projectId: links.projectId,
         filedFromInbox: true,
+        ...(body.kind === 'received' ? { origin: 'CAPTURE' } : {}),
         ...(entry.captureSource ? { captureSource: entry.captureSource } : {}),
       };
       if (filed.result.kind === 'received') {
@@ -297,6 +299,8 @@ function incomeWrite(
         replacesPaymentId: null,
         requestId,
         createdByUserId: userId,
+        origin: 'CAPTURE' as const,
+        captureSource: entry.captureSource,
         allocations: [],
       },
     };

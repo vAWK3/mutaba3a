@@ -38,7 +38,7 @@ import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
 import { projectRoutes } from './routes/projects.js';
-import { CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
+import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
 
 export interface AppDependencies {
   store: LedgerStore;
@@ -94,7 +94,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.14.0-mut120';
+export const API_VERSION = '1.15.0-mut61';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -169,6 +169,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
 
+  // MUT-61: register CaptureSource as itself before any route references it. The generator otherwise takes the first
+  // use it meets as the component; Payment's nullable response field made the shared component nullable, and every
+  // request body that $refs it (income, settle, expense, inbox) advertised a null the server rejects.
+  app.openAPIRegistry.register('CaptureSource', CaptureSourceSchema);
   app.route('/', healthRoutes(store, deps.version));
   app.route(
     '/',
@@ -274,7 +278,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.',
         '',
-        'Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session\'s own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today\'s read-only behaviour on all of it: 403 READ_ONLY_PROFILE.',
+        'Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session\'s own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today\'s read-only behaviour on all of it (403 READ_ONLY_PROFILE) except what MUT-61 opens below.',
+        '',
+        'Capture on a Malafat-fed profile (MUT-61): a session may POST /v1/income kind received — never owed (403 READ_ONLY_PROFILE) — for a client this integration has linked (customer.externalReference set; else 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED), with an optional matter of that client whose currency it must match (422 CURRENCY_MISMATCH). The payment is POSTED, unallocated and origin `capture`; GET /v1/payments?customerId=…&origin=capture&allocationState=unallocated lists what still needs allocating, through the usual allocation preview and POST /v1/payments/{id}/allocations. The person may undo it (DELETE /v1/income/{id}) until any of it is allocated (409 ALREADY_ALLOCATED); once the integration reverses it, their undo answers 409 REVERSED_BY_MALAFAT (the reversal reason "capture_undo" is reserved for the person: 422 REASON_RESERVED). GET /v1/me publishes each profile\'s rules as `income`.',
         '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),

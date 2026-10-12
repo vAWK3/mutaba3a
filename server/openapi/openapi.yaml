@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.14.0-mut120
+  version: 1.15.0-mut61
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -13,9 +13,9 @@ info:
 
     PATCH routes require `If-Match: <version>` (optimistic concurrency).
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, ENTRY_KIND_MISMATCH.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER (schema failures carry the zod issues in details instead).
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -33,7 +33,9 @@ info:
 
     Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.
 
-    Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session's own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today's read-only behaviour on all of it: 403 READ_ONLY_PROFILE.
+    Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session's own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today's read-only behaviour on all of it (403 READ_ONLY_PROFILE) except what MUT-61 opens below.
+
+    Capture on a Malafat-fed profile (MUT-61): a session may POST /v1/income kind received — never owed (403 READ_ONLY_PROFILE) — for a client this integration has linked (customer.externalReference set; else 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED), with an optional matter of that client whose currency it must match (422 CURRENCY_MISMATCH). The payment is POSTED, unallocated and origin `capture`; GET /v1/payments?customerId=…&origin=capture&allocationState=unallocated lists what still needs allocating, through the usual allocation preview and POST /v1/payments/{id}/allocations. The person may undo it (DELETE /v1/income/{id}) until any of it is allocated (409 ALREADY_ALLOCATED); once the integration reverses it, their undo answers 409 REVERSED_BY_MALAFAT (the reversal reason "capture_undo" is reserved for the person: 422 REASON_RESERVED). GET /v1/me publishes each profile's rules as `income`.
 
     Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
@@ -90,6 +92,14 @@ components:
       name: X-Admin-Token
       description: Operator token (MUTABA3A_ADMIN_TOKEN). Provisioning only.
   schemas:
+    CaptureSource:
+      type: string
+      enum:
+        - app
+        - siri
+        - widget
+        - quick_action
+        - share
     Health:
       type: object
       properties:
@@ -189,6 +199,8 @@ components:
               - read-write
               - read
               - none
+        income:
+          $ref: "#/components/schemas/IncomeCaptureRules"
         isPersonalDefault:
           type: boolean
       required:
@@ -199,6 +211,7 @@ components:
         - timezone
         - writerOfRecord
         - access
+        - income
         - isPersonalDefault
     Currency:
       type: string
@@ -206,6 +219,22 @@ components:
         - ILS
         - USD
         - EUR
+    IncomeCaptureRules:
+      type: object
+      properties:
+        received:
+          type: boolean
+        owed:
+          type: boolean
+        customer:
+          type: string
+          enum:
+            - optional
+            - linked-required
+      required:
+        - received
+        - owed
+        - customer
     ErrorEnvelope:
       type: object
       properties:
@@ -2469,6 +2498,30 @@ components:
           type: string
           nullable: true
           format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+          description: The matter picked when a person captured this payment — a hint until it is allocated; after that its allocations say where the money went. Null for payments recorded through the API key.
+        origin:
+          $ref: "#/components/schemas/PaymentOrigin"
+        captureSource:
+          allOf:
+            - $ref: "#/components/schemas/CaptureSource"
+            - nullable: true
+        capturedBy:
+          type: object
+          nullable: true
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+          required:
+            - userId
+            - displayName
+          description: "Who captured it: null for payments recorded through the API key, and once that person's account is gone."
         currency:
           $ref: "#/components/schemas/Currency"
         amount:
@@ -2483,6 +2536,8 @@ components:
           type: string
           pattern: ^-?\d+(\.\d+)?$
           description: Canonical decimal string; exactly the currency's fractional digits
+        allocationState:
+          $ref: "#/components/schemas/AllocationState"
         receivedOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -2528,10 +2583,15 @@ components:
         - id
         - number
         - customerId
+        - projectId
+        - origin
+        - captureSource
+        - capturedBy
         - currency
         - amount
         - allocated
         - unallocated
+        - allocationState
         - receivedOn
         - method
         - reference
@@ -2545,6 +2605,17 @@ components:
         - version
         - createdAt
         - updatedAt
+    PaymentOrigin:
+      type: string
+      enum:
+        - integration
+        - capture
+    AllocationState:
+      type: string
+      enum:
+        - unallocated
+        - partial
+        - allocated
     PaymentMethod:
       type: string
       enum:
@@ -2611,14 +2682,6 @@ components:
         captureSource:
           $ref: "#/components/schemas/CaptureSource"
       additionalProperties: false
-    CaptureSource:
-      type: string
-      enum:
-        - app
-        - siri
-        - widget
-        - quick_action
-        - share
     AllocationPreviewResponse:
       type: object
       properties:
@@ -7445,6 +7508,7 @@ paths:
             type: string
             format: uuid
           required: false
+          description: Payments with an allocation on this project, or captured against it while they have no allocations at all (a captured matter is a hint until Malafat allocates).
           name: projectId
           in: query
         - schema:
@@ -7467,6 +7531,18 @@ paths:
           required: false
           description: Calendar date in the organization timezone, YYYY-MM-DD
           name: receivedAfter
+          in: query
+        - schema:
+            $ref: "#/components/schemas/PaymentOrigin"
+          required: false
+          description: "`capture`: money a person recorded (the phone, the portal); `integration`: recorded through this API key."
+          name: origin
+          in: query
+        - schema:
+            $ref: "#/components/schemas/AllocationState"
+          required: false
+          description: Matches POSTED payments only (a REVERSED payment reads `unallocated` in the response but is never matched here). `?customerId=…&origin=capture&allocationState=unallocated` lists what a client's phone captures still need allocating; add `partial` for ones allocated in part.
+          name: allocationState
           in: query
       responses:
         "200":
@@ -9118,7 +9194,7 @@ paths:
       tags:
         - Income
       summary: Capture money received or owed, directly — no agreement, no allocation dance
-      description: Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
+      description: What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
       security:
         - session: []
         - deviceSession: []
@@ -9174,7 +9250,7 @@ paths:
       tags:
         - Income
       summary: Undo an income entry this session created
-      description: 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or an allocated Received payment is refused with 409, since undoing one with real money applied is an edit, not an undo.
+      description: "204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound."
       security:
         - session: []
         - deviceSession: []

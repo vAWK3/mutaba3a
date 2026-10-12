@@ -100,6 +100,8 @@ import type {
   UpdateCustomerPatch,
   UpdateProjectPatch,
 } from './ports.js';
+import { CAPTURE_UNDO_REASON } from './ports.js';
+import { allocationStateOf } from '../payments/allocation-state.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
 /**
@@ -940,7 +942,9 @@ export class MemoryLedgerStore implements LedgerStore {
             (!filter.status || p.status === filter.status) &&
             (!filter.receivedBefore || p.receivedOn <= filter.receivedBefore) &&
             (!filter.receivedAfter || p.receivedOn >= filter.receivedAfter) &&
-            (!filter.projectId || p.projectId === filter.projectId || (onProject?.has(p.id) ?? false)),
+            (!filter.projectId || (p.projectId === filter.projectId && !this.hasAllocations(p.id)) || (onProject?.has(p.id) ?? false)) &&
+            (!filter.origin || p.origin === filter.origin) &&
+            (!filter.allocationState || (p.status === 'POSTED' && allocationStateOf(p) === filter.allocationState)),
         ),
         page,
       );
@@ -977,7 +981,21 @@ export class MemoryLedgerStore implements LedgerStore {
       return { payment: { ...payment }, changed: true };
     },
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
+    capture: async (input, at) => (await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at)).payment,
+    undoCapture: async (organizationId, paymentId, userId, at) => {
+      const p = this.pays.get(paymentId);
+      if (!p || p.organizationId !== organizationId || p.origin !== 'CAPTURE' || p.createdByUserId !== userId) return { result: 'not-found', payment: null };
+      if (p.status === 'REVERSED') return { result: p.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment: { ...p } };
+      if (p.allocatedMinor > 0n) return { result: 'allocated', payment: { ...p } };
+      Object.assign(p, { status: 'REVERSED', reversedAt: at, reversalReason: CAPTURE_UNDO_REASON, version: p.version + 1, updatedAt: at });
+      return { result: 'reversed', payment: { ...p } };
+    },
   };
+
+  private hasAllocations(paymentId: string): boolean {
+    for (const a of this.allocs.values()) if (a.paymentId === paymentId) return true;
+    return false;
+  }
 
   private assertCapacity(organizationId: string, requested: readonly AllocationInput[]): void {
     for (const a of requested) {

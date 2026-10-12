@@ -255,7 +255,6 @@ describe('the acceptance criteria’s entity writes, refused with nothing writte
     ['customer: creating one', () => '/v1/customers', () => ({ name: 'New client' }), 'customers'],
     // MUT-65
     ['project: creating one', () => '/v1/projects', () => ({ customerId: a.customer.id, name: 'New matter', currency: 'ILS' }), 'projects'],
-    ['income: Received, no client', () => '/v1/income', () => ({ kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-26' }), 'payments'],
     ['income: Owed, with client', () => '/v1/income', () => ({ kind: 'owed', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-26', customerId: a.customer.id }), 'payments'],
     ['receivable: settle', () => `/v1/receivables/${receivableId}/settle`, () => ({}), 'payments'],
   ];
@@ -265,6 +264,16 @@ describe('the acceptance criteria’s entity writes, refused with nothing writte
     const res = await h.app.request(path(), json(body(), { ...as(a.org.id), ...idem() }));
     expect(res.status).toBe(403);
     expect((await read(res)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { domain, writerOfRecord: 'MALAFAT' } });
+    expect(writes(h.calls)).toEqual([]);
+  });
+
+  // MUT-61's one intended change to this table: Received is no longer refused by the matrix (the capture row admits
+  // it), but a Malafat-fed profile's client rule still refuses this body before anything is written.
+  it('income: Received, no client → 422 CUSTOMER_REQUIRED, nothing written (was 403 before MUT-61)', async () => {
+    h.calls.length = 0;
+    const res = await h.app.request('/v1/income', json({ kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-26' }, { ...as(a.org.id), ...idem() }));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'CUSTOMER_REQUIRED' });
     expect(writes(h.calls)).toEqual([]);
   });
 });

@@ -21,6 +21,7 @@ import type {
   CreatePaymentInput,
   CreditInput,
   PaymentFilter,
+  AllocationState,
   PaymentRecord,
   PaymentRepository,
   ApiKeyRecord,
@@ -75,6 +76,7 @@ import type {
   InboxEntryKind,
   InboxEntryRepository,
 } from './ports.js';
+import { CAPTURE_UNDO_REASON } from './ports.js';
 
 /**
  * Production LedgerStore over Postgres.
@@ -824,10 +826,16 @@ export class PrismaLedgerStore implements LedgerStore {
           organizationId,
           ...(filter.customerId ? { customerId: filter.customerId } : {}),
           ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.origin ? { origin: filter.origin } : {}),
           ...(filter.receivedBefore || filter.receivedAfter ? { receivedOn: { ...(filter.receivedBefore ? { lte: filter.receivedBefore } : {}), ...(filter.receivedAfter ? { gte: filter.receivedAfter } : {}) } } : {}),
-          // MUT-65: a payment whose own projectId names it, OR one with at least one allocation on it (Malafat-fed payments never populate the column).
-          ...(filter.projectId ? { OR: [{ projectId: filter.projectId }, { allocations: { some: { receivable: { projectId: filter.projectId } } } }] } : {}),
-          ...cursorWhere(page),
+          // Every OR-shaped condition goes in AND: spread side by side, the cursor's OR used to replace the project's (MUT-61).
+          AND: [
+            // MUT-65: a payment whose own projectId names it, OR one with an allocation on it. MUT-61 D2: the own
+            // projectId is a capture-time hint, so it counts only while the payment has no allocations at all.
+            ...(filter.projectId ? [{ OR: [{ projectId: filter.projectId, allocations: { none: { organizationId } } }, { allocations: { some: { organizationId, receivable: { projectId: filter.projectId } } } }] }] : []),
+            ...(filter.allocationState ? [this.allocationStateWhere(filter.allocationState)] : []),
+            cursorWhere(page),
+          ],
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: page.limit + 1,
@@ -863,7 +871,29 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
+    capture: async (input, at) => (await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at)).payment,
+    undoCapture: async (organizationId, paymentId, userId, at) => {
+      // One conditional write. allocate() holds FOR UPDATE on this row; whichever commits first wins, and Postgres
+      // re-checks this WHERE against the row allocate() left behind, so an allocation is never silently undone.
+      const { count } = await this.prisma.payment.updateMany({
+        where: { id: paymentId, organizationId, origin: 'CAPTURE', createdByUserId: userId, status: 'POSTED', allocatedMinor: 0n },
+        data: { status: 'REVERSED', reversedAt: at, reversalReason: CAPTURE_UNDO_REASON, version: { increment: 1 }, updatedAt: at },
+      });
+      const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
+      if (count === 1) return { result: 'reversed', payment };
+      if (!payment || payment.origin !== 'CAPTURE' || payment.createdByUserId !== userId) return { result: 'not-found', payment: null };
+      if (payment.status !== 'REVERSED') return { result: 'allocated', payment };
+      return { result: payment.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment };
+    },
   };
+
+  /** MUT-61: allocationStateOf (payments/allocation-state.ts) as a where clause, POSTED payments only. */
+  private allocationStateWhere(state: AllocationState): Prisma.PaymentWhereInput {
+    const amount = this.prisma.payment.fields.amountMinor;
+    if (state === 'unallocated') return { status: 'POSTED', allocatedMinor: 0n };
+    if (state === 'partial') return { status: 'POSTED', allocatedMinor: { gt: 0n, lt: amount } };
+    return { status: 'POSTED', allocatedMinor: { gte: amount } };
+  }
 
   private async entityIdsForExternal(organizationId: string, entityType: ExternalEntityType, filter: CustomerFilter | ProjectFilter): Promise<string[] | null> {
     if (filter.externalId === undefined) return null;

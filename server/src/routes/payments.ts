@@ -10,7 +10,7 @@ import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
 import { verifyPreviewToken } from '../preview-token.js';
 import { InsufficientCapacity } from '../repositories/memory.js';
-import type { LedgerStore, Organization, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
+import { CAPTURE_UNDO_REASON, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
 import {
   AllocatePaymentRequestSchema,
   AllocationPreviewRequestSchema,
@@ -22,7 +22,7 @@ import {
   PaymentSchema,
   ReversePaymentRequestSchema,
 } from '../schemas.js';
-import { outstandingMinor, receivableStatus, serializeAllocation, serializePayment } from '../serializers.js';
+import { outstandingMinor, receivableStatus, serializeAllocation, serializePayment, type CapturedBy } from '../serializers.js';
 import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -45,7 +45,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const audit = (a: Actor, action: string, entityType: string, entityId: string, metadata: Record<string, unknown>) =>
     store.audit.append({ organizationId: a.organizationId, actorType: 'API_KEY', actorId: a.apiKeyId, action, entityType, entityId, metadata, requestId: a.requestId });
 
-  async function paymentView(organizationId: string, payment: PaymentRecord, today: IsoDate) {
+  async function paymentView(organizationId: string, payment: PaymentRecord, today: IsoDate, people: ReadonlyMap<string, CapturedBy>) {
     const allocations = await store.payments.listAllocations(organizationId, payment.id);
     const receivables = new Map((await store.receivables.getByIds(organizationId, allocations.map((a) => a.receivableId))).map((r) => [r.id, r]));
     const replacedBy = await store.payments.findReplacedBy(organizationId, payment.id);
@@ -53,8 +53,21 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       payment,
       allocations.map((a) => serializeAllocation(a, receivables.get(a.receivableId) ?? null, payment.currency, today)),
       replacedBy?.id ?? null,
+      (payment.createdByUserId && people.get(payment.createdByUserId)) || null,
     );
   }
+
+  /**
+   * MUT-61: who captured these payments, one lookup per distinct person (a page's
+   * payments come from a handful of people at most), not one per payment.
+   */
+  async function capturersOf(payments: readonly PaymentRecord[]): Promise<Map<string, CapturedBy>> {
+    const ids = [...new Set(payments.map((p) => p.createdByUserId).filter((id): id is string => id !== null))];
+    const users = await Promise.all(ids.map((id) => store.users.getById(id)));
+    return new Map(users.filter((u) => u !== null).map((u) => [u.id, { userId: u.id, displayName: u.displayName }]));
+  }
+
+  const viewOf = async (organizationId: string, payment: PaymentRecord, today: IsoDate) => paymentView(organizationId, payment, today, await capturersOf([payment]));
 
   async function mustGetPayment(organizationId: string, id: string): Promise<PaymentRecord> {
     const payment = await store.payments.getById(organizationId, id);
@@ -211,7 +224,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let created;
       try {
         created = await store.payments.create(
-          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, allocations: value.allocations },
+          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: value.allocations },
           now,
         );
       } catch (err) {
@@ -220,7 +233,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       }
       await audit(actor, 'payment.recorded', 'payment', created.payment.id, { number: created.payment.number, customerId: src.customerId, amount: formatMoney({ minor: src.amountMinor, currency: src.currency }), currency: src.currency, allocations: created.allocations.length, unallocated: formatMoney({ minor: value.unallocatedMinor, currency: src.currency }), ...(body.replacesPaymentId ? { replacesPaymentId: body.replacesPaymentId } : {}) });
       await auditSettled(actor, created.allocations.map((a) => a.receivableId), created.payment.id);
-      return c.json(await paymentView(organization.id, created.payment, today), 201);
+      return c.json(await viewOf(organization.id, created.payment, today), 201);
     },
   );
 
@@ -246,9 +259,22 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const q = c.req.valid('query');
       const today = todayFor(organization, c.get('now')());
-      const page = await store.payments.list(organization.id, { ...(q.customerId ? { customerId: q.customerId } : {}), ...(q.projectId ? { projectId: q.projectId } : {}), ...(q.status ? { status: q.status } : {}), ...(q.receivedBefore ? { receivedBefore: q.receivedBefore } : {}), ...(q.receivedAfter ? { receivedAfter: q.receivedAfter } : {}) }, toPageRequest(q));
+      const page = await store.payments.list(
+        organization.id,
+        {
+          ...(q.customerId ? { customerId: q.customerId } : {}),
+          ...(q.projectId ? { projectId: q.projectId } : {}),
+          ...(q.status ? { status: q.status } : {}),
+          ...(q.receivedBefore ? { receivedBefore: q.receivedBefore } : {}),
+          ...(q.receivedAfter ? { receivedAfter: q.receivedAfter } : {}),
+          ...(q.origin ? { origin: q.origin === 'capture' ? ('CAPTURE' as const) : ('INTEGRATION' as const) } : {}),
+          ...(q.allocationState ? { allocationState: q.allocationState } : {}),
+        },
+        toPageRequest(q),
+      );
+      const people = await capturersOf(page.items);
       const items = [];
-      for (const p of page.items) items.push(await paymentView(organization.id, p, today));
+      for (const p of page.items) items.push(await paymentView(organization.id, p, today, people));
       return c.json({ items, nextCursor: encodeNextCursor(page.nextCursor) }, 200);
     },
   );
@@ -267,7 +293,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { organization } = c.get('auth');
       const today = todayFor(organization, c.get('now')());
-      return c.json(await paymentView(organization.id, await mustGetPayment(organization.id, c.req.valid('param').paymentId), today), 200);
+      return c.json(await viewOf(organization.id, await mustGetPayment(organization.id, c.req.valid('param').paymentId), today), 200);
     },
   );
 
@@ -306,7 +332,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
       await audit(actor, 'payment.allocated', 'payment', result.payment.id, { allocations: result.allocations.length, allocated: formatMoney({ minor: value.allocatedMinor, currency: src.currency }) });
       await auditSettled(actor, result.allocations.map((a) => a.receivableId), result.payment.id);
-      return c.json(await paymentView(organization.id, result.payment, today), 200);
+      return c.json(await viewOf(organization.id, result.payment, today), 200);
     },
   );
 
@@ -328,13 +354,15 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const actor = actorOf(c);
       const now = c.get('now')();
       const today = todayFor(organization, now);
+      // MUT-61: the reason a person's own capture undo records is how that undo is told apart from this route's reversal.
+      if (c.req.valid('json').reason === CAPTURE_UNDO_REASON) throw validationError('REASON_RESERVED', `"${CAPTURE_UNDO_REASON}" is reserved for a person undoing their own capture`, { field: 'reason' });
       const payment = await mustGetPayment(organization.id, c.req.valid('param').paymentId);
       if (payment.status === 'REVERSED') throw new ApiError('CONFLICT', 'This payment is already reversed', { reason: 'ALREADY_REVERSED', reversedAt: payment.reversedAt?.toISOString() ?? null });
       const allocations = await store.payments.listAllocations(organization.id, payment.id);
       const result = await store.payments.reverse(organization.id, payment.id, c.req.valid('json').reason, now);
       if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
       if (result.changed) await audit(actor, 'payment.reversed', 'payment', payment.id, { number: payment.number, reason: c.req.valid('json').reason, allocationsUndone: allocations.length, amount: formatMoney({ minor: payment.amountMinor, currency: payment.currency as Currency }) });
-      return c.json(await paymentView(organization.id, result.payment, today), 200);
+      return c.json(await viewOf(organization.id, result.payment, today), 200);
     },
   );
 

@@ -28,6 +28,34 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Received income on Malafat profiles, allocated by Malafat (MUT-61)
+
+**Why:** a lawyer handed cash or a cheque could not log it on their firm's Malafat-linked profile; the phone and the portal could only record expenses there. The rule existed to prevent double-counting. Now the payment is recorded tagged and unallocated, and Malafat allocates it — Mutaba3a never calls Malafat. Server-only; unblocks MUT-123 (phone) and MAL-1097 (Malafat). Brief: `.claude/designs/mut-61-malafat-received-capture.md` (eng-reviewed, D1–D4). ADR-037 MUT-61 amendment.
+
+**Run on this branch (Node 22):** `server/`: `npm run lint` clean, `npm run typecheck` clean, `npm run build` clean, `npm run openapi:check` up to date, `npm test` 1,354 passed / 14 skipped, `npm run test:db` 1,450 passed. Root: `npm run typecheck` clean, `npm run lint` 0 errors (12 pre-existing warnings), `npx vitest run src/hosted` 145 passed, `npm run build:hosted` OK.
+
+### Added
+- **`capture` writability row** (`capture:write`, session-only, every hosted profile). Its whole write surface: `payments.capture` and `payments.undoCapture`.
+- **`POST /v1/income` Received on a Malafat-fed profile**, for a client Malafat has linked (422 `CUSTOMER_REQUIRED` / `CUSTOMER_NOT_LINKED`); a matter is optional and must be that client's. Stored POSTED, unallocated, `origin: CAPTURE`, with its `captureSource`.
+- **`Payment.origin` (`INTEGRATION | CAPTURE`) and `Payment.captureSource`**; migration `20261012190000_mut61_payment_capture` backfills `CAPTURE` where `createdByUserId` is set.
+- **Payment view:** `origin`, `captureSource`, `capturedBy {userId, displayName}`, `allocationState`, `projectId`. **`GET /v1/payments`:** `?origin=` and `?allocationState=` (POSTED only).
+- **`GET /v1/me`:** `profiles[].income` (`incomeCaptureRulesFor`), the same rules the route enforces.
+
+### Changed
+- **Owed on a Malafat-fed profile** is refused 403 `READ_ONLY_PROFILE { domain: payments }` before any validation (was refused by the route scope).
+- **Received with no client on a Malafat-fed profile** → 422 `CUSTOMER_REQUIRED` (was 403). A P-created id undone from M → 404 (was 403).
+- **`DELETE /v1/income/{id}`** reverses a Received in one conditional write; any allocation, full or partial → 409 `ALREADY_ALLOCATED`, never an unwound allocation.
+- **A captured `projectId` is a hint until allocated:** `?projectId=` matches a payment's own matter only while it has no allocations.
+- OpenAPI `1.15.0-mut61` (MUT-120 landed 1.14.0 first); `src/hosted/api/schema.d.ts` regenerated.
+
+### Fixed (from /review, 2 fix cycles, converged)
+- **The published `CaptureSource` component had become nullable**, so four request bodies advertised a null the server rejects; it is registered first now, and a spec test pins it.
+- **A capture Malafat reversed** answered 204 to the person's undo; now 409 `REVERSED_BY_MALAFAT`, and `capture_undo` is a reserved reversal reason (422 `REASON_RESERVED`).
+- **An off-currency capture against a matter** on a Malafat-fed profile could never be allocated; now 422 `CURRENCY_MISMATCH`.
+- New reasons published; audit metadata shapes aligned; project-filter relation clauses tenant-scoped; Postgres race test for allocate vs undo (mutation-checked); route tests for settle/inbox/key origin, `capturedBy`, device-session Me; DEPLOYMENT.md post-roll backfill step.
+- **`GET /v1/payments?projectId=` lost the project filter from page 2 on** — the cursor's `OR` replaced the project's `OR` in one `where`. OR-shaped conditions now go in `AND`.
+- **Migration tests timed out under `test:db` load** (5 s default; replaying history takes longer in parallel) — both now set 60 s.
+
 ## [Unreleased] - 2026-10-12 — Every user gets exactly one personal profile (MUT-120)
 
 **Why:** the capture app (epic MUT-63) needs a writable default target on every account, and a "personal" profile was only implied (an org with no Malafat integration), never marked or limited. This is ADR-037's MUT-120 amendment. Brief: `.claude/designs/mut-120-personal-profile.md`. Test plan: `-tests.md`. Jira MUT-120 comment 11080 records the scope changes.

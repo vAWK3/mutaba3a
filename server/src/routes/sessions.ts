@@ -5,6 +5,7 @@ import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { sessionAccessFor, WRITABILITY_MATRIX } from '../auth/writability.js';
+import { incomeCaptureRulesFor } from '../income/compose.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
@@ -135,6 +136,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
       timezone: organization.timezone,
       writerOfRecord,
       access,
+      // MUT-61: the same rules POST /v1/income enforces, so the app reads them instead of inferring them.
+      income: incomeCaptureRulesFor(writerOfRecord),
       // MUT-120: explicit, from the row already loaded; another user's personal profile is never this user's default.
       isPersonalDefault: organization.personalOwnerUserId === user.id,
     });
