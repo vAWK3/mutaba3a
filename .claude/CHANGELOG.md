@@ -48,8 +48,21 @@
 - API `1.14.0-mut120`; `openapi.yaml` and `src/hosted/api/schema.d.ts` were regenerated.
 - Tests that pinned one membership or one profile now include the personal one, and "last membership revoked" tests revoke it too. These are intentional changes.
 
+### Fixed (pre-landing review, 2026-10-12)
+- `/v1/me` order is now deterministic: firms come first and the caller's personal profile last. Before this, the portal landed firm users on Personal by UUID chance (QA: 1–2 of 20 per firm; 0 of 20 after the fix).
+- `CreateUserRequest.timezone` must be an IANA zone (422).
+- An owner's own personal-profile membership cannot be revoked (409). This resolved TD-079.
+- API-key auth refuses keys on personal profiles (409); this replaces the bind-only check.
+- A 409 on create-user says "email" only for an email clash.
+- Provisioning docs (`server/README.md`, `server/DEPLOYMENT.md`) are updated.
+- New tests:
+  - `/v1/me` never marks another user's personal profile;
+  - store contract: unknown owner gives ForeignKeyViolation, and a personal-slug clash rolls the user back;
+  - CLI: no-firm create makes exactly one membership.
+- New debt: TD-081.
+
 ### Technical
-- Cut from the ticket: the backfill script, since there were no existing users.
+- Cut from the ticket: the backfill script, since there were no existing users. Before deploying, confirm `SELECT count(*) FROM users` is 0 in production (review action).
 
 **Run on this branch (`feature/mut-120-personal-profile`):**
 - server `npm run lint` 0 problems; `npm run typecheck` clean; `npm test` 1,333 passed (12 Postgres files skipped);

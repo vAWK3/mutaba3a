@@ -1811,6 +1811,11 @@ holds).
 - *Why*: the capture app (MUT-63) needs a writable default target on every account. Before this, personal income and expenses had nowhere to go unless an operator remembered to hand-build a second organization, and nothing stopped a "personal" org from later being bound to Malafat.
 - *Override log*: `hosted-portal.md` §3 says "**Personal vs firm needs nothing new.** A personal hosted profile is an operator-provisioned organization with no Malafat integration and the user as its only member". That is superseded. Personal is now an explicit, unique, provisioning-created marker, not an inference from a missing integration. Writability is untouched: `sessionAccessFor(domain, null)` still decides read-write, and a personal org can never become `MALAFAT`-written, so the two agree by construction. This is still not the `Profile` table this ADR rejected (an "Alternatives" entry): it is one column on `Organization`, and the hosted profile is still the `Membership × Organization` projection.
 - *What it replaces*: nothing structural. No new repository method, so no store-guard classification. `organizations.create` and `users.create` were already `operator`.
+- *Added in pre-landing review (`/qa-reconcile` + `/review`, D1/D2/D3/D5, 2026-10-12)*:
+  - **`/v1/me` order is a contract.** Firm profiles come in membership order, and the caller's personal profile comes last. Both memberships are created in the same instant, so before this the tie fell to random organization ids, and the portal (which opens `profiles[0]`) landed some firm users on their empty personal profile. QA reproduced this on Postgres.
+  - **The personal profile's timezone must be an IANA zone** (422 otherwise). The org-create gap is TD-081.
+  - **A user's own personal-profile membership cannot be revoked** (409 `PERSONAL_PROFILE`). This resolved TD-079.
+  - **API-key authentication itself refuses a key on a personal profile** (409 `PERSONAL_PROFILE`), replacing the bind-only guard, so no key-authed route can reach personal books even through a key planted below the admin API.
 
 ---
 
