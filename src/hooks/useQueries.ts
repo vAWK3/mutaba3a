@@ -324,6 +324,19 @@ export function useClientSummaries(profileId?: string, currency?: Currency, sear
   });
 }
 
+/**
+ * The clients index (MUT-83, ADR-049): rows, the No client and Archived
+ * clients rows, and a total equal to Home's Owed now, from one read. Keyed
+ * under 'clientSummaries', so every write that refreshes client summaries
+ * refreshes this too.
+ */
+export function useClientOwedIndex(profileId?: string, search?: string) {
+  return useQuery({
+    queryKey: ['clientSummaries', 'owedIndex', { profileId, search }] as const,
+    queryFn: () => getRepositories().base.clientSummaries.listOwedIndex({ profileId, search }),
+  });
+}
+
 export function useClientSummary(id: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }) {
   return useQuery<ClientSummary | null>({
     queryKey: queryKeys.clientSummary(id, filters?.dateFrom, filters?.dateTo, filters?.currency),

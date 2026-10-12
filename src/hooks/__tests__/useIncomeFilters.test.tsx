@@ -5,7 +5,7 @@
  * `replace` so filter changes never pile up in the browser history.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import {
   RouterProvider,
   createMemoryHistory,
@@ -15,14 +15,17 @@ import {
   Outlet,
 } from '@tanstack/react-router';
 import { useIncomeFilters } from '../useIncomeFilters';
-import { parseIncomeSearch, type IncomeSearch } from '../../lib/incomeSearch';
-
-let setSearch: (patch: Partial<IncomeSearch>) => void = () => {};
+import { parseIncomeSearch } from '../../lib/incomeSearch';
 
 function Probe() {
-  const filters = useIncomeFilters();
-  setSearch = filters.setSearch;
-  return <output data-testid="search">{JSON.stringify(filters.search)}</output>;
+  const { search, setSearch } = useIncomeFilters();
+  return (
+    <>
+      <output data-testid="search">{JSON.stringify(search)}</output>
+      <button onClick={() => setSearch({ status: 'overdue' })}>overdue</button>
+      <button onClick={() => setSearch({ client: undefined })}>every client</button>
+    </>
+  );
 }
 
 function renderAt(url: string) {
@@ -54,7 +57,7 @@ describe('useIncomeFilters', () => {
     await screen.findByTestId('search');
     const entriesBefore = history.length;
 
-    await act(async () => setSearch({ status: 'overdue' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'overdue' })));
 
     expect(router.state.location.search).toEqual({ client: 'archived', status: 'overdue' });
     expect(shown()).toEqual({ client: 'archived', status: 'overdue' });
@@ -65,7 +68,7 @@ describe('useIncomeFilters', () => {
     const { router } = renderAt('/income?client=none&q=acme');
     await screen.findByTestId('search');
 
-    await act(async () => setSearch({ client: undefined }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'every client' })));
 
     expect(router.state.location.search).toEqual({ q: 'acme' });
   });

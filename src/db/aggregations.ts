@@ -13,10 +13,12 @@ import type {
   PaymentByClientRow,
   OwedByCurrency,
   LastPayment,
+  ClientScope,
+  OwedBucket,
 } from '../types';
 import { isReceivable, isOverdueReceivable, daysOverdue } from '../lib/dates';
 
-export type { OwedByCurrency, LastPayment };
+export type { OwedByCurrency, LastPayment, ClientScope, OwedBucket };
 
 // Types for aggregation results
 export interface TransactionTotals {
@@ -63,6 +65,15 @@ export function accumulateIncomeAmount(tx: Transaction): { paid: number; unpaid:
 }
 
 /**
+ * What one entry adds to Owed Now: its remaining balance when it is an
+ * unpaid, non-deleted, non-archived income; 0 otherwise (ADR-033).
+ */
+export function owedNowRemaining(tx: Transaction): number {
+  if (!isReceivable(tx) || tx.deletedAt || tx.archivedAt) return 0;
+  return Math.max(0, accumulateIncomeAmount(tx).unpaid);
+}
+
+/**
  * Owed Now, per currency: the remaining balance of every unpaid income, with
  * the overdue part split out. The single definition behind the client profile
  * (MUT-3), the clients index (MUT-7) and home (MUT-8).
@@ -75,8 +86,7 @@ export function summarizeOwedByCurrency(transactions: Transaction[], today: stri
   const totals = new Map<Currency, OwedByCurrency>();
 
   for (const tx of transactions) {
-    if (!isReceivable(tx) || tx.deletedAt || tx.archivedAt) continue;
-    const remaining = Math.max(0, accumulateIncomeAmount(tx).unpaid);
+    const remaining = owedNowRemaining(tx);
     if (remaining === 0) continue;
 
     const entry = totals.get(tx.currency) ?? { currency: tx.currency, owedMinor: 0, overdueMinor: 0 };
@@ -113,6 +123,76 @@ export function combineOwed(lists: OwedByCurrency[][]): OwedByCurrency[] {
     totals.set(currency, entry);
   }
   return OWED_CURRENCY_ORDER.flatMap((currency) => totals.get(currency) ?? []);
+}
+
+/**
+ * Whose list an entry belongs on (MUT-83): 'none' when it has no client or its
+ * client row is gone, 'archived' when its client is archived, undefined for a
+ * live client. One definition for the clients index's muted rows and the
+ * /income filter they open.
+ */
+export function clientScopeOf(
+  tx: { clientId?: string },
+  clientsById: ReadonlyMap<string, Pick<Client, 'archivedAt'>>
+): ClientScope | undefined {
+  const client = tx.clientId ? clientsById.get(tx.clientId) : undefined;
+  if (!client) return 'none';
+  return client.archivedAt ? 'archived' : undefined;
+}
+
+export interface OwedNowPartition<T extends Transaction = Transaction> {
+  /** Owed Now over every entry passed in: Home's figure (ADR-036 §5) */
+  total: OwedByCurrency[];
+  /** Every live entry of each live client, in any state: a row's other columns need them */
+  entriesByClient: Map<string, T[]>;
+  noClient: OwedBucket;
+  archivedClients: OwedBucket;
+}
+
+/**
+ * The clients index's split of Owed Now (MUT-83, ADR-049): the entries Home
+ * sums, divided into one group per live client, "No client" and "Archived
+ * clients". Every entry lands in exactly one part, so the parts add up to
+ * `total`, which is `summarizeOwedByCurrency` over the same entries.
+ *
+ * Takes entries and clients rather than a business, so a lens over several
+ * businesses (MUT-89) can pass them all in.
+ *
+ * @param entries the entries in scope (deleted ones are skipped)
+ * @param clients every client those entries may name, archived ones included
+ */
+export function partitionOwedNow<T extends Transaction>(
+  entries: T[],
+  clients: Client[],
+  today: string
+): OwedNowPartition<T> {
+  const clientsById = new Map(clients.map((c) => [c.id, c]));
+  const entriesByClient = new Map<string, T[]>();
+  const noClient: T[] = [];
+  const archived: T[] = [];
+
+  for (const tx of entries) {
+    if (tx.deletedAt) continue;
+    const scope = clientScopeOf(tx, clientsById);
+    if (scope === 'none') noClient.push(tx);
+    else if (scope === 'archived') archived.push(tx);
+    else {
+      const group = entriesByClient.get(tx.clientId!);
+      if (group) group.push(tx);
+      else entriesByClient.set(tx.clientId!, [tx]);
+    }
+  }
+
+  const owing = (txs: T[]) => txs.filter((tx) => owedNowRemaining(tx) > 0);
+  return {
+    total: summarizeOwedByCurrency(entries, today),
+    entriesByClient,
+    noClient: { owed: summarizeOwedByCurrency(noClient, today), count: owing(noClient).length },
+    archivedClients: {
+      owed: summarizeOwedByCurrency(archived, today),
+      count: new Set(owing(archived).map((tx) => tx.clientId)).size,
+    },
+  };
 }
 
 /**

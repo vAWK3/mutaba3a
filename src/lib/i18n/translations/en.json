@@ -212,6 +212,11 @@
       "unpaid": "Unpaid",
       "received": "Received",
       "overdue": "Overdue"
+    },
+    "clientScope": {
+      "none": "No client",
+      "archived": "Archived clients",
+      "clear": "Clear filter: {name}"
     }
   },
   "projects": {
@@ -330,7 +335,17 @@
       "settled": "Settled",
       "neverPaid": "Never paid",
       "oldestOverdue": "oldest {days}d",
-      "owedOrderHint": "Ordered by today's exchange rate. Amounts are never converted."
+      "owedOrderHint": "Ordered by today's exchange rate. Amounts are never converted.",
+      "bucket": {
+        "noClient": {
+          "one": "No client · 1 entry",
+          "other": "No client · {count} entries"
+        },
+        "archivedClients": {
+          "one": "Archived clients · 1",
+          "other": "Archived clients · {count}"
+        }
+      }
     }
   },
   "insights": {

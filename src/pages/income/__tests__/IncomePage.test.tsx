@@ -59,7 +59,7 @@ vi.mock('../../../lib/i18n', () => ({
       'common.noClient': 'No Client',
       'income.clientScope.none': 'No client',
       'income.clientScope.archived': 'Archived clients',
-      'income.clientScope.clear': 'Show every client instead of {name}',
+      'income.clientScope.clear': 'Clear filter: {name}',
       'common.markPaid': 'Mark as Paid',
       'common.duplicate': 'Duplicate',
       'transactions.status.paid': 'Paid',
@@ -708,7 +708,7 @@ describe('IncomePage', () => {
       expect(filters).toMatchObject(getDateRangePreset('this-month'));
       expect(filters.status).toBeUndefined();
       expect(filters.clientScope).toBeUndefined();
-      expect(screen.queryByRole('button', { name: /Show every client/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Clear filter/ })).not.toBeInTheDocument();
     });
 
     it('opens on the filters a link carries: a client scope, a status tab and a period', async () => {
@@ -728,7 +728,7 @@ describe('IncomePage', () => {
       const user = userEvent.setup();
       const mockUseIncome = await renderWith({ client: 'archived' });
 
-      const chip = await screen.findByRole('button', { name: 'Show every client instead of Archived clients' });
+      const chip = await screen.findByRole('button', { name: 'Clear filter: Archived clients' });
       expect(chip).toHaveTextContent('Archived clients');
 
       await user.click(chip);

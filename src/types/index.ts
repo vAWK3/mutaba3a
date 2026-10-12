@@ -153,6 +153,8 @@ export interface QueryFilters {
   offset?: number;
   sort?: { by: string; dir: 'asc' | 'desc' };
   includeArchived?: boolean;
+  /** Only entries with no client, or only those of archived clients (MUT-83) */
+  clientScope?: ClientScope;
 }
 
 // Overview totals
@@ -236,6 +238,32 @@ export interface ClientSummary {
   unpaidIncomeMinorUSD?: number;
   unpaidIncomeMinorILS?: number;
   unpaidIncomeMinorEUR?: number;
+}
+
+/**
+ * Entries whose balance belongs to no listed client (MUT-83, ADR-049):
+ * 'none' = no client, or its client row is gone; 'archived' = an archived client.
+ */
+export type ClientScope = 'none' | 'archived';
+
+/** Owed now that belongs to no listed client: one muted row on the clients index (MUT-83). */
+export interface OwedBucket {
+  owed: OwedByCurrency[];
+  /** No client: entries with a balance. Archived clients: clients with a balance. */
+  count: number;
+}
+
+/**
+ * The clients index of one business (MUT-83, ADR-049): every figure comes
+ * from the entries recorded in that business, the same set Home's Owed now sums.
+ */
+export interface ClientOwedIndex {
+  /** The listed clients; every column counts only this business's entries */
+  clients: ClientSummary[];
+  /** Owed now over every entry in the business: equals Home's (ADR-036 §5) */
+  total: OwedByCurrency[];
+  noClient: OwedBucket;
+  archivedClients: OwedBucket;
 }
 
 // Filters for client-level payment history (MUT-4)
