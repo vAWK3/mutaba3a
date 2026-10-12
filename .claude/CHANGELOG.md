@@ -28,6 +28,35 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Every user gets exactly one personal profile (MUT-120)
+
+**Why:** the capture app (epic MUT-63) needs a writable default target on every account, and a "personal" profile was only implied (an org with no Malafat integration), never marked or limited. This is ADR-037's MUT-120 amendment. Brief: `.claude/designs/mut-120-personal-profile.md`. Test plan: `-tests.md`. Jira MUT-120 comment 11080 records the scope changes.
+
+### Added
+- `Organization.personalOwnerUserId` (unique, FK users). Migration `20261012170000_mut120_personal_profile` is purely additive.
+- `POST /admin/v1/users` creates the user's personal profile in the same transaction:
+  - named `Personal`/`شخصي` by locale;
+  - `organizationId` is now optional, and new `defaultCurrency`/`timezone` fields override the firm's (both required with no firm);
+  - the response gains `personalProfile {id, name}`, and `memberships` lists the personal one first.
+- `HostedProfile.isPersonalDefault` on `/v1/me` and `POST /v1/device-sessions`.
+- 409 `CONFLICT {reason: 'PERSONAL_PROFILE'}` when a personal profile is granted to another user, used as another user's `organizationId`, issued an API key, or bound.
+- `provision:user` takes optional `--organization-id`, plus `--currency` and `--timezone`, and prints `personal <id> <name>`.
+
+### Changed
+- `UserRepository.create` takes `personal` and returns `{ user, memberships, personalOrganization }`. Memory and Prisma are both all-or-nothing.
+- Admin `Organization` shows `personalOwnerUserId`.
+- API `1.14.0-mut120`; `openapi.yaml` and `src/hosted/api/schema.d.ts` were regenerated.
+- Tests that pinned one membership or one profile now include the personal one, and "last membership revoked" tests revoke it too. These are intentional changes.
+
+### Technical
+- Cut from the ticket: the backfill script, since there were no existing users.
+
+**Run on this branch (`feature/mut-120-personal-profile`):**
+- server `npm run lint` 0 problems; `npm run typecheck` clean; `npm test` 1,333 passed (12 Postgres files skipped);
+- `npm run test:db` against a dedicated database: 82 files, 1,423 passed;
+- `openapi:check` up to date; `npm run build` ok;
+- root `npm run typecheck` clean, `hosted:types:check` matches, `npx vitest run src/hosted` 145 passed.
+
 ## [Unreleased] - 2026-10-12 — "All businesses" on Home and Clients (MUT-89)
 
 **Why:** the pitch is "who owes me across my businesses", but the app showed one business at a time. An All Profiles mode was switched off in April (`70b5093`) with no ADR. Decision S2 of the Apple-design brief (epic MUT-74) brings it back for the owed screens only. The owner approved O1–O7 and eng review D1–D8. ADR-051. Brief `.claude/designs/mut-89-all-businesses-lens.md`; test plan `.claude/designs/mut-89-all-businesses-lens-tests.md`.

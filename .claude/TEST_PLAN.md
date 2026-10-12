@@ -1567,6 +1567,20 @@ Plan: `.claude/designs/mut-62-income-work-column-tests.md`. **At the owner's req
 
 ---
 
+## MUT-120 — every user gets exactly one personal profile (2026-10-12)
+
+Plan: `.claude/designs/mut-120-personal-profile-tests.md`. ADR-037 amendment (MUT-120).
+
+| Area | File | What it proves |
+|---|---|---|
+| Store contract (memory and Postgres) | `repositories/__tests__/store-contract-users.ts` | user, personal org (marked, named, settings) and memberships created together; personal-only user; a second personal org for the same user is a `UniqueViolation`; a duplicate email or unknown firm leaves no user and no personal org behind; firms carry `personalOwnerUserId: null` |
+| Admin users | `__tests__/routes-users.test.ts` (`personal profile (MUT-120)`) | firm inherits currency/timezone; `شخصي` for `ar`; personal-only from currency+timezone; 422 for each incomplete combination with nobody created; request overrides firm; retry → 409 with exactly one personal org; ADMIN audit rows per org; grant to another user → 409 (owner re-grant → 200 `created:false`); create inside another's personal profile → 409, nobody created |
+| Admin orgs / bind | `__tests__/routes.test.ts` (`personal profiles are never bound, keyed or shown as firms`) | API key refused on a personal org (firms unaffected); `personalOwnerUserId` on the org detail; bind refused even with a key planted through the store |
+| `/v1/me`, device sessions | `routes-sessions.test.ts`, `routes-device-sessions.test.ts` | `isPersonalDefault` only on the caller's own personal profile; customers/projects/payments `read-write` there; firm `false` |
+| CLI | `scripts/__tests__/users-cli.test.ts` | `create` with no `--organization-id`, from `--currency`/`--timezone`, prints `personal <id> Personal` |
+
+Run: server lint 0, typecheck clean, `npm test` 1,333 passed (12 Postgres files skipped), `npm run test:db` on a dedicated database 1,423 passed (82 files), `openapi:check` up to date, build ok; root typecheck clean, `hosted:types:check` matches, `npx vitest run src/hosted` 145 passed.
+
 ## MUT-73 — device sync retired (2026-10-12)
 
 Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.

@@ -1793,6 +1793,25 @@ holds).
 - *What it replaces*: nothing structural — the three-layer enforcement shape (scopes, route `security`, store guard) is exactly decision 7's, now parameterized by profile on three rows instead of being uniform across all ten.
 - **Deviation found during implementation, not anticipated by the brief**: `Receivable.getById`/`list`/etc. now exclude a soft-deleted (`ADJUSTMENT`, voided) row — correct for every normal reader, but it meant the new `DELETE /v1/income/{id}` undo route could not re-confirm ownership on a *repeat* call against an already-voided row (its own idempotency check needs to see what every other reader must not). `ReceivableRepository.getByIdIncludingDeleted` was added for that one caller; every other reader is untouched.
 
+**Amendment (MUT-120, 2026-10-12)**: every user is created with exactly one personal profile, explicitly marked. The plan was eng-reviewed (`/plan-eng-review`, D1 to D8) and the brief `.claude/designs/mut-120-personal-profile.md` was approved by the owner.
+- *What changed*:
+  - **`Organization.personalOwnerUserId` (nullable, `@unique`, FK users ON DELETE RESTRICT).** It is set on a user's one personal organization and null on every firm. The unique index *is* the one-per-user guarantee.
+  - **`POST /admin/v1/users` creates the personal organization and its membership** in the same transaction as the user. It is named `Personal`/`شخصي` by locale, gets a random `personal-<uuid>` slug, and takes its currency and timezone from the request, else from the firm.
+    - `organizationId` (the firm) becomes optional.
+    - With no firm, `defaultCurrency` and `timezone` are required (422).
+    - Decision 1 (operator-only accounts) is unchanged: there is still no signup.
+  - **`HostedProfile.isPersonalDefault`** in `/v1/me` and the device-session payload, true only on the caller's own personal profile. Clients read it instead of inferring "personal" from `writerOfRecord == null`.
+  - **A personal profile belongs to one person and to no external system.** These cases return `409 CONFLICT { reason: 'PERSONAL_PROFILE' }` (`errors.ts` `personalProfileConflict`):
+    - granting it to another user;
+    - creating a user inside it;
+    - issuing it an API key;
+    - binding it (`POST /v1/integration/bind`), refused defensively should a key exist.
+    It reuses an existing code with a `details.reason` rather than a new code, because a new code is a contract change Malafat maps (`errors.ts:10-13`).
+  - **No backfill.** There were no existing users at the time (owner, 2026-10-12).
+- *Why*: the capture app (MUT-63) needs a writable default target on every account. Before this, personal income and expenses had nowhere to go unless an operator remembered to hand-build a second organization, and nothing stopped a "personal" org from later being bound to Malafat.
+- *Override log*: `hosted-portal.md` §3 says "**Personal vs firm needs nothing new.** A personal hosted profile is an operator-provisioned organization with no Malafat integration and the user as its only member". That is superseded. Personal is now an explicit, unique, provisioning-created marker, not an inference from a missing integration. Writability is untouched: `sessionAccessFor(domain, null)` still decides read-write, and a personal org can never become `MALAFAT`-written, so the two agree by construction. This is still not the `Profile` table this ADR rejected (an "Alternatives" entry): it is one column on `Organization`, and the hosted profile is still the `Membership × Organization` projection.
+- *What it replaces*: nothing structural. No new repository method, so no store-guard classification. `organizations.create` and `users.create` were already `operator`.
+
 ---
 
 ## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer
