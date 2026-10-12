@@ -334,60 +334,6 @@ export interface IPaymentRecordRepository {
 }
 
 // ============================================================================
-// Synced Repository Interfaces
-// ============================================================================
-
-/**
- * The op-capturing decorators in `sync/core/synced-repository.ts` expose a
- * NARROWER surface than the base repositories they wrap — they only forward
- * the reads and writes that sync cares about. These `Pick`s describe what each
- * decorator actually has, so the contract stays tied to the base interfaces
- * instead of duplicating their signatures.
- *
- * Note the asymmetry: `transactions` has no `delete` and no `getDisplay`,
- * `businessProfiles` has no `getDefault` passthrough beyond what is listed,
- * and there is no synced expense repository at all — expenses never enter the
- * op-log. See `provider.ts` and TODOS.md item 1.
- */
-export interface ISyncedRepositories {
-  clients: Pick<IClientRepository, 'list' | 'get' | 'create' | 'update' | 'archive' | 'delete'>;
-  projects: Pick<IProjectRepository, 'list' | 'get' | 'create' | 'update' | 'archive' | 'delete'>;
-  transactions: Pick<
-    ITransactionRepository,
-    | 'list'
-    | 'get'
-    | 'getOverviewTotals'
-    | 'getOverviewTotalsByCurrency'
-    | 'getAttentionReceivables'
-    | 'create'
-    | 'update'
-    | 'markPaid'
-    | 'recordPartialPayment'
-    | 'softDelete'
-  >;
-  categories: Pick<ICategoryRepository, 'list' | 'get' | 'create' | 'update' | 'delete'>;
-  fxRates: Pick<IFxRateRepository, 'list' | 'getLatest' | 'create' | 'delete'>;
-  businessProfiles: Pick<
-    IBusinessProfileRepository,
-    'list' | 'get' | 'getDefault' | 'create' | 'update' | 'setDefault' | 'archive' | 'delete'
-  >;
-  documents: Pick<
-    IDocumentRepository,
-    | 'list'
-    | 'get'
-    | 'getByNumber'
-    | 'create'
-    | 'update'
-    | 'markPaid'
-    | 'markVoided'
-    | 'softDelete'
-    | 'linkTransactions'
-    | 'unlinkTransaction'
-  >;
-  paymentRecords: IPaymentRecordRepository;
-}
-
-// ============================================================================
 // Complete Repository Provider Interface
 // ============================================================================
 

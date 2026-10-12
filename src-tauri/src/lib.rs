@@ -1,12 +1,8 @@
-mod sync;
+mod oauth;
+mod retired_sync;
 
-use sync::commands::{
-    cancel_pairing_session, clear_pending_sync_ops, decrypt_bundle, discover_lan_peers,
-    encrypt_bundle, get_hostname, get_local_sync_ops_count, get_paired_devices, get_pairing_status,
-    get_pending_sync_ops, get_sync_server_port, is_sync_server_running, revoke_paired_device,
-    await_oauth_callback, bind_oauth_callback, cancel_oauth_callback,
-    start_pairing_session, start_sync_server, stop_sync_server, store_local_sync_op, SyncState,
-};
+use oauth::{await_oauth_callback, bind_oauth_callback, cancel_oauth_callback, OAuthState};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,31 +13,8 @@ pub fn run() {
         // Opens the OAuth authorize URL in the user's real browser. OAuth 2.1 BCP
         // forbids an embedded user-agent: our webview could read the session.
         .plugin(tauri_plugin_opener::init())
-        .manage(SyncState::default())
+        .manage(OAuthState::default())
         .invoke_handler(tauri::generate_handler![
-            // Sync server
-            start_sync_server,
-            stop_sync_server,
-            is_sync_server_running,
-            get_sync_server_port,
-            discover_lan_peers,
-            // Encryption
-            encrypt_bundle,
-            decrypt_bundle,
-            // Device
-            get_hostname,
-            // Pairing
-            start_pairing_session,
-            get_pairing_status,
-            cancel_pairing_session,
-            get_paired_devices,
-            revoke_paired_device,
-            // Sync ops (incoming from mobile)
-            get_pending_sync_ops,
-            clear_pending_sync_ops,
-            // Local ops (outgoing to mobile)
-            store_local_sync_op,
-            get_local_sync_ops_count,
             // OAuth loopback callback (MUT-28)
             bind_oauth_callback,
             await_oauth_callback,
@@ -55,6 +28,18 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Device sync is retired (MUT-73): remove the paired-devices file it
+            // left behind. Best effort; never blocks startup.
+            match app.path().app_config_dir() {
+                Ok(dir) => {
+                    for (path, err) in retired_sync::remove_retired_sync_files(&dir) {
+                        log::warn!("Could not remove retired sync file {}: {err}", path.display());
+                    }
+                }
+                Err(err) => log::warn!("Could not resolve the app config directory: {err}"),
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

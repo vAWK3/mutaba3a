@@ -192,7 +192,7 @@ export function useMarkIncomePaid() {
 
   return useMutationWithFeedback({
     mutationFn: ({ id, paidAt }: { id: string; paidAt?: string }) =>
-      getRepositories().synced.transactions.markPaid(id, { paidAt }),
+      getRepositories().base.transactions.markPaid(id, { paidAt }),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to mark as paid. Please try again.',
   });
@@ -206,7 +206,7 @@ export function useRecordIncomePartialPayment() {
 
   return useMutationWithFeedback({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      getRepositories().synced.transactions.recordPartialPayment(id, paymentAmountMinor),
+      getRepositories().base.transactions.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateIncomeQueries(queryClient),
     errorMessage: 'Failed to record payment. Please try again.',
   });

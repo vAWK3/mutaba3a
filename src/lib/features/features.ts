@@ -189,7 +189,7 @@ export async function reconcileFeaturesWithData(reader: TableReader): Promise<Fe
  * user can still enable the area by hand in Settings.
  */
 export async function reconcileFeaturesAfterDataLoad(
-  source: 'restore' | 'import' | 'demo' | 'sync',
+  source: 'restore' | 'import' | 'demo',
   reader: TableReader,
 ): Promise<FeatureKey[]> {
   try {

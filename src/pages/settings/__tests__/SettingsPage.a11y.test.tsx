@@ -55,7 +55,6 @@ vi.mock('../../../components/modals', () => ({
 }));
 
 // Sections with their own tests
-vi.mock('../../../components/sync', () => ({ SyncSection: () => null }));
 vi.mock('../AdvancedFeaturesSection', () => ({ AdvancedFeaturesSection: () => null }));
 vi.mock('../DataToolsSection', () => ({ DataToolsSection: () => null }));
 

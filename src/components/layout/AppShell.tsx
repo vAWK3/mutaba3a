@@ -21,14 +21,7 @@ import { useVisitorSampleEntry } from "../../demo/useVisitorSample";
 import { useSampleSessionStore } from "../../demo/sampleSessionStore";
 import { InlineErrorBoundary } from "../ui/ErrorBoundary";
 import { UpdateBanner } from '../ui/UpdateBanner';
-import {
-  ConflictBanner,
-  ExportBundleModal,
-  ImportBundleModal,
-  PairingModal,
-} from "../sync";
 import { useDrawerStore } from "../../lib/stores";
-import { initializeSync } from "../../sync";
 import { useDemoStore, DEMO_QUERY_PARAM } from "../../demo";
 import { FeatureNoticeBanner } from "./FeatureNoticeBanner";
 import { useLeaveDisabledArea } from "../../lib/features/routeGuard";
@@ -63,13 +56,6 @@ export function AppShell({ children }: AppShellProps) {
   useVisitorSampleEntry();
   const isPreparingSample = useSampleSessionStore((s) => s.status === "preparing");
 
-  // Initialize sync system on app load
-  useEffect(() => {
-    initializeSync().catch((err) => {
-      console.error("Failed to initialize sync:", err);
-    });
-  }, []);
-
   // Detect ?demo=1 query parameter to trigger demo mode
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -103,7 +89,6 @@ export function AppShell({ children }: AppShellProps) {
       <SidebarNav />
       <main className="main-content">
         <SampleDataBar />
-        <ConflictBanner />
         <OrphanedRecordsBanner />
         <FeatureNoticeBanner />
         {isPreparingSample ? (
@@ -177,9 +162,6 @@ export function AppShell({ children }: AppShellProps) {
         </InlineErrorBoundary>
       )}
 
-      <ExportBundleModal />
-      <ImportBundleModal />
-      <PairingModal />
       <WelcomeModal />
       <MigrationWizard />
 

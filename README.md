@@ -177,8 +177,9 @@ Mutaba3a minimizes risk by default:
 Planned/optional (depending on roadmap):
 
 - encrypted backups
-- local network sync (LAN) without routing through a server
-- end-to-end encrypted sync for users who explicitly enable it
+
+There is no device-to-device sync. To move to another device, export a backup
+in Settings and import it there.
 
 ---
 

@@ -1,18 +1,6 @@
 # TODOS
 
-## 1. Transaction mutations bypass the sync op-log — ticketed as MUT-46
-
-**What:** Creating, editing, archiving, unarchiving and soft-deleting a transaction emits no sync operation, so those changes never reach another device. Expenses never sync at all.
-
-**Why:** `src/hooks/useQueries.ts` and `src/hooks/useIncomeQueries.ts` call `transactionRepo.{create,update,archive,unarchive,softDelete}` on the raw repository; only `markPaid` and `recordPartialPayment` go through `syncedTransactionRepo`. Bundles are built from the op-log (`src/sync/transport/bundle-encoder.ts` -> `getLocalOpsSince`), so an un-captured mutation is invisible to sync. Separately, `EntityType` in `src/sync/core/ops-types.ts:84` has no `expense` member and `src/sync/` contains no expense reference.
-
-**Pros of fixing:** Closes a silent data-loss path in a feature ADR-013 describes as shipped. The machinery already exists and is already imported — the call sites simply route around it.
-
-**Cons / cost / risk:** Touches sync correctness. No existing test asserts op capture on create/update/delete, so the fix needs new regression tests before it can be trusted. Expense sync is a larger question, not a slot addition.
-
-**Context:** Found 2026-10-10 while mapping MUT-35's blast radius. Pre-existing and unrelated to MUT-35, which deliberately preserves the current behaviour. Start at the two hook files above and `src/sync/core/synced-repository.ts`. Decide the expense question alongside MUT-42, which gives expenses a server-side home anyway.
-
-**Depends on / blocked by:** Nothing. Independent of the MUT-34 epic. Should become its own MUT ticket.
+> Items 1 (MUT-46) and 3 (MUT-55) were retired with device sync on 2026-10-12 (MUT-73, ADR-053): both were sync bugs, and sync was deleted rather than fixed. The other items keep their numbers because they are cited elsewhere.
 
 ## 2. Documented data layer does not match the real one — ticketed as MUT-47
 
@@ -27,20 +15,6 @@
 **Context:** Found 2026-10-10 during the MUT-35 eng review. Either give the five objects contracts and slots, or write an explicit note in `interfaces.ts` saying they sit outside the seam and why.
 
 **Depends on / blocked by:** Nothing. Cheap; do it next time CLAUDE.md or `interfaces.ts` is open.
-
-## 3. Payment records are captured for sync but can never be applied — ticketed as MUT-55
-
-**What:** Recording a payment emits a sync operation that the receiving device cannot apply. Payments never travel between devices. A user who records a payment on the laptop opens the phone and the receivable still reads unpaid, with no error anywhere.
-
-**Why:** `src/sync/core/synced-repository.ts:401,413,418` calls `captureCreateOp('paymentRecord', …)`, `captureUpdateOps` and `captureDeleteOp`, and `src/sync/core/ops-types.ts:84` declares `'paymentRecord'` in `EntityType`. But `src/sync/core/ops-engine.ts` contains zero occurrences of `paymentRecord`: the create switch at `:410-431` has no case and no default, so creates silently no-op, and `getTableForEntityType` at `:532-549` ends `default: throw new Error(\`Unknown entity type: ${entityType}\`)`, so update and delete ops throw on apply.
-
-**Pros of fixing:** Closes a silent cross-device data-loss path in the feature ADR-013 describes as shipped. The fix mirrors the existing `transaction` case in both switches.
-
-**Cons / cost / risk:** Touches sync correctness, and no test in the repo exercises `applyOp` replay for any entity, so the fix needs new regression tests before it can be trusted. Soft-delete semantics need a decision: `paymentRecordRepo.delete` sets `deletedAt` rather than removing the row, so the delete op must replay as a field update.
-
-**Context:** Found 2026-10-10 during the MUT-6 eng review. Pre-existing and independent of MUT-6, but MUT-6 promotes this exact path from a hidden kebab item to the product's most-clicked button, which is what raises the priority. Same class as item 1 above and worth doing in the same pass. Start at `ops-engine.ts:410` and `:532`.
-
-**Depends on / blocked by:** Nothing. Overlaps item 1 (MUT-46) — decide them together.
 
 ## 4. A failed refetch after a successful write is completely silent
 

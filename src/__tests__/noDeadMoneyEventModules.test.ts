@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { db } from '../db/database';
 
 /**
  * MUT-58 guard: Home's forecast strip, month actuals and guidance feed were the
@@ -58,7 +57,7 @@ describe('money-event read side after MUT-58', () => {
     expect(declared).toEqual([]);
   });
 
-  it('keeps the moneyEventVersions table in the Dexie schema (ADR-029)', () => {
-    expect(db.tables.map((t) => t.name)).toContain('moneyEventVersions');
-  });
+  // The moneyEventVersions table this guard used to keep (ADR-029) was sync
+  // versioning, not the read side; MUT-73 dropped it with the other sync
+  // tables (ADR-053), and noSyncModules.test.ts asserts it is gone.
 });

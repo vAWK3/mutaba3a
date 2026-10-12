@@ -27,29 +27,13 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-fs = "2"
 
-# Sync dependencies
+# OAuth loopback callback (MUT-28): a one-shot axum listener on 127.0.0.1.
+# Device sync and its crates were retired in MUT-73 (ADR-053).
 tokio = { version = "1", features = ["full"] }
 axum = "0.7"
-axum-server = { version = "0.8", features = ["tls-rustls"] }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-rcgen = "0.13"
-mdns-sd = "0.11"
-ring = "0.17"
-argon2 = "0.5"
-base64 = "0.22"
-uuid = { version = "1", features = ["v4"] }
-rand = "0.8"
-hostname = "0.4"
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1.0"
-sha2 = "0.10"
-local-ip-address = "0.6"
-urlencoding = "2.1"
 tauri-plugin-opener = "2"
 
-# Test-only. persistence.rs's test module has referenced tempfile since it was
-# written, but the dependency was never declared, so `cargo test` did not
-# compile and those tests never ran. Declared here as part of MUT-28 because the
-# Rust test target has to build for any Rust test to run.
+# Test-only: retired_sync.rs's tests write and remove files in a temp dir.
+# (Declared by MUT-28 for the sync persistence tests, which MUT-73 removed.)
 [dev-dependencies]
 tempfile = "3"

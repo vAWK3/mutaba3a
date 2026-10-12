@@ -5,7 +5,7 @@ import {
   needsRefresh,
   REFRESH_SKEW_MS,
 } from '../tokenStore';
-import type { TokenSet } from '../../sync/transport/oauth-client';
+import type { TokenSet } from '../oauth/oauth-client';
 
 const ORIGIN_A = 'https://acme.malafat.app';
 const ORIGIN_B = 'https://other-firm.malafat.app';

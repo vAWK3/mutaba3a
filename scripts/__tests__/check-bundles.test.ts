@@ -12,6 +12,15 @@ describe('local bundle rules', () => {
   it('passes ordinary app code', () => {
     expect(findForbidden('const db = new Dexie("mutaba3a"); indexedDB.open()', LOCAL_RULES)).toEqual([]);
   });
+
+  // MUT-73: device sync is retired; its UI must not ship again.
+  it.each(['backup.msync', 'invoke("start_sync_server")', 'Export Sync Bundle'])('flags the retired sync marker %s', (marker) => {
+    expect(findForbidden(`x("${marker}")`, LOCAL_RULES).map((f) => f.rule)).not.toEqual([]);
+  });
+
+  it('does not mistake ordinary sync words for the retired feature', () => {
+    expect(findForbidden('async function f(){} useSyncExternalStore(); "Syncing state"; flushSync()', LOCAL_RULES)).toEqual([]);
+  });
 });
 
 describe('hosted bundle rules', () => {

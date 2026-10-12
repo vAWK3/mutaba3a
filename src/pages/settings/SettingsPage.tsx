@@ -12,7 +12,6 @@ import { useT, useLanguage } from '../../lib/i18n';
 import { useTheme, THEME_MODES } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
-import { SyncSection } from '../../components/sync';
 import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
 import { DataToolsSection } from './DataToolsSection';
 import { useDrawerStore } from '../../lib/stores';
@@ -252,11 +251,6 @@ export function SettingsPage() {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Sync Settings */}
-        <div className="settings-section">
-          <SyncSection />
         </div>
 
         {/* Business Profiles */}

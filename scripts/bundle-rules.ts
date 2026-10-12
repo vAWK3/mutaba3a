@@ -15,12 +15,20 @@ export interface Finding {
   match: string;
 }
 
-/** The local builds (web, desktop) must carry nothing of the portal: no endpoint, cookie or header. */
+/**
+ * The local builds (web, desktop) must carry nothing of the portal: no endpoint,
+ * cookie or header. Nor anything of retired device sync (MUT-73, ADR-053): the
+ * three exact strings below shipped with the bundle and pairing UI, and are
+ * specific enough not to match a library's own "sync".
+ */
 export const LOCAL_RULES: Rule[] = [
   { name: 'profile header', pattern: /X-Mutaba3a-Profile/i },
   { name: 'identity endpoint', pattern: /\/v1\/me\b/ },
   { name: 'session endpoint', pattern: /\/v1\/sessions\b/ },
   { name: 'session cookie', pattern: /mut_session/ },
+  { name: 'sync bundle extension', pattern: /\.msync\b/ },
+  { name: 'sync server command', pattern: /start_sync_server/ },
+  { name: 'sync bundle export', pattern: /Export Sync Bundle/ },
 ];
 
 /**

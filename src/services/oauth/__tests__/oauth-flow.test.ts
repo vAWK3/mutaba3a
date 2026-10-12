@@ -6,7 +6,7 @@ import {
   WorkspaceDisconnectedError,
   type OAuthFlowDeps,
 } from '../oauth-flow';
-import { InMemoryTokenStore, REFRESH_SKEW_MS } from '../../../services/tokenStore';
+import { InMemoryTokenStore, REFRESH_SKEW_MS } from '../../tokenStore';
 import { OAUTH_LOOPBACK_PORTS } from '../oauth-client';
 import type { TokenSet } from '../oauth-client';
 

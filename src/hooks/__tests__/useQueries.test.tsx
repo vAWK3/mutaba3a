@@ -1,11 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
-import { businessProfileRepo, documentRepo, clientRepo, transactionRepo } from '../../db/repository';
-import { getOrCreateLocalDevice } from '../../sync/core/ops-engine';
-import { initializeClock } from '../../sync/core/hlc';
+import { businessProfileRepo, documentRepo, clientRepo, transactionRepo, paymentRecordRepo } from '../../db/repository';
 import {
   useTransaction,
   useClient,
@@ -27,6 +25,9 @@ import {
   useSetDefaultBusinessProfile,
   useArchiveBusinessProfile,
   useCreatePaymentRecord,
+  useUpdatePaymentRecord,
+  useDeletePaymentRecord,
+  useRecordPartialPayment,
   useMarkTransactionPaid,
   usePaymentsByClient,
   useRecentPayments,
@@ -63,12 +64,6 @@ function createWrapper(queryClient: QueryClient = createTestQueryClient()) {
 }
 
 describe('Business Profile Hooks', () => {
-  beforeAll(async () => {
-    // Initialize local device and clock for sync operations
-    const device = await getOrCreateLocalDevice();
-    initializeClock(device.id);
-  });
-
   beforeEach(async () => {
     await db.businessProfiles.clear();
   });
@@ -443,11 +438,6 @@ describe('Document Hooks', () => {
  * -- right after the moment that matters most.
  */
 describe('Payment Record Hooks', () => {
-  beforeAll(async () => {
-    const device = await getOrCreateLocalDevice();
-    initializeClock(device.id);
-  });
-
   beforeEach(async () => {
     await db.transactions.clear();
     await db.paymentRecords.clear();
@@ -597,6 +587,56 @@ describe('Payment Record Hooks', () => {
       expect(result.current.recent.data?.[0]).toMatchObject({ clientName: 'Acme', transactionTitle: 'Logo', currency: 'ILS' });
     });
   });
+
+  /**
+   * MUT-73: these hooks wrote through a device-sync decorator. Device sync is
+   * retired (ADR-053) and they now call the base repository; each still writes
+   * exactly what the repository writes.
+   */
+  describe('payment writes that used to go through the sync decorator', () => {
+    const owed = () =>
+      transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2026-03-01',
+      });
+
+    it('useRecordPartialPayment records the payment and the received total', async () => {
+      const tx = await owed();
+      const { result } = renderHook(() => useRecordPartialPayment(), { wrapper: createWrapper() });
+
+      await result.current.mutateAsync({ id: tx.id, paymentAmountMinor: 4000 });
+
+      const updated = await transactionRepo.get(tx.id);
+      expect(updated).toMatchObject({ status: 'unpaid', receivedAmountMinor: 4000 });
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records.map((r) => r.amountMinor)).toEqual([4000]);
+    });
+
+    it('useUpdatePaymentRecord changes the amount and re-derives the entry', async () => {
+      const tx = await owed();
+      const record = await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 4000, paidAt: '2026-03-02' });
+      const { result } = renderHook(() => useUpdatePaymentRecord(), { wrapper: createWrapper() });
+
+      await result.current.mutateAsync({ id: record.id, transactionId: tx.id, data: { amountMinor: 10000 } });
+
+      expect(await transactionRepo.get(tx.id)).toMatchObject({ status: 'paid', receivedAmountMinor: 10000 });
+    });
+
+    it('useDeletePaymentRecord removes the payment and the entry is owed again', async () => {
+      const tx = await owed();
+      const record = await paymentRecordRepo.create({ transactionId: tx.id, amountMinor: 10000, paidAt: '2026-03-02' });
+      expect((await transactionRepo.get(tx.id))?.status).toBe('paid');
+      const { result } = renderHook(() => useDeletePaymentRecord(), { wrapper: createWrapper() });
+
+      await result.current.mutateAsync({ id: record.id, transactionId: tx.id });
+
+      expect(await transactionRepo.get(tx.id)).toMatchObject({ status: 'unpaid', receivedAmountMinor: 0 });
+      expect(await paymentRecordRepo.listByTransaction(tx.id)).toEqual([]);
+    });
+  });
 });
 
 // TD-028: every by-id hook wraps a repository `get(id)` whose contract is
@@ -715,11 +755,6 @@ describe('transaction writes refresh the income lists (MUT-5)', () => {
 
 // MUT-5 review: one invalidation list, each key once per write
 describe('invalidation covers each money key exactly once (MUT-5 review)', () => {
-  beforeAll(async () => {
-    const device = await getOrCreateLocalDevice();
-    initializeClock(device.id);
-  });
-
   beforeEach(async () => {
     await db.transactions.clear();
     await db.paymentRecords.clear();

@@ -5,7 +5,7 @@ import { useFeatureNotice } from '../../lib/features/useFeatures';
 
 /**
  * Tells the user once which optional areas were switched on for their
- * existing data (v20 upgrade, backup restore, import, demo or sync), and
+ * existing data (v20 upgrade, backup restore, import or demo), and
  * points at Settings › Advanced features (MUT-12).
  *
  * The notice is cleared only when the user dismisses it, so it survives a

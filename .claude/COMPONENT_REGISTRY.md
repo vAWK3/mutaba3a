@@ -189,7 +189,7 @@ Opening (click, ArrowDown, ArrowUp) focuses the first/last `[role="menuitem"]`; 
 
 ### FeatureNoticeBanner
 **Location**: `src/components/layout/FeatureNoticeBanner.tsx`
-**Purpose**: One-time, dismissible notice naming the optional areas that were switched on for the user's existing data (v20 upgrade, restore, import, demo, sync). Mounted once in `AppShell` above the page content; renders nothing when `Settings.featureNotice` is empty; clears the notice on dismiss (MUT-12, ADR-032).
+**Purpose**: One-time, dismissible notice naming the optional areas that were switched on for the user's existing data (v20 upgrade, restore, import, demo; sync-bundle import was deleted with device sync, MUT-73). Mounted once in `AppShell` above the page content; renders nothing when `Settings.featureNotice` is empty; clears the notice on dismiss (MUT-12, ADR-032).
 
 ```tsx
 <FeatureNoticeBanner />   // no props; reads useFeatureNotice()
@@ -1554,8 +1554,9 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 ### getRepositories() — `src/db/provider.ts`
 
 **What**: The single entry point to the data layer. Returns a frozen
-`{ base, synced }` registry covering 21 repositories plus 8 op-capturing
-decorators. Re-exported from the `src/db` barrel.
+`{ base }` registry covering 21 repositories. Re-exported from the `src/db`
+barrel. (Until MUT-73 it also had a `synced` family of 8 op-capturing
+decorators; they were deleted with device sync, ADR-053.)
 
 **Use it when**: you need to read or write any entity from a hook, service or
 component. Do not import a repository singleton — that bypasses the seam and
@@ -1567,17 +1568,13 @@ import { getRepositories } from '../db';
 // Resolve inside the callback, not at module scope.
 queryFn: () => getRepositories().base.transactions.list(filters)
 mutationFn: ({ id, paidAt }: { id: string; paidAt?: string }) =>
-  getRepositories().synced.transactions.markPaid(id, { paidAt })
+  getRepositories().base.transactions.markPaid(id, { paidAt })
 ```
-
-**base vs synced**: `base` is the plain Dexie repository. `synced` additionally
-captures an operation in the sync op-log. Keep whichever family a call site
-already used — moving a call between them changes what syncs between devices.
 
 **Swapping**: `setRepositories(next)` for tests and future hosted sources,
 `resetRepositories()` in teardown. `setRepositories` throws in production
-builds. Caveat: `synced.*` does not follow a swap — see TD-013
-(`gstack-shortcut(dec-5f2c2123)`).
+builds. A swap now redirects every call: the `synced` caveat in TD-013 went
+with the decorators.
 
 **Conformance**: `satisfies` in `provider.ts` ties every repository to its
 interface in `src/db/interfaces.ts`. Rename or delete a repository method and
@@ -1585,10 +1582,28 @@ interface in `src/db/interfaces.ts`. Rename or delete a repository method and
 
 **Tests**: `src/db/__tests__/provider.test.ts`. To fake the data layer, mock
 `'../../db'` and return `getRepositories` — the barrel is the single
-interception point.
+interception point. `src/__tests__/noSyncModules.test.ts` asserts the registry
+has only `base`.
 
 **Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
 `scheduleGenerator` and `retainerMatching`. `engagementRepo` is gone with the
 module (MUT-10). `moneyEventRepo` survived MUT-11 only because the old Overview
 read it; once MUT-8 deleted those components it had no reader, and MUT-58
 deleted it with `useMoneyEventQueries` (ADR-036 §3). See TODOS.md item 2.
+
+### Malafat OAuth client — `src/services/oauth/` and `src-tauri/src/oauth/`
+
+**What**: The desktop's OAuth 2.1 public-client flow for a Malafat workspace (MUT-28, ADR-023):
+- `oauth-pkce.ts`: S256 PKCE and state;
+- `oauth-client.ts`: discovery, the authorize URL, callback parsing, token exchange and refresh, `CIMD_CLIENT_ID`, `OAUTH_LOOPBACK_PORTS`;
+- `oauth-flow.ts`: `connectWorkspace`, `getValidAccessToken`, `disconnectWorkspace`, with platform calls injected.
+
+Tokens go through `TokenStore` (`src/services/tokenStore.ts`, in memory only, TD-015). On the Rust side, `oauth/callback.rs` is the one-shot listener on 127.0.0.1, and `oauth/mod.rs` holds the three commands (`bind_oauth_callback`, `await_oauth_callback`, `cancel_oauth_callback`) and their `OAuthState`.
+
+**Moved** out of `src/sync/transport/` and `src-tauri/src/sync/` by MUT-73 (ADR-053). Nothing changed apart from paths and comments.
+
+**Callers**: none in the app yet (TD-075).
+
+**Tests**:
+- `src/services/oauth/__tests__/`: 74 cases, including the CIMD document check against `public/.well-known/oauth-client.json`;
+- the 10 Rust tests in `callback.rs`.

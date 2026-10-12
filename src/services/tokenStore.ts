@@ -25,13 +25,13 @@
  * writing them to IndexedDB or a plain file.
  */
 
-import type { TokenSet } from '../sync/transport/oauth-client';
+import type { TokenSet } from './oauth/oauth-client';
 
 /**
  * Refresh this long before the access token actually expires.
  *
  * Malafat issues access tokens with a one-hour lifetime. Two minutes is enough
- * to cover an in-flight sync plus clock skew between the desktop and the
+ * to cover an in-flight request plus clock skew between the desktop and the
  * server, without refreshing so eagerly that every session burns a rotation.
  */
 export const REFRESH_SKEW_MS = 2 * 60 * 1000;

@@ -11,6 +11,7 @@ import {
   useUpdateIncome,
   useDeleteIncome,
   useMarkIncomePaid,
+  useRecordIncomePartialPayment,
 } from '../useIncomeQueries';
 import { getRepositories } from '../../db';
 
@@ -26,26 +27,20 @@ vi.mock('../../db', () => {
       update: vi.fn(),
       softDelete: vi.fn(),
       markPaid: vi.fn(),
+      recordPartialPayment: vi.fn(),
       archive: vi.fn(),
       unarchive: vi.fn(),
       getOverviewTotals: vi.fn(),
       getAttentionReceivables: vi.fn(),
     },
   };
-  // Payment-related mutations go through the op-capturing decorator, not the
-  // base repository. Keeping them separate here preserves that distinction.
-  const synced = {
-    transactions: {
-      markPaid: vi.fn(),
-      recordPartialPayment: vi.fn(),
-    },
-  };
-  const repositories = { base, synced };
+  // Mark paid and partial payments used to go through a sync decorator; since
+  // MUT-73 (device sync retired) every write goes to the base repository.
+  const repositories = { base };
   return { getRepositories: () => repositories };
 });
 
 const transactionRepo = getRepositories().base.transactions;
-const syncedTransactionRepo = getRepositories().synced.transactions;
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -342,7 +337,7 @@ describe('Mutation Hooks', () => {
   describe('useMarkIncomePaid', () => {
     it('should mark income as paid', async () => {
       const mockIncome = { id: 'tx-1', status: 'paid' };
-      (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
+      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
 
       const { result } = renderHook(
         () => useMarkIncomePaid(),
@@ -353,12 +348,12 @@ describe('Mutation Hooks', () => {
         await result.current.mutateAsync({ id: 'tx-1' });
       });
 
-      expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: undefined });
+      expect(transactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: undefined });
     });
 
     it('should pass a backdated paidAt through to the repository', async () => {
       const mockIncome = { id: 'tx-1', status: 'paid' };
-      (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
+      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
 
       const { result } = renderHook(
         () => useMarkIncomePaid(),
@@ -369,7 +364,7 @@ describe('Mutation Hooks', () => {
         await result.current.mutateAsync({ id: 'tx-1', paidAt: '2026-09-20' });
       });
 
-      expect(syncedTransactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: '2026-09-20' });
+      expect(transactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: '2026-09-20' });
     });
 
     /**
@@ -378,7 +373,7 @@ describe('Mutation Hooks', () => {
      * refreshes them.
      */
     it('should not invalidate the retired money-event views', async () => {
-      (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'tx-1' });
+      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'tx-1' });
 
       const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -401,6 +396,20 @@ describe('Mutation Hooks', () => {
 
       expect(invalidated).toEqual(expect.arrayContaining(['income', 'transactions']));
       expect(invalidated.filter((key) => String(key).startsWith('money'))).toEqual([]);
+    });
+  });
+
+  describe('useRecordIncomePartialPayment', () => {
+    it('records the payment through the base repository (MUT-73)', async () => {
+      (transactionRepo.recordPartialPayment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useRecordIncomePartialPayment(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.mutateAsync({ id: 'tx-1', paymentAmountMinor: 5000 });
+      });
+
+      expect(transactionRepo.recordPartialPayment).toHaveBeenCalledWith('tx-1', 5000);
     });
   });
 });
@@ -426,7 +435,7 @@ describe('income writes refresh the payment lists', () => {
     };
 
   it('useMarkIncomePaid invalidates paymentRecords', async () => {
-    (syncedTransactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     const roots = await invalidatedRoots(async (queryClient) => {
       const { result } = renderHook(() => useMarkIncomePaid(), { wrapper: wrapperFor(queryClient) });
       await act(async () => {
