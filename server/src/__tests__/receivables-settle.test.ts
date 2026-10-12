@@ -3,7 +3,8 @@ import pino from 'pino';
 import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
-import { MemoryLedgerStore } from '../repositories/memory.js';
+import { InsufficientCapacity, MemoryLedgerStore } from '../repositories/memory.js';
+import type { LedgerStore } from '../repositories/ports.js';
 
 /** MUT-65 (locked-in AC 11): POST /v1/receivables/{id}/settle — a personal profile's own receivable, no preview/allocation dance. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,11 +17,12 @@ const admin = { 'x-admin-token': ADMIN_TOKEN };
 const COOKIE = '__Host-mut_session';
 const SAME_ORIGIN = { origin: 'http://localhost' };
 
-function harness() {
+/** `wrap` lets one test hand the app a stubbed store while the assertions keep reading the real one. */
+function harness(wrap: (store: MemoryLedgerStore) => LedgerStore = (s) => s) {
   const store = new MemoryLedgerStore();
   const clock = { now: new Date('2026-10-12T09:00:00Z') };
   const app = createApp({
-    store,
+    store: wrap(store),
     logger: pino({ level: 'silent' }),
     rateLimiter: new SlidingWindowRateLimiter(1_000_000),
     adminToken: ADMIN_TOKEN,
@@ -65,8 +67,35 @@ async function owed(h: Harness, as: (p: string, e?: Record<string, string>) => R
   return { customer, receivableId: created.id as string };
 }
 
-async function setup() {
-  const h = harness();
+/**
+ * Arms the next `payments.create` to throw InsufficientCapacity — exactly what
+ * applyAllocations' FOR UPDATE re-read raises when a concurrent settle drained
+ * the receivable between this request's read and its write.
+ */
+function capacityLostOnce(store: MemoryLedgerStore): LedgerStore {
+  let armed = true;
+  return new Proxy(store, {
+    get(target, prop) {
+      const value: unknown = Reflect.get(target, prop, target);
+      if (typeof value === 'function') return value.bind(target);
+      if (prop !== 'payments' || typeof value !== 'object' || value === null) return value;
+      return new Proxy(value, {
+        get(repo, method) {
+          const fn: unknown = Reflect.get(repo, method, repo);
+          if (method !== 'create' || typeof fn !== 'function') return fn;
+          return (...args: unknown[]) => {
+            if (!armed) return (fn as (...a: unknown[]) => unknown).apply(repo, args);
+            armed = false;
+            throw new InsufficientCapacity('the-receivable-that-lost-the-race');
+          };
+        },
+      });
+    },
+  }) as LedgerStore;
+}
+
+async function setup(wrap?: (store: MemoryLedgerStore) => LedgerStore) {
+  const h = harness(wrap);
   const { p, m } = await orgs(h);
   const as = await person(h, [p.id, m.id]);
   return { h, p, m, as };
@@ -214,6 +243,14 @@ describe('POST /v1/receivables/{id}/settle', () => {
     const res = await settle(h, as, p.id, receivableId);
     expect(res.status).toBe(422);
     expect((await read(res)).error.details).toMatchObject({ reason: 'RECEIVABLE_NOT_OPEN' });
+  });
+
+  it('a concurrent settle drains the receivable first (InsufficientCapacity) → 409 VERSION_MISMATCH, not 500', async () => {
+    const { h, p, as } = await setup(capacityLostOnce);
+    const { receivableId } = await owed(h, as, p.id, '500.00');
+    const res = await settle(h, as, p.id, receivableId);
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'VERSION_MISMATCH' } });
   });
 
   it('missing Idempotency-Key → 422', async () => {

@@ -185,24 +185,31 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       assertNotFuture(paidAt, today, 'paidAt');
       const requestId = c.get('requestId');
 
-      const created = await store.payments.create(
-        {
-          organizationId: organization.id,
-          customerId: receivable.customerId,
-          projectId: receivable.projectId,
-          currency,
-          amountMinor,
-          receivedOn: paidAt,
-          method: body.method ?? 'CASH',
-          reference: null,
-          notes: null,
-          replacesPaymentId: null,
-          requestId,
-          createdByUserId: user.id,
-          allocations: [{ receivableId: receivable.id, amountMinor }],
-        },
-        now,
-      );
+      let created;
+      try {
+        created = await store.payments.create(
+          {
+            organizationId: organization.id,
+            customerId: receivable.customerId,
+            projectId: receivable.projectId,
+            currency,
+            amountMinor,
+            receivedOn: paidAt,
+            method: body.method ?? 'CASH',
+            reference: null,
+            notes: null,
+            replacesPaymentId: null,
+            requestId,
+            createdByUserId: user.id,
+            allocations: [{ receivableId: receivable.id, amountMinor }],
+          },
+          now,
+        );
+      } catch (err) {
+        // The FOR UPDATE re-read found the capacity gone: another settle landed between our read and this write.
+        if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'The receivable changed while settling; re-read and retry', { reason: 'VERSION_MISMATCH' });
+        throw err;
+      }
       const settled = await store.receivables.getById(organization.id, receivable.id);
       if (!settled) throw new ApiError('INTERNAL', 'The receivable vanished mid-settle');
 
