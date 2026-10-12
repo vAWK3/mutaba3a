@@ -1,0 +1,50 @@
+/* Brand v2 fonts (MUT-102, ADR-058). One file for every build: theme.css imports it, and both
+ * entries import only theme.css, so the app, the landing page, the desktop app and the portal
+ * load the same faces the same way.
+ *
+ * Thmanyah is bundled from src/assets/fonts: Vite emits hashed copies under /assets/ in each
+ * build, which the portal caches immutably and the desktop app reads offline. The files are the
+ * delivered bytes, unmodified (licence: no subsetting, no woff2); brand.test.ts pins their sha256.
+ * Never load Thmanyah from a CDN. Plex Mono is OFL, so its @fontsource woff2 subsets are fine. */
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+@font-face {
+  font-family: "Thmanyah Sans";
+  src: url("../../assets/fonts/thmanyahsans-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Sans";
+  src: url("../../assets/fonts/thmanyahsans-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Sans";
+  src: url("../../assets/fonts/thmanyahsans-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Serif Display";
+  src: url("../../assets/fonts/thmanyah-serif-display-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Serif Display";
+  src: url("../../assets/fonts/thmanyah-serif-display-bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
