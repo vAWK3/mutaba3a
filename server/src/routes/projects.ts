@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
+import { actorOf, keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
+import { validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -41,8 +42,8 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Projects'],
       summary: 'Create a project',
       description:
-        'One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not.',
-      security: [{ apiKey: [] }],
+        'One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not. A session may create a project on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('projects:write'), idempotent(store, 'projects.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: { required: true, content: { 'application/json': { schema: CreateProjectRequestSchema } } } },
       responses: {
@@ -54,10 +55,16 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const { organization, apiKey } = keyAuth(c);
+      const auth = c.get('auth');
+      const { organization } = auth;
+      const actor = actorOf(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const reference = body.externalReference;
+
+      if (auth.kind === 'session' && reference) {
+        throw validationError('EXTERNAL_REFERENCE_NOT_ALLOWED', 'A session has no external reference to link', { field: 'externalReference' });
+      }
 
       const customer = await store.customers.getById(organization.id, body.customerId);
       if (!customer) throw new ApiError('VALIDATION_FAILED', 'customerId does not name a customer of this organization', { field: 'customerId', reason: 'CUSTOMER_NOT_FOUND' });
@@ -82,8 +89,8 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       await store.audit.append({
         organizationId: organization.id,
-        actorType: 'API_KEY',
-        actorId: apiKey.id,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
         action: 'project.created',
         entityType: 'project',
         entityId: project.id,

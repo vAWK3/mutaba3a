@@ -44,7 +44,9 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         const recs = receivables.filter((r) => r.currency === currency);
         const pays = payments.filter((p) => p.currency === currency);
         const props = proposals.filter((p) => p.currency === currency);
-        const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId), ...props.map((p) => p.customerId)]);
+        // A session's clientless "Received" capture (MUT-65) has no customer to key a row by; it still counts in this
+        // block's own totals above (`total`/`u`, computed over every receivable/payment regardless of customer).
+        const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId), ...props.map((p) => p.customerId)].filter((id): id is string => id !== null));
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const rows = [...byCustomer].sort().map((customerId) => {
           const b = bucketize(recs.filter((r) => r.customerId === customerId), today);
@@ -93,11 +95,18 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const payments = await listAll((cursor) => store.payments.list(organization.id, { customerId, status: 'POSTED' }, { limit: 200, cursor }));
       const figures = new Map<string, ProjectView>();
       for (const p of projects) figures.set(p.id, await projectSummary(organization, p, receivables.filter((r) => r.projectId === p.id), today));
-      const currencies = [...new Set([...projects.map((p) => p.currency), ...payments.map((p) => p.currency)])].sort();
+      // "Owed with a client, no matter" is MUT-65's default capture shape and belongs to no project, so it
+      // would otherwise reach no bucket here while the organization summary counts it — the same client,
+      // two different answers. Bucketed through the very helper that summary uses (ADR-033: one definition).
+      const matterless = receivables.filter((r) => r.projectId === null);
+      const currencies = [...new Set([...projects.map((p) => p.currency), ...payments.map((p) => p.currency), ...matterless.map((r) => r.currency)])].sort();
       const blocks = currencies.map((currency) => {
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const own = projects.filter((p) => p.currency === currency);
-        const b = own.reduce((acc, p) => addBuckets(acc, figures.get(p.id)!.figures.buckets), emptyBuckets());
+        const b = addBuckets(
+          own.reduce((acc, p) => addBuckets(acc, figures.get(p.id)!.figures.buckets), emptyBuckets()),
+          bucketize(matterless.filter((r) => r.currency === currency), today),
+        );
         const u = unallocatedOf(payments.filter((p) => p.currency === currency));
         return { currency: currency as Currency, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), status: customerStatus(b), projects: own.map((p) => projectWire(p, figures.get(p.id)!)) };
       });

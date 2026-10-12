@@ -14,6 +14,7 @@ import type {
   AgreementRepository,
   AllocationInput,
   AllocationRecord,
+  CreateAdjustmentReceivableInput,
   CreatePaymentInput,
   CreditInput,
   CreditRecord,
@@ -806,17 +807,22 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly receivables: ReceivableRepository = {
     getById: async (organizationId, id) => {
       const r = this.recs.get(id);
+      return r && r.organizationId === organizationId && !r.deletedAt ? { ...r } : null;
+    },
+    getByIdIncludingDeleted: async (organizationId, id) => {
+      const r = this.recs.get(id);
       return r && r.organizationId === organizationId ? { ...r } : null;
     },
-    getByIds: async (organizationId, ids) => ids.map((id) => this.recs.get(id)).filter((r): r is ReceivableRecord => !!r && r.organizationId === organizationId).map((r) => ({ ...r })),
+    getByIds: async (organizationId, ids) =>
+      ids.map((id) => this.recs.get(id)).filter((r): r is ReceivableRecord => !!r && r.organizationId === organizationId && !r.deletedAt).map((r) => ({ ...r })),
     listEligible: async (organizationId, customerId, currency) =>
       [...this.recs.values()]
-        .filter((r) => r.organizationId === organizationId && r.customerId === customerId && r.currency === currency && r.status === 'OPEN' && outstanding(r) > 0n)
+        .filter((r) => r.organizationId === organizationId && r.customerId === customerId && r.currency === currency && r.status === 'OPEN' && !r.deletedAt && outstanding(r) > 0n)
         .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : a.postingDate < b.postingDate ? -1 : a.postingDate > b.postingDate ? 1 : a.id < b.id ? -1 : 1))
         .map((r) => ({ ...r })),
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
       const r = this.recs.get(receivableId);
-      if (!r || r.organizationId !== organizationId) return null;
+      if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
       if (r.status !== 'OPEN' || input.amountMinor > outstanding(r)) throw new InsufficientCapacity(receivableId);
       const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId, ...input, createdAt: at };
       this.credits.set(credit.id, credit);
@@ -831,6 +837,7 @@ export class MemoryLedgerStore implements LedgerStore {
         [...this.recs.values()].filter(
           (r) =>
             r.organizationId === organizationId &&
+            !r.deletedAt &&
             (!filter.customerId || r.customerId === filter.customerId) &&
             (!filter.projectId || r.projectId === filter.projectId) &&
             (!filter.currency || r.currency === filter.currency) &&
@@ -841,13 +848,48 @@ export class MemoryLedgerStore implements LedgerStore {
         page,
       ),
     countOutstandingByProject: async (organizationId, projectId) =>
-      [...this.recs.values()].filter((r) => r.organizationId === organizationId && r.projectId === projectId && r.status === 'OPEN' && outstanding(r) > 0n).length,
+      [...this.recs.values()].filter((r) => r.organizationId === organizationId && r.projectId === projectId && r.status === 'OPEN' && !r.deletedAt && outstanding(r) > 0n).length,
+    createAdjustment: async (input: CreateAdjustmentReceivableInput) => {
+      if (!this.custs.has(input.customerId)) throw new ForeignKeyViolation('receivables.customerId');
+      if (input.projectId && !this.projs.has(input.projectId)) throw new ForeignKeyViolation('receivables.projectId');
+      return {
+        ...this.newReceivable({
+          organizationId: input.organizationId,
+          customerId: input.customerId,
+          projectId: input.projectId,
+          agreementId: null,
+          origin: 'ADJUSTMENT',
+          originId: null,
+          currency: input.currency,
+          netMinor: input.netMinor,
+          vatMinor: input.vatMinor,
+          grossMinor: input.grossMinor,
+          vatTreatment: input.vatTreatment,
+          vatRateBasisPoints: input.vatRateBasisPoints,
+          dueDate: input.dueDate,
+          postingDate: input.postingDate,
+          postedAt: input.postedAt,
+          title: input.title,
+          createdByUserId: input.createdByUserId,
+        }),
+      };
+    },
+    softDeleteAdjustment: async (organizationId, id, at) => {
+      const r = this.recs.get(id);
+      if (!r || r.organizationId !== organizationId) return null;
+      // Mirrors the Prisma WHERE clause: money on the row refuses the void, and the undeleted record says so.
+      if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n) r.deletedAt = at;
+      return { ...r };
+    },
   };
 
   readonly payments: PaymentRepository = {
     create: async (input: CreatePaymentInput, at) => {
-      const customer = this.custs.get(input.customerId);
-      if (!customer || customer.organizationId !== input.organizationId) throw new ForeignKeyViolation('payments.customerId');
+      if (input.customerId) {
+        const customer = this.custs.get(input.customerId);
+        if (!customer || customer.organizationId !== input.organizationId) throw new ForeignKeyViolation('payments.customerId');
+      }
+      if (input.projectId && !this.projs.has(input.projectId)) throw new ForeignKeyViolation('payments.projectId');
       // All-or-nothing: check every receivable before touching any.
       this.assertCapacity(input.organizationId, input.allocations);
       const year = Number(input.receivedOn.slice(0, 4));
@@ -874,7 +916,7 @@ export class MemoryLedgerStore implements LedgerStore {
             (!filter.status || p.status === filter.status) &&
             (!filter.receivedBefore || p.receivedOn <= filter.receivedBefore) &&
             (!filter.receivedAfter || p.receivedOn >= filter.receivedAfter) &&
-            (!onProject || onProject.has(p.id)),
+            (!filter.projectId || p.projectId === filter.projectId || (onProject?.has(p.id) ?? false)),
         ),
         page,
       );
@@ -939,8 +981,24 @@ export class MemoryLedgerStore implements LedgerStore {
     return created;
   }
 
-  private newReceivable(input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt'>): ReceivableRecord {
-    const receivable: ReceivableRecord = { id: randomUUID(), ...input, paidMinor: 0n, creditedMinor: 0n, status: 'OPEN', version: 1, createdAt: input.postedAt };
+  private newReceivable(
+    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId'> & {
+      title?: string | null;
+      createdByUserId?: string | null;
+    },
+  ): ReceivableRecord {
+    const receivable: ReceivableRecord = {
+      id: randomUUID(),
+      ...input,
+      title: input.title ?? null,
+      createdByUserId: input.createdByUserId ?? null,
+      paidMinor: 0n,
+      creditedMinor: 0n,
+      status: 'OPEN',
+      deletedAt: null,
+      version: 1,
+      createdAt: input.postedAt,
+    };
     this.recs.set(receivable.id, receivable);
     return receivable;
   }

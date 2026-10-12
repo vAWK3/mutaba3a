@@ -510,6 +510,9 @@ export const CONFLICT_REASONS = [
   'PROPOSAL_NOT_OPEN',
   // MUT-42
   'CATEGORY_NAME_TAKEN',
+  // MUT-65
+  'ALREADY_SETTLED',
+  'ALREADY_ALLOCATED',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -575,6 +578,10 @@ export const VALIDATION_REASONS = [
   'CATEGORY_NOT_FOUND',
   'CATEGORY_ARCHIVED',
   'TOO_MANY_RECEIPTS',
+  // MUT-65: personal profile income capture
+  'CUSTOMER_REQUIRED_FOR_OWED',
+  'EXTERNAL_REFERENCE_NOT_ALLOWED',
+  'PAYMENT_HAS_NO_CUSTOMER',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -751,7 +758,8 @@ export const ReceivableSchema = z
   .object({
     id: uuid,
     customerId: uuid,
-    projectId: uuid,
+    /** Null for an "Owed" capture with no matter (MUT-65); always set for INSTALLMENT/RETAINER_CHARGE. */
+    projectId: uuid.nullable(),
     agreementId: uuid.nullable(),
     origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']),
     originId: uuid.nullable(),
@@ -769,6 +777,8 @@ export const ReceivableSchema = z
     postingDate: IsoDateSchema,
     postedAt: z.string().datetime(),
     status: ItemStatusSchema,
+    /** "What you did" (MUT-65, ADJUSTMENT origin only); null otherwise. */
+    title: z.string().nullable(),
     version: z.number().int(),
   })
   .openapi('Receivable');
@@ -1002,7 +1012,8 @@ export const PaymentSchema = z
   .object({
     id: uuid,
     number: z.string(),
-    customerId: uuid,
+    /** Null for "Received" captured with no client (MUT-65). */
+    customerId: uuid.nullable(),
     currency: CurrencySchema,
     amount: AmountSchema,
     allocated: AmountSchema,
@@ -1059,6 +1070,72 @@ export const CreditSchema = z
 
 export const CreditResponseSchema = z.object({ receivable: ReceivableSchema, credit: CreditSchema }).openapi('CreditResponse');
 export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, credits: z.array(CreditSchema) }).openapi('CreditsResponse');
+
+// ---- MUT-65: personal profile income capture (session-only) ----------------
+
+/** Where a write came from; recorded on the audit row only, never persisted on the entity itself. */
+export const CaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share']).openapi('CaptureSource');
+export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
+export const IncomeStatusSchema = z.enum(['unallocated', 'open', 'settled']).openapi('IncomeStatus');
+
+const incomeText = z.string().trim().min(1).max(200);
+const incomeNotes = z.string().max(2000);
+
+export const CreateIncomeRequestSchema = z
+  .object({
+    kind: IncomeKindSchema,
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    occurredOn: IsoDateSchema,
+    /** Required for `owed`; optional for `received` ("money can stand alone"). */
+    customerId: uuid.optional(),
+    /** With no customerId, it is taken from the project. */
+    projectId: uuid.optional(),
+    /** `owed` only — "what you did". */
+    title: incomeText.optional(),
+    /** `received` only. */
+    notes: incomeNotes.optional(),
+    /** `owed` only; defaults to EOM_15 of occurredOn. */
+    dueDate: IsoDateSchema.optional(),
+    /** `received` only; defaults CASH. */
+    method: PaymentMethodSchema.optional(),
+    captureSource: CaptureSourceSchema.optional(),
+  })
+  .strict()
+  .openapi('CreateIncomeRequest');
+
+export const IncomeResponseSchema = z
+  .object({
+    id: uuid,
+    kind: IncomeKindSchema,
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    occurredOn: IsoDateSchema,
+    customerId: uuid.nullable(),
+    projectId: uuid.nullable(),
+    title: z.string().nullable(),
+    notes: z.string().nullable(),
+    /** `owed` only; null for `received`. */
+    dueDate: IsoDateSchema.nullable(),
+    status: IncomeStatusSchema,
+  })
+  .openapi('IncomeResponse');
+
+export const IncomeIdParamSchema = z.object({ incomeId: uuid });
+
+export const SettleReceivableRequestSchema = z
+  .object({
+    /** Defaults to the full outstanding amount. */
+    amount: AmountSchema.optional(),
+    /** Defaults to today; rejected if later than today. */
+    paidAt: IsoDateSchema.optional(),
+    method: PaymentMethodSchema.optional(),
+    captureSource: CaptureSourceSchema.optional(),
+  })
+  .strict()
+  .openapi('SettleReceivableRequest');
+
+export const SettleReceivableResponseSchema = z.object({ receivable: ReceivableSchema, payment: PaymentSchema }).openapi('SettleReceivableResponse');
 
 export const OperationKeyParamSchema = z.object({ idempotencyKey: z.string().min(8).max(128) });
 export const OperationSchema = z
@@ -1339,6 +1416,8 @@ export const CreateExpenseRequestSchema = z
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
     notes: expenseNotes.optional(),
+    /** MUT-65: where the write came from; audit metadata only, never persisted on the row. */
+    captureSource: CaptureSourceSchema.optional(),
   })
   .strict()
   .openapi('CreateExpenseRequest');

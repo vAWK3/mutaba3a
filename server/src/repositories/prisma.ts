@@ -17,6 +17,8 @@ import type {
   AgreementRepository,
   AllocationInput,
   AllocationRecord,
+  CreateAdjustmentReceivableInput,
+  CreatePaymentInput,
   CreditInput,
   PaymentFilter,
   PaymentRecord,
@@ -738,18 +740,19 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   readonly receivables: ReceivableRepository = {
-    getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId } }),
+    getById: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    getByIdIncludingDeleted: (organizationId, id) => this.prisma.receivable.findFirst({ where: { id, organizationId } }),
     getByIds: async (organizationId, ids) => {
-      const rows = await this.prisma.receivable.findMany({ where: { organizationId, id: { in: [...ids] } } });
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, id: { in: [...ids] }, deletedAt: null } });
       const order = new Map(ids.map((id, i) => [id, i]));
       return rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     },
     listEligible: async (organizationId, customerId, currency) => {
-      const rows = await this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, status: 'OPEN' }, orderBy: [{ dueDate: 'asc' }, { postingDate: 'asc' }, { id: 'asc' }] });
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, status: 'OPEN', deletedAt: null }, orderBy: [{ dueDate: 'asc' }, { postingDate: 'asc' }, { id: 'asc' }] });
       return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n);
     },
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
-      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId }, select: { id: true } });
+      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null }, select: { id: true } });
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         const r = await lockReceivable(tx, receivableId);
@@ -764,6 +767,7 @@ export class PrismaLedgerStore implements LedgerStore {
       const rows = await this.prisma.receivable.findMany({
         where: {
           organizationId,
+          deletedAt: null,
           ...(filter.customerId ? { customerId: filter.customerId } : {}),
           ...(filter.projectId ? { projectId: filter.projectId } : {}),
           ...(filter.currency ? { currency: filter.currency } : {}),
@@ -777,32 +781,26 @@ export class PrismaLedgerStore implements LedgerStore {
       return toPage(rows, page);
     },
     countOutstandingByProject: async (organizationId, projectId) => {
-      const rows = await this.prisma.receivable.findMany({ where: { organizationId, projectId, status: 'OPEN' }, select: { grossMinor: true, paidMinor: true, creditedMinor: true } });
+      const rows = await this.prisma.receivable.findMany({ where: { organizationId, projectId, status: 'OPEN', deletedAt: null }, select: { grossMinor: true, paidMinor: true, creditedMinor: true } });
       return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n).length;
+    },
+    // MUT-65: "Owed", written directly, not through an Agreement/Installment.
+    createAdjustment: (input: CreateAdjustmentReceivableInput, at) => this.prisma.$transaction((tx) => createAdjustmentTx(tx, input, at)),
+    // The money guard is re-asserted in the WHERE, not trusted from the caller's earlier read: a settle
+    // landing in between would otherwise hide a row a POSTED payment is allocated to. Same shape as
+    // payments.reverse re-asserting `status: 'POSTED'`. A refusal shows up as a row that comes back undeleted.
+    softDeleteAdjustment: async (organizationId, id, at) => {
+      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
+      return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
   };
 
   readonly payments: PaymentRepository = {
+    // The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once.
     create: async (input, at) => {
-      const customer = await this.prisma.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
-      if (!customer) throw new ForeignKeyViolation('payments.customerId');
-      const { allocations: requested, ...rest } = input;
-      const year = Number(input.receivedOn.slice(0, 4));
-      // The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once.
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return await this.prisma.$transaction(async (tx) => {
-            const counter = await tx.paymentCounter.upsert({
-              where: { organizationId_year: { organizationId: input.organizationId, year } },
-              create: { organizationId: input.organizationId, year, next: 1 },
-              update: { next: { increment: 1 } },
-            });
-            const number = `PAY-${year}-${String(counter.next).padStart(4, '0')}`;
-            const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
-            const allocations = await applyAllocations(tx, payment, requested, at);
-            const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
-            return { payment: fresh, allocations };
-          });
+          return await this.prisma.$transaction((tx) => createPaymentTx(tx, input, at));
         } catch (err) {
           if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
           throw err;
@@ -817,7 +815,8 @@ export class PrismaLedgerStore implements LedgerStore {
           ...(filter.customerId ? { customerId: filter.customerId } : {}),
           ...(filter.status ? { status: filter.status } : {}),
           ...(filter.receivedBefore || filter.receivedAfter ? { receivedOn: { ...(filter.receivedBefore ? { lte: filter.receivedBefore } : {}), ...(filter.receivedAfter ? { gte: filter.receivedAfter } : {}) } } : {}),
-          ...(filter.projectId ? { allocations: { some: { receivable: { projectId: filter.projectId } } } } : {}),
+          // MUT-65: a payment whose own projectId names it, OR one with at least one allocation on it (Malafat-fed payments never populate the column).
+          ...(filter.projectId ? { OR: [{ projectId: filter.projectId }, { allocations: { some: { receivable: { projectId: filter.projectId } } } }] } : {}),
           ...cursorWhere(page),
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -1000,6 +999,72 @@ async function settleReceivable(tx: Tx, receivableId: string, data: Prisma.Recei
   const r = await tx.receivable.findUniqueOrThrow({ where: { id: receivableId } });
   const status = r.grossMinor - r.paidMinor - r.creditedMinor > 0n ? 'OPEN' : 'SETTLED';
   return tx.receivable.update({ where: { id: receivableId }, data: { status, version: { increment: 1 } } });
+}
+
+/**
+ * Payment + allocations + receivable sums/status + number, inside the
+ * caller's transaction (the `settleReceivable(tx, ...)` idiom). The public
+ * `payments.create` wraps this in its own `$transaction` with the year-counter
+ * retry; MUT-66 composes this directly inside its own transaction alongside
+ * other writes (e.g. deleting an inbox row), so "file" is atomic.
+ */
+async function createPaymentTx(tx: Tx, input: CreatePaymentInput, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
+  if (input.customerId) {
+    const customer = await tx.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
+    if (!customer) throw new ForeignKeyViolation('payments.customerId');
+  }
+  if (input.projectId) {
+    const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: input.organizationId }, select: { id: true } });
+    if (!project) throw new ForeignKeyViolation('payments.projectId');
+  }
+  const { allocations: requested, ...rest } = input;
+  const year = Number(input.receivedOn.slice(0, 4));
+  const counter = await tx.paymentCounter.upsert({
+    where: { organizationId_year: { organizationId: input.organizationId, year } },
+    create: { organizationId: input.organizationId, year, next: 1 },
+    update: { next: { increment: 1 } },
+  });
+  const number = `PAY-${year}-${String(counter.next).padStart(4, '0')}`;
+  const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
+  const allocations = await applyAllocations(tx, payment, requested, at);
+  const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+  return { payment: fresh, allocations };
+}
+
+/**
+ * "Owed", inside the caller's transaction (same idiom as `createPaymentTx`
+ * above). The public `receivables.createAdjustment` wraps this in its own
+ * `$transaction`; MUT-66 composes it directly inside its own.
+ */
+async function createAdjustmentTx(tx: Tx, input: CreateAdjustmentReceivableInput, at: Date): Promise<ReceivableRecord> {
+  const customer = await tx.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
+  if (!customer) throw new ForeignKeyViolation('receivables.customerId');
+  if (input.projectId) {
+    const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: input.organizationId }, select: { id: true } });
+    if (!project) throw new ForeignKeyViolation('receivables.projectId');
+  }
+  return tx.receivable.create({
+    data: {
+      organizationId: input.organizationId,
+      customerId: input.customerId,
+      projectId: input.projectId,
+      agreementId: null,
+      origin: 'ADJUSTMENT',
+      originId: null,
+      currency: input.currency,
+      netMinor: input.netMinor,
+      vatMinor: input.vatMinor,
+      grossMinor: input.grossMinor,
+      vatTreatment: input.vatTreatment,
+      vatRateBasisPoints: input.vatRateBasisPoints,
+      dueDate: input.dueDate,
+      postingDate: input.postingDate,
+      postedAt: input.postedAt,
+      title: input.title,
+      createdByUserId: input.createdByUserId,
+      createdAt: at,
+    },
+  });
 }
 
 /** Allocation rows + receivable sums + payment allocated total, all inside the caller's transaction; capacity checked under row locks. */
