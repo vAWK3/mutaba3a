@@ -26,7 +26,7 @@ import * as useQueries from '../../../hooks/useQueries';
 import { formatDate } from '../../../lib/utils';
 import { combineOwed } from '../../../db/aggregations';
 import { owedEntriesSearch } from '../../../lib/incomeSearch';
-import { useProfileStore } from '../../../lib/profileStore';
+import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 import * as crossProfileStats from '../../../db/crossProfileStats';
 import type { ClientsSearch } from '../../../components/clients/clientsSearch';
 import type { BusinessProfile, ClientSummary, OwedBucket, OwedBusinessBuckets } from '../../../types';
@@ -593,7 +593,8 @@ describe('ClientsPage', () => {
       vi.spyOn(crossProfileStats, 'getCrossProfileClientStats').mockResolvedValue(
         new Map([['acme', [{ profileId: 'p2', profileName: 'Teaching', txCount: 3, totalMinor: 100 }]]])
       );
-      useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: true, onOwedScreen: true });
+      useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: true });
+      useOwedScreenStore.setState({ onOwedScreen: true });
       mockSummaries(
         [{ ...acme, profileIds: ['p1', 'p2'] }, { ...beta, profileIds: ['p2'] }, { ...gamma, profileIds: ['p1'] }],
         false,
@@ -608,7 +609,8 @@ describe('ClientsPage', () => {
     });
 
     afterEach(() => {
-      useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false });
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+      useOwedScreenStore.setState({ onOwedScreen: false });
     });
 
     function combineBuckets(...buckets: OwedBucket[]): OwedBucket {

@@ -562,6 +562,10 @@ export function IncomeDrawer() {
           {errorText('amount') && <p className="form-error">{errorText('amount')}</p>}
         </div>
 
+        {/* Asked before the client: a client created here is filed in the
+            business chosen, never the default one (MUT-89 review) */}
+        {profileInFastPath && profileField}
+
         <div className="form-group">
           <label className="form-label">
             {t('drawer.transaction.client')}
@@ -581,8 +585,6 @@ export function IncomeDrawer() {
           />
           {errorText('clientDraft') && <p className="form-error">{errorText('clientDraft')}</p>}
         </div>
-
-        {profileInFastPath && profileField}
 
         <button
           type="button"

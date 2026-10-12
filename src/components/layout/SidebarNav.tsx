@@ -158,14 +158,16 @@ export function SidebarNav() {
     event: React.MouseEvent<HTMLElement>,
   ) => {
     newMenu.close();
+    // A business picker, if one opens, gives focus back to the New button (MUT-89)
+    const returnFocus = newMenu.buttonProps.ref.current;
     switch (action) {
       case "income":
-        // Use profile-aware action - will show picker if in "All Profiles" mode
-        incomeAction.trigger(event);
+        // Profile-aware: shows the business picker under All businesses
+        incomeAction.trigger(event, returnFocus);
         break;
       case "expense":
-        // Use profile-aware action - will show picker if in "All Profiles" mode
-        expenseAction.trigger(event);
+        // Profile-aware: shows the business picker under All businesses
+        expenseAction.trigger(event, returnFocus);
         break;
       case "client":
         openClientDrawer({ mode: "create" });

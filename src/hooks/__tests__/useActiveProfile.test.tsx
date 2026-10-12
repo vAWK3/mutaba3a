@@ -10,6 +10,7 @@ import type { BusinessProfile } from '../../types';
 // Mock the profile store
 vi.mock('../../lib/profileStore', () => ({
   useProfileStore: vi.fn(),
+  useOwedScreenStore: vi.fn(),
 }));
 
 // Mock useQueries hooks
@@ -58,14 +59,17 @@ const store = {
 };
 
 /** The store as the hook reads it: the working business, the lens and the screen (MUT-89) */
-function mockStore(state: { activeProfileId?: string; allBusinesses?: boolean; onOwedScreen?: boolean } = {}) {
+function mockStore({ onOwedScreen = false, ...state }: { activeProfileId?: string; allBusinesses?: boolean; onOwedScreen?: boolean } = {}) {
   (profileStore.useProfileStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     activeProfileId: '',
     allBusinesses: false,
-    onOwedScreen: false,
     ...state,
     ...store,
   });
+  // The route flag has its own unsaved store, read through a selector
+  (profileStore.useOwedScreenStore as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (select: (s: { onOwedScreen: boolean }) => unknown) => select({ onOwedScreen })
+  );
 }
 
 function mockProfiles(profiles: BusinessProfile[], options: { loading?: boolean; defaultProfile?: BusinessProfile } = {}) {

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { useProfileStore } from '../profileStore';
+import { useProfileStore, useOwedScreenStore } from '../profileStore';
 
 /**
  * The profile store (MUT-89, ADR-051): a working business (always a concrete
@@ -16,14 +16,14 @@ describe('profileStore', () => {
   beforeEach(() => {
     act(() => {
       state().reset();
-      state().setOnOwedScreen(false);
+      useOwedScreenStore.getState().setOnOwedScreen(false);
     });
   });
 
   it('starts with no working business, the lens off and no owed screen', () => {
     expect(state().activeProfileId).toBe('');
     expect(state().allBusinesses).toBe(false);
-    expect(state().onOwedScreen).toBe(false);
+    expect(useOwedScreenStore.getState().onOwedScreen).toBe(false);
   });
 
   describe('setActiveProfile: picking a business', () => {
@@ -78,14 +78,22 @@ describe('profileStore', () => {
       expect(options().version).toBe(1);
     });
 
-    it('keeps the working business and the lens, never the screen flag', () => {
+    it('keeps the working business and the lens', () => {
       act(() => {
         state().setActiveProfile('profile-1');
         state().setAllBusinesses(true);
-        state().setOnOwedScreen(true);
       });
       const persisted = options().partialize!(state());
       expect(persisted).toEqual({ activeProfileId: 'profile-1', allBusinesses: true });
+    });
+
+    it('never rewrites the saved choice when only the screen changes, so another tab keeps its own (review D2)', () => {
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      act(() => useOwedScreenStore.getState().setOnOwedScreen(true));
+      act(() => useOwedScreenStore.getState().setOnOwedScreen(false));
+
+      expect(setItem).not.toHaveBeenCalledWith('mutaba3a-active-profile', expect.anything());
+      setItem.mockRestore();
     });
 
     it('migrates a stored legacy "all" to the lens on, with the working business left to resolve', () => {

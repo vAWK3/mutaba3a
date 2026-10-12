@@ -11,8 +11,10 @@ import { persist } from 'zustand/middleware';
  *   Clients works in it.
  * - `allBusinesses`: the user chose All businesses for Home and Clients. It
  *   sticks while other screens use the working business (O1).
- * - `onOwedScreen`: the route is Home or Clients. Synced from the router by
- *   AppShell (`useOwedScreenSync`) and never persisted.
+ * - The route being Home or Clients lives in its own unsaved store,
+ *   `useOwedScreenStore` below: a persisted store writes localStorage on
+ *   every change, so keeping it here would rewrite the saved choice on each
+ *   navigation and overwrite one made in another tab (MUT-89 review).
  *
  * Three setters touch the working business, and only one turns the lens off:
  * - `setActiveProfile(id)`: the user picks a business. The lens turns off.
@@ -28,9 +30,6 @@ interface ProfileState {
   /** Whether the user chose "All businesses" for Home and Clients */
   allBusinesses: boolean;
 
-  /** Whether the current route is Home or Clients (not persisted) */
-  onOwedScreen: boolean;
-
   /** The user picks a business: it becomes the working one and All businesses turns off */
   setActiveProfile: (id: string) => void;
 
@@ -39,9 +38,6 @@ interface ProfileState {
 
   /** Turn All businesses on or off */
   setAllBusinesses: (on: boolean) => void;
-
-  /** Set by the router sync in AppShell */
-  setOnOwedScreen: (on: boolean) => void;
 
   /** Back to no working business and All businesses off */
   reset: () => void;
@@ -78,15 +74,12 @@ export const useProfileStore = create<ProfileState>()(
     (set) => ({
       activeProfileId: '',
       allBusinesses: false,
-      onOwedScreen: false,
 
       setActiveProfile: (id) => set({ activeProfileId: id, allBusinesses: false }),
 
       setWorkingProfile: (id) => set({ activeProfileId: id }),
 
       setAllBusinesses: (on) => set({ allBusinesses: on }),
-
-      setOnOwedScreen: (on) => set({ onOwedScreen: on }),
 
       reset: () => set({ activeProfileId: '', allBusinesses: false }),
     }),
@@ -101,3 +94,21 @@ export const useProfileStore = create<ProfileState>()(
     }
   )
 );
+
+interface OwedScreenState {
+  /** Whether the current route is Home or Clients */
+  onOwedScreen: boolean;
+
+  /** Set by the router sync in AppShell (`useOwedScreenSync`) */
+  setOnOwedScreen: (on: boolean) => void;
+}
+
+/**
+ * Whether the route is an owed screen (Home or Clients, MUT-89): derived from
+ * the route, never saved.
+ */
+export const useOwedScreenStore = create<OwedScreenState>()((set) => ({
+  onOwedScreen: false,
+  setOnOwedScreen: (on) => set({ onOwedScreen: on }),
+}));
+

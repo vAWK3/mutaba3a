@@ -106,18 +106,20 @@ function AddMenu() {
 
   const handleAction = (action: AddMenuAction, event: React.MouseEvent<HTMLElement>) => {
     menu.close();
+    // A business picker, if one opens, gives focus back to the Add button (MUT-89)
+    const returnFocus = menu.buttonProps.ref.current;
     switch (action) {
       case 'income':
-        incomeAction.trigger(event);
+        incomeAction.trigger(event, returnFocus);
         break;
       case 'expense':
-        expenseAction.trigger(event);
+        expenseAction.trigger(event, returnFocus);
         break;
       case 'client':
-        clientAction.trigger(event);
+        clientAction.trigger(event, returnFocus);
         break;
       case 'project':
-        projectAction.trigger(event);
+        projectAction.trigger(event, returnFocus);
         break;
     }
   };

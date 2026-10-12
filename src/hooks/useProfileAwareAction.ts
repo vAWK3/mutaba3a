@@ -33,8 +33,12 @@ interface UseProfileAwareActionOptions {
 }
 
 interface ProfileQuickPickerProps {
-  /** Element to anchor the popover to (null when closed) */
+  /** The item that asked (null when closed). It may leave the page right after: its menu closes */
   anchor: HTMLElement | null;
+  /** Where that item was when the picker opened: the picker is placed from this (MUT-89) */
+  anchorRect?: DOMRect;
+  /** Where focus goes back when the picker is dismissed: the menu's own button (MUT-89) */
+  returnFocus?: HTMLElement | null;
   /** Available profiles to choose from */
   profiles: BusinessProfile[];
   /** Called when user selects a profile */
@@ -46,9 +50,10 @@ interface ProfileQuickPickerProps {
 interface UseProfileAwareActionReturn {
   /**
    * Call this to initiate the action.
-   * Pass the event to anchor the picker if needed.
+   * Pass the event to anchor the picker if needed, and the element focus
+   * should return to if it is dismissed (the menu button whose item asked).
    */
-  trigger: (event: React.MouseEvent<HTMLElement>) => void;
+  trigger: (event: React.MouseEvent<HTMLElement>, returnFocus?: HTMLElement | null) => void;
   /** Props to spread to ProfileQuickPicker */
   pickerProps: ProfileQuickPickerProps;
   /** Whether the picker is currently open */
@@ -59,10 +64,16 @@ export function useProfileAwareAction(
   options: UseProfileAwareActionOptions
 ): UseProfileAwareActionReturn {
   const { isAllProfiles, activeProfileId, profiles } = useActiveProfile();
-  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
+  // The asking item, where it was, and where focus returns: captured at once,
+  // because the item's menu closes (and unmounts it) right after (MUT-89)
+  const [picker, setPicker] = useState<{
+    anchor: HTMLElement;
+    anchorRect: DOMRect;
+    returnFocus: HTMLElement | null;
+  } | null>(null);
 
   const trigger = useCallback(
-    (event: React.MouseEvent<HTMLElement>) => {
+    (event: React.MouseEvent<HTMLElement>, returnFocus: HTMLElement | null = null) => {
       if (profiles.length === 0) {
         // No profiles at all - shouldn't happen in normal use
         console.warn('useProfileAwareAction: No profiles available');
@@ -76,8 +87,9 @@ export function useProfileAwareAction(
         // Specific profile selected: execute with that profile
         options.onExecute(activeProfileId);
       } else {
-        // "All Profiles" mode: show picker anchored to click target
-        setPickerAnchor(event.currentTarget);
+        // All businesses: ask which business, next to the item that asked
+        const anchor = event.currentTarget;
+        setPicker({ anchor, anchorRect: anchor.getBoundingClientRect(), returnFocus });
       }
     },
     [profiles, isAllProfiles, activeProfileId, options]
@@ -85,30 +97,32 @@ export function useProfileAwareAction(
 
   const handleSelect = useCallback(
     (profile: BusinessProfile) => {
-      setPickerAnchor(null);
+      setPicker(null);
       options.onExecute(profile.id);
     },
     [options]
   );
 
   const handleClose = useCallback(() => {
-    setPickerAnchor(null);
+    setPicker(null);
   }, []);
 
   const pickerProps = useMemo<ProfileQuickPickerProps>(
     () => ({
-      anchor: pickerAnchor,
+      anchor: picker?.anchor ?? null,
+      anchorRect: picker?.anchorRect,
+      returnFocus: picker?.returnFocus,
       profiles,
       onSelect: handleSelect,
       onClose: handleClose,
     }),
-    [pickerAnchor, profiles, handleSelect, handleClose]
+    [picker, profiles, handleSelect, handleClose]
   );
 
   return {
     trigger,
     pickerProps,
-    isPickerOpen: pickerAnchor !== null,
+    isPickerOpen: picker !== null,
   };
 }
 

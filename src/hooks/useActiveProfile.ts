@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useMatches } from '@tanstack/react-router';
-import { useProfileStore } from '../lib/profileStore';
+import { useProfileStore, useOwedScreenStore } from '../lib/profileStore';
 import { useBusinessProfiles, useDefaultBusinessProfile } from './useQueries';
 import type { BusinessProfile, ProfileScope } from '../types';
 
@@ -58,11 +58,11 @@ export function useActiveProfile(): UseActiveProfileReturn {
   const {
     activeProfileId: storedId,
     allBusinesses,
-    onOwedScreen,
     setActiveProfile,
     setWorkingProfile,
     setAllBusinesses,
   } = useProfileStore();
+  const onOwedScreen = useOwedScreenStore((s) => s.onOwedScreen);
   const { data: profiles = [], isLoading: profilesLoading } = useBusinessProfiles();
   const { data: defaultProfile, isLoading: defaultLoading } = useDefaultBusinessProfile();
 
@@ -173,7 +173,7 @@ export function useOwedLens(): UseOwedLensReturn {
  */
 export function useOwedScreenSync(): void {
   const onOwedScreen = useMatches({ select: (matches) => matches.some((m) => m.staticData?.owedLens === true) });
-  const setOnOwedScreen = useProfileStore((s) => s.setOnOwedScreen);
+  const setOnOwedScreen = useOwedScreenStore((s) => s.setOnOwedScreen);
 
   useLayoutEffect(() => {
     setOnOwedScreen(onOwedScreen);

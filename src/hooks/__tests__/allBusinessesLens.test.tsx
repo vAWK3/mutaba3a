@@ -13,7 +13,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { db } from '../../db/database';
-import { useProfileStore } from '../../lib/profileStore';
+import { useProfileStore, useOwedScreenStore } from '../../lib/profileStore';
 import { useOwedScreenSync, useOwedLens, useProfileFilter, useActiveProfile } from '../useActiveProfile';
 import type { BusinessProfile } from '../../types';
 
@@ -126,6 +126,6 @@ describe('All businesses across routes (MUT-89)', () => {
   it('a client opened under the Clients layout is still an owed screen', async () => {
     renderAt('/clients/acme');
     await screen.findByText('client page');
-    await waitFor(() => expect(useProfileStore.getState().onOwedScreen).toBe(true));
+    await waitFor(() => expect(useOwedScreenStore.getState().onOwedScreen).toBe(true));
   });
 });

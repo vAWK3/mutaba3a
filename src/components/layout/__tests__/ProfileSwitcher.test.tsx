@@ -11,7 +11,7 @@ import { render, screen, fireEvent, within, cleanup } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProfileSwitcher } from '../ProfileSwitcher';
 import * as useQueries from '../../../hooks/useQueries';
-import { useProfileStore } from '../../../lib/profileStore';
+import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 import type { BusinessProfile } from '../../../types';
 
 vi.mock('@tanstack/react-router', () => ({
@@ -63,13 +63,15 @@ const optionNames = (listbox: HTMLElement) => within(listbox).getAllByRole('opti
 describe('ProfileSwitcher: All businesses (MUT-89)', () => {
   beforeEach(() => {
     mockBusinesses([studio, teaching]);
-    useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: false, onOwedScreen: true });
+    useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: false });
+    useOwedScreenStore.setState({ onOwedScreen: true });
   });
 
   afterEach(() => {
     // Unmount before the store and the spies change under a mounted switcher
     cleanup();
-    useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false });
+    useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+    useOwedScreenStore.setState({ onOwedScreen: false });
     vi.restoreAllMocks();
   });
 
@@ -85,7 +87,7 @@ describe('ProfileSwitcher: All businesses (MUT-89)', () => {
   });
 
   it('does not list it away from Home and Clients (O2)', () => {
-    useProfileStore.setState({ onOwedScreen: false });
+    useOwedScreenStore.setState({ onOwedScreen: false });
     renderSwitcher();
     expect(optionNames(openSwitcher())).toEqual(['SStudio', 'TTeaching']);
   });
@@ -111,7 +113,8 @@ describe('ProfileSwitcher: All businesses (MUT-89)', () => {
   });
 
   it('shows the working business away from Home and Clients, even with All chosen (O1)', () => {
-    useProfileStore.setState({ allBusinesses: true, onOwedScreen: false });
+    useProfileStore.setState({ allBusinesses: true });
+    useOwedScreenStore.setState({ onOwedScreen: false });
     renderSwitcher();
     expect(switcherButton()).toHaveTextContent('Studio');
     expect(switcherButton()).not.toHaveTextContent('All businesses');

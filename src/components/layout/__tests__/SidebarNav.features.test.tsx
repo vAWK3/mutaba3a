@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS } from '../../../db/defaultSettings';
 import type { Settings } from '../../../types';
 import { ThemeProvider } from '../../../lib/theme';
 import { SidebarNav } from '../SidebarNav';
-import { useProfileStore } from '../../../lib/profileStore';
+import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 
 let mockPathname = '/';
 const mockNavigate = vi.hoisted(() => vi.fn());
@@ -426,7 +426,10 @@ describe('SidebarNav + New menu (MUT-15)', () => {
 
 describe('SidebarNav New menu under All businesses (MUT-89)', () => {
   afterEach(() => {
-    act(() => useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false }));
+    act(() => {
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+      useOwedScreenStore.setState({ onOwedScreen: false });
+    });
     mockNavigate.mockClear();
   });
 

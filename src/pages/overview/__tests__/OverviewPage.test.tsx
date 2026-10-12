@@ -16,7 +16,7 @@ import { OverviewPage } from '../OverviewPage';
 import * as useQueries from '../../../hooks/useQueries';
 import * as useIncomeQueries from '../../../hooks/useIncomeQueries';
 import { formatDate } from '../../../lib/utils';
-import { useProfileStore } from '../../../lib/profileStore';
+import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 import type { BusinessProfile, RecentPaymentRow, TransactionDisplay } from '../../../types';
 
 const mockNavigate = vi.fn();
@@ -356,7 +356,8 @@ describe('OverviewPage (Home)', () => {
     });
 
     afterEach(() => {
-      useProfileStore.setState({ activeProfileId: '', allBusinesses: false, onOwedScreen: false });
+      useProfileStore.setState({ activeProfileId: '', allBusinesses: false });
+      useOwedScreenStore.setState({ onOwedScreen: false });
     });
 
     it('reads every business, with one receivables query for Owed now and Needs attention (ADR-055)', () => {
@@ -404,7 +405,8 @@ describe('OverviewPage (Home)', () => {
       vi.spyOn(useQueries, 'useDefaultBusinessProfile').mockReturnValue({ data: studio, isLoading: false } as unknown as ReturnType<
         typeof useQueries.useDefaultBusinessProfile
       >);
-      useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: true, onOwedScreen: false });
+      useProfileStore.setState({ activeProfileId: 'p1', allBusinesses: true });
+      useOwedScreenStore.setState({ onOwedScreen: false });
 
       renderPage();
 

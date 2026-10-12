@@ -20,6 +20,8 @@ const EDGE_MARGIN = 8;
  */
 export function ProfileQuickPicker({
   anchor,
+  anchorRect,
+  returnFocus,
   profiles,
   onSelect,
   onClose,
@@ -43,10 +45,12 @@ export function ProfileQuickPicker({
       }
     }
 
+    // Focus goes back to the menu button: the item that asked has usually
+    // left the page with its menu (MUT-89)
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         onClose();
-        currentAnchor.focus();
+        (returnFocus ?? (currentAnchor.isConnected ? currentAnchor : null))?.focus();
       }
     }
 
@@ -61,27 +65,30 @@ export function ProfileQuickPicker({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [anchor, onClose]);
+  }, [anchor, returnFocus, onClose]);
 
   // Before paint: keep the picker inside the window. The top bar's Add menu
   // sits at the inline end, where a picker aligned to its item would run past
   // the edge (MUT-89, the first time this picker can open)
+  // Focus moves into the picker, so a keyboard user lands on the choice
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     if (!anchor || !popover) return;
     const dx = nudgeInside(popover.getBoundingClientRect(), { left: 0, right: window.innerWidth }, EDGE_MARGIN);
     popover.style.translate = dx === 0 ? '' : `${dx}px 0`;
+    popover.querySelector<HTMLElement>('[role="option"]')?.focus();
   }, [anchor]);
 
-  // Position popover near anchor
+  // Placed from where the item was when the picker opened: the item itself
+  // has usually left the page, and measuring it again would give zeros
   const getPosition = useCallback(() => {
-    if (!anchor) return { top: 0, left: 0 };
-    const rect = anchor.getBoundingClientRect();
+    const rect = anchorRect ?? anchor?.getBoundingClientRect();
+    if (!rect) return { top: 0, left: 0 };
     return {
       top: rect.bottom + 4,
       left: rect.left,
     };
-  }, [anchor]);
+  }, [anchor, anchorRect]);
 
   if (!anchor) return null;
 
