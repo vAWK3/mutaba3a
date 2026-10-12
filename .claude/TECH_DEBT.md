@@ -95,6 +95,7 @@
 **Priority**: Low
 **Impact**: Since ADR-049, each business's Clients list counts only that business's entries. The client profile page (`/clients/:id`) still adds up the client's entries in every business: Owed now, Work and billing, Payments. For a client shared across businesses, a row can say $700 while the profile says $1,500. The owner accepted this trade-off for parity with Home. The row's cross-profile badges ("N entries" per other business) hint at it, but nothing on the profile says which business each figure belongs to.
 **Remediation**: With MUT-89 ("All businesses" lens, business tags on rows), give the profile page the same business context: tag each entry and payment with its business, or show Owed now per business when the client has entries in more than one. Don't scope the profile to one business without an owner decision: it is the one place that shows everything a client owes.
+**Update 2026-10-12 (MUT-89, ADR-051)**: the owner deferred profile-page tags (O6). With All businesses on, a shared client's row now counts every business, so it equals the profile page; the gap remains only in the single-business view.
 **Effort**: Medium
 
 ### TD-069: Expenses Needs attention only looks back 90 days

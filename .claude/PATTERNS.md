@@ -1926,3 +1926,24 @@ When an action removes the element that will hold focus (the drawer returns focu
 
 ### A card that gets narrow reflows by container query
 A list inside a card that is narrow on a phone and also in a two-column layout on a small window (Home's cards) reflows with `container-type: inline-size` on the card and `@container (max-width: …)`, not a viewport media query. For a table, switch `table`/`tbody` to `display: block` and each `tr` to a grid, move the borders from cells to rows, and give the action cell `grid-column: 1 / -1`.
+
+---
+
+## App patterns added by MUT-89 (2026-10-12)
+
+### A view that applies to some routes only: tag the routes, sync one flag, keep data off it
+When a mode belongs to a few screens ("All businesses" on Home and Clients):
+1. Tag those routes with TanStack Router's `staticData` (typed by augmenting `StaticDataRouteOption`). A layout route's tag covers its children.
+2. One hook in AppShell reads `useMatches()` and writes a store flag in a layout effect, so the chrome (switcher, top bar, drawers) never paints a stale state.
+3. Hooks and drawers read the store, not the router, so they stay testable without one.
+4. **The tagged screens' own data must not wait for the flag:** it is set after the first render, and waiting would double-read and flash. They know what they are, so give them their own hook (`useOwedLens`).
+
+### A query that waits is pending, not loading
+In TanStack Query 5, `isLoading` is `isPending && isFetching`, so a query with `enabled: false` reports `isLoading: false`. A page that decides an empty or new-user state from `isLoading` will flash it while the query waits. Decide on `isPending`, or on the value the query waits for (`scope === undefined`).
+
+### A blank id must not mean "everything" while it loads: gate at the root
+Repository reads treat a falsy business as "every record". Rather than guarding each page, `BusinessesGate` in AppShell mounts the routed page only once the businesses have loaded, the way AppShell already holds it while the visitor sample is prepared. New pages inherit the guard.
+
+### Pick and repair are different setters
+When a store value can change because the user chose it or because the app repaired it (a deleted working business), give each its own setter. `setActiveProfile` (a pick) turns All businesses off; `setWorkingProfile` (a repair or a drill-down) keeps it. A background fix must never undo a choice the user made.
+

@@ -28,6 +28,58 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — "All businesses" on Home and Clients (MUT-89)
+
+**Why:** the pitch is "who owes me across my businesses", but the app showed one business at a time. An All Profiles mode was switched off in April (`70b5093`) with no ADR. Decision S2 of the Apple-design brief (epic MUT-74) brings it back for the owed screens only. The owner approved O1–O7 and eng review D1–D8. ADR-051. Brief `.claude/designs/mut-89-all-businesses-lens.md`; test plan `.claude/designs/mut-89-all-businesses-lens-tests.md`.
+
+**Run on this branch (Node 22):**
+- `npx vitest run`: 219 files, 3,218 passed, 4 skipped;
+- `npm run typecheck` clean, and `npx tsc -b` clean;
+- `npm run lint`: 0 errors (12 warnings, all pre-existing, in files and rules this ticket did not touch);
+- `npm run test:bundles` passed;
+- a browser check on the preview (sample data, three businesses, see TEST_PLAN).
+
+### Added
+- **"All businesses" in the switcher**, first, on Home and Clients only, with two or more businesses (AC1, O2). Picking it turns the lens on; picking a business works in it and turns it off. It sticks for Home and Clients while other screens use the working business (O1). The top bar says "All businesses" while it is on.
+- **Home in All:** Owed now per currency across every business, never summed. Needs attention and Recent payments rows carry their business tag.
+- **Clients in All:**
+  - every live business's clients, each row tagged with the businesses its entries are in (a shared client shows each);
+  - "No client" and "Archived clients" come one row per business (O4), and a click opens Income in that business with All kept on.
+- **`BusinessTags`** (`ProfileBadge.tsx`): one colour-and-name tag per business, the name in `<bdi>`, the full name as a title.
+- **AppShell `BusinessesGate`:** pages mount once the businesses have loaded, so no page reads with a blank business (D8).
+
+### Changed
+- **`profileStore` v1:** working business + `allBusinesses` + unpersisted `onOwedScreen`; the setters `setActiveProfile` (pick, lens off), `setWorkingProfile` (repair, lens kept) and `setAllBusinesses`. A legacy `'all'` migrates to the lens on.
+- **`useActiveProfile`:**
+  - `activeProfileId` is always concrete;
+  - `isAllProfiles` and `showAllProfilesOption` are real again (lens + owed screen + 2 or more businesses);
+  - `setAllBusinesses` is new;
+  - the auto-correct repairs without turning the lens off (D5).
+- **New `useOwedLens()`** (Home and Clients) and **`useOwedScreenSync()`** (called in AppShell). The `/` and `/clients` routes carry `staticData.owedLens`.
+- **`ProfileScope`** (one id or a list) on `transactionRepo.list`, `clientRepo.list`, `paymentRecordRepo.listRecent` and `clientSummaryRepo.listOwedIndex`, and their hooks, which also take an `enabled` gate. A list never matches an unassigned record (O3).
+- **`listOwedIndex`** adds `profileIds` per row and `byProfile` for a list. `RecentPaymentRow` carries `profileId`.
+- **Home's new-user check** waits on a resolved scope and `isPending` (D2). The Clients spinner uses `isPending`.
+- **The `'all'` sentinel is gone** from `ActiveProfileId` and from the checks in `IncomeDrawer`, `useProfileAwareAction` and `PlanningPage` (D6).
+- "All Profiles" now reads "All businesses" / "كل الأعمال".
+
+### Fixed
+- **The Add menus' business picker** (`ProfileQuickPicker`), which could not open before this ticket, ran about 21 px past the window's inline end from the top bar. It now nudges itself inside with `nudgeInside`.
+
+### Files
+- **Changed source:**
+  - routing and shell: `src/router.tsx`, `src/components/layout/{AppShell,ProfileSwitcher,TopBar}.tsx`;
+  - state: `src/lib/profileStore.ts`, `src/hooks/{useActiveProfile,useQueries,useIncomeQueries,useProfileAwareAction}.ts`;
+  - data: `src/db/{baseQuery,repository,interfaces}.ts`, `src/types/index.ts`;
+  - Home: `src/pages/overview/OverviewPage.tsx`, `src/components/home/{HomeNeedsAttention,HomeAttentionRow,HomeRecentPayments}.tsx`;
+  - Clients: `src/pages/clients/ClientsPage.tsx`, `src/components/clients/clientIndexRows.ts`;
+  - shared UI: `src/components/ui/{ProfileBadge.tsx,ProfileBadge.css,ProfileQuickPicker.tsx}`, `src/components/drawers/IncomeDrawer.tsx`, `src/pages/planning/PlanningPage.tsx`;
+  - styles and strings: `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`.
+- **New tests:** `src/__tests__/router.owedLens.test.ts`, `src/hooks/__tests__/allBusinessesLens.test.tsx`, `src/components/layout/__tests__/{AppShell.gate,ProfileSwitcher,TopBar.profileIndicator}.test.tsx`, `src/components/ui/__tests__/ProfileQuickPicker.test.tsx`.
+- **Changed tests:** `profileStore`, `useActiveProfile`, `baseQuery`, `clientOwedIndex`, `paymentRecords`, `clientIndexRows`, `ProfileBadge`, `OverviewPage`, `HomeNeedsAttention`, `ClientsPage`, `IncomeDrawer`.
+- **Knowledge:** ADR-051, COMPONENT_REGISTRY, PATTERNS, SYSTEM_OVERVIEW, TECH_DEBT (TD-065 note), TEST_PLAN.
+
+---
+
 ## [Unreleased] - 2026-10-12 — Combined check after the parallel lanes (MUT-62, MUT-73, MUT-82, MUT-84)
 
 **Why:** at the owner's request, MUT-62, MUT-73, MUT-82 and MUT-84 landed on main without running lint, typecheck or tests. Everything ran once on the combined tree (main `ff6225e`), in a separate worktree.
