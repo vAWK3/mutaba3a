@@ -72,8 +72,8 @@ Seven specialists, Red Team and an adversarial pass reviewed the branch; Codex w
   - the Client and Project drawers prefill the business the Add menu's picker returned (`defaultProfileId`);
   - the sidebar's New → Income/Expense makes the picked business the working one before opening its list.
 - **Fixed** (owner D2):
-  - the picker is placed from where its menu item was, focuses its first business, and gives focus back to the Add/New button on Escape (`trigger(event, returnFocus)`);
-  - the Income drawer asks for the business before the client;
+  - the picker is placed from where its menu item was, focuses its first business, moves with arrow keys/Home/End, closes when focus leaves it, and gives focus back to the Add/New button on Escape (`trigger(event, returnFocus)`);
+  - the Income drawer asks for the business before the client, and offers "Create new" client only once one is chosen (second pass: order alone didn't stop a new client landing in the default business);
   - the Home/Clients route flag moved to an unsaved `useOwedScreenStore`, so navigating never rewrites the saved choice or overwrites another tab's.
 - **Auto-fixed:**
   - Planning reads the resolved working business;

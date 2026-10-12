@@ -755,6 +755,7 @@
       "titlePlaceholder": "e.g. Logo redesign",
       "statusLabel": "Status",
       "moreDetails": "More details",
+      "chooseBusinessFirst": "Choose the business first to add a new client.",
       "lessDetails": "Fewer details",
       "paymentsRecordedHint": "Payments are recorded for this entry, so its status follows them. Manage payments from the client page.",
       "currencyLockedHint": "Payments are recorded in {currency}, so the currency can't change.",

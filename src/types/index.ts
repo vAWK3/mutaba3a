@@ -262,10 +262,6 @@ export interface OwedBucket {
   count: number;
 }
 
-/**
- * The clients index of one business (MUT-83, ADR-049): every figure comes
- * from the entries recorded in that business, the same set Home's Owed now sums.
- */
 /** A clients-index row: a client's summary and the businesses it is tagged with */
 export interface ClientOwedIndexRow extends ClientSummary {
   /**
@@ -276,6 +272,10 @@ export interface ClientOwedIndexRow extends ClientSummary {
   profileIds: string[];
 }
 
+/**
+ * The clients index of one business (MUT-83, ADR-049): every figure comes
+ * from the entries recorded in that business, the same set Home's Owed now sums.
+ */
 export interface ClientOwedIndex {
   /** The listed clients; every column counts only this business's entries */
   clients: ClientOwedIndexRow[];

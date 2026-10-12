@@ -200,6 +200,9 @@ export function IncomeDrawer() {
   const selectedStatus = watch('incomeStatus');
   const selectedClientId = watch('clientId');
   const watchedProfileId = watch('profileId');
+  // While the business is still asked for and unanswered, a new client can't
+  // be created: it would be filed in the default business (MUT-89 review)
+  const businessStillAsked = profileInFastPath && !watchedProfileId;
   const watchedCurrency = watch('currency');
   const watchedOccurredAt = watch('occurredAt');
   // Set when the user picks a currency; from then on a profile change leaves it alone.
@@ -562,8 +565,9 @@ export function IncomeDrawer() {
           {errorText('amount') && <p className="form-error">{errorText('amount')}</p>}
         </div>
 
-        {/* Asked before the client: a client created here is filed in the
-            business chosen, never the default one (MUT-89 review) */}
+        {/* Asked before the client. Until it is answered the client field
+            offers no "Create new", so a new client is filed in the business
+            chosen, never the default one (MUT-89 review) */}
         {profileInFastPath && profileField}
 
         <div className="form-group">
@@ -580,10 +584,12 @@ export function IncomeDrawer() {
                 onChange={field.onChange}
                 onPendingTextChange={handleClientDraft}
                 onCreatingChange={setClientCreating}
+                canCreate={!businessStillAsked}
               />
             )}
           />
           {errorText('clientDraft') && <p className="form-error">{errorText('clientDraft')}</p>}
+          {businessStillAsked && <p className="form-hint">{t('drawer.income.chooseBusinessFirst')}</p>}
         </div>
 
         <button

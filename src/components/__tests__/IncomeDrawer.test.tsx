@@ -567,6 +567,22 @@ describe('IncomeDrawer', () => {
       expect(businessSelect.compareDocumentPosition(clientInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    it('offers to create a new client only once a business is chosen, so it is filed there (review)', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      const clientInput = await screen.findByPlaceholderText(CLIENT_PLACEHOLDER);
+      await user.type(clientInput, 'Brand New Co');
+      expect(screen.queryByRole('option', { name: /Brand New Co/ })).not.toBeInTheDocument();
+      expect(screen.getByText('Choose the business first to add a new client.')).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText(/Business Profile/), secondProfileId);
+      await user.click(clientInput);
+      expect(await screen.findByRole('option', { name: /Brand New Co/ })).toBeInTheDocument();
+      expect(screen.queryByText('Choose the business first to add a new client.')).not.toBeInTheDocument();
+    });
+
     it('still asks for the business when opened from a client, whatever business the client is in', async () => {
       const client = await clientRepo.create({ name: 'Gamma School', profileId: secondProfileId });
       useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', defaultClientId: client.id } });

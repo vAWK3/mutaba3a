@@ -940,6 +940,7 @@
       "titlePlaceholder": "مثال: إعادة تصميم الشعار",
       "statusLabel": "الحالة",
       "moreDetails": "تفاصيل إضافية",
+      "chooseBusinessFirst": "اختر النشاط التجاري أولاً لإضافة عميل جديد.",
       "lessDetails": "تفاصيل أقل",
       "paymentsRecordedHint": "تم تسجيل دفعات لهذا البند، لذا تتبع حالته هذه الدفعات. أدِر الدفعات من صفحة العميل.",
       "currencyLockedHint": "تم تسجيل دفعات بعملة {currency}، لذا لا يمكن تغيير العملة.",

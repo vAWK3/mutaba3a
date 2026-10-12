@@ -98,3 +98,49 @@ describe('ProfileQuickPicker keyboard and anchoring (MUT-89)', () => {
   });
 });
 
+describe('ProfileQuickPicker keys and leaving (MUT-89 review)', () => {
+  const teaching: BusinessProfile = { id: 'p2', name: 'Teaching', createdAt: STAMP, updatedAt: STAMP };
+
+  function renderTwo() {
+    const onClose = vi.fn();
+    render(
+      <ProfileQuickPicker
+        anchor={document.createElement('button')}
+        anchorRect={rect(300, 120, 40)}
+        profiles={[studio, teaching]}
+        onSelect={() => {}}
+        onClose={onClose}
+      />
+    );
+    return { onClose, options: screen.getAllByRole('option') };
+  }
+
+  it('moves between businesses with the arrow keys, Home and End', () => {
+    const { options } = renderTwo();
+    expect(options[0]).toHaveFocus();
+
+    fireEvent.keyDown(options[0], { key: 'ArrowDown' });
+    expect(options[1]).toHaveFocus();
+    fireEvent.keyDown(options[1], { key: 'ArrowDown' });
+    expect(options[1]).toHaveFocus();
+    fireEvent.keyDown(options[1], { key: 'Home' });
+    expect(options[0]).toHaveFocus();
+    fireEvent.keyDown(options[0], { key: 'End' });
+    expect(options[1]).toHaveFocus();
+    fireEvent.keyDown(options[1], { key: 'ArrowUp' });
+    expect(options[0]).toHaveFocus();
+  });
+
+  it('closes when focus leaves it, so Tab never leaves it floating', () => {
+    const { onClose, options } = renderTwo();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+
+    fireEvent.focusOut(options[0], { relatedTarget: options[1] });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.focusOut(options[0], { relatedTarget: outside });
+    expect(onClose).toHaveBeenCalled();
+    outside.remove();
+  });
+});
+

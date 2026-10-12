@@ -1651,7 +1651,8 @@ Plan: `.claude/designs/mut-89-all-businesses-lens-tests.md`. ADR-051. Tests were
 - `SavedFlashAnnouncer.test.tsx`: Show keeps All on.
 - `ClientDrawer.test.tsx` and `ProjectDrawer.test.tsx`: each prefills the picker's business.
 - `SidebarNav.features.test.tsx`: New → Income/Expense sets the working business before navigating.
-- `ProfileQuickPicker.test.tsx`: placed from the saved rectangle, focuses its first business, Escape returns focus.
+- `ProfileQuickPicker.test.tsx`: placed from the saved rectangle, focuses its first business, Escape returns focus, arrows/Home/End move, leaving closes it.
+- `IncomeDrawer.test.tsx`: "Create new" client only once a business is chosen.
 - `useProfileAwareAction.test.tsx`: the real All state, with a concrete working id.
 - `IncomeDrawer.test.tsx`: business before client; from a client; duplicating keeps the business.
 - `profileStore.test.ts`: the route flag never writes the saved key.

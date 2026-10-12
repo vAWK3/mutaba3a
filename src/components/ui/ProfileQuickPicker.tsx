@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback, type KeyboardEvent as ReactKeyboardEvent, type FocusEvent as ReactFocusEvent } from 'react';
 import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import type { ProfileQuickPickerProps } from '../../hooks/useProfileAwareAction';
@@ -91,6 +91,27 @@ export function ProfileQuickPicker({
 
   const position = getPosition();
 
+  // Arrow keys, Home and End move between the businesses (MUT-89 review)
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const options = [...(popoverRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])];
+    const current = options.indexOf(document.activeElement as HTMLElement);
+    const next =
+      event.key === 'ArrowDown' ? Math.min(current + 1, options.length - 1)
+      : event.key === 'ArrowUp' ? Math.max(current - 1, 0)
+      : event.key === 'Home' ? 0
+      : event.key === 'End' ? options.length - 1
+      : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    options[next]?.focus();
+  };
+
+  // Focus leaving the picker (Tab) closes it, so it never stays floating
+  const handleBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const to = event.relatedTarget as Node | null;
+    if (to && !popoverRef.current?.contains(to)) onClose();
+  };
+
   return (
     <div
       ref={popoverRef}
@@ -102,6 +123,8 @@ export function ProfileQuickPicker({
       }}
       role="listbox"
       aria-label={t('profile.choose')}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
     >
       <div className="profile-quick-picker-header">
         {t('profile.choose')}
