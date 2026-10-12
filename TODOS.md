@@ -16,7 +16,7 @@
 
 ## 2. Documented data layer does not match the real one — ticketed as MUT-47
 
-**What:** Two documented claims that nothing checks: CLAUDE.md's mandatory Phase 4 verification names `npm run test:integration`, which has never existed; and `IRepositoryProvider` covers 20 slots while the db layer exports roughly 26 repository objects.
+**What:** Two documented claims that nothing checks: CLAUDE.md's mandatory Phase 4 verification names `npm run test:integration`, which has never existed; and `IRepositoryProvider` covers 20 slots while the db layer exports 25 repository objects (26 until MUT-58 deleted `moneyEventRepo`).
 
 **Why:** `package.json` has no `test:integration` script (MUT-35 adds `typecheck`, closing the other half). `planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`src/db/planRepository.ts:33,191,301`), `scheduleGenerator` and `retainerMatching` (`src/db/retainerRepository.ts:470,620`) have no declared interface and no provider slot, so "every repository object is conformance-checked" stays false after MUT-35 ships.
 

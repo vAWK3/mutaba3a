@@ -501,12 +501,10 @@ describe('Payment Record Hooks', () => {
         ])
       );
 
-      // The Overview KPI strip and attention feed read money-event keys, which
-      // are derived from these very transactions. They have to refetch too, or
-      // the home page keeps yesterday's "what I'm owed" after a payment.
-      expect(invalidated).toEqual(
-        expect.arrayContaining(['moneyMonthKPIsBoth', 'moneyGuidance', 'moneyEvents'])
-      );
+      // MUT-58: nothing reads the money-event keys since Home's forecast strip
+      // and guidance feed were deleted (ADR-036), so a payment no longer
+      // refreshes them.
+      expect(invalidated.filter((key) => String(key).startsWith('money'))).toEqual([]);
     });
 
     it('should record the payment it invalidates for', async () => {
