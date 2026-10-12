@@ -825,6 +825,33 @@ _No new tasks from Performance review (re-review pass) — D9/D10 reduce work ra
 
 None. All 11 issues raised in this review were individually decided.
 
+---
+
+## /qa-reconcile — 2026-10-12
+
+Verdict: **PASS WITH GAPS** against all 5 literal acceptance criteria (met, tested).
+Two findings beyond the AC:
+
+1. **[GAP, fixed]** `ClientWorkSection`'s status/date/search filters are local state, never
+   synced to the URL, so Show could land on the client profile with the row still hidden
+   behind a stale filter and no second message — the dead end design decision 2A exists to
+   prevent. Fixed: a save landing on this client resets its filters (`dfddc3a`). Caught the
+   `set-state-in-effect` ESLint rule (eslint-plugin-react-hooks@7) on the first attempt;
+   fixed with React's render-time adjustment pattern instead of an effect.
+2. **[Disclosed, not fixed]** `markSaved` holds at most one pending save; two payments
+   recorded in quick succession (before the first list reports settled) silently drops the
+   first one's feedback entirely. Narrow (requires sub-second back-to-back saves on
+   different entries), not covered by any AC. Left as-is per user decision; worth a TD
+   entry if it's ever reported from real use.
+3. TD-078 names the currency-block collapse as unbuilt but doesn't explicitly say the row
+   tint itself is a plain CSS `@keyframes` rather than `motion`/`physics.ts` (design
+   decision 7A) — that divergence is accurately recorded in ADR-057 point 3, just not
+   cross-referenced from TD-078. No code change; noted here for the record.
+
+Full lint/typecheck/test verification re-run clean after the fix (168 targeted tests,
+0 lint errors, typecheck clean). Merged to `main`, worktree and branch deleted, MUT-81 →
+Done, per user instruction.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
