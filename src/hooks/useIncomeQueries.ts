@@ -11,8 +11,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../db';
 import { useMutationWithFeedback } from './useMutationWithFeedback';
-import type { QueryFilters, Transaction, Currency, TxStatus, ClientScope } from '../types';
-import { invalidateTransactionQueries } from './useQueries';
+import type { QueryFilters, Transaction, Currency, TxStatus, ClientScope, ProfileScope } from '../types';
+import { invalidateTransactionQueries, type QueryGate } from './useQueries';
 
 // ============================================================================
 // Query Keys
@@ -48,7 +48,8 @@ export interface IncomeFilters {
 }
 
 export interface ReceivablesFilters {
-  profileId?: string;
+  /** One business, or every business for All businesses (MUT-89) */
+  profileId?: ProfileScope;
   clientId?: string;
   projectId?: string;
   currency?: Currency;
@@ -113,7 +114,7 @@ export function useIncomeById(id: string) {
  * Fetch receivables (unpaid income).
  * Convenience hook that pre-filters to kind='income' + status='unpaid'.
  */
-export function useReceivables(filters: ReceivablesFilters = {}) {
+export function useReceivables(filters: ReceivablesFilters = {}, { enabled }: QueryGate = {}) {
   const queryFilters: QueryFilters = {
     kind: 'income',
     status: filters.overdueOnly ? 'overdue' : 'unpaid',
@@ -127,6 +128,7 @@ export function useReceivables(filters: ReceivablesFilters = {}) {
   return useQuery({
     queryKey: incomeQueryKeys.receivables(filters),
     queryFn: () => getRepositories().base.transactions.list(queryFilters),
+    enabled,
   });
 }
 

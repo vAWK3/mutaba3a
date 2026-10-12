@@ -1019,6 +1019,21 @@ describe('paymentRecordRepo', () => {
       expect(rows.map((r) => r.transactionTitle)).toEqual(['Mine']);
     });
 
+    it('reads several businesses for All businesses, naming each row\'s business (MUT-89)', async () => {
+      await income({ title: 'Studio job', status: 'paid', paidAt: '2024-03-01', profileId: 'p1' });
+      await income({ title: 'Teaching job', status: 'paid', paidAt: '2024-03-02', profileId: 'p2' });
+      await income({ title: 'Archived business job', status: 'paid', paidAt: '2024-03-03', profileId: 'p-archived' });
+      const unassigned = await income({ title: 'Unassigned job', status: 'paid', paidAt: '2024-03-04' });
+      await db.transactions.update(unassigned.id, { profileId: undefined });
+
+      const rows = await paymentRecordRepo.listRecent({ profileId: ['p1', 'p2'] });
+
+      expect(rows.map((r) => [r.transactionTitle, r.profileId])).toEqual([
+        ['Teaching job', 'p2'],
+        ['Studio job', 'p1'],
+      ]);
+    });
+
     it('leaves out deleted entries and deleted records, but keeps archived entries\' payments', async () => {
       const deletedEntry = await income({ status: 'paid', paidAt: '2024-03-01', title: 'Deleted entry' });
       await transactionRepo.softDelete(deletedEntry.id);

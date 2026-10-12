@@ -4,19 +4,16 @@
  * soft-deleted records are excluded and profile scoping is enforced.
  */
 
+import type { ProfileScope } from '../types';
+
+export type { ProfileScope };
+
 /**
  * Returns true if the record is NOT soft-deleted (safe to include in results).
  */
 export function excludeDeleted(record: { deletedAt?: string | null }): boolean {
   return !record.deletedAt;
 }
-
-/**
- * Which businesses a read covers: one business id, or several (the "All
- * businesses" lens on Home and Clients, MUT-89). An absent or empty id still
- * means every record, as before.
- */
-export type ProfileScope = string | readonly string[];
 
 /**
  * Returns true if the record belongs to the given business, or to one of the

@@ -52,6 +52,7 @@ import type {
   PaymentByClientFilters,
   PaymentByClientRow,
   RecentPaymentRow,
+  ProfileScope,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
 
@@ -71,7 +72,7 @@ export interface BaseRepository<T, CreateData, ID = string> {
 // ============================================================================
 
 export interface IClientRepository extends BaseRepository<Client, Omit<Client, 'id' | 'createdAt' | 'updatedAt'>> {
-  list(filters?: { profileId?: string; includeArchived?: boolean }): Promise<Client[]>;
+  list(filters?: { profileId?: ProfileScope; includeArchived?: boolean }): Promise<Client[]>;
   archive(id: string): Promise<void>;
 }
 
@@ -131,7 +132,7 @@ export interface IProjectSummaryRepository {
 export interface IClientSummaryRepository {
   list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]>;
   /** The clients index: rows, No client, Archived clients and a total equal to Home's (MUT-83) */
-  listOwedIndex(filters?: { profileId?: string; search?: string }): Promise<ClientOwedIndex>;
+  listOwedIndex(filters?: { profileId?: ProfileScope; search?: string }): Promise<ClientOwedIndex>;
   get(clientId: string, filters?: { dateFrom?: string; dateTo?: string; currency?: Currency }): Promise<ClientSummary | undefined>;
 }
 
@@ -327,7 +328,7 @@ export interface IPaymentRecordRepository {
   get(id: string): Promise<PaymentRecord | undefined>;
   listByTransaction(transactionId: string): Promise<PaymentRecord[]>;
   listByClient(clientId: string, filters?: PaymentByClientFilters): Promise<PaymentByClientRow[]>;
-  listRecent(filters?: { profileId?: string; limit?: number }): Promise<RecentPaymentRow[]>;
+  listRecent(filters?: { profileId?: ProfileScope; limit?: number }): Promise<RecentPaymentRow[]>;
   create(data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }): Promise<PaymentRecord>;
   update(id: string, data: { amountMinor?: number; paidAt?: string; notes?: string }): Promise<void>;
   delete(id: string): Promise<void>;

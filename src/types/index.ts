@@ -138,6 +138,13 @@ export interface Settings {
 export type ResolvedSettings = Settings & { features: Record<FeatureKey, boolean> };
 
 // Query filters for transactions
+/**
+ * Which businesses a read covers: one business id, or several for the "All
+ * businesses" lens on Home and Clients (MUT-89, ADR-051). An absent or empty
+ * id means every record; a list never matches a record with no business.
+ */
+export type ProfileScope = string | readonly string[];
+
 export interface QueryFilters {
   dateFrom?: string;
   dateTo?: string;
@@ -146,8 +153,8 @@ export interface QueryFilters {
   status?: TxStatus | 'overdue';
   clientId?: string;
   projectId?: string;
-  /** Filter by business profile (undefined = all profiles) */
-  profileId?: string;
+  /** Filter by business: one id, or several for All businesses (undefined = every record) */
+  profileId?: ProfileScope;
   search?: string;
   limit?: number;
   offset?: number;
@@ -229,6 +236,12 @@ export interface ClientSummary {
   /** lastPayment.paidAt */
   lastPaymentAt?: string;
   lastActivityAt?: string;
+  /**
+   * The clients index only (MUT-89): the businesses of the client's entries in
+   * the index's scope, in scope order, or its own business when it has none.
+   * The tags "All businesses" shows on the row.
+   */
+  profileIds?: string[];
   // Per-currency report totals (present when list() has no currency filter).
   // Read by the Insights and Reports client tables. Unlike `owed`, unpaid here
   // still counts archived income (TD-030).
@@ -264,6 +277,19 @@ export interface ClientOwedIndex {
   total: OwedByCurrency[];
   noClient: OwedBucket;
   archivedClients: OwedBucket;
+  /**
+   * All businesses only (MUT-89, O4): No client and Archived clients per
+   * business, in the scope's order, so each muted row can open Income in its
+   * own business. Absent when the index covers one business.
+   */
+  byProfile?: OwedBusinessBuckets[];
+}
+
+/** One business's muted rows on the clients index under All businesses (MUT-89) */
+export interface OwedBusinessBuckets {
+  profileId: string;
+  noClient: OwedBucket;
+  archivedClients: OwedBucket;
 }
 
 // Filters for client-level payment history (MUT-4)
@@ -296,6 +322,8 @@ export interface PaymentByClientRow {
 export interface RecentPaymentRow extends PaymentByClientRow {
   clientId?: string;
   clientName?: string;
+  /** The business of the entry it paid: Home's tag under All businesses (MUT-89) */
+  profileId?: string;
 }
 
 // Transaction with resolved names for display

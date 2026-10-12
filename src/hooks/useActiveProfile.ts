@@ -2,8 +2,7 @@ import { useMemo, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useMatches } from '@tanstack/react-router';
 import { useProfileStore } from '../lib/profileStore';
 import { useBusinessProfiles, useDefaultBusinessProfile } from './useQueries';
-import type { BusinessProfile } from '../types';
-import type { ProfileScope } from '../db/baseQuery';
+import type { BusinessProfile, ProfileScope } from '../types';
 
 /**
  * useActiveProfile Hook

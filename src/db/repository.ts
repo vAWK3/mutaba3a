@@ -14,6 +14,7 @@ import type {
   ProjectSummary,
   ClientSummary,
   ClientOwedIndex,
+  OwedBusinessBuckets,
   TransactionDisplay,
   Currency,
   BusinessProfile,
@@ -28,7 +29,7 @@ import type {
   RecentPaymentRow,
   PaymentByClientFilters,
 } from '../types';
-import { excludeDeleted, scopeToProfile } from './baseQuery';
+import { excludeDeleted, scopeToProfile, type ProfileScope } from './baseQuery';
 import { todayLocalISO, isOverdueReceivable, daysOverdue, isFuturePaymentDate } from '../lib/dates';
 import { selectAttentionReceivables } from '../lib/attention';
 import {
@@ -63,14 +64,14 @@ function todayISO(): string {
 
 // Client Repository
 export const clientRepo = {
-  async list(filters?: { profileId?: string; includeArchived?: boolean }): Promise<Client[]> {
+  async list(filters?: { profileId?: ProfileScope; includeArchived?: boolean }): Promise<Client[]> {
     const { profileId, includeArchived = false } = filters || {};
     const results = await db.clients.toArray();
 
     return results
       .filter((c) => {
         if (!includeArchived && c.archivedAt) return false;
-        if (profileId && c.profileId !== profileId) return false;
+        if (!scopeToProfile(c, profileId)) return false;
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -701,9 +702,14 @@ export const clientSummaryRepo = {
    * counts only this business's entries; the client profile stays
    * all-businesses. A search narrows the client rows only.
    *
-   * @param filters.profileId the business; undefined reads every business
+   * All businesses (MUT-89, ADR-051) passes every live business: each row
+   * then counts the client's entries in all of them and names them
+   * (`profileIds`, the row's tags), and the muted rows also come per business
+   * (`byProfile`, O4) so each opens Income in its own business.
+   *
+   * @param filters.profileId the business, or the businesses; undefined reads every record
    */
-  async listOwedIndex(filters: { profileId?: string; search?: string } = {}): Promise<ClientOwedIndex> {
+  async listOwedIndex(filters: { profileId?: ProfileScope; search?: string } = {}): Promise<ClientOwedIndex> {
     const [clients, entries, projects, records] = await Promise.all([
       db.clients.toArray(),
       transactionRepo.list({ profileId: filters.profileId, includeArchived: true }),
@@ -724,12 +730,17 @@ export const clientSummaryRepo = {
     );
 
     return {
-      clients: listed.map((c) =>
-        buildClientSummary(c, entriesByClient.get(c.id) ?? [], activeProjects.get(c.id)?.length ?? 0, recordsByTx, today)
-      ),
+      clients: listed.map((c) => {
+        const clientEntries = entriesByClient.get(c.id) ?? [];
+        return {
+          ...buildClientSummary(c, clientEntries, activeProjects.get(c.id)?.length ?? 0, recordsByTx, today),
+          profileIds: businessesOfClient(c, clientEntries, filters.profileId),
+        };
+      }),
       total,
       noClient,
       archivedClients,
+      ...(isScopeList(filters.profileId) && { byProfile: bucketsPerBusiness(entries, clients, filters.profileId, today) }),
     };
   },
 
@@ -750,6 +761,39 @@ export const clientSummaryRepo = {
     return buildClientSummary(client, clientTxs, activeProjectCount, groupBy(records, (r) => r.transactionId), todayLocalISO());
   },
 };
+
+function isScopeList(scope: ProfileScope | undefined): scope is readonly string[] {
+  return Array.isArray(scope);
+}
+
+/**
+ * A clients-index row's tags (MUT-89): the businesses its entries are in, in
+ * the scope's order, else the business it was created in.
+ */
+function businessesOfClient(client: Client, clientEntries: Transaction[], scope: ProfileScope | undefined): string[] {
+  const inEntries = new Set(clientEntries.flatMap((tx) => (tx.profileId ? [tx.profileId] : [])));
+  if (inEntries.size === 0) return client.profileId ? [client.profileId] : [];
+  const order = isScopeList(scope) ? scope : [...inEntries];
+  return order.filter((id) => inEntries.has(id));
+}
+
+/**
+ * No client and Archived clients for each business in the list (MUT-89, O4),
+ * with the same partition as the whole index, so the per-business rows add
+ * up to the index's own two.
+ */
+function bucketsPerBusiness(
+  entries: Transaction[],
+  clients: Client[],
+  scope: readonly string[],
+  today: string
+): OwedBusinessBuckets[] {
+  const entriesByBusiness = groupBy(entries, (tx) => tx.profileId ?? '');
+  return scope.map((profileId) => {
+    const { noClient, archivedClients } = partitionOwedNow(entriesByBusiness.get(profileId) ?? [], clients, today);
+    return { profileId, noClient, archivedClients };
+  });
+}
 
 /** The Insights and Reports client tables' paid/unpaid columns, per currency. */
 function perCurrencyReportTotals(clientTxs: Transaction[]) {
@@ -1614,7 +1658,7 @@ export const paymentRecordRepo = {
    * client. Deleted entries and records are left out; archived entries'
    * payments stay -- they happened.
    */
-  async listRecent(filters: { profileId?: string; limit?: number } = {}): Promise<RecentPaymentRow[]> {
+  async listRecent(filters: { profileId?: ProfileScope; limit?: number } = {}): Promise<RecentPaymentRow[]> {
     const incomes = await db.transactions
       .filter((tx) => tx.kind === 'income' && !tx.deletedAt && scopeToProfile(tx, filters.profileId))
       .toArray();
@@ -1636,6 +1680,7 @@ export const paymentRecordRepo = {
         ...row,
         clientId: tx.clientId,
         clientName: tx.clientId ? clientNames.get(tx.clientId) : undefined,
+        profileId: tx.profileId,
       }))
     );
 
