@@ -21,7 +21,7 @@
   Resizing across the breakpoint changes attributes only, so neither pane remounts.
 - **The breakpoint is a named token.** `BREAKPOINTS.clientsSplit` in `src/lib/breakpoints.ts`. `useIsSplitView()` reads it through `matchMedia`; CSS keys off `data-layout`, so the number lives in one place.
 - **One top bar.** The layout owns the `TopBar`: "Clients" on the list; the client's name, the Clients breadcrumb and Edit when a client is open, at any width. `ClientDetailPage` renders the profile body only.
-- **The list's state is one URL model.** `q` (search), `sort` and `dir` are parsed by `parseClientsSearch` (the layout route's `validateSearch`) and written by `useClientsSearch` with `replace`. Every client link and walk keeps them, so they survive switching clients, Back and a reload. Defaults (owed, descending, no search) are not written. This replaces `useSortState` on this page.
+- **The list's state is one URL model.** `q` (search), `sort` and `dir` are parsed by `parseClientsSearch` (the layout route's `validateSearch`) and written by `useClientsSearch` with `replace`, both in `src/components/clients/` beside the sort fields they validate (`src/lib` and `src/hooks` import nothing from `components`). Every client link and walk keeps them, so they survive switching clients, Back and a reload. Defaults (owed, descending, no search) are not written. This replaces `useSortState` on this page.
 - **Each client's profile starts fresh.** The detail route's `remountDeps` is the client id: walking to the next client remounts the profile, so its Work filters reset and it opens at the top. A resize never changes the key.
 - **Keyboard (split only, i.e. a wide window):**
   - On a client row's link, ↑/↓ open the previous/next client. Focus moves to that row and the profile follows. The walk skips the muted rows and stops at either end.
@@ -38,8 +38,8 @@
 
 | # | Rule | Level | File |
 |---|---|---|---|
-| T1 | `parseClientsSearch`: empty URL → `{}`; keeps a valid `q`, `sort`, `dir`; drops an unknown sort field or direction; reads a numeric `q` as text. `mergeClientsSearch` drops cleared fields and defaults. `resolveClientsSearch` fills owed / desc / '' | unit | `src/lib/__tests__/clientsSearch.test.ts` |
-| T2 | `useClientsSearch` on a real memory router: reads the URL; a change is written with `replace` (no history entry), on `/clients` and on `/clients/:id`, keeping the path and the other fields; a default is removed | hook | `src/hooks/__tests__/useClientsSearch.test.tsx` |
+| T1 | `parseClientsSearch`: empty URL → `{}`; keeps a valid `q`, `sort`, `dir`; drops an unknown sort field or direction; reads a numeric `q` as text. `mergeClientsSearch` drops cleared fields and defaults. `resolveClientsSearch` fills owed / desc / '' | unit | `src/components/clients/__tests__/clientsSearch.test.ts` |
+| T2 | `useClientsSearch` on a real memory router: reads the URL; a change is written with `replace` (no history entry), on `/clients` and on `/clients/:id`, keeping the path and the other fields; a default is removed | hook | `src/components/clients/__tests__/useClientsSearch.test.tsx` |
 | T3 | `listKeyAction` / `profileKeyAction`: ↑/↓/Enter; → toward the profile and ← back in LTR, mirrored in RTL; Escape back; other keys nothing | unit | `src/components/clients/__tests__/clientsSplitView.test.ts` |
 | T4 | `adjacentClientId`: next and previous in display order; skips the muted rows; undefined past either end or for an id not listed | unit | same |
 | T5 | `keyBelongsToControl`: true for input, textarea, select, contenteditable, anything inside `[role=menu]`, `listbox`, `dialog`, `tablist`, `radiogroup`, `combobox`, and a button with `aria-expanded="true"`; false for a plain link, button or the pane itself. `hasModifier` for Alt/Ctrl/Meta/Shift | unit | same |

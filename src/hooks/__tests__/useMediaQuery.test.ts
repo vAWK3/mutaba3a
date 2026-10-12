@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useMediaQuery, useIsCompactTable } from '../useMediaQuery';
+import { useMediaQuery, useIsCompactTable, useIsSplitView } from '../useMediaQuery';
+import { BREAKPOINTS } from '../../lib/breakpoints';
 
 describe('useMediaQuery', () => {
   let matchMediaMock: ReturnType<typeof vi.fn>;
@@ -150,5 +151,31 @@ describe('useIsCompactTable', () => {
 
     const { result } = renderHook(() => useIsCompactTable());
     expect(result.current).toBe(false);
+  });
+});
+
+// MUT-84 (ADR-050): a client opens beside the list from a named width up
+describe('useIsSplitView', () => {
+  let matchMediaMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    matchMediaMock = vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    window.matchMedia = matchMediaMock;
+  });
+
+  it('asks for the named split-view breakpoint as a minimum window width', () => {
+    expect(BREAKPOINTS.clientsSplit).toEqual(expect.any(Number));
+    renderHook(() => useIsSplitView());
+    expect(matchMediaMock).toHaveBeenCalledWith(`(min-width: ${BREAKPOINTS.clientsSplit}px)`);
+  });
+
+  it('is true on a window at least that wide', () => {
+    matchMediaMock.mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    const { result } = renderHook(() => useIsSplitView());
+    expect(result.current).toBe(true);
   });
 });

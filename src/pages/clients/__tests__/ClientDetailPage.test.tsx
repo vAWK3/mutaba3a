@@ -5,6 +5,8 @@
  * Work and billing, Payments -- answering the product's three questions with
  * no tab clicks. The MUT-6 (Record payment), MUT-13 (invoices, retainers) and
  * MUT-16 (projects switch) behaviours are re-asserted on the new sections.
+ * Since MUT-84 the page is the Clients layout's profile pane: the layout's
+ * top bar names the client, so the page renders the profile body only.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -321,6 +323,14 @@ describe('ClientDetailPage', () => {
       } as unknown as ReturnType<typeof useQueries.useClient>);
       renderPage();
       expect(screen.getAllByText('Client not found').length).toBeGreaterThan(0);
+    });
+
+    // MUT-84: the profile sits beside the list or alone, under the Clients
+    // layout's one top bar, which names the client (ClientsLayout.test.tsx)
+    it('renders no top bar of its own', () => {
+      const { container } = renderPage();
+      expect(container.querySelector('.topbar')).toBeNull();
+      expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     });
   });
 
