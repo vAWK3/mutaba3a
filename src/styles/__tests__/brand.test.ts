@@ -1,9 +1,26 @@
 // @vitest-environment node
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fontFaces, repoPath } from '../../test/css/brandCss';
+import tokensJson from '../brand/mutaba3a.tokens.json';
+import {
+  THEME_STATES,
+  Tokens,
+  bareVarReferences,
+  contrast,
+  customPropertyDefinitions,
+  fontFaces,
+  loadStylesheet,
+  parseColor,
+  repoPath,
+  sourceFiles,
+  stylesheetFromCss,
+  toHex,
+  type Rgba,
+  type ThemeState,
+} from '../../test/css/brandCss';
 
 /**
  * Brand v2 foundation (MUT-102): the contracts the token file and the fonts
@@ -24,6 +41,7 @@ const THMANYAH_SHA256: Record<string, string> = {
   'thmanyah-serif-display-bold.otf': 'ac2f056441891276792ab6d828d8ad9169ef44ecea60d6ccf126b25361f0ee9d',
 };
 
+const BRAND_CSS = repoPath('src/styles/brand/mutaba3a-theme.css');
 const FONTS_DIR = repoPath('src/assets/fonts');
 const FONTS_CSS = repoPath('src/styles/brand/fonts.css');
 
@@ -63,5 +81,221 @@ describe('fonts', () => {
     const imports = [...css.matchAll(/@import\s+["']([^"']+)["']/g)].map((m) => m[1]);
     expect(imports).toEqual(['@fontsource/ibm-plex-mono/400.css', '@fontsource/ibm-plex-mono/500.css']);
     expect(css).not.toMatch(/https?:\/\//);
+  });
+});
+
+const LIGHT: ThemeState = THEME_STATES['OS light'];
+const DARK: ThemeState = THEME_STATES['OS dark'];
+
+const kebab = (key: string) => key.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
+const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+function channelsClose(actual: string, expected: string): boolean {
+  const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [a, e] = [channels(actual), channels(expected)];
+  return a.every((value, i) => Math.abs(value - e[i]) <= 1);
+}
+
+describe('harness', () => {
+  const palettes = [
+    ['light', tokensJson.color],
+    ['dark', tokensJson.colorDark],
+  ] as const;
+
+  it.each(palettes)('converts every %s OKLCH primitive to the JSON hex within ±1 per channel', (_mode, palette) => {
+    const misses = Object.entries(palette)
+      .map(([key, { oklch, hex }]) => ({ key, expected: hex, actual: toHex(parseColor(oklch)) }))
+      .filter(({ actual, expected }) => !channelsClose(actual, expected));
+    expect(misses).toEqual([]);
+  });
+
+  describe('color-mix(in oklch)', () => {
+    const purple = 'oklch(0.55 0.14 295)';
+    const hexOf = (css: string) => toHex(parseColor(css));
+
+    it('mixing a colour with itself returns it', () => {
+      expect(hexOf(`color-mix(in oklch, ${purple} 30%, ${purple})`)).toBe(hexOf(purple));
+    });
+
+    it('fills in the missing percentage from the other', () => {
+      expect(hexOf(`color-mix(in oklch, ${purple}, oklch(0.9 0.06 165) 25%)`)).toBe(
+        hexOf(`color-mix(in oklch, ${purple} 75%, oklch(0.9 0.06 165))`),
+      );
+    });
+
+    it('mixing toward transparent keeps the colour and scales its alpha', () => {
+      const mixed = parseColor(`color-mix(in oklch, ${purple} 14%, transparent)`);
+      expect(mixed.a).toBeCloseTo(0.14, 6);
+      expect(toHex(mixed)).toBe(hexOf(purple));
+    });
+
+    it('interpolates hue along the shorter arc', () => {
+      expect(hexOf('color-mix(in oklch, oklch(0.6 0.1 350), oklch(0.6 0.1 10))')).toBe(hexOf('oklch(0.6 0.1 0)'));
+    });
+
+    it('an achromatic colour takes the other colour’s hue', () => {
+      const grey = parseColor('#777777');
+      const mixed = parseColor(`color-mix(in oklch, #777777 50%, ${purple})`);
+      expect(mixed.b).toBeGreaterThan(mixed.g);
+      expect(Math.abs(grey.r - grey.b)).toBeLessThan(0.01);
+    });
+  });
+
+  describe('contrast', () => {
+    const black: Rgba = { r: 0, g: 0, b: 0, a: 1 };
+    const white: Rgba = { r: 1, g: 1, b: 1, a: 1 };
+
+    it('is 21:1 for black on white and 1:1 for a colour on itself', () => {
+      expect(contrast(black, white)).toBeCloseTo(21, 5);
+      expect(contrast(white, white)).toBe(1);
+    });
+
+    it('composites a translucent foreground and background before measuring', () => {
+      expect(contrast({ ...black, a: 0 }, white)).toBe(1);
+      expect(contrast(black, { ...black, a: 0 }, white)).toBeCloseTo(21, 5);
+      expect(contrast({ ...black, a: 0.5 }, white)).toBeLessThan(contrast(black, white));
+    });
+  });
+
+  describe('evaluator', () => {
+    const sheet = stylesheetFromCss(`
+      :root { --a: light; --b: base; --c: var(--a); }
+      @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --a: dark; } }
+      :root[data-theme="dark"] { --a: dark; }
+      :root { --b: later; }
+      @media (prefers-reduced-motion: reduce) { :root { --b: still; } }
+    `);
+    const value = (state: ThemeState, name = '--a') => new Tokens(sheet, state).resolve(name);
+
+    it.each([
+      [{ os: 'light', dataTheme: 'none' }, 'light'],
+      [{ os: 'dark', dataTheme: 'none' }, 'dark'],
+      [{ os: 'dark', dataTheme: 'light' }, 'light'],
+      [{ os: 'light', dataTheme: 'dark' }, 'dark'],
+      [{ os: 'light', dataTheme: 'light' }, 'light'],
+      [{ os: 'dark', dataTheme: 'dark' }, 'dark'],
+    ] as [ThemeState, string][])('%o renders %s', (state, expected) => {
+      expect(value(state)).toBe(expected);
+      expect(value(state, '--c')).toBe(expected);
+    });
+
+    it('lets a later rule of equal specificity win, and a more specific one beat a later :root', () => {
+      expect(value(LIGHT, '--b')).toBe('later');
+      expect(value({ ...LIGHT, reducedMotion: true }, '--b')).toBe('still');
+      const specific = stylesheetFromCss(':root[data-theme="dark"] { --x: dark } :root { --x: base }');
+      expect(new Tokens(specific, THEME_STATES['forced dark under OS light']).resolve('--x')).toBe('dark');
+    });
+
+    it.each([
+      ['another selector', '.card { --x: 1 }'],
+      ['a forced-light selector', ':root[data-theme="light"] { --x: 1 }'],
+      ['!important', ':root { --x: 1 !important }'],
+      ['an unknown at-rule', '@supports (color: red) { :root { --x: 1 } }'],
+      ['an unknown media query', '@media (min-width: 40rem) { :root { --x: 1 } }'],
+    ])('refuses custom properties declared with %s', (_case, css) => {
+      expect(() => stylesheetFromCss(css)).toThrow();
+    });
+
+    it('ignores rules that declare no custom property, whatever their selector', () => {
+      expect(() => stylesheetFromCss('h1 { color: var(--a) } @media (min-width: 40rem) { .x { margin: 0 } }')).not.toThrow();
+    });
+
+    it('resolves fallbacks and names unresolved or cyclic references', () => {
+      const tokens = new Tokens(
+        stylesheetFromCss(':root { --ok: var(--nope, 4px); --bad: var(--nope); --x: var(--y); --y: var(--x); }'),
+        LIGHT,
+      );
+      expect(tokens.resolve('--ok')).toBe('4px');
+      expect(() => tokens.resolve('--bad')).toThrow('var(--nope)');
+      expect(() => tokens.resolve('--x')).toThrow('Cyclic');
+    });
+
+    it('follows local @imports before the importing file and records package imports', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'brand-css-'));
+      writeFileSync(join(dir, 'base.css'), ':root { --a: imported; --b: imported; }');
+      writeFileSync(join(dir, 'main.css'), '@import "@fontsource/x/400.css";\n@import "./base.css";\n:root { --b: own; }');
+      const sheet = loadStylesheet(join(dir, 'main.css'));
+      const tokens = new Tokens(sheet, LIGHT);
+      expect([tokens.resolve('--a'), tokens.resolve('--b')]).toEqual(['imported', 'own']);
+      expect(sheet.packageImports).toEqual(['@fontsource/x/400.css']);
+    });
+  });
+});
+
+describe('drift', () => {
+  const brand = loadStylesheet(BRAND_CSS);
+  const modes = [
+    ['light', LIGHT, tokensJson.color],
+    ['dark', DARK, tokensJson.colorDark],
+  ] as const;
+
+  it.each(modes)('every %s --m-* colour equals the JSON', (_mode, state, palette) => {
+    const tokens = new Tokens(brand, state);
+    const drifted = Object.entries(palette)
+      .map(([key, { oklch }]) => ({ token: `--m-${kebab(key)}`, css: tokens.has(`--m-${kebab(key)}`) ? squash(tokens.raw(`--m-${kebab(key)}`)) : '(missing)', json: oklch }))
+      .filter(({ css, json }) => css !== json);
+    expect(drifted).toEqual([]);
+  });
+
+  it('the radii equal the JSON', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    for (const [key, px] of Object.entries(tokensJson.radius)) expect(tokens.px(`--m-radius-${key}`), key).toBe(px);
+  });
+
+  it('the font roles name the JSON faces first', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    const first = (name: string) => tokens.resolve(name).split(',')[0].replace(/["']/g, '').trim();
+    expect([first('--m-font-display'), first('--m-font-body'), first('--m-font-num')]).toEqual([
+      tokensJson.font.display,
+      tokensJson.font.body,
+      tokensJson.font.numeric,
+    ]);
+  });
+
+  it('the motion curves and durations equal the JSON', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    const curve = (name: string) => [...tokens.resolve(name).matchAll(/-?\d*\.?\d+/g)].map((m) => Number(m[0]));
+    const { spring, overshoot, press, stagger } = tokensJson.motion;
+    expect(curve('--m-ease-spring')).toEqual(spring.curve);
+    expect(curve('--m-ease-overshoot')).toEqual(overshoot.curve);
+    expect([tokens.ms('--m-dur-nav'), tokens.ms('--m-dur-toggle'), tokens.ms('--m-dur-press'), tokens.ms('--m-stagger')]).toEqual([
+      spring.ms,
+      overshoot.ms,
+      press.ms,
+      stagger.ms,
+    ]);
+  });
+});
+
+/**
+ * Tokens referenced without a fallback that nothing defines: each one is a
+ * style silently dropped today (eng review D6, counted 2026-10-12). Shrink-only:
+ * MUT-103 replaces each with a real token and deletes it here. A new dead
+ * reference, or an entry that stops being dead, fails the test.
+ */
+const KNOWN_DEAD_REFERENCES = [
+  '--bg-hover', '--bg-primary', '--bg-secondary', '--bg-tertiary', '--border-color', '--color-accent',
+  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger', '--color-error',
+  '--color-expense', '--color-income', '--color-info', '--color-muted', '--color-primary', '--color-success',
+  '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--color-warning', '--danger', '--danger-subtle',
+  '--error-bg', '--error-fg', '--font-serif', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
+  '--positive', '--primary', '--primary-foreground', '--primary-subtle', '--shadow-lg', '--shadow-xl',
+  '--surface-active', '--surface-alt', '--surface-elevated', '--surface-raised', '--surface-secondary',
+  '--surface-tertiary', '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
+];
+
+describe('references', () => {
+  const files = sourceFiles();
+  const defined = customPropertyDefinitions(files);
+  const references = bareVarReferences(files);
+  const dead = [...references.keys()].filter((name) => !defined.has(name)).sort();
+
+  it('adds no new reference to an undefined token', () => {
+    const fresh = dead.filter((name) => !KNOWN_DEAD_REFERENCES.includes(name));
+    expect(Object.fromEntries(fresh.map((name) => [name, references.get(name)]))).toEqual({});
+  });
+
+  it('lists only references that are still dead (remove fixed ones from KNOWN_DEAD_REFERENCES)', () => {
+    expect(KNOWN_DEAD_REFERENCES.filter((name) => !dead.includes(name))).toEqual([]);
   });
 });
