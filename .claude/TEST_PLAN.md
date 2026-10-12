@@ -1214,6 +1214,25 @@ Checked by hand in the browser (2026-10-12) from a cleared origin: landing → "
 
 **Baseline after MUT-78 (2026-10-12)**: root `npx vitest run` 171 files, 2630 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass.
 
+### MUT-80 — drawers on springs (epic MUT-74, ADR-044)
+
+Test plan: `.claude/designs/mut-80-drawer-springs-tests.md`. The tests were written before the code. Five deliberate mutations were each caught: no interrupt, no snapshot, no StrictMode guard, no focus return, and no dismissed flag. The StrictMode test had to be tightened to catch its mutation.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Physics | `src/lib/motion/__tests__/physics.test.ts` | Projection (1000 px/s → 499 px); rubber band (0.55 near the edge, bounded, signed, inverse round-trips); response 0.3 / ζ 1 → k ≈ 438.65, c ≈ 41.89; velocity over the last 100ms, zero for a pause or shared timestamps |
+| Gesture rules | `src/components/ui/drawer/__tests__/drawerGesture.test.ts` | 10px hysteresis, with ties going to scroll; RTL closing axis; the display offset is capped at the exit distance and rubber-banded past open; release by projected momentum (half stays open, a flick from 60px closes); overlay opacity; no-drag targets |
+| Snapshot | `src/components/ui/drawer/__tests__/exitSnapshot.test.ts` | Values, selection and checks copied; `aria-hidden` + `inert` + no pointer events; attached where the original was (or appended); scroll restored; removed |
+| Frame | `src/components/ui/drawer/__tests__/DrawerFrame.test.tsx` | Named dialog; synchronous `onClose`; enter from the edge to rest with no inline transform; a snapshot exit in LTR and RTL; none under StrictMode or without layout; reduced-motion fades; drag past half → `onClose` after the exit; short drag → spring back; 1:1 tracking and overlay at 0.5; vertical and field presses ignored; caught mid-exit → stays open; focus in, autofocus kept, Tab wrap, return to trigger, not stolen back |
+| Focusables | `src/lib/dom/__tests__/focusable.test.ts` | Order; disabled, `tabindex=-1`, hidden inputs and `[hidden]` skipped |
+| Real browser | `e2e/drawer-motion.spec.ts` | Escape: the dialog is gone at once, and the snapshot slides right past 400px and is removed. A 120px drag springs back; a 320px drag closes. In Arabic the panel is at x = 0 and a drag left closes it. |
+
+Not covered: touch on a real device (Playwright drove a mouse), and trackpad swipes (out of scope). The hidden preview pane pauses `requestAnimationFrame`, so motion was checked in Playwright, not in the pane.
+
+**Baseline after MUT-80 (2026-10-12, before merging main)**: root `npx vitest run` under Node 22: 187 files, 2923 passed, 4 skipped. `npm run typecheck` and `npm run lint` (0 errors) pass, the 3 new Playwright specs pass, and `npm run test:bundles` passes.
+
+**After merging main** (TD-009's drawer naming and the release front door): the two `Drawer.tsx` conflicts resolved to the `DrawerFrame` wrappers, whose shell carries TD-009's `aria-labelledby`, `common.close` and `aria-hidden` icon. Typecheck passed, and lint reported 0 errors. All 22 Playwright specs pass, including axe on every surface and main's new `Drawer.test.tsx` files. A full vitest run at load average ~45 (other sessions) timed out 4 heavy tests, each at about 5s. Every file that timed out passed when re-run alone (2,941 tests across both runs; no assertion failed).
+
 ### MUT-79 — app frame: nothing floats over content (epic MUT-74)
 
 Test plan: `.claude/designs/mut-79-app-frame-tests.md`.
