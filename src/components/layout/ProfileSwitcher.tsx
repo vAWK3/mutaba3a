@@ -252,7 +252,7 @@ function ProfileAvatar({ profile, size = 'medium' }: { profile: BusinessProfile;
   return (
     <div
       className={`profile-switcher-avatar profile-switcher-avatar-initials ${sizeClass}`}
-      style={{ backgroundColor: profile.primaryColor || 'var(--color-accent)' }}
+      style={profile.primaryColor ? { backgroundColor: profile.primaryColor, color: 'white' } : undefined}
     >
       {initials}
     </div>

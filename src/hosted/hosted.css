@@ -138,12 +138,12 @@
 }
 .hp-signin-card { width: 100%; max-width: var(--hp-card-width); padding: var(--space-6); }
 .hp-signin-card h1 {
-  font-family: var(--font-en);
+  font-family: var(--font-heading);
   font-size: var(--text-2xl);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   margin: 0 0 var(--space-4);
 }
-[dir="rtl"] .hp-signin-card h1 { font-family: var(--font-ar); }
+[dir="rtl"] .hp-signin-card h1 { font-family: var(--font-heading-ar); }
 
 .hp-field { margin: 0 0 var(--space-3); }
 .hp-field label { display: block; font-size: var(--text-base); font-weight: var(--weight-medium); color: var(--text-secondary); margin: 0 0 var(--space-1-5); }
@@ -325,7 +325,7 @@
 .hp-currency-block { margin: 0 0 var(--space-6); }
 .hp-currency-block .hp-strip { margin-bottom: var(--space-3); }
 
-.hp-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hp-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hp-amount-negative { color: var(--error); }
 
 .hp-filterbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin: 0 0 var(--space-4); }

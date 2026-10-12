@@ -571,13 +571,16 @@ a.landing-get-it-option:focus-visible {
   color: var(--muted);
 }
 
+/* Links in this line of text need more than colour to stand out: the purple and the
+   purple-grey ink around them are under 3:1 apart (axe link-in-text-block, MUT-102) */
 .landing-get-it-meta a {
   color: var(--accent-text);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .landing-get-it-meta a:hover {
-  text-decoration: underline;
+  text-decoration-thickness: 2px;
 }
 
 /* ============================================

@@ -2705,8 +2705,10 @@ div.input-with-prefix {
 
 /* The largest figure on the page; stays LTR inside Arabic text */
 .owed-now-amount {
+  /* Brand figure: Plex Mono 500 (the mono face ships no 700) */
+  font-family: var(--font-mono);
   font-size: var(--text-4xl);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   color: var(--text);
