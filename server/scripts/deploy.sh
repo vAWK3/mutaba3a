@@ -17,6 +17,9 @@
 #   4. terraform apply -var image_tag=<sha>: the service rolls to the new
 #      image with SERVICE_VERSION=<sha>. Everything else is reconciled too.
 #   5. scripts/smoke.ts against the service URL, API and portal both.
+#   6. Post-roll data repairs (src/scripts/post-roll.ts) through the proxy
+#      again: idempotent fixes for rows the old revision wrote after step 3's
+#      migration, which a migration's backfill cannot see. Usually 0 rows.
 #
 # Prerequisites (DEPLOYMENT.md §1): gcloud (authenticated), docker daemon
 # running, cloud-sql-proxy v2, terraform >= 1.5, node 22, and
@@ -47,6 +50,18 @@ die()  { printf '\033[0;31m[deploy] %s\033[0m\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
 cleanup() { if [[ -n "${PROXY_PID}" ]]; then kill "${PROXY_PID}" 2>/dev/null || true; fi; }
 trap cleanup EXIT
+# The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0).
+start_proxy() {
+  info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT}"
+  cloud-sql-proxy "${SQL_CONNECTION}" --port "${PROXY_PORT}" --quiet &
+  PROXY_PID=$!
+  for _ in $(seq 1 30); do
+    (exec 3<>"/dev/tcp/127.0.0.1/${PROXY_PORT}") 2>/dev/null && return 0
+    sleep 1
+  done
+  die "cloud-sql-proxy did not open 127.0.0.1:${PROXY_PORT} within 30 s"
+}
+stop_proxy() { kill "${PROXY_PID}" 2>/dev/null || true; PROXY_PID=""; }
 
 need gcloud "https://cloud.google.com/sdk/docs/install"
 need docker "Docker Desktop, daemon running"
@@ -106,17 +121,11 @@ docker push "${IMAGE}"
 # ---------------------------------------------------------------------------
 # 3. Migrate from this machine through the Cloud SQL Auth Proxy
 # ---------------------------------------------------------------------------
-info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT}"
-cloud-sql-proxy "${SQL_CONNECTION}" --port "${PROXY_PORT}" --quiet &
-PROXY_PID=$!
-for _ in $(seq 1 30); do
-  (exec 3<>"/dev/tcp/127.0.0.1/${PROXY_PORT}") 2>/dev/null && break
-  sleep 1
-done
+start_proxy
 info "running prisma migrate deploy"
 DATABASE_URL="${LOCAL_DATABASE_URL}" npx prisma migrate deploy \
   || die "migration failed; the service was NOT rolled. Fix the migration and re-run."
-kill "${PROXY_PID}" 2>/dev/null || true; PROXY_PID=""
+stop_proxy
 popd >/dev/null
 
 # ---------------------------------------------------------------------------
@@ -135,6 +144,19 @@ popd >/dev/null
 info "smoke-testing ${SERVICE_URL}"
 pushd "${SERVER_DIR}" >/dev/null
 npm run --silent smoke -- --url "${SERVICE_URL}" --expect-version "${SHORT_SHA}"
+popd >/dev/null
+
+# ---------------------------------------------------------------------------
+# 6. Post-roll data repairs (see server/src/scripts/post-roll.ts)
+# ---------------------------------------------------------------------------
+# After the roll and the smoke, so the old revision has drained. Idempotent: a
+# re-run or a rollback (IMAGE_TAG=<old sha>) runs it again and finds 0 rows.
+pushd "${SERVER_DIR}" >/dev/null
+start_proxy
+info "running post-roll data repairs"
+DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent post-roll \
+  || die "post-roll repairs failed; the service IS rolled and healthy. Re-run ./scripts/deploy.sh (every step is idempotent) or 'DATABASE_URL=… npm run post-roll' through 'npm run db:proxy'."
+stop_proxy
 popd >/dev/null
 
 info "done: ${SERVICE_NAME} serves ${SHORT_SHA} at ${SERVICE_URL}"

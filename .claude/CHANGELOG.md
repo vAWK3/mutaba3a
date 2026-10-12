@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — deploy.sh runs post-roll data repairs (MUT-61 follow-up)
+
+**Why:** a migration's backfill runs before the new revision serves (deploy.sh step 3), so rows the old revision writes in between — or after a rollback — miss it. MUT-61's `origin` backfill had a manual DEPLOYMENT.md step for that window; it is now automatic.
+
+### Added
+- **`deploy.sh` step 6:** after the roll and the smoke, the Cloud SQL proxy opens again and `npm run post-roll` (`server/src/scripts/post-roll.ts`) runs idempotent repairs; today one: a payment with a `createdByUserId` still `INTEGRATION` becomes `CAPTURE`. Normally 0 rows. A failure stops with a message that the service is already rolled and healthy; re-running `deploy.sh` is the recovery.
+- `start_proxy` / `stop_proxy` in `deploy.sh`, shared by steps 3 and 6 (step 3 now fails fast if the proxy never opens, instead of carrying on to the migration).
+
+### Changed
+- `DEPLOYMENT.md`: §2 lists the new step; §6's one-off MUT-61 `UPDATE` row is replaced by "re-run the post-roll repairs by hand".
+
+**Run:** `server/` lint and typecheck clean, `npm test` and `npm run test:db` green, `post-roll.test.ts` (Postgres) passes; step 6's own lines exercised locally against the test database with a stand-in proxy, both the success and the failure path.
+
 ## [Unreleased] - 2026-10-12 — Received income on Malafat profiles, allocated by Malafat (MUT-61)
 
 **Why:** a lawyer handed cash or a cheque could not log it on their firm's Malafat-linked profile; the phone and the portal could only record expenses there. The rule existed to prevent double-counting. Now the payment is recorded tagged and unallocated, and Malafat allocates it — Mutaba3a never calls Malafat. Server-only; unblocks MUT-123 (phone) and MAL-1097 (Malafat). Brief: `.claude/designs/mut-61-malafat-received-capture.md` (eng-reviewed, D1–D4). ADR-037 MUT-61 amendment.

@@ -35,6 +35,7 @@
     "revoke:sessions": "tsx src/scripts/users.ts revoke-sessions",
     "smoke": "tsx src/scripts/smoke.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
+    "post-roll": "tsx src/scripts/post-roll.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
   },

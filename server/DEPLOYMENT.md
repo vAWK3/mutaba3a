@@ -147,7 +147,11 @@ What you will see, and what to answer:
 5. The full plan: service account + IAM, admin-token secret, Cloud Run
    service, public invoker, uptime check → **yes**.
 6. `smoke.ts` runs the unauthenticated checks and prints `smoke: all checks passed`.
-7. The last line is the service URL: `https://mutaba3a-api-….a.run.app`. Keep it.
+7. The proxy starts again and `npm run post-roll` repairs rows the old revision
+   wrote after the migration (MUT-61: a person's payment must be `origin
+   CAPTURE`). Normally prints `post-roll: 0 captured payment(s) re-marked
+   origin CAPTURE`; the proxy stops.
+8. The last line is the service URL: `https://mutaba3a-api-….a.run.app`. Keep it.
 
 Repeat runs are the same command; plan 2 shows no changes and the service
 rolls to the new tag. Pass `AUTO_APPROVE=1` once you trust it.
@@ -384,7 +388,7 @@ branded URL becomes a real requirement, not before.
 | Check pending migrations | `TF_STATE_BUCKET=<bucket> npm run db:migrate:status` — read-only; run it before a release to see what `deploy.sh` will apply |
 | Run a migration by hand | `TF_STATE_BUCKET=<bucket> npm run db:migrate` — `prisma migrate deploy` through the proxy, forward-only. `deploy.sh` does the same as its step 2, so this is only for migrating ahead of a roll or after a failed step 4 |
 | Keep the proxy up for another tool | `TF_STATE_BUCKET=<bucket> npm run db:proxy` prints the local URL and waits for Ctrl-C. `PROXY_PORT=` changes the port; `DATABASE_URL=` makes every `db:*` command skip the proxy (local docker Postgres) |
-| After the MUT-61 roll (once) | `TF_STATE_BUCKET=<bucket> npm run db:psql`, then `UPDATE payments SET origin = 'CAPTURE' WHERE origin = 'INTEGRATION' AND "createdByUserId" IS NOT NULL;` — the migration's backfill runs before the new revision serves, so a capture the old revision wrote in between (or after a rollback) would keep the default `INTEGRATION`. Idempotent; expect `UPDATE 0` when nothing was captured in the window |
+| Re-run the post-roll repairs by hand | `TF_STATE_BUCKET=<bucket> npm run db:proxy` in one terminal, then `DATABASE_URL=<printed URL> npm run post-roll` — what `deploy.sh` step 6 does on every deploy; only needed if that step failed |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
