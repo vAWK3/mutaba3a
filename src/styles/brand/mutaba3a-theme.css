@@ -1,0 +1,115 @@
+/* Mutaba3a design tokens — Brand v2. Source of truth: ./mutaba3a.tokens.json (see docs/brand/README.md).
+ * Light inks are the AAA-tuned values (>= 7:1), matching the iOS app.
+ * Fonts are self-hosted (public/fonts); no CDN @import — the Thmanyah licence forbids third-party
+ * redistribution, and scripts/check-bundles.ts + the portal CSP reject new origins.
+ * Not imported yet: wiring into src/styles/theme.css is the Brand v2 foundation ticket. */
+:root {
+  --m-canvas: oklch(0.975 0.014 80); /* #FCF6ED */
+  --m-surface: oklch(0.993 0.008 80); /* #FFFCF7 */
+  --m-line: oklch(0.92 0.015 300); /* #E6E2ED */
+  --m-field-bg: oklch(0.965 0.012 300); /* #F4F2FB */
+  --m-ink: oklch(0.33 0.05 300); /* #392F4B */
+  --m-ink2: oklch(0.442 0.043 298.7); /* #564E68 */
+  --m-primary: oklch(0.55 0.14 295); /* #795DBA */
+  --m-primary-hover: oklch(0.46 0.142 293.8); /* #5E439E */
+  --m-on-primary: oklch(0.98 0.012 80); /* #FDF8F0 */
+  --m-focus: oklch(0.6 0.13 295); /* #866EC5 */
+  --m-lavender: oklch(0.9 0.06 295); /* #E0D7FF */
+  --m-lavender-ink: oklch(0.401 0.114 294.5); /* #4D387E */
+  --m-mint: oklch(0.9 0.06 165); /* #BAEBD4 */
+  --m-mint-ink: oklch(0.387 0.076 170.2); /* #00513E */
+  --m-mint-strong: oklch(0.7 0.11 165); /* #51B48D */
+  --m-rose: oklch(0.9 0.06 10); /* #FFCED5 */
+  --m-rose-ink: oklch(0.398 0.103 14.8); /* #742B35 */
+  --m-rose-strong: oklch(0.65 0.13 12); /* #D16B7A */
+  --m-peach: oklch(0.9 0.06 55); /* #FED4B9 */
+  --m-peach-ink: oklch(0.4 0.104 50.8); /* #723300 */
+  --m-peach-strong: oklch(0.75 0.12 55); /* #E89960 */
+  --m-butter: oklch(0.93 0.07 95); /* #F6E8B3 */
+  --m-butter-ink: oklch(0.419 0.083 74.8); /* #67450A */
+
+  --m-font-display: "Thmanyah Serif Display", serif;
+  --m-font-body: "Thmanyah Sans", system-ui, sans-serif;
+  --m-font-num: "IBM Plex Mono", ui-monospace, monospace;
+
+  --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px;
+  --m-radius-card: 24px; --m-radius-hero: 28px; --m-radius-pill: 999px;
+
+  --m-ease-spring: cubic-bezier(.32,.72,0,1);
+  --m-ease-overshoot: cubic-bezier(.34,1.56,.64,1);
+  --m-dur-press: 120ms; --m-dur-toggle: 350ms; --m-dur-nav: 420ms; --m-stagger: 50ms;
+
+  --m-shadow-card: 0 1px 2px oklch(0.45 0.08 300 / .06), 0 12px 40px oklch(0.45 0.08 300 / .07);
+  --m-shadow-primary: 0 6px 16px oklch(0.55 0.14 295 / .28);
+  --m-focus-ring: inset 0 0 0 2px var(--m-focus), 0 0 0 5px oklch(0.6 0.13 295 / .14);
+
+  /* Map onto existing app tokens (src/styles/theme.css) */
+  --bg: var(--m-canvas); --surface: var(--m-surface); --text: var(--m-ink); --muted: var(--m-ink2);
+  --border: var(--m-line); --accent: var(--m-primary); --accent-hover: var(--m-primary-hover);
+  --accent-solid: var(--m-primary); --on-accent: var(--m-on-primary); --accent-subtle: var(--m-lavender);
+  --success: var(--m-mint-ink); --success-subtle: var(--m-mint);
+  --warning: var(--m-butter-ink); --warning-subtle: var(--m-butter);
+  --error: var(--m-rose-ink); --error-subtle: var(--m-rose);
+  --badge-paid-bg: var(--m-mint); --badge-paid-text: var(--m-mint-ink);
+  --badge-unpaid-bg: var(--m-butter); --badge-unpaid-text: var(--m-butter-ink);
+  --badge-overdue-bg: var(--m-rose); --badge-overdue-text: var(--m-rose-ink);
+  --font-ar: var(--m-font-body); --font-heading-ar: var(--m-font-display); --font-mono: var(--m-font-num);
+}
+
+/* Dark mode — follows OS, or force with <html data-theme="dark"> */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --m-canvas: oklch(0.24 0.035 300); /* #221B2D */
+    --m-surface: oklch(0.29 0.04 300); /* #2E273C */
+    --m-line: oklch(0.4 0.04 300); /* #4B435A */
+    --m-field-bg: oklch(0.34 0.045 300); /* #3B334C */
+    --m-ink: oklch(0.95 0.015 80); /* #F4EEE4 */
+    --m-ink2: oklch(0.78 0.03 300); /* #BAB3C8 */
+    --m-primary: oklch(0.78 0.11 295); /* #BCA9F7 */
+    --m-primary-hover: oklch(0.82 0.1 295); /* #C8B7FF */
+    --m-on-primary: oklch(0.27 0.06 300); /* #2B1F3F */
+    --m-focus: oklch(0.75 0.12 295); /* #B39EF2 */
+    --m-lavender: oklch(0.38 0.07 295); /* #453A64 */
+    --m-lavender-ink: oklch(0.88 0.08 295); /* #DBCEFF */
+    --m-mint: oklch(0.38 0.07 165); /* #134E39 */
+    --m-mint-ink: oklch(0.88 0.08 165); /* #A5E9CA */
+    --m-mint-strong: oklch(0.75 0.11 165); /* #62C49D */
+    --m-rose: oklch(0.38 0.07 10); /* #62313A */
+    --m-rose-ink: oklch(0.88 0.08 10); /* #FFC2CB */
+    --m-rose-strong: oklch(0.72 0.12 12); /* #E58491 */
+    --m-peach: oklch(0.38 0.07 55); /* #5F371B */
+    --m-peach-ink: oklch(0.88 0.08 55); /* #FFCAA5 */
+    --m-peach-strong: oklch(0.78 0.11 55); /* #EEA471 */
+    --m-butter: oklch(0.4 0.06 85); /* #57451E */
+    --m-butter-ink: oklch(0.9 0.09 95); /* #F0DE99 */
+    --m-shadow-card: 0 1px 2px oklch(0.15 0.03 300 / .4), 0 12px 40px oklch(0.15 0.03 300 / .35);
+    --m-shadow-primary: none;
+  }
+}
+:root[data-theme="dark"] {
+  --m-canvas: oklch(0.24 0.035 300); /* #221B2D */
+  --m-surface: oklch(0.29 0.04 300); /* #2E273C */
+  --m-line: oklch(0.4 0.04 300); /* #4B435A */
+  --m-field-bg: oklch(0.34 0.045 300); /* #3B334C */
+  --m-ink: oklch(0.95 0.015 80); /* #F4EEE4 */
+  --m-ink2: oklch(0.78 0.03 300); /* #BAB3C8 */
+  --m-primary: oklch(0.78 0.11 295); /* #BCA9F7 */
+  --m-primary-hover: oklch(0.82 0.1 295); /* #C8B7FF */
+  --m-on-primary: oklch(0.27 0.06 300); /* #2B1F3F */
+  --m-focus: oklch(0.75 0.12 295); /* #B39EF2 */
+  --m-lavender: oklch(0.38 0.07 295); /* #453A64 */
+  --m-lavender-ink: oklch(0.88 0.08 295); /* #DBCEFF */
+  --m-mint: oklch(0.38 0.07 165); /* #134E39 */
+  --m-mint-ink: oklch(0.88 0.08 165); /* #A5E9CA */
+  --m-mint-strong: oklch(0.75 0.11 165); /* #62C49D */
+  --m-rose: oklch(0.38 0.07 10); /* #62313A */
+  --m-rose-ink: oklch(0.88 0.08 10); /* #FFC2CB */
+  --m-rose-strong: oklch(0.72 0.12 12); /* #E58491 */
+  --m-peach: oklch(0.38 0.07 55); /* #5F371B */
+  --m-peach-ink: oklch(0.88 0.08 55); /* #FFCAA5 */
+  --m-peach-strong: oklch(0.78 0.11 55); /* #EEA471 */
+  --m-butter: oklch(0.4 0.06 85); /* #57451E */
+  --m-butter-ink: oklch(0.9 0.09 95); /* #F0DE99 */
+  --m-shadow-card: 0 1px 2px oklch(0.15 0.03 300 / .4), 0 12px 40px oklch(0.15 0.03 300 / .35);
+  --m-shadow-primary: none;
+}
