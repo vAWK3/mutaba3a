@@ -134,15 +134,20 @@ enum SupplementDistribution {
 }
 
 model Organization {
-  id              String   @id @default(uuid()) @db.Uuid
-  name            String
-  slug            String   @unique
+  id                  String   @id @default(uuid()) @db.Uuid
+  name                String
+  slug                String   @unique
   /// ISO 4217. Default for new projects; each project still carries its own.
-  defaultCurrency String   @db.VarChar(3)
+  defaultCurrency     String   @db.VarChar(3)
   /// IANA zone used by the recurring-charge scheduler (plan §5.4).
-  timezone        String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  timezone            String
+  /// MUT-120: set on a user's one personal organization (created with the
+  /// user), null on every firm. Unique, so a user has at most one; such an
+  /// organization is never bound to Malafat, issued an API key or shared.
+  personalOwnerUserId String?  @unique @db.Uuid
+  personalOwner       User?    @relation("PersonalProfile", fields: [personalOwnerUserId], references: [id], onDelete: Restrict)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   apiKeys            ApiKey[]
   integrations       Integration[]
@@ -216,8 +221,10 @@ model User {
   createdAt         DateTime
   updatedAt         DateTime
 
-  memberships Membership[]
-  sessions    Session[]
+  memberships     Membership[]
+  sessions        Session[]
+  /// MUT-120: the organization created with this user as their personal profile.
+  personalProfile Organization? @relation("PersonalProfile")
 
   expenses        Expense[]
   expenseReceipts ExpenseReceipt[]

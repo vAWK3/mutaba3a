@@ -59,7 +59,10 @@ async function person(h: Harness, organizationIds?: string[]) {
   /** No X-Mutaba3a-Profile: these routes name no profile. */
   const me = (extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN, ...extra });
   const revokeAll = async () => {
-    for (const id of ids) await h.app.request(`/admin/v1/users/${created.user.id}/memberships/${id}`, { method: 'DELETE', headers: admin });
+    // MUT-120: every membership, the personal profile's included.
+    for (const m of await h.store.memberships.listByUser(created.user.id)) {
+      await h.app.request(`/admin/v1/users/${created.user.id}/memberships/${m.organizationId}`, { method: 'DELETE', headers: admin });
+    }
   };
   return { me, userId: created.user.id, email, revokeAll, organizationIds: ids };
 }

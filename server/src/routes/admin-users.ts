@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
@@ -5,7 +6,7 @@ import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '..
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
-import type { LedgerStore, UserRecord } from '../repositories/ports.js';
+import type { CreateUserInput, LedgerStore, Organization, UserLocale, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -51,6 +52,27 @@ const MembershipParams = UserIdParam.extend({
 
 type AuditAction = 'user.created' | 'user.password_reset' | 'user.disabled' | 'user.enabled' | 'membership.granted' | 'membership.revoked';
 
+/** MUT-120: the personal profile is named in the user's language; a server-generated name, so no i18n layer (precedent: expenses/presets.ts). */
+const PERSONAL_PROFILE_NAME: Record<UserLocale, string> = { en: 'Personal', ar: 'شخصي' };
+
+/**
+ * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
+ * with neither there is nothing to default to, so the request is invalid.
+ */
+export function resolvePersonalSettings(
+  request: { defaultCurrency?: string | undefined; timezone?: string | undefined },
+  firm: Pick<Organization, 'defaultCurrency' | 'timezone'> | null,
+): { defaultCurrency: string; timezone: string } | null {
+  const defaultCurrency = request.defaultCurrency ?? firm?.defaultCurrency;
+  const timezone = request.timezone ?? firm?.timezone;
+  return defaultCurrency && timezone ? { defaultCurrency, timezone } : null;
+}
+
+function personalProfileFor(locale: UserLocale, settings: { defaultCurrency: string; timezone: string }): CreateUserInput['personal'] {
+  // slugify() strips Arabic, and the user id does not exist until the store creates it: a random, ASCII, never-shown slug.
+  return { name: PERSONAL_PROFILE_NAME[locale], slug: `personal-${randomUUID()}`, ...settings };
+}
+
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
   const { store, passwordHasher, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
@@ -89,7 +111,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       method: 'post',
       path: '/admin/v1/users',
       tags: ['Admin'],
-      summary: 'Create a user with its first membership (one-time password returned once)',
+      summary: 'Create a user with their personal profile and, optionally, a firm membership (one-time password returned once)',
       security: [{ adminToken: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: CreateUserRequestSchema } } } },
       responses: {
@@ -103,20 +125,42 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const body = c.req.valid('json');
       const email = normalizeEmail(body.email);
-      if (!(await store.organizations.getById(body.organizationId))) throw new ApiError('NOT_FOUND', 'Organization not found');
+      const firm = body.organizationId ? await store.organizations.getById(body.organizationId) : null;
+      if (body.organizationId && !firm) throw new ApiError('NOT_FOUND', 'Organization not found');
+      const settings = resolvePersonalSettings(body, firm);
+      if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
       const initialPassword = generateOneTimePassword();
       const passwordHash = await passwordHasher.hash(initialPassword);
       try {
-        const { user, membership } = await store.users.create({
+        const { user, memberships, personalOrganization } = await store.users.create({
           email,
           displayName: body.displayName,
           passwordHash,
           locale: body.locale,
-          organizationId: body.organizationId,
+          ...(firm ? { organizationId: firm.id } : {}),
+          personal: personalProfileFor(body.locale, settings),
           at: c.get('now')(),
         });
-        await audit(c, [membership.organizationId], user.id, 'user.created', { email: user.email, displayName: user.displayName });
-        return c.json({ user: serializeUser(user), memberships: [serializeMembership(membership)], initialPassword }, 201);
+        await store.audit.append({
+          organizationId: personalOrganization.id,
+          actorType: 'ADMIN',
+          actorId: null,
+          action: 'organization.created',
+          entityType: 'organization',
+          entityId: personalOrganization.id,
+          metadata: { personal: true, ownerUserId: user.id },
+          requestId: c.get('requestId'),
+        });
+        await audit(c, memberships.map((m) => m.organizationId), user.id, 'user.created', { email: user.email, displayName: user.displayName });
+        return c.json(
+          {
+            user: serializeUser(user),
+            memberships: memberships.map(serializeMembership),
+            personalProfile: { id: personalOrganization.id, name: personalOrganization.name },
+            initialPassword,
+          },
+          201,
+        );
       } catch (err) {
         if (err instanceof UniqueViolation) throw new ApiError('CONFLICT', 'A user with this email already exists');
         if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'Organization not found');

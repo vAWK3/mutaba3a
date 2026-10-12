@@ -198,15 +198,22 @@ export const CreateUserRequestSchema = z
     email: z.string().trim().email().max(320),
     displayName: z.string().trim().min(1).max(200),
     locale: UserLocaleSchema.default('en'),
-    /** The user's first membership. More are granted with POST /admin/v1/users/{userId}/memberships. */
-    organizationId: z.string().uuid(),
+    /** The firm this user belongs to, if any. More are granted with POST /admin/v1/users/{userId}/memberships. */
+    organizationId: z.string().uuid().optional(),
+    /** The personal profile's currency (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
+    defaultCurrency: CurrencySchema.optional(),
+    /** The personal profile's IANA timezone (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
+    timezone: z.string().min(1).optional(),
   })
   .openapi('CreateUserRequest');
 
 export const CreateUserResponseSchema = z
   .object({
     user: UserSummarySchema,
+    /** The personal profile's membership first, then the firm's. */
     memberships: z.array(MembershipSchema),
+    /** The user's one personal profile (MUT-120), created with them: Personal / شخصي by locale. */
+    personalProfile: z.object({ id: z.string().uuid(), name: z.string() }),
     /** Shown exactly once; the service stores only its argon2id hash. Deliver it to the person over a secure channel. */
     initialPassword: z.string(),
   })

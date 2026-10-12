@@ -12,7 +12,7 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
   async function world(store: LedgerStore) {
     const a = await org(store, 'A');
     const b = await org(store, 'B');
-    const { user } = await store.users.create({ email: `p-${unique()}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: a.id, at: at(0) });
+    const { user } = await store.users.create({ email: `p-${unique()}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: a.id, personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: at(0) });
     const customer = await store.customers.create({ organizationId: a.id, name: 'Haddad', email: null, phone: null, notes: null }, at(0));
     const project = await store.projects.create({ organizationId: a.id, customerId: customer.id, name: 'Sale', currency: 'USD' }, at(0));
     const expense = (over: Partial<CreateExpenseInput> = {}): CreateExpenseInput => ({

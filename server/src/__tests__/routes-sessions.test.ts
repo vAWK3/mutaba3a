@@ -65,7 +65,7 @@ async function firm(h: Harness) {
 
 async function person(h: Harness, organizationId: string, email = `partner${++seq}@firm.ps`) {
   const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId }, admin)));
-  return { id: created.user.id as string, email, password: created.initialPassword as string };
+  return { id: created.user.id as string, email, password: created.initialPassword as string, personalId: created.personalProfile.id as string };
 }
 
 async function signIn(h: Harness, email: string, password: string, headers: Record<string, string> = SAME_ORIGIN) {
@@ -103,7 +103,7 @@ describe('POST /v1/sessions — sign in', () => {
     expect(text).not.toContain(token);
     const me = JSON.parse(text);
     expect(me.user).toMatchObject({ id: p.id, email: p.email });
-    expect(me.profiles.map((x: Loose) => x.id)).toEqual([f.org.id]);
+    expect(me.profiles.map((x: Loose) => x.id).sort()).toEqual([p.personalId, f.org.id].sort());
 
     const user = await h.store.users.getById(p.id);
     expect(user?.lastSignInAt?.toISOString()).toBe(h.clock.now.toISOString());
