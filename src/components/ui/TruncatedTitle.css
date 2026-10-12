@@ -1,0 +1,62 @@
+/* TruncatedTitle (MUT-62): a one-line title that opens its record */
+
+.truncated-title {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.truncated-title:hover .truncated-title-text {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.truncated-title:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* The text cuts, not the button: an ellipsis on a <button> itself is unreliable */
+.truncated-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A title takes its direction from its own first letter, like dir="auto":
+   an English title in the Arabic UI starts at its beginning and ends in the
+   ellipsis, and the reverse. dir="auto" alone loses to theme.css's
+   ":lang(ar) { direction: rtl }" (TD-048), which plaintext sidesteps. */
+.truncated-title-text,
+.truncated-title-tooltip {
+  unicode-bidi: plaintext;
+}
+
+.truncated-title-tooltip {
+  position: fixed;
+  z-index: 9999;
+  /* Kept a margin (EDGE_MARGIN, 8px) from each window edge */
+  max-width: min(32rem, calc(100vw - 2 * var(--space-2)));
+  padding: var(--space-1-5) var(--space-2-5);
+
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}

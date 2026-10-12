@@ -2,13 +2,13 @@ import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
-import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
+import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useProject, useProjectSummary, useTransactions } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
-import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn } from '../../lib/utils';
+import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn, EMPTY_CELL } from '../../lib/utils';
 import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { TxKind, TxStatus, QueryFilters } from '../../types';
@@ -218,6 +218,8 @@ export function ProjectDetailPage() {
                   <thead>
                     <tr>
                       <th>{t('transactions.columns.date')}</th>
+                      {/* What was done, as on /income (MUT-62) */}
+                      <th>{t('clients.profile.work.what')}</th>
                       <th>{t('transactions.columns.type')}</th>
                       <th>{t('transactions.columns.client')}</th>
                       <th>{t('transactions.columns.category')}</th>
@@ -234,7 +236,14 @@ export function ProjectDetailPage() {
 
                       return (
                         <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id, tx.kind)}>
-                          <td>{formatDate(tx.occurredAt, locale)}</td>
+                          <td className="date-cell">{formatDate(tx.occurredAt, locale)}</td>
+                          <td className="work-cell">
+                            {tx.title?.trim() ? (
+                              <TruncatedTitle title={tx.title.trim()} onOpen={() => handleRowClick(tx.id, tx.kind)} />
+                            ) : (
+                              <span className="text-muted">{EMPTY_CELL}</span>
+                            )}
+                          </td>
                           <td>
                             <span
                               className={cn(
@@ -247,8 +256,8 @@ export function ProjectDetailPage() {
                               {isReceivable ? t('transactions.type.receivable') : tx.kind === 'income' ? t('transactions.type.income') : t('transactions.type.expense')}
                             </span>
                           </td>
-                          <td className="text-secondary">{tx.clientName || '-'}</td>
-                          <td className="text-secondary">{tx.categoryName || '-'}</td>
+                          <td className="text-secondary">{tx.clientName || EMPTY_CELL}</td>
+                          <td className="text-secondary">{tx.categoryName || EMPTY_CELL}</td>
                           <td className="amount-cell">
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                               <AmountWithConversion

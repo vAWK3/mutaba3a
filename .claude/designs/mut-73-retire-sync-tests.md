@@ -141,7 +141,10 @@ npm run build
 npm run test:bundles      # web/desktop/hosted bundles; D11 rules if approved
 ```
 
-## 8. E2E: full Playwright suite on port 5198
+## 8. E2E: full Playwright suite on port 5198 — replaced by the combined `qa/` run on main
+
+> **Replaced (2026-10-12).** Main retired `e2e/` for the `qa/` release-qa kit (MUT-97, `10af585`), and the `test:e2e` scripts are gone. The run planned below happened once on this branch, at `eaedf2f` before MUT-97 landed: 26/26 on the old suite. From here, end-to-end coverage for MUT-73 is the combined `qa/` run on main after every lane merges. Nothing under `e2e/` is recreated. The original plan is kept below for the record.
+
 
 The committed `playwright.config.ts` pins 5173 (TD-004), so use a throwaway config.
 - Path: `playwright.mut73.config.ts` in the worktree, never committed.

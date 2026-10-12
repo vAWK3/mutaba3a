@@ -1854,6 +1854,22 @@ Rules:
 
 ---
 
+## App patterns added by MUT-62 (2026-10-12)
+
+### A row's title is a button that opens the row
+A clickable table row (`tr.clickable` with `onClick`) can't be reached from the keyboard. Put the row's title in `TruncatedTitle`, whose button opens the same record. Its click stops propagation, so the record opens once. The clients index does the same with a `<Link>` on the name. An untitled row shows `EMPTY_CELL` as plain text; it has no button yet (TD-076).
+
+### A cut cell shows its full text on hover and on focus
+A `title=""` attribute only shows on hover, so a keyboard user never sees the rest of a cut cell. Use `TruncatedTitle`. It measures whether the text is actually cut and only then shows a tooltip portalled to `<body>` (`.data-table` scrolls and would clip it). The tooltip is hoverable, Escape dismisses it, and it is `aria-hidden` because the button's name already holds the full text. The cell is `td.work-cell` (`width: 40%; max-width: 0`), so it takes the spare width instead of widening the table. A date beside it is `td.date-cell` (`nowrap`).
+
+### Text the user typed takes its own direction
+Titles, names and notes may be Arabic in the English UI or English in the Arabic one. Give the element `dir="auto"` **and** `unicode-bidi: plaintext`. The attribute alone loses to theme.css's `:lang(ar) { direction: rtl }` (TD-048): an English title in the Arabic UI then shows its end, cut at the front. `plaintext` takes the paragraph direction from the first strong letter whatever `direction` says, so the ellipsis lands at the text's real end.
+
+### A hand-written table renders its header and cells from one column list
+The main app has no `DataTable` (see the registry's correction). A page-local table that hides columns by width keeps one module-level column list: key, i18n header key, header and cell classes, `wideOnly`. The page picks the wide or compact array, and the header and every row map over it, with a `renderCell(key, row)` switch for the cells. Precompute both arrays at module level, so they are the same objects on every render (stronger than `useMemo([])`). Shape the rows in `useMemo([result])` with a pure `toXRow`. See `src/pages/income/incomeRows.ts`.
+
+---
+
 ## Desktop patterns added by MUT-73 (2026-10-12)
 
 ### Smoke a desktop debug build without touching the owner's data (MUT-73)
