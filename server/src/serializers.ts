@@ -41,6 +41,7 @@ export function serializeOrganization(o: Organization) {
     slug: o.slug,
     defaultCurrency: o.defaultCurrency as 'ILS' | 'USD' | 'EUR',
     timezone: o.timezone,
+    personalOwnerUserId: o.personalOwnerUserId,
     createdAt: o.createdAt.toISOString(),
   };
 }

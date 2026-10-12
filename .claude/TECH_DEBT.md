@@ -188,6 +188,30 @@
 **Remediation**: Decide whether the desktop app should ever sign in to a Malafat workspace. If yes, ticket the screen that calls `connectWorkspace` (and TD-015 with it). If no, delete both modules, the three commands, the opener plugin and its `*.malafat.app` permission, and `public/.well-known/oauth-client.json`.
 **Effort**: Small either way; the decision is the work.
 
+### TD-089: A user's own personal-profile membership can still be revoked
+**Status**: Resolved 2026-10-12 (MUT-120 review, D3): `DELETE /admin/v1/users/{id}/memberships/{own personal org}` now answers 409 `PERSONAL_PROFILE`; tests that need the no-membership state revoke at the store.
+**Added**: 2026-10-12 (MUT-120)
+**Priority**: Low
+**Impact**: MUT-120 guarantees every user is *created* with exactly one personal profile and that nobody else can be granted it, but `DELETE /admin/v1/users/{id}/memberships/{personalOrgId}` still removes the owner's own access. The organization (and its `personalOwnerUserId`) survives, so re-granting it restores access; until then `/v1/me` lists no personal profile and the phone (MUT-121) falls back to Unsorted. Operator-only, so it takes a deliberate act.
+**Remediation**: Refuse revoking a user's membership of their own personal profile with `personalProfileConflict`, unless an explicit operator flag is added for account wind-down. Several existing tests revoke "every membership" to reach the no-membership state (`inbox-routes.test.ts`, `inbox-isolation.test.ts`, `routes-users.test.ts`); they would need a store-level revoke instead.
+**Effort**: Small
+
+### TD-090: Admin audit rows are appended after, not inside, the store transaction
+**Status**: Accepted
+**Added**: 2026-10-12 (recorded during MUT-120's eng review; the pattern predates it)
+**Priority**: Low
+**Impact**: Every `/admin/*` route (organizations, API keys, users, memberships) calls `store.audit.append` after the mutation commits. A failed append (database blip between the two statements) leaves a created user, personal profile or key with no `AuditEvent`. MUT-120 follows the existing pattern rather than diverging in one route.
+**Remediation**: Give the stores a way to append audit rows inside the same transaction as the mutation (e.g. an `audit` field on the create inputs, or a `withAudit` unit of work), then move all admin routes over together.
+**Effort**: Medium (touches every admin route and both store implementations)
+
+### TD-091: Organization timezones are not validated at org creation, and one bad timezone halts reconcile for every organization
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-120 review, red team and adversarial pass)
+**Priority**: Medium
+**Impact**: MUT-120 validates the personal profile's timezone (`CreateUserRequest.timezone` refines with `isValidTimezone`), but `CreateOrganizationRequest.timezone` (`schemas.ts`) is still only `z.string().min(1)`, and there is no route to edit a timezone afterwards. `reconcileAll` (`scripts/reconcile.ts`) calls `todayIn(organization.timezone)` with no per-organization catch, so one invalid zone throws and every organization after it (oldest first) gets no installments or retainer charges posted on that run. Related: `migration-mut59.test.ts` replays every migration through a spawned `prisma db execute` under vitest's 5 s default and times out under a loaded full `npm run test:db` (passes alone); each new migration nudges it closer.
+**Remediation**: `.refine(isValidTimezone)` on `CreateOrganizationRequest.timezone`; wrap each organization in `reconcileAll` in try/catch with a logged error line and a non-zero exit at the end; give the mut59 cases an explicit timeout (e.g. 30 s).
+**Effort**: Small
+
 ### TD-077: The after-save message is the existing floating Toast, not design review's anchored strip
 **Status**: Accepted
 **Added**: 2026-10-12 (MUT-81, ADR-057 point 6; design review decision 5B)

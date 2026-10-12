@@ -1985,3 +1985,6 @@ zustand's `persist` writes the partialized state to localStorage on every `set`,
 ### A popover opened from a menu item remembers where the item was
 A menu closes (and unmounts its items) as soon as an item is chosen. A follow-up popover anchored to that item must capture the item's rectangle when it opens, never re-measure it. It also needs to take focus itself and know which mounted element to give focus back to (the menu's button), because the item it would return to is gone (`useProfileAwareAction.trigger(event, returnFocus)`).
 
+### An invariant lives in a unique index; every door refuses with one helper
+MUT-120's "one personal profile per user, never anyone else's" is enforced twice. The database holds the hard guarantee: `organizations.personalOwnerUserId` is `@unique`, and the memory store mirrors it as a `UniqueViolation`, so no code path can create a second one. Each door that could break the softer rules (granting, creating a user inside it, issuing a key, binding) refuses through the same `personalProfileConflict()`, so the wire shape is identical everywhere and a new door has one obvious call. The refusal reuses an existing error code with a `details.reason`, because a new code would be a contract change the API's consumers map.
+

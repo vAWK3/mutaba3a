@@ -28,6 +28,48 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Every user gets exactly one personal profile (MUT-120)
+
+**Why:** the capture app (epic MUT-63) needs a writable default target on every account, and a "personal" profile was only implied (an org with no Malafat integration), never marked or limited. This is ADR-037's MUT-120 amendment. Brief: `.claude/designs/mut-120-personal-profile.md`. Test plan: `-tests.md`. Jira MUT-120 comment 11080 records the scope changes.
+
+### Added
+- `Organization.personalOwnerUserId` (unique, FK users). Migration `20261012170000_mut120_personal_profile` is purely additive.
+- `POST /admin/v1/users` creates the user's personal profile in the same transaction:
+  - named `Personal`/`شخصي` by locale;
+  - `organizationId` is now optional, and new `defaultCurrency`/`timezone` fields override the firm's (both required with no firm);
+  - the response gains `personalProfile {id, name}`, and `memberships` lists the personal one first.
+- `HostedProfile.isPersonalDefault` on `/v1/me` and `POST /v1/device-sessions`.
+- 409 `CONFLICT {reason: 'PERSONAL_PROFILE'}` when a personal profile is granted to another user, used as another user's `organizationId`, issued an API key, or bound.
+- `provision:user` takes optional `--organization-id`, plus `--currency` and `--timezone`, and prints `personal <id> <name>`.
+
+### Changed
+- `UserRepository.create` takes `personal` and returns `{ user, memberships, personalOrganization }`. Memory and Prisma are both all-or-nothing.
+- Admin `Organization` shows `personalOwnerUserId`.
+- API `1.14.0-mut120`; `openapi.yaml` and `src/hosted/api/schema.d.ts` were regenerated.
+- Tests that pinned one membership or one profile now include the personal one, and "last membership revoked" tests revoke it too. These are intentional changes.
+
+### Fixed (pre-landing review, 2026-10-12)
+- `/v1/me` order is now deterministic: firms come first and the caller's personal profile last. Before this, the portal landed firm users on Personal by UUID chance (QA: 1–2 of 20 per firm; 0 of 20 after the fix).
+- `CreateUserRequest.timezone` must be an IANA zone (422).
+- An owner's own personal-profile membership cannot be revoked (409). This resolved TD-089.
+- API-key auth refuses keys on personal profiles (409); this replaces the bind-only check.
+- A 409 on create-user says "email" only for an email clash.
+- Provisioning docs (`server/README.md`, `server/DEPLOYMENT.md`) are updated.
+- New tests:
+  - `/v1/me` never marks another user's personal profile;
+  - store contract: unknown owner gives ForeignKeyViolation, and a personal-slug clash rolls the user back;
+  - CLI: no-firm create makes exactly one membership.
+- New debt: TD-091.
+
+### Technical
+- Cut from the ticket: the backfill script, since there were no existing users. Before deploying, confirm `SELECT count(*) FROM users` is 0 in production (review action).
+
+**Run on this branch (`feature/mut-120-personal-profile`):**
+- server `npm run lint` 0 problems; `npm run typecheck` clean; `npm test` 1,333 passed (12 Postgres files skipped);
+- `npm run test:db` against a dedicated database: 82 files, 1,423 passed;
+- `openapi:check` up to date; `npm run build` ok;
+- root `npm run typecheck` clean, `hosted:types:check` matches, `npx vitest run src/hosted` 145 passed.
+
 ## [Unreleased] - 2026-10-12 — Brand v2 foundation: tokens, Thmanyah + Plex Mono and the type scale in every web build (MUT-102)
 
 **Why:** `theme.css` still carried the old look (teal, Inter, Source Serif 4, a 13px body) and repeated every colour in four blocks, while Brand v2 sat unimported. This lands Brand v2 once for the landing page, the app, the desktop app and the portal, with light text at AAA. Epic MUT-101; ADR-058 (amends ADR-018). Plan `.claude/designs/mut-102-brand-v2-foundation.md` (PD0–PD11, eng review D1–D8); test plan `…-tests.md`.

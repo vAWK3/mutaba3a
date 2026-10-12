@@ -1,11 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '../auth/users.js';
-import { ApiError } from '../errors.js';
+import { ApiError, personalProfileConflict } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
-import type { LedgerStore, UserRecord } from '../repositories/ports.js';
+import type { CreateUserInput, LedgerStore, Organization, UserLocale, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -51,6 +52,27 @@ const MembershipParams = UserIdParam.extend({
 
 type AuditAction = 'user.created' | 'user.password_reset' | 'user.disabled' | 'user.enabled' | 'membership.granted' | 'membership.revoked';
 
+/** MUT-120: the personal profile is named in the user's language; a server-generated name, so no i18n layer (precedent: expenses/presets.ts). */
+const PERSONAL_PROFILE_NAME: Record<UserLocale, string> = { en: 'Personal', ar: 'شخصي' };
+
+/**
+ * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
+ * with neither there is nothing to default to, so the request is invalid.
+ */
+function resolvePersonalSettings(
+  request: { defaultCurrency?: string | undefined; timezone?: string | undefined },
+  firm: Pick<Organization, 'defaultCurrency' | 'timezone'> | null,
+): { defaultCurrency: string; timezone: string } | null {
+  const defaultCurrency = request.defaultCurrency ?? firm?.defaultCurrency;
+  const timezone = request.timezone ?? firm?.timezone;
+  return defaultCurrency && timezone ? { defaultCurrency, timezone } : null;
+}
+
+function personalProfileFor(locale: UserLocale, settings: { defaultCurrency: string; timezone: string }): CreateUserInput['personal'] {
+  // slugify() strips Arabic, and the user id does not exist until the store creates it: a random, ASCII, never-shown slug.
+  return { name: PERSONAL_PROFILE_NAME[locale], slug: `personal-${randomUUID()}`, ...settings };
+}
+
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
   const { store, passwordHasher, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
@@ -89,13 +111,13 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       method: 'post',
       path: '/admin/v1/users',
       tags: ['Admin'],
-      summary: 'Create a user with its first membership (one-time password returned once)',
+      summary: 'Create a user with their personal profile and, optionally, a firm membership (one-time password returned once)',
       security: [{ adminToken: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: CreateUserRequestSchema } } } },
       responses: {
         201: { description: 'Created', content: { 'application/json': { schema: CreateUserResponseSchema } } },
         404: { description: 'Unknown organization', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
-        409: { description: 'Email already in use', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'Email already in use, or organizationId is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
@@ -103,22 +125,48 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const body = c.req.valid('json');
       const email = normalizeEmail(body.email);
-      if (!(await store.organizations.getById(body.organizationId))) throw new ApiError('NOT_FOUND', 'Organization not found');
+      const firm = body.organizationId ? await store.organizations.getById(body.organizationId) : null;
+      if (body.organizationId && !firm) throw new ApiError('NOT_FOUND', 'Organization not found');
+      if (firm?.personalOwnerUserId) throw personalProfileConflict('A personal profile belongs to one user and cannot be anyone else’s organization');
+      const settings = resolvePersonalSettings(body, firm);
+      if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
       const initialPassword = generateOneTimePassword();
       const passwordHash = await passwordHasher.hash(initialPassword);
       try {
-        const { user, membership } = await store.users.create({
+        const { user, memberships, personalOrganization } = await store.users.create({
           email,
           displayName: body.displayName,
           passwordHash,
           locale: body.locale,
-          organizationId: body.organizationId,
+          ...(firm ? { organizationId: firm.id } : {}),
+          personal: personalProfileFor(body.locale, settings),
           at: c.get('now')(),
         });
-        await audit(c, [membership.organizationId], user.id, 'user.created', { email: user.email, displayName: user.displayName });
-        return c.json({ user: serializeUser(user), memberships: [serializeMembership(membership)], initialPassword }, 201);
+        await store.audit.append({
+          organizationId: personalOrganization.id,
+          actorType: 'ADMIN',
+          actorId: null,
+          action: 'organization.created',
+          entityType: 'organization',
+          entityId: personalOrganization.id,
+          metadata: { personal: true, ownerUserId: user.id },
+          requestId: c.get('requestId'),
+        });
+        await audit(c, memberships.map((m) => m.organizationId), user.id, 'user.created', { email: user.email, displayName: user.displayName });
+        return c.json(
+          {
+            user: serializeUser(user),
+            memberships: memberships.map(serializeMembership),
+            personalProfile: { id: personalOrganization.id, name: personalOrganization.name },
+            initialPassword,
+          },
+          201,
+        );
       } catch (err) {
-        if (err instanceof UniqueViolation) throw new ApiError('CONFLICT', 'A user with this email already exists');
+        // MUT-120: the transaction also writes the personal organization, so only an email clash is reported as one.
+        if (err instanceof UniqueViolation) {
+          throw new ApiError('CONFLICT', err.constraint.includes('email') ? 'A user with this email already exists' : 'A conflicting record already exists; retry the request');
+        }
         if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'Organization not found');
         throw err;
       }
@@ -183,13 +231,18 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         201: { description: 'Granted', content: { 'application/json': { schema: GrantMembershipResponseSchema } } },
         200: { description: 'Already granted', content: { 'application/json': { schema: GrantMembershipResponseSchema } } },
         404: notFound,
+        409: { description: 'The organization is another user’s personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
     async (c) => {
       const user = await mustGetUser(c.req.valid('param').userId);
       const { organizationId } = c.req.valid('json');
-      if (!(await store.organizations.getById(organizationId))) throw new ApiError('NOT_FOUND', 'Organization not found');
+      const org = await store.organizations.getById(organizationId);
+      if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
+      if (org.personalOwnerUserId && org.personalOwnerUserId !== user.id) {
+        throw personalProfileConflict('A personal profile belongs to one user and cannot be granted to another');
+      }
       const { membership, created } = await store.memberships.grant(user.id, organizationId, c.get('now')());
       if (created) await audit(c, [organizationId], user.id, 'membership.granted');
       return c.json({ membership: serializeMembership(membership), created }, created ? 201 : 200);
@@ -207,12 +260,17 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       responses: {
         200: { description: 'Removed, or there was nothing to remove', content: { 'application/json': { schema: RemoveMembershipResponseSchema } } },
         404: notFound,
+        409: { description: 'The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
     async (c) => {
       const { userId, organizationId } = c.req.valid('param');
       const user = await mustGetUser(userId);
+      // MUT-120: a user always keeps their own personal profile; it cannot be revoked away from them.
+      if ((await store.organizations.getById(organizationId))?.personalOwnerUserId === user.id) {
+        throw personalProfileConflict('A user keeps their own personal profile; it cannot be revoked');
+      }
       const removed = await store.memberships.revoke(user.id, organizationId);
       if (removed) await audit(c, [organizationId], user.id, 'membership.revoked');
       return c.json({ removed }, 200);

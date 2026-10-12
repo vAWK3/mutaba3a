@@ -137,8 +137,12 @@ export class PrismaLedgerStore implements LedgerStore {
               updatedAt: input.at,
             },
           });
-          const membership = await tx.membership.create({ data: { userId: user.id, organizationId: input.organizationId, createdAt: input.at } });
-          return { user: toUser(user), membership: toMembership(membership) };
+          const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id } });
+          const memberships = [];
+          for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
+            memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, createdAt: input.at } })));
+          }
+          return { user: toUser(user), memberships, personalOrganization };
         }),
       ),
     getById: async (id) => mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser),

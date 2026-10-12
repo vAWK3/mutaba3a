@@ -66,3 +66,12 @@ export class ApiError extends Error {
     return { error };
   }
 }
+
+/**
+ * MUT-120: a personal profile belongs to one person and to no external system,
+ * so it is never bound, issued an API key or granted to anyone else. An existing
+ * CONFLICT with a reason, not a new code: a new code is a contract change Malafat maps.
+ */
+export function personalProfileConflict(message: string): ApiError {
+  return new ApiError('CONFLICT', message, { reason: 'PERSONAL_PROFILE' });
+}

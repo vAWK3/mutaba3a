@@ -514,7 +514,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Bound to a different tenant, or the tenant is bound to another organization */
+                /** @description Bound to a different tenant, the tenant is bound to another organization, or this is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -7489,6 +7489,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description A personal profile cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description Validation failed */
                 422: {
                     headers: {
@@ -7673,7 +7682,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create a user with its first membership (one-time password returned once) */
+        /** Create a user with their personal profile and, optionally, a firm membership (one-time password returned once) */
         post: {
             parameters: {
                 query?: never;
@@ -7714,7 +7723,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Email already in use */
+                /** @description Email already in use, or organizationId is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -7857,6 +7866,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description The organization is another user’s personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -7908,6 +7926,15 @@ export interface paths {
                 };
                 /** @description Unknown user or organization */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -8190,6 +8217,7 @@ export interface components {
             access: {
                 [key: string]: "read-write" | "read" | "none";
             };
+            isPersonalDefault: boolean;
         };
         /** @enum {string} */
         Currency: "ILS" | "USD" | "EUR";
@@ -8230,6 +8258,8 @@ export interface components {
             slug: string;
             defaultCurrency: components["schemas"]["Currency"];
             timezone: string;
+            /** Format: uuid */
+            personalOwnerUserId: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -9702,6 +9732,11 @@ export interface components {
         CreateUserResponse: {
             user: components["schemas"]["UserSummary"];
             memberships: components["schemas"]["Membership"][];
+            personalProfile: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            };
             initialPassword: string;
         };
         UserSummary: {
@@ -9731,7 +9766,9 @@ export interface components {
             displayName: string;
             locale?: components["schemas"]["UserLocale"];
             /** Format: uuid */
-            organizationId: string;
+            organizationId?: string;
+            defaultCurrency?: components["schemas"]["Currency"];
+            timezone?: string;
         };
         UserList: {
             users: components["schemas"]["UserSummary"][];

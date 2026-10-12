@@ -47,7 +47,12 @@ async function organization(h: Harness, name = `Sader Law Firm ${++seq}`): Promi
 async function createUser(h: Harness, organizationId: string, email = `partner${++seq}@firm.ps`) {
   const res = await h.app.request('/admin/v1/users', send('POST', { email, displayName: 'Nour Haddad', organizationId }));
   expect(res.status).toBe(201);
-  return read(res) as Promise<{ user: { id: string; email: string; status: string; passwordChangedAt: string }; memberships: { organizationId: string }[]; initialPassword: string }>;
+  return read(res) as Promise<{
+    user: { id: string; email: string; status: string; passwordChangedAt: string };
+    memberships: { organizationId: string }[];
+    personalProfile: { id: string; name: string };
+    initialPassword: string;
+  }>;
 }
 
 async function auditActions(h: Harness, organizationId: string): Promise<{ action: string; actorType: string; entityId: string }[]> {
@@ -57,7 +62,7 @@ async function auditActions(h: Harness, organizationId: string): Promise<{ actio
 }
 
 describe('POST /admin/v1/users', () => {
-  it('creates a user with one membership and a one-time password, never the hash', async () => {
+  it('creates a user with their personal and firm memberships and a one-time password, never the hash', async () => {
     const h = harness();
     const org = await organization(h);
     const res = await h.app.request('/admin/v1/users', send('POST', { email: '  Partner@Firm.PS ', displayName: 'Nour Haddad', organizationId: org.id }));
@@ -67,7 +72,10 @@ describe('POST /admin/v1/users', () => {
     const body = JSON.parse(text);
     expect(body.user).toMatchObject({ email: 'partner@firm.ps', displayName: 'Nour Haddad', locale: 'en', status: 'ACTIVE' });
     expect(body.user).not.toHaveProperty('passwordHash');
-    expect(body.memberships).toEqual([{ organizationId: org.id, createdAt: '2026-10-11T09:00:00.000Z' }]);
+    expect(body.memberships).toEqual([
+      { organizationId: body.personalProfile.id, createdAt: '2026-10-11T09:00:00.000Z' },
+      { organizationId: org.id, createdAt: '2026-10-11T09:00:00.000Z' },
+    ]);
     expect(body.initialPassword).toMatch(/^[A-Za-z0-9_-]{24}$/);
 
     const stored = await h.store.users.getById(body.user.id);
@@ -88,7 +96,7 @@ describe('POST /admin/v1/users', () => {
     await createUser(h, org.id, 'partner@firm.ps');
     const res = await h.app.request('/admin/v1/users', send('POST', { email: ' PARTNER@firm.ps', displayName: 'Again', organizationId: org.id }));
     expect(res.status).toBe(409);
-    expect((await read(res)).error.code).toBe('CONFLICT');
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', message: 'A user with this email already exists' });
   });
 
   it('answers 404 for an unknown organization and creates nobody', async () => {
@@ -107,6 +115,134 @@ describe('POST /admin/v1/users', () => {
     const org = await organization(h);
     const res = await h.app.request('/admin/v1/users', send('POST', { organizationId: org.id, ...partial }));
     expect(res.status).toBe(422);
+  });
+});
+
+async function createdPersonalId(h: Harness, userId: string): Promise<string> {
+  const memberships = await h.store.memberships.listByUser(userId);
+  const orgs = await Promise.all(memberships.map((m) => h.store.organizations.getById(m.organizationId)));
+  const personal = orgs.filter((o) => o?.personalOwnerUserId === userId);
+  expect(personal).toHaveLength(1);
+  return personal[0]!.id;
+}
+
+describe('personal profile (MUT-120)', () => {
+  it('creates the personal profile beside the firm, named for the locale, inheriting the firm currency and timezone', async () => {
+    const h = harness();
+    const res = await h.app.request('/admin/v1/organizations', send('POST', { name: 'Haddad & Co', defaultCurrency: 'USD', timezone: 'Asia/Hebron' }));
+    const firm = await read(res);
+    const created = await createUser(h, firm.id);
+    expect(created.personalProfile.name).toBe('Personal');
+    expect(created.memberships.map((m) => m.organizationId)).toEqual([created.personalProfile.id, firm.id]);
+    expect(await h.store.organizations.getById(created.personalProfile.id)).toMatchObject({
+      name: 'Personal',
+      defaultCurrency: 'USD',
+      timezone: 'Asia/Hebron',
+      personalOwnerUserId: created.user.id,
+    });
+    expect((await h.store.organizations.getById(created.personalProfile.id))?.slug).toMatch(/^personal-[0-9a-f-]{36}$/);
+  });
+
+  it('names it شخصي for an Arabic-locale user', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'ar@firm.ps', displayName: 'نور', locale: 'ar', organizationId: org.id }));
+    expect((await read(res)).personalProfile.name).toBe('شخصي');
+  });
+
+  it('creates a personal-only user from a currency and timezone, with no firm', async () => {
+    const h = harness();
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'solo@firm.ps', displayName: 'Solo', defaultCurrency: 'EUR', timezone: 'Europe/Berlin' }));
+    expect(res.status).toBe(201);
+    const body = await read(res);
+    expect(body.memberships).toEqual([{ organizationId: body.personalProfile.id, createdAt: '2026-10-11T09:00:00.000Z' }]);
+    expect(await h.store.organizations.getById(body.personalProfile.id)).toMatchObject({ defaultCurrency: 'EUR', timezone: 'Europe/Berlin', personalOwnerUserId: body.user.id });
+  });
+
+  it.each([
+    [{}],
+    [{ defaultCurrency: 'ILS' }],
+    [{ timezone: 'Asia/Jerusalem' }],
+  ])('answers 422 with no firm and an incomplete %j, creating nobody', async (partial) => {
+    const h = harness();
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'half@firm.ps', displayName: 'Half', ...partial }));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.code).toBe('VALIDATION_FAILED');
+    expect(await h.store.users.findByEmail('half@firm.ps')).toBeNull();
+  });
+
+  it.each([
+    [{ defaultCurrency: 'ILS', timezone: 'Asia/Jerusalim' }, false],
+    [{ timezone: 'Mars/Olympus_Mons' }, true],
+  ])('answers 422 for an unknown IANA timezone %j (firm: %s), creating nobody (MUT-120 review)', async (partial, withFirm) => {
+    const h = harness();
+    const org = withFirm ? await organization(h) : null;
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'tz@firm.ps', displayName: 'TZ', ...(org ? { organizationId: org.id } : {}), ...partial }));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.code).toBe('VALIDATION_FAILED');
+    expect(await h.store.users.findByEmail('tz@firm.ps')).toBeNull();
+  });
+
+  it('refuses to revoke a user’s own personal-profile membership, and keeps it (MUT-120 review)', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user, personalProfile } = await createUser(h, org.id);
+    const res = await h.app.request(`/admin/v1/users/${user.id}/memberships/${personalProfile.id}`, send('DELETE'));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.memberships.find(user.id, personalProfile.id)).not.toBeNull();
+    expect((await h.app.request(`/admin/v1/users/${user.id}/memberships/${org.id}`, send('DELETE'))).status).toBe(200);
+  });
+
+  it('lets a request currency and timezone override the firm’s', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'o@firm.ps', displayName: 'O', organizationId: org.id, defaultCurrency: 'USD', timezone: 'Asia/Hebron' }));
+    const body = await read(res);
+    expect(await h.store.organizations.getById(body.personalProfile.id)).toMatchObject({ defaultCurrency: 'USD', timezone: 'Asia/Hebron' });
+  });
+
+  it('a retried create answers 409 and leaves the user with exactly one personal profile', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user } = await createUser(h, org.id, 'retry@firm.ps');
+    const again = await h.app.request('/admin/v1/users', send('POST', { email: 'retry@firm.ps', displayName: 'Again', organizationId: org.id }));
+    expect(again.status).toBe(409);
+    const personal = (await h.store.organizations.list()).filter((o) => o.personalOwnerUserId !== null);
+    expect(personal.map((o) => o.personalOwnerUserId)).toEqual([user.id]);
+  });
+
+  it('refuses to grant a personal profile to anyone but its owner', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const a = await createUser(h, org.id);
+    const b = await createUser(h, org.id);
+    const res = await h.app.request(`/admin/v1/users/${b.user.id}/memberships`, send('POST', { organizationId: a.personalProfile.id }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.memberships.find(b.user.id, a.personalProfile.id)).toBeNull();
+    const own = await h.app.request(`/admin/v1/users/${a.user.id}/memberships`, send('POST', { organizationId: a.personalProfile.id }));
+    expect(own.status).toBe(200);
+    expect((await read(own)).created).toBe(false);
+  });
+
+  it('refuses to create a user inside someone else’s personal profile, creating nobody', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const a = await createUser(h, org.id);
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'intruder@firm.ps', displayName: 'Intruder', organizationId: a.personalProfile.id }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    expect(await h.store.users.findByEmail('intruder@firm.ps')).toBeNull();
+  });
+
+  it('audits as ADMIN: organization.created and user.created on the personal profile, user.created on the firm', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user, personalProfile } = await createUser(h, org.id);
+    const summary = (events: { action: string; actorType: string }[]) => events.map((e) => `${e.actorType}:${e.action}`);
+    expect(summary(await auditActions(h, personalProfile.id))).toEqual(['ADMIN:organization.created', 'ADMIN:user.created']);
+    expect(summary((await auditActions(h, org.id)).filter((e) => e.entityId === user.id))).toEqual(['ADMIN:user.created']);
   });
 });
 
@@ -129,7 +265,7 @@ describe('GET /admin/v1/users', () => {
     expect(res.status).toBe(200);
     const body = await read(res);
     expect(body.user.id).toBe(user.id);
-    expect(body.memberships.map((m: { organizationId: string }) => m.organizationId)).toEqual([org.id]);
+    expect(body.memberships.map((m: { organizationId: string }) => m.organizationId).sort()).toEqual([org.id, (await createdPersonalId(h, user.id))].sort());
     expect((await h.app.request('/admin/v1/users/00000000-0000-4000-8000-000000000000', send('GET'))).status).toBe(404);
   });
 });
@@ -245,11 +381,14 @@ describe('audit', () => {
   it('still answers 200 for a user with no memberships, auditing nowhere', async () => {
     const h = harness();
     const org = await organization(h);
-    const { user } = await createUser(h, org.id);
+    const { user, personalProfile } = await createUser(h, org.id);
+    // MUT-120: the personal membership has to go too before the user has none. The admin API refuses
+    // that revoke, so the no-membership state is reached at the store, as an operator repair would.
     await h.app.request(`/admin/v1/users/${user.id}/memberships/${org.id}`, send('DELETE'));
-    const before = h.store.auditCount(org.id);
+    await h.store.memberships.revoke(user.id, personalProfile.id);
+    const before = [h.store.auditCount(org.id), h.store.auditCount(personalProfile.id)];
     expect((await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST'))).status).toBe(200);
-    expect(h.store.auditCount(org.id)).toBe(before);
+    expect([h.store.auditCount(org.id), h.store.auditCount(personalProfile.id)]).toEqual(before);
   });
 });
 
