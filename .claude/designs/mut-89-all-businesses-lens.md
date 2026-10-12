@@ -198,7 +198,7 @@ interface ProfileState {
 - **The working business is deleted or archived while the lens is on:** the existing auto-correct effect moves to the default business, and the lens is unaffected.
 - **The lens is on and a business is archived, leaving one:** `isAllProfiles` is false (fewer than 2), so the switcher shows the working business. The lens returns if a second business comes back.
 - **Pre-existing, fixed here too (eng review D8):** while profiles load, `useProfileFilter()` returns `''`, which every repository read treats as "every record", so single-business pages could briefly read all businesses. MUT-89 gates Income, Expenses, Projects, Insights and Planning on a resolved business id, the same way the lens gates Home and Clients.
-- **MUT-81 (being designed in another session)** switches the profile on "Show" with `setActiveProfile`. In All, a save into any business is visible on Home and Clients, so there is no message. On other screens Show still switches the working business, and that turns the lens off. Whichever ticket lands second reconciles this; flag it on MUT-81.
+- **MUT-81** landed first. Its "Show" switched business with `setActiveProfile`, which turns All off; the premise that no message fires in All was false (only Home's two sections claim rows). Reconciled at landing: Show uses `setWorkingProfile` (ADR-051 §9).
 - **MUT-57** (both Add menus ask for the business in All mode) becomes testable once this lands. Its sidebar Client/Project path stays as is here (O7).
 
 ## 8. Out of scope

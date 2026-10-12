@@ -1647,6 +1647,16 @@ Plan: `.claude/designs/mut-89-all-businesses-lens-tests.md`. ADR-051. Tests were
 
 **Not run:** the `qa/` release-QA kit (no qa spec covers this flow yet).
 
+**Pre-landing review round (tests written first):**
+- `SavedFlashAnnouncer.test.tsx`: Show keeps All on.
+- `ClientDrawer.test.tsx` and `ProjectDrawer.test.tsx`: each prefills the picker's business.
+- `SidebarNav.features.test.tsx`: New → Income/Expense sets the working business before navigating.
+- `ProfileQuickPicker.test.tsx`: placed from the saved rectangle, focuses its first business, Escape returns focus.
+- `useProfileAwareAction.test.tsx`: the real All state, with a concrete working id.
+- `IncomeDrawer.test.tsx`: business before client; from a client; duplicating keeps the business.
+- `profileStore.test.ts`: the route flag never writes the saved key.
+- `AppShell.gate.test.tsx`: AppShell routes pages through the gate (mutation-checked).
+
 ### MUT-84 — Clients split view on wide windows (epic MUT-74, 2026-10-12)
 
 Plan: `.claude/designs/mut-84-clients-split-view-tests.md`. ADR-050. TD-067.

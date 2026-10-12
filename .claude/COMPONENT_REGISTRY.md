@@ -1378,7 +1378,10 @@ The parts always add up to `total`. It takes entries and clients rather than a b
   - it is `''` with no business at all, and `undefined` while the businesses load (read nothing yet);
   - it ignores the route flag.
 - **`useActiveProfile()`**: `activeProfileId` is always concrete. `isAllProfiles` and `showAllProfilesOption` (for the chrome) need the lens, an owed screen and 2 or more businesses. `setActiveProfile(id)` is a pick (lens off); `setAllBusinesses(on)` turns the lens on or off.
-- **`useOwedScreenSync()`**: called once in AppShell. It reads `useMatches()` for `staticData.owedLens` and writes `onOwedScreen` before paint.
+- **`useOwedScreenSync()`**: called once in AppShell. It reads `useMatches()` for `staticData.owedLens` and writes `onOwedScreen` before paint, into **`useOwedScreenStore`** (`src/lib/profileStore.ts`), an unsaved store kept apart from the persisted profile store so navigation never writes localStorage.
+- **`useProfileAwareAction`**: `trigger(event, returnFocus?)` records where the asking menu item was (`anchorRect`) and the button to give focus back to (`returnFocus`). `ProfileQuickPicker` places itself from that rectangle, focuses its first business, and returns focus on Escape. Callers pass `menu.buttonProps.ref.current`.
+- **`POPOVER_EDGE_MARGIN`** (`src/components/layout/popoverPosition.ts`, beside `nudgeInside`): the one edge gap for TruncatedTitle, FxRateReadout and ProfileQuickPicker.
+- **`ClientOwedIndexRow`** (`src/types`): a clients-index row, `ClientSummary` plus the required `profileIds`.
 
 **Components:**
 - **`BusinessesGate`** (AppShell.tsx): renders the routed page only once the businesses have loaded.

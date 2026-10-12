@@ -164,7 +164,7 @@ tables.
   - **What it shows:** Owed now per currency across every live business, never summed, and a business tag on each row. Unassigned records and archived businesses stay out.
   - **It sticks:** every other screen keeps working in one concrete business, the *working business* (the last one picked), and coming back to Home shows All again. Picking a business turns it off.
   - **Creating from All asks which business:** the Income drawer and the Add menus do.
-  - **State and gating:** `profileStore` (working business + `allBusinesses`, with `onOwedScreen` synced from the route). Home and Clients read `useOwedLens`. AppShell's `BusinessesGate` mounts pages only once the businesses have loaded, so no page ever reads with a blank business.
+  - **State and gating:** `profileStore` (working business + `allBusinesses`, persisted) and an unsaved `useOwedScreenStore` (`onOwedScreen`, synced from the route). Home and Clients read `useOwedLens`. AppShell's `BusinessesGate` mounts pages only once the businesses have loaded, so no page ever reads with a blank business.
 - **Clients index (MUT-7 / ADR-035, MUT-83 / ADR-049, MUT-84 / ADR-050)** — `/clients` answers "who owes me, and who is late".
   - **Strip:** the client count and Owed now. Owed now equals Home's for every currency.
   - **Columns:** Client · Owed Now (per currency, or Settled) · Overdue (per currency, with the oldest item's age) · Last Payment (date and amount, or Never paid) · Last Activity.

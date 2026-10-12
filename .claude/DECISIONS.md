@@ -2196,7 +2196,7 @@ Home counted D1 to D3; the Clients strip counted only D4.
 
 **Status**: Active
 **Date**: 2026-10-12
-**Numbering**: the epic's parallel lanes reserve ids; lane 3 holds ADR-051 (TD-068 was reserved too and is unused).
+**Numbering**: the epic's parallel lanes reserve ids; lane 3 holds ADR-051 and TD-068 (the review's leftovers).
 **Context**: MUT-89 (epic MUT-74), decision S2 of `.claude/designs/landing-apple-redesign.md`. Brief `.claude/designs/mut-89-all-businesses-lens.md`, with owner decisions O1–O7 (Basel, 2026-10-12, all as recommended) and eng review D1–D8. Test plan: `.claude/designs/mut-89-all-businesses-lens-tests.md`.
 
 The pitch is "who owes me across my businesses", but the app showed one business at a time. An "All Profiles" mode existed. Commit `70b5093` ("added vendors page", April 2026) switched it off by hard-coding `isAllProfiles = false` and `showAllProfilesOption = false` in `useActiveProfile.ts`. No ADR recorded that "strict mode". Two facts shaped the design:
@@ -2209,7 +2209,7 @@ The pitch is "who owes me across my businesses", but the app showed one business
    - **Fields:**
      - `activeProfileId` is the *working business*, always a concrete id;
      - `allBusinesses` is the lens the user chose;
-     - `onOwedScreen` is not persisted. `useOwedScreenSync` writes it from the route, in a layout effect called once in AppShell.
+     - `onOwedScreen` lives in its own unsaved store, `useOwedScreenStore` (§10). `useOwedScreenSync` writes it from the route, in a layout effect called once in AppShell.
    - **Three setters:**
      - `setActiveProfile` is a pick: it turns the lens off;
      - `setWorkingProfile` is a repair or a drill-down: it keeps the lens (D5);
@@ -2236,6 +2236,14 @@ The pitch is "who owes me across my businesses", but the app showed one business
    - The lens queries run only once `scope !== undefined`.
    - Home's new-user check waits on `isPending`, because a disabled TanStack Query 5 query is pending but not "loading" (D2). With no business at all the scope is `''`, as before (D4).
    - AppShell's `BusinessesGate` holds every routed page until the businesses have loaded, so no page ever reads with a blank business (D8, one gate rather than one per page, the owner's choice during the build).
+   - **Which guard is the guarantee:** the gate is. The per-query `enabled` gate and `scope === undefined` on Home and Clients are screen-level defence for a screen rendered without AppShell (tests, a future embed); they are not a second rule.
+9. **Choosing a business is never silently dropped** (pre-landing review, 2026-10-12):
+   - MUT-81's "Saved · Show" calls `setWorkingProfile`, so it is not a pick and keeps All on (ADR-057's Show is reconciled here).
+   - The Client and Project drawers prefill the business the Add menu's picker returned.
+   - The sidebar's New → Income/Expense makes the picked business the working one before opening its list.
+   - The Income drawer asks for the business before the client, so a client created there lands in the business chosen.
+   - The picker is placed from where its menu item was, takes focus, and gives it back to the menu button.
+10. **The route flag is unsaved** (`useOwedScreenStore`): a persisted store writes localStorage on every change, so keeping it in `profileStore` would rewrite the saved choice on each navigation and overwrite one made in another tab.
 
 **Relation to other ADRs**:
 - **Overrides** the unrecorded April strict mode.
@@ -2247,7 +2255,8 @@ The pitch is "who owes me across my businesses", but the app showed one business
 **Consequences**:
 - In All, a shared client's row equals its profile page (both count every business), so TD-065's gap now shows only in one business.
 - A cold start mounts the page a few milliseconds later, once the businesses query answers.
-- MUT-81's planned "Show" calls `setActiveProfile` to switch business, which would turn All off. Whichever lands second reconciles it (noted on MUT-81).
+- MUT-81 landed first; its "Show" now uses `setWorkingProfile` (§9).
+- Leftovers the review recorded rather than fixed are TD-068.
 - The hosted portal's switcher is unchanged (HP1 carries no S2).
 
 **Alternatives Considered**:

@@ -65,6 +65,33 @@
 ### Fixed
 - **The Add menus' business picker** (`ProfileQuickPicker`), which could not open before this ticket, ran about 21 px past the window's inline end from the top bar. It now nudges itself inside with `nudgeInside`.
 
+### Pre-landing review (qa-reconcile + /review, 2026-10-12)
+Seven specialists, Red Team and an adversarial pass reviewed the branch; Codex was not installed. Main (MUT-81 after-save feedback, the qa port) was merged in, with two code conflicts in `HomeAttentionRow.tsx` / `HomeNeedsAttention.tsx` (both sides added a prop; kept both).
+- **Fixed, a chosen business was being lost** (owner D1):
+  - MUT-81's Saved · Show now uses `setWorkingProfile` and keeps All on;
+  - the Client and Project drawers prefill the business the Add menu's picker returned (`defaultProfileId`);
+  - the sidebar's New → Income/Expense makes the picked business the working one before opening its list.
+- **Fixed** (owner D2):
+  - the picker is placed from where its menu item was, focuses its first business, and gives focus back to the Add/New button on Escape (`trigger(event, returnFocus)`);
+  - the Income drawer asks for the business before the client;
+  - the Home/Clients route flag moved to an unsaved `useOwedScreenStore`, so navigating never rewrites the saved choice or overwrites another tab's.
+- **Auto-fixed:**
+  - Planning reads the resolved working business;
+  - the switcher's up/down estimate counts the All row;
+  - the All row uses the shared option states and its avatar is a solid tint (readable in dark mode);
+  - a badge beside its name is decorative, so screen readers say the business once;
+  - one spacing token for the tag lines;
+  - doc corrections (`ProfileScope`'s `''` vs `[]`, when `byProfile` is present, archived counts).
+- **Tests and cleanups** (owner D3):
+  - an AppShell-level gate test (mutation-checked);
+  - the hook under the real All state;
+  - the Income drawer from a client and when duplicating;
+  - QueryGate moved so `@deprecated` is back on `useTransactions`;
+  - an unused `enabled` param and a re-export dropped;
+  - one shared `POPOVER_EDGE_MARGIN`;
+  - `ClientOwedIndexRow` for index rows.
+- **Recorded as TD-068** (owner D4): the leftovers (cold-start chunk wait, extra renders, middle-click on a muted row, a failed businesses read, re-picking from an off-screen switcher, a drawer kept open across Back, downgrade, the top-bar icon).
+
 ### Files
 - **Changed source:**
   - routing and shell: `src/router.tsx`, `src/components/layout/{AppShell,ProfileSwitcher,TopBar}.tsx`;

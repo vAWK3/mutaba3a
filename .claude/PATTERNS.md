@@ -1968,3 +1968,9 @@ Repository reads treat a falsy business as "every record". Rather than guarding 
 ### Pick and repair are different setters
 When a store value can change because the user chose it or because the app repaired it (a deleted working business), give each its own setter. `setActiveProfile` (a pick) turns All businesses off; `setWorkingProfile` (a repair or a drill-down) keeps it. A background fix must never undo a choice the user made.
 
+### A flag derived from the route does not belong in a persisted store
+zustand's `persist` writes the partialized state to localStorage on every `set`, whatever `partialize` keeps. A value that changes on navigation (the owed-screen flag) would rewrite the saved choice on every route change, and overwrite a choice another tab just saved. Keep derived, per-tab state in its own unsaved store (`useOwedScreenStore`) next to the persisted one.
+
+### A popover opened from a menu item remembers where the item was
+A menu closes (and unmounts its items) as soon as an item is chosen. A follow-up popover anchored to that item must capture the item's rectangle when it opens, never re-measure it. It also needs to take focus itself and know which mounted element to give focus back to (the menu's button), because the item it would return to is gone (`useProfileAwareAction.trigger(event, returnFocus)`).
+
