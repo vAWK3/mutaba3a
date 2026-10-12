@@ -60,12 +60,13 @@
   color: var(--muted);
 }
 
+/* Solid tint with an accent glyph: readable in both themes (MUT-89) */
 .profile-switcher-avatar-all {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-  color: white;
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 /* All Profiles button styling */
@@ -229,18 +230,9 @@
   margin: var(--space-1) var(--space-2);
 }
 
-/* All Profiles option styling */
-.profile-switcher-option-all {
-  background: var(--accent-subtle);
-}
-
-.profile-switcher-option-all:hover {
-  background: var(--accent-subtle);
-}
-
-.profile-switcher-option-all.active {
-  background: var(--accent-subtle);
-}
+/* The All businesses option (MUT-89) uses the shared option states: rest,
+   hover and .active. Only its grid avatar sets it apart, so it never looks
+   selected when it isn't. */
 
 /* Action Buttons */
 .profile-switcher-action {

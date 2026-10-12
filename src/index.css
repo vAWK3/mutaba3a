@@ -1511,7 +1511,7 @@ div.input-with-prefix {
    never runs into (or bidi-reorders with) the client's name */
 .business-tags.home-row-business {
   display: flex;
-  margin-block-start: 2px;
+  margin-block-start: var(--space-1);
 }
 
 .home-row-date {

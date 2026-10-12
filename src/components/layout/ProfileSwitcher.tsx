@@ -5,6 +5,11 @@ import { useT } from '../../lib/i18n';
 import type { BusinessProfile } from '../../types';
 import './ProfileSwitcher.css';
 
+/** Estimates for choosing whether the dropdown opens up or down */
+const OPTION_HEIGHT = 44;
+const ACTIONS_HEIGHT = 60;
+const MAX_DROPDOWN_HEIGHT = 260;
+
 interface ProfileSwitcherProps {
   collapsed?: boolean;
 }
@@ -32,7 +37,8 @@ export function ProfileSwitcher({ collapsed = false }: ProfileSwitcherProps) {
     if (!buttonRef.current) return;
 
     const buttonRect = buttonRef.current.getBoundingClientRect();
-    const dropdownHeight = Math.min(profiles.length * 44 + 60, 260); // Estimate: 44px per item + actions
+    const rows = profiles.length + (showAllProfilesOption ? 1 : 0);
+    const dropdownHeight = Math.min(rows * OPTION_HEIGHT + ACTIONS_HEIGHT, MAX_DROPDOWN_HEIGHT);
     const spaceAbove = buttonRect.top;
     const spaceBelow = window.innerHeight - buttonRect.bottom;
 

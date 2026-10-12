@@ -21,6 +21,9 @@ interface ProfileBadgeProps {
 
   /** Additional CSS class */
   className?: string;
+
+  /** The name is shown beside it: hide the badge from assistive tech so the name is read once */
+  decorative?: boolean;
 }
 
 export function ProfileBadge({
@@ -28,6 +31,7 @@ export function ProfileBadge({
   size = 'sm',
   showTooltip = true,
   className = '',
+  decorative = false,
 }: ProfileBadgeProps) {
   // Generate initial from name
   const initial = profile.name.charAt(0).toUpperCase();
@@ -37,7 +41,8 @@ export function ProfileBadge({
       className={`profile-badge profile-badge-${size} ${className}`}
       style={{ backgroundColor: profile.primaryColor || 'var(--accent)' }}
       title={showTooltip ? profile.name : undefined}
-      aria-label={profile.name}
+      aria-label={decorative ? undefined : profile.name}
+      aria-hidden={decorative || undefined}
     >
       {initial}
     </span>
@@ -65,6 +70,7 @@ export function ProfileBadgeWithName({
         profile={profile}
         size={size}
         showTooltip={showTooltip && !showName}
+        decorative={showName}
       />
       {showName && (
         <bdi className="profile-badge-name" title={profile.name}>{profile.name}</bdi>

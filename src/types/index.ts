@@ -140,8 +140,10 @@ export type ResolvedSettings = Settings & { features: Record<FeatureKey, boolean
 // Query filters for transactions
 /**
  * Which businesses a read covers: one business id, or several for the "All
- * businesses" lens on Home and Clients (MUT-89, ADR-051). An absent or empty
- * id means every record; a list never matches a record with no business.
+ * businesses" lens on Home and Clients (MUT-89, ADR-051).
+ * - absent (undefined) or an empty string: every record;
+ * - a list: records of those businesses only. A record with no business never
+ *   matches, and an empty list matches no record (unlike an empty string).
  */
 export type ProfileScope = string | readonly string[];
 
@@ -280,7 +282,8 @@ export interface ClientOwedIndex {
   /**
    * All businesses only (MUT-89, O4): No client and Archived clients per
    * business, in the scope's order, so each muted row can open Income in its
-   * own business. Absent when the index covers one business.
+   * own business. Present whenever `profileId` is a list; absent for a single
+   * id or undefined.
    */
   byProfile?: OwedBusinessBuckets[];
 }

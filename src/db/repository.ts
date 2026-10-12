@@ -779,8 +779,9 @@ function businessesOfClient(client: Client, clientEntries: Transaction[], scope:
 
 /**
  * No client and Archived clients for each business in the list (MUT-89, O4),
- * with the same partition as the whole index, so the per-business rows add
- * up to the index's own two.
+ * with the same partition as the whole index, so the per-business owed
+ * amounts add up to the index's own two. Counts need not: an archived client
+ * owing in two businesses is counted in each business's row.
  */
 function bucketsPerBusiness(
   entries: Transaction[],
