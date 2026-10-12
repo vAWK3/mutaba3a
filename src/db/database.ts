@@ -28,16 +28,6 @@ import type {
   Engagement,
   EngagementVersion,
 } from './retained/engagementSchema';
-import type {
-  LocalDevice,
-  TrustedPeer,
-  Operation,
-  PeerCursor,
-  EntityFieldMeta,
-  MoneyEventVersion,
-  Conflict,
-  SyncHistoryEntry,
-} from '../sync/core/ops-types';
 
 /**
  * Note the v18 upgrade wrote on the payment records it created from
@@ -85,15 +75,7 @@ export class MiniCrmDatabase extends Dexie {
   // Payment records table
   paymentRecords!: Table<PaymentRecord, string>;
 
-  // Sync tables
-  localDevice!: Table<LocalDevice, string>;
-  trustedPeers!: Table<TrustedPeer, string>;
-  opLog!: Table<Operation, string>;
-  peerCursors!: Table<PeerCursor, string>;
-  entityFieldMeta!: Table<EntityFieldMeta, string>;
-  moneyEventVersions!: Table<MoneyEventVersion, string>;
-  conflictQueue!: Table<Conflict, string>;
-  syncHistory!: Table<SyncHistoryEntry, string>;
+  // The device-sync tables (versions 2–20) were dropped in v21 (MUT-73).
 
   constructor(name = 'mutaba3a') {
     super(name);
@@ -934,6 +916,28 @@ export class MiniCrmDatabase extends Dexie {
         // and leave the app unable to open. The user can switch areas on by hand.
         console.error('[db] v20: could not auto-enable optional areas:', error);
       }
+    });
+
+    // V21 (MUT-73, ADR-053): device-to-device sync is retired, and with it the
+    // eight tables only it read or wrote: device identity, peers, the op-log,
+    // peer cursors, LWW field clocks, transaction version snapshots, the
+    // conflict queue and sync history. ADR-053 overrides ADR-029 ("removing a
+    // feature never removes its tables") for these eight only: every user
+    // record lives in a table this version does not touch, and no shipped
+    // screen could open the snapshots or conflicts. Dexie drops the stores
+    // after any upgraders run; versions 1–20 above stay as written. A backup
+    // saved before this version still carries the rows; restore skips them.
+    // If a pre-v21 build ever reopens the database, Dexie recreates the stores
+    // empty, and only a later version that re-declares these nulls removes them.
+    this.version(21).stores({
+      localDevice: null,
+      trustedPeers: null,
+      opLog: null,
+      peerCursors: null,
+      entityFieldMeta: null,
+      moneyEventVersions: null,
+      conflictQueue: null,
+      syncHistory: null,
     });
   }
 }

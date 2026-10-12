@@ -48,8 +48,9 @@ afterEach(async () => {
 });
 
 describe('Migration v20 — auto-enable optional areas that have data', () => {
-  it('bumps the singleton to v20 without changing the settings index', () => {
-    expect(db.verno).toBe(20);
+  it('bumps the singleton past v20 without changing the settings index', () => {
+    // v21 (MUT-73) only drops the sync tables, so the settings index is v20's.
+    expect(db.verno).toBe(21);
     expect(db.settings.schema.primKey.name).toBe('id');
     expect(db.settings.schema.indexes).toHaveLength(0);
   });
@@ -72,7 +73,7 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
     });
 
     const upgraded = await openAtV20(name);
-    expect(upgraded.verno).toBe(20);
+    expect(upgraded.verno).toBe(21); // the v20 upgrade runs on the way to v21
 
     const row = (await upgraded.settings.get('default')) as Settings;
     expect(row.features).toEqual({ ...DEFAULT_FEATURES, invoices: true, projects: true });
@@ -113,7 +114,7 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
 
   it('starts a fresh database at v20 with everything off and no notice', async () => {
     const fresh = await openAtV20(uniqueName());
-    expect(fresh.verno).toBe(20);
+    expect(fresh.verno).toBe(21);
     expect(await fresh.settings.get('default')).toBeUndefined();
     expect(await fresh.settings.count()).toBe(0);
   });

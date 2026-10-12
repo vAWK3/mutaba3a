@@ -79,15 +79,9 @@ const ALL_TABLES = [
   'projectedIncome',
   'engagements',
   'engagementVersions',
-  // Sync tables
-  'localDevice',
-  'trustedPeers',
-  'opLog',
-  'peerCursors',
-  'entityFieldMeta',
-  'moneyEventVersions',
-  'conflictQueue',
-  'syncHistory',
+  // The device-sync tables were dropped in v21 (MUT-73). This list is kept by
+  // hand and misses some live tables (TD-074); the user-facing JSON backup in
+  // backup.ts reads db.tables instead and is complete.
 ] as const;
 
 // ============================================================================
