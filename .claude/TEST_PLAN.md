@@ -1761,3 +1761,17 @@ Plan: `.claude/designs/mut-81-after-save-feedback.md` (two `/plan-eng-review` pa
 **Scope note.** The design review (`/plan-design-review`) approved eleven refinements beyond the ticket's five literal acceptance criteria; this build implements the mechanism and all five criteria, and discloses the rest as TD-077 (anchored-strip presentation, kept as the existing Toast instead) and TD-078 (pagination, the Owed-now tick, currency-block collapse, and a focus chain outside Home) rather than silently dropping them.
 
 **What was run.** `npm run lint`: 0 errors (12 pre-existing warnings, none in changed files). `npm run typecheck`: clean (both `tsconfig.app.json` and `tsconfig.hosted.json`). `npx vitest run`: 218 files, 3,186 passed, 4 skipped (pre-existing). `npm run build`: clean (the one chunk-size warning is pre-existing, unrelated to this change). **Not run:** `npm run test:e2e` / `release-qa` — no browser spec was written for this ticket in this session.
+
+## Hosted API — MUT-61: Received on Malafat profiles (2026-10-12)
+
+Plan: `.claude/designs/mut-61-malafat-received-capture-tests.md`; regression contract D3 in the brief. Run (Node 22, `server/`): `npm test` 1,354 passed / 14 skipped; `npm run test:db` 1,450 passed (twice in a row).
+
+| Area | File | What is pinned |
+|---|---|---|
+| Matrix | `auth/__tests__/writability.test.ts`, `api-key.test.ts`, `store-guard.test.ts`, `__tests__/writability-drift.test.ts` | `capture` is session read-write on both profile kinds, invisible to a key; `sessionScopesFor('MALAFAT')` holds `capture:write`, not `payments:write`; `capture:write` is never issuable; the domain list is pinned exactly; the brief row matches; the generic per-method table covers `capture`/`undoCapture` for every principal × profile |
+| Repository contract | `repositories/__tests__/store-contract-capture.ts` (new; memory + Postgres) | capture writes POSTED/CAPTURE/source/person with no allocations; create writes INTEGRATION; undo reversed → already-reversed; refused on full or partial allocation with nothing changed; not-found for another person, organization, a Malafat payment or an unknown id; `origin`/`allocationState` filters; D2 (a matter is a hint until allocated); the project filter on page 2 |
+| Migration | `repositories/__tests__/migration-mut61.test.ts` (new) | backfill CAPTURE exactly where `createdByUserId` is set; schema has no drift afterwards |
+| Rules | `income/__tests__/compose.test.ts` | `incomeCaptureRulesFor` both ways; `linked-required`: no client, unlinked client, PROJECT-only reference, derived client from a matter |
+| Routes | `__tests__/income-routes.test.ts` | AC 1–6 on profile M: 201 unallocated capture; matter kept; matter alone → client derived and checked; 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED / PROJECT_CUSTOMER_MISMATCH with nothing written; Owed 403 with nothing written; idempotent replay writes one payment; key → PRINCIPAL_NOT_ACCEPTED; undo 204 → 204, 409 after full/partial allocation, staged race (allocation before the write) → 409 with the allocation intact, Malafat payment → 404; payment view fields + filters via the key; summaries count it once and drop it after allocation; `/v1/me` income rules |
+| Regression (D3) | `__tests__/writability-routes.test.ts`, `inbox-filing.test.ts` | every other READ_ONLY row unchanged (403, zero writes); the one intended change (Received, no client → 422) is its own named test; inbox file-as-income on M still 403 |
+

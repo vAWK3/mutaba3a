@@ -1974,3 +1974,17 @@ zustand's `persist` writes the partialized state to localStorage on every `set`,
 ### A popover opened from a menu item remembers where the item was
 A menu closes (and unmounts its items) as soon as an item is chosen. A follow-up popover anchored to that item must capture the item's rectangle when it opens, never re-measure it. It also needs to take focus itself and know which mounted element to give focus back to (the menu's button), because the item it would return to is gone (`useProfileAwareAction.trigger(event, returnFocus)`).
 
+## Hosted API patterns added by MUT-61 (2026-10-12)
+
+### Open a narrow write with its own matrix row, never by widening a shared one
+When a principal needs one more operation in a domain it may only read (a session recording Received on a Malafat-fed profile), add a row whose scope covers exactly the new store methods (`capture` → `payments.capture`, `payments.undoCapture`) instead of making the existing row profile-dependent. Widening `payments` would have opened settle, Owed, credits, allocations, `reverse` and inbox filing at the same time. The store guard then enforces the narrow door below the routes for free. Pin the matrix's domain list in a test so the next row is a decision, not an accident.
+
+### Check-then-act on money is one conditional write
+"Undo unless something landed on it" is a single `updateMany` whose `WHERE` carries the guard (`allocatedMinor = 0`, `status = POSTED`, owner), followed by a re-read only to classify why nothing matched. The competing writer (`allocate`) holds `FOR UPDATE` on the same row, and Postgres re-checks the `WHERE` after the lock wait, so exactly one wins. Prove it at the route with `h.interleave` firing the competing write immediately before the store call. (Owed's twin: e12a5c2.)
+
+### OR-shaped Prisma conditions go in `AND`, never side by side
+Spreading `{ OR: … }` from two helpers into one `where` keeps only the last — `payments.list`'s project filter silently vanished whenever a cursor was present. Put every OR-shaped condition (filters, `cursorWhere(page)`) in an `AND: [...]` array, as `expenseCursorWhere` already did. Test the filter on page 2, not only page 1.
+
+### Publish the rules the route enforces, from the same function
+When what a write accepts depends on the profile, compute it in one pure function (`incomeCaptureRulesFor(writer)`) that both the route and `GET /v1/me` call, so a client reads the rules instead of re-deriving them from `writerOfRecord` and the two can never disagree.
+

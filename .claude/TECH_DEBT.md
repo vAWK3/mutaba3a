@@ -18,6 +18,25 @@
 
 ## Open Debt
 
+### TD-084: Pre-MUT-61 captured payments have no captureSource
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-61)
+**Priority**: Low
+**Impact**: Payments captured before the MUT-61 migration (MUT-65 income, MUT-66 filing, settle) are backfilled `origin: CAPTURE` but keep `captureSource: null`; the surface lived only in `income.received`/`receivable.settled` audit metadata. Malafat's list shows them as captured with no surface. These rows exist only on personal profiles (Malafat-fed profiles refused session payments until MUT-61), and MUT-65/66 are not yet deployed, so production is likely empty.
+**Fix if ever needed**: a one-off script copying `metadata.captureSource` from each payment's audit row.
+
+### TD-085: No index for an organization-wide "unallocated phone payments" list
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-61)
+**Priority**: Low
+**Impact**: `GET /v1/payments?origin=capture&allocationState=unallocated` without `customerId` scans the organization's payments (the `[organizationId, createdAt, id]` index orders, nothing narrows `origin`). MAL-1097 lists per client, which `[organizationId, customerId]` serves. Revisit with `@@index([organizationId, origin, status])` if Malafat adds a firm-wide inbox.
+
+### TD-086: Filing an unsorted Received onto a Malafat-fed profile is still refused
+**Status**: Open
+**Added**: 2026-10-12 (MUT-61)
+**Priority**: Low
+**Impact**: `POST /v1/income` now accepts Received on a Malafat-fed profile, but `POST /v1/inbox/{id}/file-as-income` still requires `payments:write` and is refused `READ_ONLY_PROFILE` there (MUT-69's AC relies on this). The two doors now differ for Received. Deliberately out of MUT-61's scope; a follow-up would move file-as-income's Received branch onto `capture` + `incomeCaptureRulesFor` (ADR-048 decision 4 means a separate route or a split by kind).
+
 ### TD-068: "All businesses" leftovers from the MUT-89 pre-landing review
 **Status**: Open
 **Added**: 2026-10-12 (MUT-89, ADR-051; the owner chose to record these rather than fix them)

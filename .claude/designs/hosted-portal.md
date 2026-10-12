@@ -197,6 +197,8 @@ An API key still implies its organization, and no API-key request accepts an org
 | identity | — | /v1/me, /v1/sessions/current | none | read-write | USER | device |
 <!-- writability-matrix:end -->
 
+> **MUT-61 (2026-10-12):** the `capture` row lets a person record Received on *any* hosted profile, a Malafat-fed one included, without widening `payments`. What each profile then accepts on `POST /v1/income` is `incomeCaptureRulesFor(writerOfRecord)`, published per profile as `income` on `GET /v1/me`. On a Malafat-fed profile that is Received only, for a Malafat-linked client, stored unallocated (`origin: capture`) for Malafat to allocate. See ADR-037's MUT-61 amendment.
+
 How the table is enforced. Each layer reads the same `const`:
 
 1. **Effective scopes.** A session's scope set is generated from its column: `read` grants `<domain>:read`, `read-write` grants both, `none` grants nothing. `requireScope` stays the per-route check.

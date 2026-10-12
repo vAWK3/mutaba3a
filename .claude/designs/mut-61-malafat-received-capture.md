@@ -346,3 +346,17 @@ None.
 - **OUTSIDE COVERAGE:** codex, plan-review phase, unavailable (CLI not installed, native fallback not dispatchable). Missing coverage, not clean.
 - **VERDICT:** No review CLEAR (Eng Review issues_open = mapped work, all decisions resolved); eng review required. Every finding was resolved into accepted scope; ready to implement on the amended plan.
 NO UNRESOLVED DECISIONS
+
+---
+
+## As built (2026-10-12, /eng-build)
+
+These are deviations from the plan above. None changes an approved behavior.
+- **`capturedBy` is resolved per distinct person, not with a Prisma `include`.** `routes/payments.ts` uses `capturersOf(page.items)`, which makes one `users.getById` per distinct `createdByUserId` on a page. A page comes from a handful of people, so there's still no N+1 per payment, and the repository's `PaymentRecord` shape stays unchanged.
+- **D2's rule keys on "has no allocations" (`allocations: { none: {} }`), not `allocatedMinor = 0`.** A payment that was allocated and later reversed has `allocatedMinor` reset to 0. It must not start matching its captured matter again.
+- **The repository contract lives in a new `store-contract-capture.ts`, not in `store-contract-m4.ts`.** This follows the expenses/inbox precedent of one contract per feature.
+- **Settle (`POST /v1/receivables/{id}/settle`) writes `origin: CAPTURE`.** A person settling their own Owed is a capture, which matches the migration's backfill rule. Its response's `payment.capturedBy` is the session user.
+- **`allocationState` filters POSTED payments only.** A REVERSED payment serializes as `unallocated`, with its `status` saying why.
+- **Found and fixed:** `payments.list`'s project filter was dropped from page 2 on, because the cursor's `OR` overwrote it.
+- **The migration tests' timeout is now 60 s, for both MUT-59's and this ticket's.** Replaying history under `test:db` load ran past vitest's 5 s default. The second migration test made the existing one flaky.
+- **Debt:** TD-084 (old captures have no `captureSource`), TD-085 (no org-wide unallocated index), TD-086 (inbox filing as Received onto Malafat is still refused).
