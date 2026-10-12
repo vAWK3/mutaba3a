@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -311,27 +311,34 @@ Tests: `src/pages/landing/__tests__/`.
 ## Drawer Components
 
 ### Base Drawer Pattern
-**Shell**: `src/components/drawers/Drawer.tsx` (`title`, `onClose`, `children`, `footer?`). It renders `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide). The close button is `common.close` (TD-009). The portal's own shell, `src/hosted/components/Drawer.tsx`, does the same and takes `closeLabel` as a prop. Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
-
-All drawers follow this structure:
+Every drawer renders `Drawer` (`src/components/drawers/Drawer.tsx`; the portal's is `src/hosted/components/Drawer.tsx`, which takes `closeLabel`) and is mounted by its owner while its store says open. It is a `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide), and its close button is `common.close` (TD-009). Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
 
 ```tsx
 interface DrawerProps {
-  open: boolean;
-  onClose: () => void;
-  // Entity-specific props
+  title: string;          // names the dialog (aria-labelledby)
+  onClose: () => void;    // Escape, ✕ and the overlay call it at once
+  children: ReactNode;
+  footer?: ReactNode;
 }
 
-// Usage via controller (URL-driven)
-<TransactionDrawerController />
-
-// Or direct (programmatic)
-<TransactionDrawer
-  open={isOpen}
-  onClose={handleClose}
-  transactionId={id}
-/>
+// AppShell
+{incomeDrawer.isOpen && <IncomeDrawer />}
+// IncomeDrawer
+<Drawer title={t('transactions.newIncome')} onClose={closeIncomeDrawer} footer={…}>…</Drawer>
 ```
+
+Unmount it whenever you like: the exit animation plays after it has gone (ADR-044).
+
+### DrawerFrame (MUT-80, ADR-044)
+**Location**: `src/components/ui/drawer/` — `DrawerFrame.tsx` (shell), `useDrawerMotion.ts` (enter, drag, release, interrupt, exit), `useDrawerFocus.ts` (trap and return), `drawerGesture.ts` (pure rules: `classifyDrag`, `closingDelta`, `displayOffset`, `releaseTarget`, `overlayOpacity`, `exitDistance`, `isNoDragTarget`), `drawerMotion.ts` (`DRAWER_SPRING`, `paintDrawer`, `springTo`, `fadeTo`, `playSnapshotExit`), `exitSnapshot.ts` (`captureExitSnapshot`).
+**Purpose**: the one slide-over shell for both builds. Both `Drawer`s wrap it; the local one passes `t('common.close')`, the portal its own label.
+**Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
+**Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `e2e/drawer-motion.spec.ts`.
+
+### Motion physics and focusables (MUT-80)
+- `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
+- `src/lib/dom/focusable.ts`: `FOCUSABLE_SELECTOR`, `focusablesWithin(root)` (skips disabled, `tabindex="-1"`, `[hidden]`, and, where supported, invisible elements). Used by `useMenuButton`'s dialog mode and the drawer trap.
 
 ---
 
@@ -389,6 +396,41 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 - `src/components/__tests__/IncomeDrawer.test.tsx`
 - `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx`
 - `e2e/income-fast-path.spec.ts`
+
+---
+
+### PartialPaymentDrawer ("Record payment")
+**Location**: `src/components/drawers/PartialPaymentDrawer.tsx` + `PartialPaymentDrawer.css`. It is mounted in `AppShell` while `partialPaymentDrawer.isOpen`.
+**Purpose**: record a payment against an income entry, or edit a recorded one. It is the only UI that writes a `PaymentRecord` (ADR-038). Its layout follows P1 (MUT-86, ADR-047): it leads with what's left.
+
+```tsx
+openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
+editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
+// Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
+```
+
+**Layout** (classes prefixed `pay-drawer-`; `index.css` already has global `.payment-row` and `.payment-amount`):
+- **Title:** "Record Payment · {amount} left" (`titleLeft`, the amount in bidi isolates). In edit mode it is "Edit Payment".
+- **Amount:** one large `.input-with-prefix` field, LTR in Arabic. Its label is visually hidden. It is prefilled with `minorToAmountInput` ("3550", "887.50") and selected on open.
+- **Live line** (`aria-live="polite"`, describes the input): "Paid in full", "{amount} still owed", or the overpayment message. Other amount errors show only after Record is pressed.
+- **Date:** a "Payment date · Today ›" row that opens the date field in its place. **Notes:** "+ Add note", which opens a focused field. Edit mode opens Notes when the record has one.
+- **Footer:** Cancel plus Record Payment (create) or Update Payment (edit). With nothing left to record, the footer is Close and there is no form.
+- **Payment history:** below the form, only when the entry has records. Each row has edit and delete.
+
+**Rules** (pure, in `src/lib/paymentEntry.ts`, unit-tested):
+- `describePaymentAmount(raw, currency, allowedMinor)`. Allowed is the remaining balance, plus the record's own amount when editing.
+- `minorToAmountInput(minor)`
+- Dates go through `isFuturePaymentDate` (`lib/dates.ts`), the same helper the repository uses.
+
+**Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
+
+**Props**: `transactionId`, `onClose`. MUT-82 opens it the same way.
+
+**Tests**:
+- `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx`
+- `src/lib/__tests__/paymentEntry.test.ts`
+- `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts`
+- `e2e/record-payment.spec.ts`
 
 ---
 
@@ -841,7 +883,7 @@ ProjectDetailPage.
 
 ## Home Components
 
-Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone.
+Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone. MUT-58 then deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, `lib/monthDetection`, the money-event and guidance types, and the `invalidateMoneyEventQueries` call on every write path); `src/__tests__/noDeadMoneyEventModules.test.ts` keeps that gone too.
 
 ### HomeNeedsAttention
 **Location**: `src/components/home/HomeNeedsAttention.tsx`
@@ -1399,6 +1441,7 @@ interface in `src/db/interfaces.ts`. Rename or delete a repository method and
 interception point.
 
 **Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
-`scheduleGenerator`, `retainerMatching`, and `moneyEventRepo`. `engagementRepo`
-is gone with the module (MUT-10); `moneyEventRepo` survived MUT-11 because the
-Overview page depends on it, and remains outside the seam. See TODOS.md item 2.
+`scheduleGenerator` and `retainerMatching`. `engagementRepo` is gone with the
+module (MUT-10). `moneyEventRepo` survived MUT-11 only because the old Overview
+read it; once MUT-8 deleted those components it had no reader, and MUT-58
+deleted it with `useMoneyEventQueries` (ADR-036 §3). See TODOS.md item 2.

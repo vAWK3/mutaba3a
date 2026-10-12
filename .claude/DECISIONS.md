@@ -46,11 +46,15 @@
 | ADR-035 | Lists May Be Ordered Across Currencies by Today's Rate; Amounts Are Never Shown Converted | Active | 2026-10 |
 | ADR-036 | Home Answers Who Owes Me: Owed Now, Needs Attention, Recent Payments; the Forecast Strip Is Deleted | Active | 2026-10 |
 | ADR-037 | Hosted Users and Sessions: A Human Principal Beside API Keys, a Hosted-Only Portal Build, One Enforced Writability Matrix (Extends ADR-025; Partial Override of ADR-023) | Active | 2026-10 |
-| ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active | 2026-10 |
+| ADR-038 | A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer | Active; §5 superseded by ADR-047 | 2026-10 |
 | ADR-039 | Payment Records Own an Entry's Payment State; an Edit Never Rewrites It | Active | 2026-10 |
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
+| ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active | 2026-10 |
+| ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
+| ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
+| ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 
 ---
 
@@ -1093,6 +1097,14 @@ tools › Export receipts, one ZIP with `<profile>/<month>/<file>`), then delete
 Rows still stay (ADR-029 §1): `monthCloseStatuses` keeps its retained schema in
 `src/db/retained/monthCloseSchema.ts` with a retention test, like engagements.
 
+**Note 2026-10-12 — MUT-58: §4's shared code is gone too.** `moneyEventRepository`
+stayed because three Overview components read it. ADR-036 §3 deleted those
+components, and MUT-58 then deleted the repository, `useMoneyEventQueries` and
+the money-event types, which had no reader left. This applies §4; it does not
+override it. Money events were derived, so no table was involved. The
+`moneyEventVersions` sync table is unrelated and stays (§1), and
+`noDeadMoneyEventModules.test.ts` asserts it is still in the schema.
+
 ---
 
 ## ADR-030: Overpayment Is Rejected; Locked Transactions Still Accept Payments
@@ -1799,7 +1811,7 @@ date field held.
    the drawer (prefilled with the full remaining balance, so settling in full
    is still one confirm) removes that duplicate path outright rather than
    growing a date picker into four more menu items.
-5. **`PartialPaymentDrawer`'s "Mark fully paid" shortcut now submits through
+5. *(Superseded 2026-10-12 by ADR-047: the shortcut is removed, and the date lives in the form again.)* **`PartialPaymentDrawer`'s "Mark fully paid" shortcut now submits through
    `useCreatePaymentRecord` with the form's own `dateInput`**, lifted from
    `PaymentForm` into the drawer so both the shortcut and the explicit submit
    button record under the same chosen date. `useMarkTransactionPaid` is no
@@ -1936,6 +1948,75 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Alternatives Considered**: start empty with the sample optional (rejected by Basel: an empty app doesn't show the value the page just promised); keep the demo flow and fix its bugs (rejected: an internal tool's confirm dialog as a visitor's first sight); delete only `demo_` rows on leaving (rejected: rows the visitor added to a sample business would be orphaned on a profile that no longer exists).
 
+---
+
+## ADR-043: Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: Requested by Basel. The two rollouts had no common front door. The web deploy lived in `deploy.sh`'s interactive menu as `deploy_web`, which ran `git add .` — committing whatever happened to be dirty under a "Release vX (web)" message — and always incremented the patch. The server deploy was `server/scripts/deploy.sh`, correct but only reachable by remembering to export `GCP_PROJECT_ID` and `TF_STATE_BUCKET` first. Nothing checked that the branch was `main`, that parked worktrees and unmerged branches were not quietly excluded from the release, or that `node_modules` matched the lockfile. The project habitually keeps one worktree per epic and several unpushed commits on local `main`, so "what is actually in this release" is a real question, not a theoretical one.
+
+**Decision**:
+1. **`make release web`** and **`make release server`** are the two entry points. A root `Makefile` owns the ordering; it does not reimplement any rollout. `server/scripts/deploy.sh` still performs the server rollout, and the app-version write still comes from `deploy.sh`'s `update_version`, sourced rather than copied.
+2. **`scripts/preflight.sh <web|server>` runs first and is the gate.** It fails the release — before anything is built, committed, pushed or rolled — on: a merge/rebase in progress or conflicted files; not on the release branch; an unclean working tree; a local branch not merged into it; an extra worktree still checked out; being behind `origin`; a `node` major other than 22 (TD-054); `node_modules` staler than `package-lock.json`. Per target it also checks the deploy mechanism and credentials: `netlify.toml` and push access for web; gcloud + ADC, docker daemon, terraform, cloud-sql-proxy, the state bucket's readability and the tfvars file for server. Every escape hatch is a named variable (`ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE`), so overriding a check is a deliberate, visible act.
+3. **The version is asked for, never assumed.** `scripts/bump-version.sh` prompts patch / minor / major / custom / keep, showing the resulting number for each. The app bump moves `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml` and `Cargo.lock` together — the lock included, because the web release never builds Rust and a drifting lock is what broke v0.0.65's Windows build.
+4. **Where the server deploy points is derived, then verified.** `GCP_PROJECT_ID` defaults to `project_id` in `<environment>.tfvars` and `TF_STATE_BUCKET` to the backend of the last `terraform init`; preflight re-derives both and fails on a project mismatch. `deploy.env` (git-ignored, template committed) is for overriding, not for first-time setup.
+5. **The release commit names only the release.** `git add` lists the version files explicitly; it is never `git add .`. The gates (lint, typecheck, tests, openapi/API-type contracts, build, bundle guard) run before the irreversible step, and a single confirmation — which fails closed when there is no terminal — stands in front of the push or the roll.
+
+**Consequences**: A release cannot be cut from a tree that does not describe itself, and both deploys answer the same questions in the same order. Parked epic worktrees now block a release until removed or explicitly allowed, which is the point — their work is not in it. `make release web` immediately exposed TD-057. Desktop (DMG, notarization, GitHub release) stays with `npm run release`; folding it in is a later decision.
+
+**Alternatives Considered**: npm scripts instead of a Makefile (rejected: `package.json` is the frontend's, and the server deploy is not a frontend concern); extend `deploy.sh`'s menu (rejected: its `git add .` and fixed patch bump are the behaviour being replaced, and the file already carries the desktop pipeline); checks inside each `deploy.sh` (rejected: the two would drift, and the checks are most useful before `make` even starts a build).
+
+---
+
+## ADR-044: Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency
+
+**Status**: Active
+**Date**: 2026-10-12
+**Numbering**: ADR-043 was taken on main (release front door) while this ticket was in flight.
+**Context**: MUT-80 (epic MUT-74), brief `.claude/designs/landing-apple-redesign.md` R2 (and HP1: the hosted portal inherits it), approved by Basel 2026-10-11. The shared drawer slid in on a CSS keyframe and had no exit: on Cancel, Escape or Save it vanished in one frame. It could not be dragged or caught mid-motion, and it had no focus trap. Callers close drawers by resetting a store (`{ isOpen: false, mode: 'create' }`), which unmounts the drawer at once.
+
+**Decision**:
+1. **One shared frame.** `DrawerFrame` (`src/components/ui/drawer/`) holds the shell, motion, drag and focus behaviour. The local `Drawer` and the hosted portal's `Drawer` are thin wrappers. The portal may import `components/ui` but not `components/drawers`.
+2. **A close is immediate; the exit is presentation.** `onClose` stays synchronous (Escape, ✕, overlay), and callers keep unmounting whenever they like. When a visible drawer unmounts, it clones its overlay and panel, with the typed values, picked options and scroll positions copied. The clone is `inert` and `aria-hidden` with `pointer-events: none`. It springs out along the drawer's own edge from the live position and velocity, and is then removed. A microtask checks that the original really left the document, which skips StrictMode's rehearsal.
+3. **Drag to dismiss is the one live exit.** After 10px a horizontal press becomes a 1:1 drag (`setPointerCapture`; grab point kept; rubber band past open, constant 0.55); a vertical one leaves the gesture to scrolling. On release, momentum is projected (`(v/1000)·0.998/(1−0.998)`) and past half the width dismisses. The drawer itself commits a drag dismiss: it springs out with the release velocity and calls `onClose` once off-screen, so a press mid-exit catches it from where it is. Drags don't start on form fields, editable content, horizontally scrolling regions or `[data-drawer-no-drag]`.
+4. **Springs.** Apple's response/damping ratio map to stiffness `(2π/response)²` and damping `4πζ/response` at mass 1. Every drawer move is response 0.3 and damping 1.0: an overshoot would pull the panel off its screen edge.
+5. **Reduced motion.** Moves become 150ms opacity cross-fades, while a drag still tracks the person's own pointer. **No layout, no motion:** a panel with no width (jsdom, not rendered) neither enters nor leaves a snapshot.
+6. **Focus.** The trigger is the element focused when the drawer first renders. On mount, focus moves to the dialog unless a field autofocused. Tab and Shift+Tab wrap at the ends (a keydown handler on the panel, so a modal opened on top keeps its focus). On a real unmount, focus returns to the trigger unless something else has taken it.
+7. **`motion@13.4.4`, pinned exactly** (the newest release at least two weeks old on 2026-10-12). Only the vanilla `animate` and `motionValue` are used, never the `motion.div` component, and styles are written imperatively from motion values. Web build cost: the entry chunk grows from 193.93 to 216.51 kB gzip (+22.6 kB); `npm run test:bundles` passes.
+
+**Consequences**: Every drawer, present and future, gets the motion without changes at its call site, and no exit can show reset or reloading content. A close by Save, Cancel or Escape cannot be caught: the record is already saved and the store already closed. The panel carries no inline `transform` at rest, so `position: fixed` descendants keep the viewport as their containing block. Generic physics (`src/lib/motion/physics.ts`) is ready for the payment and after-save stories.
+
+**Alternatives Considered**: keep the live tree mounted for its exit (AnimatePresence) — rejected: every store resets on close, so the exiting drawer re-renders with reset state (an edit title turning into "New", a deleted record into a loading state), and each mount site would need wrapping; make Escape/✕/overlay closes interruptible by deferring `onClose` until the exit ends — rejected: the store would say "open" for 300ms, and a shortcut that reopens a drawer in that window would be closed by the late `onClose`; CSS-only exit — rejected in the brief (no drag, not interruptible); hand-written spring integrator — rejected in the brief in favour of `motion`, which the payment and after-save stories reuse.
+
+---
+
+## ADR-047: The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5)
+
+**Status**: Active
+**Date**: 2026-10-12
+**Context**: MUT-86 (epic MUT-74). Brief: `.claude/designs/landing-apple-redesign.md`, decision P1, approved by Basel 2026-10-11. Test plan: `.claude/designs/mut-86-payment-drawer-tests.md`.
+
+`PartialPaymentDrawer` had two footer actions for one outcome. "Mark Fully Paid" recorded the remaining balance, exactly as Record Payment did with its prefilled amount, but it dropped anything typed in Notes. ADR-038 §5 had lifted the date into the drawer only so that this shortcut could use it. The two buttons also ended differently: Mark Fully Paid closed the drawer, while Record Payment cleared the form and stayed open on an empty amount. Separately, an edit opened before the entry's records had loaded mounted as a create form under the title "Edit Payment", so pressing its button recorded a second payment.
+
+**Decision**:
+1. **One primary action.** The footer is Cancel and Record Payment (Update Payment when editing). Mark Fully Paid and its `markFullyPaid` key are removed. ADR-038 §5 is superseded, and the date state moves back into the form. Settling in full stays one confirm, because the amount is prefilled with the remaining balance (MUT-6, ADR-038 §4).
+2. **A save closes the drawer**, whether the payment settles the entry or not. H1 (the Home row slides out on save) and R1 (show where it landed) both need the drawer closed afterwards. Update still returns to the entry's create view, as before.
+3. **The live line and the field errors read one classification.** `describePaymentAmount` (`src/lib/paymentEntry.ts`) uses MUT-5's strict parser. The answer ("Paid in full", "₪1,775 still owed") and an overpayment show as the user types. Unreadable text, zero, or another currency's symbol show only after Record is pressed, so a half-typed "1,2" never nags. The repository stays the source of truth (ADR-030, ADR-038). The drawer checks first only to say why in the user's language.
+4. **The drawer and the repository share one future-date rule.** `isFuturePaymentDate` moves unchanged from `repository.ts` to `lib/dates.ts` and takes an optional `today`. An emptied date is refused too, with `validation.dateRequired`.
+5. **An edit waits for its record.** While an edit is requested and the records are still loading, the drawer shows its spinner, and the form is keyed on the found record.
+6. **Nothing to record means no form.** With nothing left in create mode, the drawer says "Paid in full", lists the history and offers Close.
+
+**Consequences**:
+- The landing page's "Paid? Two taps." stays true: open, then Record Payment, with today's date.
+- Notes are never lost on the way to a full payment.
+- MUT-82 opens the drawer as it is today and gets the remaining amount and today's date. Its Undo needs the created record. `useCreatePaymentRecord` already returns it, and an `onRecorded` callback can pass it out at that point.
+- After Update Payment, the drawer lands on the entry's create view, which is one tap from recording another payment. That was true before, but the prefilled single button makes it more prominent. It is a follow-up, not part of this decision.
+
+**Alternatives Considered**:
+- Keep Mark Fully Paid and pass the notes to it (rejected): two buttons for one outcome is the defect P1 names.
+- Keep the drawer open after a partial payment so the history updates (rejected): H1 and R1 show the result where it landed, not inside the drawer.
+- Show every amount error live (rejected): grouped amounts pass through unreadable states while they are being typed.
 
 ---
 

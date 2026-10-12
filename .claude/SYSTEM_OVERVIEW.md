@@ -139,6 +139,14 @@
   Future-dated payments are rejected. Reachable from a primary button on every
   unsettled income row (`RecordPaymentButton`) and from the row kebab's "Mark
   Paid" entry — both open the same dated drawer, never a dateless shortcut
+- **Record payment leads with what's left (MUT-86 / ADR-047)**: the drawer's
+  title names the balance ("Record Payment · ₪3,550 left"), one large amount
+  is prefilled with it, and a live line says "Paid in full" or "₪1,775 still
+  owed" as the user types (MUT-5 strict parsing, Arabic-Indic digits). Date
+  reads "Today ›" and notes sit behind "+ Add note". One primary button
+  records and closes, so open → Record Payment settles the entry for today
+  ("Paid? Two taps."). The future-date rule is one helper,
+  `isFuturePaymentDate` in `lib/dates.ts`, shared with the repository
 - **Overpayment is rejected** — the sum of a transaction's payments can never
   exceed its amount (ADR-030). Payments on a locked (invoiced) transaction are
   allowed: the lock protects the invoice facts, not payment tracking
@@ -155,7 +163,7 @@
 
 ### Implemented (v0.0.48)
 
-- **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone; MUT-58 prunes the money-event read side they leave unused.
+- **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone, and MUT-58 deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, and the refresh every write path ran for it). The `moneyEventVersions` sync table stays (ADR-029).
 - **Clients index (MUT-7 / ADR-035)** — `/clients` answers "who owes me, and who is late". The strip shows the client count and Owed now for everyone listed. The columns are Client · Owed Now (per currency, or Settled) · Overdue (per currency, with the oldest item's age) · Last Payment (date and amount, or Never paid) · Last Activity. The default order is owed now descending, ranked by today's exchange rate with nothing shown converted. Click a header to sort; the sort persists in the URL. A row opens the profile.
 - **Adding income (MUT-5 / ADR-039)**: the income drawer is the work record.
   - **Fast path:** "What did you do?" (focused), the amount (currency prefix, LTR in Arabic, Arabic-Indic digits accepted, ambiguous input or a symbol naming another currency refused) and the client. Title, Tab, amount, Tab, client, Enter, Enter saves, even while a new client is still being created.
@@ -166,6 +174,7 @@
   - **Offline (ADR-040):** local reads and saves run whether or not the device is online; only the live FX rate waits for the network.
   - **App frame (MUT-79):** nothing floats over content. The live FX rate is a top-bar readout (`$1 = ₪3.06 ▾`) with a popover showing the rates, their source, date and Refresh. The Light/Dark/System toggle sits beside Settings in the sidebar footer. The Mac-app offer (Mac browsers only, until dismissed) and the desktop update bar sit in flow at the bottom of the main area.
 - **Client profile (MUT-3 / ADR-033)** — `/clients/:id` is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, invoice actions while Invoices is on, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). The retainers card follows while Retainers is on.
+- **Drawer motion (MUT-80 / ADR-044)**: every drawer (local and portal) renders the shared `DrawerFrame`. It springs in from its edge, follows a horizontal drag with a rubber band, and dismisses on a release past half (projected momentum); a press catches it mid-motion. Closing is immediate: the exit is an inert snapshot sliding out along the same edge (mirrored in RTL; cross-fades under reduced motion). Focus is trapped while open and returns to the trigger. `motion@13.4.4` is a dependency.
 - **Unassigned records (2026-10-11)**: records saved without a `profileId` show in no profile's lists. `OrphanedRecordsBanner` (AppShell) counts them with `runIntegrityCheck`; its **Review now** opens `OrphanedRecordsDrawer` in place, which lists the clients, projects, income and expenses involved and assigns them all to the default profile or one by one, each starting on its linked client's profile. "Unassigned" is defined once (`isOrphaned`, `src/db/orphanedRecords.ts`). Clients and Projects no longer open a modal by themselves. Locked income entries can't be assigned yet (TD-035).
 - **Optional areas (Advanced features, MUT-12 / ADR-032)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo, sync) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/documents*` and `/retainers` redirect home while off; the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Data tools). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home.
 - **Expenses Needs attention (MUT-87, ADR-052)** — one row per recurring rule, not one card per missed month: "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", grouped by the pure `groupOccurrencesByRule`; the header totals each currency side by side (`CurrencyAmounts`). **Mark Paid** opens `RecurringMarkPaidDrawer`: the payments, all checked, each with its date and an editable amount; saving writes one expense per checked payment, **dated on its own expected date**, in one all-or-nothing write (`confirmPayments` inside `recurringOccurrences.runAtomically`). Skip and Snooze apply per payment in the drawer, or to all from the row's ⋯ menu (`useMenuButton`); snoozing is a view of the same drawer. The per-month confirm and snooze modals are gone; the forecast keeps a read-only card. Editing a rule now refreshes the rows (`invalidateRecurringRuleQueries`). Still looks back only 90 days (TD-069).
@@ -201,6 +210,16 @@
 ---
 
 ## 5. Deployment Architecture
+
+### Release entry points (since 2026-10-12, ADR-043)
+
+| Command | Rolls out | How |
+|---------|-----------|-----|
+| `make release web` | the frontend + landing at mutaba3a.app | gates → version prompt → a commit holding only the version files → `git push origin main`; Netlify builds `main` |
+| `make release server` | the hosted API + the portal it serves | gates → version prompt → commit + push → `server/scripts/deploy.sh` (image → `prisma migrate deploy` → `terraform apply` → smoke) |
+| `npm run release` | the desktop app (DMG, notarized, GitHub release) | unchanged; `scripts/release.ts` over `deploy.sh` |
+
+`scripts/preflight.sh` gates the first two and refuses to release from a tree that does not describe itself — wrong branch, uncommitted changes, an unmerged branch, a parked worktree, behind `origin`, the wrong `node` major, stale `node_modules` — then checks that target's tools, credentials and config (`make doctor` runs all of it read-only). Where the server deploy points is derived from `production.tfvars` and the last `terraform init`, and verified rather than trusted; `deploy.env` overrides it.
 
 ### Build Targets
 

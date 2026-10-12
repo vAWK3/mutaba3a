@@ -272,8 +272,7 @@ src/
 │   └── aggregations.test.ts     # Aggregation functions
 ├── lib/__tests__/
 │   ├── utils.test.ts            # Format, parse utilities
-│   ├── matchingAlgorithm.test.ts # Retainer matching
-│   └── monthDetection.test.ts   # Date utilities
+│   └── matchingAlgorithm.test.ts # Retainer matching
 └── sync/core/__tests__/
     ├── hlc.test.ts              # Hybrid Logical Clock
     ├── ops-engine.test.ts       # Operation processing
@@ -797,9 +796,9 @@ pre-date these tickets and are untouched by them.
 | Lock exemption (ADR-030) | `src/db/__tests__/paymentRecords.test.ts` | a payment on a `lockedAt` transaction succeeds, flips status to `paid` and leaves `lockedAt` intact; overpayment is still rejected there |
 | One guard, both doors | `src/db/__tests__/partialPayment.test.ts` | `recordPartialPayment` inherits the rejection through its delegation to `paymentRecordRepo.create` |
 | Refresh after save (AC #5) | `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` invalidates `income`, `receivables`, `incomeOverviewTotals`, `incomeAttentionReceivables` alongside the payment-record and transaction keys. Uses real Dexie, no `vi.mock`, so a stubbed barrel cannot fake a pass |
-| Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; empty prefill when settled; edit mode prefills the record's own amount |
+| Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9; rewritten by MUT-86) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; ~~empty prefill when settled~~ (MUT-86: a settled entry shows no form); edit mode prefills the record's own amount |
 | Local-date default (ADR-022) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | the date field defaults to `todayISO()`, asserted at two faked instants straddling midnight in opposite directions so it holds in both `Asia/Jerusalem` and `npm run test:tz` |
-| Derived money views refresh | `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10), `useQueries.test.tsx`, `useIncomeQueries.test.tsx` | all nine money-event keys are invalidated and no others; the payment path and `markPaid` both trigger them. The expense and retainer paths are wired but uncovered — those modules have no mutation-test harness |
+| Derived money views refresh | `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10), `useQueries.test.tsx`, `useIncomeQueries.test.tsx` | all nine money-event keys are invalidated and no others; the payment path and `markPaid` both trigger them. The expense and retainer paths are wired but uncovered — those modules have no mutation-test harness. **Superseded by MUT-58:** the keys lost their last reader, the helper and its test file are deleted, and the two hook cases now assert that no `money*` key is invalidated |
 | Per-surface gate | `IncomePage.test.tsx`, `ClientDetailPage.test.tsx`, `ProjectDetailPage.test.tsx` | the button appears on exactly the rows each surface showed the kebab entry on, never on paid rows or expenses, opens the drawer with the row's id, and does not trigger the row's own click |
 
 The four IncomePage "Record Payment" tests that existed before this ticket
@@ -1065,7 +1064,7 @@ due-tomorrow boundary case needed new code/tests.
 | Repository | `src/db/__tests__/partialPayment.test.ts` (`recordPartialPayment`) | same four cases for partial payments, plus: a transaction's `paidAt` after two payment records reflects the *later* record's date, not the instant the recalculation ran |
 | Repository | `src/db/__tests__/paymentRecords.test.ts` | `paymentRecordRepo.create`/`.update` reject a future `paidAt`; a same-day timestamp with a time component is accepted (date-only comparison, not a full-timestamp one) |
 | Hook | `src/hooks/__tests__/useIncomeQueries.test.tsx` (`useMarkIncomePaid`) | `{ id, paidAt }` forwards both fields to the repository; omitting `paidAt` forwards `undefined` (repository default applies) |
-| Drawer | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | "Mark fully paid" records under today by default and under a backdated date when the field was changed first; a future-dated "Record Payment" is rejected inline with no mutation call |
+| Drawer | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | ~~"Mark fully paid" records under today by default and under a backdated date when the field was changed first~~ (button removed by MUT-86, ADR-047; the backdated-date case now runs through Record Payment); a future-dated "Record Payment" is rejected inline with no mutation call |
 | Client profile | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | the work-section "Mark Paid" row action opens the payment drawer and does **not** call the mark-paid mutation directly |
 | Income page | `src/pages/income/__tests__/IncomePage.test.tsx` | due-tomorrow is asserted not-overdue (the boundary case MUT-21's acceptance criteria named but the existing fix had not added) |
 
@@ -1215,6 +1214,25 @@ Checked by hand in the browser (2026-10-12) from a cleared origin: landing → "
 
 **Baseline after MUT-78 (2026-10-12)**: root `npx vitest run` 171 files, 2630 passed, 5 skipped; `npm run typecheck`, `npm run lint` (0 errors, 17 pre-existing warnings) and `npm run test:bundles` pass.
 
+### MUT-80 — drawers on springs (epic MUT-74, ADR-044)
+
+Test plan: `.claude/designs/mut-80-drawer-springs-tests.md`. The tests were written before the code. Five deliberate mutations were each caught: no interrupt, no snapshot, no StrictMode guard, no focus return, and no dismissed flag. The StrictMode test had to be tightened to catch its mutation.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Physics | `src/lib/motion/__tests__/physics.test.ts` | Projection (1000 px/s → 499 px); rubber band (0.55 near the edge, bounded, signed, inverse round-trips); response 0.3 / ζ 1 → k ≈ 438.65, c ≈ 41.89; velocity over the last 100ms, zero for a pause or shared timestamps |
+| Gesture rules | `src/components/ui/drawer/__tests__/drawerGesture.test.ts` | 10px hysteresis, with ties going to scroll; RTL closing axis; the display offset is capped at the exit distance and rubber-banded past open; release by projected momentum (half stays open, a flick from 60px closes); overlay opacity; no-drag targets |
+| Snapshot | `src/components/ui/drawer/__tests__/exitSnapshot.test.ts` | Values, selection and checks copied; `aria-hidden` + `inert` + no pointer events; attached where the original was (or appended); scroll restored; removed |
+| Frame | `src/components/ui/drawer/__tests__/DrawerFrame.test.tsx` | Named dialog; synchronous `onClose`; enter from the edge to rest with no inline transform; a snapshot exit in LTR and RTL; none under StrictMode or without layout; reduced-motion fades; drag past half → `onClose` after the exit; short drag → spring back; 1:1 tracking and overlay at 0.5; vertical and field presses ignored; caught mid-exit → stays open; focus in, autofocus kept, Tab wrap, return to trigger, not stolen back |
+| Focusables | `src/lib/dom/__tests__/focusable.test.ts` | Order; disabled, `tabindex=-1`, hidden inputs and `[hidden]` skipped |
+| Real browser | `e2e/drawer-motion.spec.ts` | Escape: the dialog is gone at once, and the snapshot slides right past 400px and is removed. A 120px drag springs back; a 320px drag closes. In Arabic the panel is at x = 0 and a drag left closes it. |
+
+Not covered: touch on a real device (Playwright drove a mouse), and trackpad swipes (out of scope). The hidden preview pane pauses `requestAnimationFrame`, so motion was checked in Playwright, not in the pane.
+
+**Baseline after MUT-80 (2026-10-12, before merging main)**: root `npx vitest run` under Node 22: 187 files, 2923 passed, 4 skipped. `npm run typecheck` and `npm run lint` (0 errors) pass, the 3 new Playwright specs pass, and `npm run test:bundles` passes.
+
+**After merging main** (TD-009's drawer naming and the release front door): the two `Drawer.tsx` conflicts resolved to the `DrawerFrame` wrappers, whose shell carries TD-009's `aria-labelledby`, `common.close` and `aria-hidden` icon. Typecheck passed, and lint reported 0 errors. All 22 Playwright specs pass, including axe on every surface and main's new `Drawer.test.tsx` files. A full vitest run at load average ~45 (other sessions) timed out 4 heavy tests, each at about 5s. Every file that timed out passed when re-run alone (2,941 tests across both runs; no assertion failed).
+
 ### MUT-79 — app frame: nothing floats over content (epic MUT-74)
 
 Test plan: `.claude/designs/mut-79-app-frame-tests.md`.
@@ -1351,6 +1369,87 @@ Plan: `.claude/designs/td-009-axe-structural-tests.md`. Each new assertion was w
 - `npm run build` and `npm run test:bundles`: OK.
 
 Main 8ef2df0 (MUT-65: `server/` and docs only) was merged in afterwards. Only lint and typecheck were re-run on the merged tree.
+
+### Release tooling — `make release web` / `make release server` (ADR-043, 2026-10-12)
+
+No automated tests. These scripts deploy; a test suite for them would either mock away the only thing they do or actually push and roll. They are verified by running the non-destructive halves and by reading the destructive half's dry run. What was verified on 2026-10-12, on `main` at `4eaa583`:
+
+| Checked | How | Result |
+|---|---|---|
+| `make help`, target dispatch | `make help`; `make --dry-run release web`; `make --dry-run release server` | pass |
+| An unknown target is rejected | `make release desktop` | exits 2, "unknown release target" |
+| Shell/Makefile syntax | `bash -n` on all three scripts; `make --dry-run` | pass |
+| Preflight catches a real dirty tree | `make preflight-web` with 8 uncommitted files | fails, lists them |
+| Preflight catches parked worktrees | same run, 2 epic worktrees checked out | fails, names both |
+| Preflight catches stale deps | `scripts/preflight.sh web` before `npm ci` | fails ("package-lock.json is newer than node_modules") — this is what the missing `openapi-typescript` binary looked like before the check existed |
+| …and passes once fixed | after `npm ci` | passes |
+| Server tools/credentials/config | `make preflight-server` | gcloud, ADC, docker, terraform, cloud-sql-proxy, tfvars all detected; `GCP_PROJECT_ID` and `TF_STATE_BUCKET` derived and cross-checked; `gs://…` confirmed readable |
+| The version prompt | `scripts/bump-version.sh server` with `9` then `2` | re-prompts on `9`, bumps minor `0.1.0 → 0.2.0` on `2`; reverted |
+| Non-interactive bumps | `BUMP=patch make bump-web`; `BUMP=keep`; `BUMP=custom BUMP_VERSION=9.9` | `0.0.65 → 0.0.66` across all five manifests **including `Cargo.lock`**; keep is a no-op; `9.9` rejected; reverted |
+| No terminal, no release | piped stdin, `/dev/tty` unopenable | bump and confirm both refuse with "set BUMP=…" / "re-run with AUTO=1" rather than hanging or defaulting to yes |
+| Server gates | `make check-server` | pass — lint, typecheck, **1210 tests**, `openapi:check` up to date, build |
+| Web gates | `make check-web` | lint (0 errors, 19 warnings), typecheck, **2857 tests**, and `test:bundles` (3 builds + the leak guard) all pass; **`hosted:types:check` fails** — pre-existing drift on `main`, logged as TD-058 |
+
+Not exercised, by nature: the push, `server/scripts/deploy.sh`, and the Netlify build. The confirmation in front of each is the tested part.
+
+### MUT-58 — prune the money-event read side (2026-10-12)
+
+Plan: `.claude/designs/mut-58-prune-money-events-tests.md`. A deletion with zero behaviour change. The guard and the two flipped assertions were written first and failed (7 red) before anything was deleted.
+
+| File | Covers |
+|---|---|
+| `src/__tests__/noDeadMoneyEventModules.test.ts` (new, 6) | `useMoneyEventQueries.ts`, `moneyEventRepository.ts` and `lib/monthDetection.ts` stay gone; no file under `src/` (tests included, since they are outside `tsc`) names them or `invalidateMoneyEventQueries`; `src/types/index.ts` declares none of the twelve money-event and guidance types; `moneyEventVersions` is still a Dexie table (ADR-029) |
+| `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` still invalidates the income, receivable, payment and transaction keys, and no `money*` key (was: asserted three money-event keys) |
+| `src/hooks/__tests__/useIncomeQueries.test.tsx` | `useMarkIncomePaid` invalidates `income` and `transactions`, and no `money*` key (was: "should invalidate the derived money-event views") |
+
+Removed with their subjects: `src/db/__tests__/moneyEvent.test.ts` (5), `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10) and `src/lib/__tests__/monthDetection.test.ts` (23), 38 tests in all.
+
+**How e2e was run:** a throwaway config on port 5198 (`webServer: npm run dev -- --port 5198 --strictPort`, output in the session scratchpad, TD-004), deleted afterwards and never committed.
+
+**Verified in the browser** (`web-mut58`, `/app/`, a fresh install): saved an unpaid $500 income for a new client, and Home's Owed now read $500. Marked it fully paid; Income moved it to Received, Home read "Nothing owed" with the payment under Recent payments, and Clients showed the client settled with the payment as the last one. Turned on Expenses and saved a $42 expense, which the ledger listed. No console errors. The ledger's Total expenses strip read ₪0 before and after a reload. That is not this change: the strip reads `useOverviewTotalsByCurrency` (expense *transactions*), and the rows come from the `expenses` table.
+
+**Gate (2026-10-12, branch `feature/mut-58-prune-money-events` on main 5674515, Node 22):**
+- `npx vitest run`: 185 files, 2,843 passed, 4 skipped. Before: 187 files, 2,875 passed, 4 skipped; the difference is the 38 deleted tests and the 6 new ones.
+- `npx playwright test` (port 5198): 19/19.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run typecheck` and `npx tsc -b`: clean.
+- `npm run build` and `npm run test:bundles`: OK.
+
+### MUT-86 — the Record payment drawer leads with what's left (epic MUT-74, 2026-10-12)
+
+Plan: `.claude/designs/mut-86-payment-drawer-tests.md` (T1–T22). Written first: 38 of the new tests failed against the old drawer before the code changed.
+
+| Acceptance criterion | How it is met | Covered by |
+|---|---|---|
+| Open, then Record payment, records the full remaining amount for today ("Paid? Two taps.") | Amount prefilled with the balance and selected, date today, one primary button that records and closes | `PartialPaymentDrawer.test.tsx` "two taps"; `e2e/record-payment.spec.ts` (click, and Enter in the amount) |
+| The live line updates on every keystroke and reads Arabic-Indic digits | `describePaymentAmount` on every render, with MUT-5's `parseAmountInput` | `PartialPaymentDrawer.test.tsx` "the live line" (1 → 10 → 100, "١٠٠"); `paymentEntry.test.ts`; e2e partial payment |
+| Overpayment still rejected inline (MUT-6 D1); future dates rejected (ADR-038) | Over shows live, and Record refuses it with no mutation call; `isFuturePaymentDate` (now in `lib/dates.ts`) refuses a future date; an emptied date is refused too | `PartialPaymentDrawer.test.tsx` "refused inline" and "the date"; `dates.test.ts` `isFuturePaymentDate` |
+| Edit mode still works | Record's amount, date and notes prefilled; allowed includes its own amount; Update sends the record and returns to the entry; waits for the records to load | `PartialPaymentDrawer.test.tsx` "edit mode" (4) |
+| The removed strings' i18n keys are deleted | `markFullyPaid` is gone from en and ar; new keys exist in both | `paymentDrawerKeys.test.ts` |
+| Tests cover two taps, partial, notes kept, overpayment | All four | `PartialPaymentDrawer.test.tsx` "two taps", "a partial payment", "notes", "refused inline" |
+
+| File | Tests | Covers |
+|---|---|---|
+| `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (rewritten) | 33 | Title with the balance; prefill (whole and with cents) and selection; exactly Cancel + Record Payment; no chips, box or empty history; two taps; the live line by keystroke, Arabic-Indic digits, quiet while "1,2" is half typed, overpayment live; partial; notes behind "+ Add note" and kept; refused inline (over, "1,2", "0", "€100"), errors clearing on change; date row, backdate, future, empty; ADR-022 at two instants; edit mode (prefill, allowed, update, waits for records); history below the form and its edit button; settled entry; repository rejection keeps the drawer open |
+| `src/lib/__tests__/paymentEntry.test.ts` (new) | 19 | `describePaymentAmount` (all kinds, symbols and codes, Arabic-Indic and Extended digits, separators, grouping); `minorToAmountInput` and its round trip |
+| `src/lib/__tests__/dates.test.ts` | +5 | `isFuturePaymentDate`: date-only, local-evening timestamp, tomorrow's timestamp, unreadable timestamp, clock default |
+| `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts` (new) | 5 | New keys in en and ar with `{amount}`; `markFullyPaid` gone |
+| `e2e/record-payment.spec.ts` (new) | 4 | Two taps by click; Enter records; a partial leaves the rest owed; axe on the open drawer with date and note revealed (`paymentDrawer`: `color-contrast` only) |
+
+The repository's own future-date and overpayment tests (`paymentRecords.test.ts`, `partialPayment.test.ts`) pass unchanged against the moved helper.
+
+**Verified in the browser** (web-mut86 preview, `/app/clients?sample=1`):
+- English light and dark, and Arabic dark, at 800×600. Title, prefill, "Paid in full", "Today ›", "+ Add note" and one primary button; a partial amount with a note recorded and closed; Enter recorded; edit from the client's Payments list; overpayment live.
+- In Arabic: "تسجيل دفعة · المتبقي ₪ 4,300", the chevron points left, the amount stays LTR, and "١٠٠٠" gives "يبقى ₪ 3,300 مستحقًا".
+- At 375 px: every drawer is a fixed 480 px, so it is wider than the screen there. That comes from the shared `Drawer` (MUT-80 is reworking it). With the drawer forced to 375 px, nothing inside it overflows.
+- Found and fixed: global `.payment-row` and `.payment-amount` in `index.css` squeezed the field to 120 px, so the classes are now `pay-drawer-`. The history rows' fallback colours were light in dark mode, so they now use theme tokens.
+- Found and logged: TD-062 (`formatAmount` prints "$887.5"), TD-063 (sample part-paid entries lose their seeded received amount on the first payment).
+
+**How e2e was run:** a throwaway config on port 5195 (`webServer: npx vite --port 5195 --strictPort`, TD-004), deleted afterwards along with `test-results/`. All 23 specs passed.
+
+**Gate (2026-10-12, branch head dad50d2 on main 5674515, Node 22 per TD-054):**
+- `npx vitest run`: 189 files, 2,923 passed, 4 skipped. An earlier full run on the same code had 3 tests and 2 suites time out under the load of four parallel lanes. They were `ExpenseDrawer.oneTimeFields`, `RetainerDrawer.projectField`, `CurrencyTabs`, `router.gates` and `legacyRedirects`. Rerun alone, those 5 files passed (35 tests), and the full rerun was clean.
+- `npx playwright test` (throwaway config, port 5195): 23/23, including the 4 new specs.
 
 ### MUT-87 — Expenses Needs attention, one row per recurring rule (epic MUT-74, 2026-10-12)
 
