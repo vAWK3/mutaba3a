@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Currency, TxKind, DocumentType, Currency as CurrencyType } from '../types';
+import type { Currency, TxKind, DocumentType, Currency as CurrencyType, PaymentRecord } from '../types';
 
 // Income status for the income drawer (Earned/Invoiced/Received)
 export type IncomeStatus = 'earned' | 'invoiced' | 'received';
@@ -176,8 +176,13 @@ interface DrawerState {
     isOpen: boolean;
     transactionId?: string;
     editingPaymentRecordId?: string;
+    /**
+     * Hears the record a save created, before the drawer closes (MUT-82:
+     * Home's Undo). Kept while a record of the same entry is edited.
+     */
+    onRecorded?: (record: PaymentRecord) => void;
   };
-  openPartialPaymentDrawer: (options: { transactionId: string }) => void;
+  openPartialPaymentDrawer: (options: { transactionId: string; onRecorded?: (record: PaymentRecord) => void }) => void;
   editPaymentRecord: (options: { transactionId: string; paymentRecordId: string }) => void;
   closePartialPaymentDrawer: () => void;
 
@@ -485,16 +490,21 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         isOpen: true,
         transactionId: options.transactionId,
         editingPaymentRecordId: undefined,
+        onRecorded: options.onRecorded,
       },
     }),
   editPaymentRecord: (options) =>
-    set({
+    set((state) => ({
       partialPaymentDrawer: {
         isOpen: true,
         transactionId: options.transactionId,
         editingPaymentRecordId: options.paymentRecordId,
+        onRecorded:
+          state.partialPaymentDrawer.transactionId === options.transactionId
+            ? state.partialPaymentDrawer.onRecorded
+            : undefined,
       },
-    }),
+    })),
   closePartialPaymentDrawer: () =>
     set({
       partialPaymentDrawer: {

@@ -567,6 +567,48 @@ describe('useDrawerStore', () => {
       expect(state.isOpen).toBe(false);
       expect(state.transactionId).toBeUndefined();
     });
+
+    // MUT-82 (D4): whoever opens the drawer can hear what it recorded.
+    describe('onRecorded', () => {
+      const onRecorded = () => {};
+
+      it('travels with the open options', () => {
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1', onRecorded });
+        });
+
+        expect(useDrawerStore.getState().partialPaymentDrawer.onRecorded).toBe(onRecorded);
+      });
+
+      it('is cleared on close and absent when the opener gives none', () => {
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1', onRecorded });
+          useDrawerStore.getState().closePartialPaymentDrawer();
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.onRecorded).toBeUndefined();
+
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.onRecorded).toBeUndefined();
+      });
+
+      it('stays while a record of the same entry is edited, and goes for another entry', () => {
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1', onRecorded });
+          useDrawerStore.getState().editPaymentRecord({ transactionId: 'tx-1', paymentRecordId: 'pr-1' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer).toMatchObject({
+          editingPaymentRecordId: 'pr-1',
+          onRecorded,
+        });
+
+        act(() => {
+          useDrawerStore.getState().editPaymentRecord({ transactionId: 'tx-2', paymentRecordId: 'pr-2' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.onRecorded).toBeUndefined();
+      });
+    });
   });
 });
 

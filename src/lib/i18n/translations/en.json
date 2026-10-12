@@ -177,6 +177,9 @@
     "recentPayments": "Recent Payments",
     "noPayments": "No payments recorded yet",
     "noClient": "No client",
+    "paymentRecorded": "Recorded {amount} from {client}",
+    "paymentRecordedNoClient": "Recorded {amount}",
+    "undoFailed": "Couldn't undo. The payment is still recorded.",
     "empty": {
       "title": "Nothing to track yet",
       "description": "Add what you did for a client and what it's worth. Home then shows what you're owed, who is late, and what came in.",

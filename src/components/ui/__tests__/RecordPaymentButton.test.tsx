@@ -138,6 +138,21 @@ describe('RecordPaymentButton', () => {
     expect(screen.getByRole('button')).toHaveTextContent('₪70.5');
   });
 
+  // MUT-82 (D1): on Home the amount sits in the cell beside the button, so the
+  // button shows its label alone; a screen reader still hears the amount.
+  it('compact: shows the label alone and keeps the remaining amount in its name', () => {
+    render(
+      <RecordPaymentButton
+        compact
+        transaction={makeTransaction({ currency: 'ILS', remainingAmountMinor: 355000 })}
+        onRecordPayment={vi.fn()}
+      />
+    );
+
+    const button = screen.getByRole('button', { name: 'Record Payment — Remaining: ₪3,550' });
+    expect(button).toHaveTextContent(/^Record Payment$/);
+  });
+
   it('calls onRecordPayment once per click', async () => {
     const onRecordPayment = vi.fn();
     const user = userEvent.setup();

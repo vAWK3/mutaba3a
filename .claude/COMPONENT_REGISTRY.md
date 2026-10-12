@@ -16,7 +16,7 @@
 | **Table headers** | SortableHeader, RowActionsHeader |
 | **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
-| **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
+| **Home** | HomeNeedsAttention (rows: HomeAttentionRow), HomeRecentPayments (with OwedNowSummary), usePaymentUndo |
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income), useClientsSearch (URL model for the Clients list) |
@@ -360,10 +360,13 @@ Unmount it whenever you like: the exit animation plays after it has gone (ADR-04
 **Purpose**: the one slide-over shell for both builds. Both `Drawer`s wrap it; the local one passes `t('common.close')`, the portal its own label.
 **Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
 **Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
+**Snapshots carry no ids** (MUT-82): `exitSnapshot` strips every `id` from the clone, so a drawer opened while another is still playing out never resolves an id (the payment drawer's `form=` button, a label) to the clone.
 **Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `qa/specs/web/drawer-motion.spec.ts`.
 
 ### Motion physics and focusables (MUT-80)
 - `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
+- `src/lib/motion/presets.ts` (MUT-82): `UI_SPRING` (response 0.3, damping 1) and `REDUCED_MOTION_FADE_SECONDS` (0.15), shared by drawers (`drawerMotion.ts` re-exports them as `DRAWER_SPRING` and `REDUCED_MOTION_FADE_SECONDS`) and list rows.
+- `src/lib/motion/rowExit.ts` (MUT-82): `captureRowExit(row, container)` → `{ play({ reducedMotion }) }`, or `null` without layout. Call it from a layout-effect cleanup while the row is still in the document, then `play` after the commit. An inert, hidden copy of the row (its ancestors copied shallowly so cells keep their styles, cells pinned to measured widths, ids stripped) is laid over the container and slides toward the inline end while fading; the rows after it glide up into the gap; reduced motion fades the copy and moves nothing. The container must be `position: relative` and should clip. Tests: `src/lib/motion/__tests__/rowExit.test.ts`.
 - `src/lib/dom/focusable.ts`: `FOCUSABLE_SELECTOR`, `focusablesWithin(root)` (skips disabled, `tabindex="-1"`, `[hidden]`, and, where supported, invisible elements). Used by `useMenuButton`'s dialog mode and the drawer trap.
 
 ---
@@ -431,6 +434,7 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 
 ```tsx
 openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
+openPartialPaymentDrawer({ transactionId, onRecorded });        // also hear the PaymentRecord a save created (MUT-82)
 editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
 // Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
 ```
@@ -450,7 +454,7 @@ editPaymentRecord({ transactionId, paymentRecordId });          // edit one reco
 
 **Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
 
-**Props**: `transactionId`, `onClose`. MUT-82 opens it the same way.
+**Props**: `transactionId`, `onClose`, and `onRecorded?: (record: PaymentRecord) => void` (MUT-82, ADR-055). `onRecorded` hears the record a save created, just before the drawer closes; an update or a delete is never reported. The store carries it in `partialPaymentDrawer.onRecorded` and `AppShell` passes it on. Editing a record of the same entry, and returning to the entry, keep it.
 
 **Tests**:
 - `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx`
@@ -808,8 +812,12 @@ new column, so it cannot push the amount column off-screen.
 </td>
 ```
 
+**`compact`** (MUT-82): the label alone, for a row whose amount already sits
+beside the button (Home's Needs attention). The accessible name keeps the
+amount: "Record Payment — Remaining: ₪3,550".
+
 **Used by**: ClientWorkSection (client profile work list, MUT-3), IncomePage,
-ProjectDetailPage.
+ProjectDetailPage, HomeAttentionRow (`compact`, MUT-82).
 **Tests**: `src/components/ui/__tests__/RecordPaymentButton.test.tsx`
 
 ---
@@ -957,7 +965,10 @@ Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) 
 
 ### HomeNeedsAttention
 **Location**: `src/components/home/HomeNeedsAttention.tsx`
-**Purpose**: "Who is late?" (MUT-8). It renders `useAttentionReceivables(undefined, profileId)` as is: overdue or due within 7 days (inclusive), every currency, oldest due date first, ties by client name then id. Each row shows the client (or "No client"), what it was for, the remaining amount in its own currency, and "Nd overdue", "Due in Nd" or "Due today". Rows are shaped with `toWorkRow`, so bucketing uses the ADR-010/022 helpers. A row opens the client profile, or the entry's income drawer when there is no client. The empty state reads "No overdue or upcoming receivables".
+**Purpose**: "Who is late?" (MUT-8), and record a payment in place (MUT-82, ADR-055). It selects its rows with `selectAttentionReceivables` (`src/lib/attention.ts`) from `useReceivables({ profileId })`, **the same query Owed now reads**, so a payment changes both in one render: overdue or due within 7 days (inclusive), every currency, oldest due date first, ties by client name then id. Each row (`HomeAttentionRow`) shows the client (or "No client") and what it was for as a link to the client (a button opening the entry when there is no client), the remaining amount in its own currency with "Nd overdue", "Due in Nd" or "Due today", and a `compact` `RecordPaymentButton` in its own cell. A click anywhere else on the row opens the client, or the entry. The empty state reads "No overdue or upcoming receivables".
+- **Record Payment** opens `PartialPaymentDrawer` with an `onRecorded` callback. A payment that settles the row marks it, moves focus to the next row's Record Payment (or the heading), and offers Undo (`usePaymentUndo`). When the row leaves the list, `captureRowExit` plays its slide-out. A partial payment keeps the row.
+- **Undo** brings the row back; it takes focus again if focus was lost with the toast.
+- The section is the slide-out's containing block and clips it. Below 400 px of card width (a phone, or two columns on a small window) the button moves to its own line under the client and the amount (a container query in `HomeNeedsAttention.css`).
 
 ```tsx
 <HomeNeedsAttention profileId={profileId} />
@@ -971,7 +982,16 @@ Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) 
 <HomeRecentPayments profileId={profileId} />
 ```
 
-Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactionRepo.test.ts` ("as Home's Needs attention") and `paymentRecords.test.ts` (`listRecent`).
+Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`, `src/components/home/__tests__/HomeNeedsAttention.test.tsx` (MUT-82 integration: full, partial, Undo, same render, keyboard, focus), `src/lib/__tests__/attention.test.ts` (the browser spec is to port to `qa/`, TEST_PLAN § MUT-82); data in `transactionRepo.test.ts` ("as Home's Needs attention") and `paymentRecords.test.ts` (`listRecent`).
+
+### HomeAttentionRow
+**Location**: `src/components/home/HomeAttentionRow.tsx` (not exported from the home barrel; only `HomeNeedsAttention` renders it)
+**Purpose**: one Needs attention row (MUT-82). Hands its `<tr>` to the list on mount (`onArrive`) and, while it is still in the document, on unmount (`onLeave`), which is when a leaving row can be copied for its slide-out. `ATTENTION_PAY_CLASS` marks its Record Payment for focus hand-offs.
+
+### usePaymentUndo
+**Location**: `src/hooks/usePaymentUndo.ts`
+**Purpose**: Undo for a payment just recorded (MUT-82). `offerUndo(record, message, onUndone?)` shows a toast in the `PAYMENT_UNDO_GROUP` group (one Undo at a time) whose action deletes the record through `useDeletePaymentRecord`, so the entry is recalculated from the records left (ADR-038/039). Works after the screen that offered it has gone. A failed delete shows `overview.undoFailed`. Reusable by MUT-85's lump-sum payment.
+**Tests**: `src/hooks/__tests__/usePaymentUndo.test.tsx` (real repository: exact restore of status, remaining and paidAt).
 
 ---
 
@@ -1223,6 +1243,12 @@ toast.info('Syncing...');
 // Rendered globally in AppShell
 <ToastContainer />
 ```
+
+**MUT-82 additions**:
+- `showToast(message, { action, group })`: a toast with a `group` replaces the toast showing in that group (one Undo at a time). Toasts with no group stack.
+- `ToastContainer` pauses a toast's timer while the pointer is over it or focus is inside it, and resumes with the time that was left (`useDismissTimer`).
+- `useToast` selects only the two store actions, so a component that shows toasts doesn't re-render when one comes or goes.
+- Tests: `src/components/ui/__tests__/ToastContainer.test.tsx`, `src/lib/__tests__/toastStore.test.ts`.
 
 ---
 

@@ -1904,3 +1904,25 @@ When ← and → move between columns, map them by where things are on the scree
 
 ### Walking replaces history; opening pushes
 Keyboard selection that the detail follows (↑/↓ through a list) writes the URL with `replace`, except for the first open from no selection, which pushes. Back then closes the detail instead of replaying every step. A click on a row's link stays a link and pushes. Carry the list's URL model along (`search: true`) on every link and walk, so switching records never resets the list.
+
+---
+
+## App patterns added by MUT-82 (2026-10-12)
+
+### Two blocks that must change together read one query
+When a save has to change two parts of a screen in the same frame (Home's Owed now and the Needs attention row), give both the same query and derive each part with a pure selector (`selectAttentionReceivables`). One refetch notifies every observer of a query in one batch, so React commits both changes together. Two queries resolve in separate tasks and can paint a frame apart. If the repository already had the rule (`getAttentionReceivables`), move it into the selector and have the repository call it, so it stays defined once. Prove it with a `MutationObserver` that records every DOM batch and asserts no batch shows one change without the other (`HomeNeedsAttention.test.tsx`).
+
+### A drawer tells its opener what it saved
+An app-wide drawer that a screen opens can report back through an optional callback in its open options (`openPartialPaymentDrawer({ transactionId, onRecorded })`). The store carries it, `AppShell` passes it as a prop, and the drawer calls it with the saved record **before** it closes, so the opener can act while focus is still in the drawer. Keep it optional: every other opener behaves as before. Report creations only, not edits or deletes, unless the opener needs them.
+
+### Undo deletes what the save created, through the repository
+For a record that owns derived state (payment records own an entry's status, remaining and paidAt), Undo deletes that record through the repository path that recalculates, rather than snapshotting and writing the old fields back. Offer it in a toast with a `group`, so a newer Undo replaces an older one, and make the action need only the record's id, so it still works after the screen that offered it is gone (`usePaymentUndo`).
+
+### A row leaving a list is a snapshot over its container
+The ADR-044 rule for rows: the data change is immediate and the exit is presentation. The row component hands its element to the list from a layout-effect cleanup, while it is still in the document (`onLeave`), and the list captures it with `captureRowExit(row, container)` only when its own action caused the departure. In a microtask: if the row is still connected it was StrictMode's rehearsal; otherwise `play`. The copy is laid over the container, not put back in the table, so the list can switch to its empty state at once. Copies strip their ids, and so do drawer snapshots: an id in a copy can capture a `form=` or `for=` meant for the live element.
+
+### Hand focus on before the element holding it goes
+When an action removes the element that will hold focus (the drawer returns focus to the row's button, and the row is about to leave), move focus to its successor at the moment the action succeeds (the next row's button, else the previous one's, else the section heading with `tabIndex={-1}`). Waiting for the removal is order-dependent: if the row leaves before the drawer closes, the drawer finds its trigger gone and focus falls to the page. When Undo brings an element back and focus was lost with the toast, give it back to the restored element on mount.
+
+### A card that gets narrow reflows by container query
+A list inside a card that is narrow on a phone and also in a two-column layout on a small window (Home's cards) reflows with `container-type: inline-size` on the card and `@container (max-width: …)`, not a viewport media query. For a table, switch `table`/`tbody` to `display: block` and each `tr` to a grid, move the borders from cells to rows, and give the action cell `grid-column: 1 / -1`.

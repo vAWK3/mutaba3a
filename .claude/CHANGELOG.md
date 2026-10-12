@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Home: record a payment straight from Needs attention, with Undo (MUT-82)
+
+**Why:** every Needs attention row on Home opened the client's profile, so recording that a client paid took four steps and a page change (Home → profile → find the row → Record payment). Decision H1 of the approved Apple-design brief (`.claude/designs/landing-apple-redesign.md`, epic MUT-74) puts the action on the row. ADR-055; TD-064. Test plan: `.claude/designs/mut-82-home-inline-payment-tests.md`.
+
+**Not run, at the owner's request:** lint, typecheck and tests are left to one combined run on main after every lane has merged. Before that instruction (and before merging main) they passed: vitest 198 files / 3,006 passed / 4 skipped, typecheck clean, lint 0 errors, the five browser specs 5/5. Not re-run since: the exit-snapshot id fix and the merge of main. The full browser suite and `test:bundles` were not run.
+
+### Added
+- **Record Payment on every Needs attention row**, always visible, in its own cell. It opens the existing payment drawer in place with the remaining amount and today (ADR-047). Its accessible name carries the amount ("Record Payment — Remaining: ₪3,550"); on Home it shows the label alone (`RecordPaymentButton` `compact`), because the amount cell is beside it.
+- **The row slides out** when a payment settles it, and the rows below glide up (`src/lib/motion/rowExit.ts`, the ADR-044 snapshot idea for list rows, on the shared spring). Reduced motion fades it. A partial payment keeps the row with its new amount.
+- **Undo** in a toast ("Recorded ₪3,550 from Acme Studio · Undo", `usePaymentUndo`): it deletes the payment record through the repository, which recalculates the entry, so status, remaining and paidAt return exactly. One Undo at a time; it still works after leaving Home; a failure says so.
+- **Keyboard:** the client cell is a real link to the client (a button opening the entry when there is no client). A payment that settles a row moves focus to the next row's Record Payment; Undo gives focus back to the restored row.
+- i18n (en, ar): `overview.paymentRecorded`, `overview.paymentRecordedNoClient`, `overview.undoFailed`.
+
+### Changed
+- **Needs attention reads Owed now's query**, `useReceivables({ profileId })`, and selects its rows with `selectAttentionReceivables` (`src/lib/attention.ts`), so the row and Owed now change in the same render. `transactionRepo.getAttentionReceivables` calls the same selector. Same list, same order; one IndexedDB read fewer on Home.
+- `PartialPaymentDrawer` takes `onRecorded(record)`, carried by `openPartialPaymentDrawer({ transactionId, onRecorded })` and passed by `AppShell`; it is called before the drawer closes, for new payments only.
+- Toasts: an optional `group` replaces the toast showing in that group; `ToastContainer` pauses a toast while it is hovered or focused; `useToast` no longer re-renders its caller on every toast.
+- `src/lib/motion/presets.ts` holds `UI_SPRING` and `REDUCED_MOTION_FADE_SECONDS`; `drawerMotion.ts` re-exports them under its old names.
+- Below 400 px of card width the Needs attention row puts its button on a line of its own (container query).
+- `e2e/home-record-payment.spec.ts` (5 Playwright tests, written for this ticket, passed 5/5 before main was merged in) was dropped when main retired `e2e/` (MUT-97): **to port to `qa/` (MUT-97 kit)**. It covered, in a real browser: a full payment from a Needs attention row (the row's copy slides toward the inline end, more than 100 px, fading below 0.5, then goes; Owed now drops; focus moves to the next row's Record Payment; the toast reads "Recorded $1,200 from Acme Studio"; Undo brings the row and Owed now back with focus on the row's button); a partial payment (the row stays, named "Remaining: $1,000", Owed now $1,300); reduced motion (the copy only fades, x stays 0); Arabic (the copy slides left, below −100 px); and axe on Home with the buttons (the `home` surface). It needed `logIncome` to take a `dueDate` and a `localDateFromToday(days)` helper, which go with the port.
+
+### Fixed
+- A payment drawer opened while another drawer's exit snapshot was still in the page submitted the snapshot's form and reloaded the page: both forms had `id="partial-payment-form"`. Drawer snapshots now strip ids (`exitSnapshot.ts`).
+
+### Files
+- New: `src/lib/attention.ts`, `src/lib/motion/rowExit.ts`, `src/lib/motion/presets.ts`, `src/hooks/usePaymentUndo.ts`, `src/components/home/HomeAttentionRow.tsx`, `src/components/home/HomeNeedsAttention.css`; tests `attention.test.ts`, `rowExit.test.ts`, `usePaymentUndo.test.tsx`, `HomeNeedsAttention.test.tsx`, `ToastContainer.test.tsx`, `homePaymentKeys.test.ts`.
+- Changed: `src/components/home/HomeNeedsAttention.tsx`, `src/components/drawers/PartialPaymentDrawer.tsx`, `src/components/layout/AppShell.tsx`, `src/components/ui/RecordPaymentButton.tsx`, `src/components/ui/ToastContainer.tsx`, `src/components/ui/drawer/{drawerMotion,exitSnapshot}.ts`, `src/lib/{stores,toastStore}.ts`, `src/db/repository.ts`, `src/lib/i18n/{types.ts,translations/en.json,translations/ar.json}`; tests `OverviewPage.test.tsx`, `PartialPaymentDrawer.test.tsx`, `RecordPaymentButton.test.tsx`, `stores.test.ts`, `toastStore.test.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-84: on a wide window a client opens beside the Clients list
 
 **Why:** opening a client replaced the list with the profile. Working through who owes you was open, check, record, back, next, losing sight of the list each time. Decision C1 in `.claude/designs/landing-apple-redesign.md` (approved 2026-10-11) settles a Mail-style split view. ADR-050. Test plan: `.claude/designs/mut-84-clients-split-view-tests.md`.

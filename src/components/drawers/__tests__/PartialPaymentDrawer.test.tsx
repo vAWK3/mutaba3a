@@ -16,7 +16,7 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { PartialPaymentDrawer } from '../PartialPaymentDrawer';
 import { todayISO } from '../../../lib/utils';
-import type { TransactionDisplay } from '../../../types';
+import type { PaymentRecord, TransactionDisplay } from '../../../types';
 
 const mockCreate = vi.fn().mockResolvedValue(undefined);
 const mockUpdate = vi.fn().mockResolvedValue(undefined);
@@ -118,8 +118,8 @@ async function openDateField(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByLabelText('Payment date') as HTMLInputElement;
 }
 
-function renderDrawer(onClose = vi.fn()) {
-  const result = render(<PartialPaymentDrawer transactionId="tx-1" onClose={onClose} />);
+function renderDrawer(onClose = vi.fn(), onRecorded?: (record: PaymentRecord) => void) {
+  const result = render(<PartialPaymentDrawer transactionId="tx-1" onClose={onClose} onRecorded={onRecorded} />);
   return { ...result, onClose };
 }
 
@@ -214,6 +214,43 @@ describe('PartialPaymentDrawer', () => {
         paidAt: todayISO(),
         notes: undefined,
       });
+    });
+
+    // MUT-82 (D4): Home's Undo needs the record that was just created, and
+    // hears about it before the drawer closes.
+    it('reports the created record to whoever opened it, then closes', async () => {
+      const record: PaymentRecord = {
+        id: 'pr-new',
+        transactionId: 'tx-1',
+        amountMinor: 75000,
+        paidAt: todayISO(),
+        createdAt: '2026-03-02T00:00:00Z',
+        updatedAt: '2026-03-02T00:00:00Z',
+      };
+      mockCreate.mockResolvedValueOnce(record);
+      const onRecorded = vi.fn();
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer(vi.fn(), onRecorded);
+
+      await user.click(recordButton());
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(onRecorded).toHaveBeenCalledTimes(1);
+      expect(onRecorded).toHaveBeenCalledWith(record);
+      expect(onRecorded.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+    });
+
+    it('reports nothing when the repository refuses the payment', async () => {
+      mockCreate.mockRejectedValueOnce(new Error('Payment amount exceeds the remaining balance of 750 USD'));
+      const onRecorded = vi.fn();
+      const user = userEvent.setup();
+      const { onClose } = renderDrawer(vi.fn(), onRecorded);
+
+      await user.click(recordButton());
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('exceeds the remaining balance');
+      expect(onRecorded).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
     });
   });
 
@@ -487,6 +524,20 @@ describe('PartialPaymentDrawer', () => {
       });
       expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-1' });
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    // MUT-82 (D4): an update is not a new payment, so nothing to undo; the
+    // opener's callback rides along to the entry's create view.
+    it('reports no update, and hands the opener\'s callback back to the entry view', async () => {
+      const onRecorded = vi.fn();
+      const user = userEvent.setup();
+      renderDrawer(vi.fn(), onRecorded);
+
+      await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(onRecorded).not.toHaveBeenCalled();
+      expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-1', onRecorded });
     });
 
     it('waits for the records instead of falling back to a new payment', () => {

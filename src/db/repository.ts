@@ -29,7 +29,8 @@ import type {
   PaymentByClientFilters,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
-import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon, isFuturePaymentDate } from '../lib/dates';
+import { todayLocalISO, isOverdueReceivable, daysOverdue, isFuturePaymentDate } from '../lib/dates';
+import { selectAttentionReceivables } from '../lib/attention';
 import {
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
@@ -542,18 +543,9 @@ export const transactionRepo = {
       profileId: filters.profileId,
     });
 
-    return transactions.filter((tx) => {
-      // Overdue, or due within the next 7 days. The previous implementation
-      // derived its 7-day bound via toISOString(), i.e. the UTC date, so the
-      // window was a day off west of UTC.
-      return isOverdueReceivable(tx, today) || isDueSoon(tx, today);
-    }).sort((a, b) =>
-      // Oldest due date first; equal dates by client name, then id, so Home's
-      // Needs attention (MUT-8) never reshuffles between renders
-      (a.dueDate || '').localeCompare(b.dueDate || '') ||
-      (a.clientName ?? '').localeCompare(b.clientName ?? '') ||
-      a.id.localeCompare(b.id)
-    );
+    // Overdue, or due within the next 7 days, oldest first: the rule Home
+    // applies to its own receivables (MUT-82), defined once
+    return selectAttentionReceivables(transactions, today);
   },
 };
 

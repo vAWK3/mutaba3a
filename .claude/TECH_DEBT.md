@@ -65,6 +65,22 @@
 3. Give an untitled row a keyboard path: a `TruncatedTitle`-style button showing the dash, named by `clients.profile.work.untitled`, or a focusable row.
 
 **Effort**: Small
+
+### TD-064: MUT-82's leftovers around Home's in-place payment
+**Status**: Open
+**Added**: 2026-10-12 (MUT-82)
+**Priority**: Low to Medium (item 1 is Medium: it is the sample path visitors take)
+**Impact**: Held back to keep MUT-82 to H1:
+1. **Undo on an entry with an uncovered received amount** (sample data, TD-063; legacy data, MUT-60) restores the record-derived state, not the seeded number. The save already drops the uncovered part, because `recalculateReceivedAmount` sums records only; deleting the record then leaves `receivedAmountMinor` at what the records cover. Fixed for free once such entries get a record (TD-063's seed fix or MUT-60's backfill).
+2. **`useAttentionReceivables` has no app consumer.** Home selects its list from `useReceivables` (ADR-055). Both copies (`useQueries.ts`, `useIncomeQueries.ts`) and their tests remain, and so does `transactionRepo.getAttentionReceivables` in the repository interface (it now calls the shared selector). Not deleted here: `useQueries.ts` was MUT-73's area while this lane was open.
+3. **Home's Recent payments rows** still open their client by mouse only (Needs attention's rows gained a link), and at 375 px the date and amount squeeze the client column to one letter.
+4. **Toasts and assistive technology.** `ToastContainer` mounts with its first toast, so its `role="status"` region is not in the page before the message and some screen readers won't announce it. Undo has no keyboard shortcut and sits at the end of the tab order; MUT-82 only pauses the timer once focus or the pointer reaches it.
+5. **The bidi isolate helper is copied four times** (`PartialPaymentDrawer`, `IncomeDrawer`, `OwedNowSummary`, `HomeNeedsAttention`).
+6. **Untested lines.** `exitSnapshot`'s id stripping (found in the browser after the owner paused new tests) has no unit test; the integration test drives the flow but not a drawer opened during another's exit.
+7. **The browser spec is not in `qa/`.** `e2e/home-record-payment.spec.ts` (full payment and slide-out, partial, reduced motion, Arabic, axe) was dropped when main retired `e2e/` (MUT-97); TEST_PLAN § MUT-82 lists what it covered.
+**Remediation**: 1 with TD-063 / MUT-60. 2: MUT-73 has landed, so delete both hooks and their tests, and `getAttentionReceivables` if nothing else reads it. 3: give Recent payments the same link cell and the container-query layout (`HomeNeedsAttention.css`). 4: keep the toast region mounted and empty; consider Cmd/Ctrl+Z for the Undo showing. 5: one `isolate` in `lib/utils.ts`. 6: add an `exitSnapshot.test.ts` case: a clone has no `[id]`. 7: port it to `qa/specs/web/home.spec.ts` with five `home.yaml` features, plus `logIncome({ dueDate })` and `localDateFromToday` in `qa/support/app.ts`.
+**Effort**: Small each
+
 ### TD-066: Income's Received / Unpaid strip ignores the page's filters
 **Status**: Open
 **Added**: 2026-10-12 (MUT-83, seen in the browser check)

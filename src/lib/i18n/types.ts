@@ -84,6 +84,9 @@ export interface Translations {
     recentPayments: string;
     noPayments: string;
     noClient: string;
+    paymentRecorded: string;
+    paymentRecordedNoClient: string;
+    undoFailed: string;
     empty: {
       title: string;
       description: string;

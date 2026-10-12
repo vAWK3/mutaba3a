@@ -2,24 +2,54 @@
  * HomeNeedsAttention
  *
  * "Who is late?" on Home (MUT-8): every receivable that is overdue or due
- * within 7 days, oldest due date first -- the list getAttentionReceivables
- * already returns. Bucketing goes through the shared ADR-010/022 helpers
- * (via toWorkRow); amounts stay in their own currency. A row opens its
- * client, or the entry itself when it has no client.
+ * within 7 days, oldest due date first. Bucketing goes through the shared
+ * ADR-010/022 helpers (selectAttentionReceivables, toWorkRow); amounts stay in
+ * their own currency. A row opens its client, or the entry itself when it has
+ * no client.
+ *
+ * Record a payment in place (MUT-82, brief H1, ADR-055): each row's Record
+ * Payment opens the payment drawer, prefilled with what is left and today.
+ * - The list is selected from the same receivables query Owed now reads, so a
+ *   save changes the row and Owed now in the same render.
+ * - A row the payment settled slides out (captureRowExit); a partial payment
+ *   keeps the row with its new amount.
+ * - A toast offers Undo, which deletes the payment record (usePaymentUndo).
+ * - Focus never falls to the page. A payment that settles a row moves focus
+ *   to the next row's Record Payment as the drawer closes (the drawer would
+ *   otherwise return it to a button that is about to go); a row Undo brings
+ *   back takes it again.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useAttentionReceivables } from '../../hooks/useIncomeQueries';
+import { useReceivables } from '../../hooks/useIncomeQueries';
+import { usePaymentUndo } from '../../hooks/usePaymentUndo';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { useDrawerStore } from '../../lib/stores';
-import { toWorkRow } from '../clients/clientProfileRows';
+import { toWorkRow, type WorkRow } from '../clients/clientProfileRows';
 import { CheckCircleIcon } from '../icons';
 import { formatAmount } from '../../lib/utils';
 import { todayLocalISO } from '../../lib/dates';
+import { selectAttentionReceivables } from '../../lib/attention';
+import { captureRowExit } from '../../lib/motion/rowExit';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { HomeAttentionRow, ATTENTION_PAY_CLASS } from './HomeAttentionRow';
+import type { PaymentRecord } from '../../types';
+import './HomeNeedsAttention.css';
 
 export interface HomeNeedsAttentionProps {
   profileId?: string;
+}
+
+// Bidi isolate: keep a name or an amount whole inside a sentence of either direction
+const isolate = (text: string) => `⁨${text}⁩`;
+
+const focusIsLost = () => !document.activeElement || document.activeElement === document.body;
+
+/** Where focus goes when a row it was in leaves: the next row's Record Payment, else the previous one's. */
+function neighbourAction(row: HTMLTableRowElement): HTMLElement | null {
+  const neighbour = row.nextElementSibling ?? row.previousElementSibling;
+  return neighbour?.querySelector<HTMLElement>(`.${ATTENTION_PAY_CLASS}`) ?? null;
 }
 
 export function HomeNeedsAttention({ profileId }: HomeNeedsAttentionProps) {
@@ -27,21 +57,108 @@ export function HomeNeedsAttention({ profileId }: HomeNeedsAttentionProps) {
   const { language } = useLanguage();
   const locale = getLocale(language);
   const navigate = useNavigate();
-  const { openIncomeDrawer } = useDrawerStore();
-  const { data: receivables = [], isLoading } = useAttentionReceivables(undefined, profileId);
+  const { openIncomeDrawer, openPartialPaymentDrawer } = useDrawerStore();
+  const reducedMotion = usePrefersReducedMotion();
+  const { offerUndo } = usePaymentUndo();
+  // The receivables Owed now reads (same filters, same query): one refetch
+  // changes both in one render (ADR-055)
+  const { data: receivables = [], isLoading, dataUpdatedAt } = useReceivables({ profileId });
 
   const today = todayLocalISO();
-  const rows = useMemo(() => receivables.map((tx) => toWorkRow(tx, today)), [receivables, today]);
+  const rows = useMemo(
+    () => selectAttentionReceivables(receivables, today).map((tx) => toWorkRow(tx, today)),
+    [receivables, today]
+  );
 
-  const open = (clientId: string | undefined, transactionId: string) =>
-    clientId
-      ? navigate({ to: '/clients/$clientId', params: { clientId } })
-      : openIncomeDrawer({ mode: 'edit', transactionId });
+  const sectionRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // The rows on screen, so a payment can find its row's neighbours
+  const rowElements = useRef(new Map<string, HTMLTableRowElement>());
+  // Rows a payment from here settled, with when: their departure slides out
+  const settledAt = useRef(new Map<string, number>());
+  // The row Undo is bringing back, with when: it takes focus if focus was lost
+  const returning = useRef<{ id: string; at: number } | null>(null);
+
+  // Marks the data has answered are spent: a row a payment did not take off
+  // the list (an entry with an uncovered received amount, TD-063) must not
+  // slide out later for another reason
+  useEffect(() => {
+    settledAt.current.forEach((at, id) => {
+      if (dataUpdatedAt > at) settledAt.current.delete(id);
+    });
+    if (returning.current && dataUpdatedAt > returning.current.at) returning.current = null;
+  }, [dataUpdatedAt]);
+
+  const open = (row: WorkRow) =>
+    row.tx.clientId
+      ? navigate({ to: '/clients/$clientId', params: { clientId: row.tx.clientId } })
+      : openIncomeDrawer({ mode: 'edit', transactionId: row.id });
+
+  const recordedMessage = (row: WorkRow, record: PaymentRecord) => {
+    const amount = isolate(formatAmount(record.amountMinor, row.currency, locale));
+    return row.tx.clientName
+      ? t('overview.paymentRecorded', { amount, client: isolate(row.tx.clientName) })
+      : t('overview.paymentRecordedNoClient', { amount });
+  };
+
+  const recordPayment = (row: WorkRow) =>
+    openPartialPaymentDrawer({
+      transactionId: row.id,
+      onRecorded: (record) => {
+        const leftMinor = row.tx.remainingAmountMinor ?? row.amountMinor;
+        if (record.amountMinor >= leftMinor) {
+          settledAt.current.set(row.id, Date.now());
+          // Taken now, before the drawer closes: it gives focus back to its
+          // trigger only while focus is still inside it
+          const element = rowElements.current.get(row.id);
+          const next = (element && neighbourAction(element)) ?? headingRef.current;
+          next?.focus({ preventScroll: true });
+        }
+        offerUndo(record, recordedMessage(row, record), () => {
+          returning.current = { id: row.id, at: Date.now() };
+        });
+      },
+    });
+
+  const onArrive = useCallback((id: string, element: HTMLTableRowElement) => {
+    rowElements.current.set(id, element);
+    if (returning.current?.id !== id) return;
+    returning.current = null;
+    if (focusIsLost()) element.querySelector<HTMLElement>(`.${ATTENTION_PAY_CLASS}`)?.focus({ preventScroll: true });
+  }, []);
+
+  const onLeave = useCallback(
+    (id: string, element: HTMLTableRowElement) => {
+      if (rowElements.current.get(id) === element) rowElements.current.delete(id);
+      const at = settledAt.current.get(id);
+      const section = sectionRef.current;
+      if (at === undefined || !section) return;
+      settledAt.current.delete(id);
+
+      // Captured now, while the row is still in the document
+      const exit = captureRowExit(element, section);
+      const hadFocus = element.contains(document.activeElement);
+      const nextFocus = neighbourAction(element);
+      queueMicrotask(() => {
+        // StrictMode's rehearsal: the row is still here
+        if (element.isConnected) {
+          settledAt.current.set(id, at);
+          return;
+        }
+        exit?.play({ reducedMotion });
+        // The row itself held focus (it was focused again before it left)
+        if (hadFocus && focusIsLost()) {
+          (nextFocus?.isConnected ? nextFocus : headingRef.current)?.focus({ preventScroll: true });
+        }
+      });
+    },
+    [reducedMotion]
+  );
 
   return (
-    <section className="card home-section" aria-labelledby="home-attention-title">
+    <section ref={sectionRef} className="card home-section home-attention" aria-labelledby="home-attention-title">
       <div className="card-header">
-        <h2 id="home-attention-title" className="card-title">
+        <h2 ref={headingRef} id="home-attention-title" className="card-title" tabIndex={-1}>
           {t('overview.needsAttention')}
         </h2>
         {rows.length > 0 && <span className="home-section-count">{rows.length}</span>}
@@ -57,28 +174,15 @@ export function HomeNeedsAttention({ profileId }: HomeNeedsAttentionProps) {
           <table>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="clickable" onClick={() => open(row.tx.clientId, row.id)}>
-                  <td className="home-row-main">
-                    <span className="home-row-primary">{row.tx.clientName ?? t('overview.noClient')}</span>
-                    <span className="home-row-secondary">{row.title ?? t('clients.profile.work.untitled')}</span>
-                  </td>
-                  <td className="amount-cell">
-                    <bdi dir="ltr">{formatAmount(row.tx.remainingAmountMinor ?? row.amountMinor, row.currency, locale)}</bdi>
-                    {row.overdueDays !== undefined ? (
-                      <span className="home-row-status text-danger">
-                        {t('transactions.status.overdue', { days: row.overdueDays })}
-                      </span>
-                    ) : (
-                      row.dueInDays !== undefined && (
-                        <span className="home-row-status">
-                          {row.dueInDays === 0
-                            ? t('transactions.status.dueToday')
-                            : t('transactions.status.dueIn', { days: row.dueInDays })}
-                        </span>
-                      )
-                    )}
-                  </td>
-                </tr>
+                <HomeAttentionRow
+                  key={row.id}
+                  row={row}
+                  locale={locale}
+                  onOpen={open}
+                  onRecordPayment={recordPayment}
+                  onArrive={onArrive}
+                  onLeave={onLeave}
+                />
               ))}
             </tbody>
           </table>
