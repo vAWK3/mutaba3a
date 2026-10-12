@@ -34,7 +34,7 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
   return items.map((r) => ({
     id: r.id,
     client: customers.get(r.customerId)?.name ?? '—',
-    matter: projects.get(r.projectId)?.name ?? '—',
+    matter: (r.projectId ? projects.get(r.projectId)?.name : undefined) ?? '—',
     due: formatDay(r.dueDate, language),
     currency: r.currency,
     gross: r.gross,

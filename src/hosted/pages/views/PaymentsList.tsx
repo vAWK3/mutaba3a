@@ -36,7 +36,7 @@ function shape(items: Payment[], customers: Map<string, Customer>, language: 'en
   return items.map((p) => ({
     id: p.id,
     number: p.number,
-    client: customers.get(p.customerId)?.name ?? '—',
+    client: (p.customerId ? customers.get(p.customerId)?.name : undefined) ?? '—',
     received: formatDay(p.receivedOn, language),
     method: methodLabel(p.method),
     currency: p.currency,

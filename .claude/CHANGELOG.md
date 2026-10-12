@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — Regenerate stale hosted-portal API types (TD-058, TD-072)
+
+**Why:** `src/hosted/api/schema.d.ts` hadn't been regenerated since MUT-65 made `Payment.customerId` and `Receivable.projectId` nullable (personal-profile captures with no client/matter). `hosted:types:check` was already failing on `main`; mobile work (MUT-68) was about to start leaning on the stale types.
+
+### Fixed
+- `src/hosted/api/schema.d.ts`: regenerated via `npm run hosted:types` (1,038 insertions / 129 deletions against the current `server/openapi/openapi.yaml`).
+- `src/hosted/pages/views/PaymentsList.tsx`, `src/hosted/pages/views/ReceivablesList.tsx`: guard the now-nullable `customerId`/`projectId` before the `Map.get` lookup, falling back to the existing "—" rendering instead of a type error.
+
+**Scope:** `hosted:types:check`, `typecheck`, `lint`, and the hosted test suite (145 tests) all pass. No CI change needed — `hosted:types:check` was already wired into the Makefile gates.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-83: Owed now on Home and Clients always match
 
 **Why:** Home and the Clients list showed the same-looking Owed now block with different numbers and no explanation.

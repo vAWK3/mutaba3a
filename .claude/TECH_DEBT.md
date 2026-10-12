@@ -51,11 +51,11 @@
 **Effort**: Small
 
 ### TD-072: The portal's vendored API types have been stale since MUT-65
-**Status**: Open
+**Status**: Resolved 2026-10-12
 **Added**: 2026-10-12 (found running MUT-66's gates)
 **Priority**: Medium
 **Impact**: `src/hosted/api/schema.d.ts` is generated from `server/openapi/openapi.yaml` by `npm run hosted:types`, but was not regenerated when MUT-65 landed. Regenerating it now produces ~1,040 changed lines and surfaces two real type errors the portal has been compiling past: `PaymentsList.tsx:39` and `ReceivablesList.tsx:37` pass `string | null` where `string` is required, because MUT-65 made `Payment.customerId` and `Receivable.projectId` nullable. The portal is reading those fields as if they can never be null. MUT-66 deliberately left the file alone — its design scopes it to the server, and regenerating would have dragged MUT-65's portal fixes into this ticket — so root `typecheck` still passes against the stale file.
-**Remediation**: Run `npm run hosted:types`, then handle the null cases at both call sites (and anywhere else the regeneration reveals). Consider adding `hosted:types --check` to the gates, the way `openapi:check` already guards the server document, so the two can never drift silently again.
+**Resolution**: Ran `npm run hosted:types`; both call sites now guard the null id before the `Map.get` lookup (`PaymentsList.tsx` customer lookup, `ReceivablesList.tsx` matter lookup), falling back to the existing "—" rendering. `hosted:types:check` already exists (package.json, wired into the Makefile gates) and now passes against the regenerated file.
 **Effort**: Small
 
 ### TD-073: Suites time out under full parallel load, because the 5 s default is tuned for isolation
@@ -90,11 +90,11 @@
 **Effort**: Small
 
 ### TD-058: `src/hosted/api/schema.d.ts` is stale on `main`, and regenerating it breaks the hosted typecheck
-**Status**: Open
+**Status**: Resolved 2026-10-12
 **Added**: 2026-10-12 (found by the first `make check-web` run, ADR-043)
 **Priority**: High — it blocks `make release web`
 **Impact**: `npm run hosted:types:check` fails on `main`. MUT-65 changed `server/openapi/openapi.yaml` (commits `7382c56`, `ac3817f`, merge `8ef2df0`) without regenerating the portal's client types, which were last written at MUT-64 (`8840f1c`). The drift is 382 insertions: the new `POST /v1/receivables/{receivableId}/settle` path, the session-may-create wording on customers and projects, and — the part that matters — `Receivable.projectId` and `Payment.customerId` becoming nullable. So this is not a stale generated file to refresh and forget: running `npm run hosted:types` makes `npm run typecheck` fail with two real errors, `src/hosted/pages/views/ReceivablesList.tsx:37` and `PaymentsList.tsx:39`, both `Argument of type 'string | null' is not assignable to parameter of type 'string'`. The portal reads fields the API may now return as null. Shipped portal code has the same gap at runtime; it is only invisible because the types were never regenerated.
-**Remediation**: Run `npm run hosted:types`, then fix both views to handle a null id (a personal-profile receivable has no matter; a personal-profile payment has no client) — decide per view whether that renders a dash, hides the link, or groups under "No client". Land the regenerated `schema.d.ts` with the fixes in one commit. Add `hosted:types:check` to the server's CI alongside `openapi:check` so the pair cannot drift again.
+**Resolution**: Regenerated `schema.d.ts` via `npm run hosted:types` (1,038 insertions / 129 deletions against the current `openapi.yaml`). Fixed both views: a null `customerId`/`projectId` now renders "—" instead of being passed into `Map.get`, matching the existing missing-name fallback. `hosted:types:check`, `typecheck`, `lint`, and the hosted test suite (145 tests) all pass. `hosted:types:check` was already wired into the Makefile gates, so no CI change was needed.
 **Effort**: Small–Medium (the regeneration is one command; the two views need a product decision about what a missing client or matter looks like)
 ### TD-057: Settings' Data Tools sits outside the page's scroll area and squeezes it
 **Status**: Open
