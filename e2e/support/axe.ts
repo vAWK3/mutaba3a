@@ -22,6 +22,8 @@ export const KNOWN_AXE_VIOLATIONS = {
   settings: [...APP_SHELL],
   // Save is brand teal
   incomeDrawer: ['color-contrast'],
+  // Record Payment is brand teal (MUT-86)
+  paymentDrawer: ['color-contrast'],
 } satisfies Record<string, string[]>;
 
 export type AxeSurface = keyof typeof KNOWN_AXE_VIOLATIONS;

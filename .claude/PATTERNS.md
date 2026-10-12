@@ -9,10 +9,10 @@
 
 | Category | Patterns |
 |----------|----------|
-| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3), Same figure, same entries, split (MUT-83) |
+| **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3), Same figure, same entries, split (MUT-83), All-or-nothing batches through `runAtomically` (MUT-87) |
 | **State** | URL State (one parsed model per page, MUT-83), Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place |
-| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets, One row per decision (MUT-87), One `<Drawer>` for a drawer's views (MUT-87) |
+| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3), Ungrouped amount prefills (`minorToAmountInput`, MUT-86) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
 | **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009) |
@@ -1305,6 +1305,17 @@ never go (ADR-029); their row types move to `src/db/retained/` with a
 retention test, and user *files* get a plain export before their viewer goes
 (ADR-029 addendum).
 
+Two refinements from MUT-58 (the money-event read side). Re-run the audit on
+the branch you delete from, not the one the ticket was written against: the
+ticket counted four `invalidateMoneyEventQueries` call sites and main had three.
+And when the deleted code was *refreshed by write paths*, the tests that
+asserted the refresh are flipped, not just deleted: they now assert that no
+`money*` key is invalidated, next to a positive check that the write's own keys
+still are, so the negative cannot pass vacuously. The guard
+(`noDeadMoneyEventModules.test.ts`) also scans `src/` for the deleted names,
+because test files are outside `tsc` and a stale `vi.mock` path would not fail
+the typecheck.
+
 ---
 
 ### Reconcile on read when a write path skips a derived record (MUT-3, ADR-033)
@@ -1739,6 +1750,138 @@ A `role="dialog"` points `aria-labelledby` at its heading, using a `useId()` id,
 
 ### A column without a visible title still has a header
 The row-actions column uses `RowActionsHeader` (a visually hidden "Actions"), never an empty `<th>`. Axe's `empty-table-header` flags an empty one, and a screen reader announces a nameless column.
+
+---
+
+## Release patterns — added 2026-10-12 (ADR-043)
+
+### Gate before you build, confirm before you commit
+
+A release target runs in a fixed order, and the order is the point:
+
+```
+preflight  →  gates  →  version prompt  →  build  →  confirm  →  commit/push/roll
+```
+
+- **Preflight is cheap and first.** Every reason a release should not happen — wrong branch, dirty tree, unmerged branch, parked worktree, behind `origin`, wrong `node`, stale `node_modules`, a missing tool or credential — is found in under a second, before anything spends minutes building. `scripts/preflight.sh` reports *every* failure and exits once, rather than dying on the first; an operator fixes the whole list in one pass.
+- **Gates that cannot fail the build run before the version bump**, so a failure leaves the working tree exactly as it was. The build runs *after*, because the version is compiled into the bundle (`__APP_VERSION__`).
+- **The irreversible step is last and asks.** `scripts/confirm.sh` defaults to no and fails closed when there is no terminal: a release never proceeds because a prompt could not be shown. `AUTO=1` is the only way past it.
+
+### Every override is a named variable
+
+A check that can be bypassed silently is not a check. Preflight's escape hatches are `ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE` — each downgrades exactly one check to a warning and prints why it was downgraded. There is no blanket `--force`.
+
+### Derive configuration, then verify it
+
+Do not ask an operator for a value the repository already knows. `GCP_PROJECT_ID` is read from `project_id` in `<environment>.tfvars`, `TF_STATE_BUCKET` from the backend of the last `terraform init`. Because a derived value could be wrong, preflight re-derives both independently and **fails on a mismatch** — a project that disagrees with the tfvars would push an image to one project and apply infrastructure in another. Derivation removes setup friction; verification is what makes it safe.
+
+### Prompt output goes to stderr
+
+Anything read back by `$(...)` must print its UI to stderr and only the answer to stdout — otherwise the menu is captured instead of shown, and the caller receives the menu text as the answer. Read from `/dev/tty` where there is one, falling back to stdin, and probe the terminal by *opening* it (`exec 3</dev/tty`) rather than testing the path: `/dev/tty` can exist and still refuse to open.
+
+### A release commit names only the release
+
+`git add` lists the version files explicitly — never `git add .`, which sweeps whatever was dirty into a commit labelled as a release. Preflight's clean-tree check is what makes an explicit list sufficient.
+
+### Reuse the rollout, own only the order
+
+`make` does not reimplement a deploy. The server roll stays `server/scripts/deploy.sh`; the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied, so the list of files carrying the version has one definition. When sourcing a script that also runs interactively, guard its entry point (`[[ "${BASH_SOURCE[0]}" == "${0}" ]]`) and namespace your own variables — `deploy.sh` defines `$GREEN` and friends as literal `\033` strings for `echo -e`, which silently corrupts a `printf '%s'` caller that uses the same names.
+## Motion patterns — added 2026-10-12 (MUT-80, ADR-044)
+
+### A close is immediate; the exit is presentation
+Never delay a state change for an animation. A drawer's `onClose` runs at once and its owner unmounts it. The exit is played by an inert, `aria-hidden` clone of the last frame (`captureExitSnapshot`), so it can't show reset or reloading content and can't be clicked. Only a motion the component commits itself (a drag dismiss) runs live and calls back at the end, which is what makes it catchable.
+
+### Animate from a motion value; write styles yourself; clear them at rest
+Drive `transform`/`opacity` from `motionValue`s with `.on('change', paint)`, not React state; React never renders per frame. At rest, clear the inline transform (and opacity at 1): a transform makes the element the containing block for `position: fixed` descendants. To interrupt, `stop()` the controls and read `value.get()`, which is the presentation value. Read `getVelocity()` *before* `stop()`. A stopped animation never fires `onComplete`, so a cancelled exit can't call back.
+
+### Gesture rules are pure; physics is shared
+Thresholds, release decisions, rubber-banding and opacity mapping are pure functions (`drawerGesture.ts`) with unit tests. Physics that any draggable thing reuses lives in `src/lib/motion/physics.ts`. Push a sample at `pointerup`, so a pause before release reads as zero velocity. On `pointercancel` use zero velocity: its coordinates are unreliable.
+
+### No layout, no motion
+A motion that needs a measured size (`offsetWidth`) skips itself when the size is 0. That keeps jsdom component tests synchronous without a test-only branch. Tests that exercise motion stub `offsetWidth` for the element (`DrawerFrame.test.tsx`).
+
+### Telling a real unmount from StrictMode's rehearsal
+In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
+
+### Hidden documents pause motion
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+
+---
+
+## App patterns added by MUT-86 (2026-10-12)
+
+### A live line and its errors read one classification
+When a field shows a live answer under it (the payment drawer's "Paid in full" or "₪1,775 still owed"), classify the typed text once, with a pure function that returns a tagged union (`describePaymentAmount`). The live line and the submit check both switch on that one result, so the line can never promise what the button then refuses. Show answers and definitive problems (an overpayment) live. Show states a valid value passes through while it is being typed (an unreadable "1,2" on the way to "1,200", an empty field) only after submit, and clear them on the next change.
+
+### A quiet row opens into its field in place
+A secondary field with a sensible default (the payment date, "Today ›") or one that is usually empty ("+ Add note") is a quiet button that is replaced by the labelled field when pressed. Focus moves to the field only when the user opened it: set a `focusTarget` state in the click handler and focus it in an effect keyed on that state. A field open from the start, such as an edited record's notes, never steals focus from the main field. Mirror chevrons in RTL with `[dir="rtl"] … { transform: scaleX(-1) }`.
+
+### Prefill an amount ungrouped, with cents as two digits
+Under MUT-5's strict grammar, deleting a digit from a prefilled "3,550" leaves "3,55", which can't be read. Prefill amount fields with `minorToAmountInput`: "3550" or "887.50". It uses integer arithmetic, never `String(minor / 100)`, which gives "887.5".
+
+### A co-located stylesheet prefixes its classes with the component
+`index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, used by the document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.
+
+---
+
+## Inbox patterns — added 2026-10-12 (MUT-66)
+
+### A user-owned resource, where everything else is organization-owned
+
+`InboxEntry` is the first server-side row that belongs to a person rather than to an organization. The shape to copy, if there is ever a second:
+
+- **Every repository method takes `userId` first**, exactly where the ledger's take `organizationId`. Cross-user reads are then impossible by construction, not by a filter someone has to remember — the same guarantee ADR-025 point 2 gives the ledger, one ownership axis over.
+- **No FK to `Organization` or `Membership` at all.** This is what makes "survives losing every membership" a structural fact instead of a guard or a cleanup job. Guard it with a DMMF test (`inbox-ownership.test.ts`), so a later edit that adds an innocent-looking `organizationId` fails immediately rather than surfacing as a support ticket about vanished rows.
+- **Its routes send no `X-Mutaba3a-Profile` and declare no scope**, following `GET /v1/me`, and join the organization-independent set through their own exported module rather than editing `routes/sessions.ts`.
+- **In the store guard it is `'sessionOnly'`** — neither `control` ("any principal": an API key has no person behind it, so no inbox) nor a matrix `Domain` (which is per-organization by construction).
+
+### Claim-then-write: a cross-repository transaction that cannot double-write
+
+When one call must create a record *and* consume the thing it came from, do not check-then-act. Delete the source row **inside** the transaction first, and let the delete be the check:
+
+```ts
+const { count } = await tx.inboxEntry.deleteMany({ where: { id, userId, kind } });
+if (count !== 1) return { kind: 'not_found' };          // unknown, foreign, wrong kind, or already filed
+return { kind: 'filed', expense: await createExpenseRow(tx, input, at) };
+```
+
+The delete proves ownership and holds the row lock until commit, so of two concurrent calls exactly one proceeds; and because the financial insert is in the same transaction, a failure rolls the delete back with it. One shape gives both "exactly once" and "on failure it stays untouched".
+
+The in-memory store simulates it by removing the entry **synchronously, before any await** (so two concurrent calls cannot both see it) and restoring it in a `catch`.
+
+### Splitting a repository create so it can be composed
+
+To let an existing create participate in a larger transaction, extract its row insert to take an explicit handle and leave the public method as the one-statement caller:
+
+```ts
+create: (input, at) => createExpenseRow(this.prisma, input, at),   // implicit transaction
+// filing: createExpenseRow(tx, input, at) inside its own $transaction
+```
+
+Behaviour is unchanged and no rule is duplicated — only the transaction boundary moves outward. `settleReceivable(tx, …)`, `createPaymentTx` and `createAdjustmentTx` are the existing instances of this idiom.
+
+### Validate everything before the transaction opens
+
+All destination-side validation — writability, link resolution, category/customer/project existence, future dates — runs in the route, before the repository method that would consume the source row is called at all. "On failure it stays untouched" is then structural: a refusal never reaches the code that could delete it, and `READ_ONLY_PROFILE`/`INSUFFICIENT_SCOPE` are refused in middleware before the handler runs. Assert it with a spy proving zero store calls, not only by observing the row afterwards.
+
+### Prove an isolation claim structurally, not just behaviourally
+
+"Unsorted entries never change any summary" is asserted twice: once by comparing whole summary responses before and after filling an inbox, and once by reading the summary sources — enumerated from the directory so a module added later is covered — and finding no reference to the table. The second keeps the first from being a coincidence that a future query could quietly break.
+
+---
+
+## App patterns added by MUT-87 (2026-10-12)
+
+### A batch of writes is all or nothing, through the repository
+When one user action writes several rows (marking three months paid writes three expenses and three occurrences), run it in one storage transaction so a failure leaves nothing half done. Services can't open one themselves: they reach storage only through `getRepositories()` (ADR-002). The repository offers a unit of work instead, `recurringOccurrences.runAtomically(work)`, and the service loops over the **existing** single-row functions inside it (`confirmPayments` → `confirmPayment`), so the rules for one row are written once. The Dexie implementation is `db.transaction('rw', [every table the work touches, reads included], work)`; repository calls inside join it through Dexie's zone. `work` may await only repository calls: a timer or a `fetch` inside commits the transaction early. Test it with fake-indexeddb by making the second write reject (`vi.spyOn(repo, 'create').mockImplementationOnce(original).mockRejectedValueOnce(...)`) and asserting the tables are empty (ADR-052).
+
+### One row per decision, not one card per item
+A list that asks the user to act should show one row per thing they decide about, not one card per underlying record. The Expenses Needs attention list groups a rule's missed payments into one row ("Aug, Sep, Oct not marked · $240") with one primary action; the less common actions go in a ⋯ menu (`useMenuButton`) and apply to the whole group; per-item choices live in the drawer the primary action opens. The grouping is a pure, tested function the page calls in `useMemo` (`groupOccurrencesByRule`), and the drawer looks its group up live by key, so an item resolved inside it drops out.
+
+### One `<Drawer>` for a drawer's views
+A drawer with a second step (the mark-paid drawer's snooze view) renders a single `<Drawer>` and swaps its body and footer by state. Returning a different component that each renders its own `<Drawer>` remounts the shell, which replays the open animation and loses state the first view held (checks, typed amounts). Keep that state in the component that owns the `<Drawer>`.
+
+---
 
 ## App patterns added by MUT-83 (2026-10-12)
 

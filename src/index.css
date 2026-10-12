@@ -2183,12 +2183,13 @@ div.input-with-prefix {
 }
 
 /* Drawer */
+/* Drawer motion (enter, drag, exit) is driven from JS by DrawerFrame (MUT-80):
+   it writes transform/opacity inline and clears them at rest. */
 .drawer-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
   z-index: 200;
-  animation: fadeIn var(--transition-fast);
 }
 
 @keyframes fadeIn {
@@ -2211,16 +2212,17 @@ div.input-with-prefix {
   z-index: 201;
   display: flex;
   flex-direction: column;
-  animation: slideIn var(--transition-normal);
+  /* Vertical pans scroll the body; horizontal ones reach the drag. */
+  touch-action: pan-y;
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+.drawer:focus {
+  outline: none;
+}
+
+.drawer.is-dragging {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .drawer-header {
@@ -3243,16 +3245,6 @@ a.project-tag:hover {
   right: auto;
   left: 0;
   box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
-  animation: slideInRTL var(--transition-normal);
-}
-
-@keyframes slideInRTL {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
 }
 
 /* Reports sidebar text alignment */

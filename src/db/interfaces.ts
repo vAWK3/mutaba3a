@@ -276,6 +276,14 @@ export interface IRecurringOccurrenceRepository extends BaseRepository<Recurring
 
   // Get history for a specific rule
   getHistoryForRule(ruleId: string): Promise<RecurringOccurrence[]>;
+
+  /**
+   * Run `work` so that every rule read and every occurrence and expense write
+   * it makes commits together or not at all: a throw undoes them all (MUT-87,
+   * ADR-052). `work` may await only repository calls, never timers or the
+   * network.
+   */
+  runAtomically<T>(work: () => Promise<T>): Promise<T>;
 }
 
 // ============================================================================

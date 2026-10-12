@@ -612,6 +612,7 @@ export interface VirtualOccurrence {
 export interface VirtualOccurrenceDisplay extends VirtualOccurrence {
   // Resolved from rule
   ruleTitle: string;
+  frequency: ExpenseFrequency;     // "$80 monthly" on the Needs attention row (MUT-87)
   vendor?: string;
   vendorName?: string;
   categoryId?: string;
@@ -1003,125 +1004,6 @@ export interface AttentionItem {
     /** URL params for navigation actions */
     urlParams?: Record<string, string>;
   };
-}
-
-// ============================================================================
-// Money Answers Types (Unified Financial Cockpit)
-// ============================================================================
-
-// Money Event Direction
-export type MoneyDirection = 'inflow' | 'outflow';
-
-// Money Event Source
-export type MoneyEventSource =
-  | 'actual_income'      // Transaction kind=income, status=paid
-  | 'actual_cost'        // Transaction kind=expense
-  | 'receivable'         // Transaction kind=income, status=unpaid
-  | 'profile_expense'    // Expense table
-  | 'projected_expense'  // From RecurringRule forecast
-  | 'retainer';          // From ProjectedIncome
-
-// Money Event State
-export type MoneyEventState =
-  | 'paid' | 'unpaid' | 'partial' | 'overdue' | 'upcoming' | 'missed' | 'cancelled';
-
-// Confidence Level
-export type MoneyConfidence = 'high' | 'medium' | 'low';
-
-// Core MoneyEvent
-export interface MoneyEvent {
-  id: string;
-  profileId?: string;
-  direction: MoneyDirection;
-  source: MoneyEventSource;
-  state: MoneyEventState;
-  amountMinor: number;
-  receivedAmountMinor?: number;
-  currency: Currency;
-  eventDate: string;        // Primary: paidAt || dueDate || expectedDate || occurredAt
-  dueDate?: string;
-  paidDate?: string;
-  expectedDate?: string;
-  counterparty?: { id: string; name: string; type: 'client' | 'vendor' };
-  title: string;
-  confidence: MoneyConfidence;
-  sourceEntityId: string;
-  sourceEntityType: 'transaction' | 'expense' | 'projectedIncome';
-}
-
-// Daily Aggregate
-export interface DailyAggregate {
-  date: string;
-  inflowMinor: number;
-  outflowMinor: number;
-  netMinor: number;
-  runningBalanceMinor: number;
-  events: MoneyEvent[];
-  confidenceLevel: MoneyConfidence;
-}
-
-// Month Summary
-export interface MonthSummary {
-  month: string;
-  totalInflowMinor: number;
-  totalOutflowMinor: number;
-  netMinor: number;
-  awaitingMinor: number;
-  projectedOutflowMinor: number;
-}
-
-// Year Summary
-export interface YearSummary {
-  year: number;
-  totalInflowMinor: number;
-  totalOutflowMinor: number;
-  netMinor: number;
-  avgAwaitingMinor: number;
-  retainerStabilityPercent: number;
-  months: MonthSummary[];
-  bestMonth?: string;
-  worstMonth?: string;
-}
-
-// Guidance Item
-export type GuidanceSeverity = 'critical' | 'warning' | 'info';
-export type GuidanceCategory = 'collect' | 'reduce' | 'delay' | 'hygiene';
-
-export interface GuidanceItem {
-  id: string;
-  severity: GuidanceSeverity;
-  category: GuidanceCategory;
-  title: string;
-  description: string;
-  impactMinor: number;
-  impactCurrency: Currency;
-  relatedEventIds: string[];
-  primaryAction?: { label: string; type: string; payload?: Record<string, unknown> };
-}
-
-// Money Answers Filters
-export interface MoneyEventFilters {
-  month?: string; // YYYY-MM
-  year?: number;
-  profileId?: string;
-  currency: Currency;
-  /**
-   * Include unpaid income (transactions with kind='income' and status='unpaid').
-   * Terminology note: per ADR-010, "receivables" are just unpaid income, not a separate entity.
-   * @default true
-   */
-  includeUnpaidIncome?: boolean;
-  /**
-   * Include projected retainer income (from ProjectedIncome table).
-   * @default true
-   */
-  includeProjectedRetainer?: boolean;
-
-  // DEPRECATED: Use includeUnpaidIncome instead
-  /** @deprecated Use includeUnpaidIncome instead */
-  includeReceivables?: boolean;
-  /** @deprecated Use includeProjectedRetainer instead */
-  includeProjections?: boolean;
 }
 
 // ============================================================================

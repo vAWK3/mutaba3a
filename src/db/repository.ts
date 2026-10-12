@@ -29,7 +29,7 @@ import type {
   PaymentByClientFilters,
 } from '../types';
 import { excludeDeleted, scopeToProfile } from './baseQuery';
-import { todayLocalISO, formatLocalDate, isOverdueReceivable, daysOverdue, isDueSoon } from '../lib/dates';
+import { todayLocalISO, isOverdueReceivable, daysOverdue, isDueSoon, isFuturePaymentDate } from '../lib/dates';
 import {
   aggregateTransactionTotals,
   aggregateTransactionTotalsByCurrency,
@@ -1516,20 +1516,6 @@ async function assertWithinTransactionTotal(
       { transactionId, paymentRecordId: excludePaymentRecordId }
     );
   }
-}
-
-/**
- * A payment dated after today (MUT-18). Only the calendar day matters. A full
- * timestamp is future only when both its UTC date and its local date are, so
- * nowISO() is today in every timezone: in the evening west of UTC its UTC
- * date is already tomorrow.
- */
-function isFuturePaymentDate(paidAt: string): boolean {
-  const today = todayLocalISO();
-  if (paidAt.split('T')[0] <= today) return false;
-  if (!paidAt.includes('T')) return true;
-  const instant = new Date(paidAt);
-  return Number.isNaN(instant.getTime()) || formatLocalDate(instant) > today;
 }
 
 export const paymentRecordRepo = {

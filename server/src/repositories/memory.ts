@@ -69,6 +69,13 @@ import type {
   ExpenseRepository,
   UpdateExpenseCategoryPatch,
   UpdateExpensePatch,
+  CreateInboxEntryInput,
+  IncomeWriteResult,
+  InboxEntryCursor,
+  InboxEntryKind,
+  InboxEntryRecord,
+  InboxEntryRepository,
+  UpdateInboxEntryPatch,
   CustomerFilter,
   CustomerRecord,
   CustomerRepository,
@@ -128,6 +135,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly exps = new Map<string, ExpenseRecord>();
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
+  private readonly inbox = new Map<string, InboxEntryRecord>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -1142,6 +1150,88 @@ export class MemoryLedgerStore implements LedgerStore {
     return [...this.expCats.values()].find((c) => c.organizationId === organizationId && categoryNameKey(c.name) === key);
   }
 
+  // ---- MUT-66: the unsorted inbox ------------------------------------------
+
+  readonly inboxEntries: InboxEntryRepository = {
+    create: async (input: CreateInboxEntryInput, at) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('inbox_entries.userId');
+      const record: InboxEntryRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at };
+      this.inbox.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (userId, id) => {
+      const e = this.inbox.get(id);
+      return e && e.userId === userId ? { ...e } : null;
+    },
+    list: async (userId, page) => {
+      const rows = [...this.inbox.values()]
+        .filter((e) => e.userId === userId && (!page.cursor || isBeforeInboxCursor(e, page.cursor)))
+        .sort(newestInboxFirst)
+        .slice(0, page.limit + 1);
+      const items = rows.slice(0, page.limit).map((e) => ({ ...e }));
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null };
+    },
+    update: async (userId, id, expectedVersion, patch: UpdateInboxEntryPatch, at) => {
+      const e = this.inbox.get(id);
+      if (!e || e.userId !== userId) return { kind: 'not_found' };
+      if (e.version !== expectedVersion) return { kind: 'stale', record: { ...e } };
+      Object.assign(e, definedOnly(patch));
+      e.version += 1;
+      e.updatedAt = at;
+      return { kind: 'updated', record: { ...e } };
+    },
+    delete: async (userId, id) => {
+      const e = this.inbox.get(id);
+      if (!e || e.userId !== userId) return false;
+      this.inbox.delete(id);
+      return true;
+    },
+    countByUser: async (userId) => [...this.inbox.values()].filter((e) => e.userId === userId).length,
+    fileAsExpense: async (params, at) => {
+      const claimed = this.claimInboxEntry(params);
+      if (!claimed) return { kind: 'not_found' };
+      const expense = await this.restoringOnFailure(claimed, () => this.expenses.create(params.expense, at));
+      return { kind: 'filed', expense };
+    },
+    fileAsIncome: async (params, at) => {
+      const claimed = this.claimInboxEntry(params);
+      if (!claimed) return { kind: 'not_found' };
+      const result = await this.restoringOnFailure(claimed, async (): Promise<IncomeWriteResult> => {
+        if (params.write.kind === 'received') {
+          const { payment, allocations } = await this.payments.create(params.write.payment, at);
+          return { kind: 'received', payment, allocations };
+        }
+        return { kind: 'owed', receivable: await this.receivables.createAdjustment(params.write.receivable, at) };
+      });
+      return { kind: 'filed', result };
+    },
+  };
+
+  /**
+   * The in-memory stand-in for the filing transaction's row lock: take the
+   * entry out of the map synchronously, before any await, so that of two
+   * concurrent filings of the same entry exactly one proceeds and the other
+   * sees `not_found` — rather than both passing an "it still exists" check and
+   * writing two financial records.
+   */
+  private claimInboxEntry(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind }): InboxEntryRecord | null {
+    const entry = this.inbox.get(params.inboxEntryId);
+    if (!entry || entry.userId !== params.userId || entry.kind !== params.kind) return null;
+    this.inbox.delete(entry.id);
+    return entry;
+  }
+
+  /** The rollback half: a financial write that throws puts the claimed entry back exactly as it was. */
+  private async restoringOnFailure<T>(claimed: InboxEntryRecord, write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } catch (err) {
+      this.inbox.set(claimed.id, claimed);
+      throw err;
+    }
+  }
+
   async ping(): Promise<void> {
     /* always up */
   }
@@ -1220,6 +1310,19 @@ function newestFirst(a: ExpenseRecord, b: ExpenseRecord): number {
 
 function isBeforeExpenseCursor(e: ExpenseRecord, cursor: ExpenseCursor): boolean {
   return e.occurredOn < cursor.occurredOn || (e.occurredOn === cursor.occurredOn && e.id < cursor.id);
+}
+
+/** The inbox's own newest-first order: (createdAt, id) descending, so entries captured in the same millisecond still page without gaps or repeats. */
+function newestInboxFirst(a: InboxEntryRecord, b: InboxEntryRecord): number {
+  const byTime = b.createdAt.getTime() - a.createdAt.getTime();
+  if (byTime !== 0) return byTime;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+function isBeforeInboxCursor(e: InboxEntryRecord, cursor: InboxEntryCursor): boolean {
+  const t = e.createdAt.getTime();
+  const c = cursor.createdAt.getTime();
+  return t < c || (t === c && e.id < cursor.id);
 }
 
 /** The keys of a patch that are present (undefined = unchanged; null = cleared). */

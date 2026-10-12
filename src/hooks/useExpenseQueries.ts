@@ -3,7 +3,6 @@ import { withErrorToast } from './useMutationWithFeedback';
 // Standalone helpers, not repositories — they stay direct imports.
 import { seedExpenseCategories, type CategoryPreset } from '../db/defaultExpenseCategories';
 import { getRepositories } from '../db';
-import { invalidateMoneyEventQueries } from './useMoneyEventQueries';
 import type {
   Expense,
   RecurringRule,
@@ -77,9 +76,6 @@ function invalidateExpenseQueries(queryClient: ReturnType<typeof useQueryClient>
   queryClient.invalidateQueries({ queryKey: ['monthCloseStatus'] });
   queryClient.invalidateQueries({ queryKey: ['monthCloseComputed'] });
   queryClient.invalidateQueries({ queryKey: ['monthCloseList'] });
-  // Money events are derived from this data, so the Overview KPI strip and
-  // attention feed have to refetch with it.
-  invalidateMoneyEventQueries(queryClient);
 }
 
 function invalidateRecurringRuleQueries(queryClient: ReturnType<typeof useQueryClient>) {
@@ -87,6 +83,9 @@ function invalidateRecurringRuleQueries(queryClient: ReturnType<typeof useQueryC
   queryClient.invalidateQueries({ queryKey: ['recurringRule'] });
   queryClient.invalidateQueries({ queryKey: ['activeRecurringRules'] });
   queryClient.invalidateQueries({ queryKey: ['expenseForecast'] });
+  // The Needs attention rows and the forecast are computed from the rules (MUT-87)
+  queryClient.invalidateQueries({ queryKey: ['dueOccurrences'] });
+  queryClient.invalidateQueries({ queryKey: ['virtualOccurrences'] });
 }
 
 function invalidateExpenseCategoryQueries(queryClient: ReturnType<typeof useQueryClient>) {

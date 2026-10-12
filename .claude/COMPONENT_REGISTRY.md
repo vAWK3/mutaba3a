@@ -10,16 +10,17 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
+| **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income) |
 | **Feedback** | Toast, Modal, ConfirmModal |
-| **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
+| **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, CurrencyAmounts, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -310,27 +311,34 @@ Tests: `src/pages/landing/__tests__/`.
 ## Drawer Components
 
 ### Base Drawer Pattern
-**Shell**: `src/components/drawers/Drawer.tsx` (`title`, `onClose`, `children`, `footer?`). It renders `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide). The close button is `common.close` (TD-009). The portal's own shell, `src/hosted/components/Drawer.tsx`, does the same and takes `closeLabel` as a prop. Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
-
-All drawers follow this structure:
+Every drawer renders `Drawer` (`src/components/drawers/Drawer.tsx`; the portal's is `src/hosted/components/Drawer.tsx`, which takes `closeLabel`) and is mounted by its owner while its store says open. It is a `role="dialog"` `aria-modal`, named by its title through `aria-labelledby` (a `useId()` id, so two open drawers never collide), and its close button is `common.close` (TD-009). Tests: `drawers/__tests__/Drawer.test.tsx`, `hosted/components/__tests__/Drawer.test.tsx`.
 
 ```tsx
 interface DrawerProps {
-  open: boolean;
-  onClose: () => void;
-  // Entity-specific props
+  title: string;          // names the dialog (aria-labelledby)
+  onClose: () => void;    // Escape, ✕ and the overlay call it at once
+  children: ReactNode;
+  footer?: ReactNode;
 }
 
-// Usage via controller (URL-driven)
-<TransactionDrawerController />
-
-// Or direct (programmatic)
-<TransactionDrawer
-  open={isOpen}
-  onClose={handleClose}
-  transactionId={id}
-/>
+// AppShell
+{incomeDrawer.isOpen && <IncomeDrawer />}
+// IncomeDrawer
+<Drawer title={t('transactions.newIncome')} onClose={closeIncomeDrawer} footer={…}>…</Drawer>
 ```
+
+Unmount it whenever you like: the exit animation plays after it has gone (ADR-044).
+
+### DrawerFrame (MUT-80, ADR-044)
+**Location**: `src/components/ui/drawer/` — `DrawerFrame.tsx` (shell), `useDrawerMotion.ts` (enter, drag, release, interrupt, exit), `useDrawerFocus.ts` (trap and return), `drawerGesture.ts` (pure rules: `classifyDrag`, `closingDelta`, `displayOffset`, `releaseTarget`, `overlayOpacity`, `exitDistance`, `isNoDragTarget`), `drawerMotion.ts` (`DRAWER_SPRING`, `paintDrawer`, `springTo`, `fadeTo`, `playSnapshotExit`), `exitSnapshot.ts` (`captureExitSnapshot`).
+**Purpose**: the one slide-over shell for both builds. Both `Drawer`s wrap it; the local one passes `t('common.close')`, the portal its own label.
+**Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
+**Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `e2e/drawer-motion.spec.ts`.
+
+### Motion physics and focusables (MUT-80)
+- `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
+- `src/lib/dom/focusable.ts`: `FOCUSABLE_SELECTOR`, `focusablesWithin(root)` (skips disabled, `tabindex="-1"`, `[hidden]`, and, where supported, invisible elements). Used by `useMenuButton`'s dialog mode and the drawer trap.
 
 ---
 
@@ -391,6 +399,41 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 
 ---
 
+### PartialPaymentDrawer ("Record payment")
+**Location**: `src/components/drawers/PartialPaymentDrawer.tsx` + `PartialPaymentDrawer.css`. It is mounted in `AppShell` while `partialPaymentDrawer.isOpen`.
+**Purpose**: record a payment against an income entry, or edit a recorded one. It is the only UI that writes a `PaymentRecord` (ADR-038). Its layout follows P1 (MUT-86, ADR-047): it leads with what's left.
+
+```tsx
+openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
+editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
+// Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
+```
+
+**Layout** (classes prefixed `pay-drawer-`; `index.css` already has global `.payment-row` and `.payment-amount`):
+- **Title:** "Record Payment · {amount} left" (`titleLeft`, the amount in bidi isolates). In edit mode it is "Edit Payment".
+- **Amount:** one large `.input-with-prefix` field, LTR in Arabic. Its label is visually hidden. It is prefilled with `minorToAmountInput` ("3550", "887.50") and selected on open.
+- **Live line** (`aria-live="polite"`, describes the input): "Paid in full", "{amount} still owed", or the overpayment message. Other amount errors show only after Record is pressed.
+- **Date:** a "Payment date · Today ›" row that opens the date field in its place. **Notes:** "+ Add note", which opens a focused field. Edit mode opens Notes when the record has one.
+- **Footer:** Cancel plus Record Payment (create) or Update Payment (edit). With nothing left to record, the footer is Close and there is no form.
+- **Payment history:** below the form, only when the entry has records. Each row has edit and delete.
+
+**Rules** (pure, in `src/lib/paymentEntry.ts`, unit-tested):
+- `describePaymentAmount(raw, currency, allowedMinor)`. Allowed is the remaining balance, plus the record's own amount when editing.
+- `minorToAmountInput(minor)`
+- Dates go through `isFuturePaymentDate` (`lib/dates.ts`), the same helper the repository uses.
+
+**Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
+
+**Props**: `transactionId`, `onClose`. MUT-82 opens it the same way.
+
+**Tests**:
+- `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx`
+- `src/lib/__tests__/paymentEntry.test.ts`
+- `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts`
+- `e2e/record-payment.spec.ts`
+
+---
+
 ### Typeaheads (`EntityTypeahead`, `ClientTypeahead`, `ProjectTypeahead`, `VendorTypeahead`)
 **Location**: `src/components/ui/`. The hosted `ClientPicker`/`ProjectPicker` also wrap `EntityTypeahead`.
 
@@ -447,6 +490,22 @@ navigate({ search: { newProject: true, clientId } }); // Create
 - Category selection
 - Receipt attachment
 - Recurring rule linking
+
+---
+
+### RecurringMarkPaidDrawer
+**Location**: `src/components/drawers/RecurringMarkPaidDrawer.tsx` (+ `.css`)
+**Purpose**: The small drawer behind an Expenses Needs attention row (MUT-87, ADR-052). It lists one recurring rule's missed payments, oldest first, all checked, each with its month, its expected date and an amount field prefilled with the rule's amount (`input-with-prefix`, so it stays LTR in Arabic). **Mark N paid** writes one expense per checked payment, dated on its own expected date, in one all-or-nothing write (`useConfirmRecurringPayments`); an amount is sent only when edited. Each payment has its own **Skip** (asks first) and **Snooze**. Snoozing is the drawer's second view: a date (default a week out, must be after today) and quick picks named by `Intl.RelativeTimeFormat`. Opened with `initialView="snooze"` (the row's ⋯ › Snooze all) it snoozes every payment and Cancel closes; from a payment it snoozes that one and Back returns to the list, which keeps its checks and edited amounts. Uses the shared `Drawer` as is: one `<Drawer>` for both views, so switching views doesn't replay the open animation.
+
+```tsx
+// Page state: { ruleId, view } | null; the group is looked up live, so a skipped payment drops out
+{drawerGroup && (
+  <RecurringMarkPaidDrawer key={`${ruleId}:${view}`} group={drawerGroup} initialView={view} onClose={close} />
+)}
+```
+
+Calls the batch hooks itself (`useConfirmRecurringPayments`, `useSkipRecurringOccurrences`, `useSnoozeRecurringOccurrences`). Closes itself when nothing would be left (all marked, the last skipped, all snoozed).
+Tests: `src/components/drawers/__tests__/RecurringMarkPaidDrawer.test.tsx`.
 
 ---
 
@@ -824,7 +883,7 @@ ProjectDetailPage.
 
 ## Home Components
 
-Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone.
+Home is three blocks since MUT-8 (ADR-036): `OwedNowSummary` (Money Components) over every receivable, then these two sections in `.home-two-column`. The old `PredictiveKpiStrip`, `AttentionFeed`, `MonthActualsRow`, `KpiCard`/`KpiStrip` were deleted by decision. `QuickSummaries` never existed in this tree. A guard test (`src/__tests__/noDeadHomeModules.test.ts`) keeps them gone. MUT-58 then deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, `lib/monthDetection`, the money-event and guidance types, and the `invalidateMoneyEventQueries` call on every write path); `src/__tests__/noDeadMoneyEventModules.test.ts` keeps that gone too.
 
 ### HomeNeedsAttention
 **Location**: `src/components/home/HomeNeedsAttention.tsx`
@@ -856,6 +915,26 @@ Tests: `src/pages/overview/__tests__/OverviewPage.test.tsx`; data in `transactio
 ```
 
 **Usage**: Typically paired with tooltips to explain projected values or data sources.
+
+---
+
+## Expenses Components
+
+### RecurringAttentionList
+**Location**: `src/components/expenses/RecurringAttentionList.tsx` (+ `.css`); shaping in `src/components/expenses/recurringAttention.ts`
+**Purpose**: Expenses › Needs attention as **one row per recurring rule** (MUT-87, decision E1, ADR-052): "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", the oldest payment's lateness under the amount ("68d overdue", "Due today", as Home says it). One primary **Mark Paid** per row; Skip all, Snooze all… and Edit recurring rule in a ⋯ menu built on `useMenuButton()` (menu opens under its button on the end edge, so it mirrors in RTL; rows are a `<ul>`, not a scrolling table, so nothing clips it). The header carries the number of rules and the total per currency (`CurrencyAmounts`). Presentational: the page passes the groups and the four handlers.
+
+```tsx
+const groups = useMemo(() => groupOccurrencesByRule(dueOccurrences), [dueOccurrences]);
+<RecurringAttentionList groups={groups} onMarkPaid={open} onSnoozeAll={openSnooze} onSkipAll={skipAll} onEditRule={edit} />
+```
+
+`recurringAttention.ts` (pure, tested): `groupOccurrencesByRule` (rule → missed payments oldest first; rows by oldest payment, then title, then id), `currencyTotals`, `formatMonthList` / `formatMonthYear` / `formatDateOnly` (date-only values read as **local** dates, `Intl` month names and `Intl.ListFormat`; the year is added only when the payments span two years), `snoozeDateAfter`, `amountInputValue` and `readPaymentAmount` (the app's one amount parser; a symbol naming another currency is refused).
+Tests: `src/components/expenses/__tests__/RecurringAttentionList.test.tsx`, `recurringAttention.test.ts`.
+
+### RecurringOccurrenceCard / RecurringOccurrenceList
+**Location**: `src/components/ui/RecurringOccurrenceCard.tsx`
+**Purpose**: Read-only since MUT-87: one projected recurring payment with its state, for the Expenses forecast (`compact`). Its Mark Paid / Skip / Snooze / Edit rule buttons were replaced by `RecurringAttentionList` and `RecurringMarkPaidDrawer`; `RecurringConfirmModal` and `RecurringSnoozeModal` were deleted.
 
 ---
 
@@ -1145,6 +1224,20 @@ The parts always add up to `total`. It takes entries and clients rather than a b
 
 ---
 
+### CurrencyAmounts
+**Location**: `src/components/ui/CurrencyAmounts.tsx` (+ `.css`); entries from `orderCurrencyAmounts` in `src/lib/currencyAmounts.ts`
+**Purpose**: Amounts in several currencies side by side, one `<bdi dir="ltr">` per currency, never converted or combined (ADR-004), like Owed now but without its label and overdue lines (MUT-87). `orderCurrencyAmounts(totals)` keeps the non-zero currencies in USD → ILS → EUR order; its order is a `Record<Currency, number>`, so a new currency without a place fails to compile.
+
+```tsx
+<CurrencyAmounts amounts={orderCurrencyAmounts({ USD: 24000, ILS: 350000 })} />
+// $240  ₪3,500
+```
+
+**Use when**: a total or a header figure covers several currencies (the Expenses Needs attention total). **Not**: `OwedNowSummary` for Owed now itself; `UnifiedAmount` / `CurrencySummaryPopup`, which convert. The Expenses page's "Total expenses" strip still uses `CurrencySummaryPopup`, and sums the wrong table (reported with MUT-87, not changed).
+Tests: through `RecurringAttentionList.test.tsx`; the helper in `src/lib/__tests__/currencyAmounts.test.ts`.
+
+---
+
 ### UnifiedAmount
 **Location**: `src/components/ui/UnifiedAmount.tsx`
 **Purpose**: Display multi-currency totals (USD + ILS + EUR) as unified ILS amount with breakdown.
@@ -1295,7 +1388,7 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 |---|---|---|
 | `src/lib/i18n/core.tsx` (**shared**, MUT-43) | `I18nProvider` (controlled: `translations`, `language`, `setLanguage`), `createTranslator` (`t` with `.has`), `useLanguage`, `useT`, `useDirection`, `getLocale`, `getDirection`, `detectSystemLanguage` | the app's `LanguageProvider` (context.tsx), `HostedLanguageProvider`, every `useT()` caller |
 | `src/lib/i18n/plural.ts` (**shared**) | `tp` via `useTp()`, `createPluralTranslator`, `pluralKey` (CLDR forms through `Intl.PluralRules`) | portal (`hosted.auth.rateLimited`); available to the app |
-| `src/components/expenses/` (**shared**, MUT-44) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
+| `src/components/expenses/` (**shared**, MUT-44; `RecurringAttentionList` and `recurringAttention` there are app-only, MUT-87) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
 | `api/client.ts` | `api.*` (one function per operation, now incl. expense CRUD + categories + summary + receipt start/complete/download/delete), `request` (GET/POST/PATCH/DELETE, `idempotencyKey`/`ifMatchVersion` options), `ApiError` (`status`, `code`, `details`, `retryAfterSeconds`), `setUnauthorisedHandler`, schema type aliases | every portal hook and page |
 | `format/DecimalAmount.tsx` | `DecimalAmount` (`<bdi dir="ltr">`), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
 | `format/dates.ts` | `formatDay` (calendar date, never shifted), `formatInstant` (in the organization's zone), `formatSize`, `todayLocalISO` (MUT-44, browser-local calendar date — the expense drawer's default `occurredOn`) | views |
@@ -1349,7 +1442,9 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `routes/expenses.ts`, `routes/expense-categories.ts` (MUT-42) | the 13 session-only expense operations (CRUD, receipts on the M6 flow, categories, `GET /v1/summaries/expenses`); MUT-65 threads an optional `captureSource` into `expense.created`'s audit metadata | the portal (MUT-44) |
 | `income/compose.ts` (MUT-65) | `resolveIncomeLinks(store, organizationId, kind, { customerId, projectId })` (expenses/compose.ts's `resolveLinks` rule, plus "Owed requires a customer"), `dueDateForOwed(occurredOn, explicit)` (EOM_15 via the existing `dueDateFor`), `owedVatFields(amountMinor)` (always `OUT_OF_SCOPE`, zero rate), `assertNotFuture(date, today, field)` (a new, stricter check than `assertNotAbsurdDate` — see ADR-038 addendum) | `routes/income.ts`, `routes/receivables.ts`'s settle route |
 | `routes/income.ts` (MUT-65) | `POST /v1/income` (Received, optionally clientless/matter-linked; Owed, a bare `ADJUSTMENT` receivable), `DELETE /v1/income/{id}` (undo: void an unsettled Owed, or reverse an unallocated Received — idempotent, never leaks another user's/profile's row) — session-only, `payments:write` | the phone capture app (MUT-68), MUT-66's inbox filing |
-| `auth/store-guard.ts` (MUT-39, MUT-65) | `STORE_ACCESS` (every repository method classified read / control / operator / `{ write: Domain }`; typed over `LedgerStore`), `principalStoreGuard(principal, profileWriter)`, `storeRefusal` (now calls `mayWriteFor`, MUT-65), `requestScopedStore(base)` (the store every route factory gets), `unguarded(store)` (only via `lazyPostingOf`); MUT-42 adds `{ read: Domain }` (refused where the column is `none`) and classifies the 17 expense methods; MUT-65 classifies `receivables.{createAdjustment,softDeleteAdjustment,getByIdIncludingDeleted}` | `app.ts`, `authenticate()` |
+| `inbox/compose.ts`, `inbox/cursor.ts`, `inbox/routes-keys.ts` (MUT-66) | `parseInboxAmount(text, currency)` (positive, currency digits), `inboxDate(value)` (a valid date — deliberately NOT a future-date check: capture has no profile, so no timezone; filing applies it), `assertKind(entry, expected)` (409 `ENTRY_KIND_MISMATCH`, before any store call); `encodeInboxCursor`/`decodeInboxCursor` (keyset on `(createdAt, id)`, its own envelope key so another collection's cursor is refused); `INBOX_ORGANIZATION_INDEPENDENT_ROUTES` (the four CRUD keys, merged in `app.ts` as device-sessions' set is) | `routes/inbox.ts`, `app.ts` |
+| `routes/inbox.ts` (MUT-66) | `GET`/`POST /v1/inbox`, `PATCH`/`DELETE /v1/inbox/{entryId}` (no profile header, no scope — `identity`-shaped, like `GET /v1/me`); `POST /v1/inbox/{entryId}/file-as-expense` (`expenses:write`) and `…/file-as-income` (`payments:write`), both `Idempotency-Key`-required and profile-scoped. Filing reuses `expenses/compose.ts`'s `resolveLinks`/`assertCategoryChoosable` and `income/compose.ts`'s `resolveIncomeLinks`/`dueDateForOwed`/`owedVatFields`/`assertNotFuture` verbatim — no rule is reimplemented | the phone capture app (MUT-68 keypad, MUT-69 recents/undo) |
+| `auth/store-guard.ts` (MUT-39, MUT-65, MUT-66) | `STORE_ACCESS` (every repository method classified read / control / operator / `sessionOnly` / `{ write: Domain }`; typed over `LedgerStore`), `principalStoreGuard(principal, profileWriter)`, `storeRefusal` (now calls `mayWriteFor`, MUT-65), `requestScopedStore(base)` (the store every route factory gets), `unguarded(store)` (only via `lazyPostingOf`); MUT-42 adds `{ read: Domain }` (refused where the column is `none`) and classifies the 17 expense methods; MUT-65 classifies `receivables.{createAdjustment,softDeleteAdjustment,getByIdIncludingDeleted}`; MUT-66 adds the `'sessionOnly'` case (a signed-in person's own resource, on no profile and in no matrix domain) and classifies `inboxEntries` — capture `sessionOnly`, `countByUser` `operator`, the two filings keeping the `{ write: Domain }` of the record they create | `app.ts`, `authenticate()` |
 | `auth/middleware.ts` (MUT-38 rewrite, MUT-39, MUT-65) | `authenticate()` (one principal per request, enforces each route's OpenAPI `security`, sets the request's store guard, maps a session on a key-only Malafat write to READ_ONLY_PROFILE), `buildRouteAccessIndex(definitions, app.routes)` (principals + tagged scopes), `requireScope` (tagged; either principal), `requiredScopeOf`, `keyAuth(c)` for key-only handlers, `sessionAuth(c)` for session-only ones (MUT-42), `actorOf(c)` for routes that accept either principal and must audit the real caller (MUT-65: `POST /v1/customers`/`/v1/projects`), `lazyPostingOf(c, store)` for lazy posting in reads (`postingActorOf(c)` stays for key-only creates), `AuthContext = ApiKeyAuth \| SessionAuth` (session carries `writerOfRecord`, now from `sessionScopesFor`), `c.get('identity')` | every /v1 route |
 | `routes/sessions.ts` (MUT-38, MUT-65) | `POST /v1/sessions`, `DELETE /v1/sessions/current`, `GET /v1/me` (its `access` map now per-organization via `sessionAccessFor`); `ORGANIZATION_INDEPENDENT_ROUTES` | the portal (MUT-43) |
 | `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |
@@ -1403,6 +1498,7 @@ interface in `src/db/interfaces.ts`. Rename or delete a repository method and
 interception point.
 
 **Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
-`scheduleGenerator`, `retainerMatching`, and `moneyEventRepo`. `engagementRepo`
-is gone with the module (MUT-10); `moneyEventRepo` survived MUT-11 because the
-Overview page depends on it, and remains outside the seam. See TODOS.md item 2.
+`scheduleGenerator` and `retainerMatching`. `engagementRepo` is gone with the
+module (MUT-10). `moneyEventRepo` survived MUT-11 only because the old Overview
+read it; once MUT-8 deleted those components it had no reader, and MUT-58
+deleted it with `useMoneyEventQueries` (ADR-036 §3). See TODOS.md item 2.

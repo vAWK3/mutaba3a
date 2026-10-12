@@ -74,6 +74,203 @@ Owner decision A (2026-10-12) and ADR-049 resolve it. The brief is H2 in `landin
 ### Technical
 - TD-065 (shared client: row vs profile) and TD-066 (Income's strip ignores the page's filters) added.
 
+---
+
+## [Unreleased] - 2026-10-12 — MUT-87: Expenses Needs attention is one row per recurring rule
+
+**Why:** three missed months of one recurring expense were three identical cards and 12 buttons for one decision (decision E1, `.claude/designs/landing-apple-redesign.md`). ADR-052. Test plan: `.claude/designs/mut-87-recurring-rows-tests.md`.
+
+**Scope:**
+- `src/components/expenses/recurringAttention.ts` (new: grouping, totals, month labels, snooze dates, amount reading), `RecurringAttentionList.tsx` + `.css` (new)
+- `src/components/drawers/RecurringMarkPaidDrawer.tsx` + `.css` (new)
+- `src/components/ui/CurrencyAmounts.tsx` + `.css` (new), `src/lib/currencyAmounts.ts` (new)
+- `src/services/recurringExpenseService.ts` (`confirmPayments`, `skipOccurrences`, `snoozeOccurrences`; `frequency` on virtual occurrences), `src/db/interfaces.ts` + `src/db/expenseRepository.ts` (`recurringOccurrences.runAtomically`), `src/types/index.ts` (`VirtualOccurrenceDisplay.frequency`)
+- `src/hooks/useRecurringExpenseQueries.ts` (batch hooks replace the single-payment ones), `src/hooks/useExpenseQueries.ts` (one additive change, below)
+- `src/pages/expenses/ExpensesLedgerPage.tsx`; `src/components/ui/RecurringOccurrenceCard.tsx` + `.css` (read-only)
+- Removed: `src/components/modals/RecurringConfirmModal.tsx` + `.css` (both modals), their export from `components/modals/index.ts`
+- `src/lib/i18n/translations/{en,ar}.json`: `expenses.recurring.attention.*` added; five orphaned `expenses.recurring.occurrence.*` leaves (`confirmPayment`, `actualDate`, `editAmount`, `notes`, `notesPlaceholder`) removed
+
+### Changed
+- **One row per rule.** "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", with the oldest payment's lateness under the amount, read like Home's Needs attention. The section header shows the number of rules and the total of each currency side by side (`CurrencyAmounts`), never combined.
+- **One primary action, Mark Paid,** opens a small drawer: the rule's missed payments, oldest first, all checked, each with its date and an amount prefilled with the rule's amount. **Mark N paid** writes one expense per checked payment, **dated on its own expected date** (the old modal dated them today), in one all-or-nothing write.
+- **Skip, Snooze and Edit rule moved to a ⋯ menu** (`useMenuButton`: focus on open, arrows, Escape returns focus) and apply to all of the rule's missed payments; Skip asks first. In the drawer each payment has its own Skip and Snooze. Snoozing is a view of the same drawer, with quick picks in the user's language.
+- The forecast's cards are read-only.
+
+### Fixed
+- **Editing or creating a recurring rule now refreshes Needs attention and the forecast.** `invalidateRecurringRuleQueries` (`useExpenseQueries.ts`) didn't invalidate `dueOccurrences` / `virtualOccurrences`, so a rule edited from the row's ⋯ › Edit rule kept its old amount until a reload. Found in the browser check.
+
+### Removed
+- `RecurringConfirmModal` and `RecurringSnoozeModal` (no consumer left). The confirm modal's paid-date and notes fields go with it (each expense is dated on its expected date; notes stay editable on the expense).
+
+### Technical
+- `recurringOccurrences.runAtomically(work)`: one Dexie `rw` transaction over `recurringRules`, `recurringOccurrences` and `expenses`; the batch service functions loop over the existing single-payment functions inside it.
+- Tests (+55 net): grouping and labels (15), currency order (2), batches on fake-indexeddb incl. rollback (12), batch hooks (3, replacing 3), list (5), drawer (10), page (4), i18n keys (5), rule-edit refresh (1), modals-gone guard (1). Full suite: 193 files, 2,930 passed, 4 skipped.
+- Debt: TD-069 (Needs attention looks back only 90 days), TD-070 (the shared drawer is 480 px wide on a 375 px phone).
+- Found, not changed: the page's "Total expenses" strip sums `db.transactions`, not the ledger's `db.expenses` (also found by MUT-58's smoke test).
+
+---
+
+## [Unreleased] - 2026-10-12 — MUT-66: the unsorted inbox, and filing an entry onto a profile
+
+**Scope (server only; the portal and the offline app are untouched):**
+- New: `server/src/routes/inbox.ts`, `server/src/inbox/compose.ts`, `server/src/inbox/cursor.ts`, `server/src/inbox/routes-keys.ts`
+- `server/prisma/schema.prisma` + `server/prisma/migrations/20261012140000_mut66_inbox/` (one enum, one table, one index — purely additive)
+- `server/src/repositories/ports.ts`, `prisma.ts`, `memory.ts` (the `InboxEntryRepository`)
+- `server/src/auth/store-guard.ts` (the `'sessionOnly'` case), `schemas.ts`, `serializers.ts`, `app.ts`, `routes/admin-users.ts`
+- Tests: `store-contract-inbox.ts` + its memory/Prisma runners, `inbox-ownership.test.ts`, `inbox/__tests__/compose.test.ts`, `__tests__/inbox-routes.test.ts`, `inbox-filing.test.ts`, `inbox-isolation.test.ts`; `store-guard.test.ts` and `route-security.test.ts` extended
+- Design: `.claude/designs/mut-66-unsorted-inbox.md` + `-tests.md`
+
+**Why:** MUT-63's promise is "log it in seconds", and the fastest way to break it is a capture flow that stops to ask which business the money belongs to. "General" at intake now means *unsorted*: a durable place to put an amount the moment it happens, with filing deferred to whenever the person is ready. Named blocker of MUT-68 and MUT-69.
+
+### Added
+- **`GET/POST /v1/inbox`, `PATCH/DELETE /v1/inbox/{entryId}`** — a person's own unsorted captures (kind, amount, currency, date, optional note and capture source). They send no `X-Mutaba3a-Profile` and declare no scope, reading `identity` exactly as `GET /v1/me` does, and join the organization-independent route set through their own module. A future `occurredOn` is accepted here on purpose: with no profile there is no timezone in which "today" means anything.
+- **`POST /v1/inbox/{entryId}/file-as-expense` and `…/file-as-income`** — the entry becomes a real record on one chosen profile. Amount, currency, date and note come from the entry; only what it could not know is sent in the body, including the Received/Owed choice, which needs a client in the picture and so cannot be made at capture. Both require `Idempotency-Key` and reuse the existing middleware unmodified.
+- **`InboxEntry`**, the first user-owned table: no `organizationId`, no FK to `Organization` or `Membership` (ADR-048). Keyset-paged `(createdAt desc, id desc)`.
+- **`inboxEntryCount` on `GET /admin/v1/users/{userId}`** — one indexed count for support, never the contents.
+- **`'sessionOnly'`** `MethodAccess`, the first guard case that is neither "any principal" nor a per-organization domain. `ENTRY_KIND_MISMATCH` joins `CONFLICT_REASONS`.
+
+### Changed
+- `ExpenseRepository.create`'s row insert moved into `createExpenseRow(tx, …)` so filing can compose it inside its own transaction. Behaviour is unchanged. Income reuses MUT-65's `createPaymentTx`/`createAdjustmentTx`, which were built for exactly this.
+- API version `1.12.0-mut65` → `1.13.0-mut66`; `openapi.yaml` regenerated with the six operations.
+
+### Fixed
+- `store-contract-m4.ts` passed the literal `'user-1'` as `createdByUserId`. That column is a UUID in Postgres, so three MUT-65 cases passed against the memory store and failed against the real one — found because this was the first local `test:db` run with MUT-65's migration applied. See TD-072 and TD-073 for the two related gaps left open.
+
+### Technical
+- **Filing is refused in exactly the places a direct create is, and no more.** The design assumed MUT-42 already rejected future-dated expenses; it does not, so `file-as-expense` does not either, while `file-as-income` does because `POST /v1/income` does. Both are asserted against the direct route's own response rather than against a hardcoded status.
+- Filing is the store's only cross-repository transaction. The entry is claimed by a delete *inside* the transaction, which proves ownership and kind and holds the row lock until commit: two concurrent filings of one entry yield exactly one record, and a financial write that throws rolls the delete back with it. Both halves are proven against real Postgres, not only the in-memory simulation.
+- AC 5 is asserted twice: fifty inbox entries leave both summaries byte-identical, and the summary sources — enumerated from the directory, not hardcoded — contain no reference to the inbox at all.
+- Gates: server lint, typecheck, build, `openapi:check`, `npm test` (1310) and `npm run test:db` (1397, all 82 files) green; root lint, typecheck and build green.
+
+## [Unreleased] - 2026-10-12 — MUT-86: the Record payment drawer leads with what's left, with one primary button
+
+**Scope:**
+- `src/components/drawers/PartialPaymentDrawer.tsx` (rewritten form; history rows on theme tokens) + `PartialPaymentDrawer.css` (new)
+- `src/lib/paymentEntry.ts` (new: `describePaymentAmount`, `minorToAmountInput`)
+- `src/lib/dates.ts` (`isFuturePaymentDate`, moved from `src/db/repository.ts`, which now imports it)
+- `src/lib/i18n/translations/{en,ar}.json`: new `transactions.partialPayment.titleLeft`, `paidInFull`, `stillOwed`, `addNote`; `markFullyPaid` removed
+- `e2e/record-payment.spec.ts` (new); `e2e/support/axe.ts` (`paymentDrawer` surface)
+- Tests: `PartialPaymentDrawer.test.tsx` (rewritten, 33), `paymentEntry.test.ts` (new, 19), `paymentDrawerKeys.test.ts` (new, 5), `dates.test.ts` (+5)
+- Test plan `.claude/designs/mut-86-payment-drawer-tests.md`; ADR-047 (supersedes ADR-038 §5); TD-062, TD-063; TD-047 updated
+
+### Changed
+- **The drawer opens on the answer.** The title names the balance, for example "Record Payment · ₪3,550 left". One large amount field holds that balance, selected so that typing replaces it. A line under the field updates on every keystroke: "Paid in full" or "₪1,775 still owed". It reads Arabic-Indic digits. Typing more than is owed shows the overpayment message straight away.
+- **The date reads "Payment date · Today ›"**, or the chosen date. Pressing the row opens the date field in its place. **Notes sit behind "+ Add note"**, which opens a focused Notes field.
+- **One primary button.** Record Payment records and closes the drawer, so opening it and pressing Record Payment settles the entry for today ("Paid? Two taps."). Enter in the amount does the same. A partial payment closes the drawer too; before, the drawer stayed open with an empty amount.
+- The amount is read with MUT-5's strict parser (`parseAmountInput`), not the lenient filter. "1,2" is refused with "Enter an amount like 1200 or 1,200.50", and "€100" in a dollar entry with the currency-mismatch message.
+- Payment history appears below the form, only when the entry has payments. Its rows use theme tokens, so they read in dark mode. Before, they fell back to a light grey.
+- With nothing left to record (create mode), the drawer says "Paid in full", lists the history and offers Close, instead of a form whose button could only be refused.
+
+### Removed
+- **Mark Fully Paid**, which duplicated Record Payment and dropped the notes, along with its `markFullyPaid` key in both locales.
+- The 25 / 50 / 100% chips, which printed "₪887.5".
+- The Amount / Received so far / Remaining box (its label and value ran together).
+- The empty "No payments recorded yet" history, and the form's "Record Payment" sub-heading.
+
+### Fixed
+- **An edit no longer turns into a second payment.** An edit opened before the entry's records had loaded used to mount as a create form, prefilled with the remaining balance and titled "Edit Payment". Pressing its button recorded a new payment. The drawer now waits for the record.
+- **An emptied payment date is refused** with "Date is required". Before, it was saved as an empty date.
+
+### Technical
+- `isFuturePaymentDate` (ADR-038, as amended) lives in `lib/dates.ts`, and both the repository and the drawer call it. The drawer's own `dateInput > todayISO()` comparison is gone.
+- The new classes are prefixed `pay-drawer-`. `index.css` already has global `.payment-row` and `.payment-amount` rules (fixed widths, used by the document forms), and these squeezed the amount field to 120 px.
+- Found while checking in the browser, and logged rather than fixed:
+  - `formatAmount` prints a lone tenth ("$887.5") everywhere, including the new title (TD-062).
+  - Sample-data part-paid entries carry a received amount with no payment record, so the first payment recorded on one drops it and Owed now rises (TD-063).
+
+**Why:** decision P1 of the Apple-design brief. The drawer had two buttons for one outcome, one of which lost the notes. Its labels ran into their values. The chips printed "₪887.5". It showed an empty history.
+
+---
+
+## [Unreleased] - 2026-10-12 — MUT-80: Drawers open, close and drag on springs, and leave the way they came
+
+**Scope:**
+- `src/components/ui/drawer/` (new): `DrawerFrame.tsx`, `useDrawerMotion.ts`, `useDrawerFocus.ts`, `drawerGesture.ts`, `drawerMotion.ts`, `exitSnapshot.ts`
+- `src/lib/motion/physics.ts` (new), `src/lib/dom/focusable.ts` (new); `src/hooks/useMenuButton.ts` uses `focusablesWithin`
+- `src/components/drawers/Drawer.tsx`, `src/hosted/components/Drawer.tsx`: thin wrappers around `DrawerFrame`
+- `src/index.css`: the drawer's `slideIn` / `slideInRTL` keyframes and the overlay's `fadeIn` animation removed; `touch-action: pan-y`, `.is-dragging`, no focus outline on the panel
+- `package.json`: `motion` 13.4.4 (exact)
+- Tests: `physics`, `focusable`, `drawerGesture`, `exitSnapshot`, `DrawerFrame` (new, 66 tests); `e2e/drawer-motion.spec.ts` (new, 3 specs)
+- Test plan `.claude/designs/mut-80-drawer-springs-tests.md` (decisions D1–D17); ADR-044
+
+### Added
+- **Drawers move on springs.** They spring in from their edge (response 0.3, damping 1.0) with the overlay dimming in step.
+- **Drawers leave the way they came.** Escape, ✕, the overlay, Save and Cancel all slide the drawer out along its own edge from wherever it was.
+- **Drag to dismiss.** A horizontal drag follows the pointer 1:1 from where it was grabbed and rubber-bands past fully open. On release, momentum is projected: past half the width it closes, otherwise it springs back carrying the release velocity. A press catches a moving drawer where it is.
+- Vertical scrolling inside a drawer, text selection in its fields and horizontally scrolling regions still work, because a press only becomes a drag after 10px of mostly horizontal movement.
+- In Arabic the edge is mirrored. Under reduced motion, every move is a 150ms cross-fade.
+- **Focus trap.** Tab and Shift+Tab wrap inside an open drawer, and focus returns to the button that opened it. There was no trap before.
+
+### Changed
+- Closing stays immediate for every caller (`onClose` contract unchanged). The exit is an inert, `aria-hidden` snapshot of the last frame, so it never shows reset or reloading content (ADR-044).
+- The local and portal drawers share one frame, so the portal inherits all of the above (brief HP1).
+
+### Technical
+- New dependency `motion@13.4.4`, using only the vanilla `animate` and `motionValue`. Web entry chunk 193.93 → 216.51 kB gzip (+22.6 kB).
+- Removing the drawer's global `slideIn` keyframe leaves `ProfilePickerModal.css` the only `slideIn`. The two had collided by name.
+
+**Why:** decision R2 of the Apple-design brief. The drawer vanished in one frame on close, and couldn't be dragged or caught.
+
+
+---
+
+## [Unreleased] - 2026-10-12 — MUT-58: the money-event read side MUT-8 left without a screen is deleted
+
+**Scope:**
+- Deleted: `src/hooks/useMoneyEventQueries.ts`, `src/db/moneyEventRepository.ts`, `src/lib/monthDetection.ts`, and their tests `src/db/__tests__/moneyEvent.test.ts`, `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts`, `src/lib/__tests__/monthDetection.test.ts`
+- `src/types/index.ts` (the "Money Answers Types" block)
+- `src/hooks/useQueries.ts`, `useExpenseQueries.ts`, `useRetainerQueries.ts` (one import and one call each)
+- `src/hooks/__tests__/useQueries.test.tsx`, `useIncomeQueries.test.tsx`; `src/__tests__/noDeadMoneyEventModules.test.ts` (new)
+- Test plan: `.claude/designs/mut-58-prune-money-events-tests.md`
+
+**Why:** MUT-8 deleted Home's forecast strip, month actuals and guidance feed by decision (D10 = B, ADR-036 §3). They were the only readers of the money-event engine, so its eleven read hooks and the 842-line repository had no consumer. Every income, payment, expense and retainer write still refreshed nine query keys that nothing read. Closes TD-034.
+
+### Removed
+- **The money-event read side**: `useMoneyEvents`, `useDailyAggregates`, `useMonthSummary`, `useMonthKPIs`, `useMonthKPIsBothCurrencies`, `useGuidance`, `useDayEvents`, `useYearSummary`, `useYearSummaryBothCurrencies`, `useInvalidateMoneyEvents`, `moneyEventQueryKeys`, `invalidateMoneyEventQueries`, and `moneyEventRepo`, which had no provider or interface slot.
+- **The refresh on every write.** `invalidateMoneyEventQueries` had three call sites on main, not the four the ticket counted: `invalidateTransactionQueries`, `invalidateExpenseQueries` and `invalidateProjectedIncomeQueries`. `useIncomeQueries.ts` needed no change, since it has reused `invalidateTransactionQueries` since MUT-5.
+- **`src/lib/monthDetection.ts`**: its last importers were the MUT-8 components.
+- **The twelve money-event and guidance types**, from `MoneyDirection` to `MoneyEventFilters`, including `GuidanceItem`.
+- **Their tests**: 38 cases in three files.
+
+### Changed
+- The two MUT-6 tests asserting that a payment and Mark paid refresh the money-event keys now assert that no `money*` key is refreshed. Each sits next to a check that the write's own keys still are.
+
+### Kept
+- The `moneyEventVersions` table and the `MoneyEventVersion` type. They belong to sync versioning, not the read side. The Dexie schema and version are unchanged (ADR-029); the guard asserts that the table is still there.
+- `src/lib/aggregations.ts` and its forecast types (`ForecastKPIs`, `MonthActuals`, `ForecastOptions`, `AmountByCurrency`, `AttentionItem`). They never had an app consumer, but the money-event files didn't keep them alive either, so they are out of scope and recorded as TD-071.
+
+### Technical
+- `noDeadMoneyEventModules.test.ts` guards the deleted paths, any import or call of them anywhere in `src/` (tests included, since they are outside `tsc`), the removed types, and the table's retention.
+- Gate (Node 22): vitest 185 files, 2,843 passed, 4 skipped (was 187 / 2,875 / 4); Playwright 19/19 on port 5198; lint 0 errors; typecheck, `tsc -b`, build and `test:bundles` OK. Browser smoke on `web-mut58` covered income, mark paid and an expense across Home, Clients, Income and Expenses, with no console errors.
+
+---
+
+## [Unreleased] - 2026-10-12 — Release: one front door for both deploys (`make release web` / `make release server`)
+
+**Scope:**
+- `Makefile` (new): `release web`, `release server`, plus `doctor`, `preflight-web`, `preflight-server`, `check-web`, `check-server`, `check`, `bump-web`, `bump-server`, `migrate-status`, `clean-dist`, `help`
+- `scripts/preflight.sh` (new): the release gate, per target
+- `scripts/bump-version.sh` (new): the patch/minor/major/custom/keep prompt
+- `scripts/confirm.sh` (new): the yes/no gate in front of an irreversible step
+- `deploy.env.example` (new) + `.gitignore` (`deploy.env`)
+
+### Added
+- **`make release web`** — preflight → lint, typecheck, unit tests, hosted API types → version prompt → the three builds and the bundle guard → confirm → a commit holding only the version files → `git push origin main`, which is what Netlify builds.
+- **`make release server`** — preflight → server lint, typecheck, tests, `openapi:check`, build → version prompt → confirm → the version commit → push so the deployed sha is reachable → `server/scripts/deploy.sh` (image, `prisma migrate deploy`, `terraform apply`, smoke), unchanged.
+- **`scripts/preflight.sh`** — refuses to release from a tree that does not describe itself: merge/rebase in progress, conflicted files, wrong branch, dirty tree, a branch not merged into `main`, an extra worktree, behind `origin`, the wrong `node` major (TD-054), `node_modules` staler than the lockfile. Then per target: `netlify.toml` and push access; or gcloud + ADC, docker daemon, terraform, cloud-sql-proxy, tfvars, and a readable state bucket. Each override is a named variable (`ALLOW_DIRTY`, `ALLOW_UNMERGED`, `ALLOW_WORKTREES`, `ALLOW_NODE_MAJOR`, `SKIP_REMOTE`).
+- **`make doctor`** — the same checks for both targets, read-only, non-fatal.
+- The server deploy now points itself: `GCP_PROJECT_ID` comes from `project_id` in `production.tfvars` and `TF_STATE_BUCKET` from the last `terraform init`, and preflight fails if the two disagree. `deploy.env` is for overriding, not for setup.
+
+### Changed
+- The version is asked for, not assumed. `deploy.sh`'s `deploy_web` always incremented the patch and ran `git add .`; the new path prompts patch/minor/major/custom/keep and stages only `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`. `Cargo.lock` moves with the others so it cannot drift (the v0.0.65 Windows failure).
+
+### Technical
+- Nothing about either rollout is reimplemented: the server roll stays `server/scripts/deploy.sh`, and the app-version write is `deploy.sh`'s `update_version`, sourced rather than copied.
+- ADR-043. Desktop (DMG, notarization, GitHub release) is untouched and still `npm run release`.
+- Found by the first full run and left for its owner: **TD-058** — `src/hosted/api/schema.d.ts` is stale against `server/openapi/openapi.yaml` on `main`, and regenerating it fails `typecheck` in `ReceivablesList.tsx` and `PaymentsList.tsx` because MUT-65 made `Receivable.projectId` and `Payment.customerId` nullable. `make release web` is blocked until that lands.
+
+---
+
 ## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
 
 **Scope:**

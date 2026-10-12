@@ -1,11 +1,11 @@
 /**
  * RecurringOccurrenceCard Component
  *
- * Displays a recurring expense occurrence with computed state and actions.
- * Handles:
- * - State display (projected, due, overdue, snoozed)
- * - Quick actions (Mark Paid, Skip, Snooze)
- * - Click to open confirm payment modal
+ * Displays a recurring expense occurrence with its computed state (projected,
+ * due, overdue, snoozed). Read-only: the Expenses forecast lists upcoming
+ * payments with it. Acting on a missed payment happens on its rule's Needs
+ * attention row and drawer (MUT-87), which replaced this card's Mark Paid,
+ * Skip, Snooze and Edit rule buttons.
  */
 
 import { useT } from '../../lib/i18n';
@@ -15,22 +15,11 @@ import './RecurringOccurrenceCard.css';
 
 interface RecurringOccurrenceCardProps {
   occurrence: VirtualOccurrenceDisplay;
-  onMarkPaid: (occurrence: VirtualOccurrenceDisplay) => void;
-  onSkip: (occurrence: VirtualOccurrenceDisplay) => void;
-  onSnooze: (occurrence: VirtualOccurrenceDisplay) => void;
-  onClick?: (occurrence: VirtualOccurrenceDisplay) => void;
-  /** Opens the rule behind this occurrence for editing (MUT-14) */
-  onEditRule?: (occurrence: VirtualOccurrenceDisplay) => void;
   compact?: boolean;
 }
 
 export function RecurringOccurrenceCard({
   occurrence,
-  onMarkPaid,
-  onSkip,
-  onSnooze,
-  onClick,
-  onEditRule,
   compact = false,
 }: RecurringOccurrenceCardProps) {
   const t = useT();
@@ -77,21 +66,8 @@ export function RecurringOccurrenceCard({
     }
   };
 
-  const handleClick = (e: React.MouseEvent) => {
-    // Don't trigger card click if clicking on action buttons
-    if ((e.target as HTMLElement).closest('.occurrence-actions')) {
-      return;
-    }
-    onClick?.(occurrence);
-  };
-
   return (
-    <div
-      className={`recurring-occurrence-card ${getStateClass()} ${compact ? 'compact' : ''}`}
-      onClick={handleClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-    >
+    <div className={`recurring-occurrence-card ${getStateClass()} ${compact ? 'compact' : ''}`}>
       <div className="occurrence-main">
         <div className="occurrence-info">
           <span className="occurrence-title">{occurrence.ruleTitle}</span>
@@ -121,41 +97,6 @@ export function RecurringOccurrenceCard({
           {getStateLabel()}
         </span>
       </div>
-
-      {!compact && (
-        <div className="occurrence-actions">
-          <button
-            type="button"
-            className="btn btn-sm btn-primary"
-            onClick={() => onMarkPaid(occurrence)}
-          >
-            {t('expenses.recurring.occurrence.markPaid')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-secondary"
-            onClick={() => onSkip(occurrence)}
-          >
-            {t('expenses.recurring.occurrence.skip')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-secondary"
-            onClick={() => onSnooze(occurrence)}
-          >
-            {t('expenses.recurring.occurrence.snooze')}
-          </button>
-          {onEditRule && (
-            <button
-              type="button"
-              className="btn btn-sm btn-ghost"
-              onClick={() => onEditRule(occurrence)}
-            >
-              {t('expenses.recurring.editRule')}
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -165,11 +106,6 @@ export function RecurringOccurrenceCard({
  */
 interface RecurringOccurrenceListProps {
   occurrences: VirtualOccurrenceDisplay[];
-  onMarkPaid: (occurrence: VirtualOccurrenceDisplay) => void;
-  onSkip: (occurrence: VirtualOccurrenceDisplay) => void;
-  onSnooze: (occurrence: VirtualOccurrenceDisplay) => void;
-  onClick?: (occurrence: VirtualOccurrenceDisplay) => void;
-  onEditRule?: (occurrence: VirtualOccurrenceDisplay) => void;
   emptyMessage?: string;
   emptyHint?: string;
   compact?: boolean;
@@ -177,11 +113,6 @@ interface RecurringOccurrenceListProps {
 
 export function RecurringOccurrenceList({
   occurrences,
-  onMarkPaid,
-  onSkip,
-  onSnooze,
-  onClick,
-  onEditRule,
   emptyMessage,
   emptyHint,
   compact = false,
@@ -207,11 +138,6 @@ export function RecurringOccurrenceList({
         <RecurringOccurrenceCard
           key={`${occurrence.ruleId}-${occurrence.expectedDate}`}
           occurrence={occurrence}
-          onMarkPaid={onMarkPaid}
-          onSkip={onSkip}
-          onSnooze={onSnooze}
-          onEditRule={onEditRule}
-          onClick={onClick}
           compact={compact}
         />
       ))}
