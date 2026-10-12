@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { focusablesWithin } from '../lib/dom/focusable';
 
 /**
  * A button that opens a menu of actions, with the keyboard behaviour of the
@@ -25,8 +26,6 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
  */
 
 const ITEM_SELECTOR = '[role="menuitem"]:not([disabled])';
-const CONTROL_SELECTOR =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 type FocusTarget = 'first' | 'last';
 
@@ -64,13 +63,11 @@ export function useMenuButton({ kind = 'menu' }: MenuButtonOptions = {}): MenuBu
   const focusOnOpen = useRef<FocusTarget>('first');
   const menuId = useId();
 
-  const items = useCallback(
-    () =>
-      Array.from(
-        menuRef.current?.querySelectorAll<HTMLElement>(isDialog ? CONTROL_SELECTOR : ITEM_SELECTOR) ?? [],
-      ),
-    [isDialog],
-  );
+  const items = useCallback((): HTMLElement[] => {
+    const menu = menuRef.current;
+    if (!menu) return [];
+    return isDialog ? focusablesWithin(menu) : Array.from(menu.querySelectorAll<HTMLElement>(ITEM_SELECTOR));
+  }, [isDialog]);
 
   const focusItem = useCallback(
     (target: FocusTarget) => {
