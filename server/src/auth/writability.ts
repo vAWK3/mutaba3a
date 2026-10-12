@@ -80,6 +80,34 @@ export function mayWrite(principal: Principal, domain: Domain): boolean {
 }
 
 /**
+ * MUT-65: the three rows whose session column is a function of the profile,
+ * not a constant (hosted-portal.md §5a amendment, ADR-037 decision 7). A
+ * personal profile (profileWriter === null) may write customers, projects
+ * and payments through its own session; a Malafat-fed one still cannot —
+ * the matrix's static `session` value for these rows keeps meaning exactly
+ * that case. Every other row is unaffected and stays driven by the static
+ * `WRITABILITY_MATRIX` alone.
+ */
+export const PROFILE_DEPENDENT_DOMAINS: ReadonlySet<Domain> = new Set(['customers', 'projects', 'payments']);
+
+/** The session column for `domain`, as a function of the profile rather than the static matrix, for the three profile-dependent rows. */
+export function sessionAccessFor(domain: Domain, profileWriter: ProfileWriter): Access {
+  if (!PROFILE_DEPENDENT_DOMAINS.has(domain)) return matrixRow(domain).session;
+  return profileWriter === null ? 'read-write' : 'read';
+}
+
+/** `sessionScopes()`, but correct for a specific profile: the scopes a session actually holds there. */
+export function sessionScopesFor(profileWriter: ProfileWriter): readonly Scope[] {
+  return WRITABILITY_MATRIX.flatMap((row) => row.scopes.filter((s) => granted(sessionAccessFor(row.domain, profileWriter), s))).filter(isScope);
+}
+
+/** `mayWrite`, but correct for a session on a specific profile (the three profile-dependent rows); unchanged for every other case. */
+export function mayWriteFor(principal: Principal, domain: Domain, profileWriter: ProfileWriter): boolean {
+  if (principal === 'session' && PROFILE_DEPENDENT_DOMAINS.has(domain)) return profileWriter === null;
+  return mayWrite(principal, domain);
+}
+
+/**
  * The refusal for a write the matrix does not grant (ADR-037 decision 7).
  * On a row Malafat writes it is READ_ONLY_PROFILE, carrying the profile's own
  * writer of record so the UI can explain; anywhere else the principal simply

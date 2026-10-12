@@ -140,6 +140,18 @@ describe('POST /v1/expenses', () => {
     });
   });
 
+  it('MUT-65: captureSource lands on the expense.created audit row when present; absent when not given', async () => {
+    const { h, a, p, create } = await setup();
+    const withSource = await read(await create({ captureSource: 'quick_action' }));
+    const withoutSource = await read(await create({ amount: '5.00' }));
+    const events = (await h.store.audit.list(a.org.id, { action: 'expense.created' }, { limit: 10, cursor: null })).items;
+    const withSourceEvent = events.find((e) => e.entityId === withSource.id)!;
+    const withoutSourceEvent = events.find((e) => e.entityId === withoutSource.id)!;
+    expect(withSourceEvent.metadata).toMatchObject({ captureSource: 'quick_action' });
+    expect(withoutSourceEvent.metadata).not.toHaveProperty('captureSource');
+    void p;
+  });
+
   it('replays an Idempotency-Key and refuses it for a different body', async () => {
     const { h, a, p } = await setup();
     const key = { ...p.as(a.org.id), 'idempotency-key': 'expense-key-0001' };

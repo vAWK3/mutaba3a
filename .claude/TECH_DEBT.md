@@ -31,7 +31,67 @@
 **Added**: 2026-10-12 (MUT-64)
 **Priority**: Low
 **Impact**: MUT-64 adds a `deviceSession` bearer security scheme to the published OpenAPI contract (pure addition — no existing scheme changes shape, Malafat only ever uses `apiKey`). ADR-037 decision 9 set the precedent that a contract change gets Malafat's vendored parser refreshed and confirmed tolerant before it ships; that verification lives in the Malafat repo, outside this one's reach, and wasn't run as part of this ticket.
-**Remediation**: before the next deploy that includes this change, refresh Malafat's vendored envelope from `server/openapi/openapi.yaml` and confirm its parser doesn't choke on the unrecognized scheme name. Very likely a non-event given the addition is purely additive.
+**Remediation**: before the next deploy that includes this change, refresh Malafat's vendored envelope from `server/openapi/openapi.yaml` and confirm its parser doesn't choke on the unrecognized scheme name. Very likely a non-event given the addition is purely additive. **MUT-65 note (2026-10-12):** this same un-reverified contract also now carries MUT-65's two nullability changes — `ReceivableSchema.projectId` and `PaymentSchema.customerId` went required → nullable, and `ReceivableSchema` gained `title`. A Malafat client deserializing those into non-optional types would break, so the refresh below must cover both tickets' changes, not just the `deviceSession` scheme.
+
+### TD-055: MUT-65's P2 review findings, deliberately left for a later pass
+**Status**: Open
+**Added**: 2026-10-12 (MUT-65 post-review pass)
+**Priority**: Low — none is exploitable on its own; each is a sharp edge, not a hole
+**Impact**: The MUT-65 reviews raised four P1s (all fixed in the post-review
+pass — see CHANGELOG) and this P2 list, held back under an explicit scope
+guard so the four fixes stayed reviewable:
+1. `repositories/memory.ts` FK checks look entities up by id without
+   re-asserting `organizationId` on some paths, so the memory store is more
+   permissive than Prisma's real foreign keys. Test-fidelity risk only.
+2. A `requestId` field carried on an input type that nothing reads.
+3. `GET /v1/me`'s `access` map advertises `read-write` on domains that have
+   no PATCH route, so "write" overstates what the session can actually do.
+4. The organization-independent-route guard is permissive by default rather
+   than listing what may skip the organization check.
+5. `dueDate` is unbounded — a capture can set one centuries out.
+6. The income request schema is a flat object with `kind`, not a
+   discriminated union, so Zod cannot refuse `kind: 'received'` carrying
+   `dueDate`; the route checks by hand instead.
+7. `sessionAccess()` / `sessionScopes()` are dead exports, superseded by the
+   `…For` variants MUT-65 introduced.
+**Fix**: one cleanup ticket, or fold each into whichever ticket next touches
+that file. Nothing here blocks MUT-65 shipping.
+
+### TD-056: The hosted portal's "income isn't recorded" copy is now false for personal profiles
+**Status**: Open — follow-up filed, MUT-93
+**Added**: 2026-10-12 (MUT-65)
+**Priority**: Medium — a false statement in the product's own UI
+**Impact**: `hosted-portal.md` §7.4 and `src/hosted/i18n/en.json:85` hard-code
+*"Income isn't recorded on hosted profiles yet. This profile is for
+expenses."* for a read-only domain. After MUT-65, a personal profile's income
+**is** recorded — by the user, through the phone capture app — so the string
+is wrong, and the portal's read-only affordances (`§7.4`'s suppressed
+"Record payment"/edit actions) arguably should unsuppress for a personal
+profile too. This is `src/hosted/**` portal-UI work (copy + a real UX call
+on whether to also enable editing, not just reword a sentence), a different
+module than this ticket's `server/` scope and large enough to be its own
+pass. Filed as MUT-93 rather than folded in, the way MUT-44's CSP gap was
+left for MUT-45 to pick up.
+**Fix**: reword `hosted.*` copy to reflect the mechanism `GET /v1/me`'s
+`access` map already publishes per profile (MUT-65 made this mechanically
+correct; only the portal's own prose and affordances are stale), decide
+whether the portal gains write UI for a personal profile's income in the
+same pass or a later one.
+
+### TD-053: Owed capture is always OUT_OF_SCOPE VAT, never the organization's real rate
+**Status**: Accepted
+**Added**: 2026-10-12 (MUT-65)
+**Priority**: Low until VAT-aware personal capture is actually requested
+**Impact**: `income/compose.ts`'s `owedVatFields` always returns
+`{ vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0 }` regardless of any
+`VatRate` configured on the organization — a deliberate simplification named
+in the design brief, not an oversight. A personal profile has no VAT
+settings UI, and the phone capture app's keypad flow (MUT-68) does not
+describe a VAT field; computing a real rate would need both to exist first.
+**Fix**: if VAT-aware personal capture is wanted, it is its own ticket
+(capture-app VAT field + compose.ts + a product decision on whether
+`vatTreatment` becomes configurable per personal profile) — not a silent
+addition to this one. Explicitly not folded in here (scope guard).
 
 ### TD-051: A first run stacks two first-run surfaces
 **Status**: Open
@@ -164,6 +224,11 @@ appends two events in one millisecond and expects insertion order.
 **Seen again in MUT-42 (2026-10-11):** `routes-expenses.test.ts`'s audit test
 compared actions in order and failed once. It now compares them as a set, so
 nothing new depends on the order.
+
+**Seen again in MUT-65 (2026-10-12):** `income-routes.test.ts`'s captureSource
+audit test indexed `events[0]`/`events[1]` positionally and was flaky for the
+same reason. Rewritten to `find()` by a distinguishing field instead of by
+position, like MUT-42's fix.
 
 ### TD-037: The Sync Op-Log Has No Notion of a Profile
 **Status**: Accepted (recorded by MUT-36; deliberately not built)

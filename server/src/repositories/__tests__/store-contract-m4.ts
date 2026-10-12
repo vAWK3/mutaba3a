@@ -42,9 +42,10 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
     return { c, p, receivables };
   }
 
-  const payment = (organizationId: string, customerId: string, amountMinor: bigint, allocations: Array<{ receivableId: string; amountMinor: bigint }>, over: Record<string, unknown> = {}) => ({
+  const payment = (organizationId: string, customerId: string | null, amountMinor: bigint, allocations: Array<{ receivableId: string; amountMinor: bigint }>, over: Record<string, unknown> = {}) => ({
     organizationId,
     customerId,
+    projectId: null,
     currency: 'ILS',
     amountMinor,
     receivedOn: '2026-10-08',
@@ -53,6 +54,7 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
     notes: null,
     replacesPaymentId: null,
     requestId: 'req-1',
+    createdByUserId: null,
     allocations,
     ...over,
   });
@@ -236,6 +238,120 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       expect(await store.idempotency.get(a.id, 'k-failed-1')).toBeNull();
       const other = await org(store, 'B');
       expect(await store.idempotency.get(other.id, 'k-pending-1')).toBeNull();
+    });
+
+    // ---- MUT-65: personal profile income capture ----------------------------
+
+    it('createAdjustment: a bare "Owed" receivable, origin ADJUSTMENT, no agreement, optionally no matter', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
+      const p = await store.projects.create({ organizationId: a.id, customerId: c.id, name: 'Consulting', currency: 'ILS' }, at(1));
+
+      const withMatter = await store.receivables.createAdjustment(
+        { organizationId: a.id, customerId: c.id, projectId: p.id, currency: 'ILS', netMinor: 50000n, vatMinor: 0n, grossMinor: 50000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Logo design', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(2), createdByUserId: 'user-1', requestId: null },
+        at(2),
+      );
+      expect(withMatter).toMatchObject({ origin: 'ADJUSTMENT', agreementId: null, originId: null, projectId: p.id, title: 'Logo design', createdByUserId: 'user-1', grossMinor: 50000n, status: 'OPEN', dueDate: '2026-11-15', deletedAt: null });
+
+      const noMatter = await store.receivables.createAdjustment(
+        { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 10000n, vatMinor: 0n, grossMinor: 10000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(3), createdByUserId: 'user-1', requestId: null },
+        at(3),
+      );
+      expect(noMatter).toMatchObject({ projectId: null, title: null });
+
+      expect(await store.receivables.getById(a.id, withMatter.id)).toMatchObject({ id: withMatter.id });
+      expect((await store.receivables.list(a.id, { customerId: c.id }, { limit: 10, cursor: null })).items.map((r) => r.id).sort()).toEqual([noMatter.id, withMatter.id].sort());
+      expect(await store.receivables.countOutstandingByProject(a.id, p.id)).toBe(1);
+      expect((await store.receivables.listEligible(a.id, c.id, 'ILS')).map((r) => r.id).sort()).toEqual([noMatter.id, withMatter.id].sort());
+    });
+
+    it('createAdjustment: ForeignKeyViolation on an unknown customer or project', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
+      const ghost = '00000000-0000-4000-8000-000000000000';
+      const base = { organizationId: a.id, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, vatTreatment: 'OUT_OF_SCOPE' as const, vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(0), createdByUserId: 'user-1', requestId: null };
+      await expect(store.receivables.createAdjustment({ ...base, customerId: ghost, projectId: null }, at(0))).rejects.toThrow();
+      await expect(store.receivables.createAdjustment({ ...base, customerId: c.id, projectId: ghost }, at(0))).rejects.toThrow();
+    });
+
+    it('softDeleteAdjustment: a plain soft-delete, idempotent, excluded from every read (undo, MUT-65)', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
+      const p = await store.projects.create({ organizationId: a.id, customerId: c.id, name: 'Consulting', currency: 'ILS' }, at(1));
+      const r = await store.receivables.createAdjustment(
+        { organizationId: a.id, customerId: c.id, projectId: p.id, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Consult', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(2), createdByUserId: 'user-1', requestId: null },
+        at(2),
+      );
+      expect(await store.receivables.countOutstandingByProject(a.id, p.id)).toBe(1);
+      expect((await store.receivables.listEligible(a.id, c.id, 'ILS')).map((x) => x.id)).toContain(r.id);
+
+      const deleted = await store.receivables.softDeleteAdjustment(a.id, r.id, at(3));
+      expect(deleted).toMatchObject({ id: r.id, deletedAt: at(3) });
+
+      // Undone: absent from every list/get surface, and no longer counted as outstanding or eligible (eng-review mutation check, design doc §2.1/§9).
+      expect(await store.receivables.getById(a.id, r.id)).toBeNull();
+      // ... but still reachable for the undo route's own idempotency re-check (DELETE /v1/income/{id} on an already-voided row).
+      expect(await store.receivables.getByIdIncludingDeleted(a.id, r.id)).toMatchObject({ id: r.id, deletedAt: at(3) });
+      expect(await store.receivables.getByIds(a.id, [r.id])).toEqual([]);
+      expect((await store.receivables.list(a.id, { customerId: c.id }, { limit: 10, cursor: null })).items).toEqual([]);
+      expect(await store.receivables.countOutstandingByProject(a.id, p.id)).toBe(0);
+      expect((await store.receivables.listEligible(a.id, c.id, 'ILS')).map((x) => x.id)).not.toContain(r.id);
+
+      // idempotent: a second delete changes nothing further
+      const again = await store.receivables.softDeleteAdjustment(a.id, r.id, at(4));
+      expect(again).toMatchObject({ id: r.id, deletedAt: at(3) });
+
+      // unknown / cross-organization ids
+      const other = await org(store, 'B');
+      expect(await store.receivables.softDeleteAdjustment(a.id, '00000000-0000-4000-8000-000000000000', at(5))).toBeNull();
+      expect(await store.receivables.softDeleteAdjustment(other.id, r.id, at(5))).toBeNull();
+      expect(await store.receivables.getByIdIncludingDeleted(other.id, r.id)).toBeNull();
+    });
+
+    it('softDeleteAdjustment: refuses a receivable money has already landed on, and says so by leaving it undeleted (MUT-65 undo/settle race)', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const c = await store.customers.create({ organizationId: a.id, name: 'Nadia', email: null, phone: null, notes: null, vatTreatment: null }, at(0));
+      const adjustment = (ms: number) =>
+        store.receivables.createAdjustment(
+          { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 5000n, vatMinor: 0n, grossMinor: 5000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(ms), createdByUserId: 'user-1', requestId: null },
+          at(ms),
+        );
+
+      // The guard lives in the WHERE clause, not only in the caller: a settle that lands between
+      // routes/income.ts's paid/credited pre-check and this write must not leave a POSTED payment
+      // allocated to a row every read path then hides.
+      const paid = await adjustment(1);
+      await store.payments.create(payment(a.id, c.id, 2000n, [{ receivableId: paid.id, amountMinor: 2000n }]), at(2));
+      expect(await store.receivables.softDeleteAdjustment(a.id, paid.id, at(3))).toMatchObject({ id: paid.id, deletedAt: null, paidMinor: 2000n });
+      expect(await store.receivables.getById(a.id, paid.id)).toMatchObject({ id: paid.id, deletedAt: null });
+
+      const credited = await adjustment(4);
+      await store.receivables.credit(a.id, credited.id, { amountMinor: 1000n, netMinor: 1000n, vatMinor: 0n, reason: 'waived', effectiveDate: '2026-10-08', requestId: null }, at(5));
+      expect(await store.receivables.softDeleteAdjustment(a.id, credited.id, at(6))).toMatchObject({ id: credited.id, deletedAt: null, creditedMinor: 1000n });
+
+      // An untouched one still voids, so the guard is the money and nothing else.
+      const clean = await adjustment(7);
+      expect(await store.receivables.softDeleteAdjustment(a.id, clean.id, at(8))).toMatchObject({ id: clean.id, deletedAt: at(8) });
+    });
+
+    it('Received can stand alone with no client, and optionally carries a matter', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const { c, p } = await seed(store, a.id, []);
+
+      const standalone = await store.payments.create(payment(a.id, null, 5000n, [], { projectId: null }), at(10));
+      expect(standalone.payment).toMatchObject({ customerId: null, projectId: null, status: 'POSTED' });
+      expect(await store.payments.getById(a.id, standalone.payment.id)).toMatchObject({ id: standalone.payment.id });
+      expect((await store.payments.list(a.id, {}, { limit: 10, cursor: null })).items.map((x) => x.id)).toContain(standalone.payment.id);
+
+      const withMatter = await store.payments.create(payment(a.id, c.id, 3000n, [], { projectId: p.id }), at(11));
+      expect(withMatter.payment).toMatchObject({ customerId: c.id, projectId: p.id });
+      // the payment's own projectId matches the filter, same as an allocation-based match (MUT-65 OR)
+      expect((await store.payments.list(a.id, { projectId: p.id }, { limit: 10, cursor: null })).items.map((x) => x.id)).toContain(withMatter.payment.id);
     });
   });
 }

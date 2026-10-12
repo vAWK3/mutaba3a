@@ -4,7 +4,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
-import { sessionAccess } from '../auth/writability.js';
+import { sessionAccessFor, WRITABILITY_MATRIX } from '../auth/writability.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
@@ -119,19 +119,21 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
 
 /** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */
 export async function buildMe(store: LedgerStore, user: UserRecord) {
-  const access = sessionAccess();
   const profiles = [];
   for (const membership of await store.memberships.listByUser(user.id)) {
     const organization = await store.organizations.getById(membership.organizationId);
     if (!organization) continue;
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
+    const writerOfRecord = malafat?.status === 'CONNECTED' ? ('MALAFAT' as const) : null;
+    // MUT-65: per-organization, not a constant — three rows' access depend on whether this profile is personal or Malafat-fed.
+    const access = Object.fromEntries(WRITABILITY_MATRIX.map((row) => [row.domain, sessionAccessFor(row.domain, writerOfRecord)]));
     profiles.push({
       id: organization.id,
       name: organization.name,
       source: 'hosted' as const,
       defaultCurrency: organization.defaultCurrency as 'ILS' | 'USD' | 'EUR',
       timezone: organization.timezone,
-      writerOfRecord: malafat?.status === 'CONNECTED' ? ('MALAFAT' as const) : null,
+      writerOfRecord,
       access,
     });
   }

@@ -1,0 +1,85 @@
+import { validationError } from '../agreements/compose.js';
+import { compareIsoDates, dueDateFor, type IsoDate } from '../dates.js';
+import type { LedgerStore } from '../repositories/ports.js';
+import type { VatTreatment } from '../vat.js';
+
+/**
+ * Income capture rules shared by routes/income.ts and routes/receivables.ts's
+ * settle route (MUT-65 brief §4). Pure except for the lookups that check a
+ * link belongs to the profile — mirrors expenses/compose.ts's shape.
+ */
+
+export type IncomeKind = 'received' | 'owed';
+
+export interface IncomeLinks {
+  customerId: string | null;
+  projectId: string | null;
+}
+
+/**
+ * A client and matter link inside the profile (expenses/compose.ts's
+ * resolveLinks rule verbatim: a project alone brings its customer; both must
+ * agree; archived ones may be linked), plus the one rule this ticket adds:
+ * Owed requires a customer, explicit or resolved from a project — Received
+ * may stand alone with neither (ticket AC 1/2).
+ */
+export async function resolveIncomeLinks(store: LedgerStore, organizationId: string, kind: IncomeKind, requested: IncomeLinks): Promise<IncomeLinks> {
+  const resolved = await resolveLinks(store, organizationId, requested);
+  if (kind === 'owed' && !resolved.customerId) {
+    throw validationError('CUSTOMER_REQUIRED_FOR_OWED', 'Owed requires a client', { field: 'customerId' });
+  }
+  return resolved;
+}
+
+async function resolveLinks(store: LedgerStore, organizationId: string, requested: IncomeLinks): Promise<IncomeLinks> {
+  if (requested.projectId) {
+    const project = await store.projects.getById(organizationId, requested.projectId);
+    if (!project) throw validationError('PROJECT_NOT_FOUND', 'No such project in this profile', { field: 'projectId' });
+    if (requested.customerId && requested.customerId !== project.customerId) {
+      throw validationError('PROJECT_CUSTOMER_MISMATCH', 'The project belongs to another client', { field: 'customerId' });
+    }
+    return { customerId: project.customerId, projectId: project.id };
+  }
+  if (requested.customerId) {
+    const customer = await store.customers.getById(organizationId, requested.customerId);
+    if (!customer) throw validationError('CUSTOMER_NOT_FOUND', 'No such client in this profile', { field: 'customerId' });
+    return { customerId: customer.id, projectId: null };
+  }
+  return { customerId: null, projectId: null };
+}
+
+/** Owed's due date: the explicit one, or EOM_15 of occurredOn (ticket owner's resolved decision) — the existing dueDateFor helper, not a reimplementation. */
+export function dueDateForOwed(occurredOn: IsoDate, explicit: IsoDate | undefined): IsoDate {
+  return explicit ?? dueDateFor(occurredOn, 'EOM_15');
+}
+
+export interface OwedVatFields {
+  vatTreatment: VatTreatment;
+  vatRateBasisPoints: number;
+  netMinor: bigint;
+  vatMinor: bigint;
+  grossMinor: bigint;
+}
+
+/**
+ * A captured "Owed" is always OUT_OF_SCOPE VAT at a zero rate (deliberate
+ * simplification, brief §4.1) — regardless of any VatRate configured on the
+ * organization. A future, VAT-aware capture is an explicit follow-up, not
+ * this ticket; this function exists so that never happens by accident.
+ */
+export function owedVatFields(amountMinor: bigint): OwedVatFields {
+  return { vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, netMinor: amountMinor, vatMinor: 0n, grossMinor: amountMinor };
+}
+
+/**
+ * ADR-038's rule — a payment date is never later than today; backdating is
+ * accepted — ported to the server (MUT-65 addendum to ADR-038; see
+ * DECISIONS.md). Distinct from `assertNotAbsurdDate` (agreements/compose.ts),
+ * which only rejects a date more than ten years ahead: `POST /v1/payments`'s
+ * `receivedOn` today applies only that ten-year ceiling, not a same-day cutoff,
+ * so this is a new, stricter check for the two fields this ticket adds
+ * (`occurredOn`, settle's `paidAt`), not a verbatim reuse of an existing one.
+ */
+export function assertNotFuture(date: IsoDate, today: IsoDate, field: string): void {
+  if (compareIsoDates(date, today) > 0) throw validationError('DATE_INVALID', `${field} cannot be later than today`, { field });
+}

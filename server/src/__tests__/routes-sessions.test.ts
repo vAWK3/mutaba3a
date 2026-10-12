@@ -229,6 +229,8 @@ describe('GET /v1/me', () => {
     expect(byId[b.org.id]).toMatchObject({ source: 'hosted', writerOfRecord: null });
     expect(byId[a.org.id].access).toEqual(sessionAccess());
     expect(byId[a.org.id].access).toMatchObject({ customers: 'read', payments: 'read', expenses: 'read-write', integration: 'none' });
+    // MUT-65: org b has no Malafat integration (a personal profile) — the three profile-dependent rows are read-write there, unlike org a.
+    expect(byId[b.org.id].access).toMatchObject({ customers: 'read-write', projects: 'read-write', payments: 'read-write', expenses: 'read-write', integration: 'none' });
   });
 
   it('answers 401 UNAUTHENTICATED without a credential and SESSION_EXPIRED for an unknown cookie', async () => {

@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
+import { actorOf, keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
+import { validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -41,8 +42,8 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Customers'],
       summary: 'Create a customer',
       description:
-        'With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider.',
-      security: [{ apiKey: [] }],
+        'With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider. A session may create a customer on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('customers:write'), idempotent(store, 'customers.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: { required: true, content: { 'application/json': { schema: CreateCustomerRequestSchema } } } },
       responses: {
@@ -54,10 +55,16 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const { organization, apiKey } = keyAuth(c);
+      const auth = c.get('auth');
+      const { organization } = auth;
+      const actor = actorOf(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const reference = body.externalReference;
+
+      if (auth.kind === 'session' && reference) {
+        throw validationError('EXTERNAL_REFERENCE_NOT_ALLOWED', 'A session has no external reference to link', { field: 'externalReference' });
+      }
 
       if (reference) {
         await requireConnectedIntegration(store, organization.id, reference.provider);
@@ -82,8 +89,8 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       await store.audit.append({
         organizationId: organization.id,
-        actorType: 'API_KEY',
-        actorId: apiKey.id,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
         action: 'customer.created',
         entityType: 'customer',
         entityId: customer.id,

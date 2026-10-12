@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { WRITABILITY_MATRIX } from '../auth/writability.js';
+import { PROFILE_DEPENDENT_DOMAINS, sessionAccessFor, WRITABILITY_MATRIX } from '../auth/writability.js';
 
 /**
  * MUT-39 AC: "the matrix in the design brief and the enforced behaviour are
@@ -36,14 +36,24 @@ describe('writability matrix: brief ↔ code', () => {
   it.each(WRITABILITY_MATRIX.map((r, i) => [r.domain, i] as const))('row %s is identical cell by cell', (_domain, i) => {
     const row = WRITABILITY_MATRIX[i]!;
     const cells = rows[i]!;
+    // MUT-65: the three profile-dependent rows carry a fixed, literal suffix on
+    // the session cell rather than a change to the matrix's own `session`
+    // value, so this stays a plain string comparison — no grammar to parse.
+    const session = PROFILE_DEPENDENT_DOMAINS.has(row.domain) ? `${row.session}; read-write on a personal profile` : row.session;
     expect(cells).toEqual([
       row.domain,
       row.scopes.length ? row.scopes.join(', ') : '—',
       row.routes,
       row.apiKey,
-      row.session,
+      session,
       row.writerOfRecord ?? '—',
       'device',
     ]);
+  });
+
+  it.each([...PROFILE_DEPENDENT_DOMAINS])('%s: the suffix is backed by sessionAccessFor, not just brief prose (MUT-65)', (domain) => {
+    const row = WRITABILITY_MATRIX.find((r) => r.domain === domain)!;
+    expect(sessionAccessFor(domain, null)).toBe('read-write');
+    expect(sessionAccessFor(domain, 'MALAFAT')).toBe(row.session);
   });
 });
