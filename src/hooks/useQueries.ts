@@ -177,7 +177,7 @@ export function useMarkTransactionPaid() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => getRepositories().synced.transactions.markPaid(id),
+    mutationFn: (id: string) => getRepositories().base.transactions.markPaid(id),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -187,7 +187,7 @@ export function useRecordPartialPayment() {
 
   return useMutation({
     mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      getRepositories().synced.transactions.recordPartialPayment(id, paymentAmountMinor),
+      getRepositories().base.transactions.recordPartialPayment(id, paymentAmountMinor),
     onSuccess: () => invalidateTransactionQueries(queryClient),
   });
 }
@@ -242,7 +242,7 @@ export function useCreatePaymentRecord() {
 
   return useMutation({
     mutationFn: (data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }) =>
-      getRepositories().synced.paymentRecords.create(data),
+      getRepositories().base.paymentRecords.create(data),
     onSuccess: () => invalidatePaymentRecordQueries(queryClient),
   });
 }
@@ -255,7 +255,7 @@ export function useUpdatePaymentRecord() {
       id: string;
       transactionId: string;
       data: { amountMinor?: number; paidAt?: string; notes?: string };
-    }) => getRepositories().synced.paymentRecords.update(vars.id, vars.data),
+    }) => getRepositories().base.paymentRecords.update(vars.id, vars.data),
     onSuccess: () => invalidatePaymentRecordQueries(queryClient),
   });
 }
@@ -265,7 +265,7 @@ export function useDeletePaymentRecord() {
 
   return useMutation({
     mutationFn: (vars: { id: string; transactionId: string }) =>
-      getRepositories().synced.paymentRecords.delete(vars.id),
+      getRepositories().base.paymentRecords.delete(vars.id),
     onSuccess: () => invalidatePaymentRecordQueries(queryClient),
   });
 }
@@ -683,7 +683,7 @@ export function useArchiveBusinessProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => getRepositories().synced.businessProfiles.archive(id),
+    mutationFn: (id: string) => getRepositories().base.businessProfiles.archive(id),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
   });
 }

@@ -5,10 +5,9 @@ import {
   resetRepositories,
   type Repositories,
 } from '../provider';
-import { transactionRepo, clientRepo, settingsRepo } from '../repository';
+import { transactionRepo, clientRepo, settingsRepo, paymentRecordRepo, businessProfileRepo } from '../repository';
 import { expenseRepo } from '../expenseRepository';
 import { retainerRepo, projectedIncomeRepo } from '../retainerRepository';
-import { syncedTransactionRepo, syncedPaymentRecordRepo } from '../../sync/core/synced-repository';
 
 afterEach(() => {
   resetRepositories();
@@ -28,14 +27,15 @@ describe('repository provider', () => {
       expect(repos.base.projectedIncome).toBe(projectedIncomeRepo);
     });
 
-    it('exposes the op-capturing decorators separately from the base repositories', () => {
+    it('exposes only the base repositories, now that device sync is retired (MUT-73)', () => {
       const repos = getRepositories();
 
-      expect(repos.synced.transactions).toBe(syncedTransactionRepo);
-      expect(repos.synced.paymentRecords).toBe(syncedPaymentRecordRepo);
-      // The two families must stay distinct: collapsing them would silently
-      // change which mutations capture a sync op.
-      expect(repos.synced.transactions).not.toBe(repos.base.transactions);
+      expect(Object.keys(repos)).toEqual(['base']);
+      // The mutations that used to capture a sync op now resolve to the plain
+      // repositories, so they write exactly what the repository writes.
+      expect(repos.base.transactions).toBe(transactionRepo);
+      expect(repos.base.paymentRecords).toBe(paymentRecordRepo);
+      expect(repos.base.businessProfiles).toBe(businessProfileRepo);
     });
 
     it('fills every declared slot', () => {
@@ -43,9 +43,6 @@ describe('repository provider', () => {
 
       for (const [slot, repo] of Object.entries(repos.base)) {
         expect(repo, `base.${slot} is unset`).toBeDefined();
-      }
-      for (const [slot, repo] of Object.entries(repos.synced)) {
-        expect(repo, `synced.${slot} is unset`).toBeDefined();
       }
     });
   });
@@ -69,7 +66,6 @@ describe('repository provider', () => {
       const previous = getRepositories();
       const stub = {
         base: { ...previous.base },
-        synced: { ...previous.synced },
       } as Repositories;
 
       setRepositories(stub);
@@ -82,7 +78,6 @@ describe('repository provider', () => {
       const original = getRepositories();
       setRepositories({
         base: { ...original.base },
-        synced: { ...original.synced },
       } as Repositories);
 
       resetRepositories();
@@ -96,7 +91,7 @@ describe('repository provider', () => {
       const current = getRepositories();
 
       expect(() =>
-        setRepositories({ base: { ...current.base }, synced: { ...current.synced } } as Repositories)
+        setRepositories({ base: { ...current.base } } as Repositories)
       ).toThrow(/not available in production/);
 
       expect(getRepositories()).toBe(current);
