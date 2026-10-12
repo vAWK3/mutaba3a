@@ -24,6 +24,7 @@ import { UpdateBanner } from '../ui/UpdateBanner';
 import { useDrawerStore } from "../../lib/stores";
 import { useDemoStore, DEMO_QUERY_PARAM } from "../../demo";
 import { FeatureNoticeBanner } from "./FeatureNoticeBanner";
+import { SavedFlashAnnouncer } from "./SavedFlashAnnouncer";
 import { useLeaveDisabledArea } from "../../lib/features/routeGuard";
 
 interface AppShellProps {
@@ -163,6 +164,7 @@ export function AppShell({ children }: AppShellProps) {
         </InlineErrorBoundary>
       )}
 
+      <SavedFlashAnnouncer />
       <WelcomeModal />
       <MigrationWizard />
 

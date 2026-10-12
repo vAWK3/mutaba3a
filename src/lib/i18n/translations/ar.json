@@ -1486,5 +1486,13 @@
       "keep": "واصل التصفح"
     },
     "preparing": "جارٍ تجهيز البيانات التجريبية…"
+  },
+  "savedFlash": {
+    "saved": "تم الحفظ",
+    "incomeSaved": "تم الحفظ لدى {client}",
+    "incomeSavedNoClient": "تم حفظ الإدخال",
+    "paymentSaved": "تم تسجيل الدفعة لدى {client}",
+    "paymentSavedNoClient": "تم تسجيل الدفعة",
+    "show": "عرض"
   }
 }

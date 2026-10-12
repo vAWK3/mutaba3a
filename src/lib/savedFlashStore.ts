@@ -41,15 +41,18 @@ export function matchesFlash(ids: readonly string[], flash: SavedFlash | null): 
 export interface FlashTarget {
   to: '/clients/$clientId' | '/income';
   params?: { clientId: string };
+  search?: Record<string, never>;
 }
 
 /** Pure: where Show should navigate. An entry with a client goes to the
- *  client profile; otherwise /income (the drawer re-arms the filters there). */
+ *  client profile; otherwise /income, with its filters reset (an empty
+ *  search clears status/client-scope/search-text, the usual way a save can
+ *  be filtered out of view -- MUT-83's filter model). */
 export function flashTarget(flash: SavedFlash): FlashTarget {
   if (flash.clientId) {
     return { to: '/clients/$clientId', params: { clientId: flash.clientId } };
   }
-  return { to: '/income' };
+  return { to: '/income', search: {} };
 }
 
 interface ListEntry {
