@@ -179,7 +179,8 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'EXPENSE');
       // Every destination-side rule is checked before the transaction opens, so a refusal can never consume the entry.
-      assertNotFuture(entry.occurredOn, todayFor(organization, now), 'occurredOn');
+      // No future-date check: POST /v1/expenses has none, and filing must be refused in exactly the places a
+      // direct create is — not more. The income route below does check, because POST /v1/income does.
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
 

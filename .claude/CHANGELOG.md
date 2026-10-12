@@ -55,6 +55,7 @@
 - `store-contract-m4.ts` passed the literal `'user-1'` as `createdByUserId`. That column is a UUID in Postgres, so three MUT-65 cases passed against the memory store and failed against the real one — found because this was the first local `test:db` run with MUT-65's migration applied. See TD-072 and TD-073 for the two related gaps left open.
 
 ### Technical
+- **Filing is refused in exactly the places a direct create is, and no more.** The design assumed MUT-42 already rejected future-dated expenses; it does not, so `file-as-expense` does not either, while `file-as-income` does because `POST /v1/income` does. Both are asserted against the direct route's own response rather than against a hardcoded status.
 - Filing is the store's only cross-repository transaction. The entry is claimed by a delete *inside* the transaction, which proves ownership and kind and holds the row lock until commit: two concurrent filings of one entry yield exactly one record, and a financial write that throws rolls the delete back with it. Both halves are proven against real Postgres, not only the in-memory simulation.
 - AC 5 is asserted twice: fifty inbox entries leave both summaries byte-identical, and the summary sources — enumerated from the directory, not hardcoded — contain no reference to the inbox at all.
 - Gates: server lint, typecheck, build, `openapi:check`, `npm test` (1310) and `npm run test:db` (1397, all 82 files) green; root lint, typecheck and build green.

@@ -169,6 +169,18 @@ describe('POST /v1/inbox/{id}/file-as-expense', () => {
     expect((await s.fileExpense('00000000-0000-4000-8000-000000000000')).status).toBe(404);
   });
 
+  /** "any profile the user belongs to" (AC 2) — and no others: a non-member destination is not found. */
+  it('is 404 for a profile the person is not a member of, and files nothing', async () => {
+    const s = await setup();
+    const outsider = (await read(await s.h.app.request('/admin/v1/organizations', json({ name: `Outsider ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)))) as { id: string };
+    const entry = await s.capture(EXPENSE_ENTRY);
+
+    const res = await s.fileExpense(entry.id, {}, outsider.id);
+    expect(res.status).toBe(404);
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+    expect(await s.expenses(s.p.id)).toHaveLength(0);
+  });
+
   it('requires an Idempotency-Key', async () => {
     const s = await setup();
     const entry = await s.capture(EXPENSE_ENTRY);
@@ -210,13 +222,21 @@ describe('POST /v1/inbox/{id}/file-as-expense', () => {
     expect(row?.metadata).toMatchObject({ captureSource: 'siri', filedFromInbox: true });
   });
 
-  it('refuses a future-dated entry at filing, in the destination profile’s own timezone', async () => {
+  /**
+   * Filing is refused exactly where a direct create is, and no more: POST /v1/expenses
+   * accepts a future occurredOn, so filing must too. The income route is the opposite
+   * case, and is asserted below — there the direct route does refuse.
+   */
+  it('accepts a future-dated entry, because POST /v1/expenses does', async () => {
     const s = await setup();
     const entry = await s.capture({ ...EXPENSE_ENTRY, occurredOn: '2027-06-01' });
-    const res = await s.fileExpense(entry.id);
-    expect(res.status).toBe(422);
-    expect((await read(res)).error.details.field).toBe('occurredOn');
-    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+    const filed = await s.fileExpense(entry.id);
+    const direct = await s.h.app.request('/v1/expenses', json({ occurredOn: '2027-06-01', amount: '120.50', currency: 'ILS' }, s.as(s.p.id, idem())));
+
+    expect(filed.status).toBe(direct.status);
+    expect(filed.status).toBe(201);
+    expect((await read(filed)).occurredOn).toBe('2027-06-01');
+    expect(await s.listInbox()).toEqual([]);
   });
 });
 
@@ -257,15 +277,23 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
     expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
   });
 
-  it('refuses an expense entry with 409 ENTRY_KIND_MISMATCH', async () => {
+  it('refuses an expense entry with 409 ENTRY_KIND_MISMATCH on a personal profile', async () => {
     const s = await setup();
     const entry = await s.capture(EXPENSE_ENTRY);
-    for (const profile of [s.p.id, s.m.id]) {
-      const res = await s.fileIncome(entry.id, { kind: 'received' }, profile);
-      // On M the profile refusal comes first; that is the matrix doing its job, and the entry survives either way.
-      expect([409, 403]).toContain(res.status);
-      expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
-    }
+    const res = await s.fileIncome(entry.id, { kind: 'received' });
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details.reason).toBe('ENTRY_KIND_MISMATCH');
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+  });
+
+  /** On a Malafat-fed profile the matrix refuses in middleware, before the handler can look at the kind. */
+  it('refuses an expense entry on a Malafat-fed profile with READ_ONLY_PROFILE, not the kind conflict', async () => {
+    const s = await setup();
+    const entry = await s.capture(EXPENSE_ENTRY);
+    const res = await s.fileIncome(entry.id, { kind: 'received' }, s.m.id);
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.code).toBe('READ_ONLY_PROFILE');
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
   });
 
   it('replays to the identical response and creates no second record', async () => {
@@ -295,6 +323,20 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
 
     expect(Object.keys(filedMeta).sort()).toEqual([...Object.keys(directMeta), 'filedFromInbox'].sort());
     for (const key of Object.keys(directMeta)) expect(filedMeta[key], key).toEqual(directMeta[key]);
+  });
+
+  /** The mirror of the expense case: POST /v1/income does refuse a future date, so filing must too. */
+  it('refuses a future-dated entry, because POST /v1/income does, and leaves it in the inbox', async () => {
+    const s = await setup();
+    const entry = await s.capture({ ...INCOME_ENTRY, occurredOn: '2027-06-01' });
+    const filed = await s.fileIncome(entry.id, { kind: 'received' });
+    const direct = await s.h.app.request('/v1/income', json({ kind: 'received', amount: '250.00', currency: 'ILS', occurredOn: '2027-06-01' }, s.as(s.p.id, idem())));
+    const [filedBody, directBody] = [await read(filed), await read(direct)];
+
+    expect(filed.status).toBe(direct.status);
+    expect(filed.status).toBe(422);
+    expect(filedBody.error.details).toEqual(directBody.error.details);
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
   });
 
   it('records how the entry was captured on the income audit row', async () => {
