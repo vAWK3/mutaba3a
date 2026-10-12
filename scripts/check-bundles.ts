@@ -6,7 +6,7 @@
  * worker, no self-service account door in either language, and no new origin.
  *
  * Brand v2 (MUT-102): every dist ships the delivered Thmanyah files
- * byte-identical, bundles no retired face, preloads Thmanyah Sans 400, and
+ * byte-identical, bundles no retired face, preloads no font (ADR-058), and
  * every CSS url() resolves to a file inside that dist (offline proof for
  * desktop; for web, no font silently answered by the index.html fallback).
  */
@@ -17,8 +17,7 @@ import { HOSTED_RULES, LOCAL_RULES, extractOrigins, findForbidden, fontProblems,
 
 const TEXT_FILE = /\.(js|mjs|html|css|json|webmanifest)$/;
 const FONT_FILE = /\.(otf|ttf|woff2?)$/;
-const THMANYAH_DIR = 'src/assets/fonts';
-const PRELOADED_FONT = 'thmanyahsans-Regular.otf';
+const THMANYAH_PINS = 'src/assets/fonts/thmanyah.sha256.json';
 const allowlist = JSON.parse(readFileSync('scripts/bundle-origins.json', 'utf8')) as { local: string[]; hosted: string[] };
 
 function allFiles(dir: string): string[] {
@@ -36,11 +35,8 @@ function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-const thmanyah = Object.fromEntries(
-  readdirSync(THMANYAH_DIR)
-    .filter((name) => /^thmanyah.*\.otf$/.test(name))
-    .map((name) => [name, sha256(join(THMANYAH_DIR, name))]),
-);
+/** The delivered bytes, pinned (brand.test.ts checks src/assets/fonts holds exactly these). */
+const thmanyah = (JSON.parse(readFileSync(THMANYAH_PINS, 'utf8')) as { files: Record<string, string> }).files;
 
 function checkBrandFonts(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -49,7 +45,6 @@ function checkBrandFonts(dir: string): string[] {
     files: all.filter((path) => FONT_FILE.test(path)).map((path) => ({ path: relative(dir, path).split(sep).join('/'), sha256: sha256(path) })),
     sources: thmanyah,
     html: readFileSync(join(dir, 'index.html'), 'utf8'),
-    preload: PRELOADED_FONT,
   }).map((problem) => `${dir}: ${problem}`);
   for (const css of all.filter((path) => path.endsWith('.css'))) {
     for (const url of unresolvedUrls(css, readFileSync(css, 'utf8'), dir, existsSync)) problems.push(`${css}: url(${url}) has no file in ${dir}`);
@@ -82,5 +77,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  'Bundle check passed: dist-web and dist-desktop carry no portal code; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloaded, with every CSS url() resolving.',
+  'Bundle check passed: dist-web and dist-desktop carry no portal code; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, and resolves every CSS url().',
 );

@@ -45,7 +45,6 @@ exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
     "vite-plugin-pwa:build",
     "vite-plugin-pwa:dev-sw",
     "vite-plugin-pwa:pwa-assets",
-    "mutaba3a:brand-font-preload",
   ],
   "server": {
     "host": "127.0.0.1",
@@ -122,7 +121,6 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
     "vite-plugin-pwa:build",
     "vite-plugin-pwa:dev-sw",
     "vite-plugin-pwa:pwa-assets",
-    "mutaba3a:brand-font-preload",
   ],
   "server": {
     "host": "127.0.0.1",

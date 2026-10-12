@@ -1,15 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
-import type { OutputAsset, OutputBundle, OutputChunk } from 'rollup';
-import configFn, { BRAND_PRELOAD_FONT, PWA_WORKBOX, findEmittedAsset, fontPreloadTag } from '../../vite.config';
+import configFn, { PWA_WORKBOX } from '../../vite.config';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
  * `desktop` configs were snapshotted before the `hosted` branch existed, so any
- * change to them fails here first. Updated on purpose by MUT-102 (font preload
- * plugin, PWA font runtime cache); the release version is masked so a release
- * bump doesn't break it.
+ * change to them fails here first. MUT-102 masks the release version so a
+ * release bump doesn't break it.
  */
 
 type ConfigFactory = (env: ConfigEnv) => UserConfig;
@@ -33,9 +31,6 @@ function comparable(config: UserConfig) {
   return { ...config, define: { ...config.define, __APP_VERSION__: '<package.json version>' }, plugins: pluginNames(config.plugins) };
 }
 
-function asset(fileName: string, originalFileNames: string[]): OutputAsset {
-  return { type: 'asset', fileName, originalFileNames, names: [], originalFileName: originalFileNames[0] ?? null, name: undefined, needsCodeReference: false, source: '' };
-}
 
 describe('vite.config', () => {
   it.each(['web', 'desktop'])('leaves the %s build exactly as it was', (mode) => {
@@ -43,8 +38,8 @@ describe('vite.config', () => {
   });
 
   describe('brand fonts (MUT-102)', () => {
-    it.each(['web', 'desktop', 'hosted'])('the %s build preloads the body face', (mode) => {
-      expect(pluginNames(resolve(mode).plugins)).toContain('mutaba3a:brand-font-preload');
+    it.each(['web', 'desktop', 'hosted'])('the %s build preloads no font: swap paints text first (ADR-058)', (mode) => {
+      expect(pluginNames(resolve(mode).plugins).filter((name) => /preload/.test(name))).toEqual([]);
     });
 
     it('caches fonts on first use instead of precaching ~1.2 MB of .otf on every install (PD10)', () => {
@@ -55,28 +50,6 @@ describe('vite.config', () => {
       const fontRule = runtimeCaching?.find((rule) => isFont(rule, 'font'));
       expect(fontRule).toMatchObject({ handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 12 } } });
       expect(isFont(fontRule!, 'script')).toBe(false);
-    });
-
-    it('finds the emitted font by its source path', () => {
-      const bundle = {
-        'assets/index-abc.js': { type: 'chunk', fileName: 'assets/index-abc.js' } as OutputChunk,
-        'assets/thmanyahsans-Bold-x1.otf': asset('assets/thmanyahsans-Bold-x1.otf', ['src/assets/fonts/thmanyahsans-Bold.otf']),
-        'assets/thmanyahsans-Regular-Ab12.otf': asset('assets/thmanyahsans-Regular-Ab12.otf', [BRAND_PRELOAD_FONT]),
-      } as OutputBundle;
-      expect(findEmittedAsset(bundle, BRAND_PRELOAD_FONT)).toBe('assets/thmanyahsans-Regular-Ab12.otf');
-    });
-
-    it('fails the build when the preloaded font was not emitted', () => {
-      expect(() => findEmittedAsset({} as OutputBundle, BRAND_PRELOAD_FONT)).toThrow(BRAND_PRELOAD_FONT);
-    });
-
-    it('builds a crossorigin font preload with the build base', () => {
-      expect(fontPreloadTag('./', 'assets/a.otf')).toEqual({
-        tag: 'link',
-        attrs: { rel: 'preload', as: 'font', type: 'font/otf', href: './assets/a.otf', crossorigin: true },
-        injectTo: 'head',
-      });
-      expect(fontPreloadTag('/', 'assets/a.otf').attrs?.href).toBe('/assets/a.otf');
     });
   });
 

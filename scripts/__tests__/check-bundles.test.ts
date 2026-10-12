@@ -90,13 +90,11 @@ describe('brand fonts', () => {
       { path: 'assets/ibm-plex-mono-latin-400-normal-1.woff2', sha256: 'ccc' },
       { path: 'fonts/IBMPlexSansArabic-Regular.ttf', sha256: 'ddd' },
     ];
-    const html = '<head><link rel="preload" as="font" type="font/otf" href="/assets/thmanyahsans-Regular-Xy12.otf" crossorigin></head>';
-    const check = (overrides: Partial<Parameters<typeof fontProblems>[0]> = {}) =>
-      fontProblems({ files, sources, html, preload: 'thmanyahsans-Regular.otf', ...overrides });
+    const html = '<head><link rel="modulepreload" href="/assets/vendor-react-1.js"></head>';
+    const check = (overrides: Partial<Parameters<typeof fontProblems>[0]> = {}) => fontProblems({ files, sources, html, ...overrides });
 
-    it('passes a dist that ships every face unchanged and preloads the body face (PDF fonts in fonts/ are not bundled)', () => {
+    it('passes a dist that ships every face unchanged (PDF fonts in fonts/ are not bundled)', () => {
       expect(check()).toEqual([]);
-      expect(check({ html: html.replace('/assets/', './assets/') })).toEqual([]);
     });
 
     it.each(['assets/inter-latin-wght-normal-1.woff2', 'assets/source-serif-4-latin-2.woff2', 'assets/ibm-plex-sans-arabic-arabic-400-normal-3.woff2'])(
@@ -114,11 +112,9 @@ describe('brand fonts', () => {
       ]);
     });
 
-    it('flags an entry with no preload, a preload without crossorigin, and a preload of the wrong file', () => {
-      const expected = ['the entry HTML has no crossorigin preload of thmanyahsans-Regular.otf'];
-      expect(check({ html: '<head></head>' })).toEqual(expected);
-      expect(check({ html: html.replace(' crossorigin', '') })).toEqual(expected);
-      expect(check({ html: html.replace('Regular-Xy12', 'Bold-Zz99') })).toEqual(expected);
+    it('flags an entry that preloads a font: it competed with the app code and cost 700 ms of LCP (ADR-058)', () => {
+      const preload = '<head><link rel="preload" as="font" type="font/otf" href="/assets/thmanyahsans-Regular-Xy12.otf" crossorigin></head>';
+      expect(check({ html: preload })).toEqual(['the entry HTML preloads a font (/assets/thmanyahsans-Regular-Xy12.otf); swap loads it without delaying first paint']);
     });
   });
 });

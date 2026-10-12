@@ -1,5 +1,4 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin, type UserConfig } from "vite";
-import type { OutputBundle } from "rollup";
+import { defineConfig, type Plugin, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
@@ -35,57 +34,11 @@ function emitHostedEntryAsIndex(): Plugin {
   };
 }
 
-/** The one face every build preloads (MUT-102, PD9): body text in both scripts. */
-export const BRAND_PRELOAD_FONT = "src/assets/fonts/thmanyahsans-Regular.otf";
-
-/**
- * The emitted file for a bundled source asset, found by its original path
- * (Rollup `originalFileNames`). Throws when it is missing, so a renamed font
- * fails the build instead of shipping a dead preload.
- */
-export function findEmittedAsset(bundle: OutputBundle, source: string): string {
-  for (const output of Object.values(bundle)) {
-    if (output.type === "asset" && output.originalFileNames.includes(source)) return output.fileName;
-  }
-  throw new Error(`mutaba3a:brand-font-preload: ${source} was not emitted; is it still used by src/styles/brand/fonts.css?`);
-}
-
-/** A font preload must be crossorigin, or the browser fetches the file twice. */
-export function fontPreloadTag(base: string, fileName: string): HtmlTagDescriptor {
-  return {
-    tag: "link",
-    attrs: { rel: "preload", as: "font", type: "font/otf", href: `${base}${fileName}`, crossorigin: true },
-    injectTo: "head",
-  };
-}
-
-/**
- * Preloads Thmanyah Sans 400 in the built entry HTML (MUT-102, PD9). The
- * file name carries a content hash, so the tag is added after bundling; the
- * dev server serves the font from source and needs no preload.
- */
-function brandFontPreload(): Plugin {
-  let base = "/";
-  return {
-    name: "mutaba3a:brand-font-preload",
-    enforce: "post",
-    configResolved(config) {
-      base = config.base;
-    },
-    transformIndexHtml: {
-      order: "post",
-      handler(_html, ctx) {
-        return ctx.bundle ? [fontPreloadTag(base, findEmittedAsset(ctx.bundle, BRAND_PRELOAD_FONT))] : [];
-      },
-    },
-  };
-}
-
 /**
  * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
- * licence forbids converting) is cached on first use instead of being
- * precached on every install (MUT-102, PD10); offline works after one online
- * visit.
+ * licence forbids converting) is cached on use instead of being precached on
+ * every install (MUT-102, PD10). No font is preloaded either: a preload
+ * competed with the app code and delayed first paint by ~700 ms (ADR-058).
  */
 export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   navigateFallback: "/index.html",
@@ -120,7 +73,7 @@ function hostedConfig(): UserConfig {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_MODE__: JSON.stringify("hosted"),
     },
-    plugins: [react(), emitHostedEntryAsIndex(), brandFontPreload()],
+    plugins: [react(), emitHostedEntryAsIndex()],
     clearScreen: false,
     server: {
       port: HOSTED_DEV_PORT,
@@ -205,7 +158,6 @@ export default defineConfig(({ mode }) => {
         enabled: false,  // Disable PWA in dev to avoid caching issues
       },
     }),
-    brandFontPreload(),
   ],
   clearScreen: false,
   server: {

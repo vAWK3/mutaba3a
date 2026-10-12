@@ -107,8 +107,6 @@ export interface FontCheck {
   sources: Record<string, string>;
   /** The entry HTML. */
   html: string;
-  /** The source name the entry must preload. */
-  preload: string;
 }
 
 /** Faces Brand v2 retired (MUT-102). The invoice PDFs' own .ttf copies in `fonts/` are not bundled assets. */
@@ -116,16 +114,19 @@ const RETIRED_FONT = /(^|\/)(inter|source-?serif|ibm-?plex-?sans-?arabic)[^/]*\.
 
 const PRELOAD_LINK = /<link\b[^>]*>/gi;
 
-function preloadedFontPaths(html: string): string[] {
+function preloadedFonts(html: string): string[] {
   return [...html.matchAll(PRELOAD_LINK)]
     .map((m) => m[0])
-    .filter((tag) => /\brel=["']?preload\b/i.test(tag) && /\bas=["']?font\b/i.test(tag) && /\bcrossorigin\b/i.test(tag))
-    .map((tag) => /\bhref=["']?([^"'\s>]+)/i.exec(tag)?.[1] ?? '')
-    .map((href) => href.replace(/^\.?\//, ''));
+    .filter((tag) => /\brel=["']?preload\b/i.test(tag) && /\bas=["']?font\b/i.test(tag))
+    .map((tag) => /\bhref=["']?([^"'\s>]+)/i.exec(tag)?.[1] ?? '');
 }
 
-/** The Thmanyah files ship unmodified, no retired face is bundled, and the entry preloads the body face. */
-export function fontProblems({ files, sources, html, preload }: FontCheck): string[] {
+/**
+ * The Thmanyah files ship unmodified, no retired face is bundled, and the entry
+ * preloads no font: a preload competed with the app code and cost ~700 ms of
+ * landing LCP on a slow link, where swap paints text at once (ADR-058).
+ */
+export function fontProblems({ files, sources, html }: FontCheck): string[] {
   const problems: string[] = [];
   const bundled = files.filter((file) => file.path.startsWith('assets/'));
   for (const file of bundled) if (RETIRED_FONT.test(file.path)) problems.push(`retired font bundled: ${file.path}`);
@@ -138,8 +139,6 @@ export function fontProblems({ files, sources, html, preload }: FontCheck): stri
     if (file.path.endsWith('.otf') && !delivered.has(file.sha256)) problems.push(`${file.path} matches no delivered Thmanyah file (modified?)`);
   }
 
-  const wanted = sources[preload];
-  const preloaded = preloadedFontPaths(html).some((path) => files.some((file) => file.path === path && file.sha256 === wanted));
-  if (!preloaded) problems.push(`the entry HTML has no crossorigin preload of ${preload}`);
+  for (const href of preloadedFonts(html)) problems.push(`the entry HTML preloads a font (${href}); swap loads it without delaying first paint`);
   return problems;
 }
