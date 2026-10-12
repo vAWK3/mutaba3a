@@ -12,7 +12,7 @@
  */
 
 import { usePaymentsByClient } from '../../hooks/useQueries';
-import { RowActionsMenu, AmountWithConversion, type RowAction } from '../ui';
+import { RowActionsMenu, RowActionsHeader, AmountWithConversion, type RowAction } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import { formatDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
@@ -75,7 +75,7 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
                 <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                 <th>{t('clients.profile.payments.for')}</th>
                 <th>{t('transactions.partialPayment.notes')}</th>
-                <th className="row-actions-header"></th>
+                <RowActionsHeader />
               </tr>
             </thead>
             <tbody>

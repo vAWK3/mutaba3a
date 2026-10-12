@@ -12,6 +12,7 @@
     "downloading": "Downloading...",
     "search": "Search...",
     "close": "Close",
+    "actions": "Actions",
     "confirm": "Confirm",
     "noClient": "No client",
     "noProject": "No project",
@@ -454,6 +455,7 @@
       "setDefault": "Set as Default",
       "default": "Default",
       "confirmArchive": "Are you sure you want to archive this business profile?",
+      "actionsFor": "Actions for {name}",
       "empty": "No business profiles yet. Create one to start issuing invoices."
     },
     "language": {
@@ -821,6 +823,9 @@
     "thisYear": "This Year",
     "allTime": "All Time",
     "custom": "Custom",
+    "period": "Period",
+    "periodFrom": "From",
+    "periodTo": "To",
     "all": "All",
     "type": {
       "all": "All",

@@ -85,8 +85,10 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
 
   return (
     <div className="date-range-control" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+      {/* No visible label beside it in the top bar, so it names itself (TD-009) */}
       <select
         className="select"
+        aria-label={t('filters.period')}
         value={isCustomActive ? 'custom' : currentPreset}
         onChange={(e) => handlePresetChange(e.target.value)}
       >
@@ -114,6 +116,7 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
           <input
             type="date"
             className="input"
+            aria-label={t('filters.periodFrom')}
             value={customFrom}
             onChange={(e) => handleCustomDateChange('from', e.target.value)}
             style={{ width: 'auto', padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--font-size-sm)' }}
@@ -122,6 +125,7 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
           <input
             type="date"
             className="input"
+            aria-label={t('filters.periodTo')}
             value={customTo}
             onChange={(e) => handleCustomDateChange('to', e.target.value)}
             style={{ width: 'auto', padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--font-size-sm)' }}

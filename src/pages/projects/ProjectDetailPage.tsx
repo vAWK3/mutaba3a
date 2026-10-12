@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, StatusSegment, DateRangeControl } from '../../components/filters';
-import { RowActionsMenu, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
+import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton } from '../../components/ui';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { CheckIcon, CopyIcon } from '../../components/icons';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
@@ -223,7 +223,7 @@ export function ProjectDetailPage() {
                       <th>{t('transactions.columns.category')}</th>
                       <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                       <th>{t('transactions.columns.status')}</th>
-                      <th className="row-actions-header"></th>
+                      <RowActionsHeader />
                     </tr>
                   </thead>
                   <tbody>

@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — TD-009: the structural axe violations on the core surfaces are fixed
+
+**Scope:**
+- `src/components/drawers/Drawer.tsx` and the hosted `src/hosted/components/Drawer.tsx` (`aria-labelledby` on the title)
+- `src/components/filters/DateRangeControl.tsx` (named select and custom-range inputs)
+- `src/components/ui/RowActionsHeader.tsx` + `.css` (new); used by `IncomePage`, `ClientWorkSection`, `ClientPaymentsSection`, `ProjectDetailPage`; the `.row-actions-header` rule moved out of `RecordPaymentButton.css`
+- `src/pages/settings/SettingsPage.tsx`, `AdvancedFeaturesSection.tsx`; `src/index.css` (`.settings-label` is `display: block`)
+- `src/lib/i18n/translations/{en,ar}.json`; `e2e/support/axe.ts`
+- Test plan: `.claude/designs/td-009-axe-structural-tests.md`
+
+### Fixed
+- **Every drawer is a named dialog.** `Drawer` points `aria-labelledby` at its title, using an id from `useId()`. Its close button reads `common.close` ("إغلاق" in Arabic), not a fixed "Close". The portal's own drawer gets the same `aria-labelledby`. (axe `aria-dialog-name`)
+- **The period filter has a name.** It is "Period" / "الفترة" on Income, the client profile and every other page that uses `DateRangeControl`. With Custom chosen, its two date inputs are "From" and "To". (axe `select-name`)
+- **Settings' default-currency select is named by its visible label.** The label is now a real `<label for>`. `aria-labelledby` was tried first. It satisfied `select-name`, but axe's best-practice `label-title-only` then fired: it treats a labelledby target as hidden once it is scrolled below the fold, because `.main-content` and `.app-shell` are `overflow: hidden`. The row's description is its `aria-describedby`. (axe `select-name`)
+- **The business profile's ⋯ button says what it is**: "Actions for <profile name>", with `aria-expanded`. (axe `button-name`)
+- **The row-actions column has a header.** `RowActionsHeader` carries a visually hidden "Actions" in Income, in the client profile's work and payments tables, and in project detail. (axe `empty-table-header`)
+- **Settings' headings are in order.** The section titles are `h2` under the page's `h1`, as Data Tools already was. They look the same: the class sets the size, and the reset zeroes the margins. (axe `heading-order`)
+
+### Changed
+- `KNOWN_AXE_VIOLATIONS` is down to `color-contrast` on every surface, which is left for MUT-74's palette work. MUT-79 had already removed `landmark-no-duplicate-banner`; the only `role="banner"` left is the demo-mode bar, which renders alone.
+
 ## [Unreleased] - 2026-10-12 — MUT-79: App frame — nothing floats over content
 
 **Scope:**
