@@ -56,6 +56,7 @@
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
 | ADR-049 | Each Business's Clients List Counts Only That Business's Entries; Its Owed Now Equals Home's, With "No Client" and "Archived Clients" Rows | Active | 2026-10 |
+| ADR-050 | On a Wide Window a Client Opens Beside the Clients List; the URL Stays /clients/:id; Arrows Walk Clients by Visual Direction and the Walk Replaces History | Active | 2026-10 |
 | ADR-052 | Expenses Needs Attention Is One Row per Recurring Rule; Marking Several Payments Paid Is One All-or-Nothing Write, Each Dated on Its Expected Date | Active | 2026-10 |
 
 ---
@@ -2105,6 +2106,57 @@ Home counted D1 to D3; the Clients strip counted only D4.
 - **C: a third muted row**, "Clients from other businesses". It is not in the approved brief and hides a client that owes here behind a bucket.
 - **Explain the gap on Home** (H2's rejected option).
 - **A second query for the strip** (rejected by the ticket: two queries can drift).
+
+---
+
+## ADR-050: On a Wide Window a Client Opens Beside the Clients List; the URL Stays /clients/:id; Arrows Walk Clients by Visual Direction and the Walk Replaces History
+
+**Status**: Active
+**Date**: 2026-10-12
+**Numbering**: the epic's parallel lanes reserve id ranges; this lane holds ADR-050.
+**Context**: MUT-84 (epic MUT-74), brief `.claude/designs/landing-apple-redesign.md` decision C1, approved by Basel 2026-10-11 over "a full page that preserves place on Back" and "leave as is". Test plan: `.claude/designs/mut-84-clients-split-view-tests.md`.
+
+`/clients` and `/clients/$clientId` were sibling routes. Opening a client unmounted the list and Back mounted it again, so working through who owes you was open, check, record, back, next, losing sight of the list each time. Each page rendered its own top bar. The list's search was a `useState`, and its sort was `useSortState`, which writes `?sort=&dir=` with `window.history.replaceState({}, …)` behind the router: the next router navigation rebuilt the URL from the router's own location and dropped the sort.
+
+**Decision**:
+1. **One layout route, same URLs.** `/clients` is a layout (`ClientsLayout`) with two children: the index (nothing beside the list) and `$clientId` (`ClientDetailPage`). Deep links, Home's rows, the sidebar and back/forward keep their URLs.
+2. **Three arrangements of one tree.** The layout always renders the list pane, then the profile pane; only `data-layout` and `hidden` change:
+   - `list`: no client open, the list alone, as before;
+   - `split`: a client open on a window at least `BREAKPOINTS.clientsSplit` wide (`src/lib/breakpoints.ts`, 1280 px). The list narrows to a 360 px column (Client and Owed now; the strip and the other columns hide) and the profile takes the rest;
+   - `profile`: a client open on a narrower window, the profile alone, as before. The list stays mounted, hidden.
+
+   Resizing across the breakpoint changes attributes only, so it never remounts the profile. Switching clients never remounts the list, so its search, sort and scroll position stay. The columns use logical properties and flex order, so Arabic mirrors them: the list on the right, the profile on the left.
+3. **The breakpoint is a named token in JS.** CSS media queries can't read custom properties, so `useIsSplitView()` reads `BREAKPOINTS.clientsSplit` through `matchMedia`, and the stylesheet keys off `data-layout`. The number is written once. 1280 px was measured: at 1200 px with the sidebar expanded, the profile's Work and Payments tables scrolled sideways; at 1280 px they fit.
+4. **The layout owns the one top bar**: "Clients" on the list; the open client's name, the Clients breadcrumb and Edit when a client is open, at any width. `ClientDetailPage` renders the profile body only.
+5. **The list's search and sort are one URL model** (`clientsSearch.ts`, `useClientsSearch`, the layout route's `validateSearch`), following the MUT-83 pattern. Writes use `replace` and keep the current path. Every client link and walk keeps them (`search: true`). `?sort=&dir=` keep their names, so older links keep their order. This page no longer uses `useSortState`.
+6. **The keyboard, on a wide window only.** Arrows follow the screen, not the reading direction:
+   - On a client row, ↑/↓ open the previous/next client. Focus moves to its row and the profile follows. The walk stops at either end.
+   - Enter on the open client's row, or the arrow pointing at the profile (→ in English, ← in Arabic), moves focus into the profile pane (`role="region"`, "Client profile").
+   - In the profile, Escape or the arrow pointing back (← in English, → in Arabic) returns focus to the open client's row. A key that belongs to a control is left alone: a text field, a select, anything inside an open menu, listbox, dialog, tablist, radiogroup or combobox, a button whose popup is open, or an event already handled. A held modifier is never taken (Alt+← is the browser's Back).
+   - ↓ in the list's search box focuses the open client's row, or opens the first client.
+   - On a narrow window the keys do what they did before.
+7. **History.** The first client opened from the list adds a history entry. Walking from one open client to the next replaces it, so Back closes the profile instead of replaying every step. A click on a row or its name is a link and pushes, as it always did.
+8. **The muted rows are skipped by the walk** (the small call the ticket left to this lane). "No client" and "Archived clients" are not clients: each opens `/income` filtered, which would leave the page in the middle of a walk, and a row that only took focus without opening anything would break "the profile follows". They stay links in every arrangement, reachable by Tab and opened with Enter or a click. This extends ADR-049 §4 and the MUT-83 pattern "a row that isn't a record never sorts with the records" to the walk.
+9. **The selection is announced.** The open client's link has `aria-current="page"` and its row is tinted. A polite status line says "Showing {name}" when the open client changes after the page loaded (a walk, a click, Back). It says nothing on a deep-link load, where the page title already names the client.
+10. **Each client gets a fresh profile.** The detail route's `remountDeps` is the client id. Opening another client resets its Work filters and starts at the top, as opening a profile always did. A resize never changes the key.
+11. **No motion.** The pane appears in place. ADR-044's springs are for drawers, and a layout that moves on every arrow press would fight a fast walk. Nothing needs reducing.
+
+**Relation to other ADRs**: ADR-003 (drawer-first) is unchanged: the profile is a page, not a create or edit drawer, and every drawer still opens over the whole app. ADR-008 (URL-driven UI state) is applied to the list's search and sort. ADR-033's profile content, ADR-035's ordering and ADR-049's rows are unchanged.
+
+**Consequences**:
+- Working through the list is ↓, look, record, ↓, with the list in sight.
+- A search or sort changed while a client is open is written into that client's history entry. Back then returns to the list as it was when the first client was opened.
+- The list pane stays mounted, and its queries keep running, while a narrow window shows a profile. These are local reads, already cached.
+- An e2e spec for the split view was not written: the owner stopped new tests during the epic's merge window (TD-067).
+
+**Alternatives Considered**:
+- **A full page that preserves its place on Back** (C1's rejected option).
+- **Remount the list per URL, restoring scroll by hand**: more code, and the list would flash on every arrow press.
+- **Render the panes differently per width** (an `if (wide)` that returns another tree): a resize would remount the profile, losing what was typed in it.
+- **Land on the muted rows and open `/income` with Enter**: the selection would stop following focus on two rows, and ↓ past the last client would leave the page.
+- **Wrap at the ends**: Mail doesn't, and a wrap from the last client to the first is easy to miss in a long list.
+- **Push a history entry per step**: thirty presses of ↓ would need thirty presses of Back.
+- **A CSS media query for the breakpoint**: the width would then live in two places.
 
 ---
 

@@ -18,6 +18,23 @@
 
 ## Open Debt
 
+### TD-067: The Clients split view has no browser-level spec, and its unit tests have not run yet
+**Status**: Open
+**Added**: 2026-10-12 (MUT-84, ADR-050)
+**Priority**: Medium
+**Impact**: MUT-84's brief asked for an e2e spec of the split view: the keyboard walk and a deep link. The owner then stopped new tests, and every gate run, in all of the epic's lanes until they merge, so it was not written. Since MUT-97 retired `e2e/`, it belongs in `qa/`. The behaviour is covered only by jsdom tests on a real memory router (`ClientsLayout.test.tsx` and the helpers' tests). Those were written test-first, and the targeted suites passed once mid-build (11 files, 178 tests), before the stop order. They have not run since the last edits: the breakpoint moved from 1200 to 1280 px, and main was merged in. jsdom can't check what only a browser shows: real focus rings, the column widths, the mirrored columns in Arabic, and axe on the split view. `qa/playwright.config.ts` runs at 1280 × 720, which is exactly `BREAKPOINTS.clientsSplit`, so the existing `@web.clients.profile` spec now opens the profile beside the list; it has not been run against it.
+**Remediation**: Run the combined gate on main, then add `split-view` to `qa/features/web/clients.yaml`, with a spec in `qa/specs/web/clients.spec.ts`:
+- a click opens the profile beside the list;
+- ↓/↑ walk, with the URL and `aria-current` following;
+- Enter and Escape (→ and ←) move focus between the panes;
+- the status line names the client;
+- Back after a walk returns to the full list;
+- a deep link with `?sort=name&dir=asc` opens both panes, sorted;
+- resizing 1280 → 375 → 1280 keeps a value typed in the profile;
+- in Arabic the list sits on the right and ← moves into the profile;
+- axe on the split view adds no rule.
+**Effort**: Small
+
 ### TD-066: Income's Received / Unpaid strip ignores the page's filters
 **Status**: Open
 **Added**: 2026-10-12 (MUT-83, seen in the browser check)

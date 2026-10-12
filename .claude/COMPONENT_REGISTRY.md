@@ -9,7 +9,7 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientRetainersCard, ClientWorkSection, ClientPaymentsSection |
+| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
@@ -18,7 +18,7 @@
 | **Home** | HomeNeedsAttention, HomeRecentPayments (with OwedNowSummary) |
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
-| **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income) |
+| **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income), useClientsSearch (URL model for the Clients list) |
 | **Feedback** | Toast, Modal, ConfirmModal |
 | **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, CurrencyAmounts, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
@@ -255,6 +255,31 @@ Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Work and billin
 ```
 
 Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Payments").
+
+---
+
+### ClientsLayout (Clients split view, MUT-84)
+**Location**: `src/pages/clients/ClientsLayout.tsx` (+ `.css`, classes prefixed `clients-split-`); rules in `src/components/clients/clientsSplitView.ts`
+**Purpose**: The `/clients` layout route (ADR-050). It renders the one top bar, then always the same two panes: the list (`ClientsPage`) and the profile (`<Outlet />`, `ClientDetailPage`). `data-layout` is set by `splitLayout(hasClient, useIsSplitView())`:
+- `list`: no client open;
+- `split`: a client open on a wide window; the list is a 360 px column at the start edge;
+- `profile`: a client open on a narrow window; the list is hidden but stays mounted.
+
+Only attributes change, so a resize never remounts the profile and a client switch never remounts the list. The profile pane is a focusable region named "Client profile". Escape, or the arrow toward the list (by visual direction), returns focus to the open client's row; the list pane handles ↑/↓ and Enter. A polite status line says "Showing {name}" when the open client changes after load.
+
+**`ClientsPage` props** (the list pane): `openClientId` marks the row (`client-index-row-open`, `aria-current="page"` on its link); `onWalk(id)` (wide windows only) is called by ↑/↓ and by ↓ in the search box; `onEnterProfile()` (split only) is called by Enter on the open row or the arrow toward the profile. With no props it is the plain list.
+
+**`clientsSplitView.ts`**: `splitLayout`, `listKeyAction` / `profileKeyAction` (arrows by visual direction), `adjacentClientId` / `firstClientId` (clients only, muted rows skipped), `keyBelongsToControl` (fields, open menus and pickers keep their keys), `hasModifier`, `clientRowLink(container, id)`, and `clientProfileRemountDeps` (the detail route's `remountDeps`).
+
+**Extend, don't copy**: another list/detail pair that should open side by side reuses the same shape: a layout route, a `BREAKPOINTS` token, one tree with a data attribute, and these key helpers. Move the helpers to a shared place only when a second consumer exists.
+**Tests** (written, not yet run; TD-067): `src/pages/clients/__tests__/ClientsLayout.test.tsx` (real memory router), `src/components/clients/__tests__/clientsSplitView.test.ts`, `src/pages/clients/__tests__/ClientsPage.test.tsx`.
+
+---
+
+### BREAKPOINTS / useIsSplitView
+**Location**: `src/lib/breakpoints.ts`, `src/hooks/useMediaQuery.ts`
+**Purpose**: Named window widths that code and styles both depend on (MUT-84). CSS media queries can't read custom properties, so the number lives in JS. `useIsSplitView()` reads `BREAKPOINTS.clientsSplit` (1280) through `useMediaQuery(minWidthQuery(…))`, and the page sets a data attribute for its stylesheet. Add a width here rather than writing it into a media query and a hook separately. (`useIsCompactTable`'s 768 predates this and is not yet a token.)
+**Tests**: `src/hooks/__tests__/useMediaQuery.test.ts`.
 
 ---
 
@@ -798,7 +823,7 @@ ProjectDetailPage.
   sortField={sortField} sortDir={sortDir} onSort={handleSort} />
 ```
 
-**Used by**: ClientsPage. ProjectsPage still uses a sort dropdown and can adopt this.
+**Used by**: ClientsPage, whose sort state is `useClientsSearch` since MUT-84 (not `useSortState`). ProjectsPage still uses a sort dropdown and can adopt this.
 **Tests**: `src/components/ui/__tests__/SortableHeader.test.tsx`
 
 ---
@@ -1054,6 +1079,26 @@ const filters = useMemo(() => resolveIncomeFilters(search), [search]);
 
 **Extend, don't copy**: a new `/income` filter is one more field in `IncomeSearch`, `parseIncomeSearch` and `resolveIncomeFilters`. `useTransactionFilters` is a `useState` model with no URL and no current consumer; it is not this.
 **Tests**: `src/lib/__tests__/incomeSearch.test.ts`, `src/hooks/__tests__/useIncomeFilters.test.tsx` (real memory router), `src/pages/income/__tests__/IncomePage.test.tsx`.
+
+---
+
+### useClientsSearch + clientsSearch (URL model for the Clients list, MUT-84)
+**Location**: `src/components/clients/useClientsSearch.ts`, `src/components/clients/clientsSearch.ts` (beside the sort fields they validate; `src/lib` and `src/hooks` import nothing from `components`)
+**Purpose**: The Clients list's search and sort as one model in the URL: `q`, `sort` (a `ClientSortField`) and `dir`. It works on `/clients` and `/clients/:id` alike, so they survive switching clients.
+- `parseClientsSearch` is the layout route's `validateSearch`. It drops unknown values and reads a numeric `q` as text.
+- `mergeClientsSearch` drops a cleared search and any default (owed, desc).
+- `resolveClientsSearch` fills in the defaults.
+- `useClientsSearch()` returns `{ search, setSearch(patch) }`, written with `to: '.'` and `replace`, so the open client stays open.
+
+Every client link and walk passes `search: true` to keep them.
+
+```tsx
+const { search, setSearch } = useClientsSearch();
+const { q, sort, dir } = useMemo(() => resolveClientsSearch(search), [search]);
+<Link to="/clients/$clientId" params={{ clientId }} search>…</Link>
+```
+
+**Tests** (written, not yet run; TD-067): `src/components/clients/__tests__/clientsSearch.test.ts`, `src/components/clients/__tests__/useClientsSearch.test.tsx` (real memory router). Page tests stand in for the hook with an in-memory model (`ClientsPage.test.tsx`).
 
 ---
 
