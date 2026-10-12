@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.13.0-mut66
+  version: 1.14.0-mut120
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -189,6 +189,8 @@ components:
               - read-write
               - read
               - none
+        isPersonalDefault:
+          type: boolean
       required:
         - id
         - name
@@ -197,6 +199,7 @@ components:
         - timezone
         - writerOfRecord
         - access
+        - isPersonalDefault
     Currency:
       type: string
       enum:
@@ -323,6 +326,10 @@ components:
           $ref: "#/components/schemas/Currency"
         timezone:
           type: string
+        personalOwnerUserId:
+          type: string
+          nullable: true
+          format: uuid
         createdAt:
           type: string
           format: date-time
@@ -332,6 +339,7 @@ components:
         - slug
         - defaultCurrency
         - timezone
+        - personalOwnerUserId
         - createdAt
     ApiKeySummary:
       type: object
@@ -4258,11 +4266,23 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Membership"
+        personalProfile:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+          required:
+            - id
+            - name
         initialPassword:
           type: string
       required:
         - user
         - memberships
+        - personalProfile
         - initialPassword
     UserSummary:
       type: object
@@ -4328,10 +4348,14 @@ components:
         organizationId:
           type: string
           format: uuid
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
       required:
         - email
         - displayName
-        - organizationId
     UserList:
       type: object
       properties:
@@ -4671,7 +4695,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Bound to a different tenant, or the tenant is bound to another organization
+          description: Bound to a different tenant, the tenant is bound to another organization, or this is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
           content:
             application/json:
               schema:
@@ -9675,6 +9699,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: A personal profile cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
           content:
@@ -9765,7 +9795,7 @@ paths:
     post:
       tags:
         - Admin
-      summary: Create a user with its first membership (one-time password returned once)
+      summary: Create a user with their personal profile and, optionally, a firm membership (one-time password returned once)
       security:
         - adminToken: []
       requestBody:
@@ -9794,7 +9824,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Email already in use
+          description: Email already in use, or organizationId is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
           content:
             application/json:
               schema:
@@ -9912,6 +9942,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The organization is another user’s personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
           content:
             application/json:
               schema:
