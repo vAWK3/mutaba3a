@@ -1607,3 +1607,38 @@ Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.
 - Deleted: 131 TS cases (with `src/sync`) and 14 Rust tests (pairing, persistence, crypto).
 - Added: 17 guard cases, 7 migration-v21 cases, 4 hook cases and 4 bundle-rule cases (2 new `it` blocks, one of them `it.each` over 3 markers), plus 5 Rust cleanup tests.
 - Moved: 74 OAuth cases and 10 Rust tests.
+
+### MUT-84 — Clients split view on wide windows (epic MUT-74, 2026-10-12)
+
+Plan: `.claude/designs/mut-84-clients-split-view-tests.md`. ADR-050. TD-067.
+
+**Not run, at the owner's request.** The owner asked every lane of the epic to skip lint, typecheck and tests until all lanes have merged, then run them once on main. The tests below were written first and failed on the old code (checkpoint `6401562`: 8 files red). The targeted suites passed once mid-build (11 files, 178 tests), before the stop order. They have not run since the breakpoint moved from 1200 to 1280 px and main (MUT-97) was merged in. The full suite, `test:bundles` and any `qa/` run were never run. The split view's browser-level spec (T19: the keyboard walk, Enter/Escape and ←/→ between the panes, the status line, Back after a walk, a deep link with a sort, a resize that keeps the profile, Arabic, axe) was never written and nothing was added under `e2e/`. It is **to port to `qa/` (MUT-97 kit)** as a `split-view` entry in `qa/features/web/clients.yaml` with its spec in `qa/specs/web/clients.spec.ts` (TD-067).
+
+| File | Covers |
+|---|---|
+| `src/components/clients/__tests__/clientsSearch.test.ts` (new) | `parseClientsSearch` (unknown values dropped, numeric `q` as text, every sort column), `mergeClientsSearch` (cleared search and defaults removed), `resolveClientsSearch` (owed / desc / '') |
+| `src/components/clients/__tests__/useClientsSearch.test.tsx` (new) | On a real memory router: reads the URL; writes with `replace` on `/clients` and on `/clients/:id` (path kept, no history entry); defaults leave the URL |
+| `src/components/clients/__tests__/clientsSplitView.test.ts` (new) | Key mapping in LTR and RTL; `adjacentClientId` skipping muted rows and stopping at the ends; `keyBelongsToControl` (fields, menu/listbox/dialog/tablist/radiogroup/combobox, open popup button); `hasModifier`; `splitLayout`; `clientProfileRemountDeps` |
+| `src/hooks/__tests__/useMediaQuery.test.ts` | `useIsSplitView` asks for `(min-width: BREAKPOINTS.clientsSplit px)` |
+| `src/pages/clients/__tests__/ClientsLayout.test.tsx` (new) | On a real memory router with the app's route shape and a profile stub that counts mounts: narrow vs wide arrangements; top bar (name, breadcrumb, Edit, not found); **resize with a profile open does not remount it** (typed value kept); ↑/↓ walk with focus and URL following; muted rows skipped; ends stop without scrolling; first open pushes, walking replaces, Back returns to the list; search and sort kept through walks and clicks, list pane and scroller the same nodes; a fresh profile per client; ↓ from the search box; Enter/→ into the profile, Escape/← back; RTL mirrored; keys in a field and Alt+← left alone; announcement after a walk, silence on a deep-link load |
+| `src/pages/clients/__tests__/ClientsPage.test.tsx` | `useClientsSearch` stood in by an in-memory model. MUT-7/MUT-83 behaviour unchanged; sort and search written through the model and read from it; a row click keeps the list's search (`search: true`); rows carry `data-client-id` (muted rows don't); the open row is marked with `aria-current="page"`; ↑/↓ do nothing without `onWalk` |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Renders no top bar of its own (the layout owns it); the existing sections unchanged |
+| `src/lib/i18n/__tests__/clientsSplitKeys.test.ts` (new) | `clients.split.profile` and `clients.split.showing` (with `{name}`) in en and ar |
+
+**Acceptance criteria and their coverage:**
+
+| AC | Covered by | Status |
+|---|---|---|
+| Named breakpoint; the layout switches without remounting the profile on resize | `useMediaQuery.test.ts`, `ClientsLayout.test.tsx` "resizing across the breakpoint" | Written, not run. Verified in the browser |
+| ↑/↓ move the selection, Enter/→ focus the profile, Escape/← return; the selection is announced | `clientsSplitView.test.ts`, `ClientsLayout.test.tsx` "walking" / "moving between" / "announcing" | Written, not run. Verified in the browser |
+| Selection, scroll position and filters survive switching clients | `ClientsLayout.test.tsx` "keeps the list, its search and its sort", `useClientsSearch.test.tsx` | Written, not run. Verified in the browser |
+| RTL mirrors the columns | `ClientsLayout.test.tsx` "follows the screen in Arabic" (keys only; jsdom has no layout) | Keys written, not run. Columns verified in the browser only |
+| An ADR records the navigation change | ADR-050 | Done |
+| Tests cover wide vs narrow rendering and keyboard navigation | All of the above | Written, not run. No browser-level spec (TD-067) |
+
+**Verified in the browser** (`web-mut84`, sample data):
+- **Widths:** split at 1440 and 1280 px, full page at 1279 and 375 px. At 1200 px with the sidebar expanded, the profile's Work and Payments tables needed 604 px but had 528, so the token moved to 1280, where they fit (608/608).
+- **Resize:** 1440 → 375 → 1440 with a Work search typed in the profile kept the same DOM node and the value.
+- **Keyboard walk:** URL, focus, `aria-current` and status line follow. ↓ at the last client stays. The history length doesn't change while walking, and Back returns to `/clients`. Enter, → and Tab, ←, and Escape move focus between the panes. Narrow ↓ does nothing.
+- **URL model:** search typed in the list stays in the URL through walks; sorting while a client is open keeps the path; the scroll container is the same node.
+- **Languages and themes:** Arabic in dark mode, with the list on the right, the profile on the left, ← in and → out.

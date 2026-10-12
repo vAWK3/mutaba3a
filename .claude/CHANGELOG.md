@@ -28,6 +28,53 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-84: on a wide window a client opens beside the Clients list
+
+**Why:** opening a client replaced the list with the profile. Working through who owes you was open, check, record, back, next, losing sight of the list each time. Decision C1 in `.claude/designs/landing-apple-redesign.md` (approved 2026-10-11) settles a Mail-style split view. ADR-050. Test plan: `.claude/designs/mut-84-clients-split-view-tests.md`.
+
+**Gates not run, at the owner's request.** The owner asked every lane of the epic to skip lint, typecheck and tests until all lanes have merged, then run them once on main. What did run, before that instruction:
+- the targeted suites, once mid-build: 11 files, 178 tests passed. That was before the breakpoint moved to 1280 px and before main was merged in;
+- `npm run lint` (0 errors) and `npm run typecheck` (clean), once mid-build, also before those two changes.
+
+Not run at all: the full `vitest` suite, `test:bundles`, and any Playwright or `qa/` run. The split view's browser-level spec was not written (TD-067).
+
+**Scope:**
+- `src/router.tsx`: `/clients` is a layout route with `validateSearch: parseClientsSearch`, an index child and a `$clientId` child (`remountDeps: clientProfileRemountDeps`). The URLs are unchanged.
+- `src/pages/clients/ClientsLayout.tsx` + `.css` (new): the top bar, the two panes, the profile pane's keys and the status line.
+- `src/pages/clients/ClientsPage.tsx`: now the list pane. No top bar. Search and sort come from the URL model. Rows carry `data-client-id`; the open row is marked; the walk and the search box's ↓.
+- `src/pages/clients/ClientDetailPage.tsx`: the profile body only; its top bar moved to the layout.
+- `src/components/clients/clientsSearch.ts`, `useClientsSearch.ts`, `clientsSplitView.ts` (new).
+- `src/lib/breakpoints.ts` (new): `BREAKPOINTS.clientsSplit`. `src/hooks/useMediaQuery.ts`: `useIsSplitView`.
+- `src/lib/i18n/translations/{en,ar}.json`, `src/lib/i18n/types.ts`: `clients.split.profile`, `clients.split.showing`.
+- Tests (written, not run since the stop): `ClientsLayout.test.tsx` (new), `clientsSearch.test.ts` (new), `useClientsSearch.test.tsx` (new), `clientsSplitView.test.ts` (new), `clientsSplitKeys.test.ts` (new), `useMediaQuery.test.ts`, `ClientsPage.test.tsx`, `ClientDetailPage.test.tsx`.
+
+### Added
+- **The split view.** From 1280 px (`BREAKPOINTS.clientsSplit`), opening a client keeps the list as a 360 px column (Client and Owed now) with the profile beside it. In Arabic the list is on the right. Narrower windows keep the full-page profile. Resizing across the breakpoint never remounts the profile: what was typed in it stays. Switching clients never remounts the list: its search, sort and scroll stay.
+- **Keyboard, wide windows only:**
+  - ↑/↓ on a client row open the previous/next client, and the profile follows. The muted rows are skipped, and the walk stops at either end.
+  - Enter on the open row, or → (← in Arabic), moves focus into the profile. Escape, or ← (→ in Arabic), returns to the open row.
+  - ↓ in the search box moves to the list.
+  - Keys inside the profile's fields, menus and pickers are left alone, and so is Alt+←.
+- **The selection is announced**: `aria-current="page"` on the open client's link, a tinted row, and a polite "Showing {name}" when the open client changes after the page loaded.
+
+### Changed
+- **The list's search and sort live in the URL** as one model (`?q=&sort=&dir=`), kept on `/clients/:id` and by every client link. The list no longer uses `useSortState`, which wrote behind the router, so a click on a client used to drop the sort.
+- **History:** the first client opened from the list pushes; walking with the arrows replaces, so Back closes the profile. A click is still a link and pushes.
+- **One top bar for the Clients area**: "Clients", or the open client's name with the breadcrumb and Edit.
+- **Each client gets a fresh profile** (route `remountDeps`): Work filters reset and it opens at the top, as before.
+
+### Technical
+- Browser check (`web-mut84`, sample data):
+  - split at 1440 and 1280 px, full page at 1279 and 375 px. At 1200 px, measured while it was still the token, the profile's tables scrolled sideways, so the token moved to 1280;
+  - resized 1440 → 375 → 1440 with a Work search typed in the profile: the same DOM node, and the value kept;
+  - the walk, Enter/Escape/←/→, the stop at the last client, the history length unchanged by walks, Back to the list;
+  - search and sort kept in the URL through a walk; the list's scroll container is the same node;
+  - Arabic (mirrored columns and keys) and dark mode. No console errors from the app (403s from external resources only).
+- Debt: TD-067 (no browser-level spec; the unit tests have not run since the stop order).
+- Found, not changed: `ProjectsPage` still sorts through `useSortState`, which writes with `window.history.replaceState({}, …)` behind TanStack Router and clears its history state.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-73: device-to-device sync is retired (ADR-053)
 
 **Scope (web, desktop and Tauri; the hosted server, the portal, JSON backup and the Flutter app are untouched):**

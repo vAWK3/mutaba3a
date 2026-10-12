@@ -1,0 +1,82 @@
+/* =============================================================================
+   Clients area (MUT-84, ADR-050): the list and the open client's profile.
+
+   `data-layout` is set by ClientsLayout from BREAKPOINTS.clientsSplit
+   (src/lib/breakpoints.ts), so there is no media query here and the width
+   is written once:
+   - list:    no client open; the list alone, full width
+   - split:   a client open on a wide window; the list is a column at the
+              start edge (right in Arabic) and the profile takes the rest
+   - profile: a client open on a narrow window; the profile alone
+   Each pane scrolls on its own (its .page-content).
+   ============================================================================ */
+
+.clients-split {
+  --clients-split-list-width: 22.5rem;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* A pane's display rule would otherwise beat the hidden attribute */
+.clients-split > [hidden] {
+  display: none;
+}
+
+.clients-split-list,
+.clients-split-profile {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.clients-split[data-layout='split'] .clients-split-list {
+  flex: 0 0 var(--clients-split-list-width);
+  border-inline-end: 1px solid var(--border);
+}
+
+.clients-split[data-layout='split'] .clients-split-list .page-content {
+  padding: var(--space-4);
+}
+
+/* The column keeps Client and Owed now. The business's strip and the later
+   columns (Overdue, Last payment, Last activity) belong to the full list;
+   the open profile shows its own Owed now and overdue. */
+.clients-split[data-layout='split'] .clients-index-summary {
+  display: none;
+}
+
+.clients-split[data-layout='split'] .clients-index-table :is(th, td):nth-child(n + 3) {
+  display: none;
+}
+
+.clients-split[data-layout='split'] .clients-split-list .filters-row {
+  margin-bottom: var(--space-4);
+}
+
+.clients-split[data-layout='split'] .clients-split-list .search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The client open beside the list (its link is aria-current="page") */
+.clients-index-table tr.client-index-row-open td,
+.clients-index-table tr.client-index-row-open:hover td {
+  background: var(--accent-subtle);
+}
+
+.clients-index-table tr.client-index-row-open .client-index-name {
+  color: var(--accent);
+}
+
+/* Enter or → moves focus into the profile: show where it went, inside the
+   pane, since <main> clips anything drawn outside it */
+.clients-split-profile:focus {
+  outline: none;
+}
+
+.clients-split-profile:focus-visible {
+  box-shadow: inset var(--focus-ring);
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BREAKPOINTS, minWidthQuery } from '../lib/breakpoints';
 
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(
@@ -25,4 +26,9 @@ export function useMediaQuery(query: string): boolean {
 
 export function useIsCompactTable(): boolean {
   return useMediaQuery('(max-width: 768px)');
+}
+
+/** Whether the window is wide enough to open a client beside the Clients list (MUT-84). */
+export function useIsSplitView(): boolean {
+  return useMediaQuery(minWidthQuery(BREAKPOINTS.clientsSplit));
 }

@@ -164,6 +164,11 @@ export interface Translations {
       oldestOverdue: string;
       owedOrderHint: string;
     };
+    /** The split view (MUT-84): the profile pane's label and the announcement of the open client */
+    split: {
+      profile: string;
+      showing: string;
+    };
     profile: {
       owedNow: string;
       nothingOwed: string;

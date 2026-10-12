@@ -333,6 +333,10 @@
     "emptyFiltered": "No clients match your search",
     "emptyFilteredCount": "{count} clients in total.",
     "clearSearch": "Clear search",
+    "split": {
+      "profile": "Client profile",
+      "showing": "Showing {name}"
+    },
     "crossProfileTxCount": "{count} entries",
     "index": {
       "settled": "Settled",

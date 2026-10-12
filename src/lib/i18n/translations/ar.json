@@ -333,6 +333,10 @@
     "emptyFiltered": "لا يوجد عملاء مطابقون للبحث",
     "emptyFilteredCount": "{count} عميل إجمالاً.",
     "clearSearch": "مسح البحث",
+    "split": {
+      "profile": "ملف العميل",
+      "showing": "يُعرض الآن: {name}"
+    },
     "crossProfileTxCount": "{count} إدخال",
     "index": {
       "settled": "مسدَّد",

@@ -4,6 +4,8 @@ import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@t
 import { AppShell } from './components/layout';
 import { requireFeature } from './lib/features/routeGuard';
 import { parseIncomeSearch } from './lib/incomeSearch';
+import { parseClientsSearch } from './components/clients/clientsSearch';
+import { clientProfileRemountDeps } from './components/clients/clientsSplitView';
 
 // Keep OverviewPage eager (it's the landing page)
 import { OverviewPage } from './pages/overview/OverviewPage';
@@ -87,16 +89,28 @@ const projectDetailRoute = createRoute({
   component: lazyPage(() => import('./pages/projects/ProjectDetailPage'), 'ProjectDetailPage'),
 });
 
-// Clients routes
+// Clients routes (MUT-84, ADR-050): one layout keeps the list mounted and, on
+// a wide window, opens a client beside it. The URLs are unchanged. The list's
+// search and sort are the URL, on the list and on a client alike.
 const clientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients',
-  component: lazyPage(() => import('./pages/clients/ClientsPage'), 'ClientsPage'),
+  validateSearch: parseClientsSearch,
+  component: lazyPage(() => import('./pages/clients/ClientsLayout'), 'ClientsLayout'),
 });
 
+// The full list, with nothing beside it
+const clientsIndexRoute = createRoute({
+  getParentRoute: () => clientsRoute,
+  path: '/',
+  component: () => null,
+});
+
+// Another client gets a fresh profile; a resize never remounts it
 const clientDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/clients/$clientId',
+  getParentRoute: () => clientsRoute,
+  path: '$clientId',
+  remountDeps: clientProfileRemountDeps,
   component: lazyPage(() => import('./pages/clients/ClientDetailPage'), 'ClientDetailPage'),
 });
 
@@ -319,8 +333,7 @@ const routeTree = rootRoute.addChildren([
   transactionsRoute,
   projectsRoute,
   projectDetailRoute,
-  clientsRoute,
-  clientDetailRoute,
+  clientsRoute.addChildren([clientsIndexRoute, clientDetailRoute]),
   documentsRoute,
   documentNewRoute,
   documentDetailRoute,

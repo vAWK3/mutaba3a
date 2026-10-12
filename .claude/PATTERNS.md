@@ -10,12 +10,12 @@
 | Category | Patterns |
 |----------|----------|
 | **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3), Same figure, same entries, split (MUT-83), All-or-nothing batches through `runAtomically` (MUT-87) |
-| **State** | URL State (one parsed model per page, MUT-83), Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets, One row per decision (MUT-87), One `<Drawer>` for a drawer's views (MUT-87) |
+| **State** | URL State (one parsed model per page, MUT-83; kept across a layout's children, MUT-84), Zustand Stores, Form State |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets, One row per decision (MUT-87), One `<Drawer>` for a drawer's views (MUT-87), List and detail side by side in one tree, A width code and CSS share is a JS token (MUT-84) |
 | **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3), Ungrouped amount prefills (`minorToAmountInput`, MUT-86) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
-| **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009) |
+| **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009), Arrow keys follow the screen; keys in a control belong to it (MUT-84) |
 
 ---
 
@@ -1881,3 +1881,26 @@ A debug build of the Tauri app shares the installed app's config directory (keye
 - with no way to drive the webview, let an injected throwaway script report through the app itself: each outcome binds a different loopback port with `bind_oauth_callback`, and the shell reads `lsof -iTCP -sTCP:LISTEN`. Avoid `setTimeout` in that script: an occluded WKWebView throttles timers until they effectively stop;
 - a capability for the smoke only goes inline in the same `--config` (`app.security.capabilities: ["default", {...}]`), never in `capabilities/`;
 - delete the isolated config, WebKit, cache and log directories afterwards.
+
+---
+
+## App patterns added by MUT-84 (2026-10-12)
+
+### List and detail side by side in one tree
+A page that shows a record beside its list on a wide window and alone on a narrow one is a layout route whose component always renders the same panes, in the same order: list, then `<Outlet />`. Width and selection change only a `data-layout` attribute and the panes' `hidden`. Never return a different tree per width (`if (wide) return <Split/>`): a resize would remount the record and lose what was typed in it. A pane's own `display` rule beats `[hidden]`, so the stylesheet restores it (`.clients-split > [hidden] { display: none }`). Give the detail route `remountDeps` keyed on its id when each record should start fresh. That remounts on a record switch and never on a resize. Test the no-remount promise with a stub that counts mounts and holds a typed value across a simulated `matchMedia` change (`ClientsLayout.test.tsx`).
+
+### A width that code and CSS share is a JS token
+CSS media queries can't read custom properties, so a breakpoint that changes behaviour (keyboard handling, history) as well as layout lives in `src/lib/breakpoints.ts`. A hook reads it through `matchMedia` (`useIsSplitView`), and the component sets a data attribute that the stylesheet keys off. Don't write the same number into a media query too. Measure the number in the browser with the content that has to fit, and say in the comment what fits.
+
+### Arrow keys follow the screen; keys in a control belong to the control
+When ← and → move between columns, map them by where things are on the screen: in Arabic the columns mirror, so the key toward the detail is ←. Keep the mapping in a pure function of `(key, direction)`. A pane-level key handler leaves alone:
+- any key whose target is a text field, a select or contenteditable;
+- anything inside an open menu, listbox, dialog, tablist, radiogroup or combobox;
+- a button with `aria-expanded="true"`;
+- an event already `defaultPrevented`;
+- any held modifier (Alt+← is the browser's Back).
+
+`keyBelongsToControl` and `hasModifier` (`clientsSplitView.ts`) are that check. A React handler on a pane also sees keys from portals rendered by its children (the ⋯ menu), which is why the role check matters.
+
+### Walking replaces history; opening pushes
+Keyboard selection that the detail follows (↑/↓ through a list) writes the URL with `replace`, except for the first open from no selection, which pushes. Back then closes the detail instead of replaying every step. A click on a row's link stays a link and pushes. Carry the list's URL model along (`search: true`) on every link and walk, so switching records never resets the list.

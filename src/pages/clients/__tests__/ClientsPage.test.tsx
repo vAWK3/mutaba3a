@@ -9,6 +9,11 @@
  * MUT-83 (ADR-049): the strip equals Home's Owed now. Debts of no listed
  * client get up to two muted rows after the clients, "No client" and
  * "Archived clients", each opening /income filtered to those entries.
+ *
+ * MUT-84 (ADR-050): the list is the Clients layout's list pane. Its search and
+ * sort are one URL model (stood in for here; the URL itself is covered by
+ * useClientsSearch.test.tsx), every client link keeps them, and the client
+ * open beside the list is marked. The split view itself is ClientsLayout.test.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -18,6 +23,7 @@ import * as useQueries from '../../../hooks/useQueries';
 import { formatDate } from '../../../lib/utils';
 import { combineOwed } from '../../../db/aggregations';
 import { owedEntriesSearch } from '../../../lib/incomeSearch';
+import type { ClientsSearch } from '../../../components/clients/clientsSearch';
 import type { ClientSummary, OwedBucket } from '../../../types';
 
 const mockNavigate = vi.fn();
@@ -27,16 +33,44 @@ vi.mock('@tanstack/react-router', () => ({
     to,
     params,
     search,
+    'aria-current': ariaCurrent,
   }: {
     children: React.ReactNode;
     to: string;
     params?: Record<string, string>;
-    search?: Record<string, string>;
+    search?: Record<string, string> | true;
+    'aria-current'?: 'page';
   }) => (
-    <a href={search ? `${to}?${new URLSearchParams(search)}` : `${to}/${params?.clientId || ''}`}>{children}</a>
+    <a
+      href={typeof search === 'object' ? `${to}?${new URLSearchParams(search)}` : `${to}/${params?.clientId || ''}`}
+      aria-current={ariaCurrent}
+    >
+      {children}
+    </a>
   ),
   useNavigate: () => mockNavigate,
 }));
+
+// The list's search and sort (MUT-84): an in-memory stand-in for the URL, so a
+// header click or a search re-renders the list as the real URL would.
+const urlSearch = vi.hoisted(() => ({
+  initial: {} as Record<string, unknown>,
+  writes: [] as Record<string, unknown>[],
+}));
+vi.mock('../../../components/clients/useClientsSearch', async () => {
+  const { useState, useCallback } = await import('react');
+  const { mergeClientsSearch } = await import('../../../components/clients/clientsSearch');
+  return {
+    useClientsSearch: () => {
+      const [search, setState] = useState<ClientsSearch>(() => urlSearch.initial as ClientsSearch);
+      const setSearch = useCallback((patch: Parameters<typeof mergeClientsSearch>[1]) => {
+        urlSearch.writes.push(patch);
+        setState((prev) => mergeClientsSearch(prev, patch));
+      }, []);
+      return { search, setSearch };
+    },
+  };
+});
 
 vi.mock('../../../lib/i18n', () => {
   const translations: Record<string, string> = {
@@ -169,11 +203,11 @@ function mockSummaries(
 const noClientDebt: OwedBucket = { owed: [{ currency: 'ILS', owedMinor: 50_000, overdueMinor: 20_000 }], count: 2 };
 const archivedDebt: OwedBucket = { owed: [{ currency: 'USD', owedMinor: 10_000, overdueMinor: 0 }], count: 1 };
 
-function renderPage() {
+function renderPage(props: React.ComponentProps<typeof ClientsPage> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ClientsPage />
+      <ClientsPage {...props} />
     </QueryClientProvider>
   );
 }
@@ -186,7 +220,8 @@ const header = (name: string) => screen.getByRole('columnheader', { name: new Re
 describe('ClientsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.history.replaceState({}, '', '/clients');
+    urlSearch.initial = {};
+    urlSearch.writes = [];
     fxRates.USD = 3;
     fxRates.EUR = 4;
     mockSummaries([delta, beta, acme, gamma]);
@@ -285,7 +320,14 @@ describe('ClientsPage', () => {
     it('keeps the sort in the URL', () => {
       renderPage();
       fireEvent.click(within(header('Last payment')).getByRole('button'));
-      expect(window.location.search).toContain('sort=lastPayment');
+      expect(urlSearch.writes).toEqual([{ sort: 'lastPayment', dir: 'desc' }]);
+    });
+
+    it('opens in the sort the URL names', () => {
+      urlSearch.initial = { sort: 'name', dir: 'asc' };
+      renderPage();
+      expect(names()).toEqual(['Acme', 'Beta', 'Delta', 'Gamma']);
+      expect(header('Client')).toHaveAttribute('aria-sort', 'ascending');
     });
 
     it('orders ties by name so the list never jumps', () => {
@@ -306,15 +348,62 @@ describe('ClientsPage', () => {
   });
 
   describe('navigation', () => {
-    it('opens the client profile when a row is clicked', () => {
+    it('opens the client profile when a row is clicked, keeping the list\'s search and sort', () => {
       renderPage();
       fireEvent.click(rowFor('Beta'));
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/clients/$clientId', params: { clientId: 'beta' } });
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/clients/$clientId', params: { clientId: 'beta' }, search: true });
     });
 
     it('keeps the client name a link', () => {
       renderPage();
       expect(screen.getByRole('link', { name: 'Beta' })).toHaveAttribute('href', '/clients/$clientId/beta');
+    });
+
+    it('writes the search into the URL', async () => {
+      renderPage();
+      fireEvent.change(screen.getByPlaceholderText('Search clients...'), { target: { value: 'acm' } });
+
+      // SearchInput debounces by 200ms
+      expect(await screen.findByText('1 client')).toBeInTheDocument();
+      expect(urlSearch.writes).toEqual([{ q: 'acm' }]);
+    });
+
+    it('opens with the search the URL names', () => {
+      urlSearch.initial = { q: 'acm' };
+      renderPage();
+      expect(screen.getByPlaceholderText('Search clients...')).toHaveValue('acm');
+      expect(names()).toEqual(['Acme']);
+    });
+  });
+
+  describe('the client open beside the list (MUT-84)', () => {
+    it('marks its row and makes its link the current page', () => {
+      renderPage({ openClientId: 'acme' });
+      expect(rowFor('Acme')).toHaveClass('client-index-row-open');
+      expect(screen.getByRole('link', { name: 'Acme' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Beta' })).not.toHaveAttribute('aria-current');
+    });
+
+    it('marks nothing when no client is open', () => {
+      renderPage();
+      expect(document.querySelector('.client-index-row-open')).toBeNull();
+      expect(document.querySelector('[aria-current]')).toBeNull();
+    });
+
+    it('tags each client row with its id, and no muted row', () => {
+      mockSummaries([acme, beta], false, { noClient: noClientDebt });
+      renderPage();
+      expect(rowFor('Acme')).toHaveAttribute('data-client-id', 'acme');
+      expect(rowFor('Beta')).toHaveAttribute('data-client-id', 'beta');
+      expect(screen.getByRole('link', { name: /No client/ }).closest('tr')).not.toHaveAttribute('data-client-id');
+    });
+
+    it('leaves ↑/↓ alone when the window is too narrow to walk', () => {
+      renderPage();
+      const link = screen.getByRole('link', { name: 'Gamma' });
+      link.focus();
+      expect(fireEvent.keyDown(link, { key: 'ArrowDown' })).toBe(true);
+      expect(link).toHaveFocus();
     });
   });
 
