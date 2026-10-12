@@ -310,25 +310,34 @@ Tests: `src/pages/landing/__tests__/`.
 ## Drawer Components
 
 ### Base Drawer Pattern
-All drawers follow this structure:
+Every drawer renders `Drawer` (`src/components/drawers/Drawer.tsx`; the portal's is `src/hosted/components/Drawer.tsx`) and is mounted by its owner while its store says open:
 
 ```tsx
 interface DrawerProps {
-  open: boolean;
-  onClose: () => void;
-  // Entity-specific props
+  title: string;          // names the dialog (aria-labelledby)
+  onClose: () => void;    // Escape, ✕ and the overlay call it at once
+  children: ReactNode;
+  footer?: ReactNode;
 }
 
-// Usage via controller (URL-driven)
-<TransactionDrawerController />
-
-// Or direct (programmatic)
-<TransactionDrawer
-  open={isOpen}
-  onClose={handleClose}
-  transactionId={id}
-/>
+// AppShell
+{incomeDrawer.isOpen && <IncomeDrawer />}
+// IncomeDrawer
+<Drawer title={t('transactions.newIncome')} onClose={closeIncomeDrawer} footer={…}>…</Drawer>
 ```
+
+Unmount it whenever you like: the exit animation plays after it has gone (ADR-044).
+
+### DrawerFrame (MUT-80, ADR-044)
+**Location**: `src/components/ui/drawer/` — `DrawerFrame.tsx` (shell), `useDrawerMotion.ts` (enter, drag, release, interrupt, exit), `useDrawerFocus.ts` (trap and return), `drawerGesture.ts` (pure rules: `classifyDrag`, `closingDelta`, `displayOffset`, `releaseTarget`, `overlayOpacity`, `exitDistance`, `isNoDragTarget`), `drawerMotion.ts` (`DRAWER_SPRING`, `paintDrawer`, `springTo`, `fadeTo`, `playSnapshotExit`), `exitSnapshot.ts` (`captureExitSnapshot`).
+**Purpose**: the one slide-over shell for both builds. Both `Drawer`s wrap it; the local one passes `t('common.close')`, the portal its own label.
+**Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
+**Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `e2e/drawer-motion.spec.ts`.
+
+### Motion physics and focusables (MUT-80)
+- `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
+- `src/lib/dom/focusable.ts`: `FOCUSABLE_SELECTOR`, `focusablesWithin(root)` (skips disabled, `tabindex="-1"`, `[hidden]`, and, where supported, invisible elements). Used by `useMenuButton`'s dialog mode and the drawer trap.
 
 ---
 

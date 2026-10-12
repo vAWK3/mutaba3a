@@ -28,6 +28,37 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-80: Drawers open, close and drag on springs, and leave the way they came
+
+**Scope:**
+- `src/components/ui/drawer/` (new): `DrawerFrame.tsx`, `useDrawerMotion.ts`, `useDrawerFocus.ts`, `drawerGesture.ts`, `drawerMotion.ts`, `exitSnapshot.ts`
+- `src/lib/motion/physics.ts` (new), `src/lib/dom/focusable.ts` (new); `src/hooks/useMenuButton.ts` uses `focusablesWithin`
+- `src/components/drawers/Drawer.tsx`, `src/hosted/components/Drawer.tsx`: thin wrappers around `DrawerFrame`
+- `src/index.css`: the drawer's `slideIn` / `slideInRTL` keyframes and the overlay's `fadeIn` animation removed; `touch-action: pan-y`, `.is-dragging`, no focus outline on the panel
+- `package.json`: `motion` 13.4.4 (exact)
+- Tests: `physics`, `focusable`, `drawerGesture`, `exitSnapshot`, `DrawerFrame` (new, 66 tests); `e2e/drawer-motion.spec.ts` (new, 3 specs)
+- Test plan `.claude/designs/mut-80-drawer-springs-tests.md` (decisions D1–D17); ADR-044
+
+### Added
+- **Drawers move on springs.** They spring in from their edge (response 0.3, damping 1.0) with the overlay dimming in step.
+- **Drawers leave the way they came.** Escape, ✕, the overlay, Save and Cancel all slide the drawer out along its own edge from wherever it was.
+- **Drag to dismiss.** A horizontal drag follows the pointer 1:1 from where it was grabbed and rubber-bands past fully open. On release, momentum is projected: past half the width it closes, otherwise it springs back carrying the release velocity. A press catches a moving drawer where it is.
+- Vertical scrolling inside a drawer, text selection in its fields and horizontally scrolling regions still work, because a press only becomes a drag after 10px of mostly horizontal movement.
+- In Arabic the edge is mirrored. Under reduced motion, every move is a 150ms cross-fade.
+- **Focus trap.** Tab and Shift+Tab wrap inside an open drawer, and focus returns to the button that opened it. There was no trap before.
+
+### Changed
+- Closing stays immediate for every caller (`onClose` contract unchanged). The exit is an inert, `aria-hidden` snapshot of the last frame, so it never shows reset or reloading content (ADR-044).
+- The local and portal drawers share one frame, so the portal inherits all of the above (brief HP1).
+
+### Technical
+- New dependency `motion@13.4.4`, using only the vanilla `animate` and `motionValue`. Web entry chunk 193.93 → 216.51 kB gzip (+22.6 kB).
+- Removing the drawer's global `slideIn` keyframe leaves `ProfilePickerModal.css` the only `slideIn`. The two had collided by name.
+
+**Why:** decision R2 of the Apple-design brief. The drawer vanished in one frame on close, and couldn't be dragged or caught.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-79: App frame — nothing floats over content
 
 **Scope:**

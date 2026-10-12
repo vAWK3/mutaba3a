@@ -1707,3 +1707,24 @@ Every Playwright test gets an empty IndexedDB, so the Welcome dialog always open
 ### Axe checks fail on new rules, not on known ones
 
 `expectOnlyKnownAxeViolations(page, surface)` (`e2e/support/axe.ts`) runs axe and fails on any rule not listed for that surface in `KNOWN_AXE_VIOLATIONS`. Each listed rule is described in TD-009. A new kind of violation is caught at once, and the existing ones don't hide it or block the suite. When a fix lands, delete its rule from the list. The helper adds an `axe-known-violation-gone` annotation for a listed rule that no longer fires, so the list only shrinks. Check pages with one entry logged (`logIncome`), so the real content renders, not an empty state.
+
+## Motion patterns — added 2026-10-12 (MUT-80, ADR-044)
+
+### A close is immediate; the exit is presentation
+Never delay a state change for an animation. A drawer's `onClose` runs at once and its owner unmounts it. The exit is played by an inert, `aria-hidden` clone of the last frame (`captureExitSnapshot`), so it can't show reset or reloading content and can't be clicked. Only a motion the component commits itself (a drag dismiss) runs live and calls back at the end, which is what makes it catchable.
+
+### Animate from a motion value; write styles yourself; clear them at rest
+Drive `transform`/`opacity` from `motionValue`s with `.on('change', paint)`, not React state; React never renders per frame. At rest, clear the inline transform (and opacity at 1): a transform makes the element the containing block for `position: fixed` descendants. To interrupt, `stop()` the controls and read `value.get()`, which is the presentation value. Read `getVelocity()` *before* `stop()`. A stopped animation never fires `onComplete`, so a cancelled exit can't call back.
+
+### Gesture rules are pure; physics is shared
+Thresholds, release decisions, rubber-banding and opacity mapping are pure functions (`drawerGesture.ts`) with unit tests. Physics that any draggable thing reuses lives in `src/lib/motion/physics.ts`. Push a sample at `pointerup`, so a pause before release reads as zero velocity. On `pointercancel` use zero velocity: its coordinates are unreliable.
+
+### No layout, no motion
+A motion that needs a measured size (`offsetWidth`) skips itself when the size is 0. That keeps jsdom component tests synchronous without a test-only branch. Tests that exercise motion stub `offsetWidth` for the element (`DrawerFrame.test.tsx`).
+
+### Telling a real unmount from StrictMode's rehearsal
+In a layout-effect cleanup, capture what you need while the DOM still exists, then decide in a `queueMicrotask`: if the node is still `isConnected`, it was StrictMode's simulated unmount, so do nothing. Focus return uses the same check.
+
+### Hidden documents pause motion
+`requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
+
