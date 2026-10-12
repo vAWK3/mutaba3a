@@ -139,6 +139,14 @@
   Future-dated payments are rejected. Reachable from a primary button on every
   unsettled income row (`RecordPaymentButton`) and from the row kebab's "Mark
   Paid" entry — both open the same dated drawer, never a dateless shortcut
+- **Record payment leads with what's left (MUT-86 / ADR-047)**: the drawer's
+  title names the balance ("Record Payment · ₪3,550 left"), one large amount
+  is prefilled with it, and a live line says "Paid in full" or "₪1,775 still
+  owed" as the user types (MUT-5 strict parsing, Arabic-Indic digits). Date
+  reads "Today ›" and notes sit behind "+ Add note". One primary button
+  records and closes, so open → Record Payment settles the entry for today
+  ("Paid? Two taps."). The future-date rule is one helper,
+  `isFuturePaymentDate` in `lib/dates.ts`, shared with the repository
 - **Overpayment is rejected** — the sum of a transaction's payments can never
   exceed its amount (ADR-030). Payments on a locked (invoiced) transaction are
   allowed: the lock protects the invoice facts, not payment tracking

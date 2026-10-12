@@ -796,7 +796,7 @@ pre-date these tickets and are untouched by them.
 | Lock exemption (ADR-030) | `src/db/__tests__/paymentRecords.test.ts` | a payment on a `lockedAt` transaction succeeds, flips status to `paid` and leaves `lockedAt` intact; overpayment is still rejected there |
 | One guard, both doors | `src/db/__tests__/partialPayment.test.ts` | `recordPartialPayment` inherits the rejection through its delegation to `paymentRecordRepo.create` |
 | Refresh after save (AC #5) | `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` invalidates `income`, `receivables`, `incomeOverviewTotals`, `incomeAttentionReceivables` alongside the payment-record and transaction keys. Uses real Dexie, no `vi.mock`, so a stubbed barrel cannot fake a pass |
-| Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; empty prefill when settled; edit mode prefills the record's own amount |
+| Drawer contract (AC #3, #4, #6) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (9; rewritten by MUT-86) | amount prefilled to the remaining balance and overwritable; the backdated date is what reaches the mutation; overpayment and zero rejected inline without calling the mutation; a repository rejection renders inline; ~~empty prefill when settled~~ (MUT-86: a settled entry shows no form); edit mode prefills the record's own amount |
 | Local-date default (ADR-022) | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | the date field defaults to `todayISO()`, asserted at two faked instants straddling midnight in opposite directions so it holds in both `Asia/Jerusalem` and `npm run test:tz` |
 | Derived money views refresh | `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10), `useQueries.test.tsx`, `useIncomeQueries.test.tsx` | all nine money-event keys are invalidated and no others; the payment path and `markPaid` both trigger them. The expense and retainer paths are wired but uncovered — those modules have no mutation-test harness. **Superseded by MUT-58:** the keys lost their last reader, the helper and its test file are deleted, and the two hook cases now assert that no `money*` key is invalidated |
 | Per-surface gate | `IncomePage.test.tsx`, `ClientDetailPage.test.tsx`, `ProjectDetailPage.test.tsx` | the button appears on exactly the rows each surface showed the kebab entry on, never on paid rows or expenses, opens the drawer with the row's id, and does not trigger the row's own click |
@@ -1064,7 +1064,7 @@ due-tomorrow boundary case needed new code/tests.
 | Repository | `src/db/__tests__/partialPayment.test.ts` (`recordPartialPayment`) | same four cases for partial payments, plus: a transaction's `paidAt` after two payment records reflects the *later* record's date, not the instant the recalculation ran |
 | Repository | `src/db/__tests__/paymentRecords.test.ts` | `paymentRecordRepo.create`/`.update` reject a future `paidAt`; a same-day timestamp with a time component is accepted (date-only comparison, not a full-timestamp one) |
 | Hook | `src/hooks/__tests__/useIncomeQueries.test.tsx` (`useMarkIncomePaid`) | `{ id, paidAt }` forwards both fields to the repository; omitting `paidAt` forwards `undefined` (repository default applies) |
-| Drawer | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | "Mark fully paid" records under today by default and under a backdated date when the field was changed first; a future-dated "Record Payment" is rejected inline with no mutation call |
+| Drawer | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | ~~"Mark fully paid" records under today by default and under a backdated date when the field was changed first~~ (button removed by MUT-86, ADR-047; the backdated-date case now runs through Record Payment); a future-dated "Record Payment" is rejected inline with no mutation call |
 | Client profile | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | the work-section "Mark Paid" row action opens the payment drawer and does **not** call the mark-paid mutation directly |
 | Income page | `src/pages/income/__tests__/IncomePage.test.tsx` | due-tomorrow is asserted not-overdue (the boundary case MUT-21's acceptance criteria named but the existing fix had not added) |
 
@@ -1414,3 +1414,42 @@ Removed with their subjects: `src/db/__tests__/moneyEvent.test.ts` (5), `src/hoo
 - `npm run lint`: 0 errors, 16 warnings, none in changed files.
 - `npm run typecheck` and `npx tsc -b`: clean.
 - `npm run build` and `npm run test:bundles`: OK.
+
+### MUT-86 — the Record payment drawer leads with what's left (epic MUT-74, 2026-10-12)
+
+Plan: `.claude/designs/mut-86-payment-drawer-tests.md` (T1–T22). Written first: 38 of the new tests failed against the old drawer before the code changed.
+
+| Acceptance criterion | How it is met | Covered by |
+|---|---|---|
+| Open, then Record payment, records the full remaining amount for today ("Paid? Two taps.") | Amount prefilled with the balance and selected, date today, one primary button that records and closes | `PartialPaymentDrawer.test.tsx` "two taps"; `e2e/record-payment.spec.ts` (click, and Enter in the amount) |
+| The live line updates on every keystroke and reads Arabic-Indic digits | `describePaymentAmount` on every render, with MUT-5's `parseAmountInput` | `PartialPaymentDrawer.test.tsx` "the live line" (1 → 10 → 100, "١٠٠"); `paymentEntry.test.ts`; e2e partial payment |
+| Overpayment still rejected inline (MUT-6 D1); future dates rejected (ADR-038) | Over shows live, and Record refuses it with no mutation call; `isFuturePaymentDate` (now in `lib/dates.ts`) refuses a future date; an emptied date is refused too | `PartialPaymentDrawer.test.tsx` "refused inline" and "the date"; `dates.test.ts` `isFuturePaymentDate` |
+| Edit mode still works | Record's amount, date and notes prefilled; allowed includes its own amount; Update sends the record and returns to the entry; waits for the records to load | `PartialPaymentDrawer.test.tsx` "edit mode" (4) |
+| The removed strings' i18n keys are deleted | `markFullyPaid` is gone from en and ar; new keys exist in both | `paymentDrawerKeys.test.ts` |
+| Tests cover two taps, partial, notes kept, overpayment | All four | `PartialPaymentDrawer.test.tsx` "two taps", "a partial payment", "notes", "refused inline" |
+
+| File | Tests | Covers |
+|---|---|---|
+| `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` (rewritten) | 33 | Title with the balance; prefill (whole and with cents) and selection; exactly Cancel + Record Payment; no chips, box or empty history; two taps; the live line by keystroke, Arabic-Indic digits, quiet while "1,2" is half typed, overpayment live; partial; notes behind "+ Add note" and kept; refused inline (over, "1,2", "0", "€100"), errors clearing on change; date row, backdate, future, empty; ADR-022 at two instants; edit mode (prefill, allowed, update, waits for records); history below the form and its edit button; settled entry; repository rejection keeps the drawer open |
+| `src/lib/__tests__/paymentEntry.test.ts` (new) | 19 | `describePaymentAmount` (all kinds, symbols and codes, Arabic-Indic and Extended digits, separators, grouping); `minorToAmountInput` and its round trip |
+| `src/lib/__tests__/dates.test.ts` | +5 | `isFuturePaymentDate`: date-only, local-evening timestamp, tomorrow's timestamp, unreadable timestamp, clock default |
+| `src/lib/i18n/__tests__/paymentDrawerKeys.test.ts` (new) | 5 | New keys in en and ar with `{amount}`; `markFullyPaid` gone |
+| `e2e/record-payment.spec.ts` (new) | 4 | Two taps by click; Enter records; a partial leaves the rest owed; axe on the open drawer with date and note revealed (`paymentDrawer`: `color-contrast` only) |
+
+The repository's own future-date and overpayment tests (`paymentRecords.test.ts`, `partialPayment.test.ts`) pass unchanged against the moved helper.
+
+**Verified in the browser** (web-mut86 preview, `/app/clients?sample=1`):
+- English light and dark, and Arabic dark, at 800×600. Title, prefill, "Paid in full", "Today ›", "+ Add note" and one primary button; a partial amount with a note recorded and closed; Enter recorded; edit from the client's Payments list; overpayment live.
+- In Arabic: "تسجيل دفعة · المتبقي ₪ 4,300", the chevron points left, the amount stays LTR, and "١٠٠٠" gives "يبقى ₪ 3,300 مستحقًا".
+- At 375 px: every drawer is a fixed 480 px, so it is wider than the screen there. That comes from the shared `Drawer` (MUT-80 is reworking it). With the drawer forced to 375 px, nothing inside it overflows.
+- Found and fixed: global `.payment-row` and `.payment-amount` in `index.css` squeezed the field to 120 px, so the classes are now `pay-drawer-`. The history rows' fallback colours were light in dark mode, so they now use theme tokens.
+- Found and logged: TD-062 (`formatAmount` prints "$887.5"), TD-063 (sample part-paid entries lose their seeded received amount on the first payment).
+
+**How e2e was run:** a throwaway config on port 5195 (`webServer: npx vite --port 5195 --strictPort`, TD-004), deleted afterwards along with `test-results/`. All 23 specs passed.
+
+**Gate (2026-10-12, branch head dad50d2 on main 5674515, Node 22 per TD-054):**
+- `npx vitest run`: 189 files, 2,923 passed, 4 skipped. An earlier full run on the same code had 3 tests and 2 suites time out under the load of four parallel lanes. They were `ExpenseDrawer.oneTimeFields`, `RetainerDrawer.projectField`, `CurrencyTabs`, `router.gates` and `legacyRedirects`. Rerun alone, those 5 files passed (35 tests), and the full rerun was clean.
+- `npx playwright test` (throwaway config, port 5195): 23/23, including the 4 new specs.
+- `npm run lint`: 0 errors, 16 warnings, none in changed files.
+- `npm run typecheck`: clean.
+- `npm run test:bundles`: OK.

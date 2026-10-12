@@ -28,6 +28,46 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — MUT-86: the Record payment drawer leads with what's left, with one primary button
+
+**Scope:**
+- `src/components/drawers/PartialPaymentDrawer.tsx` (rewritten form; history rows on theme tokens) + `PartialPaymentDrawer.css` (new)
+- `src/lib/paymentEntry.ts` (new: `describePaymentAmount`, `minorToAmountInput`)
+- `src/lib/dates.ts` (`isFuturePaymentDate`, moved from `src/db/repository.ts`, which now imports it)
+- `src/lib/i18n/translations/{en,ar}.json`: new `transactions.partialPayment.titleLeft`, `paidInFull`, `stillOwed`, `addNote`; `markFullyPaid` removed
+- `e2e/record-payment.spec.ts` (new); `e2e/support/axe.ts` (`paymentDrawer` surface)
+- Tests: `PartialPaymentDrawer.test.tsx` (rewritten, 33), `paymentEntry.test.ts` (new, 19), `paymentDrawerKeys.test.ts` (new, 5), `dates.test.ts` (+5)
+- Test plan `.claude/designs/mut-86-payment-drawer-tests.md`; ADR-047 (supersedes ADR-038 §5); TD-062, TD-063; TD-047 updated
+
+### Changed
+- **The drawer opens on the answer.** The title names the balance, for example "Record Payment · ₪3,550 left". One large amount field holds that balance, selected so that typing replaces it. A line under the field updates on every keystroke: "Paid in full" or "₪1,775 still owed". It reads Arabic-Indic digits. Typing more than is owed shows the overpayment message straight away.
+- **The date reads "Payment date · Today ›"**, or the chosen date. Pressing the row opens the date field in its place. **Notes sit behind "+ Add note"**, which opens a focused Notes field.
+- **One primary button.** Record Payment records and closes the drawer, so opening it and pressing Record Payment settles the entry for today ("Paid? Two taps."). Enter in the amount does the same. A partial payment closes the drawer too; before, the drawer stayed open with an empty amount.
+- The amount is read with MUT-5's strict parser (`parseAmountInput`), not the lenient filter. "1,2" is refused with "Enter an amount like 1200 or 1,200.50", and "€100" in a dollar entry with the currency-mismatch message.
+- Payment history appears below the form, only when the entry has payments. Its rows use theme tokens, so they read in dark mode. Before, they fell back to a light grey.
+- With nothing left to record (create mode), the drawer says "Paid in full", lists the history and offers Close, instead of a form whose button could only be refused.
+
+### Removed
+- **Mark Fully Paid**, which duplicated Record Payment and dropped the notes, along with its `markFullyPaid` key in both locales.
+- The 25 / 50 / 100% chips, which printed "₪887.5".
+- The Amount / Received so far / Remaining box (its label and value ran together).
+- The empty "No payments recorded yet" history, and the form's "Record Payment" sub-heading.
+
+### Fixed
+- **An edit no longer turns into a second payment.** An edit opened before the entry's records had loaded used to mount as a create form, prefilled with the remaining balance and titled "Edit Payment". Pressing its button recorded a new payment. The drawer now waits for the record.
+- **An emptied payment date is refused** with "Date is required". Before, it was saved as an empty date.
+
+### Technical
+- `isFuturePaymentDate` (ADR-038, as amended) lives in `lib/dates.ts`, and both the repository and the drawer call it. The drawer's own `dateInput > todayISO()` comparison is gone.
+- The new classes are prefixed `pay-drawer-`. `index.css` already has global `.payment-row` and `.payment-amount` rules (fixed widths, used by the document forms), and these squeezed the amount field to 120 px.
+- Found while checking in the browser, and logged rather than fixed:
+  - `formatAmount` prints a lone tenth ("$887.5") everywhere, including the new title (TD-062).
+  - Sample-data part-paid entries carry a received amount with no payment record, so the first payment recorded on one drops it and Owed now rises (TD-063).
+
+**Why:** decision P1 of the Apple-design brief. The drawer had two buttons for one outcome, one of which lost the notes. Its labels ran into their values. The chips printed "₪887.5". It showed an empty history.
+
+---
+
 ## [Unreleased] - 2026-10-12 — MUT-80: Drawers open, close and drag on springs, and leave the way they came
 
 **Scope:**

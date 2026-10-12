@@ -11,8 +11,8 @@
 |----------|----------|
 | **Data Access** | Repository Pattern, Query Hooks, Mutations, Reconcile on read (MUT-3) |
 | **State** | URL State, Zustand Stores, Form State |
-| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place |
-| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3) |
+| **Components** | Drawer Pattern, Filter Pattern, Table Pattern, Repair actions open in place, One classification for a live line and its errors, Quiet rows open into their field (MUT-86), Prefixed classes in co-located stylesheets |
+| **Utilities** | Amount Formatting, Date Handling (`src/lib/dates.ts`), i18n, LTR amounts in RTL text (MUT-3), Ungrouped amount prefills (`minorToAmountInput`, MUT-86) |
 | **Sync** | HLC Operations, Conflict Resolution |
 | **Testing** | Repository Mocking, Component Testing |
 | **Accessibility** | Real `<label for>` for visible labels, accessible names through `t()`, dialogs named by their title, `RowActionsHeader` (TD-009) |
@@ -1806,3 +1806,18 @@ In a layout-effect cleanup, capture what you need while the DOM still exists, th
 ### Hidden documents pause motion
 `requestAnimationFrame` doesn't run while the document is hidden (a backgrounded window, or the hidden preview pane). Measure motion in Playwright (`e2e/drawer-motion.spec.ts` traces the snapshot with a `MutationObserver` + rAF), not in a hidden pane.
 
+---
+
+## App patterns added by MUT-86 (2026-10-12)
+
+### A live line and its errors read one classification
+When a field shows a live answer under it (the payment drawer's "Paid in full" or "₪1,775 still owed"), classify the typed text once, with a pure function that returns a tagged union (`describePaymentAmount`). The live line and the submit check both switch on that one result, so the line can never promise what the button then refuses. Show answers and definitive problems (an overpayment) live. Show states a valid value passes through while it is being typed (an unreadable "1,2" on the way to "1,200", an empty field) only after submit, and clear them on the next change.
+
+### A quiet row opens into its field in place
+A secondary field with a sensible default (the payment date, "Today ›") or one that is usually empty ("+ Add note") is a quiet button that is replaced by the labelled field when pressed. Focus moves to the field only when the user opened it: set a `focusTarget` state in the click handler and focus it in an effect keyed on that state. A field open from the start, such as an edited record's notes, never steals focus from the main field. Mirror chevrons in RTL with `[dir="rtl"] … { transform: scaleX(-1) }`.
+
+### Prefill an amount ungrouped, with cents as two digits
+Under MUT-5's strict grammar, deleting a digit from a prefilled "3,550" leaves "3,55", which can't be read. Prefill amount fields with `minorToAmountInput`: "3550" or "887.50". It uses integer arithmetic, never `String(minor / 100)`, which gives "887.5".
+
+### A co-located stylesheet prefixes its classes with the component
+`index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, used by the document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.

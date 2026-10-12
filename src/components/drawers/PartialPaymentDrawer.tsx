@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useId, useRef, useMemo, type FormEvent } from 'react';
 import { Drawer } from './Drawer';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import {
@@ -8,19 +8,50 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { formatAmount, parseCurrencyInput, formatCurrencyInput, formatDate, todayISO } from '../../lib/utils';
+import { cn, formatAmount, formatDate, todayISO } from '../../lib/utils';
+import { isFuturePaymentDate } from '../../lib/dates';
+import { describePaymentAmount, minorToAmountInput, type PaymentAmountState } from '../../lib/paymentEntry';
 import type { Currency, PaymentRecord } from '../../types';
 import { useDrawerStore } from '../../lib/stores';
+import './PartialPaymentDrawer.css';
+
+/**
+ * PartialPaymentDrawer -- "Record payment"
+ *
+ * Leads with what's left (MUT-86, decision P1): the title names the balance,
+ * one large amount field is prefilled with it, and a live line under the field
+ * says what the typed amount leaves owed. The date reads "Today ›" and notes
+ * sit behind "+ Add note", each opening into its field in place. One primary
+ * button records, so opening the drawer and pressing Record Payment settles the
+ * entry in full, dated today ("Paid? Two taps."). A save closes the drawer.
+ *
+ * Payment records own the entry's payment state (ADR-039); overpayment and
+ * future dates are refused by the repository (ADR-030, ADR-038) and checked
+ * here first only to say so in the user's language.
+ */
+
+type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 interface PartialPaymentDrawerProps {
   transactionId: string;
   onClose: () => void;
 }
 
+const FORM_ID = 'partial-payment-form';
+
+// Bidi isolates: keep an amount whole inside a sentence of either direction
+const FIRST_STRONG_ISOLATE = '\u2068';
+const POP_ISOLATE = '\u2069';
+
+function isolate(text: string): string {
+  return `${FIRST_STRONG_ISOLATE}${text}${POP_ISOLATE}`;
+}
+
 export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentDrawerProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
+  const historyHeadingId = useId();
 
   const { partialPaymentDrawer, editPaymentRecord } = useDrawerStore();
   const editingRecordId = partialPaymentDrawer.editingPaymentRecordId;
@@ -32,16 +63,17 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
   const deleteMutation = useDeletePaymentRecord();
 
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
-  // Lifted out of PaymentForm so "Mark fully paid" below records against the
-  // same date the user chose there, instead of silently stamping today (MUT-18).
-  const [dateInput, setDateInput] = useState(() => todayISO());
 
   const editingRecord = useMemo(
     () => editingRecordId ? paymentRecords.find((r) => r.id === editingRecordId) : undefined,
     [editingRecordId, paymentRecords]
   );
 
-  if (txLoading || !transaction) {
+  // An edit waits for its record. Mounting the form without it would fall
+  // back to create mode, and the button would record a second payment.
+  const waitingForRecord = !!editingRecordId && recordsLoading;
+
+  if (txLoading || !transaction || waitingForRecord) {
     return (
       <Drawer title={t('transactions.partialPayment.title')} onClose={onClose}>
         <div className="loading">
@@ -53,19 +85,10 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
 
   const receivedAmountMinor = transaction.receivedAmountMinor ?? 0;
   const remainingAmountMinor = transaction.amountMinor - receivedAmountMinor;
-
-  const handleMarkFullyPaid = async () => {
-    try {
-      await createMutation.mutateAsync({
-        transactionId,
-        amountMinor: remainingAmountMinor,
-        paidAt: dateInput,
-      });
-      onClose();
-    } catch {
-      // Error handled in form
-    }
-  };
+  // Nothing left to record (ADR-030 legacy rows can even be over): no form
+  const settled = !editingRecord && remainingAmountMinor <= 0;
+  // An edited record's own amount is part of what it may be changed to
+  const allowedMinor = editingRecord ? remainingAmountMinor + editingRecord.amountMinor : remainingAmountMinor;
 
   const handleDeleteRecord = async (recordId: string) => {
     try {
@@ -76,340 +99,382 @@ export function PartialPaymentDrawer({ transactionId, onClose }: PartialPaymentD
     }
   };
 
-  const handleCancelEdit = () => {
+  const returnToEntry = () => {
     useDrawerStore.getState().openPartialPaymentDrawer({ transactionId });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
-  return (
-    <Drawer
-      title={editingRecordId ? t('transactions.partialPayment.editPayment') : t('transactions.partialPayment.title')}
-      onClose={onClose}
-      footer={
-        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-          {editingRecordId ? (
-            <>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleCancelEdit}
-                disabled={isPending}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                form="partial-payment-form"
-                className="btn btn-primary"
-                disabled={isPending}
-              >
-                {isPending ? t('common.saving') : t('transactions.partialPayment.updatePayment')}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={onClose}
-                disabled={isPending}
-              >
-                {t('common.cancel')}
-              </button>
-              {remainingAmountMinor > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={handleMarkFullyPaid}
-                  disabled={isPending}
-                >
-                  {t('transactions.partialPayment.markFullyPaid')}
-                </button>
-              )}
-              <button
-                type="submit"
-                form="partial-payment-form"
-                className="btn btn-primary"
-                disabled={isPending}
-              >
-                {isPending ? t('common.saving') : t('transactions.partialPayment.record')}
-              </button>
-            </>
-          )}
-        </div>
-      }
-    >
-      {/* Transaction summary */}
-      <div className="form-section" style={{ marginBottom: 'var(--space-4)' }}>
-        <div className="summary-row">
-          <span className="summary-label">{t('transactions.columns.amount')}</span>
-          <span className="summary-value">
-            {formatAmount(transaction.amountMinor, transaction.currency, locale)}
-          </span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">{t('transactions.partialPayment.received')}</span>
-          <span className="summary-value amount-positive">
-            {formatAmount(receivedAmountMinor, transaction.currency, locale)}
-          </span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">{t('transactions.partialPayment.remaining')}</span>
-          <span className="summary-value amount-warning">
-            {formatAmount(Math.max(0, remainingAmountMinor), transaction.currency, locale)}
-          </span>
-        </div>
-      </div>
+  const title = editingRecord
+    ? t('transactions.partialPayment.editPayment')
+    : settled
+      ? t('transactions.partialPayment.title')
+      : t('transactions.partialPayment.titleLeft', {
+          amount: isolate(formatAmount(remainingAmountMinor, transaction.currency, locale)),
+        });
 
-      {/* Payment History */}
-      {!recordsLoading && (
-        <div style={{ marginBottom: 'var(--space-4)' }}>
-          <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
-            {t('transactions.partialPayment.history')}
-          </h4>
-          {paymentRecords.length === 0 ? (
-            <div style={{ padding: 'var(--space-3)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-              {t('transactions.partialPayment.noPayments')}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              {paymentRecords.map((record) => (
-                <PaymentRecordRow
-                  key={record.id}
-                  record={record}
-                  currency={transaction.currency}
-                  locale={locale}
-                  isEditing={editingRecordId === record.id}
-                  isDeleting={deletingRecordId === record.id}
-                  disabled={isPending}
-                  onEdit={() => editPaymentRecord({ transactionId, paymentRecordId: record.id })}
-                  onDelete={() => setDeletingRecordId(record.id)}
-                  onConfirmDelete={() => handleDeleteRecord(record.id)}
-                  onCancelDelete={() => setDeletingRecordId(null)}
-                  t={t}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+  const footer = (
+    <div className="pay-drawer-actions">
+      {settled ? (
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={editingRecord ? returnToEntry : onClose}
+            disabled={isPending}
+          >
+            {t('common.cancel')}
+          </button>
+          <button type="submit" form={FORM_ID} className="btn btn-primary" disabled={isPending}>
+            {isPending
+              ? t('common.saving')
+              : editingRecord
+                ? t('transactions.partialPayment.updatePayment')
+                : t('transactions.partialPayment.record')}
+          </button>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <Drawer title={title} onClose={onClose} footer={footer}>
+      {settled ? (
+        <p className="pay-drawer-status pay-drawer-status--done">
+          <CheckIcon />
+          {t('transactions.partialPayment.paidInFull')}
+        </p>
+      ) : (
+        // key: a fresh form, freshly prefilled, for each record edited and
+        // whenever what's left changes under it (a payment deleted below)
+        <PaymentForm
+          key={editingRecord?.id ?? `create-${remainingAmountMinor}`}
+          transactionId={transactionId}
+          currency={transaction.currency}
+          allowedMinor={allowedMinor}
+          locale={locale}
+          editingRecord={editingRecord}
+          createMutation={createMutation}
+          updateMutation={updateMutation}
+          isPending={isPending}
+          onRecorded={onClose}
+          onUpdated={returnToEntry}
+          t={t}
+        />
       )}
 
-      {/* Payment form -- key forces remount with fresh state when switching modes */}
-      <PaymentForm
-        key={editingRecordId || 'create'}
-        transactionId={transactionId}
-        currency={transaction.currency}
-        remainingAmountMinor={remainingAmountMinor}
-        locale={locale}
-        editingRecord={editingRecord}
-        createMutation={createMutation}
-        updateMutation={updateMutation}
-        isPending={isPending}
-        dateInput={dateInput}
-        onDateChange={setDateInput}
-        t={t}
-      />
+      {/* Payment history: only when there is some */}
+      {!recordsLoading && paymentRecords.length > 0 && (
+        <section className="pay-drawer-history" aria-labelledby={historyHeadingId}>
+          <h3 className="pay-drawer-history-title" id={historyHeadingId}>
+            {t('transactions.partialPayment.history')}
+          </h3>
+          <div className="pay-drawer-history-list">
+            {paymentRecords.map((record) => (
+              <PaymentRecordRow
+                key={record.id}
+                record={record}
+                currency={transaction.currency}
+                locale={locale}
+                isEditing={editingRecordId === record.id}
+                isDeleting={deletingRecordId === record.id}
+                disabled={isPending}
+                onEdit={() => editPaymentRecord({ transactionId, paymentRecordId: record.id })}
+                onDelete={() => setDeletingRecordId(record.id)}
+                onConfirmDelete={() => handleDeleteRecord(record.id)}
+                onCancelDelete={() => setDeletingRecordId(null)}
+                t={t}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </Drawer>
   );
 }
 
-// Extracted form component -- remounts via key when editingRecordId changes
+type AmountTone = 'done' | 'owed' | 'error';
+
+/**
+ * The line under the amount. The answer ("Paid in full", "₪1,775 still
+ * owed") and an overpayment show live; text that can't be recorded as typed
+ * says why only once Record is pressed, so a half-typed "1,2" on its way to
+ * "1,200" never nags.
+ */
+function amountLine(
+  state: PaymentAmountState,
+  showErrors: boolean,
+  currency: Currency,
+  locale: string,
+  t: Translate
+): { tone: AmountTone; text: string } | null {
+  switch (state.kind) {
+    case 'paidInFull':
+      return { tone: 'done', text: t('transactions.partialPayment.paidInFull') };
+    case 'stillOwed':
+      return {
+        tone: 'owed',
+        text: t('transactions.partialPayment.stillOwed', { amount: isolate(formatAmount(state.leftMinor, currency, locale)) }),
+      };
+    case 'over':
+      return {
+        tone: 'error',
+        text: t('transactions.partialPayment.overpayment', {
+          amount: isolate(formatAmount(Math.max(0, state.allowedMinor), currency, locale)),
+        }),
+      };
+    case 'invalid':
+      return showErrors ? { tone: 'error', text: t('validation.amountInvalid') } : null;
+    case 'currencyMismatch':
+      return showErrors
+        ? { tone: 'error', text: t('validation.amountCurrencyMismatch', { typed: state.typed, currency }) }
+        : null;
+    case 'empty':
+    case 'notPositive':
+      return showErrors ? { tone: 'error', text: t('transactions.partialPayment.amountMustBePositive') } : null;
+  }
+}
+
+// Extracted form component -- remounts via key when the edited record changes
 function PaymentForm({
   transactionId,
   currency,
-  remainingAmountMinor,
+  allowedMinor,
   locale,
   editingRecord,
   createMutation,
   updateMutation,
   isPending,
-  dateInput,
-  onDateChange,
+  onRecorded,
+  onUpdated,
   t,
 }: {
   transactionId: string;
   currency: Currency;
-  remainingAmountMinor: number;
+  /** The most this payment may be: what's left, plus the edited record's own amount */
+  allowedMinor: number;
   locale: string;
   editingRecord?: PaymentRecord;
   createMutation: ReturnType<typeof useCreatePaymentRecord>;
   updateMutation: ReturnType<typeof useUpdatePaymentRecord>;
   isPending: boolean;
-  dateInput: string;
-  onDateChange: (date: string) => void;
-  t: (key: string, params?: Record<string, string | number>) => string;
+  onRecorded: () => void;
+  onUpdated: () => void;
+  t: Translate;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const amountId = useId();
+  const amountLineId = useId();
+  const dateId = useId();
+  const notesId = useId();
+  const amountRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLInputElement>(null);
+
   // Settling in full is the common case, so create mode opens with the whole
   // remaining balance already in the field -- one confirm, still editable down
-  // to a partial amount (MUT-6 AC #3). Nothing to prefill once it is settled.
-  const [paymentInput, setPaymentInput] = useState(() => {
-    if (editingRecord) return formatCurrencyInput(String(editingRecord.amountMinor / 100));
-    return remainingAmountMinor > 0 ? formatCurrencyInput(String(remainingAmountMinor / 100)) : '';
-  });
-  const [notesInput, setNotesInput] = useState(() =>
-    editingRecord?.notes || ''
+  // to a partial amount (MUT-6 AC #3).
+  const [amountText, setAmountText] = useState(() =>
+    minorToAmountInput(editingRecord ? editingRecord.amountMinor : allowedMinor)
   );
-  const [error, setError] = useState<string | null>(null);
-
-  // dateInput lives in the parent (PartialPaymentDrawer) so "Mark fully paid"
-  // can read the same chosen date. This component remounts via `key` whenever
-  // editingRecordId changes, so a mount-only effect is enough to (re)seed it.
   // todayISO() is the local calendar date (ADR-022). new Date().toISOString()
   // is the UTC one, which hands a user west of UTC tomorrow's date in the
   // evening and one east of UTC yesterday's after midnight -- silently wrong
   // on a field the user is now one confirm away from accepting.
+  const [paidAt, setPaidAt] = useState(() => (editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO()));
+  const [notes, setNotes] = useState(() => editingRecord?.notes ?? '');
+  const [dateOpen, setDateOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(() => !!editingRecord?.notes);
+  // A field the user just opened takes focus; one open from the start doesn't
+  const [focusTarget, setFocusTarget] = useState<'date' | 'notes' | null>(null);
+  const [showAmountErrors, setShowAmountErrors] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Focused and selected, so typing replaces the prefill with a partial amount
   useEffect(() => {
-    onDateChange(editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO());
-    inputRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    amountRef.current?.focus();
+    amountRef.current?.select();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (focusTarget === 'date') dateRef.current?.focus();
+    if (focusTarget === 'notes') notesRef.current?.focus();
+  }, [focusTarget]);
+
+  const amountState = describePaymentAmount(amountText, currency, allowedMinor);
+  const line = amountLine(amountState, showAmountErrors, currency, locale, t);
+  const today = todayISO();
+  const dateLabel = paidAt === today ? t('time.today') : formatDate(`${paidAt}T00:00:00`, locale);
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const paymentAmountMinor = parseCurrencyInput(paymentInput);
-
-    if (paymentAmountMinor <= 0) {
-      setError(t('transactions.partialPayment.amountMustBePositive'));
+    if (amountState.kind !== 'paidInFull' && amountState.kind !== 'stillOwed') {
+      setShowAmountErrors(true);
+      amountRef.current?.focus();
       return;
     }
-
-    // A payment can't have arrived before it was received (MUT-18).
-    if (dateInput > todayISO()) {
+    if (!paidAt) {
+      setError(t('validation.dateRequired'));
+      return;
+    }
+    // A payment can't have arrived before it was received (ADR-038)
+    if (isFuturePaymentDate(paidAt)) {
       setError(t('transactions.partialPayment.futureDate'));
       return;
     }
 
-    // The repository rejects overpayment too (ADR-030) and stays the source of
-    // truth; checking here as well is what turns it into a translated inline
-    // message instead of an English throw the user has to decode. When editing
-    // an existing record, its own amount is part of the remaining balance.
-    const allowedMinor = editingRecord
-      ? remainingAmountMinor + editingRecord.amountMinor
-      : remainingAmountMinor;
-    if (paymentAmountMinor > allowedMinor) {
-      setError(
-        t('transactions.partialPayment.overpayment', {
-          amount: formatAmount(Math.max(0, allowedMinor), currency, locale),
-        })
-      );
-      return;
-    }
-
+    const payment = { amountMinor: amountState.amountMinor, paidAt, notes: notes.trim() || undefined };
     try {
       if (editingRecord) {
-        await updateMutation.mutateAsync({
-          id: editingRecord.id,
-          transactionId,
-          data: {
-            amountMinor: paymentAmountMinor,
-            paidAt: dateInput,
-            notes: notesInput || undefined,
-          },
-        });
-        useDrawerStore.getState().openPartialPaymentDrawer({ transactionId });
+        await updateMutation.mutateAsync({ id: editingRecord.id, transactionId, data: payment });
+        onUpdated();
       } else {
-        await createMutation.mutateAsync({
-          transactionId,
-          amountMinor: paymentAmountMinor,
-          paidAt: dateInput,
-          notes: notesInput || undefined,
-        });
-        setPaymentInput('');
-        onDateChange(todayISO());
-        setNotesInput('');
+        await createMutation.mutateAsync({ transactionId, ...payment });
+        onRecorded();
       }
     } catch (err) {
+      // The repository is the source of truth (ADR-030): a refusal it still
+      // makes (records changed in another window) is shown, not swallowed
       setError((err as Error).message);
     }
   };
 
   return (
-    <form id="partial-payment-form" onSubmit={handleSubmit}>
-      <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
-        {editingRecord ? t('transactions.partialPayment.editPayment') : t('transactions.partialPayment.recordPayment')}
-      </h4>
-
-      <div className="form-group">
-        <label className="form-label" htmlFor="payment-amount">
+    <form id={FORM_ID} onSubmit={handleSubmit} noValidate>
+      <div className="pay-drawer-amount">
+        <label className="sr-only" htmlFor={amountId}>
           {t('transactions.partialPayment.amount')}
         </label>
-        <div className="input-with-prefix">
+        <div className="input-with-prefix pay-drawer-amount-field" dir="ltr">
           <span className="input-prefix">{currency}</span>
           <input
-            ref={inputRef}
-            id="payment-amount"
+            ref={amountRef}
+            id={amountId}
             type="text"
             inputMode="decimal"
-            className="input"
-            value={paymentInput}
-            onChange={(e) => setPaymentInput(formatCurrencyInput(e.target.value))}
-            placeholder="0.00"
+            autoComplete="off"
+            className={cn('input', line?.tone === 'error' && 'input-error')}
+            value={amountText}
+            onChange={(e) => {
+              setAmountText(e.target.value);
+              setShowAmountErrors(false);
+            }}
+            placeholder={t('drawer.transaction.amountPlaceholder')}
+            aria-invalid={line?.tone === 'error'}
+            aria-describedby={amountLineId}
             disabled={isPending}
           />
         </div>
+        <p
+          id={amountLineId}
+          className={cn('pay-drawer-status', line && `pay-drawer-status--${line.tone}`)}
+          data-testid="payment-amount-status"
+          aria-live="polite"
+        >
+          {line?.tone === 'done' && <CheckIcon />}
+          {line?.text}
+        </p>
       </div>
 
-      <div className="form-group" style={{ marginTop: 'var(--space-2)' }}>
-        <label className="form-label" htmlFor="payment-date">
-          {t('transactions.partialPayment.date')}
-        </label>
-        <input
-          id="payment-date"
-          type="date"
-          className="input"
-          value={dateInput}
-          onChange={(e) => onDateChange(e.target.value)}
-          disabled={isPending}
-        />
-      </div>
-
-      <div className="form-group" style={{ marginTop: 'var(--space-2)' }}>
-        <label className="form-label" htmlFor="payment-notes">
-          {t('transactions.partialPayment.notes')}
-        </label>
-        <input
-          id="payment-notes"
-          type="text"
-          className="input"
-          value={notesInput}
-          onChange={(e) => setNotesInput(e.target.value)}
-          placeholder={t('transactions.partialPayment.notes')}
-          disabled={isPending}
-        />
-      </div>
-
-      {error && <div className="form-error" style={{ marginTop: 'var(--space-2)' }}>{error}</div>}
-
-      {!editingRecord && remainingAmountMinor > 0 && (
-        <div className="quick-amount-buttons" style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-          <QuickAmountButton
-            label="25%"
-            amount={Math.round(remainingAmountMinor * 0.25)}
-            currency={currency}
-            locale={locale}
-            onClick={() => setPaymentInput(formatCurrencyInput(String(Math.round(remainingAmountMinor * 0.25) / 100)))}
-          />
-          <QuickAmountButton
-            label="50%"
-            amount={Math.round(remainingAmountMinor * 0.5)}
-            currency={currency}
-            locale={locale}
-            onClick={() => setPaymentInput(formatCurrencyInput(String(Math.round(remainingAmountMinor * 0.5) / 100)))}
-          />
-          <QuickAmountButton
-            label="100%"
-            amount={remainingAmountMinor}
-            currency={currency}
-            locale={locale}
-            onClick={() => setPaymentInput(formatCurrencyInput(String(remainingAmountMinor / 100)))}
+      {dateOpen ? (
+        <div className="form-group">
+          <label className="form-label" htmlFor={dateId}>
+            {t('transactions.partialPayment.date')}
+          </label>
+          <input
+            ref={dateRef}
+            id={dateId}
+            type="date"
+            className="input"
+            value={paidAt}
+            max={today}
+            onChange={(e) => setPaidAt(e.target.value)}
+            disabled={isPending}
           />
         </div>
+      ) : (
+        <button
+          type="button"
+          className="pay-drawer-row"
+          onClick={() => {
+            setDateOpen(true);
+            setFocusTarget('date');
+          }}
+          disabled={isPending}
+        >
+          <span className="pay-drawer-row-label">{t('transactions.partialPayment.date')}</span>
+          <span className="pay-drawer-row-value">
+            <bdi>{dateLabel}</bdi>
+            <ChevronIcon />
+          </span>
+        </button>
+      )}
+
+      {notesOpen ? (
+        <div className="form-group">
+          <label className="form-label" htmlFor={notesId}>
+            {t('transactions.partialPayment.notes')}
+          </label>
+          <input
+            ref={notesRef}
+            id={notesId}
+            type="text"
+            className="input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={isPending}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="pay-drawer-note"
+          onClick={() => {
+            setNotesOpen(true);
+            setFocusTarget('notes');
+          }}
+          disabled={isPending}
+        >
+          <PlusIcon />
+          {t('transactions.partialPayment.addNote')}
+        </button>
+      )}
+
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
       )}
     </form>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="pay-drawer-status-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m5 12.5 4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg className="pay-drawer-row-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+    </svg>
   );
 }
 
@@ -443,17 +508,9 @@ function PaymentRecordRow({
 }: PaymentRecordRowProps) {
   if (isDeleting) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 'var(--space-2)',
-        borderRadius: 'var(--radius-sm)',
-        backgroundColor: 'var(--color-danger-bg, #fef2f2)',
-        fontSize: 'var(--text-sm)',
-      }}>
+      <div className="pay-drawer-record pay-drawer-record--deleting">
         <span>{t('transactions.partialPayment.deleteConfirm')}</span>
-        <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+        <div className="pay-drawer-record-actions">
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -464,8 +521,7 @@ function PaymentRecordRow({
           </button>
           <button
             type="button"
-            className="btn btn-sm"
-            style={{ color: 'var(--color-danger, #ef4444)' }}
+            className="btn btn-sm pay-drawer-record-delete"
             onClick={onConfirmDelete}
             disabled={disabled}
           >
@@ -477,73 +533,34 @@ function PaymentRecordRow({
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 'var(--space-2)',
-      borderRadius: 'var(--radius-sm)',
-      backgroundColor: isEditing ? 'var(--color-primary-bg, #eff6ff)' : 'var(--color-bg-secondary, #f9fafb)',
-      fontSize: 'var(--text-sm)',
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span style={{ color: 'var(--color-text-secondary)' }}>
-            {formatDate(record.paidAt, locale)}
-          </span>
-          <span style={{ fontWeight: 500 }}>
-            {formatAmount(record.amountMinor, currency, locale)}
-          </span>
+    <div className={cn('pay-drawer-record', isEditing && 'pay-drawer-record--editing')}>
+      <div className="pay-drawer-record-main">
+        <div className="pay-drawer-record-line">
+          <span className="pay-drawer-record-date">{formatDate(record.paidAt, locale)}</span>
+          <span className="pay-drawer-record-amount">{formatAmount(record.amountMinor, currency, locale)}</span>
         </div>
-        {record.notes && (
-          <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs, 0.75rem)' }}>
-            {record.notes}
-          </span>
-        )}
+        {record.notes && <span className="pay-drawer-record-notes">{record.notes}</span>}
       </div>
-      <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+      <div className="pay-drawer-record-actions">
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="btn btn-ghost btn-sm pay-drawer-record-action"
           onClick={onEdit}
           disabled={disabled}
           title={t('transactions.partialPayment.editPayment')}
-          style={{ padding: '2px 6px', fontSize: 'var(--text-xs, 0.75rem)' }}
         >
           &#9998;
         </button>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="btn btn-ghost btn-sm pay-drawer-record-action pay-drawer-record-delete"
           onClick={onDelete}
           disabled={disabled}
           title={t('transactions.partialPayment.deletePayment')}
-          style={{ padding: '2px 6px', fontSize: 'var(--text-xs, 0.75rem)', color: 'var(--color-danger, #ef4444)' }}
         >
           &#128465;
         </button>
       </div>
     </div>
-  );
-}
-
-interface QuickAmountButtonProps {
-  label: string;
-  amount: number;
-  currency: Currency;
-  locale: string;
-  onClick: () => void;
-}
-
-function QuickAmountButton({ label, amount, currency, locale, onClick }: QuickAmountButtonProps) {
-  return (
-    <button
-      type="button"
-      className="btn btn-ghost btn-sm"
-      onClick={onClick}
-      style={{ flex: 1 }}
-    >
-      {label} ({formatAmount(amount, currency, locale)})
-    </button>
   );
 }
