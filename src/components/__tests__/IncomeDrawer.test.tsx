@@ -583,6 +583,33 @@ describe('IncomeDrawer', () => {
       expect(screen.queryByText('Choose the business first to add a new client.')).not.toBeInTheDocument();
     });
 
+    it('says to choose the business first, not to press Enter, when an unknown client blocks the save (review)', async () => {
+      const user = userEvent.setup();
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      await user.type(await screen.findByPlaceholderText(CLIENT_PLACEHOLDER), 'Brand New Co');
+      await user.type(amountInput(), '100');
+      await user.click(saveButton());
+
+      expect(await screen.findByText('Choose the business first to add a new client.')).toHaveClass('form-error');
+      expect(screen.queryByText('Pick a client from the list, or press Enter to create it')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Choose the business first to add a new client.')).toHaveLength(1);
+    });
+
+    it('keeps the project field closed until a business is chosen, so a new project is filed there too (review)', async () => {
+      const user = userEvent.setup();
+      await settingsRepo.update({ features: { projects: true } });
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create' } });
+      renderDrawer();
+
+      await openMoreDetails(user);
+      expect(await screen.findByPlaceholderText(PROJECT_PLACEHOLDER)).toBeDisabled();
+
+      await user.selectOptions(screen.getByLabelText(/Business Profile/), secondProfileId);
+      expect(screen.getByPlaceholderText(PROJECT_PLACEHOLDER)).toBeEnabled();
+    });
+
     it('still asks for the business when opened from a client, whatever business the client is in', async () => {
       const client = await clientRepo.create({ name: 'Gamma School', profileId: secondProfileId });
       useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', defaultClientId: client.id } });

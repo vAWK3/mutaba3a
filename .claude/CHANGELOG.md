@@ -90,6 +90,7 @@ Seven specialists, Red Team and an adversarial pass reviewed the branch; Codex w
   - an unused `enabled` param and a re-export dropped;
   - one shared `POPOVER_EDGE_MARGIN`;
   - `ClientOwedIndexRow` for index rows.
+- **Third pass** (informational, applied): while no business is chosen, an unknown client's error says to choose the business first (not "press Enter"), and the project field stays closed too; the picker is one Tab stop; the Arabic hint uses the field's own noun ("الملف التجاري"); the hint key is in the drawer's i18n guard; a test pins that focus going nowhere (WebKit clicks) never closes the picker. The review stopped at its three-cycle cap, recorded as not converged.
 - **Recorded as TD-068** (owner D4): the leftovers (cold-start chunk wait, extra renders, middle-click on a muted row, a failed businesses read, re-picking from an off-screen switcher, a drawer kept open across Back, downgrade, the top-bar icon).
 
 ### Files

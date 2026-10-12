@@ -1657,6 +1657,7 @@ Plan: `.claude/designs/mut-89-all-businesses-lens-tests.md`. ADR-051. Tests were
 - `IncomeDrawer.test.tsx`: business before client; from a client; duplicating keeps the business.
 - `profileStore.test.ts`: the route flag never writes the saved key.
 - `AppShell.gate.test.tsx`: AppShell routes pages through the gate (mutation-checked).
+- Third pass: `IncomeDrawer.test.tsx` (the client error says choose the business first; the project field is closed until then), `ProfileQuickPicker.test.tsx` (one Tab stop; focus going nowhere keeps it open), `incomeDrawerKeys.test.ts` (the hint key).
 
 ### MUT-84 — Clients split view on wide windows (epic MUT-74, 2026-10-12)
 

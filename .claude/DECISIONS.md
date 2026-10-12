@@ -2241,7 +2241,7 @@ The pitch is "who owes me across my businesses", but the app showed one business
    - MUT-81's "Saved · Show" calls `setWorkingProfile`, so it is not a pick and keeps All on (ADR-057's Show is reconciled here).
    - The Client and Project drawers prefill the business the Add menu's picker returned.
    - The sidebar's New → Income/Expense makes the picked business the working one before opening its list.
-   - The Income drawer asks for the business before the client, and offers "Create new" client only once a business is chosen (a hint says so), so a client created there is filed in that business, never the default one.
+   - The Income drawer asks for the business before the client, and offers "Create new" client only once a business is chosen (a hint says so, and so does the error if an unknown client blocks the save), so a client created there is filed in that business, never the default one. The project field stays closed until then for the same reason.
    - The picker is placed from where its menu item was, takes focus (arrow keys, Home, End), gives it back to the menu button on Escape, and closes when focus leaves it.
 10. **The route flag is unsaved** (`useOwedScreenStore`): a persisted store writes localStorage on every change, so keeping it in `profileStore` would rewrite the saved choice on each navigation and overwrite one made in another tab.
 

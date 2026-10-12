@@ -136,6 +136,7 @@ export function ProfileQuickPicker({
             type="button"
             className="profile-quick-picker-option"
             role="option"
+            tabIndex={-1}
             onClick={() => onSelect(profile)}
           >
             <ProfileAvatar profile={profile} size="small" />

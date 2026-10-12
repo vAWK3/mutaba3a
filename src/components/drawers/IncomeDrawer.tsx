@@ -418,6 +418,9 @@ export function IncomeDrawer() {
     return t(error.message);
   };
 
+  const clientDraftError =
+    errorText('clientDraft') && (businessStillAsked ? t('drawer.income.chooseBusinessFirst') : errorText('clientDraft'));
+
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   if (mode === 'edit' && txLoading) {
@@ -588,8 +591,12 @@ export function IncomeDrawer() {
               />
             )}
           />
-          {errorText('clientDraft') && <p className="form-error">{errorText('clientDraft')}</p>}
-          {businessStillAsked && <p className="form-hint">{t('drawer.income.chooseBusinessFirst')}</p>}
+          {/* With no business yet, Enter cannot create the client: the error says what will (MUT-89 review) */}
+          {clientDraftError ? (
+            <p className="form-error">{clientDraftError}</p>
+          ) : (
+            businessStillAsked && <p className="form-hint">{t('drawer.income.chooseBusinessFirst')}</p>
+          )}
         </div>
 
         <button
@@ -707,6 +714,7 @@ export function IncomeDrawer() {
                       clientId={selectedClientId || undefined}
                       value={field.value || ''}
                       onChange={field.onChange}
+                      disabled={businessStillAsked}
                     />
                   )}
                 />

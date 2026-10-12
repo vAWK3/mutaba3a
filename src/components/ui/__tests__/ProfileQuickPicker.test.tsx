@@ -142,5 +142,30 @@ describe('ProfileQuickPicker keys and leaving (MUT-89 review)', () => {
     expect(onClose).toHaveBeenCalled();
     outside.remove();
   });
+
+  it('stays open when focus goes nowhere, so a mouse click still picks in WebKit (Tauri on macOS)', () => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ProfileQuickPicker
+        anchor={document.createElement('button')}
+        anchorRect={rect(300, 120, 40)}
+        profiles={[studio, teaching]}
+        onSelect={onSelect}
+        onClose={onClose}
+      />
+    );
+    const [first, second] = screen.getAllByRole('option');
+
+    fireEvent.focusOut(first, { relatedTarget: null });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(second);
+    expect(onSelect).toHaveBeenCalledWith(teaching);
+  });
+
+  it('is one Tab stop: the businesses are reached with the arrow keys', () => {
+    const { options } = renderTwo();
+    expect(options.map((o) => o.tabIndex)).toEqual([-1, -1]);
+  });
 });
 
