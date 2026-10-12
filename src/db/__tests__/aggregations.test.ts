@@ -15,6 +15,9 @@ import {
   paymentRowsForIncome,
   latestPayment,
   combineOwed,
+  clientScopeOf,
+  owedNowRemaining,
+  partitionOwedNow,
 } from '../aggregations';
 import type { Transaction, Client, Project, Category, PaymentRecord, PaymentByClientRow } from '../../types';
 
@@ -656,5 +659,130 @@ describe('combineOwed', () => {
 
   it('returns an empty list when nobody owes anything', () => {
     expect(combineOwed([[], []])).toEqual([]);
+  });
+});
+
+/**
+ * MUT-83 (ADR-049): the clients index splits the same entries Home sums into
+ * one group per client, No client and Archived clients, so its strip equals
+ * Home's Owed now and the rows beneath add up to it.
+ */
+describe('clientScopeOf', () => {
+  const live: Client = { id: 'live', name: 'Live', createdAt: '', updatedAt: '' };
+  const archived: Client = { ...live, id: 'old', name: 'Old', archivedAt: '2026-09-01T00:00:00.000Z' };
+  const clientsById = new Map([live, archived].map((c) => [c.id, c]));
+
+  it('is none for an entry without a client', () => {
+    expect(clientScopeOf({}, clientsById)).toBe('none');
+  });
+
+  it('is none for an entry whose client row is gone', () => {
+    expect(clientScopeOf({ clientId: 'deleted' }, clientsById)).toBe('none');
+  });
+
+  it('is archived for an entry of an archived client', () => {
+    expect(clientScopeOf({ clientId: 'old' }, clientsById)).toBe('archived');
+  });
+
+  it('is undefined for an entry of a live client', () => {
+    expect(clientScopeOf({ clientId: 'live' }, clientsById)).toBeUndefined();
+  });
+});
+
+describe('owedNowRemaining', () => {
+  const receivable = (overrides: Partial<Transaction> = {}) =>
+    createTransaction({ kind: 'income', status: 'unpaid', ...overrides });
+
+  it('is the balance still to pay on a live, unpaid income', () => {
+    expect(owedNowRemaining(receivable({ amountMinor: 5000, receivedAmountMinor: 2000 }))).toBe(3000);
+  });
+
+  it('is zero for paid, expense, deleted, archived and over-received entries', () => {
+    expect(owedNowRemaining(createTransaction({ status: 'paid' }))).toBe(0);
+    expect(owedNowRemaining(createTransaction({ kind: 'expense', status: 'unpaid' }))).toBe(0);
+    expect(owedNowRemaining(receivable({ deletedAt: '2026-10-01T00:00:00.000Z' }))).toBe(0);
+    expect(owedNowRemaining(receivable({ archivedAt: '2026-10-01T00:00:00.000Z' }))).toBe(0);
+    expect(owedNowRemaining(receivable({ amountMinor: 1000, receivedAmountMinor: 1500 }))).toBe(0);
+  });
+});
+
+describe('partitionOwedNow', () => {
+  const today = '2026-10-12';
+  const PAST = '2026-09-01';
+  const ARCHIVED_AT = '2026-09-15T00:00:00.000Z';
+  const client = (id: string, overrides: Partial<Client> = {}): Client => ({
+    id,
+    name: id,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  });
+  const clients = [client('acme'), client('old', { archivedAt: ARCHIVED_AT }), client('old2', { archivedAt: ARCHIVED_AT })];
+  const receivable = (id: string, overrides: Partial<Transaction> = {}) =>
+    createTransaction({ id, kind: 'income', status: 'unpaid', ...overrides });
+
+  const entries = [
+    receivable('acme-late', { clientId: 'acme', currency: 'USD', amountMinor: 100000, dueDate: PAST }),
+    createTransaction({ id: 'acme-paid', clientId: 'acme', currency: 'ILS', amountMinor: 50000, status: 'paid' }),
+    receivable('acme-archived-entry', { clientId: 'acme', amountMinor: 999900, archivedAt: ARCHIVED_AT }),
+    receivable('no-client', { currency: 'ILS', amountMinor: 30000, dueDate: PAST }),
+    receivable('ghost', { clientId: 'deleted-client', currency: 'EUR', amountMinor: 20000 }),
+    receivable('no-client-covered', { currency: 'ILS', amountMinor: 1000, receivedAmountMinor: 1000 }),
+    receivable('no-client-deleted', { amountMinor: 7000, deletedAt: ARCHIVED_AT }),
+    receivable('old-partial', { clientId: 'old', currency: 'USD', amountMinor: 40000, receivedAmountMinor: 10000 }),
+    receivable('old2-open', { clientId: 'old2', currency: 'USD', amountMinor: 5000, dueDate: PAST }),
+    createTransaction({ id: 'old-paid', clientId: 'old', amountMinor: 8000, status: 'paid' }),
+  ];
+
+  it('puts entries without a client, or whose client row is gone, under No client', () => {
+    const { noClient } = partitionOwedNow(entries, clients, today);
+
+    expect(noClient.owed).toEqual([
+      { currency: 'ILS', owedMinor: 30000, overdueMinor: 30000 },
+      { currency: 'EUR', owedMinor: 20000, overdueMinor: 0 },
+    ]);
+    // Entries with a balance only: the covered and the deleted ones don't count
+    expect(noClient.count).toBe(2);
+  });
+
+  it('puts entries of archived clients under Archived clients and counts the clients, not the entries', () => {
+    const { archivedClients } = partitionOwedNow(entries, clients, today);
+
+    expect(archivedClients.owed).toEqual([{ currency: 'USD', owedMinor: 35000, overdueMinor: 5000 }]);
+    expect(archivedClients.count).toBe(2);
+  });
+
+  it('groups every live entry of a live client, in any state, for the row\'s other columns', () => {
+    const { entriesByClient } = partitionOwedNow(entries, clients, today);
+
+    expect([...entriesByClient.keys()]).toEqual(['acme']);
+    expect(entriesByClient.get('acme')!.map((tx) => tx.id)).toEqual(['acme-late', 'acme-paid', 'acme-archived-entry']);
+  });
+
+  it('totals exactly what summarizeOwedByCurrency counts over the same entries (Home\'s figure)', () => {
+    const { total } = partitionOwedNow(entries, clients, today);
+
+    expect(total).toEqual(summarizeOwedByCurrency(entries, today));
+    expect(total).toEqual([
+      { currency: 'USD', owedMinor: 135000, overdueMinor: 105000 },
+      { currency: 'ILS', owedMinor: 30000, overdueMinor: 30000 },
+      { currency: 'EUR', owedMinor: 20000, overdueMinor: 0 },
+    ]);
+  });
+
+  it('adds up: the clients plus the two muted rows equal the total, per currency', () => {
+    const { total, entriesByClient, noClient, archivedClients } = partitionOwedNow(entries, clients, today);
+    const perClient = [...entriesByClient.values()].map((txs) => summarizeOwedByCurrency(txs, today));
+
+    expect(combineOwed([...perClient, noClient.owed, archivedClients.owed])).toEqual(total);
+  });
+
+  it('is empty when nothing is owed', () => {
+    const result = partitionOwedNow([], clients, today);
+
+    expect(result.total).toEqual([]);
+    expect(result.noClient).toEqual({ owed: [], count: 0 });
+    expect(result.archivedClients).toEqual({ owed: [], count: 0 });
+    expect(result.entriesByClient.size).toBe(0);
   });
 });
