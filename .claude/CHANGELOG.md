@@ -28,6 +28,47 @@
 
 ---
 
+## [Unreleased] - 2026-10-12 — The MUT-82 and MUT-84 browser checks, now in `qa/`
+
+**Why:** MUT-82's five Playwright tests were dropped when MUT-97 retired `e2e/` (TD-064 item 7). MUT-84's split-view spec was planned but never written (TD-067). MUT-86's four checks were not lost: MUT-86 merged before MUT-97, which ported them as `web.record-payment.*`, so nothing was needed there. This adds the missing coverage to `qa/` and changes no app code.
+
+### Added
+- **`qa/features/web/home.yaml` + `qa/specs/web/home.spec.ts`: four MUT-82 features.** The original spec was recovered from the pre-rebase checkpoint `660ba96` and ported:
+  - `attention-pay-full` (secondary): runs axe on Home with the buttons, then a full payment. The row's copy slides out, Owed now drops, focus moves to the next row, the toast names the payment, and Undo restores the row, Owed now and focus.
+  - `attention-pay-partial` (secondary).
+  - `attention-pay-reduced-motion` (tertiary): fade only.
+  - `attention-pay-rtl` (tertiary): slides left.
+  - The separate axe test became a step inside the full-payment flow, as MUT-97 did for every axe check.
+  - The Arabic test finds controls by their translated names, not by the CSS classes it used before.
+- **`qa/features/web/clients.yaml` + `qa/specs/web/clients.spec.ts`: four MUT-84 features**, written from TD-067's list:
+  - `split-view` (secondary): click, ↓/↑ walk, the status line, Enter/Escape and →/←, axe on both panes, Back.
+  - `split-view-deep-link` (secondary): a sorted deep link, and a walk that keeps the sort.
+  - `split-view-resize` (tertiary): 1280 → 375 → 1280 keeps a typed Work search.
+  - `split-view-rtl` (tertiary): the list on the right, ← in and → out.
+- **`qa/support/motion.ts`:** `traceExit(page, selector)` and `readExitTrace(page)`. They follow an animated copy frame by frame, for the drawer snapshot and the Home row alike. `drawer-motion.spec.ts` now uses them instead of its private copy.
+- **`qa/support/i18n.ts`:** `ar`, the app's Arabic copy read from `src/lib/i18n/translations/ar.json`. A spec can't import the JSON itself, because Node's ESM loader needs `with { type: 'json' }`.
+- **`qa/support/app.ts`:**
+  - `logIncome({ dueDate })` opens More details and fills the Due Date.
+  - `localDateFromToday(days)`.
+  - `switchToArabic(page)` switches the language from Settings.
+- **`qa/support/axe.ts`:** a `clientsSplit` surface (`color-contrast` only, like the app shell).
+
+### Changed
+- `home.yaml` now maps `src/components/home/**` and `clients.yaml` maps `src/components/clients/**`. Before this, no feature claimed either folder, so a change to Needs attention or to the split-view helpers brought nothing into scope.
+- The catalog: 21 → 29 features (9 core, 12 secondary, 8 tertiary). `release-qa lint`: no errors, 29/29 automated.
+
+### Verified
+- `release-qa pw --record` for the Home, Clients and drawer-motion specs with retries off: 16/16 on the first run. That is the 8 new features plus the 8 existing ones those files hold.
+- `release-qa run --all --in-place` (recorded, review page): 29/29 passed, so the shared-helper refactor broke none of the existing features.
+- Each new feature also failed against a deliberately broken build, on the assertion that guards the broken behaviour. The code was reverted after each check.
+  - Split view: the walk disabled, and the profile keyed by layout.
+  - Home: reduced motion ignored, the focus hand-off removed, and the slide forced to the right. The partial feature, which none of these touch, kept passing.
+
+### Files
+`qa/features/web/home.yaml`, `qa/features/web/clients.yaml`, `qa/specs/web/home.spec.ts`, `qa/specs/web/clients.spec.ts`, `qa/specs/web/drawer-motion.spec.ts`, `qa/support/app.ts`, `qa/support/axe.ts`, `qa/support/motion.ts` (new), `qa/support/i18n.ts` (new); knowledge: `TECH_DEBT.md` (TD-067 resolved, TD-064 item 7 done), `TEST_PLAN.md`, `PATTERNS.md`, `designs/mut-82-home-inline-payment-tests.md`, `designs/mut-84-clients-split-view-tests.md`
+
+---
+
 ## [Unreleased] - 2026-10-12 — Combined check after the parallel lanes (MUT-62, MUT-73, MUT-82, MUT-84)
 
 **Why:** at the owner's request, MUT-62, MUT-73, MUT-82 and MUT-84 landed on main without running lint, typecheck or tests. Everything ran once on the combined tree (main `ff6225e`), in a separate worktree.

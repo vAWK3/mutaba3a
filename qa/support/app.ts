@@ -24,10 +24,14 @@ export async function openNewIncomeDrawer(page: Page): Promise<Locator> {
   return drawer;
 }
 
-/** Logs one entry for a new client through the drawer and waits for it to close. */
+/**
+ * Logs one entry for a new client through the drawer and waits for it to
+ * close. A `dueDate` (YYYY-MM-DD) puts it on Home's Needs attention when it is
+ * past or within 7 days.
+ */
 export async function logIncome(
   page: Page,
-  entry: { title: string; amount: string; client: string },
+  entry: { title: string; amount: string; client: string; dueDate?: string },
 ): Promise<void> {
   const drawer = await openNewIncomeDrawer(page);
   await drawer.getByLabel('What did you do?').fill(entry.title);
@@ -42,6 +46,27 @@ export async function logIncome(
   await expect(client).toHaveValue(entry.client);
   await expect(client).not.toHaveAttribute('aria-busy', 'true');
 
+  if (entry.dueDate) {
+    await drawer.getByRole('button', { name: 'More details' }).click();
+    await drawer.getByLabel('Due Date').fill(entry.dueDate);
+  }
+
   await drawer.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(drawer).toBeHidden();
+}
+
+/** The local calendar date `days` from today, as YYYY-MM-DD (ADR-022). */
+export function localDateFromToday(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/** Switches the app to Arabic from Settings, as a user would, and waits for the page to turn right-to-left. */
+export async function switchToArabic(page: Page): Promise<void> {
+  await page.goto('/app/settings');
+  await page.getByRole('button', { name: 'العربية' }).click();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 }
