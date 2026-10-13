@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Privacy policy page for the landing site
+
+**Why:** Basel needed a public privacy-policy link to submit for app distribution. Scoped to exactly what the landing page offers (Mac, Windows, browser — no hosted product, no server change): local-first storage, the two outbound requests the app actually makes (Frankfurter FX rates, GitHub release checks), no accounts/analytics/tracking. Contact: info@malafat.app, Barmajiyat Ltd.
+
+**Run on this branch (Node 22):** `eslint` on touched files clean, `tsc --noEmit` clean, `npm run build:web` clean (new `PrivacyPolicyPage` chunk), `vitest run` on landing tests (23 passed).
+
+### Added
+- `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`: reuses `LandingHeader`/`LandingFooter` and `LandingPage.css`'s container/section tokens. Served client-side only at `/privacy` (web build), wired in `src/main.tsx` the same way as `/download` — no router, no server route, no `_redirects`/`netlify.toml` change needed (the existing `/* → /index.html` SPA fallback already covers it).
+- `landing.privacyPolicy.*` keys in `en.json`/`ar.json` (title, intro, nine sections, back link).
+- Footer "Privacy" link (`landing.footer.privacy` — already translated, previously unused) now points to `/privacy`.
+- `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx`: renders the heading/footer, no raw i18n keys, RTL in Arabic, names no hosted product.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Backfill personal profiles for users provisioned before MUT-120
 
 **Why:** MUT-120 shipped with **no backfill** (ADR-037 amendment: "There were no existing users at the time"). One user has since been provisioned in production without a personal profile, so `/v1/me` lists no `isPersonalDefault` profile for them and the capture app (MUT-121) falls back to Unsorted.

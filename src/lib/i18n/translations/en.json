@@ -1219,6 +1219,48 @@
       "privacy": "Privacy",
       "buyMeACoffee": "Buy Me a Coffee",
       "kofi": "Ko-fi"
+    },
+    "privacyPolicy": {
+      "title": "Privacy Policy",
+      "updated": "Last updated October 13, 2026",
+      "intro": "This policy covers Mutaba3a's free apps for Mac, Windows, and the browser — the ones linked from this page. It does not cover any other product.",
+      "backLink": "Back to the homepage",
+      "scope": {
+        "title": "The short version",
+        "body": "Mutaba3a keeps your business data on your own device. We don't run a server that stores it, we don't ask you to create an account, and we don't track you."
+      },
+      "dataStorage": {
+        "title": "Where your data lives",
+        "body": "Everything you enter — clients, projects, income, expenses, and documents — is stored locally: in your browser's storage when you use the web app, or in a local database file when you use the Mac or Windows app. We never see it, and it never leaves your device unless you choose to export it."
+      },
+      "whatYouEnter": {
+        "title": "What you enter",
+        "body": "You control what goes into Mutaba3a: client names and contact details, project and income records, optional expenses, and any documents you generate. None of this is sent to us."
+      },
+      "network": {
+        "title": "The few things that reach the network",
+        "body": "The app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Both are plain, unauthenticated requests — no account, no personal data attached."
+      },
+      "noTracking": {
+        "title": "No accounts, no analytics, no ads",
+        "body": "Mutaba3a doesn't use analytics, advertising, or tracking scripts of any kind, and there's no sign-up or login for the apps linked from this page."
+      },
+      "yourControl": {
+        "title": "Exporting, importing, and deleting your data",
+        "body": "You can export a full backup of your data as a file at any time, and import it back in. Deleting your data is just as direct: clearing the app's storage (or uninstalling the desktop app) removes it completely, because there's no copy anywhere else."
+      },
+      "children": {
+        "title": "Children's privacy",
+        "body": "Mutaba3a is a business tool and isn't directed at children. We don't knowingly collect information from anyone under 13."
+      },
+      "changes": {
+        "title": "Changes to this policy",
+        "body": "If this policy changes, we'll update this page and the \"Last updated\" date above."
+      },
+      "contact": {
+        "title": "Contact",
+        "body": "Questions about this policy can be sent to info@malafat.app. Mutaba3a is made by Barmajiyat Ltd."
+      }
     }
   },
   "demo": {

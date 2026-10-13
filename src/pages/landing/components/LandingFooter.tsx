@@ -9,6 +9,7 @@ export function LandingFooter() {
         <div className="landing-footer-content">
           <span className="landing-footer-brand">{t('landing.footer.copyright')}</span>
           <div className="landing-footer-links">
+            <a href="/privacy">{t('landing.footer.privacy')}</a>
             <a
               href="https://github.com/vAWK3/mutaba3a"
               target="_blank"

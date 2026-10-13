@@ -343,6 +343,10 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 **Location**: `src/pages/landing/components/`
 **Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`), shared with `DownloadPage`.
 
+### PrivacyPolicyPage
+**Location**: `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`
+**Purpose**: The full privacy policy at `/privacy`, scoped to exactly what the landing page offers (Mac, Windows, browser — never the hosted product). Reuses `LandingHeader`/`LandingFooter` and `LandingPage.css`'s container/section tokens; copy is `landing.privacyPolicy.*` in `en.json`/`ar.json`. Routed client-side only (`src/main.tsx`, same pattern as `/download`) — no server/router change.
+
 Tests: `src/pages/landing/__tests__/`.
 
 ---

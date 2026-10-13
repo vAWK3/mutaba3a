@@ -44,6 +44,15 @@ const DownloadPage =
       )
     : null;
 
+const PrivacyPolicyPage =
+  __BUILD_MODE__ === "web"
+    ? lazy(() =>
+        import("./pages/landing/PrivacyPolicyPage").then((m) => ({
+          default: m.PrivacyPolicyPage,
+        })),
+      )
+    : null;
+
 const queryClient = createAppQueryClient();
 
 // Simple loading fallback for landing pages
@@ -85,6 +94,18 @@ function App() {
           <LanguageProvider>
             <Suspense fallback={<LandingLoader />}>
               <DownloadPage />
+            </Suspense>
+          </LanguageProvider>
+        </ThemeProvider>
+      );
+    }
+
+    if (path === "/privacy" && PrivacyPolicyPage) {
+      return (
+        <ThemeProvider>
+          <LanguageProvider>
+            <Suspense fallback={<LandingLoader />}>
+              <PrivacyPolicyPage />
             </Suspense>
           </LanguageProvider>
         </ThemeProvider>
