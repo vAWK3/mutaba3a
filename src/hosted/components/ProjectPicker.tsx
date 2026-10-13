@@ -15,9 +15,11 @@ export interface ProjectPickerProps {
   onChange: (projectId: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** The input's id, so the drawer's `<label htmlFor>` names it. */
+  id?: string;
 }
 
-export function ProjectPicker({ profileId, customerId, value, onChange, placeholder, disabled }: ProjectPickerProps) {
+export function ProjectPicker({ profileId, customerId, value, onChange, placeholder, disabled, id }: ProjectPickerProps) {
   const { data: projects } = useProjectDirectory(profileId, customerId);
   const [inputValue, setInputValue] = useState('');
   const prevValue = useRef(value);
@@ -55,6 +57,7 @@ export function ProjectPicker({ profileId, customerId, value, onChange, placehol
       }}
       placeholder={placeholder}
       disabled={disabled}
+      id={id}
     />
   );
 }

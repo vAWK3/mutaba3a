@@ -29,6 +29,8 @@ export interface EntityTypeaheadProps<T = unknown> {
   onBlur?: () => void;
   /** Which option typed text highlights, when the default rule doesn't fit the options */
   autoHighlight?: (options: TypeaheadOption<T>[], typed: string) => number;
+  /** The input's id, so a `<label htmlFor>` names it. */
+  id?: string;
 }
 
 export function EntityTypeahead<T = unknown>({
@@ -42,6 +44,7 @@ export function EntityTypeahead<T = unknown>({
   createLabel,
   onBlur,
   autoHighlight = defaultAutoHighlight,
+  id,
 }: EntityTypeaheadProps<T>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -207,6 +210,7 @@ export function EntityTypeahead<T = unknown>({
     <div className={cn('entity-typeahead', className)}>
       <input
         ref={inputRef}
+        id={id}
         type="text"
         className="input"
         value={inputValue}

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
 import type { Allocation, Currency, Customer, Payment, Project } from '../../api/client';
@@ -6,7 +7,9 @@ import { ClientFilter, DateFilter, FilterBar } from '../../components/FilterCont
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
-import { isNarrowed, type PaymentFilters, type PaymentStatusFilter } from '../../data/filters';
+import { isNarrowed, splitIncomeDrawer, type PaymentFilters, type PaymentsPageSearch, type PaymentStatusFilter } from '../../data/filters';
+import { incomeAffordancesFor } from '../../data/incomeAffordances';
+import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, usePayments, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -51,9 +54,11 @@ interface PaymentsListProps {
   filters: PaymentFilters;
   setFilters: (next: PaymentFilters) => void;
   fixedCustomerId?: string;
+  /** The page's Add income button, repeated as the empty state's action (MUT-133). */
+  addAction?: ReactNode;
 }
 
-export function PaymentsList({ filters, setFilters, fixedCustomerId }: PaymentsListProps) {
+export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction }: PaymentsListProps) {
   const profile = useProfile();
   const { t, language } = useLanguage();
   const list = usePayments(profile.id, fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters);
@@ -135,7 +140,7 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId }: PaymentsL
           isNarrowed(filters) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.payments.empty.title')} body={t('hosted.payments.empty.body')} />
+            <Empty title={t('hosted.payments.empty.title')} body={t('hosted.payments.empty.body')} action={addAction} />
           )
         }
       >
@@ -189,12 +194,24 @@ function Allocations({ row, matters }: { row: PaymentRow; matters: Map<string, P
   );
 }
 
-export function PaymentsPage(props: Omit<PaymentsListProps, 'fixedCustomerId'>) {
+export function PaymentsPage({ search, setSearch }: { search: PaymentsPageSearch; setSearch: (next: PaymentsPageSearch) => void }) {
+  const profile = useProfile();
   const { t } = useLanguage();
+  const { filters, drawer } = splitIncomeDrawer(search);
+  const { kinds } = incomeAffordancesFor(profile);
+  // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
+  const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('received') ? 'received' : kinds[0] });
+  const addButton = (header: boolean) =>
+    kinds.length > 0 ? (
+      <Button variant="primary" size="sm" onClick={openAdd} {...(header ? { [ADD_BUTTON_ATTR]: '' } : {})}>
+        {t('hosted.income.add')}
+      </Button>
+    ) : undefined;
   return (
     <>
-      <PageHeader title={t('hosted.payments.title')} />
-      <PaymentsList {...props} />
+      <PageHeader title={t('hosted.payments.title')}>{addButton(true)}</PageHeader>
+      <PaymentsList filters={filters} setFilters={setSearch} addAction={addButton(false)} />
+      <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} />
     </>
   );
 }

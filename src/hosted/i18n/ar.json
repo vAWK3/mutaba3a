@@ -87,7 +87,7 @@
     },
     "readOnly": {
       "malafat": "«ملفات» تسجّل الإيرادات والدفعات لهذا الملف. لتعديلها، استخدم «ملفات».",
-      "personal": "تُسجَّل الإيرادات في هذا الملف من تطبيق الهاتف. هذه الشاشة للعرض فقط.",
+      "personal": "تُسجَّل الإيرادات في هذا الملف من تطبيق الهاتف.",
       "none": "لا تُسجَّل الإيرادات في الملفات المستضافة بعد. هذا الملف للمصروفات."
     },
     "filters": {
@@ -366,6 +366,80 @@
         "sameCurrency": "اختر عملة مختلفة للتحويل إليها",
         "conflict": "تغيّر هذا التحويل في مكان آخر — يُعرض الآن أحدث إصدار",
         "network": "تعذّر الوصول إلى الخادم. حاول مجدداً."
+      }
+    },
+    "income": {
+      "add": "+ إضافة دخل",
+      "drawerTitle": "دخل جديد",
+      "save": "حفظ الدخل",
+      "kind": "النوع",
+      "kindReceived": "مستلم",
+      "kindOwed": "مستحق",
+      "amount": "المبلغ",
+      "amountPlaceholder": "0.00",
+      "client": "العميل",
+      "clientOptional": "العميل (اختياري)",
+      "clientPlaceholder": "اختر عميلاً",
+      "whatFor": "مقابل ماذا؟",
+      "whatForPlaceholder": "مثلاً: إعادة تصميم الشعار",
+      "moreDetails": "تفاصيل أكثر",
+      "fewerDetails": "تفاصيل أقل",
+      "summaryToday": "اليوم",
+      "summaryDue": "الاستحقاق {date}",
+      "summaryDueDefault": "الاستحقاق ١٥ من الشهر التالي",
+      "summaryCash": "نقداً",
+      "summaryBank": "تحويل بنكي",
+      "currency": "العملة",
+      "date": "التاريخ",
+      "dueDate": "تاريخ الاستحقاق (اختياري)",
+      "dueDateHint": "إن تُرك فارغاً: ١٥ من الشهر التالي.",
+      "method": "طريقة الدفع",
+      "matter": "الملف (اختياري)",
+      "matterPlaceholder": "اختر ملفاً",
+      "notes": "ملاحظات (اختياري)",
+      "notesPlaceholder": "أي شيء يستحق التذكّر",
+      "saved": {
+        "received": "تم الحفظ · {amount} مستلمة من {client}",
+        "receivedNoClient": "تم الحفظ · {amount} مستلمة",
+        "owed": "تم الحفظ · {amount} مستحقة على {client}"
+      },
+      "errors": {
+        "amountRequired": "أدخل مبلغاً",
+        "amountInvalid": "أدخل مبلغاً صحيحاً",
+        "amountNotPositive": "أدخل مبلغاً أكبر من صفر",
+        "currencyMismatch": "هذا المبلغ بعملة {typed}، وهذا القيد بعملة {currency}",
+        "dateRequired": "اختر تاريخاً",
+        "dateFuture": "لا يمكن أن يكون التاريخ بعد اليوم",
+        "clientRequiredOwed": "المستحق يحتاج إلى عميل",
+        "clientRequired": "اختر عميلاً",
+        "clientNotFound": "هذا العميل غير موجود في هذا الملف",
+        "matterNotFound": "هذا الملف غير موجود في هذا الحساب",
+        "matterMismatch": "هذا الملف يعود لعميل آخر",
+        "saveFailed": "تعذّر حفظ هذا القيد. حاول مرة أخرى.",
+        "network": "تعذّر الوصول إلى الخادم. حاول مرة أخرى."
+      }
+    },
+    "settle": {
+      "record": "تسجيل دفعة",
+      "titleLeft": "تسجيل دفعة · {amount} متبقٍ",
+      "rowLabel": "تسجيل دفعة من {client}، المتبقي: {amount}",
+      "actions": "إجراءات",
+      "due": "الاستحقاق {date}",
+      "amount": "المبلغ ({currency})",
+      "paidOn": "تاريخ الدفع",
+      "method": "طريقة الدفع",
+      "paidInFull": "مدفوع بالكامل",
+      "stillOwed": "{amount} ما زالت مستحقة",
+      "exceeds": "يتجاوز المتبقي ({amount})",
+      "honest": "تحقّق من المبلغ: لا يمكن تعديل الدفعة بعد تسجيلها حالياً.",
+      "nothingLeft": "لا شيء متبقٍ للدفع على هذا القيد",
+      "nothingLeftBody": "تم دفعه أو حذفه منذ تحميل هذه الصفحة.",
+      "saved": "تم تسجيل الدفعة · {amount} من {client}",
+      "savedNoClient": "تم تسجيل الدفعة · {amount}",
+      "errors": {
+        "exceedsNow": "هذا أكثر من المتبقي الآن ({amount})",
+        "changed": "تغيّر هذا القيد أثناء التسجيل. نعرض أحدث نسخة.",
+        "gone": "لم يعد هذا القيد يقبل دفعة."
       }
     }
   }

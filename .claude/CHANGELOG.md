@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Hosted portal: add income and record payments on a personal profile (MUT-133)
+
+**Why:** a personal hosted profile's session could already write income (MUT-65), but the portal rendered no affordance, so a freelancer had to pick up the phone to log what a client owes or paid. MUT-93 fixed the copy and deferred this.
+
+### Added
+- **Add income** (`IncomeCaptureDrawer`): Received or Owed via `POST /v1/income`, from Receivables, Payments and Client detail (client prefilled). Fast path (kind, amount, client, what it was for) with the rest behind "More details" and a defaults summary; it opens on a hidden-field error.
+- **Record payment** (`RecordPaymentDrawer`): settles an open Owed entry via `POST /v1/receivables/{id}/settle`. The title carries what's left; a live line says paid in full / still owed / exceeds, and blocks Save when over; a note says a recorded payment can't be changed yet.
+- One gate, `incomeAffordancesFor`: personal profile only (`isPersonalDefault`); Malafat-fed and non-personal profiles stay exactly as read-only as before (tested).
+- A polite "Saved · …" status for each income save (Toast `info` tone in a persistent `aria-live` region).
+- `todayInZone`, `useAttemptKey`, `HostedTable` `stickyEnd`, an optional `id` on `EntityTypeahead` and the portal pickers.
+
+### Changed
+- `ReadOnlyNotice` shows nothing on a writable personal profile; its fallback copy drops "This view is read-only".
+- Receivables/Payments/Client detail parse `?newIncome=` / `?settle=` beside their filters and own the drawers; lists take `onRecordPayment` and an empty-state action.
+
+### Fixed
+- Expense and conversion creates were not retry-safe: a Save retried after a timeout that landed recorded twice. All portal creates now reuse one Idempotency-Key per save attempt (D5).
+- Expense and conversion drawers default the date to the profile's calendar day (the server checks dates in that zone).
+- Pre-landing review (qa-reconcile): Record payment kept its form keyed by receivable *version*, so the re-read after a race (or a focus refetch) remounted it, dropped the typed amount and the "more than what's left now" error, and refilled the new outstanding. The amount now lives in the drawer (keyed by receivable), the sent value is pinned on submit, and Save stays blocked against the fresh figure. Also: an error in collapsed More details reopens it; pending Save is `aria-disabled` (a disabled focused button loses focus in Chromium); after Add, focus returns to the header Add button; an empty Paid on says "Choose a date"; identical Saved messages are re-announced; row buttons name the client.
+
+### Technical
+- en/ar keys under `hosted.income.*` and `hosted.settle.*`. ADR-037 MUT-133 amendment; hosted-portal.md §7.4 rewritten; PATTERNS (attempt key, pages own drawers, zone dates, lenient money input, focus before close, pre-rendered live region); TD-056 resolved; TD-123..TD-126 added.
+- Plan, reviews and wireframe: `.claude/designs/mut-133-portal-personal-income.md`, `mut-133-portal-income-wireframe.html`.
 ## [Unreleased] - 2026-10-14 — Edit a payment's date from the ledger and the entry (MUT-169)
 
 **Why:** Fast-added Received income is dated *now* (`nowISO()`), and users fix the date hours or days later from `/income`. A fully paid row there had no way to reach its payment (its Record Payment button hides and its menu had only Duplicate). The income drawer told people to manage payments from the client page. Plan and eng-review decisions D1–D7: `.claude/designs/mut-169-edit-payment-from-ledger.md`.

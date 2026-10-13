@@ -1,0 +1,56 @@
+import { describe, it, expect } from 'vitest';
+import type { HostedProfile, Receivable } from '../../api/client';
+import { profile } from '../../__tests__/harness';
+import { receivable } from '../../pages/__tests__/fixtures';
+import { incomeAffordancesFor, isSettleable } from '../incomeAffordances';
+
+const PERSONAL_RULES = { received: true, owed: true, customer: 'optional' } as const;
+const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required' } as const;
+const PERSONAL_ACCESS = { payments: 'read-write', capture: 'read-write', expenses: 'read-write' } as const;
+
+function personal(overrides: Partial<HostedProfile> = {}): HostedProfile {
+  return profile({ writerOfRecord: null, isPersonalDefault: true, access: { ...PERSONAL_ACCESS }, income: { ...PERSONAL_RULES }, ...overrides });
+}
+
+describe('incomeAffordancesFor (MUT-133 D-gate)', () => {
+  it('offers both kinds and settling on the signed-in user\'s own personal profile', () => {
+    expect(incomeAffordancesFor(personal())).toEqual({ kinds: ['received', 'owed'], customer: 'optional', canSettle: true });
+  });
+
+  it('offers nothing on a Malafat-fed profile even though its rules allow Received (MUT-61)', () => {
+    const malafat = profile({ writerOfRecord: 'MALAFAT', isPersonalDefault: false, access: { payments: 'read', capture: 'read-write' }, income: { ...MALAFAT_RULES } });
+    expect(incomeAffordancesFor(malafat)).toEqual({ kinds: [], customer: 'linked-required', canSettle: false });
+  });
+
+  it('offers nothing on a writable profile that is not the user\'s personal one (ADR-066)', () => {
+    expect(incomeAffordancesFor(personal({ isPersonalDefault: false })).kinds).toEqual([]);
+    expect(incomeAffordancesFor(personal({ isPersonalDefault: false })).canSettle).toBe(false);
+  });
+
+  it('gates Add on capture access and settling on payments access', () => {
+    expect(incomeAffordancesFor(personal({ access: { ...PERSONAL_ACCESS, capture: 'read' } })).kinds).toEqual([]);
+    const noPayments = incomeAffordancesFor(personal({ access: { ...PERSONAL_ACCESS, payments: 'read' } }));
+    expect(noPayments.kinds).toEqual(['received', 'owed']);
+    expect(noPayments.canSettle).toBe(false);
+  });
+
+  it('follows the published rules: no Owed means no Owed kind and nothing to settle', () => {
+    const receivedOnly = incomeAffordancesFor(personal({ income: { received: true, owed: false, customer: 'optional' } }));
+    expect(receivedOnly).toEqual({ kinds: ['received'], customer: 'optional', canSettle: false });
+  });
+});
+
+describe('isSettleable', () => {
+  const adjustment = (status: string, outstanding = '100.00'): Receivable => ({ ...receivable('r1', 'c1', 'p1', outstanding, status), origin: 'ADJUSTMENT' });
+
+  it('accepts an open entry captured through /v1/income', () => {
+    for (const status of ['PENDING', 'DUE', 'OVERDUE', 'PARTIALLY_PAID']) expect(isSettleable(adjustment(status))).toBe(true);
+  });
+
+  it('refuses a paid or void entry, and anything Malafat posted (the server would answer 404)', () => {
+    expect(isSettleable(adjustment('PAID', '0.00'))).toBe(false);
+    expect(isSettleable(adjustment('VOID'))).toBe(false);
+    expect(isSettleable({ ...adjustment('DUE'), origin: 'INSTALLMENT' })).toBe(false);
+    expect(isSettleable({ ...adjustment('DUE'), origin: 'RETAINER_CHARGE' })).toBe(false);
+  });
+});

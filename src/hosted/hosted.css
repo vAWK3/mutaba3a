@@ -127,6 +127,9 @@
   font-size: var(--text-body);
 }
 .hp-toast .hp-banner-icon { color: var(--error); }
+/* MUT-133 (3A): the quiet "Saved · …" status. Same slot, success tokens. */
+.hp-toast.hp-toast-info { border-color: var(--success-muted); border-inline-start-color: var(--success); }
+.hp-toast.hp-toast-info .hp-banner-icon { color: var(--success); }
 
 /* ---------- Sign-in ---------- */
 
@@ -417,4 +420,20 @@
   .hp-stat { padding: 0 var(--space-3); }
   .hp-filter { min-width: calc(50% - var(--space-3)); }
   .hp-toast { inset-inline: var(--hp-gutter); max-width: none; }
+}
+
+/* ---------- Income drawers (MUT-133) ---------- */
+
+.hp-settle-context { color: var(--muted); font-size: var(--text-label); margin: 0 0 var(--space-4); overflow-wrap: anywhere; }
+.hp-settle-line { font-size: var(--text-label); margin: var(--space-1) 0 0; min-height: 1.2em; }
+.hp-settle-line-done { color: var(--success); }
+.hp-settle-line-owed { color: var(--muted); }
+.hp-settle-line-over { color: var(--error); }
+.hp-settle-note { color: var(--muted); font-size: var(--text-label); margin: var(--space-4) 0 0; }
+
+/* Design 8A: the row action column stays pinned at the inline end (left in RTL) while the table scrolls. */
+.hp-table-wrapper .hp-sticky-end { position: sticky; inset-inline-end: 0; background: var(--surface); border-inline-start: 1px solid var(--border); }
+/* Design 10A: a 44px row action on touch screens; desktop rows keep the compact 32px button. */
+@media (pointer: coarse) {
+  .hp-row-action.btn-sm { height: 44px; padding-inline: var(--space-4); }
 }

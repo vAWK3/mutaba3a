@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
-import { parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePayments, parseReceivables } from './data/filters';
+import { parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
@@ -105,18 +105,18 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   const receivablesRoute = createRoute({
     getParentRoute: () => profileRoute,
     path: '/receivables',
-    validateSearch: parseReceivables,
+    validateSearch: parseReceivablesPage,
     component: function Receivables() {
-      return <ReceivablesPage filters={receivablesRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <ReceivablesPage search={receivablesRoute.useSearch()} setSearch={useReplaceSearch()} />;
     },
   });
 
   const paymentsRoute = createRoute({
     getParentRoute: () => profileRoute,
     path: '/payments',
-    validateSearch: parsePayments,
+    validateSearch: parsePaymentsPage,
     component: function Payments() {
-      return <PaymentsPage filters={paymentsRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <PaymentsPage search={paymentsRoute.useSearch()} setSearch={useReplaceSearch()} />;
     },
   });
 

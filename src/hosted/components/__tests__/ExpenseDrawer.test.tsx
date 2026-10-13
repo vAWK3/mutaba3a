@@ -100,6 +100,42 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(createCall!.body).toMatchObject({ amount: '12.50', currency: 'USD', categoryId: 'cat-1' });
   });
 
+  it('resends the same Idempotency-Key when Save is retried after a network failure (MUT-133 D5)', async () => {
+    const user = userEvent.setup();
+    const keys: (string | null)[] = [];
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input), 'http://portal.test');
+      const method = (init.method ?? 'GET').toUpperCase();
+      if (method === 'GET' && url.pathname === '/v1/expense-categories') return ok(EMPTY_CATEGORIES);
+      if (method === 'GET' && (url.pathname === '/v1/customers' || url.pathname === '/v1/projects')) return ok(EMPTY_DIRECTORY);
+      if (method === 'POST' && url.pathname === '/v1/expenses') {
+        keys.push(new Headers(init.headers).get('idempotency-key'));
+        if (keys.length === 1) throw new TypeError('network down');
+        return ok({ id: 'e1' }, 201);
+      }
+      return fail(404, 'NOT_FOUND');
+    });
+    const { onClose } = renderDrawer();
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.50');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(keys).toHaveLength(1));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('defaults the date to today in the profile\'s zone when the list passes it (MUT-133 D5)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
+    try {
+      renderDrawer({ timezone: 'Asia/Jerusalem' });
+      expect(await screen.findByDisplayValue('2026-10-14')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('creates a JOD expense with a 3-decimal amount (MUT-140: JOD is 3-decimal, not 2)', async () => {
     const user = userEvent.setup();
     let createCall: { body: unknown } | null = null;

@@ -83,7 +83,7 @@
     },
     "readOnly": {
       "malafat": "Malafat records income and payments for this profile. To change them, use Malafat.",
-      "personal": "Income on this profile is recorded from the phone app. This view is read-only.",
+      "personal": "Income on this profile is recorded from the phone app.",
       "none": "Income isn't recorded on hosted profiles yet. This profile is for expenses."
     },
     "filters": {
@@ -362,6 +362,80 @@
         "sameCurrency": "Choose a different currency to convert to",
         "conflict": "This conversion changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
+      }
+    },
+    "income": {
+      "add": "+ Add income",
+      "drawerTitle": "New income",
+      "save": "Save income",
+      "kind": "Kind",
+      "kindReceived": "Received",
+      "kindOwed": "Owed",
+      "amount": "Amount",
+      "amountPlaceholder": "0.00",
+      "client": "Client",
+      "clientOptional": "Client (optional)",
+      "clientPlaceholder": "Choose a client",
+      "whatFor": "What was it for?",
+      "whatForPlaceholder": "e.g. Logo redesign",
+      "moreDetails": "More details",
+      "fewerDetails": "Fewer details",
+      "summaryToday": "today",
+      "summaryDue": "due {date}",
+      "summaryDueDefault": "due the 15th of next month",
+      "summaryCash": "cash",
+      "summaryBank": "bank transfer",
+      "currency": "Currency",
+      "date": "Date",
+      "dueDate": "Due date (optional)",
+      "dueDateHint": "If empty: the 15th of next month.",
+      "method": "Method",
+      "matter": "Matter (optional)",
+      "matterPlaceholder": "Choose a matter",
+      "notes": "Notes (optional)",
+      "notesPlaceholder": "Anything worth remembering",
+      "saved": {
+        "received": "Saved · {amount} received from {client}",
+        "receivedNoClient": "Saved · {amount} received",
+        "owed": "Saved · {amount} owed by {client}"
+      },
+      "errors": {
+        "amountRequired": "Enter an amount",
+        "amountInvalid": "Enter a valid amount",
+        "amountNotPositive": "Enter an amount above zero",
+        "currencyMismatch": "That amount is in {typed}; this entry is in {currency}",
+        "dateRequired": "Choose a date",
+        "dateFuture": "The date can't be later than today",
+        "clientRequiredOwed": "Owed needs a client",
+        "clientRequired": "Choose a client",
+        "clientNotFound": "This client isn't on this profile",
+        "matterNotFound": "This matter isn't on this profile",
+        "matterMismatch": "This matter belongs to another client",
+        "saveFailed": "Couldn't save this entry. Try again.",
+        "network": "Couldn't reach the server. Try again."
+      }
+    },
+    "settle": {
+      "record": "Record payment",
+      "titleLeft": "Record payment · {amount} left",
+      "rowLabel": "Record payment for {client}, remaining: {amount}",
+      "actions": "Actions",
+      "due": "due {date}",
+      "amount": "Amount ({currency})",
+      "paidOn": "Paid on",
+      "method": "Method",
+      "paidInFull": "Paid in full",
+      "stillOwed": "{amount} still owed",
+      "exceeds": "Exceeds what's left ({amount})",
+      "honest": "Check the amount: a recorded payment can't be changed yet.",
+      "nothingLeft": "Nothing left to pay on this entry",
+      "nothingLeftBody": "It was paid or removed since this page loaded.",
+      "saved": "Payment recorded · {amount} from {client}",
+      "savedNoClient": "Payment recorded · {amount}",
+      "errors": {
+        "exceedsNow": "That's more than what's left now ({amount})",
+        "changed": "This entry changed while you were recording. Showing the latest.",
+        "gone": "This entry can't take a payment anymore."
       }
     }
   }

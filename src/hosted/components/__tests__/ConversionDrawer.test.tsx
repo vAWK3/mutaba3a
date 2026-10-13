@@ -116,4 +116,38 @@ describe('ConversionDrawer (hosted)', () => {
     expect(await screen.findByText('Enter a valid amount')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('resends the same Idempotency-Key when Save is retried after a network failure (MUT-133 D5)', async () => {
+    const user = userEvent.setup();
+    const keys: (string | null)[] = [];
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input), 'http://portal.test');
+      if ((init.method ?? 'GET').toUpperCase() === 'POST' && url.pathname === '/v1/conversions') {
+        keys.push(new Headers(init.headers).get('idempotency-key'));
+        if (keys.length === 1) throw new TypeError('network down');
+        return ok({ id: 'c1' }, 201);
+      }
+      return fail(404, 'NOT_FOUND');
+    });
+    const { onClose } = renderDrawer();
+    const [fromAmount, toAmount] = await screen.findAllByPlaceholderText('0.00');
+    await user.type(fromAmount, '100.00');
+    await user.type(toAmount, '365.00');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(keys).toHaveLength(1));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('defaults the date to today in the profile\'s zone when the list passes it (MUT-133 D5)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
+    try {
+      renderDrawer({ timezone: 'Asia/Jerusalem' });
+      expect(await screen.findByDisplayValue('2026-10-14')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

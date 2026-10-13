@@ -1839,6 +1839,18 @@ holds).
   - **A user's own personal-profile membership cannot be revoked** (409 `PERSONAL_PROFILE`). This resolved TD-089.
   - **API-key authentication itself refuses a key on a personal profile** (409 `PERSONAL_PROFILE`), replacing the bind-only guard, so no key-authed route can reach personal books even through a key planted below the admin API.
 
+**Amendment (MUT-133, 2026-10-14)**: the portal writes income, but only on the signed-in user's own personal profile. Approved by the owner with `.claude/designs/mut-133-portal-personal-income.md` (eng review D1–D5 and re-review R5, design review 1A–12A).
+- *Decision*:
+  - **One gate**, `incomeAffordancesFor(profile)` (`src/hosted/data/incomeAffordances.ts`): write affordances only when `isPersonalDefault`; Add income stands on `access.capture === 'read-write'` (POST /v1/income is `capture:write`) and Record payment on `access.payments === 'read-write'` plus `income.owed`. Within that, `profile.income` shapes the kinds. The published `income` rules alone are **not** the gate: a Malafat-fed profile has `received: true` since MUT-61, and the portal keeps it read-only; a writer-null firm is not personal (ADR-066).
+  - **Two writes, no edits**: Add income (`POST /v1/income`, Received or Owed) and Record payment (`POST /v1/receivables/{id}/settle`, only on `origin: ADJUSTMENT` rows that are not PAID/VOID). No delete/edit, no Undo; MUT-91 owns Undo and row highlighting. A polite "Saved · …" status (an `info` toast in a persistent `aria-live` region) confirms every save, because the new row is often off screen.
+  - **Record payment always sends the typed amount.** Omitting it lets the server settle whatever is outstanding at write time, which would silently record less than was received after a concurrent phone partial; the race is a 422 with the new figure instead.
+  - **Pages own the drawers**: `?newIncome=received|owed` and `?settle=<id>` are parsed beside, never inside, a list's filters (`splitIncomeDrawer`), so they can't enter a list's query key (the MUT-44 e0ed4fd bug). Deep links are inert where the gate says no.
+  - **Retry-safe writes everywhere in the portal**: the Idempotency-Key belongs to the save attempt (`useAttemptKey`), not the click — reused while the body is unchanged — and expenses and conversions adopt it too (D5).
+  - **Dates use the profile's calendar** (`todayInZone(profile.timezone)`), matching the server's `assertNotFuture`.
+  - **`ReadOnlyNotice` shows nothing on a writable personal profile**; the reworded phone-app sentence remains only as the fallback when the rules offer no income writes.
+- *Why*: a freelancer on a personal profile could only log income from the phone; MUT-93 fixed the copy and deferred these affordances to this ticket.
+- *Known limit*: a recorded payment cannot be reversed by any session (DELETE /v1/income refuses an allocated payment; personal profiles refuse API keys). The drawer says so; a correction path is a follow-up ticket (TD-126).
+
 ---
 
 ## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer
