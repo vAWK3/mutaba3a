@@ -12,7 +12,8 @@ import { create } from 'zustand';
  */
 
 export interface SavedFlash {
-  kind: 'income' | 'payment';
+  /** `expense` and `conversion` come from the hosted portal (MUT-91); the app marks only income and payments. */
+  kind: 'income' | 'payment' | 'expense' | 'conversion';
   /** Every id that represents this save. A payment carries [paymentRecordId,
    *  transactionId], so the entry row and the payment row can both claim it. */
   ids: string[];
@@ -30,7 +31,9 @@ export interface SavedFlash {
 export const FLASH_MS = 1500;
 
 /** No list ever registers (e.g. a save from /settings' + Add, which has no
- *  list on screen) -- force resolution so the message still fires. */
+ *  list on screen) -- force resolution so the message still fires. A list
+ *  still fetching when it fires is waited for instead: the portal refetches
+ *  over the network and can take longer than this (MUT-91, eng review D3). */
 export const BACKSTOP_MS = 1200;
 
 export function matchesFlash(ids: readonly string[], flash: SavedFlash | null): boolean {
@@ -77,6 +80,9 @@ interface SavedFlashState {
 
 let flashTimer: ReturnType<typeof setTimeout> | undefined;
 let backstopTimer: ReturnType<typeof setTimeout> | undefined;
+/** Once the backstop has fired, a list that settled before the save and has
+ *  not re-rendered since counts as reported: only fetching lists are waited on. */
+let backstopElapsed = false;
 
 function clearTimers() {
   clearTimeout(flashTimer);
@@ -104,7 +110,8 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
     }
 
     const everyRegisteredListReported =
-      lists.size > 0 && Array.from(lists.values()).every((entry) => entry.reportedForCurrentSave && entry.settled);
+      lists.size > 0 &&
+      Array.from(lists.values()).every((entry) => entry.settled && (entry.reportedForCurrentSave || backstopElapsed));
     if (everyRegisteredListReported) {
       clearTimers();
       set({ claimed: false });
@@ -132,10 +139,15 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
 
     markSaved: (flash) => {
       clearTimers();
+      backstopElapsed = false;
       for (const entry of lists.values()) entry.reportedForCurrentSave = false;
       set({ pending: flash, claimed: null, flashIds: [] });
       backstopTimer = setTimeout(() => {
-        set((state) => (state.pending === flash && state.claimed === null ? { claimed: false } : {}));
+        const { pending, claimed } = get();
+        if (pending !== flash || claimed !== null) return;
+        backstopElapsed = true;
+        if (lists.size === 0) set({ claimed: false });
+        else tryResolve();
       }, BACKSTOP_MS);
       // A list already mounted and settled (e.g. the client profile's own
       // entry list, re-rendered from the same invalidation that created this
@@ -146,6 +158,7 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
 
     rearm: (flash) => {
       clearTimers();
+      backstopElapsed = false;
       for (const entry of lists.values()) entry.reportedForCurrentSave = false;
       set({ pending: flash, claimed: null, flashIds: [] });
       tryResolve();
@@ -153,6 +166,7 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
 
     clear: () => {
       clearTimers();
+      backstopElapsed = false;
       lists.clear();
       set({ pending: null, flashIds: [], claimed: null });
     },

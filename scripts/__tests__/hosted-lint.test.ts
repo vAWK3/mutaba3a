@@ -29,6 +29,12 @@ describe('portal lint guards', () => {
     expect(await rulesFor(`${line}\nexport const x = 1;\n`)).toContain('no-restricted-imports');
   }, 30_000);
 
+  it('allows the shared after-save store and hook in lib/ (MUT-91), not their old hooks/ home', async () => {
+    const shared = "import { useSavedFlashRows } from '../../lib/useSavedFlash';\nimport { useSavedFlashStore } from '../../lib/savedFlashStore';\nexport const x = [useSavedFlashRows, useSavedFlashStore];\n";
+    expect(await rulesFor(shared)).not.toContain('no-restricted-imports');
+    expect(await rulesFor("import { useSavedFlashRows } from '../../hooks/useSavedFlash';\nexport const x = useSavedFlashRows;\n")).toContain('no-restricted-imports');
+  }, 30_000);
+
   it('allows the i18n core and the shared UI kit', async () => {
     const code = "import { useT } from '../../lib/i18n/core';\nimport { Button } from '../../components/ui/Button';\nexport const x = [useT, Button];\n";
     expect(await rulesFor(code)).not.toContain('no-restricted-imports');

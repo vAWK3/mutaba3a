@@ -158,6 +158,63 @@ describe('useSavedFlashStore', () => {
       act(() => vi.advanceTimersByTime(BACKSTOP_MS));
       expect(result.current.claimed).toBe(true); // not flipped back to false
     });
+
+    // MUT-91 (eng review D3): the portal refetches over the network, so a list
+    // can still be loading when the backstop fires. It must not answer "not
+    // claimed" for a row that is about to arrive.
+    it('the backstop waits while a registered list is still fetching; the row arriving later claims it', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-a', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBeNull();
+      act(() => vi.advanceTimersByTime(1800));
+      act(() => result.current.reportSettled('list-a', ['tx-0', 'tx-1'], true));
+      expect(result.current.claimed).toBe(true);
+      expect(result.current.flashIds).toEqual(['tx-1']);
+    });
+
+    it('a list still fetching at the backstop that settles without the row resolves not claimed then', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-a', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBeNull();
+      act(() => result.current.reportSettled('list-a', ['tx-0'], true));
+      expect(result.current.claimed).toBe(false);
+    });
+
+    it('after the backstop, a list that settled before the save and never re-reported does not hold resolution', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-quiet');
+        result.current.reportSettled('list-quiet', ['tx-0'], true);
+        result.current.registerList('list-busy');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-busy', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBeNull();
+      act(() => result.current.reportSettled('list-busy', ['tx-0'], true));
+      expect(result.current.claimed).toBe(false);
+    });
+
+    it('the backstop still answers not claimed when every registered list is settled but none re-reported', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.reportSettled('list-a', ['tx-0'], true);
+        result.current.markSaved(income());
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBe(false);
+    });
   });
 
   describe('tint lifetime', () => {

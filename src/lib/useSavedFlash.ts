@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId } from 'react';
-import { useSavedFlashStore } from '../lib/savedFlashStore';
+import { useSavedFlashStore } from './savedFlashStore';
 
 interface FlashableQuery {
   isLoading: boolean;
