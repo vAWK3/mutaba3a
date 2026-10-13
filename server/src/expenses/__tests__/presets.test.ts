@@ -38,10 +38,11 @@ describe('expense category presets', () => {
   /**
    * MAL-1118: the personal preset is server-only — a person's own profile
    * (MUT-120) has no offline counterpart — so instead of a parity check these
-   * invariants guard it.
+   * invariants guard it. MAL-1137 replaced "Projects" (read as a freelance
+   * ledger item) with Shopping, Communications & Internet and Health & Insurance.
    */
-  it('seeds the ten personal categories in order, Other last, translated', () => {
-    expect(PERSONAL_PRESET.map((c) => c.name)).toEqual(['Transportation', 'Car', 'Rent', 'Groceries', 'Supplies', 'Gifts', 'Investments', 'Projects', 'Leisure', 'Other']);
+  it('seeds the personal categories in order, Other last, translated', () => {
+    expect(PERSONAL_PRESET.map((c) => c.name)).toEqual(['Groceries', 'Transportation', 'Car', 'Rent', 'Shopping', 'Communications & Internet', 'Health & Insurance', 'Investments', 'Leisure', 'Gifts', 'Supplies', 'Other']);
     expect(PERSONAL_PRESET.at(-1)).toMatchObject({ name: 'Other', nameAr: 'أخرى' });
     for (const c of PERSONAL_PRESET) {
       expect(c.nameAr.trim()).not.toBe('');

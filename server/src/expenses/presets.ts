@@ -56,17 +56,23 @@ export const LAW_FIRM_PRESET: readonly CategoryTemplate[] = [
   { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
-/** MAL-1118: a person's day-to-day spending, not a business ledger. */
+/**
+ * MAL-1118: a person's day-to-day spending, not a business ledger. MAL-1137
+ * dropped "Projects" — a freelance-ledger item that didn't belong here — for
+ * Shopping, Communications & Internet and Health & Insurance.
+ */
 export const PERSONAL_PRESET: readonly CategoryTemplate[] = [
+  { name: 'Groceries', nameAr: 'البقالة', color: '#22c55e' },
   { name: 'Transportation', nameAr: 'المواصلات', color: '#0ea5e9' },
   { name: 'Car', nameAr: 'السيارة', color: '#ef4444' },
   { name: 'Rent', nameAr: 'الإيجار', color: '#6366f1' },
-  { name: 'Groceries', nameAr: 'البقالة', color: '#22c55e' },
-  { name: 'Supplies', nameAr: 'المستلزمات', color: '#14b8a6' },
-  { name: 'Gifts', nameAr: 'الهدايا', color: '#ec4899' },
+  { name: 'Shopping', nameAr: 'التسوق', color: '#f97316' },
+  { name: 'Communications & Internet', nameAr: 'الاتصالات والإنترنت', color: '#3b82f6' },
+  { name: 'Health & Insurance', nameAr: 'الصحة والتأمين', color: '#d946ef' },
   { name: 'Investments', nameAr: 'الاستثمارات', color: '#a855f7' },
-  { name: 'Projects', nameAr: 'المشاريع', color: '#3b82f6' },
   { name: 'Leisure', nameAr: 'الترفيه', color: '#f59e0b' },
+  { name: 'Gifts', nameAr: 'الهدايا', color: '#ec4899' },
+  { name: 'Supplies', nameAr: 'المستلزمات', color: '#14b8a6' },
   { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
