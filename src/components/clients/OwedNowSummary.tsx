@@ -10,7 +10,7 @@
  *   <OwedNowSummary owed={summarizeOwedByCurrency(receivables, today)} />
  */
 
-import { formatAmount, isolate, cn } from '../../lib/utils';
+import { formatAmount, isolateAmount, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { OwedByCurrency } from '../../db/aggregations';
 
@@ -39,7 +39,7 @@ export function OwedNowSummary({ owed, className }: OwedNowSummaryProps) {
               {overdueMinor > 0 ? (
                 <div className="owed-now-overdue">
                   {t('clients.profile.overdueAmount', {
-                    amount: isolate(formatAmount(overdueMinor, currency, locale)),
+                    amount: isolateAmount(formatAmount(overdueMinor, currency, locale)),
                   })}
                 </div>
               ) : (

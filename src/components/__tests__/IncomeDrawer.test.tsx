@@ -948,9 +948,9 @@ describe('IncomeDrawer', () => {
         await user.click(saveButton());
 
         const recorded = formatAmount(5000, 'USD', 'en-US');
-        // the amount is bidi-isolated so it stays whole inside the Arabic sentence too
+        // the amount is LRI-isolated (MUT-110) so it stays left-to-right whole inside the Arabic sentence too
         expect(
-          await screen.findByText(`\u2068${recorded}\u2069 is already recorded as paid, so the amount can't be less`)
+          await screen.findByText(`\u2066${recorded}\u2069 is already recorded as paid, so the amount can't be less`)
         ).toBeInTheDocument();
         expect((await transactionRepo.get(txId))?.amountMinor).toBe(10000);
       });

@@ -93,9 +93,10 @@ vi.mock('../../../hooks/useQueries', () => ({
   useDeletePaymentRecord: () => ({ mutateAsync: mockDelete, isPending: false }),
 }));
 
-/** Text as read, without the bidi isolates that keep amounts whole in Arabic */
+/** Text as read, without the bidi isolates that keep amounts whole in Arabic.
+ * Amounts use LRI (MUT-110); strip FSI too in case a name shares the text. */
 function plain(text: string | null | undefined): string {
-  return (text ?? '').replace(/[\u2068\u2069]/g, '');
+  return (text ?? '').replace(/[\u2066\u2068\u2069]/g, '');
 }
 
 function amountInput() {

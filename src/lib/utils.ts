@@ -61,16 +61,30 @@ const ARABIC_THOUSANDS_SEPARATORS = /[\u066C\u060C]/g;
 const BIDI_MARKS = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g;
 
 const FIRST_STRONG_ISOLATE = '\u2068';
+const LEFT_TO_RIGHT_ISOLATE = '\u2066';
 const POP_ISOLATE = '\u2069';
 
 /**
- * Wrap a value (an amount, a name) in a first-strong isolate so it reads
- * whole inside a sentence of either direction: an amount has no strong
- * character and stays left-to-right; a name starting with a strong RTL
- * character is not forced left-to-right the way U+2066 LRI would force it.
+ * Wrap a name in a first-strong isolate so it reads whole inside a sentence
+ * of either direction: a name starting with a strong RTL character is not
+ * forced left-to-right the way LRI would force it. Not for amounts -- see
+ * `isolateAmount` (MUT-110): `Intl.NumberFormat('ar', {style:'currency'})`
+ * prepends a RLM (U+200F), a strong RTL character, so FSI resolves an
+ * Arabic-formatted amount right-to-left.
  */
 export function isolate(text: string): string {
   return `${FIRST_STRONG_ISOLATE}${text}${POP_ISOLATE}`;
+}
+
+/**
+ * Wrap a formatted amount in a left-to-right isolate so it always reads
+ * left-to-right inside a sentence of either direction, matching the
+ * `<bdi dir="ltr">` convention used for a standalone amount. Unlike FSI,
+ * LRI ignores the strong RLM an Arabic `Intl.NumberFormat` currency string
+ * carries (MUT-110).
+ */
+export function isolateAmount(text: string): string {
+  return `${LEFT_TO_RIGHT_ISOLATE}${text}${POP_ISOLATE}`;
 }
 // Spaces that may group thousands: space, NBSP, thin space, narrow NBSP
 const GROUP_SPACES = /[ \u00A0\u2009\u202F]+/g;

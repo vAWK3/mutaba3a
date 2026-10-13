@@ -20,6 +20,7 @@ import {
   nowISO,
   copyToClipboard,
   isolate,
+  isolateAmount,
 } from '../utils';
 
 describe('utils', () => {
@@ -37,6 +38,25 @@ describe('utils', () => {
       const isolated = isolate(arabicName);
       expect(isolated.startsWith('⁦')).toBe(false); // not the old LRI
       expect(isolated).toBe(`⁨${arabicName}⁩`);
+    });
+  });
+
+  describe('isolateAmount (MUT-110)', () => {
+    it('wraps text in a left-to-right isolate (U+2066 ... U+2069)', () => {
+      expect(isolateAmount('$500')).toBe('⁦$500⁩');
+    });
+
+    it('keeps an Arabic-formatted amount reading left-to-right despite its leading RLM', () => {
+      // Intl.NumberFormat('ar', {style:'currency'}) prepends U+200F RLM, a
+      // strong RTL character. The shared isolate() (FSI) would resolve this
+      // right-to-left -- exactly the MUT-110 bug -- because FSI takes its
+      // direction from the first strong character inside it. LRI always
+      // forces left-to-right regardless of what's inside, which is what an
+      // amount (unlike a name) needs.
+      const arabicAmount = '‏7,550 US$';
+      const isolated = isolateAmount(arabicAmount);
+      expect(isolated.startsWith('⁨')).toBe(false); // not FSI
+      expect(isolated).toBe(`⁦${arabicAmount}⁩`);
     });
   });
 

@@ -29,7 +29,7 @@ import {
   type RecurringAttentionGroup,
 } from '../expenses/recurringAttention';
 import { todayLocalISO } from '../../lib/dates';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount, isolateAmount } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
 import type { VirtualOccurrenceDisplay } from '../../types';
@@ -40,9 +40,6 @@ export type RecurringDrawerView = 'list' | 'snooze';
 /** Snooze defaults to a week; the quick picks are a week, two weeks and a month */
 const DEFAULT_SNOOZE_DAYS = 7;
 const QUICK_SNOOZE_DAYS = [7, 14, 30] as const;
-
-/** FIRST STRONG ISOLATE … POP DIRECTIONAL ISOLATE around an amount inside a sentence */
-const isolate = (text: string) => `\u2068${text}\u2069`;
 
 type View =
   | { kind: 'list' }
@@ -180,7 +177,7 @@ export function RecurringMarkPaidDrawer({ group, initialView = 'list', onClose }
   }
 
   const period = t(`expenses.recurring.attention.perPeriod.${group.frequency}`, {
-    amount: isolate(formatAmount(group.periodAmountMinor, group.currency, locale)),
+    amount: isolateAmount(formatAmount(group.periodAmountMinor, group.currency, locale)),
   });
 
   return (

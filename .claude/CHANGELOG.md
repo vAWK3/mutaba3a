@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Arabic amounts inside a sentence read right-to-left (MUT-110)
+
+**Why:** `formatAmount(…, 'ar')` prepends a U+200F RLM (a strong RTL character); the shared `isolate()` (FSI) takes its direction from the first strong character inside it, so an Arabic-formatted amount wrapped in `isolate()` renders right-to-left -- `$US 7,550` instead of `7,550 US$`. MUT-81 moved `OwedNowSummary` from LRI to the shared FSI `isolate()`, reasoning an amount "has no strong character," which doesn't hold once `Intl.NumberFormat('ar', ...)` is in the picture. FSI is right for names (MUT-81's actual case); wrong for amounts.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,434 passed / 4 skipped.
+
+### Added
+- `isolateAmount()` (`src/lib/utils.ts`): wraps an amount in a left-to-right isolate (LRI, U+2066…U+2069), matching the `<bdi dir="ltr">` convention already used for a standalone amount. `isolate()` (FSI) stays for names.
+
+### Fixed
+- Six sites wrapped an amount in the wrong isolate -- three (`OwedNowSummary`, `PartialPaymentDrawer` ×3, `HomeNeedsAttention`) via the shared FSI `isolate()`; three (`RecurringAttentionList`, `RecurringMarkPaidDrawer`, `IncomeDrawer`) via a private FSI copy. All six now use `isolateAmount()`. `HomeNeedsAttention`'s client-name wrap (a name, not an amount) keeps `isolate()`.
+- `PartialPaymentDrawer.test.tsx`'s `plain()` helper only stripped FSI/PDI; it now also strips LRI so it doesn't leak a stray isolate character into an assertion now that these sites use LRI.
+- `IncomeDrawer.test.tsx`'s below-recorded error assertion and `OwedNowSummary.test.tsx`'s MUT-81 tripwire both pinned FSI; both now pin LRI, with the tripwire's comment updated to explain why.
+
+### Technical
+- `OwedNowSummary.test.tsx` gained a controllable `mockLanguage` ('en' | 'ar') and a new Arabic render test proving the overdue line reads in the same order as the standalone amount (ticket AC #4).
+- TD-064 item 5 ("the bidi isolate helper is copied four times") resolved -- it was actually six sites, all private copies were FSI (the bug), now consolidated to `isolate()` / `isolateAmount()` in `lib/utils.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Both + Add menus open the drawer in place and ask for the profile (MUT-57)
 
 **Why:** since MUT-15 both `+ Add` menus offered the same actions but behaved differently (TD-032): the sidebar's New menu opened the drawer then navigated to the list, and skipped the profile picker for Client/Project; the top bar's Add menu opened every drawer in place and was profile-aware for all four. Decision (Basel, 2026-10-11): both menus open the drawer in place, all four actions profile-aware in both.

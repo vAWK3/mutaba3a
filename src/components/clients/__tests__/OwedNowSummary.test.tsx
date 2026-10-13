@@ -1,9 +1,12 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { OwedNowSummary } from '../OwedNowSummary';
+import { formatAmount } from '../../../lib/utils';
+
+let mockLanguage: 'en' | 'ar' = 'en';
 
 vi.mock('../../../lib/i18n', () => ({
   useT: () => (key: string, vars?: Record<string, string | number>) => {
@@ -16,9 +19,13 @@ vi.mock('../../../lib/i18n', () => ({
     const template = translations[key] ?? key;
     return template.replace(/\{(\w+)\}/g, (_, name) => String(vars?.[name] ?? ''));
   },
-  useLanguage: () => ({ language: 'en' }),
-  getLocale: () => 'en-US',
+  useLanguage: () => ({ language: mockLanguage }),
+  getLocale: () => (mockLanguage === 'ar' ? 'ar' : 'en-US'),
 }));
+
+afterEach(() => {
+  mockLanguage = 'en';
+});
 
 describe('OwedNowSummary', () => {
   it('shows one amount per currency, never a combined total', () => {
@@ -61,11 +68,23 @@ describe('OwedNowSummary', () => {
     render(<OwedNowSummary owed={[{ currency: 'USD', owedMinor: 150000, overdueMinor: 50000 }]} />);
 
     expect(screen.getByTestId('owed-now-amount')).toHaveAttribute('dir', 'ltr');
-    // The overdue sentence isolates its amount with the shared isolate()
-    // helper (U+2068 FSI / U+2069 PDI, MUT-81 eng review D4/D5) -- not the
-    // U+2066 LRI this component used to carry privately. For an amount (no
-    // strong directional character) the two render identically; this
-    // assertion is a deliberate tripwire against a silent revert to LRI.
-    expect(screen.getByText(/overdue$/).textContent).toContain('⁨$500⁩');
+    // The overdue sentence isolates its amount with isolateAmount() (U+2066
+    // LRI / U+2069 PDI, MUT-110) -- not the shared isolate()'s U+2068 FSI
+    // MUT-81 wrongly moved this to (it resolves right-to-left in Arabic,
+    // because Intl.NumberFormat('ar', ...) prepends a strong RTL mark). For
+    // an English amount the two render identically; this assertion is a
+    // deliberate tripwire against a silent revert to FSI.
+    expect(screen.getByText(/overdue$/).textContent).toContain('⁦$500⁩');
+  });
+
+  it('reads the overdue amount in the same order as a standalone amount, in Arabic (MUT-110)', () => {
+    mockLanguage = 'ar';
+    render(<OwedNowSummary owed={[{ currency: 'USD', owedMinor: 150000, overdueMinor: 50000 }]} />);
+
+    // Intl.NumberFormat('ar', {style:'currency'}) prepends a RLM (a strong
+    // RTL character); isolateAmount's LRI keeps the order left-to-right
+    // regardless, same as the standalone amount's <bdi dir="ltr">.
+    const expectedAmount = formatAmount(50000, 'USD', 'ar');
+    expect(screen.getByText(/overdue$/).textContent).toBe(`⁦${expectedAmount}⁩ overdue`);
   });
 });
