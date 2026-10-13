@@ -81,7 +81,7 @@ async function setup() {
   const me = (extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN, ...extra });
   const as = (profile: string, extra: Record<string, string> = {}) => me({ 'x-mutaba3a-profile': profile, ...extra });
 
-  const capture = async (body: Record<string, unknown>) => (await read(await h.app.request('/v1/inbox', json(body, me())))) as { id: string };
+  const capture = async (body: Record<string, unknown>) => (await read(await h.app.request('/v1/inbox', json(body, { ...me(), ...idem() })))) as { id: string };
   const listInbox = async () => (await read(await h.app.request('/v1/inbox', { headers: me() }))).items as Loose[];
   const fileExpense = (entryId: string, body: Record<string, unknown> = {}, profile = p.id, headers: Record<string, string> = idem()) =>
     h.app.request(`/v1/inbox/${entryId}/file-as-expense`, json(body, as(profile, headers)));

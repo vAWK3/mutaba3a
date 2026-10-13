@@ -3,6 +3,7 @@ import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, StateConflict, UniqueViolation } from './memory.js';
+import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import type {
   AttachmentFilter,
@@ -46,6 +47,8 @@ import type {
   ExternalReferenceRepository,
   IdempotencyClaim,
   IdempotencyRepository,
+  UserIdempotencyClaim,
+  UserIdempotencyRepository,
   IntegrationRecord,
   IntegrationRepository,
   LedgerStore,
@@ -354,8 +357,8 @@ export class PrismaLedgerStore implements LedgerStore {
       }
       const existing = await this.prisma.idempotencyKey.findUnique({ where: { organizationId_key: { organizationId, key } } });
       if (!existing) return { kind: 'in_progress' }; // deleted between insert and read: treat as racing
-      if (existing.fingerprint !== fingerprint || existing.operation !== operation) return { kind: 'mismatch' };
-      if (existing.status === 'COMPLETED') {
+      const outcome = resolveClaim(existing, operation, fingerprint);
+      if (outcome === 'replay') {
         return {
           kind: 'replay',
           record: {
@@ -371,7 +374,7 @@ export class PrismaLedgerStore implements LedgerStore {
           },
         };
       }
-      return { kind: 'in_progress' };
+      return { kind: outcome === 'new' ? 'in_progress' : outcome }; // 'new' is unreachable here (the insert above already claimed it)
     },
     complete: async ({ organizationId, key, responseStatus, responseBody, at }) => {
       await this.prisma.idempotencyKey.updateMany({
@@ -386,6 +389,54 @@ export class PrismaLedgerStore implements LedgerStore {
       const r = await this.prisma.idempotencyKey.findUnique({ where: { organizationId_key: { organizationId, key } } });
       if (!r) return null;
       return { organizationId: r.organizationId, key: r.key, operation: r.operation, fingerprint: r.fingerprint, status: r.status, responseStatus: r.responseStatus, responseBody: r.responseBody, createdAt: r.createdAt, completedAt: r.completedAt };
+    },
+  };
+
+  /** MUT-131: same contract as `idempotency`, keyed by user instead of organization. */
+  readonly userIdempotency: UserIdempotencyRepository = {
+    claim: async ({ userId, key, operation, fingerprint, at }): Promise<UserIdempotencyClaim> => {
+      try {
+        await this.prisma.userIdempotencyKey.create({
+          data: { userId, key, operation, fingerprint, status: 'PENDING', createdAt: at },
+        });
+        return { kind: 'new' };
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+      }
+      const existing = await this.prisma.userIdempotencyKey.findUnique({ where: { userId_key: { userId, key } } });
+      if (!existing) return { kind: 'in_progress' }; // deleted between insert and read: treat as racing
+      const outcome = resolveClaim(existing, operation, fingerprint);
+      if (outcome === 'replay') {
+        return {
+          kind: 'replay',
+          record: {
+            userId: existing.userId,
+            key: existing.key,
+            operation: existing.operation,
+            fingerprint: existing.fingerprint,
+            status: existing.status,
+            responseStatus: existing.responseStatus,
+            responseBody: existing.responseBody,
+            createdAt: existing.createdAt,
+            completedAt: existing.completedAt,
+          },
+        };
+      }
+      return { kind: outcome === 'new' ? 'in_progress' : outcome }; // 'new' is unreachable here (the insert above already claimed it)
+    },
+    complete: async ({ userId, key, responseStatus, responseBody, at }) => {
+      await this.prisma.userIdempotencyKey.updateMany({
+        where: { userId, key },
+        data: { status: 'COMPLETED', responseStatus, responseBody: responseBody as Prisma.InputJsonValue, completedAt: at },
+      });
+    },
+    fail: async ({ userId, key }) => {
+      await this.prisma.userIdempotencyKey.deleteMany({ where: { userId, key } });
+    },
+    get: async (userId, key) => {
+      const r = await this.prisma.userIdempotencyKey.findUnique({ where: { userId_key: { userId, key } } });
+      if (!r) return null;
+      return { userId: r.userId, key: r.key, operation: r.operation, fingerprint: r.fingerprint, status: r.status, responseStatus: r.responseStatus, responseBody: r.responseBody, createdAt: r.createdAt, completedAt: r.completedAt };
     },
   };
 

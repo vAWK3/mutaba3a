@@ -237,6 +237,39 @@ export interface IdempotencyRepository {
   fail(input: { organizationId: string; key: string; at: Date }): Promise<void>;
 }
 
+/**
+ * MUT-131: the same contract as IdempotencyRecord/IdempotencyClaim, keyed by
+ * user instead of organization — for routes with no organization at all
+ * (POST /v1/inbox, MUT-66). A separate type/table rather than a polymorphic
+ * owner on the org-scoped one: every other idempotent() caller is
+ * organization-scoped, and this is the first of its kind.
+ */
+export interface UserIdempotencyRecord {
+  userId: string;
+  key: string;
+  operation: string;
+  fingerprint: string;
+  status: IdempotencyStatus;
+  responseStatus: number | null;
+  responseBody: unknown;
+  createdAt: Date;
+  completedAt: Date | null;
+}
+
+export type UserIdempotencyClaim =
+  | { kind: 'new' }
+  | { kind: 'replay'; record: UserIdempotencyRecord }
+  | { kind: 'in_progress' }
+  | { kind: 'mismatch' };
+
+export interface UserIdempotencyRepository {
+  claim(input: { userId: string; key: string; operation: string; fingerprint: string; at: Date }): Promise<UserIdempotencyClaim>;
+  get(userId: string, key: string): Promise<UserIdempotencyRecord | null>;
+  complete(input: { userId: string; key: string; responseStatus: number; responseBody: unknown; at: Date }): Promise<void>;
+  /** Releases the key so a retry can run the operation again (used after a 5xx). */
+  fail(input: { userId: string; key: string; at: Date }): Promise<void>;
+}
+
 // ---- Milestone 2: customers, projects, external references ----------------
 
 export type EntityStatus = 'ACTIVE' | 'ARCHIVED';
@@ -1119,6 +1152,8 @@ export interface LedgerStore {
   expenseReceipts: ExpenseReceiptRepository;
   /** MUT-66: the unsorted inbox — the one repository scoped by user, not by organization. */
   inboxEntries: InboxEntryRepository;
+  /** MUT-131: idempotency for organization-independent writes (POST /v1/inbox's create). */
+  userIdempotency: UserIdempotencyRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

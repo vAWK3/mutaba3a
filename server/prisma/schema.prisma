@@ -246,6 +246,8 @@ model User {
   payments        Payment[]
   /// MUT-66: this person's unsorted captures, owned by them and by no profile.
   inboxEntries    InboxEntry[]
+  /// MUT-131: this person's idempotency claims for organization-independent writes.
+  userIdempotencyKeys UserIdempotencyKey[]
 
   @@map("users")
 }
@@ -393,6 +395,29 @@ model IdempotencyKey {
   @@id([organizationId, key])
   @@index([createdAt])
   @@map("idempotency_keys")
+}
+
+/// MUT-131: the same contract as IdempotencyKey, keyed by user instead of
+/// organization — for the organization-independent inbox create (MUT-66's
+/// POST /v1/inbox has no organization to key against, the same reason
+/// InboxEntry itself has no organizationId). Kept as its own table rather
+/// than a polymorphic owner column on IdempotencyKey: every other caller of
+/// that table is organization-scoped, and this is the first of its kind.
+model UserIdempotencyKey {
+  userId         String            @db.Uuid
+  user           User              @relation(fields: [userId], references: [id])
+  key            String            @db.VarChar(128)
+  operation      String
+  fingerprint    String            @db.VarChar(64)
+  status         IdempotencyStatus
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime          @default(now())
+  completedAt    DateTime?
+
+  @@id([userId, key])
+  @@index([createdAt])
+  @@map("user_idempotency_keys")
 }
 
 // ---- Milestone 2: customers, projects, external references ----------------

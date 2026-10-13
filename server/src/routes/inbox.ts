@@ -3,7 +3,7 @@ import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, resolveLinks } from '../expenses/compose.js';
-import { idempotent } from '../idempotency.js';
+import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
@@ -82,7 +82,10 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'Capture an amount now, decide where it belongs later',
       description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. kind is fixed at capture.',
       security: SESSION_ONLY,
-      request: { body: jsonBody(CreateInboxEntryRequestSchema) },
+      // MUT-131: a lost response could otherwise be replayed into a duplicate entry — the same
+      // protection every other create route (income, expenses, file-as-*) already has.
+      middleware: [identityIdempotent(store, 'inbox.create')] as const,
+      request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateInboxEntryRequestSchema) },
       responses: { 201: { description: 'Captured', content: { 'application/json': { schema: InboxEntrySchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {

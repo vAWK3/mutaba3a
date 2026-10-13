@@ -368,5 +368,50 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
 
       expect(await store.inboxEntries.getById(w.owner.user.id, captured.id)).toEqual(captured);
     });
+
+    // ---- MUT-131: user-scoped idempotency for the organization-independent inbox create -----
+
+    it('userIdempotency: new → in_progress → replay; mismatch on a different fingerprint or operation; fail releases; cross-user isolation', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const key = `idem-${unique()}`;
+      const claimAt = at(1);
+
+      expect(await store.userIdempotency.claim({ userId: w.owner.user.id, key, operation: 'inbox.create', fingerprint: 'f1', at: claimAt })).toEqual({ kind: 'new' });
+      expect(await store.userIdempotency.claim({ userId: w.owner.user.id, key, operation: 'inbox.create', fingerprint: 'f1', at: claimAt })).toEqual({ kind: 'in_progress' });
+      expect(await store.userIdempotency.claim({ userId: w.owner.user.id, key, operation: 'inbox.create', fingerprint: 'f2', at: claimAt })).toEqual({ kind: 'mismatch' });
+      expect(await store.userIdempotency.claim({ userId: w.owner.user.id, key, operation: 'other', fingerprint: 'f1', at: claimAt })).toEqual({ kind: 'mismatch' });
+
+      await store.userIdempotency.complete({ userId: w.owner.user.id, key, responseStatus: 201, responseBody: { ok: true }, at: claimAt });
+      const replay = await store.userIdempotency.claim({ userId: w.owner.user.id, key, operation: 'inbox.create', fingerprint: 'f1', at: claimAt });
+      expect(replay.kind).toBe('replay');
+      if (replay.kind === 'replay') {
+        expect(replay.record.responseStatus).toBe(201);
+        expect(replay.record.responseBody).toEqual({ ok: true });
+      }
+
+      // The literal key string is namespaced per person — a stranger presenting it is a fresh claim, never a replay of the owner's.
+      expect(await store.userIdempotency.claim({ userId: w.stranger.user.id, key, operation: 'inbox.create', fingerprint: 'zzz', at: claimAt })).toEqual({ kind: 'new' });
+
+      await store.userIdempotency.fail({ userId: w.stranger.user.id, key, at: claimAt });
+      expect(await store.userIdempotency.claim({ userId: w.stranger.user.id, key, operation: 'inbox.create', fingerprint: 'zzz', at: claimAt })).toEqual({ kind: 'new' });
+    });
+
+    it('userIdempotency.get returns the stored claim, null after fail, and nothing for another person', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      expect(await store.userIdempotency.get(w.owner.user.id, 'never-claimed-key')).toBeNull();
+
+      await store.userIdempotency.claim({ userId: w.owner.user.id, key: 'k-pending-1', operation: 'inbox.create', fingerprint: 'fp', at: at(1) });
+      expect(await store.userIdempotency.get(w.owner.user.id, 'k-pending-1')).toMatchObject({ status: 'PENDING', operation: 'inbox.create', responseBody: null });
+      await store.userIdempotency.complete({ userId: w.owner.user.id, key: 'k-pending-1', responseStatus: 201, responseBody: { id: 'x' }, at: at(2) });
+      expect(await store.userIdempotency.get(w.owner.user.id, 'k-pending-1')).toMatchObject({ status: 'COMPLETED', responseStatus: 201, responseBody: { id: 'x' } });
+
+      await store.userIdempotency.claim({ userId: w.owner.user.id, key: 'k-failed-1', operation: 'inbox.create', fingerprint: 'fp', at: at(3) });
+      await store.userIdempotency.fail({ userId: w.owner.user.id, key: 'k-failed-1', at: at(4) });
+      expect(await store.userIdempotency.get(w.owner.user.id, 'k-failed-1')).toBeNull();
+
+      expect(await store.userIdempotency.get(w.stranger.user.id, 'k-pending-1')).toBeNull();
+    });
   });
 }

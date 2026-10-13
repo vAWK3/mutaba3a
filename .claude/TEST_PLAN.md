@@ -1805,6 +1805,19 @@ Plan: `.claude/designs/mut-100-contingency-agreements-tests.md`; regression cont
 | Review fixes | `routes-mut100.test.ts` › "review fixes (D1–D4)", `store-contract-mut100.ts` (7 rows added) | voided line never posts; cancel refuses after an outcome (store + racing route); upfront moved after compose → stale / `PREVIEW_STALE`; reason outside the token; credited-not-paid commission refused; correcting a never-posted line; VAT-included CREDITED; read-only key 403; two corrections racing on Postgres (one `updated`, one `stale`, one credit). Mutation-checked: each fails with its fix reverted |
 | Regression | every existing server suite | unchanged assertions; edits limited to the API version pins (`1.16.0-mut100`), record fixtures gaining the new fields, and the MUT-59/MUT-61 migration harnesses applying history one transaction per file |
 
+## Hosted API — MUT-131: Idempotency for POST /v1/inbox (2026-10-13)
+
+Found while planning MUT-125 (the phone app's offline outbox). ADR-061. Run (Node 22, `server/`): `npm run lint` clean; `npm run typecheck` clean; `npm test` 1,523 passed / 18 skipped; `npm run test:db` (Postgres, scratch databases) 1,650 passed; `npm run build` clean.
+
+| Area | File | What is pinned |
+|---|---|---|
+| Repository contract | `store-contract-inbox.ts` (2 cases added; memory + Postgres) | `userIdempotency`: new → in_progress → replay; mismatch on a different fingerprint or a different operation; `fail` releases the key; a stranger presenting the identical literal key string gets a fresh claim, never the owner's replay; `get` returns the stored claim, null after fail, nothing for another person |
+| Routes | `__tests__/inbox-routes.test.ts` (4 new cases) | missing `Idempotency-Key` → 422; replay (same key + body) → identical entry, `Idempotent-Replayed: true`, confirmed via a follow-up list call that only one entry exists; same key + different body → 422 `IDEMPOTENCY_KEY_REUSED`; two different people using the identical literal key each get their own entry |
+| Regression | `inbox-routes.test.ts`, `inbox-filing.test.ts`, `inbox-isolation.test.ts` | every direct `POST /v1/inbox` call updated to send an `idempotency-key` header — these pre-dated the requirement and would otherwise 422 |
+| Migration | no dedicated migration test — plain additive `CREATE TABLE`, no CHECK constraint, no backfill, nothing a replay-the-history test would catch that `npm run test:db`'s scratch-database setup doesn't already exercise | `migration-mut107.test.ts` now applies the rest of the migration history before its final schema diff (matching `migration-mut61.test.ts`'s and `migration-mut100.test.ts`'s existing pattern) — it previously stopped right after its own file, which broke the first time a later migration (this one) was added |
+
+Session writes to `POST /v1/inbox` with no identity (an API key) are covered by the existing `refuses an API key outright` case in `inbox-routes.test.ts` — refused before the idempotency middleware ever runs, so it needed no new test.
+
 ## Hosted API — MUT-107: Contingency fee proposals (2026-10-13)
 
 Plan: `.claude/designs/mut-107-contingency-fee-proposals.md` (MUT-100 plan §11, D9/D10 already locked). Run (Node 22, `server/`): `npm test` 1,505 passed / 18 skipped; `npm run test:db` (Postgres, scratch databases) 1,630 passed.

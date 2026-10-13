@@ -88,6 +88,9 @@ import type {
   IdempotencyClaim,
   IdempotencyRecord,
   IdempotencyRepository,
+  UserIdempotencyClaim,
+  UserIdempotencyRecord,
+  UserIdempotencyRepository,
   IntegrationProvider,
   IntegrationRecord,
   IntegrationRepository,
@@ -104,6 +107,7 @@ import type {
 } from './ports.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
+import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
 /**
@@ -117,6 +121,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly ints = new Map<string, IntegrationRecord>();
   private readonly events: AuditEventRecord[] = [];
   private readonly idem = new Map<string, IdempotencyRecord>();
+  private readonly userIdem = new Map<string, UserIdempotencyRecord>();
   private readonly custs = new Map<string, CustomerRecord>();
   private readonly projs = new Map<string, ProjectRecord>();
   private readonly refs = new Map<string, ExternalReferenceRecord>();
@@ -449,23 +454,13 @@ export class MemoryLedgerStore implements LedgerStore {
     claim: async ({ organizationId, key, operation, fingerprint, at }): Promise<IdempotencyClaim> => {
       const id = `${organizationId}:${key}`;
       const existing = this.idem.get(id);
-      if (!existing) {
-        this.idem.set(id, {
-          organizationId,
-          key,
-          operation,
-          fingerprint,
-          status: 'PENDING',
-          responseStatus: null,
-          responseBody: null,
-          createdAt: at,
-          completedAt: null,
-        });
+      const outcome = resolveClaim(existing, operation, fingerprint);
+      if (outcome === 'new') {
+        this.idem.set(id, { organizationId, key, operation, fingerprint, status: 'PENDING', responseStatus: null, responseBody: null, createdAt: at, completedAt: null });
         return { kind: 'new' };
       }
-      if (existing.fingerprint !== fingerprint || existing.operation !== operation) return { kind: 'mismatch' };
-      if (existing.status === 'COMPLETED') return { kind: 'replay', record: { ...existing } };
-      return { kind: 'in_progress' };
+      if (outcome === 'replay') return { kind: 'replay', record: { ...existing! } };
+      return { kind: outcome };
     },
     complete: async ({ organizationId, key, responseStatus, responseBody, at }) => {
       const r = this.idem.get(`${organizationId}:${key}`);
@@ -479,6 +474,33 @@ export class MemoryLedgerStore implements LedgerStore {
       this.idem.delete(`${organizationId}:${key}`);
     },
     get: async (organizationId, key) => clone(this.idem.get(`${organizationId}:${key}`)),
+  };
+
+  /** MUT-131: same state machine as `idempotency`, keyed by user instead of organization. */
+  readonly userIdempotency: UserIdempotencyRepository = {
+    claim: async ({ userId, key, operation, fingerprint, at }): Promise<UserIdempotencyClaim> => {
+      const id = `${userId}:${key}`;
+      const existing = this.userIdem.get(id);
+      const outcome = resolveClaim(existing, operation, fingerprint);
+      if (outcome === 'new') {
+        this.userIdem.set(id, { userId, key, operation, fingerprint, status: 'PENDING', responseStatus: null, responseBody: null, createdAt: at, completedAt: null });
+        return { kind: 'new' };
+      }
+      if (outcome === 'replay') return { kind: 'replay', record: { ...existing! } };
+      return { kind: outcome };
+    },
+    complete: async ({ userId, key, responseStatus, responseBody, at }) => {
+      const r = this.userIdem.get(`${userId}:${key}`);
+      if (!r) return;
+      r.status = 'COMPLETED';
+      r.responseStatus = responseStatus;
+      r.responseBody = responseBody;
+      r.completedAt = at;
+    },
+    fail: async ({ userId, key }) => {
+      this.userIdem.delete(`${userId}:${key}`);
+    },
+    get: async (userId, key) => clone(this.userIdem.get(`${userId}:${key}`)),
   };
 
   readonly externalReferences: ExternalReferenceRepository = {
