@@ -61,6 +61,32 @@
 
 **Files:** see `git log pre-mut-145..feat/mut-145-remove-documents`.
 
+---
+
+## [Unreleased] - 2026-10-13 — MUT-141: log currency conversion events
+
+**Why:** Freelancers holding multiple currencies periodically convert money between them; until now that movement either went unrecorded or got miscategorized as a fake expense/income, corrupting P&L. Blocked by MUT-140 (per-currency decimal precision, merged). Two findings reshaped the ticket's own premise mid-build: the "excluded from P&L by construction" claim was false until the aggregation branches were tightened, and the "Transactions ledger" the ticket assumed exists is dead code — see ADR-068.
+
+**Run (Node 22):** `npm run lint` 0 errors (13 pre-existing warnings, unrelated), `npm run typecheck` clean, `npm run build` succeeded, full `npm run test:run` 3,536 passed / 4 skipped (after the qa-reconcile fix below).
+
+### Added
+- New Transaction `kind: 'conversion'`, with `toCurrency`/`toAmountMinor` for the destination leg (`currency`/`amountMinor` stay the source leg). No Dexie migration — both are additive, unindexed.
+- `ConversionDrawer.tsx` (third sibling alongside `IncomeDrawer`/`ExpenseDrawer`): two independent amount/currency fields, each validated at its own currency's decimal precision; read-only implied rate; always `status: 'paid'`.
+- New dedicated `/conversions` page (`ConversionsPage.tsx`), gated by a new `'conversions'` feature flag (7th optional area, `FEATURE_DATA_PROBES.conversions: []` — never auto-enabled by data, a brand-new kind has none to detect). Wired into both Add menus and the sidebar nav.
+- `useConversionQueries.ts`: `useConversions`/`useConversionById`/`useCreateConversion`/`useUpdateConversion`/`useDeleteConversion`, wrapping the existing generic `transactionRepo` — no repository changes needed.
+- CSV export/import/validation: `toCurrency`/`toAmount` columns, `validateConversion`, a conversion row in the import template; wired into the live `ImportDataPage.tsx` only (`ImportDataModal.tsx` is dead code, not touched).
+
+### Changed
+- `src/db/aggregations.ts` (3 functions) and `src/lib/aggregations.ts` (2 functions): tightened bare `else { expensesMinor += ... }` branches to `else if (kind === 'expense')`, so a conversion row contributes to neither income nor expense totals anywhere in the app. Additive — no existing income/expense call site's behavior changes.
+- `src/pages/insights/InsightsPage.tsx`: same tightening applied to its own independent `summaryTotals` calculation, found by `/qa-reconcile` re-sweeping every `kind === 'income'` call site in the repo — this page doesn't route through the shared `aggregations.ts` module, so the first pass missed it. Without this fix a logged conversion inflated the Insights page's Expenses KPI by its full amount (`/reports` has the identical duplicate logic but is unreachable dead code — `/reports` redirects to `/insights` — and was left untouched).
+
+### Technical
+- ADR-068 records both architecture decisions above (the aggregation fix's shape, and the new-page-plus-feature-flag UI choice) and the alternatives considered. **Renumbered on merge: this branch's ADR-067 → ADR-068, TD-110 → TD-112, TD-111 → TD-113** — MUT-145 (merged to main first) independently claimed ADR-067 and TD-110/TD-111 for unrelated content; see its entry above.
+- TD-112 (new): `ImportDataPage.tsx`'s pre-existing income/expense import loops still hardcode base-100 parsing (predates MUT-140); the new conversion branch does not repeat this, flagged rather than fixed (unrelated scope).
+- TD-113 (new): `ImportDataPage.tsx` has no render/integration test at all (pre-existing); the new conversion branch inherits that gap, covered only indirectly.
+
+---
+
 ## [Unreleased] - 2026-10-13 — MAL-1118: personal profiles seed a household expense-category preset
 
 **Why:** MUT-143 adds expense categories to personal profiles in the iPhone app, and a person's own profile was being seeded the general business list (Office Rent, Bank Fees, Salaries). Since MUT-120 "no Malafat writer" covers both a person's own profile and a firm with no Malafat link, so the new preset keys on `personalOwnerUserId` (ADR-066).

@@ -309,9 +309,11 @@ export function aggregateTransactionTotals(transactions: Transaction[]): Transac
       const { paid, unpaid } = accumulateIncomeAmount(tx);
       paidIncomeMinor += paid;
       unpaidIncomeMinor += unpaid;
-    } else {
+    } else if (tx.kind === 'expense') {
       expensesMinor += tx.amountMinor;
     }
+    // kind === 'conversion' (MUT-141): non-operating cash movement, excluded
+    // from P&L by construction, not summed into either bucket.
   }
 
   return { paidIncomeMinor, unpaidIncomeMinor, expensesMinor };
@@ -339,9 +341,10 @@ export function aggregateTransactionTotalsByCurrency(
       const { paid, unpaid } = accumulateIncomeAmount(tx);
       currencyTotals.paidIncomeMinor += paid;
       currencyTotals.unpaidIncomeMinor += unpaid;
-    } else {
+    } else if (tx.kind === 'expense') {
       currencyTotals.expensesMinor += tx.amountMinor;
     }
+    // kind === 'conversion' (MUT-141): excluded from P&L by construction.
   }
 
   return result;
@@ -369,9 +372,11 @@ export function aggregateTransactionTotalsWithActivity(
       if (options.trackPayments && tx.status === 'paid' && (!lastPaymentAt || (tx.paidAt && tx.paidAt > lastPaymentAt))) {
         lastPaymentAt = tx.paidAt;
       }
-    } else {
+    } else if (tx.kind === 'expense') {
       expensesMinor += tx.amountMinor;
     }
+    // kind === 'conversion' (MUT-141): excluded from P&L totals, but still
+    // counts toward lastActivityAt below — it did happen on this entity.
 
     if (!lastActivityAt || tx.occurredAt > lastActivityAt) {
       lastActivityAt = tx.occurredAt;

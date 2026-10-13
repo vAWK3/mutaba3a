@@ -11,7 +11,7 @@ export type PeriodPreset = 'month' | 'quarter' | 'year' | 'custom';
 export type ReportType = 'summary' | 'by-project' | 'by-client' | 'expenses-by-project' | 'unpaid-aging';
 
 // Transaction types
-export type TxKind = 'income' | 'expense';
+export type TxKind = 'income' | 'expense' | 'conversion';
 export type TxStatus = 'paid' | 'unpaid';
 
 // Payment status (computed from receivedAmountMinor vs amountMinor)
@@ -63,6 +63,10 @@ export interface Transaction {
   categoryId?: string;
   amountMinor: number;
   currency: Currency;
+  /** Destination side of a `kind: 'conversion'` row; unset for income/expense */
+  toCurrency?: Currency;
+  /** Destination amount in minor units; unset for income/expense */
+  toAmountMinor?: number;
   occurredAt: string;
   dueDate?: string;
   paidAt?: string;
@@ -110,7 +114,8 @@ export type FeatureKey =
   | 'expenses'
   | 'insights'
   | 'planning'
-  | 'projects';
+  | 'projects'
+  | 'conversions';
 
 // Settings entity
 export interface Settings {

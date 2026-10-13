@@ -112,6 +112,40 @@ describe('aggregateTransactionTotals', () => {
     expect(result.unpaidIncomeMinor).toBe(5000);
     expect(result.expensesMinor).toBe(3000);
   });
+
+  // MUT-141: a conversion row must never be counted as an expense (or income) —
+  // it is non-operating cash movement, not P&L. Without this, conversions would
+  // silently fall into the "anything that isn't income" expense bucket.
+  it('should exclude conversion transactions from all totals', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'conversion', status: 'paid', amountMinor: 50000, currency: 'JOD',
+        toCurrency: 'USD', toAmountMinor: 70450,
+      }),
+    ];
+
+    const result = aggregateTransactionTotals(transactions);
+
+    expect(result.paidIncomeMinor).toBe(0);
+    expect(result.unpaidIncomeMinor).toBe(0);
+    expect(result.expensesMinor).toBe(0);
+  });
+
+  it('should exclude conversions while still aggregating income and expenses in the same batch', () => {
+    const transactions = [
+      createTransaction({ kind: 'income', status: 'paid', amountMinor: 10000 }),
+      createTransaction({ kind: 'expense', status: 'paid', amountMinor: 3000 }),
+      createTransaction({
+        kind: 'conversion', status: 'paid', amountMinor: 50000, currency: 'JOD',
+        toCurrency: 'USD', toAmountMinor: 70450,
+      }),
+    ];
+
+    const result = aggregateTransactionTotals(transactions);
+
+    expect(result.paidIncomeMinor).toBe(10000);
+    expect(result.expensesMinor).toBe(3000);
+  });
 });
 
 describe('accumulateIncomeAmount', () => {
@@ -209,6 +243,23 @@ describe('aggregateTransactionTotalsByCurrency', () => {
     expect(result.USD.paidIncomeMinor).toBe(15000);
     expect(result.USD.unpaidIncomeMinor).toBe(3000);
   });
+
+  // MUT-141: see aggregateTransactionTotals's equivalent test for why this matters.
+  it('should exclude conversion transactions from per-currency totals', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'conversion', status: 'paid', amountMinor: 50000, currency: 'JOD',
+        toCurrency: 'USD', toAmountMinor: 70450,
+      }),
+    ];
+
+    const result = aggregateTransactionTotalsByCurrency(transactions);
+
+    expect(result.JOD.paidIncomeMinor).toBe(0);
+    expect(result.JOD.expensesMinor).toBe(0);
+    expect(result.USD.paidIncomeMinor).toBe(0);
+    expect(result.USD.expensesMinor).toBe(0);
+  });
 });
 
 describe('aggregateTransactionTotalsByCurrency — partial payments', () => {
@@ -262,6 +313,24 @@ describe('aggregateTransactionTotalsWithActivity', () => {
     const result = aggregateTransactionTotalsWithActivity(transactions, { trackPayments: false });
 
     expect(result.lastPaymentAt).toBeUndefined();
+  });
+
+  // MUT-141: project/client rollups call this function — a conversion must not
+  // inflate a project's or client's expense total.
+  it('should exclude conversion transactions from totals while still tracking activity', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'conversion', status: 'paid', amountMinor: 50000, currency: 'JOD',
+        toCurrency: 'USD', toAmountMinor: 70450, occurredAt: '2024-01-20',
+      }),
+    ];
+
+    const result = aggregateTransactionTotalsWithActivity(transactions);
+
+    expect(result.paidIncomeMinor).toBe(0);
+    expect(result.unpaidIncomeMinor).toBe(0);
+    expect(result.expensesMinor).toBe(0);
+    expect(result.lastActivityAt).toBe('2024-01-20');
   });
 });
 

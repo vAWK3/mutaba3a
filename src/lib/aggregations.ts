@@ -289,14 +289,15 @@ export function calculateForecastKPIs(
         // Unpaid income: add to coming
         coming[tx.currency] += tx.amountMinor;
       }
-    } else {
-      // Expense transaction
+    } else if (tx.kind === 'expense') {
       if (isPast) {
         cashOnHand[tx.currency] -= tx.amountMinor;
       } else {
         leaving[tx.currency] += tx.amountMinor;
       }
     }
+    // kind === 'conversion' (MUT-141): excluded from the forecast by
+    // construction — non-operating cash movement, not P&L.
   }
 
   // Process profile expenses
@@ -394,10 +395,11 @@ export function calculateMonthActuals(
       } else {
         unpaid[tx.currency] += tx.amountMinor;
       }
-    } else {
-      // Transaction expense (kind='expense')
+    } else if (tx.kind === 'expense') {
       expenseTotal[tx.currency] += tx.amountMinor;
     }
+    // kind === 'conversion' (MUT-141): excluded from month actuals by
+    // construction — non-operating cash movement, not P&L.
   }
 
   // Process profile expenses

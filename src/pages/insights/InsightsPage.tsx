@@ -162,10 +162,11 @@ export function InsightsPage() {
           if (tx.currency === 'USD') result.unpaidIncomeUSD += unpaid;
           else if (tx.currency === 'ILS') result.unpaidIncomeILS += unpaid;
         }
-      } else {
+      } else if (tx.kind === 'expense') {
         if (tx.currency === 'USD') result.expensesUSD += tx.amountMinor;
         else if (tx.currency === 'ILS') result.expensesILS += tx.amountMinor;
       }
+      // kind === 'conversion' (MUT-141): excluded from totals by construction.
     }
 
     return result;

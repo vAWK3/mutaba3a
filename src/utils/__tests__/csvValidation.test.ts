@@ -250,6 +250,104 @@ describe('CSV Validation', () => {
       });
     });
 
+    describe('Conversion validation (MUT-141)', () => {
+      it('should validate correct conversion row as new', () => {
+        const row = {
+          type: 'conversion',
+          amount: '500',
+          currency: 'JOD',
+          toAmount: '704.50',
+          toCurrency: 'USD',
+          date: '2024-01-10',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.NEW);
+        expect(result.errors).toHaveLength(0);
+      });
+
+      it('should error if toAmount is missing', () => {
+        const row = {
+          type: 'conversion',
+          amount: '500',
+          currency: 'JOD',
+          toAmount: '',
+          toCurrency: 'USD',
+          date: '2024-01-10',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.ERROR);
+        expect(result.errors).toContain('To amount is required for conversion');
+      });
+
+      it('should error if toCurrency is missing', () => {
+        const row = {
+          type: 'conversion',
+          amount: '500',
+          currency: 'JOD',
+          toAmount: '704.50',
+          toCurrency: '',
+          date: '2024-01-10',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.ERROR);
+        expect(result.errors).toContain('To currency is required for conversion');
+      });
+
+      it('should error if toCurrency is invalid', () => {
+        const row = {
+          type: 'conversion',
+          amount: '500',
+          currency: 'JOD',
+          toAmount: '704.50',
+          toCurrency: 'GBP',
+          date: '2024-01-10',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.ERROR);
+        expect(result.errors).toContain('Invalid to currency. Must be one of: USD, ILS, EUR, JOD');
+      });
+
+      it('should error if currency equals toCurrency', () => {
+        const row = {
+          type: 'conversion',
+          amount: '500',
+          currency: 'USD',
+          toAmount: '450',
+          toCurrency: 'USD',
+          date: '2024-01-10',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.ERROR);
+        expect(result.errors).toContain('To currency must differ from currency');
+      });
+
+      it('should error if date is missing', () => {
+        const row = {
+          type: 'conversion',
+          amount: '500',
+          currency: 'JOD',
+          toAmount: '704.50',
+          toCurrency: 'USD',
+          date: '',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.ERROR);
+        expect(result.errors).toContain('Date is required for conversion');
+      });
+    });
+
     describe('General validation', () => {
       it('should error if type is invalid', () => {
         const row = {
@@ -260,7 +358,7 @@ describe('CSV Validation', () => {
         const result = validateCSVRow(row, 0, []);
 
         expect(result.status).toBe(ValidationStatus.ERROR);
-        expect(result.errors).toContain('Invalid type. Must be one of: client, project, income, expense');
+        expect(result.errors).toContain('Invalid type. Must be one of: client, project, income, expense, conversion');
       });
 
       it('should error if type is missing', () => {

@@ -14,7 +14,7 @@ export interface CSVValidationResult {
   data: Record<string, string>;
 }
 
-const VALID_TYPES = ['client', 'project', 'income', 'expense'];
+const VALID_TYPES = ['client', 'project', 'income', 'expense', 'conversion'];
 export const VALID_CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'];
 const VALID_FIELDS = ['design', 'development', 'consulting', 'marketing', 'legal', 'maintenance', 'other'];
 const VALID_INCOME_STATUSES = ['paid', 'unpaid'];
@@ -58,6 +58,9 @@ export function validateCSVRow(
       break;
     case 'expense':
       validateExpense(row, errors);
+      break;
+    case 'conversion':
+      validateConversion(row, errors);
       break;
   }
 
@@ -163,6 +166,45 @@ function validateExpense(
 
   if (!date) {
     errors.push('Date is required for expense');
+  }
+}
+
+function validateConversion(
+  row: Record<string, string>,
+  errors: string[]
+): void {
+  const amount = row.amount?.trim();
+  const currency = row.currency?.trim();
+  const toAmount = row.toAmount?.trim();
+  const toCurrency = row.toCurrency?.trim();
+  const date = row.date?.trim();
+
+  if (!amount) {
+    errors.push('Amount is required for conversion');
+  }
+
+  if (!currency) {
+    errors.push('Currency is required for conversion');
+  } else if (!VALID_CURRENCIES.includes(currency)) {
+    errors.push(`Invalid currency. Must be one of: ${VALID_CURRENCIES.join(', ')}`);
+  }
+
+  if (!toAmount) {
+    errors.push('To amount is required for conversion');
+  }
+
+  if (!toCurrency) {
+    errors.push('To currency is required for conversion');
+  } else if (!VALID_CURRENCIES.includes(toCurrency)) {
+    errors.push(`Invalid to currency. Must be one of: ${VALID_CURRENCIES.join(', ')}`);
+  }
+
+  if (currency && toCurrency && currency === toCurrency) {
+    errors.push('To currency must differ from currency');
+  }
+
+  if (!date) {
+    errors.push('Date is required for conversion');
   }
 }
 

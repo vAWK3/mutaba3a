@@ -189,6 +189,16 @@ const expensesRoute = createRoute({
   component: lazyPage(() => import('./pages/expenses/ExpensesLedgerPage'), 'ExpensesLedgerPage'),
 });
 
+// Conversions route (MUT-141): logged currency-conversion events, excluded
+// from P&L by construction. A new dedicated page, not folded into the
+// income/expense ledgers -- see .claude/designs/mut-141-currency-conversion.md.
+const conversionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/conversions',
+  beforeLoad: requireFeature('conversions'),
+  component: lazyPage(() => import('./pages/conversions/ConversionsPage'), 'ConversionsPage'),
+});
+
 // Legacy route (MUT-14): the per-profile expenses overview was removed; old links land on the ledger,
 // which then applies the Expenses switch.
 const expenseProfilesRoute = createRoute({
@@ -334,6 +344,7 @@ const routeTree = rootRoute.addChildren([
   legacyDocumentsSplatRoute,
   // Expense routes
   expensesRoute,
+  conversionsRoute,
   expenseProfilesRoute,
   profileExpensesRoute,
   profileReceiptsRoute,

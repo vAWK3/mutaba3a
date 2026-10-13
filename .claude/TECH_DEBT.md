@@ -18,6 +18,24 @@
 
 ## Open Debt
 
+### TD-113: `ImportDataPage.tsx` has no render/integration test at all
+**Status**: Open
+**Ticket**: none yet (surfaced during MUT-141)
+**Added**: 2026-10-13 (MUT-141 build)
+**Priority**: Low
+**Impact**: `ImportDataPage.tsx` (the live `/settings/import` path) has zero component or integration tests — confirmed while adding MUT-141's new conversion-import branch next to the existing income/expense ones. The new branch inherited that gap: it's covered indirectly (`csvValidation.test.ts` proves a conversion row's shape validates correctly; `csv.test.ts` proves export produces the right columns/values) but there is no test that actually drives the page's upload → preview → validate → import flow end to end for any entity type, conversion included.
+**Fix**: stand up a first render/integration test harness for this page (file upload simulation, step-through assertions, a `db.transactions` read-back after import) — a bigger lift than any single ticket's import branch, so it's tracked here rather than attempted piecemeal.
+
+### TD-112: `ImportDataPage.tsx`'s income/expense CSV import ignores per-currency decimal precision
+**Status**: Open
+**Ticket**: none yet (surfaced during MUT-141)
+**Added**: 2026-10-13 (MUT-141 build)
+**Priority**: Medium
+**Impact**: `ImportDataPage.tsx`'s income and expense CSV-import loops (the live import path — `ImportDataModal.tsx` is dead code, see the `mutaba3a-dead-import-modal-and-transactions-page` project learning) compute `amountMinor` as `Math.round(parseFloat(row.amount) * 100)`, a hardcoded base-100 assumption that predates MUT-140's per-currency-exponent work (ADR-065). A JOD row's amount (3 decimal places) silently rounds to 2 decimals on CSV import through this page — the exact bug class MUT-140 existed to kill, just not reached by that ticket's scope (drawers and shared parsing, not this direct-to-`db.transactions` import write path). MUT-141's own new conversion-import branch, added right next to these two loops, was written currency-aware from day one using `parseAmountToMinor` specifically so it wouldn't repeat this gap.
+**Fix**: thread `parseAmountToMinor(row.amount, row.currency as Currency)` into both the income and expense loops, same as the new conversion loop already does. Also worth checking whether `reconcileFeaturesAfterDataLoad`'s empty probe for `conversions` (ADR-068) ever needs revisiting: today a fresh conversion kind can't pre-exist in any database, but a cross-device backup restore containing real conversion rows, imported before the user ever toggles the area on locally, would be hidden behind an off toggle — accepted as out of scope for MUT-141, not yet a reported problem.
+
+*(TD-111/TD-110/TD-109 below were already claimed by MUT-145, merged to main first — this branch's equivalents were renumbered to TD-113/TD-112 above; see CHANGELOG/ADR-068.)*
+
 ### TD-111: The per-profile export leaves out payment records, expenses, receipts and retainers
 **Status**: Open
 **Ticket**: MUT-145 / MUT-158 (found while fixing import)
