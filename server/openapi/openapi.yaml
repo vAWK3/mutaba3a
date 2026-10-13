@@ -219,6 +219,7 @@ components:
         - ILS
         - USD
         - EUR
+        - JOD
     IncomeCaptureRules:
       type: object
       properties:
