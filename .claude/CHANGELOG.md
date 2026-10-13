@@ -28,6 +28,34 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Desktop updater capability grant: check() and relaunch() were "not allowed" in every shipped build (MUT-99)
+
+**Scope:** `src-tauri/capabilities/default.json`, `src/lib/__tests__/updater-capabilities.test.ts` (new), `.claude/CI_CD.md`, `.claude/TEST_PLAN.md`. Epic MUT-48.
+
+### Fixed
+- `capabilities/default.json` now grants `updater:default` and `process:allow-restart`.
+  `tauri-plugin-updater` and `tauri-plugin-process` were registered in `lib.rs`
+  and configured in `tauri.conf.json`, but every Tauri v2 plugin command is
+  still denied unless the capability file grants it. `check()` failed "not
+  allowed" before it ever reached the network; `relaunch()` after an install
+  would have failed the same way. Found 2026-10-12 during MUT-73's smoke test
+  (recorded in TEST_PLAN.md's desktop-smoke notes), predates MUT-73. Granted
+  `process:allow-restart` alone, not the broader `process:default`: the app
+  never calls `exit()`.
+
+### Added
+- `src/lib/__tests__/updater-capabilities.test.ts`: asserts both grants are
+  present, mirroring `updater-config.test.ts`'s pubkey guard. Written red
+  against the un-granted capabilities file, green after the fix.
+
+### Technical
+- `.claude/CI_CD.md`'s Release Checklist now lists the grant as a prerequisite.
+- Full end-to-end verification (an older install finding, downloading,
+  installing and relaunching into a real published release) is a release-time
+  checklist item, not a unit test — tracked on MUT-99.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Contingency fee agreements: upfront plus a % of the award (MUT-100)
 
 **Why:** litigation firms most often charge an upfront fee plus a negotiated percentage of what the court or a settlement awards, and the ledger could not hold it: FIXED and RECURRING both need their total at creation. Server-only; unblocks MAL-1077 (Malafat UI) and MUT-107 (contingency fee proposals). Brief: `.claude/designs/mut-100-contingency-agreements.md` (eng review, CEO review, eng re-review on 2026-10-12; review record alongside). ADR-059.
