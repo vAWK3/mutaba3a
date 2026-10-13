@@ -65,6 +65,8 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId }
     const receivableId = drawer.settle;
     return (
       <RecordPaymentDrawer
+        // One drawer state per receivable: an amount typed for one row never carries to another.
+        key={receivableId}
         profile={profile}
         receivableId={receivableId}
         onClose={onClose}
