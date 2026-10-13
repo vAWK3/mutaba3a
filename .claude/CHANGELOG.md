@@ -50,6 +50,29 @@
 - Tests: drawer intent (1/several/none/loading/failed, save/cancel paths, focus, local-day prefill, future date), store intent, `canEditPayment`, the ledger menu, the income-drawer link and its dirty guard, `paymentLocalDay`/`formatPaymentDate` in UTC+ and UTC− zones, the client Payments list west of UTC, and entry recalculation after a date move (`paymentRecords.test.ts`, D4). QA: `@web.record-payment.edit-payment-date` and `-rtl`.
 - Files: `src/lib/{stores,dates,utils}.ts`, `src/components/drawers/{PartialPaymentDrawer.tsx,PartialPaymentDrawer.css,IncomeDrawer.tsx}`, `src/pages/income/{incomeRows.ts,IncomePage.tsx}`, `src/components/clients/ClientPaymentsSection.tsx`, `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`, `qa/specs/web/record-payment.spec.ts`, `qa/features/web/record-payment.yaml`.
 
+### Fixed in pre-landing review (2026-10-14)
+- **Editing an unpaid entry to Received now records a payment** (`transactionRepo.update`, no-records branch → `markPaid`), like a Received create (MUT-60). Before this, the edit wrote status/paidAt/received straight onto the entry, so Edit Payment opened on an entry with nothing to edit (TD-029 on the edit path).
+- **An edit saves only what changed.** An untouched date keeps its stored instant: a no-op save no longer turns a fast-add's UTC timestamp into a day, which could move it across a month boundary for readers that use the UTC day. A legacy entry recorded over its total (ADR-030) can have its date fixed without tripping the overpayment check.
+- **Payment dates show the user's own day everywhere:** Home's Recent payments, the Clients index's Last payment and the CSV export's `paidAt` now go through `formatPaymentDate`/`paymentLocalDay`. `paymentLocalDay` also reads non-ISO stored dates (a CSV import's `1/15/2024`) instead of producing "Invalid Date".
+- **Edit Payment from the income drawer:**
+  - The guard also waits for a client name typed but not picked.
+  - The button uses `aria-disabled`, so it stays focusable and its hint is read.
+  - The hand-over opens the payment drawer a tick later, so closing it returns focus to the row that opened the income drawer.
+  - "Last payment" breaks a same-day tie by the stored value, so list order never decides.
+- **Payment drawer:**
+  - A failed records read has its own copy (`transactions.partialPayment.loadFailed`; the income drawer's said "can't be saved yet").
+  - Retry shows that it is loading and can't be clicked twice.
+  - A failed background refetch keeps the records already loaded.
+  - The picker says "Choose the payment to edit."
+  - The record row's edit/delete buttons have accessible names.
+  - The ledger's Edit Payment has a pencil icon (new `PencilIcon`).
+- **Tests are stable under `npm run test:tz`:** the Jerusalem-specific cases pin their zone, and two expectations that encoded the old UTC-midnight output now name the day.
+
+### Known, not fixed here
+- The repository orders a transaction's records by raw string (`recalculateReceivedAmount`, `listByTransaction`). West of UTC, a timestamp record and a date-only record on adjacent days can sort against their local days.
+- The single-record edit is derived on each render: if another window adds or removes a payment while the form is open, it switches to the picker.
+- `OrphanedRecordsDrawer.test.tsx` fails under `npm run test:tz` on main too (unrelated).
+
 ---
 
 ## [Unreleased] - 2026-10-14 — A retainer's schedule no longer skips months (TD-120)
