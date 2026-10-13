@@ -1,3 +1,4 @@
+import { getCrossProfileClientStats, type ProfileStat } from './crossProfileStats';
 import { db } from './database';
 import { DEFAULT_SETTINGS } from './defaultSettings';
 import { resolveFeatures } from '../lib/features/features';
@@ -675,6 +676,12 @@ export const projectSummaryRepo = {
 
 // Client Summary Repository
 export const clientSummaryRepo = {
+  /** Per-business entry counts and totals for clients with entries in two or more businesses. */
+  async getCrossProfileStats(): Promise<Map<string, ProfileStat[]>> {
+    // Called through the module binding so a test spy on it still applies.
+    return getCrossProfileClientStats();
+  },
+
   /**
    * One row per non-archived client: totals, activity and the MUT-7 collection
    * fields (owed now, oldest overdue age, last payment), each counted over the

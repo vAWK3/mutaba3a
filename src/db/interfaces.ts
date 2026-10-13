@@ -64,6 +64,8 @@ import type { CsvImportRow, CsvImportOptions } from './csvImport';
 import type { IntegrityResult } from './integrityCheck';
 import type { OrphanedRecordSet } from './orphanedRecords';
 import type { Document, DocumentSequence } from './retained/documentSchema';
+import type { ProfileStat } from './crossProfileStats';
+import type { CategoryPreset } from './defaultExpenseCategories';
 
 // ============================================================================
 // Base Repository Interface
@@ -142,6 +144,8 @@ export interface IProjectSummaryRepository {
 // ============================================================================
 
 export interface IClientSummaryRepository {
+  /** Per-business entry counts and totals, only for clients with entries in two or more businesses. */
+  getCrossProfileStats(): Promise<Map<string, ProfileStat[]>>;
   list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]>;
   /** The clients index: rows, No client, Archived clients and a total equal to Home's (MUT-83) */
   listOwedIndex(filters?: { profileId?: ProfileScope; search?: string }): Promise<ClientOwedIndex>;
@@ -196,6 +200,8 @@ export interface IExpenseRepository extends BaseRepository<Expense, Omit<Expense
 
 export interface IExpenseCategoryRepository extends BaseRepository<ExpenseCategory, Omit<ExpenseCategory, 'id'>> {
   list(profileId?: string): Promise<ExpenseCategory[]>;
+  /** Creates a preset's default categories in `language`; not de-duplicated. */
+  seedDefaults(profileId: string, preset?: CategoryPreset, language?: 'en' | 'ar'): Promise<void>;
 }
 
 // ============================================================================
