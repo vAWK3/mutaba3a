@@ -2162,3 +2162,20 @@ QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a bus
 **Regression sweep for the version bump (v22 → v23):** every test hardcoding the app's current top schema version was re-verified and bumped: `migration-v20/v21/v22.test.ts`, `retainedDocumentSchema.test.ts`, `retainedMonthCloseSchema.test.ts`, and one in `expensesGatingDataSafety.test.ts` that was already stale since MUT-88's v22 bump and had gone uncaught until this ticket's full-suite run.
 
 Full suite (Node 22): 3693/3697 pass (4 pre-existing skips), 262/262 files -- no regressions. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.
+
+## TD-014 (partial) — retainer projections use the local "today" (2026-10-14)
+
+Every case runs at 01:30 on 2026-10-14 in Asia/Jerusalem (`2026-10-13T22:30:00.000Z`, `atInstantIn` from `src/test/atInstantIn.ts`), where the UTC date is a day behind. All six failed on the old UTC helper.
+
+| Path | Test (`src/db/__tests__/retainerRepo.test.ts`) |
+|---|---|
+| `refreshDueStates` flips a row due today | "refreshes due states: only upcoming rows dated today or earlier become due" (was flaky between 00:00 and 03:00; now deterministic) |
+| `end` stamps the local date | "end() stamps the local date as the end date" |
+| `generateSchedule` initial state | "a generated row expected today is born due" |
+| `generateSchedule` 12-month horizon | "the schedule horizon is twelve months from the local date" |
+| `unmatch` restores due | "unmatching the only payment of a row expected today puts it back to due" |
+| `list` `daysOverdue` and `getSummary` overdue totals | "a due row expected yesterday is overdue by one day and counts as overdue" |
+
+`paymentRecords.test.ts` now imports the shared `atInstantIn` instead of its own copy. Both files pass with host `TZ` = Asia/Jerusalem, America/New_York, UTC and Pacific/Kiritimati.
+
+Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.

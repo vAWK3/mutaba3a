@@ -1,5 +1,6 @@
 import { db } from './database';
 import { excludeDeleted } from './baseQuery';
+import { formatLocalDate, todayLocalISO } from '../lib/dates';
 import type {
   RetainerAgreement,
   RetainerAgreementDisplay,
@@ -25,10 +26,6 @@ function generateId(): string {
 
 function nowISO(): string {
   return new Date().toISOString();
-}
-
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
 }
 
 /**
@@ -344,7 +341,7 @@ export const retainerRepo = {
 
     await db.retainerAgreements.update(id, {
       status: 'ended',
-      endDate: todayISO(),
+      endDate: todayLocalISO(),
       updatedAt: nowISO()
     });
 
@@ -373,7 +370,7 @@ export const retainerRepo = {
       profileId,
       state: 'due',
     });
-    const today = todayISO();
+    const today = todayLocalISO();
 
     let activeCount = 0;
     let totalExpectedMonthlyUsdMinor = 0;
@@ -450,7 +447,7 @@ export const projectedIncomeRepo = {
     const projectMap = new Map(projects.map((p) => [p.id, p.name]));
     const retainerMap = new Map(retainers.map((r) => [r.id, r.title]));
 
-    const today = todayISO();
+    const today = todayLocalISO();
 
     const filtered = items.filter((pi) => {
       if (filters.profileId && pi.profileId !== filters.profileId) return false;
@@ -538,7 +535,7 @@ export const projectedIncomeRepo = {
    * load (useUpdateDueStates).
    */
   async refreshDueStates(): Promise<void> {
-    const today = todayISO();
+    const today = todayLocalISO();
     const upcomingItems = await db.projectedIncome
       .where('state')
       .equals('upcoming')
@@ -691,7 +688,7 @@ export const projectedIncomeRepo = {
 
     // Determine new state
     let state = projectedIncome.state;
-    const today = todayISO();
+    const today = todayLocalISO();
     if (receivedAmountMinor === 0) {
       state = projectedIncome.expectedDate <= today ? 'due' : 'upcoming';
     } else {
@@ -783,16 +780,14 @@ export const scheduleGenerator = {
     if (!retainer || retainer.status !== 'active') return;
 
     const now = nowISO();
-    const today = todayISO();
+    const today = todayLocalISO();
 
     // Calculate horizon (end date or 12 months from today)
     const horizonDate = new Date();
     horizonDate.setMonth(horizonDate.getMonth() + 12);
-    const horizon = retainer.endDate
-      ? retainer.endDate < horizonDate.toISOString().split('T')[0]
-        ? retainer.endDate
-        : horizonDate.toISOString().split('T')[0]
-      : horizonDate.toISOString().split('T')[0];
+    const twelveMonthsOut = formatLocalDate(horizonDate);
+    const horizon =
+      retainer.endDate && retainer.endDate < twelveMonthsOut ? retainer.endDate : twelveMonthsOut;
 
     // Get existing items for idempotency
     const existingItems = await projectedIncomeRepo.getByRetainer(retainerId);
@@ -802,6 +797,8 @@ export const scheduleGenerator = {
 
     // Generate periods based on cadence
     const newItems: ProjectedIncome[] = [];
+    // A cursor parsed from a date-only string (UTC midnight), not a "today".
+    // Stepping it with local setMonth skips months (TD-120).
     const currentDate = new Date(retainer.startDate);
 
     while (currentDate.toISOString().split('T')[0] <= horizon) {

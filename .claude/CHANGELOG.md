@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Retainer projections use the local "today", not the UTC one (TD-014)
+
+**Why:** `src/db/retainerRepository.ts` kept a private `todayISO()` built from `toISOString()`, the UTC date that ADR-022 forbids. Between 00:00 and ~03:00 in Asia/Jerusalem it returned yesterday, so a projected retainer payment due today stayed `upcoming` for the first hours of each local day. It surfaced on 2026-10-14 at 02:00 as a failure in `retainerRepo.test.ts` ("refreshes due states…"), which built its "today" from local fields while the code compared against UTC.
+
+### Fixed
+- `retainerRepository.ts`: the private UTC helper is deleted; `refreshDueStates`, `end` (the end date), `getSummary` (overdue totals), `projectedIncomeRepo.list` (`daysOverdue`), `unmatch` (back to due/upcoming) and `generateSchedule` (a new row's initial state) all call `todayLocalISO()`. The schedule's 12-month horizon is `formatLocalDate` of the local date, not its UTC date.
+
+### Technical
+- `src/test/atInstantIn.ts`: the `atInstantIn(timeZone, instant, fn)` helper moves out of `paymentRecords.test.ts` so both tests share it.
+- `retainerRepo.test.ts`: the refresh-due-states test is deterministic (01:30 on 2026-10-14 in Jerusalem), and five new cases pin the other paths at the same instant. All six fail on the old code and pass in Jerusalem, New York, UTC and UTC+14 host timezones.
+- `.claude/TECH_DEBT.md`: TD-014 updated (the retainer copy is gone; `recurringExpenseService.ts` keeps its copy). New TD-120: the schedule's month cursor (`new Date(startDate)` + local `setMonth`) skips February for a start on the 29th–31st, and skips a month west of UTC for a start on the 1st. Found here, not fixed here.
+- `.claude/PATTERNS.md`: the date pattern's Testing note points at `atInstantIn` for "today" bugs.
+
+---
+
 ## [Unreleased] - 2026-10-13 — MUT-103: no hard-coded colour, size or radius anywhere outside the token file
 
 **Why:** MUT-102 (Brand v2) re-pointed `theme.css` at the new brand tokens, but left the rest of the app on the old system behind shrink-only allowlists: 131 colour literals, 33 px radii, 95 literal font sizes, 496 uses of the legacy `--text-xs…4xl`/`--radius-xl/2xl/full` aliases, 46 dead `var()` names, and amounts outside the shared components still in the body face instead of Plex Mono (TD-079). Nothing stopped a new one from landing. MUT-103 (epic MUT-101) closes that gap app-wide — landing and the hosted portal included (their layout and motion stay with MUT-77/MUT-91) — and turns each allowlist into a guard that fails on a new literal.
