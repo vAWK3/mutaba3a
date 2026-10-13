@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler, Next } from 'hono';
 import type { AppEnv, AuthContext } from './auth/middleware.js';
 import { ApiError } from './errors.js';
-import type { LedgerStore } from './repositories/ports.js';
+import type { IdempotencyClaim, LedgerStore, UserIdempotencyClaim } from './repositories/ports.js';
 
 /**
  * Idempotent financial writes (plan §11, §14.2, G4).
@@ -21,66 +21,95 @@ import type { LedgerStore } from './repositories/ports.js';
 export const IDEMPOTENCY_HEADER = 'Idempotency-Key';
 const KEY_RE = /^[A-Za-z0-9_\-:.]{8,128}$/;
 
+function requireKey(c: Context<AppEnv>, operation: string): string {
+  const key = c.req.header(IDEMPOTENCY_HEADER);
+  if (!key) throw new ApiError('IDEMPOTENCY_KEY_REQUIRED', `${IDEMPOTENCY_HEADER} header is required for ${operation}`);
+  if (!KEY_RE.test(key)) {
+    throw new ApiError('VALIDATION_FAILED', `${IDEMPOTENCY_HEADER} must be 8–128 characters of [A-Za-z0-9_-:.]`);
+  }
+  return key;
+}
+
+interface ClaimOps {
+  claim(args: { key: string; operation: string; fingerprint: string; at: Date }): Promise<IdempotencyClaim | UserIdempotencyClaim>;
+  complete(args: { key: string; responseStatus: number; responseBody: unknown; at: Date }): Promise<void>;
+  fail(args: { key: string; at: Date }): Promise<void>;
+}
+
+/**
+ * The claim/next()/complete-or-fail flow every idempotent write follows,
+ * regardless of what it's partitioned by (organization or user, MUT-131).
+ * [ops] already closes over that partition key.
+ */
+async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string, claimKey: string, ops: ClaimOps) {
+  const now = c.get('now')();
+  const body = await c.req.raw.clone().text();
+  const fingerprint = createHash('sha256').update(`${c.req.method}\n${c.req.path}\n${body}`).digest('hex');
+
+  const claim = await ops.claim({ key: claimKey, operation, fingerprint, at: now });
+
+  switch (claim.kind) {
+    case 'mismatch':
+      throw new ApiError('IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was already used with a different request');
+    case 'in_progress':
+      throw new ApiError('OPERATION_IN_PROGRESS', 'A request with this Idempotency-Key is still being processed');
+    case 'replay':
+      c.header('Idempotent-Replayed', 'true');
+      return c.json(claim.record.responseBody as object, (claim.record.responseStatus ?? 200) as 200);
+    case 'new':
+      break;
+  }
+
+  try {
+    await next();
+  } catch (err) {
+    await ops.fail({ key: claimKey, at: now });
+    throw err;
+  }
+
+  const res = c.res;
+  if (res.status >= 500) {
+    await ops.fail({ key: claimKey, at: now });
+    return;
+  }
+  const text = await res.clone().text();
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = null;
+  }
+  await ops.complete({ key: claimKey, responseStatus: res.status, responseBody: parsed, at: c.get('now')() });
+}
+
 export function idempotent(store: LedgerStore, operation: string): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const key = c.req.header(IDEMPOTENCY_HEADER);
-    if (!key) throw new ApiError('IDEMPOTENCY_KEY_REQUIRED', `${IDEMPOTENCY_HEADER} header is required for ${operation}`);
-    if (!KEY_RE.test(key)) {
-      throw new ApiError('VALIDATION_FAILED', `${IDEMPOTENCY_HEADER} must be 8–128 characters of [A-Za-z0-9_-:.]`);
-    }
-
+    const key = requireKey(c, operation);
     const auth = c.get('auth');
-    const now = c.get('now')();
-    const body = await c.req.raw.clone().text();
-    const fingerprint = createHash('sha256').update(`${c.req.method}\n${c.req.path}\n${body}`).digest('hex');
-
     const claimKey = claimKeyFor(auth, key);
-    const claim = await store.idempotency.claim({
-      organizationId: auth.organization.id,
-      key: claimKey,
-      operation,
-      fingerprint,
-      at: now,
+    return withIdempotency(c, next, operation, claimKey, {
+      claim: (args) => store.idempotency.claim({ organizationId: auth.organization.id, ...args }),
+      complete: (args) => store.idempotency.complete({ organizationId: auth.organization.id, ...args }),
+      fail: (args) => store.idempotency.fail({ organizationId: auth.organization.id, ...args }),
     });
+  };
+}
 
-    switch (claim.kind) {
-      case 'mismatch':
-        throw new ApiError('IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was already used with a different request');
-      case 'in_progress':
-        throw new ApiError('OPERATION_IN_PROGRESS', 'A request with this Idempotency-Key is still being processed');
-      case 'replay': {
-        c.header('Idempotent-Replayed', 'true');
-        return c.json(claim.record.responseBody as object, (claim.record.responseStatus ?? 200) as 200);
-      }
-      case 'new':
-        break;
-    }
-
-    try {
-      await next();
-    } catch (err) {
-      await store.idempotency.fail({ organizationId: auth.organization.id, key: claimKey, at: now });
-      throw err;
-    }
-
-    const res = c.res;
-    if (res.status >= 500) {
-      await store.idempotency.fail({ organizationId: auth.organization.id, key: claimKey, at: now });
-      return;
-    }
-    const text = await res.clone().text();
-    let parsed: unknown = null;
-    try {
-      parsed = text ? JSON.parse(text) : null;
-    } catch {
-      parsed = null;
-    }
-    await store.idempotency.complete({
-      organizationId: auth.organization.id,
-      key: claimKey,
-      responseStatus: res.status,
-      responseBody: parsed,
-      at: c.get('now')(),
+/**
+ * MUT-131: the same contract as [idempotent], for a route with no
+ * organization at all (POST /v1/inbox) — partitioned by the signed-in
+ * person instead. No `claimKeyFor`-style hashing needed: the userId column
+ * already fully isolates one person's claims, since there's no second
+ * principal (an API key has no identity, MUT-66) it could ever collide with.
+ */
+export function identityIdempotent(store: LedgerStore, operation: string): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const key = requireKey(c, operation);
+    const userId = c.get('identity').user.id;
+    return withIdempotency(c, next, operation, key, {
+      claim: (args) => store.userIdempotency.claim({ userId, ...args }),
+      complete: (args) => store.userIdempotency.complete({ userId, ...args }),
+      fail: (args) => store.userIdempotency.fail({ userId, ...args }),
     });
   };
 }

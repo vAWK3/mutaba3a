@@ -42,6 +42,8 @@ const json = (body: unknown, headers: Record<string, string> = {}, method = 'POS
   headers: { 'content-type': 'application/json', ...headers },
   body: JSON.stringify(body),
 });
+let ik = 0;
+const idem = () => ({ 'idempotency-key': `key-${++ik}-${Math.random().toString(36).slice(2, 8)}` });
 
 async function organization(h: Harness, label: string) {
   return (await read(await h.app.request('/admin/v1/organizations', json({ name: `${label} ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)))) as { id: string };
@@ -71,7 +73,7 @@ const BASE = { kind: 'expense', amount: '120.50', currency: 'ILS', occurredOn: '
 async function setup(organizationIds?: string[]) {
   const h = harness();
   const u = await person(h, organizationIds);
-  const capture = (body: Record<string, unknown> = BASE) => h.app.request('/v1/inbox', json(body, u.me()));
+  const capture = (body: Record<string, unknown> = BASE) => h.app.request('/v1/inbox', json(body, { ...u.me(), ...idem() }));
   const list = (query = '') => h.app.request(`/v1/inbox${query}`, { headers: u.me() });
   return { h, u, capture, list };
 }
@@ -115,6 +117,46 @@ describe('POST /v1/inbox', () => {
     const { capture } = await setup();
     expect((await capture({ ...BASE, organizationId: '00000000-0000-4000-8000-000000000000' })).status).toBe(422);
   });
+
+  // ---- MUT-131: this route had no Idempotency-Key protection at all; /v1/income and /v1/expenses
+  // already work this way (income-routes.test.ts) — same contract, here for the organization-
+  // independent capture route too, so a lost-response replay can never double-create an entry.
+
+  it('missing Idempotency-Key → 422', async () => {
+    const { h, u } = await setup();
+    const res = await h.app.request('/v1/inbox', json(BASE, u.me()));
+    expect(res.status).toBe(422);
+  });
+
+  it('replays the same Idempotency-Key + body → identical response, no second row created', async () => {
+    const { h, u } = await setup();
+    const headers = u.me({ 'idempotency-key': 'inbox-key-01' });
+    const first = await h.app.request('/v1/inbox', json(BASE, headers));
+    const again = await h.app.request('/v1/inbox', json(BASE, headers));
+    expect(again.headers.get('idempotent-replayed')).toBe('true');
+    expect(await read(again)).toEqual(await read(first));
+    const list = await read(await h.app.request('/v1/inbox', { headers: u.me() }));
+    expect(list.items).toHaveLength(1);
+  });
+
+  it('replays the same key with a different body → 422 IDEMPOTENCY_KEY_REUSED', async () => {
+    const { h, u } = await setup();
+    const headers = u.me({ 'idempotency-key': 'inbox-key-02' });
+    await h.app.request('/v1/inbox', json(BASE, headers));
+    const other = await h.app.request('/v1/inbox', json({ ...BASE, amount: '999.00' }, headers));
+    expect((await read(other)).error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('two different people using the identical literal key each get their own entry — no cross-user leakage', async () => {
+    const a = await setup();
+    const b = await setup();
+    const literal = { 'idempotency-key': 'shared-literal-key' };
+    const mine = await read(await a.h.app.request('/v1/inbox', json({ ...BASE, note: 'mine' }, a.u.me(literal))));
+    const theirs = await read(await b.h.app.request('/v1/inbox', json({ ...BASE, note: 'theirs' }, b.u.me(literal))));
+    expect(mine.id).not.toBe(theirs.id);
+    expect((await read(await a.list())).items).toHaveLength(1);
+    expect((await read(await b.list())).items).toHaveLength(1);
+  });
 });
 
 describe('the inbox belongs to the person, not to a profile', () => {
@@ -139,7 +181,7 @@ describe('the inbox belongs to the person, not to a profile', () => {
     const h = harness();
     const org = await organization(h, 'Firm');
     const u = await person(h, [org.id]);
-    const withHeader = await h.app.request('/v1/inbox', json(BASE, u.me({ 'x-mutaba3a-profile': org.id })));
+    const withHeader = await h.app.request('/v1/inbox', json(BASE, u.me({ 'x-mutaba3a-profile': org.id, ...idem() })));
     expect(withHeader.status).toBe(201);
     const listed = await h.app.request('/v1/inbox', { headers: u.me({ 'x-mutaba3a-profile': org.id }) });
     expect(listed.status).toBe(200);
@@ -159,8 +201,8 @@ describe('the inbox belongs to the person, not to a profile', () => {
     const h = harness();
     const mine = await person(h);
     const theirs = await person(h);
-    for (let i = 0; i < 5; i += 1) await h.app.request('/v1/inbox', json({ ...BASE, note: `mine ${i}` }, mine.me()));
-    await h.app.request('/v1/inbox', json({ ...BASE, note: 'theirs' }, theirs.me()));
+    for (let i = 0; i < 5; i += 1) await h.app.request('/v1/inbox', json({ ...BASE, note: `mine ${i}` }, mine.me(idem())));
+    await h.app.request('/v1/inbox', json({ ...BASE, note: 'theirs' }, theirs.me(idem())));
 
     const walked: string[] = [];
     let cursor: string | null = null;
@@ -178,7 +220,7 @@ describe('the inbox belongs to the person, not to a profile', () => {
     const h = harness();
     const mine = await person(h);
     const theirs = await person(h);
-    const entry = (await read(await h.app.request('/v1/inbox', json(BASE, theirs.me())))) as { id: string };
+    const entry = (await read(await h.app.request('/v1/inbox', json(BASE, theirs.me(idem()))))) as { id: string };
 
     expect((await h.app.request(`/v1/inbox/${entry.id}`, json({ note: 'x' }, { ...mine.me(), 'if-match': '1' }, 'PATCH'))).status).toBe(404);
     expect((await h.app.request(`/v1/inbox/${entry.id}`, { method: 'DELETE', headers: mine.me() })).status).toBe(404);

@@ -99,6 +99,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — POST /v1/inbox had no Idempotency-Key protection (MUT-131)
+
+**Why:** found while planning MUT-125 (the phone app's offline outbox): /v1/income and /v1/expenses already dedupe a replayed create by Idempotency-Key (`idempotent()` middleware), but the plain `POST /v1/inbox` capture route (MUT-66) called `store.inboxEntries.create()` directly with no such protection — a client retrying after a lost response could create a duplicate Unsorted entry. Blocks MUT-125's client-side fix, which needs to safely replay a POST to learn whether it already committed. ADR-061.
+
+**Run on this branch (Node 22):** `server/`: `npm run lint` clean, `npm run typecheck` clean, `npm test` 1,523 passed / 18 skipped, `npm run test:db` (Postgres, scratch databases) 1,650 passed, `npm run build` clean. Root: `npm run typecheck` clean (hosted schema types regenerated).
+
+### Added
+- **`POST /v1/inbox`** now requires `Idempotency-Key`, same contract as `/v1/income`/`/v1/expenses`: a replay with the same key + body returns the original entry (`Idempotent-Replayed: true`); the same key with a different body is refused 422 `IDEMPOTENCY_KEY_REUSED`.
+- `UserIdempotencyKey` table (`userId`, `key` → status/fingerprint/response), the user-scoped twin of `IdempotencyKey` — for routes with no organization at all (ADR-061 explains why this is a new table, not a column added to the existing one). Migration `20261013110000_mut131_user_idempotency_keys`, purely additive.
+- `identityIdempotent(store, operation)` middleware (`src/idempotency.ts`), alongside the existing `idempotent()` — partitions by the signed-in person (`c.get('identity')`) instead of an organization, for routes `authenticate()` never sets `auth` on.
+- `resolveClaim()` (`src/repositories/idempotency-claim.ts`): the new/in_progress/replay/mismatch state machine, factored out of `memory.ts`/`prisma.ts` so the user-scoped claim implementations didn't copy it a second time; the existing organization-scoped `idempotency.claim()` in both stores now calls it too.
+
+### Technical
+- `store-contract-inbox.ts` gained the user-idempotency state-machine test (mirrors `store-contract.ts`'s organization one) plus a cross-user isolation case — run against both `memory.ts` and `prisma.ts` via the existing `store-memory-inbox.test.ts`/`store-prisma-inbox.test.ts` harnesses.
+- `inbox-routes.test.ts`, `inbox-filing.test.ts`, `inbox-isolation.test.ts`: every direct `POST /v1/inbox` call now sends an `idempotency-key` header (these pre-dated the requirement); new idempotency-specific cases added to `inbox-routes.test.ts` (missing key, replay, mismatch, cross-user).
+- `migration-mut107.test.ts` now applies the rest of the migration history before its final schema diff (matching `migration-mut61.test.ts`'s and `migration-mut100.test.ts`'s existing pattern) — it previously stopped right after its own file, which broke the first time a later migration (this one) was added.
+- API `1.18.0-mut131`; `openapi.yaml` and the hosted portal's `schema.d.ts` regenerated. `store-guard.ts` classifies `userIdempotency.*` as `sessionOnly` (an API key has no person behind it, same rationale MUT-66 already gave `inboxEntries.*`).
+
+---
+
 ## [Unreleased] - 2026-10-13 — Contingency fee proposals: propose upfront + rate, approval creates the agreement (MUT-107)
 
 **Why:** since M8, approving a fee proposal is how every agreement is born (MUT-40/MAL-943) except CONTINGENCY (MUT-100), which could only be created directly with no client-approval record. Design already reviewed and locked inside MUT-100's plan (§11, decisions D9/D10); deferred there because MAL-1077 excluded it. Server-only; pairs with Malafat ticket MAL-1094 (not yet built) for the UI. Brief: `.claude/designs/mut-107-contingency-fee-proposals.md`. ADR-060.

@@ -84,6 +84,8 @@ if (!url) {
       );
       expect(withTerms).toEqual([{ commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' }]);
 
+      // The rest of the history (MUT-131 onwards), one transaction per file as `prisma migrate deploy` applies it, ends at the schema.
+      for (const dir of dirs.slice(dirs.indexOf(TARGET) + 1)) execute(dbUrl, `BEGIN;\n${sqlOf(dir)}\nCOMMIT;`);
       execFileSync(PRISMA, ['migrate', 'diff', '--from-url', dbUrl, '--to-schema-datamodel', join(SERVER, 'prisma/schema.prisma'), '--exit-code'], { cwd: SERVER, stdio: 'pipe' });
     });
   });

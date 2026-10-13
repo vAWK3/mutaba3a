@@ -54,7 +54,7 @@ async function setup() {
   const me = () => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN });
   const as = (extra: Record<string, string> = {}) => ({ ...me(), 'x-mutaba3a-profile': p.id, ...extra });
 
-  const capture = async (body: Record<string, unknown>) => (await read(await app.request('/v1/inbox', json(body, me())))) as { id: string };
+  const capture = async (body: Record<string, unknown>) => (await read(await app.request('/v1/inbox', json(body, { ...me(), ...idem() })))) as { id: string };
   const detail = async (userId = created.user.id) => read(await app.request(`/admin/v1/users/${userId}`, { headers: admin }));
 
   return { app, store, p, me, as, capture, detail, userId: created.user.id };

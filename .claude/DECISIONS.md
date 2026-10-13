@@ -2570,3 +2570,21 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 
 **Alternatives considered**:
 - A second `agreedCommissionRateBasisPoints`/`agreedUpfrontTreatment` pair on `fee_proposals`, mirroring `agreedAmountMinor` exactly: rejected as unscoped by §11's literal migration line, and redundant with the created agreement already holding the agreed terms.
+
+## ADR-061: Idempotency for `POST /v1/inbox` Is a New User-Keyed Table, Not a Polymorphic Column on the Existing One
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-131, found while planning MUT-125 (the phone app's offline outbox needs to replay a POST to learn whether it already committed, before deleting a not-yet-confirmed entry — safe only where the server dedupes by `Idempotency-Key`). `/v1/income`, `/v1/expenses` and both `/v1/inbox/{id}/file-as-*` routes already wrap in `idempotent(store, operation)`; the plain `POST /v1/inbox` (MUT-66) never did. `idempotent()` and the backing `IdempotencyKey` model partition every claim by `organizationId` — a required, non-nullable half of its composite primary key, with a hard FK to `Organization` — and the middleware reads `c.get('auth').organization.id`. `POST /v1/inbox` is one of the four plain inbox CRUD routes that are deliberately organization-independent (an unsorted entry belongs to the person, not an org — MUT-66): `authenticate()`'s `finishSessionAuth` only ever sets `c.get('identity')` for these routes, never `c.get('auth')`, so there is no organization to key against.
+
+**Decision**: a new `UserIdempotencyKey` table, the same shape as `IdempotencyKey` but `@@id([userId, key])` with an FK straight to `User` — mirroring how MUT-66 itself solved "a resource that belongs to a person, not an organization": `InboxEntry` is a wholly separate table keyed by `userId`, no `organizationId` column at all, paired with `store-guard.ts`'s `sessionOnly` `MethodAccess` (an API key has no person behind it, so no inbox and no inbox-create claim either). A new `identityIdempotent(store, operation)` middleware mirrors `idempotent()`, partitioned by `c.get('identity').user.id` instead; the claim/in_progress/replay/mismatch state machine itself (`resolveClaim()`) is factored into one shared function both the organization-scoped and user-scoped implementations call, in both `memory.ts` and `prisma.ts`, rather than writing it a fourth time.
+
+**Consequences**:
+- Zero change to the 28 existing `idempotent()` call sites or their tests — the org-scoped `IdempotencyKey` table, its composite primary key, and `idempotent()` itself are untouched.
+- A purely additive migration (`CREATE TABLE "user_idempotency_keys"`), no backfill — the table starts empty.
+- Two idempotency tables exist side by side (`idempotency_keys`, `user_idempotency_keys`) rather than one. Accepted: the alternative (a polymorphic owner column) would have put a nullable-PK problem in front of 28 working call sites to serve a need only one route has today.
+- `GET /v1/operations/{key}` (apiKey-only, reads `store.idempotency.get`) is unchanged and does not cover `POST /v1/inbox`'s claims — not asked for by MUT-131's AC, and an API key can't reach an organization-independent route anyway.
+
+**Alternatives considered**:
+- Relax `IdempotencyKey.organizationId` to nullable, add a polymorphic `ownerType`/`ownerId` pair: rejected — Postgres composite primary keys can't contain a nullable column, so this would have meant restructuring the primary key every one of the 28 existing callers depends on, to serve a single new caller. No precedent for a polymorphic owner column anywhere in `schema.prisma`; every existing `entityType`/`entityId` pair discriminates which table a row *references*, always alongside a still-required `organizationId`, never as a replacement for it.
+- Give `POST /v1/inbox` a dedicated, non-shared dedup mechanism (e.g. a unique constraint on the request body itself): rejected as a second, divergent idempotency implementation instead of reusing the established claim/replay/mismatch contract every other create route already has tests and client expectations built around.

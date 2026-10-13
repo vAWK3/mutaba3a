@@ -64,6 +64,8 @@ export const STORE_ACCESS: StoreAccess = {
   },
   audit: { append: 'control', listByOrganization: 'read', list: 'read' },
   idempotency: { claim: 'control', get: 'read', complete: 'control', fail: 'control' },
+  // MUT-131: partitioned by user, not organization — an API key has no person behind it (MUT-66's rationale for inboxEntries, below).
+  userIdempotency: { claim: 'sessionOnly', get: 'sessionOnly', complete: 'sessionOnly', fail: 'sessionOnly' },
   customers: { create: { write: 'customers' }, getById: 'read', list: 'read', update: { write: 'customers' }, archive: { write: 'customers' } },
   projects: {
     create: { write: 'projects' },
