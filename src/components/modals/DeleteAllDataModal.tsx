@@ -1,16 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { db, deleteAllData } from '../../db';
+import { deleteAllData } from '../../db/seed';
 import { useT } from '../../lib/i18n';
-import {
-  toCsv,
-  downloadTextFile,
-  CLIENT_COLUMNS,
-  PROJECT_COLUMNS,
-  TRANSACTION_COLUMNS,
-} from '../../utils/csv';
+import { useBackUp } from '../../hooks/useQueries';
 import './DeleteAllDataModal.css';
+
+/**
+ * The typed word matches when it reads the same ignoring surrounding spaces
+ * and letter case ("delete", " DELETE "). Arabic has no case, so حذف must
+ * match as written.
+ */
+function matchesConfirmWord(input: string, word: string): boolean {
+  return input.trim().toLocaleLowerCase() === word.toLocaleLowerCase();
+}
 
 interface DeleteAllDataModalProps {
   onClose: () => void;
@@ -25,9 +28,12 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
   const queryClient = useQueryClient();
   const modalRef = useRef<HTMLDivElement>(null);
 
+  const backUp = useBackUp();
+  const confirmId = useId();
   const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
-  const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [typedWord, setTypedWord] = useState('');
   const [deleteStatus, setDeleteStatus] = useState<DeleteStatus>('idle');
+  const confirmWord = t('settings.data.deleteModal.stepB.confirmWord');
 
   // Handle ESC key
   useEffect(() => {
@@ -48,33 +54,16 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
     }
   }, []);
 
+  // Step 1 is a real, restorable backup (MUT-88): the same file and the same
+  // "Last backed up" stamp as Settings › Your data › Back up.
   const handleExportBackup = async () => {
     setExportStatus('exporting');
     try {
-      const clients = await db.clients.toArray();
-      const projects = await db.projects.toArray();
-      const transactions = await db.transactions.toArray();
-
-      const timestamp = new Date().toISOString().split('T')[0];
-
-      // Export all three CSV files
-      downloadTextFile(
-        `clients-${timestamp}.csv`,
-        toCsv(clients as unknown as Record<string, unknown>[], [...CLIENT_COLUMNS])
-      );
-      downloadTextFile(
-        `projects-${timestamp}.csv`,
-        toCsv(projects as unknown as Record<string, unknown>[], [...PROJECT_COLUMNS])
-      );
-      downloadTextFile(
-        `transactions-${timestamp}.csv`,
-        toCsv(transactions as unknown as Record<string, unknown>[], [...TRANSACTION_COLUMNS])
-      );
-
+      await backUp.mutateAsync();
       setExportStatus('done');
     } catch (error) {
       setExportStatus('error');
-      console.error('Export failed:', error);
+      console.error('Backup failed:', error);
     }
   };
 
@@ -100,7 +89,7 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
     }
   };
 
-  const canDelete = exportStatus === 'done' && backupConfirmed && deleteStatus !== 'deleting';
+  const canDelete = exportStatus === 'done' && matchesConfirmWord(typedWord, confirmWord) && deleteStatus !== 'deleting';
 
   return createPortal(
     <>
@@ -157,15 +146,19 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
           {/* Step B: Confirm Deletion */}
           <div className={`modal-step ${exportStatus !== 'done' ? 'modal-step-disabled' : ''}`}>
             <h3 className="modal-step-title">{t('settings.data.deleteModal.stepB.title')}</h3>
-            <label className="modal-checkbox">
-              <input
-                type="checkbox"
-                checked={backupConfirmed}
-                onChange={(e) => setBackupConfirmed(e.target.checked)}
-                disabled={exportStatus !== 'done'}
-              />
-              <span>{t('settings.data.deleteModal.stepB.checkbox')}</span>
+            <label className="modal-confirm-label" htmlFor={confirmId}>
+              {t('settings.data.deleteModal.stepB.confirmLabel', { word: confirmWord })}
             </label>
+            <input
+              id={confirmId}
+              className="input modal-confirm-input"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={typedWord}
+              onChange={(e) => setTypedWord(e.target.value)}
+              disabled={exportStatus !== 'done'}
+            />
             <div className="modal-step-action">
               <button
                 className="btn btn-danger"
