@@ -23,6 +23,7 @@ import { useActiveProfile } from '../../hooks/useActiveProfile';
 import {
   amountInputCurrency,
   cn,
+  currencyExponent,
   formatAmount,
   formatDate,
   getLocaleFromLanguage,
@@ -61,17 +62,16 @@ import type { TxStatus } from '../../types';
  */
 
 const INCOME_STATUSES = ['earned', 'invoiced', 'received'] as const satisfies readonly IncomeStatus[];
-const CURRENCIES = ['USD', 'ILS', 'EUR'] as const;
+const CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'] as const;
 
-const schema = z.object({
+// Exported for direct schema-level testing (cheaper and more precise than a
+// full component render): amount's decimal-precision validity depends on the
+// sibling currency field (JOD = 3 decimals, others = 2), which a chained
+// z.string().refine() on the field alone can't see -- hence superRefine.
+export const schema = z.object({
   incomeStatus: z.enum(INCOME_STATUSES),
   profileId: z.string().min(1, 'validation.profileRequired'),
-  amount: z
-    .string()
-    .trim()
-    .min(1, 'validation.amountRequired')
-    .refine((value) => !value || parseAmountInput(value) !== null, 'validation.amountInvalid')
-    .refine((value) => (parseAmountInput(value) ?? 1) > 0, 'validation.amountPositive'),
+  amount: z.string().trim().min(1, 'validation.amountRequired'),
   currency: z.enum(CURRENCIES),
   occurredAt: z.string().min(1, 'validation.dateRequired'),
   clientId: z.string().optional(),
@@ -84,6 +84,16 @@ const schema = z.object({
   dueDate: z.string().optional(),
   title: z.string().optional(),
   notes: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.amount) return; // 'validation.amountRequired' already reported
+  const parsed = parseAmountInput(data.amount, { currency: data.currency });
+  if (parsed === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'validation.amountInvalid', path: ['amount'] });
+    return;
+  }
+  if (parsed <= 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'validation.amountPositive', path: ['amount'] });
+  }
 });
 
 type FormData = z.infer<typeof schema>;
@@ -227,7 +237,7 @@ export function IncomeDrawer() {
       reset({
         incomeStatus: getIncomeStatusFromTx(existingTx.status),
         profileId: existingTx.profileId || initialProfileId,
-        amount: (existingTx.amountMinor / 100).toString(),
+        amount: (existingTx.amountMinor / 10 ** currencyExponent(existingTx.currency)).toString(),
         currency: existingTx.currency,
         occurredAt: existingTx.occurredAt.split('T')[0],
         clientId: existingTx.clientId || '',
@@ -247,7 +257,7 @@ export function IncomeDrawer() {
       reset({
         incomeStatus: 'invoiced',
         profileId: sourceTx.profileId || initialProfileId,
-        amount: (sourceTx.amountMinor / 100).toString(),
+        amount: (sourceTx.amountMinor / 10 ** currencyExponent(sourceTx.currency)).toString(),
         currency: sourceTx.currency,
         occurredAt: todayISO(),
         clientId: sourceTx.clientId || '',
@@ -291,7 +301,7 @@ export function IncomeDrawer() {
 
   const onSubmit = async (data: FormData) => {
     if (isLocked || recordsPending) return; // the notice explains / the records are still loading
-    const amountMinor = parseAmountInput(data.amount);
+    const amountMinor = parseAmountInput(data.amount, { currency: data.currency });
     if (amountMinor === null) return; // the schema already reported it
 
     // "€100" in a USD entry is never quietly saved as $100; the currency sits under More details
