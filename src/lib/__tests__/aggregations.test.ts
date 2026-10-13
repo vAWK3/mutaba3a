@@ -444,6 +444,43 @@ describe('calculateForecastKPIs', () => {
     expect(result.cashOnHand.USD).toBe(15000); // 20000 - 5000
   });
 
+  // MUT-141: a conversion must never be treated as an expense — not even a past
+  // one, which is the exact branch that would otherwise decrement cashOnHand.
+  it('should exclude conversion transactions from cashOnHand and leaving', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'income',
+        status: 'paid',
+        amountMinor: 20000,
+        currency: 'USD',
+        paidAt: '2026-03-05T00:00:00Z',
+      }),
+      createTransaction({
+        kind: 'conversion',
+        status: 'paid',
+        amountMinor: 5000,
+        currency: 'USD',
+        toCurrency: 'JOD',
+        toAmountMinor: 3550,
+        occurredAt: '2026-03-10T00:00:00Z', // Past, would hit the expense branch if misclassified
+      }),
+      createTransaction({
+        kind: 'conversion',
+        status: 'paid',
+        amountMinor: 5000,
+        currency: 'USD',
+        toCurrency: 'JOD',
+        toAmountMinor: 3550,
+        occurredAt: '2026-03-20T00:00:00Z', // Future, would hit the "leaving" branch if misclassified
+      }),
+    ];
+
+    const result = calculateForecastKPIs('2026-03', transactions, [], [], defaultOptions);
+
+    expect(result.cashOnHand.USD).toBe(20000); // unaffected by either conversion
+    expect(result.leaving.USD).toBe(0);
+  });
+
   it('should calculate willMakeIt correctly', () => {
     const transactions = [
       // Past paid income
@@ -676,6 +713,27 @@ describe('calculateMonthActuals', () => {
     const result = calculateMonthActuals('2026-03', transactions, expenses);
 
     expect(result.expenses.USD).toBe(8000); // 5000 + 3000
+  });
+
+  // MUT-141: a conversion row must never be counted as a transaction expense.
+  it('should exclude conversion transactions from expenses', () => {
+    const transactions = [
+      createTransaction({
+        kind: 'conversion',
+        status: 'paid',
+        amountMinor: 5000,
+        currency: 'USD',
+        toCurrency: 'JOD',
+        toAmountMinor: 3550,
+        occurredAt: '2026-03-10T00:00:00Z',
+      }),
+    ];
+
+    const result = calculateMonthActuals('2026-03', transactions, []);
+
+    expect(result.expenses.USD).toBe(0);
+    expect(result.received.USD).toBe(0);
+    expect(result.unpaid.USD).toBe(0);
   });
 
   it('should calculate net correctly', () => {
