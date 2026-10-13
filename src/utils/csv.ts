@@ -105,6 +105,8 @@ export const TRANSACTION_COLUMNS = [
   'categoryId',
   'amountMinor',
   'currency',
+  'toCurrency',
+  'toAmountMinor',
   'occurredAt',
   'dueDate',
   'paidAt',
@@ -125,6 +127,8 @@ export const IMPORT_TEMPLATE_COLUMNS = [
   'field',
   'amount',
   'currency',
+  'toCurrency',
+  'toAmount',
   'status',
   'date',
   'dueDate',
@@ -267,10 +271,10 @@ export function generateImportTemplate(): string {
   const examples = [
     // Header explanation row (will be commented out in production, but helpful in template)
     {
-      type: '# TYPE OPTIONS: client, project, income, expense',
+      type: '# TYPE OPTIONS: client, project, income, expense, conversion',
       name: '# FIELD OPTIONS (projects): design, development, consulting, marketing, legal, maintenance, other',
-      email: '# CURRENCY OPTIONS: USD, ILS, EUR',
-      phone: '# STATUS OPTIONS (income only): paid, unpaid',
+      email: '# CURRENCY OPTIONS: USD, ILS, EUR, JOD',
+      phone: '# STATUS OPTIONS (income only): paid, unpaid; conversion rows also need toCurrency + toAmount',
       client: '',
       project: '',
       field: '',
@@ -408,6 +412,28 @@ export function generateImportTemplate(): string {
       category: 'Software',
       notes: '',
     },
+    // Conversion example (MUT-141): a logged currency conversion, excluded
+    // from income/expense totals by construction -- note the toCurrency/
+    // toAmount columns, required only for this type.
+    {
+      type: 'conversion',
+      name: '',
+      email: '',
+      phone: '',
+      client: '',
+      project: '',
+      field: '',
+      amount: '500',
+      currency: 'JOD',
+      toCurrency: 'USD',
+      toAmount: '704.50',
+      status: '',
+      date: '2024-01-20',
+      dueDate: '',
+      paidAt: '',
+      category: '',
+      notes: 'Moved savings to USD',
+    },
   ];
 
   return toCsv(examples, headers);
@@ -436,6 +462,8 @@ export function exportDataToCSV(data: {
     categoryId?: string;
     amountMinor: number;
     currency: string;
+    toCurrency?: string;
+    toAmountMinor?: number;
     occurredAt: Date | string;
     dueDate?: Date | string | null;
     paidAt?: Date | string | null;
@@ -508,6 +536,11 @@ export function exportDataToCSV(data: {
       field: '',
       amount: amountMinorToMajorString(tx.amountMinor, tx.currency), // Convert minor units to major, at the currency's own exponent
       currency: tx.currency,
+      // MUT-141: only populated for kind='conversion' rows -- the destination side of the conversion
+      toCurrency: tx.toCurrency || '',
+      toAmount: tx.toAmountMinor !== undefined && tx.toCurrency
+        ? amountMinorToMajorString(tx.toAmountMinor, tx.toCurrency)
+        : '',
       status: tx.status || '',
       date: formatDate(tx.occurredAt),
       dueDate: formatDate(tx.dueDate),

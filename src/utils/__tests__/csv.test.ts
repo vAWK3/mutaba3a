@@ -415,6 +415,47 @@ expense,Software subscription,,,,,,99.99,USD,,2024-01-01,,,Software,`;
       const rows = parseCSV(csv);
       expect(rows[0].amount).toBe('100.50');
     });
+
+    it('exports a conversion row with both currency legs at their own precision (MUT-141)', () => {
+      const csv = exportDataToCSV({
+        clients: [],
+        projects: [],
+        transactions: [
+          {
+            id: 'tx1',
+            kind: 'conversion',
+            amountMinor: 500000, // 500.000 JOD
+            currency: 'JOD',
+            toAmountMinor: 70450, // 704.50 USD
+            toCurrency: 'USD',
+            occurredAt: '2024-01-20',
+            notes: 'Moved savings',
+          },
+        ],
+      });
+
+      const rows = parseCSV(csv);
+      expect(rows[0].type).toBe('conversion');
+      expect(rows[0].amount).toBe('500.000');
+      expect(rows[0].currency).toBe('JOD');
+      expect(rows[0].toAmount).toBe('704.50');
+      expect(rows[0].toCurrency).toBe('USD');
+      expect(rows[0].notes).toBe('Moved savings');
+    });
+
+    it('leaves toCurrency/toAmount blank for income and expense rows', () => {
+      const csv = exportDataToCSV({
+        clients: [],
+        projects: [],
+        transactions: [
+          { id: 'tx1', kind: 'income', status: 'paid', amountMinor: 10000, currency: 'USD', occurredAt: '2024-01-15' },
+        ],
+      });
+
+      const rows = parseCSV(csv);
+      expect(rows[0].toCurrency).toBe('');
+      expect(rows[0].toAmount).toBe('');
+    });
   });
 
   describe('CSV round-trip', () => {

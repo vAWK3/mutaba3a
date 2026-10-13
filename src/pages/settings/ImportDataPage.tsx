@@ -10,7 +10,8 @@ import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
 import { CSVValidationPreview } from '../../components/csv/CSVValidationPreview';
 import { Select } from '../../components/ui';
-import type { BusinessProfile } from '../../types';
+import { parseAmountToMinor } from '../../lib/utils';
+import type { BusinessProfile, Currency } from '../../types';
 import './ImportDataPage.css';
 
 type ImportStep = 'select' | 'preview' | 'validate' | 'importing' | 'done' | 'error';
@@ -169,6 +170,7 @@ export function ImportDataPage() {
         const projectRows = selectedRows.filter(r => r.type === 'project');
         const incomeRows = selectedRows.filter(r => r.type === 'income');
         const expenseRows = selectedRows.filter(r => r.type === 'expense');
+        const conversionRows = selectedRows.filter(r => r.type === 'conversion');
 
         for (const row of clientRows) {
           if (!row.name) continue;
@@ -277,6 +279,32 @@ export function ImportDataPage() {
             categoryId,
             amountMinor,
             currency: row.currency as 'USD' | 'ILS' | 'EUR',
+            occurredAt: row.date,
+            notes: row.notes || undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          stats.transactions++;
+        }
+
+        // MUT-141: conversions always use currency-aware parsing (parseAmountToMinor)
+        // for both legs -- unlike the income/expense loops above, which predate
+        // MUT-140's per-currency-exponent work and still assume base-100 (TD-110).
+        for (const row of conversionRows) {
+          if (!row.amount || !row.currency || !row.toAmount || !row.toCurrency || !row.date) continue;
+          if (row.currency === row.toCurrency) continue;
+
+          const currency = row.currency as Currency;
+          const toCurrency = row.toCurrency as Currency;
+
+          await db.transactions.add({
+            id: crypto.randomUUID(),
+            kind: 'conversion',
+            status: 'paid',
+            amountMinor: parseAmountToMinor(row.amount, currency),
+            currency,
+            toAmountMinor: parseAmountToMinor(row.toAmount, toCurrency),
+            toCurrency,
             occurredAt: row.date,
             notes: row.notes || undefined,
             createdAt: new Date().toISOString(),
