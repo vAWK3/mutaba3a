@@ -10,8 +10,6 @@ import {
   useCreateIncome,
   useUpdateIncome,
   useDeleteIncome,
-  useMarkIncomePaid,
-  useRecordIncomePartialPayment,
 } from '../useIncomeQueries';
 import { getRepositories } from '../../db';
 
@@ -334,84 +332,6 @@ describe('Mutation Hooks', () => {
     });
   });
 
-  describe('useMarkIncomePaid', () => {
-    it('should mark income as paid', async () => {
-      const mockIncome = { id: 'tx-1', status: 'paid' };
-      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
-
-      const { result } = renderHook(
-        () => useMarkIncomePaid(),
-        { wrapper: createWrapper() }
-      );
-
-      await act(async () => {
-        await result.current.mutateAsync({ id: 'tx-1' });
-      });
-
-      expect(transactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: undefined });
-    });
-
-    it('should pass a backdated paidAt through to the repository', async () => {
-      const mockIncome = { id: 'tx-1', status: 'paid' };
-      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(mockIncome);
-
-      const { result } = renderHook(
-        () => useMarkIncomePaid(),
-        { wrapper: createWrapper() }
-      );
-
-      await act(async () => {
-        await result.current.mutateAsync({ id: 'tx-1', paidAt: '2026-09-20' });
-      });
-
-      expect(transactionRepo.markPaid).toHaveBeenCalledWith('tx-1', { paidAt: '2026-09-20' });
-    });
-
-    /**
-     * MUT-58: the money-event keys lost their last reader when Home's forecast
-     * strip and guidance feed were deleted (ADR-036), so Mark paid no longer
-     * refreshes them.
-     */
-    it('should not invalidate the retired money-event views', async () => {
-      (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'tx-1' });
-
-      const queryClient = new QueryClient({
-        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-      });
-      const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
-
-      const { result } = renderHook(() => useMarkIncomePaid(), {
-        wrapper: ({ children }: { children: React.ReactNode }) => (
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        ),
-      });
-
-      await act(async () => {
-        await result.current.mutateAsync({ id: 'tx-1' });
-      });
-
-      const invalidated = invalidateQueries.mock.calls.map(
-        ([arg]) => (arg as { queryKey: unknown[] }).queryKey[0]
-      );
-
-      expect(invalidated).toEqual(expect.arrayContaining(['income', 'transactions']));
-      expect(invalidated.filter((key) => String(key).startsWith('money'))).toEqual([]);
-    });
-  });
-
-  describe('useRecordIncomePartialPayment', () => {
-    it('records the payment through the base repository (MUT-73)', async () => {
-      (transactionRepo.recordPartialPayment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
-
-      const { result } = renderHook(() => useRecordIncomePartialPayment(), { wrapper: createWrapper() });
-
-      await act(async () => {
-        await result.current.mutateAsync({ id: 'tx-1', paymentAmountMinor: 5000 });
-      });
-
-      expect(transactionRepo.recordPartialPayment).toHaveBeenCalledWith('tx-1', 5000);
-    });
-  });
 });
 
 /**
@@ -433,17 +353,6 @@ describe('income writes refresh the payment lists', () => {
     function Wrapper({ children }: { children: React.ReactNode }) {
       return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
     };
-
-  it('useMarkIncomePaid invalidates paymentRecords', async () => {
-    (transactionRepo.markPaid as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
-    const roots = await invalidatedRoots(async (queryClient) => {
-      const { result } = renderHook(() => useMarkIncomePaid(), { wrapper: wrapperFor(queryClient) });
-      await act(async () => {
-        await result.current.mutateAsync({ id: 'tx-1' });
-      });
-    });
-    expect(roots).toContain('paymentRecords');
-  });
 
   it('useUpdateIncome invalidates paymentRecords', async () => {
     (transactionRepo.update as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);

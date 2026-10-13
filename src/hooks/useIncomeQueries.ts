@@ -185,36 +185,6 @@ export function useUpdateIncome() {
 }
 
 /**
- * Mark an income transaction as paid. `paidAt` defaults to today when
- * omitted; pass it to record a payment that happened on an earlier date
- * (MUT-18).
- */
-export function useMarkIncomePaid() {
-  const queryClient = useQueryClient();
-
-  return useMutationWithFeedback({
-    mutationFn: ({ id, paidAt }: { id: string; paidAt?: string }) =>
-      getRepositories().base.transactions.markPaid(id, { paidAt }),
-    onSuccess: () => invalidateIncomeQueries(queryClient),
-    errorMessage: 'Failed to mark as paid. Please try again.',
-  });
-}
-
-/**
- * Record a partial payment on an income transaction.
- */
-export function useRecordIncomePartialPayment() {
-  const queryClient = useQueryClient();
-
-  return useMutationWithFeedback({
-    mutationFn: ({ id, paymentAmountMinor }: { id: string; paymentAmountMinor: number }) =>
-      getRepositories().base.transactions.recordPartialPayment(id, paymentAmountMinor),
-    onSuccess: () => invalidateIncomeQueries(queryClient),
-    errorMessage: 'Failed to record payment. Please try again.',
-  });
-}
-
-/**
  * Delete (soft delete) an income transaction.
  */
 export function useDeleteIncome() {

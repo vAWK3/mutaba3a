@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Remove the dead mark-paid income hooks (MUT-98)
+
+**Why:** `useMarkIncomePaid` and `useRecordIncomePartialPayment` (`useIncomeQueries.ts`) were exported and documented but had no caller outside tests -- every live "mark paid" path has gone through `PartialPaymentDrawer` → `useCreatePaymentRecord` since MUT-18/ADR-038 and MUT-86. A second, undocumented-as-dead way to mark income paid (writing `status`/`paidAt` via `transactionRepo.markPaid` directly, bypassing payment records) is exactly the split ADR-039 exists to prevent -- the risk was the next contributor finding a documented hook and wiring it back up.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,430 passed / 4 skipped.
+
+### Removed
+- `useMarkIncomePaid`, `useRecordIncomePartialPayment` (`src/hooks/useIncomeQueries.ts`).
+- The doc references to `useMarkIncomePaid` in `useQueries.ts` (the `useTransactions` JSDoc bullet, and `useMarkTransactionPaid`'s `@deprecated` notice -- now points at `PartialPaymentDrawer`/`useCreatePaymentRecord` instead of a hook that no longer exists).
+- Three stale test mocks (`ClientDetailPage.test.tsx`, `IncomePage.test.tsx`, `ProjectDetailPage.test.tsx`) -- none of the three components actually called the hook; all three already mark paid through `openPartialPaymentDrawer`.
+- The dedicated `useMarkIncomePaid`/`useRecordIncomePartialPayment` test suite in `useIncomeQueries.test.tsx` (not named in the ticket, but it directly imported and exercised both deleted symbols) and the one `useMarkIncomePaid invalidates paymentRecords` case in the "income writes refresh the payment lists" block.
+- `transactionRepo.markPaid` is unchanged -- still reachable, still covered by its own repository tests (`transactionRepo.test.ts`, `paymentRecords.test.ts`, `partialPayment.test.ts`).
+
+---
+
 ## [Unreleased] - 2026-10-13 — Hosted portal: correct the read-only income copy for personal profiles after MUT-65 (MUT-93)
 
 **Why:** `hosted-portal.md` §7.4 and `hosted.readOnly.none` hard-coded "Income isn't recorded on hosted profiles yet" for any profile Malafat doesn't feed. MUT-65 shipped income capture for the signed-in user's own personal profile via the phone app, making that sentence false for exactly that profile. Flagged (not built) in MUT-65's design doc §9, filed as this ticket. **Copy only** (Basel, 2026-10-13): the portal stays read-only-by-design; unsuppressing "Record payment"/edit affordances for a personal profile is a separate follow-up (MUT-133).
