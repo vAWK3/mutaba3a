@@ -353,7 +353,7 @@ export function ReportsPage() {
                   </td>
                 )}
               </tr>
-              <tr style={{ fontWeight: 600, borderTop: '2px solid var(--color-border)' }}>
+              <tr style={{ fontWeight: 600, borderTop: '2px solid var(--border)' }}>
                 <td>{t('overview.kpi.net')}</td>
                 {(currencyMode === 'USD' || currencyMode === 'BOTH') && (
                   <td className={cn('amount-cell', netUSD >= 0 ? 'amount-positive' : 'amount-negative')}>

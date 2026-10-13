@@ -391,33 +391,18 @@ describe('names', () => {
   });
 });
 
-/**
- * Tokens referenced without a fallback that nothing defines: each one is a
- * style silently dropped today (eng review D6, counted 2026-10-12). Shrink-only:
- * MUT-103 replaces each with a real token and deletes it here. A new dead
- * reference, or an entry that stops being dead, fails the test.
- */
-const KNOWN_DEAD_REFERENCES = [
-  '--bg-primary', '--bg-secondary', '--border-color',
-  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border',     '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--danger', '--danger-subtle',
-  '--error-bg', '--error-fg', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
-  '--positive', '--primary', '--primary-foreground', '--primary-subtle',   '--surface-alt', '--surface-raised',   '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
-];
-
 describe('references', () => {
   const files = sourceFiles();
   const defined = customPropertyDefinitions(files);
   const references = bareVarReferences(files);
   const dead = [...references.keys()].filter((name) => !defined.has(name)).sort();
 
-  it('adds no new reference to an undefined token', () => {
-    const fresh = dead.filter((name) => !KNOWN_DEAD_REFERENCES.includes(name));
-    expect(Object.fromEntries(fresh.map((name) => [name, references.get(name)]))).toEqual({});
+  // Every var() without a fallback names a defined token: one that doesn't is a style
+  // the browser silently drops (eng review D6; MUT-103 fixed the 48 found by MUT-102).
+  it('references no undefined token', () => {
+    expect(Object.fromEntries(dead.map((name) => [name, references.get(name)]))).toEqual({});
   });
 
-  it('lists only references that are still dead (remove fixed ones from KNOWN_DEAD_REFERENCES)', () => {
-    expect(KNOWN_DEAD_REFERENCES.filter((name) => !dead.includes(name))).toEqual([]);
-  });
 });
 
 const firstFamily = (value: string) => value.split(',')[0].replace(/["']/g, '').trim();
@@ -814,21 +799,9 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
  * entries; a new file, a higher count, or a stale count fails.
  */
 const KNOWN_LITERALS: Record<string, number> = {
-  'src/components/drawers/BusinessProfileDrawer.tsx': 6,
-  'src/components/ui/Button.css': 1,
-  'src/components/ui/EntityTypeahead.css': 2,
-  'src/components/ui/ProfileBadge.css': 2,
-  'src/components/ui/ProfileContextChip.css': 6,
-  'src/components/ui/ProfileQuickPicker.css': 8,
-  'src/components/ui/RecurringOccurrenceCard.css': 8,
-  'src/components/ui/Switch.css': 1,
-  'src/index.css': 35,
-  'src/pages/expenses/ExpensesLedgerPage.tsx': 1,
-  'src/pages/income/IncomePage.tsx': 2,
   'src/pages/landing/LandingPage.css': 8,
   'src/pages/landing/PrivacyPolicyPage.css': 1,
   'src/pages/landing/components/HeroSection.css': 2,
-  'src/pages/projects/ProjectDetailPage.tsx': 2,
 };
 
 /**
@@ -836,15 +809,6 @@ const KNOWN_LITERALS: Record<string, number> = {
  * so the request does nothing). Shrink-only, as above.
  */
 const KNOWN_TABULAR_WITHOUT_MONO: string[] = [
-  'src/components/drawers/PartialPaymentDrawer.css .pay-drawer-amount-field .input',
-  'src/components/drawers/PartialPaymentDrawer.css .pay-drawer-record-amount',
-  'src/components/drawers/RecurringMarkPaidDrawer.css .recurring-drawer-amount .input',
-  'src/components/expenses/RecurringAttentionList.css .recurring-attention-amount',
-  'src/components/layout/FxRateReadout.css .fx-popover-rate dt',
-  'src/components/layout/FxRateReadout.css .fx-readout-button',
-  'src/components/ui/RecordPaymentButton.css .record-payment-remaining',
-  'src/components/ui/Table.css .table',
-  'src/index.css .client-index-amount',
   'src/pages/landing/LandingPage.css .landing-mock-amount',
   'src/pages/landing/LandingPage.css .landing-mock-client-owed, .landing-mock-client-overdue',
   'src/pages/landing/LandingPage.css .landing-mock-input--amount',
@@ -887,8 +851,13 @@ describe('literals', () => {
       'a { border-radius: calc(var(--radius-lg) - 1px); }',
       'a { padding: 12px; }',
       '@media (max-width: 768px) { a { color: var(--text); } }',
+      '@media print { .table td { border: 1px solid #ccc; } }',
     ])('leaves %s alone', (css) => {
       expect(cssLiterals(css)).toEqual([]);
+    });
+
+    it('checks screen rules beside a print block', () => {
+      expect(cssLiterals('@media print { a { color: #333; } } @media screen { a { color: #333; } }').map((literal) => literal.kind)).toEqual(['colour']);
     });
 
     it('reports the line', () => {

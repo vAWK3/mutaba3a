@@ -115,7 +115,7 @@ export function AboutSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-label" style={{ color: 'var(--color-text-muted)' }}>{t('download.allVersions')}</div>
+          <div className="settings-label" style={{ color: 'var(--muted)' }}>{t('download.allVersions')}</div>
         </div>
         <a href="/download" className="btn btn-ghost">
           {t('settings.desktopApp.downloadBtn')}

@@ -320,7 +320,7 @@ export function ExpensesLedgerPage() {
             <button
               className="recurring-rules-header"
               onClick={() => setShowForecast(!showForecast)}
-              style={{ width: '100%', textAlign: 'start', background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              style={{ width: '100%', textAlign: 'start', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
               <span style={{ fontWeight: 600 }}>
                 {t('expenses.recurring.forecast')} ({forecastOccurrences.length})

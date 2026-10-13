@@ -179,7 +179,7 @@ td {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -204,7 +204,7 @@ td {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   text-decoration: none;
   color: var(--text);
 }
@@ -214,7 +214,7 @@ td {
 }
 
 .brand-mark {
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-1);
   flex: 0 0 auto;
 }
@@ -224,7 +224,7 @@ td {
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1;
-  font-size: 16px;
+  font-size: var(--text-body);
 }
 
 .sidebar {
@@ -363,11 +363,11 @@ td {
   bottom: 4px;
   width: 3px;
   background: var(--accent);
-  border-radius: 0 2px 2px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
 }
 
 [dir="rtl"] .nav-item-rail {
-  border-radius: 2px 0 0 2px;
+  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
 }
 
 .nav-item-icon-wrapper {
@@ -580,7 +580,7 @@ td {
   border-radius: var(--radius-pill);
   background: var(--accent-solid);
   color: var(--on-accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-1);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -588,7 +588,7 @@ td {
 .sidebar-expand-toggle:hover {
   background: var(--accent-hover);
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-1);
 }
 
 .sidebar-expand-toggle .nav-icon {
@@ -671,9 +671,9 @@ td {
   gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  background: var(--surface-raised);
+  background: var(--surface-2);
   font-size: var(--text-label);
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 .topbar-profile-name {
@@ -743,7 +743,7 @@ td {
   border: none;
   padding: var(--space-1);
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--muted);
   display: flex;
   border-radius: var(--radius-sm);
 }
@@ -798,7 +798,7 @@ td {
   border: none;
   padding: var(--space-1);
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--muted);
   display: flex;
   border-radius: var(--radius-sm);
 }
@@ -914,8 +914,8 @@ td {
   align-items: center;
   gap: 3px;
   font-size: var(--text-label);
-  color: var(--text-muted);
-  background: var(--surface-raised);
+  color: var(--muted);
+  background: var(--surface-2);
   padding: 1px var(--space-1);
   border-radius: var(--radius-sm);
   line-height: 1.4;
@@ -930,7 +930,7 @@ td {
   border-radius: 50%;
   background: var(--accent-subtle);
   color: var(--on-accent-subtle);
-  font-size: 9px;
+  font-size: var(--text-micro);
   font-weight: var(--weight-semibold);
 }
 
@@ -1057,13 +1057,13 @@ td {
 }
 
 .segment-tab:hover {
-  color: var(--foreground);
+  color: var(--text);
 }
 
 .segment-tab-active,
 .segment-tab[aria-selected="true"] {
   background: var(--surface);
-  color: var(--foreground);
+  color: var(--text);
   box-shadow: var(--shadow-1);
 }
 
@@ -1102,13 +1102,13 @@ td {
 }
 
 .currency-tab:hover {
-  color: var(--foreground);
+  color: var(--text);
 }
 
 .currency-tab-active,
 .currency-tab[aria-selected="true"] {
   background: var(--surface);
-  color: var(--foreground);
+  color: var(--text);
   box-shadow: var(--shadow-1);
 }
 
@@ -1585,10 +1585,11 @@ div.input-with-prefix {
 
 .summary-item-name {
   font-size: var(--text-label);
-  color: var(--foreground);
+  color: var(--text);
 }
 
 .summary-item-amount {
+  font-family: var(--font-mono);
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
 }
@@ -1649,13 +1650,13 @@ div.input-with-prefix {
 }
 
 .income-status-tab:hover {
-  color: var(--foreground);
+  color: var(--text);
 }
 
 .income-status-tab-active,
 .income-status-tab[aria-selected="true"] {
   background: var(--surface);
-  color: var(--foreground);
+  color: var(--text);
   box-shadow: var(--shadow-1);
 }
 
@@ -1735,7 +1736,7 @@ div.input-with-prefix {
   display: flex;
   gap: var(--space-1);
   padding: var(--space-1);
-  background: var(--surface-raised);
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-4);
@@ -1755,12 +1756,12 @@ div.input-with-prefix {
 }
 
 .expenses-mode-button:hover {
-  color: var(--foreground);
+  color: var(--text);
 }
 
 .expenses-mode-button-active {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--accent-solid);
+  color: var(--on-accent);
 }
 
 /* View toggle tabs */
@@ -1787,13 +1788,13 @@ div.input-with-prefix {
 }
 
 .expenses-view-tab:hover {
-  color: var(--foreground);
+  color: var(--text);
 }
 
 .expenses-view-tab-active,
 .expenses-view-tab[aria-selected="true"] {
   background: var(--surface);
-  color: var(--foreground);
+  color: var(--text);
   box-shadow: var(--shadow-1);
 }
 
@@ -1832,7 +1833,8 @@ div.input-with-prefix {
 }
 
 .expenses-group-total {
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
   font-size: var(--text-label);
 }
 
@@ -1852,13 +1854,13 @@ div.input-with-prefix {
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 15%, transparent);
-  border-radius: 4px;
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent-solid) 15%, transparent);
+  border-radius: var(--radius-xs);
 }
 
 .expenses-group .data-table {
@@ -1907,6 +1909,7 @@ div.input-with-prefix {
 }
 
 .client-index-amount {
+  font-family: var(--font-mono);
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
 }
@@ -1997,7 +2000,7 @@ div.input-with-prefix {
 .projects-summary-count {
   font-weight: 600;
   font-size: var(--text-label);
-  color: var(--foreground);
+  color: var(--text);
   padding-right: var(--space-4);
   border-right: 1px solid var(--border);
 }
@@ -2015,11 +2018,11 @@ div.input-with-prefix {
 
 /* Net cell styling */
 .net-cell.positive {
-  color: var(--positive);
+  color: var(--success);
 }
 
 .net-cell.negative {
-  color: var(--negative);
+  color: var(--error);
 }
 
 /* Period Control */
@@ -2195,8 +2198,8 @@ div.input-with-prefix {
 }
 
 .status-badge.partial {
-  background: var(--info-subtle, var(--primary-subtle));
-  color: var(--info, var(--primary));
+  background: var(--info-subtle, var(--accent-subtle));
+  color: var(--info, var(--accent-text));
 }
 
 .status-badge.overdue {
@@ -2235,7 +2238,7 @@ div.input-with-prefix {
 .drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--overlay);
   z-index: 200;
 }
 
@@ -2718,6 +2721,11 @@ a.project-tag:hover {
   font-size: var(--text-label);
   color: var(--muted);
   margin-top: 2px;
+}
+
+/* Words in a subline stay in the body face; only the figure is Plex Mono (TD-079) */
+.client-work-subline bdi {
+  font-family: var(--font-mono);
 }
 
 .client-work-subline.text-danger {
@@ -3317,7 +3325,7 @@ a.project-tag:hover {
 [dir="rtl"] .drawer {
   right: auto;
   left: 0;
-  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-1);
 }
 
 /* Reports sidebar text alignment */
@@ -3378,7 +3386,7 @@ a.project-tag:hover {
 /* Dark mode RTL drawer shadow */
 @media (prefers-color-scheme: dark) {
   [dir="rtl"] .drawer {
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-1);
   }
 }
 
@@ -3405,15 +3413,16 @@ a.project-tag:hover {
 }
 
 .unified-total {
+  font-family: var(--font-mono);
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .unified-amount-kpi .unified-total {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--text-headline);
+  font-weight: var(--weight-medium);
 }
 
 .unified-amount-compact .unified-total {
@@ -3424,12 +3433,12 @@ a.project-tag:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 
 .unified-amount-kpi .unified-breakdown {
-  font-size: 13px;
+  font-size: var(--text-label);
 }
 
 .breakdown-item {
@@ -3454,11 +3463,11 @@ a.project-tag:hover {
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .fx-source-badge.source-live {
@@ -3477,7 +3486,7 @@ a.project-tag:hover {
 }
 
 .fx-indicator {
-  font-size: 10px;
+  font-size: var(--text-micro);
   vertical-align: super;
 }
 
@@ -3511,8 +3520,8 @@ a.project-tag:hover {
 }
 
 .currency-summary-label {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -3524,13 +3533,14 @@ a.project-tag:hover {
 }
 
 .currency-summary-amount {
-  font-size: 16px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
 }
 
 .currency-summary-amount.large {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--text-headline);
+  font-weight: var(--weight-medium);
 }
 
 .currency-summary-toggle {
@@ -3542,7 +3552,7 @@ a.project-tag:hover {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--muted);
   cursor: pointer;
   border-radius: 50%;
   transition: background-color 0.15s, color 0.15s;
@@ -3560,8 +3570,8 @@ a.project-tag:hover {
   padding: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
 }
 
 .currency-breakdown-row {
@@ -3576,13 +3586,13 @@ a.project-tag:hover {
 }
 
 .currency-breakdown-label {
-  font-size: 13px;
+  font-size: var(--text-label);
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .currency-breakdown-value {
-  font-size: 14px;
+  font-size: var(--text-label);
   font-weight: 600;
 }
 
@@ -3593,8 +3603,8 @@ a.project-tag:hover {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: var(--text-micro);
+  color: var(--muted);
 }
 
 .currency-breakdown-rate-label {
@@ -3648,7 +3658,7 @@ a.project-tag:hover {
   width: 60px;
   height: 2px;
   background: var(--border);
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
 }
 
 .matching-step-line.active {

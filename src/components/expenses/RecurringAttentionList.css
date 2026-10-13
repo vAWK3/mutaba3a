@@ -76,9 +76,10 @@
 }
 
 .recurring-attention-amount {
+  font-family: var(--font-mono);
   direction: ltr;
   unicode-bidi: isolate;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
 }
 

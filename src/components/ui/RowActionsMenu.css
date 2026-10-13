@@ -17,7 +17,7 @@
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--muted);
   cursor: pointer;
 
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -77,11 +77,11 @@
 }
 
 .row-actions-item-danger {
-  color: var(--danger);
+  color: var(--error);
 }
 
 .row-actions-item-danger:hover {
-  background-color: var(--danger-subtle);
+  background-color: var(--error-subtle);
 }
 
 .row-actions-icon {

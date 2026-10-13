@@ -7,8 +7,9 @@
  * Direction mirrors for free: .btn is inline-flex and the document carries dir.
  */
 .record-payment-remaining {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: var(--weight-medium);
   white-space: nowrap;
   opacity: 0.85;
 }

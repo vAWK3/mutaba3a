@@ -173,7 +173,7 @@ export function IncomePage() {
               </span>
             )}
             {row.overdueDays !== undefined && (
-              <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '2px' }}>
+              <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)', marginTop: '2px' }}>
                 {t('transactions.status.overdue', { days: row.overdueDays })}
               </div>
             )}
@@ -184,7 +184,7 @@ export function IncomePage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
             <AmountWithConversion amountMinor={row.amountMinor} currency={row.currency} type="income" />
             {row.partialReceivedMinor !== undefined && (
-              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+              <div style={{ fontSize: 'var(--text-label)', color: 'var(--muted)' }}>
                 {t('transactions.partialPayment.received')}: {formatAmount(row.partialReceivedMinor, row.currency, locale)}
               </div>
             )}

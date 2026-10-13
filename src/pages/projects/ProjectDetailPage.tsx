@@ -271,7 +271,7 @@ export function ProjectDetailPage() {
                                 showExpenseSign={tx.kind === 'expense'}
                               />
                               {tx.kind === 'income' && tx.receivedAmountMinor && tx.receivedAmountMinor > 0 && tx.paymentStatus === 'partial' && (
-                                <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                                <div style={{ fontSize: 'var(--text-label)', color: 'var(--muted)' }}>
                                   {t('transactions.partialPayment.received')}: {formatAmount(tx.receivedAmountMinor, tx.currency, locale)}
                                 </div>
                               )}
@@ -286,7 +286,7 @@ export function ProjectDetailPage() {
                                   receivedAmountMinor={tx.receivedAmountMinor}
                                 />
                                 {isOverdue && (
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--error)' }}>
+                                  <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)' }}>
                                     {t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}
                                   </div>
                                 )}

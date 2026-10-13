@@ -16,9 +16,10 @@
 }
 
 .pay-drawer-amount-field .input {
+  font-family: var(--font-mono);
   padding-block: var(--space-3);
   font-size: var(--text-title);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
@@ -177,6 +178,7 @@
 }
 
 .pay-drawer-record-amount {
+  font-family: var(--font-mono);
   font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
 }

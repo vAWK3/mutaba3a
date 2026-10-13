@@ -11,6 +11,7 @@
 import { useT } from '../../lib/i18n';
 import { formatAmount, formatDate } from '../../lib/utils';
 import type { VirtualOccurrenceDisplay } from '../../types';
+import { USER_COLOR_INK } from './profileAvatarStyle';
 import './RecurringOccurrenceCard.css';
 
 interface RecurringOccurrenceCardProps {
@@ -77,7 +78,7 @@ export function RecurringOccurrenceCard({
           {occurrence.categoryName && (
             <span
               className="occurrence-category"
-              style={{ backgroundColor: occurrence.categoryColor }}
+              style={occurrence.categoryColor ? { backgroundColor: occurrence.categoryColor, color: USER_COLOR_INK } : undefined}
             >
               {occurrence.categoryName}
             </span>

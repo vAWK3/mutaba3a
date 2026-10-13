@@ -576,10 +576,19 @@ export interface Literal {
   text: string;
 }
 
-/** Every colour, px radius and px/rem font size written into a stylesheet's declarations. */
+/** Inside `@media print`: paper, not the screen theme, so tokens (which follow the scheme) would be wrong there. */
+function inPrint(node: { parent?: unknown }): boolean {
+  for (let at = node.parent as { type?: string; name?: string; params?: string; parent?: unknown } | undefined; at; at = at.parent as typeof at) {
+    if (at.type === 'atrule' && at.name === 'media' && /\bprint\b/.test(at.params ?? '')) return true;
+  }
+  return false;
+}
+
+/** Every colour, px radius and px/rem font size written into a stylesheet's declarations, outside print rules. */
 export function cssLiterals(css: string): Literal[] {
   const found: Literal[] = [];
   postcss.parse(css).walkDecls((decl) => {
+    if (inPrint(decl)) return;
     const line = decl.source?.start?.line ?? 0;
     const text = `${decl.prop}: ${decl.value}`;
     if (COLOR_LITERAL.test(decl.value)) found.push({ line, kind: 'colour', text });

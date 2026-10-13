@@ -5,6 +5,7 @@
 }
 
 .fx-readout-button {
+  font-family: var(--font-mono);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -80,6 +81,7 @@
 }
 
 .fx-popover-rate dt {
+  font-family: var(--font-mono);
   font-size: var(--text-body);
   font-variant-numeric: tabular-nums;
   color: var(--text);
