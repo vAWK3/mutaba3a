@@ -87,6 +87,18 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ## Current Test Coverage
 
+### Craft-fix bundle (MUT-92, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/__tests__/IncomeDrawer.test.tsx` › currency follows the client (MUT-92) | Integration (real Dexie) | Opens in the client's newest income currency and saves it; profile currency for a client with no income; switches on a typeahead pick; a user-picked currency sticks; newest by `occurredAt`, deleted + expense ignored, archived counts; edit and duplicate keep their own currency |
+| `src/styles/__tests__/layering.test.ts` | Unit (node, CSS) | Drawer above its overlay; `.demo-banner` above content (100) and below `.drawer-overlay` |
+| `src/components/ui/__tests__/RecordPaymentButton.test.tsx` | Component | Text is "Record Payment ₪3,550" with the accessible name unchanged |
+| `src/components/filters/__tests__/DateRangeControl.test.tsx` | Component | All Time shows no range (no 2000/2100); This month keeps its range |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` › Payments | Component | Entry-saved row has empty notes and opens the entry; migration note hidden; user note shown under Notes; no Notes column without notes |
+| `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` | Component | Row amounts have no minus sign, flat and by-category |
+| `src/lib/__tests__/utils.test.ts` › formatRelativeDate | Unit | Today/Yesterday keys; EN one/other across day/week/month/year; AR one/two/few/many forms match `Intl.RelativeTimeFormat('ar')` and differ |
+| `src/lib/i18n/__tests__/craftFixKeys.test.ts` | Unit | EN + AR: no "Mini CRM", About name, Today/Yesterday kept, retired keys gone |
+
 ### Brand chrome (MUT-104, added 2026-10-13)
 | File | Type | Covers |
 |------|------|--------|
