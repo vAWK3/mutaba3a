@@ -91,7 +91,7 @@ export function FxRateReadout() {
             </p>
           )}
           {hasRate && usd.lastUpdated && (
-            <p className="fx-popover-meta">{t('fx.updated', { time: formatRelativeDate(usd.lastUpdated, t) })}</p>
+            <p className="fx-popover-meta">{t('fx.updated', { time: formatRelativeDate(usd.lastUpdated, t, locale) })}</p>
           )}
           <button type="button" className="btn btn-secondary btn-sm fx-popover-refresh" onClick={refresh} disabled={isLoading}>
             <RefreshIcon spinning={isLoading} />

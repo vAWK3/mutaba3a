@@ -589,6 +589,13 @@ test asserting on dates must pin the clock with
 `vi.useFakeTimers({ shouldAdvanceTime: true })` and `vi.setSystemTime(...)`;
 `shouldAdvanceTime` keeps Testing Library's `waitFor` from deadlocking.
 
+A test about "today" passes in daytime whether the code reads the local or the
+UTC date. Pin an instant where the two differ instead: `atInstantIn(timeZone,
+instant, fn)` (`src/test/atInstantIn.ts`, data-layer tests without `waitFor`)
+sets `TZ` and fakes only `Date`, e.g. `atInstantIn('Asia/Jerusalem',
+'2026-10-13T22:30:00.000Z', …)` is 01:30 on the 14th locally and the 13th in
+UTC. `retainerRepo.test.ts` and `paymentRecords.test.ts` use it.
+
 ---
 
 ### Pattern: i18n
@@ -1515,6 +1522,14 @@ A plural string is an object of CLDR forms (`zero|one|two|few|many|other`);
 `tp(key, count, vars)` picks the form `Intl.PluralRules` names, falling back to
 `other`, with `{count}` always available. English needs `one` + `other`; Arabic
 all six (parity-tested in `src/hosted/i18n`).
+
+### Relative time goes through `Intl.RelativeTimeFormat` (MUT-92, ADR-019)
+"3 days ago", "1 week ago" come from `formatRelativeDate(iso, t, locale)`
+(`src/lib/utils.ts`), which hands the count to `Intl.RelativeTimeFormat` with
+`numeric: 'always'`, so the plural form is CLDR's, not a `{n} weeks ago`
+template. Only Today and Yesterday are translation keys (`time.today`,
+`time.yesterday`), to keep their capitalisation. Pass `getLocale(language)`.
+Any other count in a string goes through `tp()` above.
 
 ### One broadcast channel per tab (MUT-43)
 A tab that announces something to its other tabs must use the same

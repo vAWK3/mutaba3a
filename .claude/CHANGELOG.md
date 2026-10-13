@@ -28,6 +28,60 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — A retainer's schedule no longer skips months (TD-120)
+
+**Why:** `scheduleGenerator.generateSchedule` walked months with `new Date(retainer.startDate)` and a local `setMonth(+1)` (or `+3`). The date-only start parses as UTC midnight while `setMonth`/`getMonth`/`getFullYear` are local, so a start on the 31st jumped from January to "Feb 31" = 3 March in every timezone, and west of UTC a start on the 1st read as the previous month and then skipped one. A missing row is missing expected income and leaves a payment nothing to match.
+
+### Fixed
+- `src/db/retainerRepository.ts` `generateSchedule`: the cursor is an integer month index (`year * 12 + month`) read from the start date's string, stepped by 1 or 3. Each period comes from the existing `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate` helpers, so a payment day past the month's end is clamped (Feb 28, or 29 in a leap year). The loop stops when the period start is past `horizon`, compared as strings. The skip rules (period ends before the start date, period already exists, period starts after the end date) and idempotency are unchanged.
+
+### Changed
+- The horizon check is now on the period start, not on a cursor carrying the start date's day of month. For a start mid-month, the last month whose first day falls on or before the horizon now always gets its row; before, it was dropped when the horizon's day of month was earlier than the start's.
+
+### Technical
+- `src/db/__tests__/retainerRepo.test.ts`: four cases under "every month and quarter gets a row (TD-120)", each at a fixed instant via `atInstantIn`. All four failed on the old loop.
+- `.claude/TECH_DEBT.md`: TD-120 resolved.
+
+---
+
+## [Unreleased] - 2026-10-14 — Craft-fix bundle from the Apple-design pass (MUT-92)
+
+**Why:** small defects from the 2026-10-11 review that needed no decision. Plan: `.claude/designs/mut-92-craft-fix-bundle.md` (eng review D1: reuse `useTransactions`; D2: the other count strings get their own ticket). Two of the ticket's nine fixes were already on main: the demo seed's future dates (MUT-78) and the About name (MUT-88); the second now has a regression test.
+
+### Changed
+- **Income drawer currency** (`IncomeDrawer.tsx`): a new entry for a client starts in the currency of that client's newest income (archived entries count; deleted entries and expenses do not), else the profile currency. It follows a client or profile change until the user picks a currency. Edit and duplicate keep their own currency. One `useTransactions({clientId, kind:'income', includeArchived:true, limit:1})` read, gated to create mode with a client.
+
+### Fixed
+- **Drawer layering** (`DemoBanner.css`): the fixed demo bar drops from z-index 1000 to 150, above content (≤100) and below drawers (200/201) and modals, so it no longer clips the drawer header.
+- **Record Payment** (`RecordPaymentButton.tsx`): a space between the label and the remaining amount, so copied and page text reads "Record Payment ₪3,550". The visual gap and the accessible name are unchanged.
+- **All Time** (`DateRangeControl.tsx`): no longer prints its sentinel range "01/01/2000 – 31/12/2100", on all seven pages that use the control.
+- **Client Payments notes** (`ClientPaymentsSection.tsx`): the notes cell shows only what the user wrote. "Recorded on the entry" and the migration note (on every legacy record since MUT-60's v23 backfill) are hidden, and the Notes column is dropped when no row has a note.
+- **Expenses ledger** (`ExpensesLedgerPage.tsx`): row amounts lose their minus sign (flat and by-category), keeping the expense colour. `ProjectDetailPage` keeps it, because its list mixes income and expenses.
+- **Relative dates** (`formatRelativeDate`): "1 week ago" instead of "1 weeks ago", and all six Arabic plural forms, via `Intl.RelativeTimeFormat`. Callers (`FxRateReadout`, `ClientsPage`, `ProjectsPage`) pass the locale; the untranslated English fallback is gone.
+
+### Removed
+- i18n keys `clients.profile.payments.recordedOnEntry`, `transactions.partialPayment.migratedNote` and `time.daysAgo|weeksAgo|monthsAgo|yearsAgo`, from `en.json`, `ar.json` and `types.ts`. `MIGRATED_PAYMENT_NOTE` stays: it is stored data.
+
+### Technical
+- Tests: `src/styles/__tests__/layering.test.ts` (new), `src/lib/i18n/__tests__/craftFixKeys.test.ts` (new), plus cases in `IncomeDrawer`, `RecordPaymentButton`, `DateRangeControl`, `ClientDetailPage`, `ExpensesLedgerPage` and `utils` suites. The MUT-94 "$42 in the strip" test now reads the strip, since the row shows "$42" too.
+
+---
+
+## [Unreleased] - 2026-10-14 — Retainer projections use the local "today", not the UTC one (TD-014)
+
+**Why:** `src/db/retainerRepository.ts` kept a private `todayISO()` built from `toISOString()`, the UTC date that ADR-022 forbids. Between 00:00 and ~03:00 in Asia/Jerusalem it returned yesterday, so a projected retainer payment due today stayed `upcoming` for the first hours of each local day. It surfaced on 2026-10-14 at 02:00 as a failure in `retainerRepo.test.ts` ("refreshes due states…"), which built its "today" from local fields while the code compared against UTC.
+
+### Fixed
+- `retainerRepository.ts`: the private UTC helper is deleted; `refreshDueStates`, `end` (the end date), `getSummary` (overdue totals), `projectedIncomeRepo.list` (`daysOverdue`), `unmatch` (back to due/upcoming) and `generateSchedule` (a new row's initial state) all call `todayLocalISO()`. The schedule's 12-month horizon is `formatLocalDate` of the local date, not its UTC date.
+
+### Technical
+- `src/test/atInstantIn.ts`: the `atInstantIn(timeZone, instant, fn)` helper moves out of `paymentRecords.test.ts` so both tests share it.
+- `retainerRepo.test.ts`: the refresh-due-states test is deterministic (01:30 on 2026-10-14 in Jerusalem), and five new cases pin the other paths at the same instant. All six fail on the old code and pass in Jerusalem, New York, UTC and UTC+14 host timezones.
+- `.claude/TECH_DEBT.md`: TD-014 updated (the retainer copy is gone; `recurringExpenseService.ts` keeps its copy). New TD-120: the schedule's month cursor (`new Date(startDate)` + local `setMonth`) skips February for a start on the 29th–31st, and skips a month west of UTC for a start on the 1st. Found here, not fixed here.
+- `.claude/PATTERNS.md`: the date pattern's Testing note points at `atInstantIn` for "today" bugs.
+
+---
+
 ## [Unreleased] - 2026-10-14 — The Settings QA specs find Language and Theme as radiogroups (MUT-160)
 
 **Why:** Since MUT-139, Settings → Language and Theme are `SegmentedControl` radiogroups, each named by its row label. MUT-103 (`5bd1b09`) moved the Language clicks to `radio`, but `qa/specs/web/settings.spec.ts` still waited for a `Language` and a `Theme` heading, and still clicked Dark, Light and System as buttons. So `@web.settings.language` and `@web.settings.theme` timed out on every run.

@@ -284,34 +284,35 @@ export function formatDateCompact(isoString: string): string {
  */
 type TranslationFn = (key: string, vars?: Record<string, string | number>) => string;
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const DAYS_PER_WEEK = 7;
+const DAYS_PER_MONTH = 30;
+const DAYS_PER_YEAR = 365;
+
+/** The unit and count a past day-count reads best in ("2 weeks", not "14 days"). */
+function relativeUnit(diffDays: number): [number, Intl.RelativeTimeFormatUnit] {
+  if (diffDays < DAYS_PER_WEEK) return [diffDays, 'day'];
+  if (diffDays < DAYS_PER_MONTH) return [Math.floor(diffDays / DAYS_PER_WEEK), 'week'];
+  if (diffDays < DAYS_PER_YEAR) return [Math.floor(diffDays / DAYS_PER_MONTH), 'month'];
+  return [Math.floor(diffDays / DAYS_PER_YEAR), 'year'];
+}
+
 /**
- * Format a relative date using translation function for labels
+ * How long ago `isoString` was: "Today", "Yesterday", then "3 days ago",
+ * "1 week ago"… Counts go through Intl.RelativeTimeFormat (ADR-019), so they
+ * follow CLDR plural rules: all six forms in Arabic (MUT-92).
  * @param isoString - ISO date string
- * @param t - Translation function from useT() hook
+ * @param t - Translation function from useT(), for the Today/Yesterday labels
+ * @param locale - From getLocale(language)
  */
-export function formatRelativeDate(isoString: string, t?: TranslationFn): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+export function formatRelativeDate(isoString: string, t: TranslationFn, locale: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffDays = Math.floor(diffMs / MS_PER_DAY);
 
-  // Default English fallback if no translation function provided
-  if (!t) {
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
-  }
-
-  // Use translation function for localized labels
   if (diffDays === 0) return t('time.today');
   if (diffDays === 1) return t('time.yesterday');
-  if (diffDays < 7) return t('time.daysAgo', { days: diffDays });
-  if (diffDays < 30) return t('time.weeksAgo', { weeks: Math.floor(diffDays / 7) });
-  if (diffDays < 365) return t('time.monthsAgo', { months: Math.floor(diffDays / 30) });
-  return t('time.yearsAgo', { years: Math.floor(diffDays / 365) });
+  const [count, unit] = relativeUnit(diffDays);
+  return new Intl.RelativeTimeFormat(locale, { numeric: 'always' }).format(-count, unit);
 }
 
 /**

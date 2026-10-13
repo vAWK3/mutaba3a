@@ -131,7 +131,6 @@
       "date": "تاريخ الدفعة",
       "notes": "ملاحظات",
       "addNote": "إضافة ملاحظة",
-      "migratedNote": "تم الترحيل من الإجمالي المتراكم",
       "amountMustBePositive": "يجب أن يكون مبلغ الدفعة أكبر من 0",
       "overpayment": "مبلغ الدفعة يتجاوز الرصيد المتبقي البالغ {amount}",
       "futureDate": "لا يمكن أن يكون تاريخ الدفعة في المستقبل"
@@ -319,7 +318,6 @@
       "payments": {
         "title": "الدفعات",
         "for": "مقابل",
-        "recordedOnEntry": "مسجّلة في الإدخال",
         "openEntry": "فتح إدخال الإيراد"
       }
     },
@@ -1151,10 +1149,6 @@
   "time": {
     "today": "اليوم",
     "yesterday": "أمس",
-    "daysAgo": "منذ {days} يوم",
-    "weeksAgo": "منذ {weeks} أسبوع",
-    "monthsAgo": "منذ {months} شهر",
-    "yearsAgo": "منذ {years} سنة",
     "daysOverdue": "متأخر {days} يوم",
     "dueInDays": "مستحق خلال {days} يوم"
   },
