@@ -88,15 +88,6 @@
 **Impact**: every seeded income/expense/settle call carries a deterministic Idempotency-Key that embeds the computed date (`seed-<client>-<project>-income-<slug>-<occurredOn>`), so a same-day re-run replays cleanly, but a re-run on a *later* day computes different dates — a different key — and creates a fresh batch on top of the same customers/projects (which dedupe, since their keys don't depend on date). This is deliberate: the alternative (an absolute, fixed fixture date) would eventually make the "Recent entries" screen look stale, and there's no `GET /v1/income` list route a script could use to check "did I already seed this transaction" some other way. The seeded account's record count is only bounded by how often someone actually re-runs the script by hand.
 **Fix**: none planned — screenshot tooling, plus (since 2026-10-13) the occasional manual refresh of the store-review account in prod, where a few extra recent entries are harmless. If it ever matters, the fix would be a `GET /v1/income` (or similar) list route the script could use to check existence before creating, replacing the date-keyed Idempotency-Key scheme.
 
-### TD-106: Expenses have two sources of truth — `db.expenses` and legacy `kind:'expense'` transactions
-**Status**: Open
-**Ticket**: MUT-138
-**Added**: 2026-10-13 (MUT-94 review)
-**Priority**: Medium
-**Impact**: since MUT-14, real expense creation writes `db.expenses` only. But `ImportDataModal.tsx`/`ImportDataPage.tsx` still import expenses as `kind:'expense'` transactions into `db.transactions`, and demo seed data (`src/demo/seedData/transactions.ts`) does the same. Anything imported that way never appears on `/expenses` (which reads `db.expenses` exclusively), and `TransactionsPage.tsx`'s row-click handler for such a row opens the expense drawer with the transaction's id as `expenseId`, looking up the wrong table. MUT-94 made every totals reader (`transactionRepo.getOverviewTotals(ByCurrency)`, `projectSummaryRepo`, `InsightsPage`'s monthly trend) sum both sources additively so totals stay correct either way, but that's a totals-level patch, not a fix for the underlying two-table split.
-**Fix**: MUT-138 — Import should write `db.expenses` via `expenseRepo.create`, not `kind:'expense'` transactions; fix or confirm the TransactionsPage edit-routing for any pre-existing legacy rows.
-
-
 ### TD-104: A payment allocation or reversal that loses a deadlock answers 500
 **Status**: Open
 **Ticket**: MUT-130
@@ -1431,6 +1422,15 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-106: Expenses have two sources of truth — `db.expenses` and legacy `kind:'expense'` transactions
+**Status**: Resolved (2026-10-13, MUT-138)
+**Ticket**: MUT-138
+**Added**: 2026-10-13 (MUT-94 review)
+**Priority**: Medium
+**Impact**: since MUT-14, real expense creation writes `db.expenses` only. But `ImportDataModal.tsx`/`ImportDataPage.tsx` still imported expenses as `kind:'expense'` transactions into `db.transactions`, and demo seed data (`src/demo/seedData/transactions.ts`) does the same. Anything imported that way never appeared on `/expenses` (which reads `db.expenses` exclusively), and `ProjectDetailPage.tsx`'s row-click handler for such a row opened the expense drawer with the transaction's id as `expenseId`, looking up the wrong table. MUT-94 made every totals reader sum both sources additively so totals stayed correct either way, but that was a totals-level patch, not a fix for the underlying two-table split.
+**Fix**: MUT-138 — Import should write `db.expenses` via `expenseRepo.create`, not `kind:'expense'` transactions; fix or confirm the edit-routing for any pre-existing legacy rows.
+**Resolution**: ADR-069. CSV import (`ImportDataPage.tsx`) now writes expenses via a shared `importExpenseRow()` helper (`src/utils/csvImport.ts`) into `db.expenses`, resolving categories against `db.expenseCategories`. A `profileId` is now resolved once per CSV run and threaded through every entity it creates (clients, projects, income, expenses), not just expenses. `ProjectDetailPage.tsx`'s row-click handler now routes a legacy `kind:'expense'` row to a new `LegacyExpenseEditDrawer` instead of `openExpenseDrawer`. `TransactionsPage.tsx`/`ImportDataModal.tsx` had the identical bugs but were confirmed dead code (unrouted/unrendered) and left unfixed here; MUT-145 (merged the same day) deleted both outright. Demo seed data (`src/demo/seedData/transactions.ts`) is unchanged — explicitly out of scope per the ticket, and ADR-062's additive-totals reconciliation already covers it — so the two-table split isn't fully eliminated, only its import and edit-routing consequences are. Merging alongside MUT-140/MUT-141 also surfaced and fixed two real pre-existing JOD gaps in shared code: `LegacyExpenseEditDrawer`'s hardcoded `/100` amount prefill, and `ExpenseFormFields.tsx`'s hardcoded `step="0.01"` (which silently blocked saving any 3-decimal JOD amount in the real `ExpenseDrawer` too — see ADR-069).
 
 ### TD-067: The Clients split view has no browser-level spec, and its unit tests have not run yet
 **Status**: Resolved (2026-10-12, qa port of the MUT-82/MUT-84 browser checks)

@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -575,6 +575,25 @@ openConversionDrawer({ mode: 'edit', transactionId });
 **Reuse**: data access goes through `useConversionQueries.ts` (below), not a new repository method — `transactionRepo.list`/`create`/`update`/`softDelete` were already generic enough.
 
 **Tests**: `src/components/__tests__/ConversionDrawer.test.tsx`, `src/components/drawers/__tests__/conversionFormSchema.test.ts`.
+
+---
+
+### LegacyExpenseEditDrawer
+**Location**: `src/components/drawers/LegacyExpenseEditDrawer.tsx`
+**Purpose**: Edits a pre-existing `kind:'expense'` row in `db.transactions` (MUT-138, ADR-069) — not a real `db.expenses` record. Real expenses have lived in `db.expenses` since MUT-14; this covers demo seed data and anything imported before MUT-138's import-path fix. Deliberately separate from `ExpenseDrawer` (wrong table, wrong category namespace) and from `IncomeDrawer` (hardcodes `kind: 'income'` on save). Not a general-purpose component to reuse — the population it edits only shrinks, never grows.
+
+**Features**:
+- Amount/currency/date/title/notes via the shared `ExpenseFormFields` (relaxes `categoryId` to allow empty; currency widened to USD/ILS/EUR/JOD with the same amount/currency `superRefine` ExpenseDrawer's own schema uses)
+- Client/project `<Select>` pickers (plain, not typeaheads — this is an edit-only surface for a capped population)
+- Category picker against the legacy global `db.categories` (`kind: 'expense'`), via `useCategories('expense')`
+- Delete (soft delete via `useDeleteTransaction`)
+
+```tsx
+useDrawerStore.getState().openLegacyExpenseDrawer({ transactionId: id });
+{legacyExpenseDrawer.isOpen && <LegacyExpenseEditDrawer />}
+```
+
+Tests: `src/components/drawers/__tests__/LegacyExpenseEditDrawer.test.tsx`.
 
 ---
 

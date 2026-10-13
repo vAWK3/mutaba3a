@@ -1947,6 +1947,48 @@ expenses never appear on `/expenses`; `TransactionsPage`'s row-click handler
 for such a legacy row also looks up the wrong table for editing. Found while
 tracing this bug's full reader graph, not built here.
 
+## MUT-138 — Import writes expenses into db.expenses; legacy row edit routing fixed (2026-10-13, ADR-069)
+
+Follow-up to MUT-94/TD-106. Two independent fixes: (1) CSV import
+(`ImportDataPage.tsx`) now writes expense rows via a shared
+`importExpenseRow()` helper into `db.expenses`, with a `profileId` resolved
+once per import run and threaded through every entity created, not just
+expenses; (2) `ProjectDetailPage.tsx`'s row click for a legacy
+`kind:'expense'` transaction now opens a new `LegacyExpenseEditDrawer`
+instead of `ExpenseDrawer`, which was looking the row up in the wrong table.
+`TransactionsPage.tsx`/`ImportDataModal.tsx` had the identical bugs but were
+confirmed dead code (unrouted/unrendered — confirmed against `src/router.tsx`,
+where `/transactions` redirects to `/income`) and were intentionally left
+unfixed here; MUT-145 (merged to main the same day) deleted both outright,
+porting `ImportDataModal`'s tests onto `ImportDataPage.test.tsx`. Merging
+this branch with MUT-140/MUT-141/MUT-145 (all landed the same day) also
+surfaced and fixed two real pre-existing JOD gaps in shared code: the
+drawer's amount prefill hardcoded `/100` (now `currencyExponent`-aware), and
+`ExpenseFormFields.tsx`'s amount input hardcoded `step="0.01"`, which
+silently blocked saving any 3-decimal JOD amount in the real `ExpenseDrawer`
+too (a step mismatch fails the browser's native constraint check before the
+submit event fires at all — no visible error).
+
+| Area | File | What is pinned |
+|---|---|---|
+| New helpers | `src/utils/__tests__/csvImport.test.ts` | `importExpenseRow` writes `db.expenses` not `db.transactions`, category resolves against `db.expenseCategories` (creates once, reuses on a repeat name), client/project id resolution from the import's name maps, skips a row missing amount/currency/date, defaults title; `resolveImportProfileId` returns an already-selected profile unchanged, auto-creates a default profile (English and Arabic name) via `businessProfileRepo.create`, matching `WelcomeModal`'s skip shape, when none exists |
+| CSV import, page | `src/pages/settings/__tests__/ImportDataPage.test.tsx` | a CSV expense row lands in `db.expenses` (via `expenseRepo.list()`) and not `db.transactions`, with the category in `db.expenseCategories` not the legacy global `db.categories` (AC1, AC3) — merged into MUT-145's ported suite for the one live import page |
+| Legacy edit drawer | `src/components/drawers/__tests__/LegacyExpenseEditDrawer.test.tsx` | loads an existing `db.transactions` row by id (not `db.expenses`); a save preserves `kind:'expense'`/`status:'paid'` and never writes `db.expenses`; delete asks for confirmation and soft-deletes (`deletedAt`) only when confirmed; saving with no category selected doesn't fail; a stale `clientId`/`projectId` pointing at a deleted record renders without crashing; a JOD row loads and saves at 3-decimal precision |
+| Store | `src/lib/__tests__/stores.test.ts` | `openLegacyExpenseDrawer`/`closeLegacyExpenseDrawer` state transitions |
+| Edit routing | `src/pages/projects/__tests__/ProjectDetailPage.test.tsx` | both the row-click and the title-click paths for a `kind:'expense'` transaction now call `openLegacyExpenseDrawer`, and explicitly assert `openExpenseDrawer` is NOT called (the exact regression this ticket fixes) |
+
+**Scope note:** `src/demo/seedData/transactions.ts` is unchanged — explicitly
+out of scope per the ticket (dev/demo-only), so the two-table split isn't
+fully eliminated, only the import and edit-routing consequences MUT-138's
+acceptance criteria named. `ImportDataPage.tsx`'s own income/expense CSV
+loops still hardcode base-100 amount parsing (wrong for JOD) — pre-existing,
+tracked separately as TD-112 (filed during MUT-141's build), not fixed here.
+
+**What was run (Node 22, on the fully merged tree with MUT-140/141/145):**
+see this merge's own verification note for exact counts — full `npx vitest run`,
+`npm run lint`, `npm run typecheck` (both tsconfigs), `npm run build` and
+`npm run build:hosted` all green before landing.
+
 ### MUT-139 — Settings IA reorg (2026-10-13)
 Plan: `.claude/designs/settings-ia-reorg.md`. IA/placement only, no visual redesign. Two gaps from the original review corrected during planning/build after reading the actual code and tests: the Theme control is an intentional shared-state pattern (MUT-79), not a duplicate — dropped from scope; `/settings/import` already has a working "back to Settings" button (just not the shared `TopBar` breadcrumb pattern) — logged as TD-108 instead of forcing a header-component swap.
 
