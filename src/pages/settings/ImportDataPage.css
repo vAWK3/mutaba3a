@@ -331,7 +331,7 @@
 
 .import-mode-select h4 {
   margin: 0 0 var(--space-3) 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   color: var(--text);
 }

@@ -37,7 +37,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   border: 2px solid var(--border);
   color: var(--text-muted);
@@ -65,14 +65,14 @@
 /* Content */
 .migration-content h2 {
   font-family: var(--font-serif);
-  font-size: var(--text-xl);
+  font-size: var(--text-headline);
   font-weight: var(--weight-semibold);
   margin: 0 0 var(--space-2);
 }
 
 .migration-description {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   line-height: var(--leading-relaxed);
   margin-bottom: var(--space-5);
 }
@@ -84,7 +84,7 @@
 
 .migration-backup-done {
   color: var(--success);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
 }
 
@@ -100,7 +100,7 @@
 .migration-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
 }
 
 .migration-table thead {
@@ -129,7 +129,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
 }
 
 /* Summary */
@@ -141,7 +141,7 @@
 }
 
 .migration-summary-item {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--success);
 }
 

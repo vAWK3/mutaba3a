@@ -28,7 +28,7 @@
 }
 
 .update-banner-message {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
 }
 
@@ -51,7 +51,7 @@
   border: none;
   border-radius: var(--radius-sm);
 
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   cursor: pointer;
 

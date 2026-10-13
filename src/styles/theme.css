@@ -40,16 +40,6 @@
   --text-figure: 2.5rem;
   --text-display: 3.5rem;
 
-  /* Legacy size names, kept as aliases until MUT-103 migrates them (TD-079) */
-  --text-xs: var(--text-label);
-  --text-sm: var(--text-label);
-  --text-base: var(--text-body);
-  --text-md: var(--text-body);
-  --text-lg: var(--text-body);
-  --text-xl: var(--text-headline);
-  --text-2xl: var(--text-headline);
-  --text-3xl: var(--text-title);
-  --text-4xl: var(--text-title);
 
   /* Weights. Thmanyah ships 400/500/700, so semibold renders at 700. */
   --weight-normal: 400;
@@ -96,12 +86,8 @@
   --radius-card: var(--m-radius-card);
   --radius-hero: var(--m-radius-hero);
   --radius-pill: var(--m-radius-pill);
-  /* Legacy radius names (TD-079) */
-  --radius-xl: var(--radius-card);
-  --radius-2xl: var(--radius-hero);
-  --radius-full: var(--radius-pill);
 
-  /* Layout (index.css repeats these four; TD-079) */
+  /* Layout: the only definition (MUT-103 removed index.css's copy) */
   --sidebar-width: 240px;
   --topbar-height: 56px;
   --drawer-width: 480px;
@@ -358,12 +344,12 @@ h1, h2, h3, h4, h5, h6,
   color: var(--text);
 }
 
-h1, .h1 { font-size: var(--text-4xl); }
-h2, .h2 { font-size: var(--text-3xl); }
-h3, .h3 { font-size: var(--text-2xl); }
-h4, .h4 { font-size: var(--text-xl); }
-h5, .h5 { font-size: var(--text-lg); }
-h6, .h6 { font-size: var(--text-md); }
+h1, .h1 { font-size: var(--text-title); }
+h2, .h2 { font-size: var(--text-title); }
+h3, .h3 { font-size: var(--text-headline); }
+h4, .h4 { font-size: var(--text-headline); }
+h5, .h5 { font-size: var(--text-body); }
+h6, .h6 { font-size: var(--text-body); }
 
 :lang(ar) h1, :lang(ar) h2, :lang(ar) h3,
 :lang(ar) h4, :lang(ar) h5, :lang(ar) h6,
@@ -487,7 +473,7 @@ textarea::placeholder {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -515,13 +501,13 @@ textarea::placeholder {
 .text-info { color: var(--info); }
 
 /* Text sizes */
-.text-xs { font-size: var(--text-xs); }
-.text-sm { font-size: var(--text-sm); }
-.text-base { font-size: var(--text-base); }
-.text-md { font-size: var(--text-md); }
-.text-lg { font-size: var(--text-lg); }
-.text-xl { font-size: var(--text-xl); }
-.text-2xl { font-size: var(--text-2xl); }
+.text-xs { font-size: var(--text-label); }
+.text-sm { font-size: var(--text-label); }
+.text-base { font-size: var(--text-body); }
+.text-md { font-size: var(--text-body); }
+.text-lg { font-size: var(--text-body); }
+.text-xl { font-size: var(--text-headline); }
+.text-2xl { font-size: var(--text-headline); }
 
 /* Font weights */
 .font-normal { font-weight: var(--weight-normal); }

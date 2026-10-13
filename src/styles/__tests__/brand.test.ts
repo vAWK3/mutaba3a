@@ -354,7 +354,9 @@ describe('drift', () => {
  * Every custom property theme.css defined before the Brand v2 rewrite (eng
  * review D6). Components use these names; dropping one silently strips a
  * border, shadow or colour somewhere. Add names freely; remove one only with
- * the sweep that stops every use of it.
+ * the sweep that stops every use of it. MUT-103 removed the legacy size and
+ * radius aliases (--text-xs…4xl, --radius-xl/2xl/full) after moving every use
+ * onto the brand roles.
  */
 const FROZEN_THEME_NAMES = [
   '--accent', '--accent-2', '--accent-2-hover', '--accent-2-subtle', '--accent-active', '--accent-hover',
@@ -368,14 +370,14 @@ const FROZEN_THEME_NAMES = [
   '--input-border', '--input-border-focus', '--input-border-hover', '--input-placeholder', '--leading-normal',
   '--leading-relaxed', '--leading-snug', '--leading-tight', '--link', '--link-hover', '--link-visited', '--muted',
   '--muted-2', '--nav-item-active', '--nav-item-active-text', '--nav-item-hover', '--on-accent', '--overlay',
-  '--placeholder', '--radius-2xl', '--radius-full', '--radius-lg', '--radius-md', '--radius-sm', '--radius-xl',
+  '--placeholder', '--radius-lg', '--radius-md', '--radius-sm',
   '--selection-bg', '--selection-text', '--shadow-1', '--shadow-2', '--shadow-3', '--shadow-inset', '--sidebar-bg',
   '--sidebar-border', '--sidebar-width', '--space-0', '--space-0-5', '--space-1', '--space-1-5', '--space-10',
   '--space-12', '--space-16', '--space-2', '--space-2-5', '--space-3', '--space-4', '--space-5', '--space-6',
   '--space-8', '--space-px', '--success', '--success-hover', '--success-muted', '--success-subtle', '--surface',
   '--surface-2', '--surface-3', '--surface-hover', '--table-border', '--table-header-bg', '--table-row-height',
-  '--table-row-hover', '--table-row-selected', '--text', '--text-2xl', '--text-3xl', '--text-4xl', '--text-base',
-  '--text-lg', '--text-md', '--text-secondary', '--text-sm', '--text-xl', '--text-xs', '--topbar-height',
+  '--table-row-hover', '--table-row-selected', '--text',
+  '--text-secondary', '--topbar-height',
   '--tracking-normal', '--tracking-tight', '--tracking-wide', '--warning', '--warning-hover', '--warning-muted',
   '--warning-subtle', '--weight-bold', '--weight-medium', '--weight-normal', '--weight-semibold',
 ];
@@ -491,7 +493,6 @@ describe('tokens', () => {
   it('body text is 16px and the type roles equal the JSON scale', () => {
     const tokens = new Tokens(theme, LIGHT);
     expect(tokens.px('--text-body')).toBe(16);
-    expect(tokens.px('--text-base')).toBe(16);
     for (const [role, [size]] of Object.entries(tokensJson.type)) expect(tokens.px(`--text-${role}`), role).toBe(size);
   });
 

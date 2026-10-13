@@ -15,7 +15,7 @@
 
 .error-boundary-content h2 {
   margin-bottom: var(--space-2);
-  font-size: var(--text-xl);
+  font-size: var(--text-headline);
   font-weight: var(--weight-semibold);
   color: var(--color-text-base);
 }
@@ -35,7 +35,7 @@
 
 .error-boundary-content summary {
   cursor: pointer;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--color-text-muted);
 }
 
@@ -43,7 +43,7 @@
   margin-top: var(--space-2);
   padding: var(--space-2);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-label);
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--color-bg-base);
@@ -72,5 +72,5 @@
 
 .inline-error-fallback p {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
 }

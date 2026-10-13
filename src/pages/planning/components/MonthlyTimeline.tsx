@@ -241,7 +241,7 @@ export function MonthlyTimeline({ projections, currency, locale }: MonthlyTimeli
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          font-size: var(--text-sm);
+          font-size: var(--text-label);
           margin-bottom: 0.25rem;
         }
 

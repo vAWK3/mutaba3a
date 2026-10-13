@@ -58,7 +58,7 @@
   border: none;
   border-radius: var(--radius-sm);
 
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   color: var(--text);
   text-align: start;

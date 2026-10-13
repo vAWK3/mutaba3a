@@ -20,7 +20,7 @@
 
 .table th {
   padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   color: var(--muted);
   text-align: left;
@@ -45,7 +45,7 @@
 /* Cells */
 .table td {
   padding: var(--space-3) var(--space-4);
-  font-size: var(--text-base);
+  font-size: var(--text-body);
   color: var(--text);
   border-bottom: 1px solid var(--table-border);
   vertical-align: middle;
@@ -152,14 +152,14 @@
 
 .table-empty-title {
   font-family: var(--font-heading);
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   color: var(--text);
   margin-bottom: var(--space-2);
 }
 
 .table-empty-description {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   margin-bottom: var(--space-4);
 }
 

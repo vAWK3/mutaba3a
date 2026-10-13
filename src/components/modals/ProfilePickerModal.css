@@ -43,14 +43,14 @@
 }
 
 .profile-picker-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   color: var(--foreground);
   margin: 0 0 var(--space-2);
 }
 
 .profile-picker-description {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--muted);
   margin: 0;
 }
@@ -99,7 +99,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   /* Without a business colour: the filled pair; a colour comes inline (profileAvatarStyle) */
   background-color: var(--accent-solid);
@@ -122,7 +122,7 @@
 
 .profile-picker-option-secondary {
   display: block;
-  font-size: var(--text-xs);
+  font-size: var(--text-label);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;

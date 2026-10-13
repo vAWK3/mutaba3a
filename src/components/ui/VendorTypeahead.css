@@ -29,7 +29,7 @@
   background: transparent;
   text-align: start;
   cursor: pointer;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--text);
   transition: background 0.15s;
 }
@@ -62,7 +62,7 @@
 }
 
 .vendor-typeahead-score {
-  font-size: var(--text-xs);
+  font-size: var(--text-label);
   color: var(--text-muted);
   padding: 2px 6px;
   background: var(--bg-subtle);

@@ -61,7 +61,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-6) var(--space-3) var(--space-5);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-card);
   background: var(--text);
   color: var(--bg);
   text-decoration: none;
@@ -93,18 +93,18 @@
 }
 
 .hero-cta-label {
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
 
 .hero-cta-hint {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   opacity: 0.72;
 }
 
 .hero-cta-alt {
   color: var(--accent-text);
-  font-size: var(--text-md);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
   text-decoration: none;
 }

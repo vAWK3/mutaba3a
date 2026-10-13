@@ -21,7 +21,7 @@
   background: var(--surface-elevated);
   border: 2px solid var(--border-subtle);
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   transition: all 0.2s ease;
 }

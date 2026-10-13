@@ -7,7 +7,7 @@
 }
 
 .input-label {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
 }
@@ -19,7 +19,7 @@
   width: 100%;
   height: 36px;
   padding: 0 var(--space-3);
-  font-size: var(--text-base);
+  font-size: var(--text-body);
   color: var(--text);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -103,13 +103,13 @@
 
 /* Error & Hint messages */
 .input-error-message {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--error);
   margin: 0;
 }
 
 .input-hint {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--muted);
   margin: 0;
 }
