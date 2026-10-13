@@ -39,9 +39,9 @@
 - Transitive refreshes, all within declared ranges: `rollup` 4.63.5, `ws` 8.22.0, `fast-uri` 3.1.8, `@babel/core` 7.29.7, `browserslist` 4.29.3, `ajv` 6.15.0, `flatted` 3.4.4, `picomatch` 4.0.7, `minimatch` 3.1.5, `brace-expansion` 1.1.21, `source-map-js` 1.2.2. The lockfile has 749 → 716 entries.
 - No `overrides` were added.
 - Resolution used `npm@11.6.2 … --before=2026-10-01`, so every resolved version is at least 12 days old. The one exception is `solid-js` 1.9.16 (2026-10-06): no older `solid-js` clears the critical. Reason for the cutoff: the unconstrained latest `rollup` (4.64.6) had been published only hours earlier.
-- npm 11 was needed because `npm audit fix` and `npm install` crash on the repo's npm 10.9.8 (TD-112). The lockfile is still v3, and a clean `npm ci` on npm 10.9.8 installs from it and audits at 0.
+- npm 11 was needed because `npm audit fix` and `npm install` crash on the repo's npm 10.9.8 (TD-114). The lockfile is still v3, and a clean `npm ci` on npm 10.9.8 installs from it and audits at 0.
 - `rollup` ≥ 4.63.0 adds an optional, Linux-x64-only `@napi-rs/lzma-linux-x64-gnu` (upstream since 2026-08-25). It is in the lockfile, but nothing installs it on macOS or Windows.
-- Deferred: `server/` (its own lockfile) has 3 highs from `deepmerge-ts` via Prisma's `@prisma/config`; the only offered fix is a forced Prisma downgrade (TD-113).
+- Deferred: `server/` (its own lockfile) has 3 highs from `deepmerge-ts` via Prisma's `@prisma/config`; the only offered fix is a forced Prisma downgrade (TD-115).
 
 **Run on this branch (Node 22.23.1):**
 - `npm audit` 0 vulnerabilities (was 27);
