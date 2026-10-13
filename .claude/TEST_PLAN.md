@@ -1994,3 +1994,23 @@ JOD is a 3-decimal (fils) currency, unlike USD/ILS/EUR (all 2-decimal) — the r
 **Scope note:** document/invoice generation (`DocumentFormPage.tsx`, `DocumentDrawer.tsx`, `LineItemsTable.tsx`) was briefly widened to accept JOD, then reverted — that whole feature is being removed (MUT-145, product direction is digital-ledger-only). `DocumentPdf.tsx`'s fix above stayed, since it's the same defensive type-completeness category as the aggregation fixes, not new JOD feature investment in a surface that's going away.
 
 
+## MUT-141 — Currency conversion logging (2026-10-13)
+
+New `kind: 'conversion'` on `Transaction`, excluded from P&L totals, on a new dedicated `/conversions` page gated by a 7th feature flag — see ADR-067 for the two findings that reshaped this ticket mid-build (the "excluded by construction" premise was false until the aggregation branches were tightened; the "Transactions ledger" the ticket assumed exists is dead code).
+
+| File | Added | Covers |
+|---|---|---|
+| `src/db/__tests__/aggregations.test.ts` | +3 | A conversion row contributes 0 to `paidIncomeMinor`/`unpaidIncomeMinor`/`expensesMinor` in `aggregateTransactionTotals`, `aggregateTransactionTotalsByCurrency` (per-currency), `aggregateTransactionTotalsWithActivity` (also confirms `lastActivityAt` still tracks it); mixed-batch case alongside real income/expense rows |
+| `src/lib/__tests__/aggregations.test.ts` | +2 | `calculateForecastKPIs`: a past AND a future conversion in the same batch touch neither `cashOnHand` nor `leaving` (the exact two branches that would have miscounted it as an expense); `calculateMonthActuals`: a conversion contributes 0 to `expenses`/`received`/`unpaid` |
+| `src/lib/features/__tests__/features.test.ts` | 1 updated, +1 | "six areas" → "seven areas" assertion updated for the new `conversions` key; new assertion that `FEATURE_DATA_PROBES.conversions` is `[]` (never auto-enabled by data, same as `insights`, for a stronger reason — see ADR-067 point 5) |
+| `src/components/drawers/__tests__/conversionFormSchema.test.ts` (new) | 10 | Valid two-currency conversion parses; JOD's 3rd decimal accepted independently on either side; a 4th decimal / wrong-precision rejected independently on either side (proves the two `superRefine` checks don't leak into each other); non-positive amount rejected on either side; same-currency conversion rejected; date required; note optional |
+| `src/components/__tests__/ConversionDrawer.test.tsx` (new) | 4 | Create flow writes `kind:'conversion'`, `status:'paid'`, both currency legs, and the selected profile to `db.transactions`; the implied-rate readout renders and matches hand-computed expectation; same-currency conversion blocked before any write; edit flow loads an existing row's both amounts/currencies/notes correctly and re-saves |
+| `src/pages/conversions/__tests__/ConversionsPage.test.tsx` (new) | 5 | Empty state; a row renders both currency amounts (exact `Intl.NumberFormat` output, not an assumption) and the correct implied rate; the default this-month date range excludes an out-of-range conversion; search filters by note text; row click opens the edit drawer with the right `transactionId` |
+| `src/utils/__tests__/csv.test.ts` | +2 | A conversion row exports both legs at each currency's own precision (JOD's 3 decimals preserved, not rounded); `toCurrency`/`toAmount` are blank for income/expense rows (no cross-contamination) |
+| `src/utils/__tests__/csvValidation.test.ts` | +6 (1 updated) | Valid conversion row passes; missing `toAmount`/`toCurrency` each rejected with their own message; invalid `toCurrency` rejected; same currency on both sides rejected; missing date rejected; the "invalid type" error message updated to list `conversion` among valid types |
+| `src/lib/features/__tests__/routeGuard.test.ts` | 0 (no change needed) | Already generic over `FeatureKey` — `requireFeature('conversions')` is covered by the existing key-agnostic suite with no new test required |
+
+**Known gap (not closed this session):** `ImportDataPage.tsx`'s new conversion-import branch has no render/integration test — the whole page has none (TD-111), a pre-existing gap this ticket's branch inherited rather than fixed. Covered indirectly (row-shape validation + export round-trip), not end-to-end.
+
+**What was run (Node 22):** `npm run lint` 0 errors (13 pre-existing warnings, unrelated — the `react-hooks/incompatible-library` `watch()` warning already exists on every other React Hook Form drawer) · `npm run typecheck` clean · `npm run build` succeeded (new `ConversionsPage` chunk code-split as expected) · full `vitest run` (no path filter): 3,535 passed / 4 skipped.
+

@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -552,6 +552,29 @@ navigate({ search: { newProject: true, clientId } }); // Create
 - Category selection
 - Receipt attachment
 - Recurring rule linking
+
+---
+
+### ConversionDrawer (MUT-141)
+**Location**: `src/components/drawers/ConversionDrawer.tsx`. Mounted in `AppShell` while `conversionDrawer.isOpen` (`src/lib/stores.ts`). Opened via `useDrawerStore().openConversionDrawer`.
+
+**Purpose**: Log a currency-conversion event — money moved from one currency to another, excluded from P&L by construction (ADR-067). Writes `kind: 'conversion'` to `db.transactions`, with `currency`/`amountMinor` as the source leg and `toCurrency`/`toAmountMinor` as the destination leg.
+
+```tsx
+openConversionDrawer({ mode: 'create', defaultProfileId: profileId });
+openConversionDrawer({ mode: 'edit', transactionId });
+```
+
+**Features**:
+- Two independent amount/currency fields (`conversionFormSchema.ts`), each validated against its own currency's decimal precision (MUT-140's `parseAmountInput`/`CURRENCY_EXPONENT`), not a single shared pair — the one new form shape in the drawers directory.
+- Same-currency conversion rejected (`fromCurrency !== toCurrency`).
+- Read-only implied exchange rate, recalculated live from the two amounts, never persisted as a separate field.
+- Always writes `status: 'paid'` — a conversion has no due/unpaid concept, so `TxStatus` was not widened for this feature.
+- No category, client, or project field (out of this ticket's scope).
+
+**Reuse**: data access goes through `useConversionQueries.ts` (below), not a new repository method — `transactionRepo.list`/`create`/`update`/`softDelete` were already generic enough.
+
+**Tests**: `src/components/__tests__/ConversionDrawer.test.tsx`, `src/components/drawers/__tests__/conversionFormSchema.test.ts`.
 
 ---
 
