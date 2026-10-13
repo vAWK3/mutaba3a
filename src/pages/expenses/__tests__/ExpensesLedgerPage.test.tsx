@@ -262,8 +262,11 @@ describe('ExpensesLedgerPage', () => {
 
       renderWithProviders();
 
+      // The row shows $42 too since MUT-92 dropped its minus sign, so read
+      // the strip itself.
       await waitFor(() => {
-        expect(screen.getByText('$42')).toBeInTheDocument();
+        const strip = document.querySelector('.expenses-summary-strip') as HTMLElement;
+        expect(within(strip).getByText('$42')).toBeInTheDocument();
       });
     });
 
@@ -304,6 +307,20 @@ describe('ExpensesLedgerPage', () => {
       });
     });
 
+    // MUT-92 F6: every row here is an expense, so a minus sign is noise; the
+    // amount keeps its expense colour.
+    it('shows row amounts without a minus sign', async () => {
+      renderWithProviders();
+
+      await waitFor(() => {
+        expect(screen.getByText('Office Supplies')).toBeInTheDocument();
+      });
+
+      const amounts = document.querySelectorAll('tbody .amount-cell .amount-negative');
+      expect(amounts.length).toBe(3);
+      amounts.forEach((amount) => expect(amount.textContent).not.toMatch(/^[-−]/));
+    });
+
     it('clicking row opens expense drawer', async () => {
       renderWithProviders();
 
@@ -337,6 +354,24 @@ describe('ExpensesLedgerPage', () => {
         const categoryGroups = screen.getAllByTestId('category-group');
         expect(categoryGroups.length).toBe(2);
       });
+    });
+
+    it('shows row amounts without a minus sign (MUT-92 F6)', async () => {
+      renderWithProviders();
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /by category/i })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('tab', { name: /by category/i }));
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('category-group').length).toBe(2);
+      });
+      const amounts = document.querySelectorAll(
+        '[data-testid="category-group"] .amount-cell .amount-negative'
+      );
+      expect(amounts.length).toBe(3);
+      amounts.forEach((amount) => expect(amount.textContent).not.toMatch(/^[-−]/));
     });
 
     it('shows subtotals for each category', async () => {
