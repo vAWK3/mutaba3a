@@ -536,6 +536,10 @@
         "projects": {
           "label": "Projects",
           "description": "Group income entries under a project"
+        },
+        "conversions": {
+          "label": "Currency conversions",
+          "description": "Log money moved between currencies, kept out of your income and expense totals"
         }
       }
     },

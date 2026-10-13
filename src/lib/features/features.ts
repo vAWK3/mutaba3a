@@ -26,6 +26,7 @@ export const FEATURE_KEYS = [
   'insights',
   'planning',
   'projects',
+  'conversions',
 ] as const satisfies readonly FeatureKey[];
 
 // Type-level guard: the union in `types/index.ts` and this list must match.
@@ -95,11 +96,14 @@ interface Probe {
 /**
  * Which tables prove an area has user data. An empty list means the area owns
  * no data of its own and is never auto-enabled (insights is derived from
- * income and expenses). Archived rows count as data: the user created them
- * and can still reach them inside the area; only soft-deleted rows do not.
- * Projects have no soft delete (`archivedAt` only; `projectRepo.delete` is a
- * hard delete), so any row counts. Vendors belong to the expenses module
- * (`Expense.vendorId`), so they switch expenses on.
+ * income and expenses; conversions is a brand-new `kind` value on
+ * `transactions` that cannot exist in any pre-upgrade database, so there is
+ * no existing data an off toggle could hide — MUT-141). Archived rows count
+ * as data: the user created them and can still reach them inside the area;
+ * only soft-deleted rows do not. Projects have no soft delete (`archivedAt`
+ * only; `projectRepo.delete` is a hard delete), so any row counts. Vendors
+ * belong to the expenses module (`Expense.vendorId`), so they switch expenses
+ * on.
  */
 export const FEATURE_DATA_PROBES: Readonly<Record<FeatureKey, readonly Probe[]>> = Object.freeze({
   invoices: [{ table: 'documents', softDelete: true }],
@@ -111,6 +115,7 @@ export const FEATURE_DATA_PROBES: Readonly<Record<FeatureKey, readonly Probe[]>>
   insights: [],
   planning: [{ table: 'plans', softDelete: false }],
   projects: [{ table: 'projects', softDelete: false }],
+  conversions: [],
 });
 
 /** Every table a probe reads, for transaction scopes and test cleanup. */

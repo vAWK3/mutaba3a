@@ -428,7 +428,7 @@ export function exportDataToCSV(data: {
   }>;
   transactions: Array<{
     id: string;
-    kind: 'income' | 'expense';
+    kind: 'income' | 'expense' | 'conversion';
     status?: 'paid' | 'unpaid';
     title?: string;
     clientId?: string;
