@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { addMoney, compareMoney, formatMoney, MoneyParseError, parseMoney, subtractMoney } from '../money.js';
+import {
+  addMoney,
+  compareMoney,
+  currencyExponent,
+  formatMoney,
+  isSupportedCurrency,
+  MoneyParseError,
+  parseMoney,
+  subtractMoney,
+} from '../money.js';
 
 describe('parseMoney', () => {
   it('parses whole and fractional canonical strings into minor units', () => {
@@ -7,6 +16,15 @@ describe('parseMoney', () => {
     expect(parseMoney('10000.5', 'ILS').minor).toBe(1_000_050n);
     expect(parseMoney('10000.50', 'USD').minor).toBe(1_000_050n);
     expect(parseMoney('0.01', 'EUR').minor).toBe(1n);
+  });
+
+  it('parses JOD at 3 fractional digits (fils) — the one 3-decimal currency here', () => {
+    expect(parseMoney('10000.123', 'JOD').minor).toBe(10_000_123n);
+    expect(parseMoney('0.001', 'JOD').minor).toBe(1n);
+  });
+
+  it('rejects a 4th fractional digit for JOD same as it rejects a 3rd for 2-decimal currencies', () => {
+    expect(() => parseMoney('1.0005', 'JOD')).toThrow(MoneyParseError);
   });
 
   it('parses negative amounts (supplements can be negative, plan §3.4)', () => {
@@ -40,6 +58,25 @@ describe('formatMoney', () => {
     for (const s of ['0.00', '1.00', '99.99', '-0.01', '1000000.00']) {
       expect(formatMoney(parseMoney(s, 'EUR'))).toBe(s);
     }
+  });
+
+  it('round-trips JOD at 3 decimals', () => {
+    for (const s of ['0.000', '1.000', '99.999', '-0.001', '1000000.000']) {
+      expect(formatMoney(parseMoney(s, 'JOD'))).toBe(s);
+    }
+  });
+});
+
+describe('currency support', () => {
+  it('recognizes JOD as supported, at a 3-decimal exponent', () => {
+    expect(isSupportedCurrency('JOD')).toBe(true);
+    expect(currencyExponent('JOD')).toBe(3);
+  });
+
+  it('existing currencies stay at a 2-decimal exponent', () => {
+    expect(currencyExponent('ILS')).toBe(2);
+    expect(currencyExponent('USD')).toBe(2);
+    expect(currencyExponent('EUR')).toBe(2);
   });
 });
 

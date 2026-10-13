@@ -10,10 +10,10 @@
  * desktop hard-codes `/100`; the service carries the exponent per currency so
  * a zero-decimal currency can be added without touching arithmetic.
  */
-export const SUPPORTED_CURRENCIES = ['ILS', 'USD', 'EUR'] as const;
+export const SUPPORTED_CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
-const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2 };
+const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2, JOD: 3 };
 
 export function isSupportedCurrency(value: string): value is Currency {
   return (SUPPORTED_CURRENCIES as readonly string[]).includes(value);
