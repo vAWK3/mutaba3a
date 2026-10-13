@@ -217,19 +217,31 @@ Tests: `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx`.
 **Purpose**: Settings › Advanced features — one `Switch` per `FEATURE_KEYS` entry, labels and descriptions from `settings.features.items.*`. Reads `useFeatureFlags()`, writes `useSetFeatureEnabled()`; never touches the settings row.
 
 ```tsx
-<AdvancedFeaturesSection />   // rendered by SettingsPage between Currency and Data
+<AdvancedFeaturesSection />   // rendered by SettingsPage between Currency and AboutSection (MUT-139 order)
 ```
 
 Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ---
 
-### DataToolsSection
-**Location**: `src/pages/settings/DataToolsSection.tsx`
-**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch.
+### AboutSection
+**Location**: `src/pages/settings/AboutSection.tsx`
+**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, unlike `DataToolsSection`, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, and the mac/Windows download links.
 
 ```tsx
-<DataToolsSection />   // rendered by SettingsPage below the main settings
+<AboutSection />   // rendered by SettingsPage between AdvancedFeaturesSection and Data (last two: Data, DataToolsSection)
+```
+
+Tests: `src/pages/settings/__tests__/AboutSection.test.tsx`.
+
+---
+
+### DataToolsSection
+**Location**: `src/pages/settings/DataToolsSection.tsx`
+**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch. Deliberately kept as its own component/heading rather than merged into "Data" (MUT-139) — it has its own standalone heading test; proximity to Data is achieved by page order (both are now the last two sections) rather than a header merge.
+
+```tsx
+<DataToolsSection />   // rendered by SettingsPage last, directly after Data
 ```
 
 Tests: `src/pages/settings/__tests__/DataToolsSection.test.tsx`.

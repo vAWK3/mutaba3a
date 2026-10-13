@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-107: Enabled-currencies toggle has no control for a currency outside USD/ILS
+**Status**: Open
+**Ticket**: MUT-139
+**Added**: 2026-10-13 (MUT-139 build)
+**Priority**: Low
+**Impact**: Settings → Currency's "Enabled currencies" toggle (restored by MUT-139, dead code since the initial commit — never shipped live before this) only renders USD/ILS buttons. If `Settings.enabledCurrencies` ever contains a different `Currency` value (only reachable via JSON import of legacy data — no live UI path sets it today), there is no button to turn it off, and the default-currency `<select>` (which iterates `enabledCurrencies` directly) would still list it as a selectable default with no way to remove it from Settings.
+**Fix**: either derive the toggle's currency list from the `Currency` union directly instead of a hardcoded `['USD', 'ILS']` array, or validate/strip unsupported currencies on import.
+
+### TD-108: `/settings/import` doesn't use the shared TopBar/breadcrumb component
+**Status**: Open
+**Ticket**: none yet
+**Added**: 2026-10-13 (MUT-139 build)
+**Priority**: Low
+**Impact**: Every other Settings sub-route (`ProfileDetailPage`) renders through the shared `TopBar` with a `Settings › ...` breadcrumb trail. `ImportDataPage.tsx` has its own hardcoded, non-i18n'd `<div className="page-header"><h1>Import Data</h1></div>` with a plain "← Back to Settings" button instead — functionally it already gets the user back to Settings, but it's a second, inconsistent wayfinding pattern plus a chunk of un-translated UI. Fixing it means replacing the page's whole custom header with `TopBar`, which is a bigger (and visually different) change than a placement fix, so it's logged rather than folded into MUT-139.
+**Fix**: convert `ImportDataPage.tsx`'s header to `TopBar` with `breadcrumbs={[{ label: t('nav.settings'), href: '/settings' }, { label: t('settings.data.import') }]}`, and i18n the rest of the page's hardcoded strings while at it (same file, same gap).
+
 ### TD-105: seed-demo-account grows its transaction count on a later re-run, not a fixed snapshot
 **Status**: Accepted
 **Ticket**: MUT-136
