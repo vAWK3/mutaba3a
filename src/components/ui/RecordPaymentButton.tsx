@@ -75,6 +75,9 @@ export function RecordPaymentButton({
       aria-label={`${t('transactions.partialPayment.recordPayment')} — ${t('transactions.partialPayment.remaining')}: ${remainingLabel}`}
     >
       {t('transactions.partialPayment.recordPayment')}
+      {/* A white-space flex item is not rendered, so `gap` alone spaces the
+          two visually; the space keeps the copied text readable (MUT-92). */}
+      {!compact && ' '}
       {!compact && <span className="record-payment-remaining">{remainingLabel}</span>}
     </Button>
   );

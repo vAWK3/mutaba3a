@@ -272,7 +272,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
           <span className="text-muted">{t('clients.index.neverPaid')}</span>
         )}
       </td>
-      <td className="text-muted">{row.lastActivityAt ? formatRelativeDate(row.lastActivityAt, t) : '—'}</td>
+      <td className="text-muted">{row.lastActivityAt ? formatRelativeDate(row.lastActivityAt, t, locale) : '—'}</td>
     </tr>
   );
 

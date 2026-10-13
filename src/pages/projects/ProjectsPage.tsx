@@ -9,13 +9,14 @@ import { useSortState } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
 import { formatRelativeDate } from '../../lib/utils';
-import { useT } from '../../lib/i18n';
+import { useT, useLanguage, getLocale } from '../../lib/i18n';
 
 type SortField = 'name' | 'net' | 'unpaid' | 'activity';
 
 export function ProjectsPage() {
   const { openProjectDrawer } = useDrawerStore();
   const t = useT();
+  const locale = getLocale(useLanguage().language);
   const [search, setSearch] = useState('');
 
   // URL-persisted sorting
@@ -252,7 +253,7 @@ export function ProjectsPage() {
                         />
                       </td>
                       <td className="text-muted">
-                        {project.lastActivityAt ? formatRelativeDate(project.lastActivityAt, t) : '-'}
+                        {project.lastActivityAt ? formatRelativeDate(project.lastActivityAt, t, locale) : '-'}
                       </td>
                     </tr>
                   );

@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Craft-fix bundle from the Apple-design pass (MUT-92)
+
+**Why:** small defects from the 2026-10-11 review that needed no decision. Plan: `.claude/designs/mut-92-craft-fix-bundle.md` (eng review D1: reuse `useTransactions`; D2: the other count strings get their own ticket). Two of the ticket's nine fixes were already on main: the demo seed's future dates (MUT-78) and the About name (MUT-88); the second now has a regression test.
+
+### Changed
+- **Income drawer currency** (`IncomeDrawer.tsx`): a new entry for a client starts in the currency of that client's newest income (archived entries count; deleted entries and expenses do not), else the profile currency. It follows a client or profile change until the user picks a currency. Edit and duplicate keep their own currency. One `useTransactions({clientId, kind:'income', includeArchived:true, limit:1})` read, gated to create mode with a client.
+
+### Fixed
+- **Drawer layering** (`DemoBanner.css`): the fixed demo bar drops from z-index 1000 to 150, above content (≤100) and below drawers (200/201) and modals, so it no longer clips the drawer header.
+- **Record Payment** (`RecordPaymentButton.tsx`): a space between the label and the remaining amount, so copied and page text reads "Record Payment ₪3,550". The visual gap and the accessible name are unchanged.
+- **All Time** (`DateRangeControl.tsx`): no longer prints its sentinel range "01/01/2000 – 31/12/2100", on all seven pages that use the control.
+- **Client Payments notes** (`ClientPaymentsSection.tsx`): the notes cell shows only what the user wrote. "Recorded on the entry" and the migration note (on every legacy record since MUT-60's v23 backfill) are hidden, and the Notes column is dropped when no row has a note.
+- **Expenses ledger** (`ExpensesLedgerPage.tsx`): row amounts lose their minus sign (flat and by-category), keeping the expense colour. `ProjectDetailPage` keeps it, because its list mixes income and expenses.
+- **Relative dates** (`formatRelativeDate`): "1 week ago" instead of "1 weeks ago", and all six Arabic plural forms, via `Intl.RelativeTimeFormat`. Callers (`FxRateReadout`, `ClientsPage`, `ProjectsPage`) pass the locale; the untranslated English fallback is gone.
+
+### Removed
+- i18n keys `clients.profile.payments.recordedOnEntry`, `transactions.partialPayment.migratedNote` and `time.daysAgo|weeksAgo|monthsAgo|yearsAgo`, from `en.json`, `ar.json` and `types.ts`. `MIGRATED_PAYMENT_NOTE` stays: it is stored data.
+
+### Technical
+- Tests: `src/styles/__tests__/layering.test.ts` (new), `src/lib/i18n/__tests__/craftFixKeys.test.ts` (new), plus cases in `IncomeDrawer`, `RecordPaymentButton`, `DateRangeControl`, `ClientDetailPage`, `ExpensesLedgerPage` and `utils` suites. The MUT-94 "$42 in the strip" test now reads the strip, since the row shows "$42" too.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Retainer projections use the local "today", not the UTC one (TD-014)
 
 **Why:** `src/db/retainerRepository.ts` kept a private `todayISO()` built from `toISOString()`, the UTC date that ADR-022 forbids. Between 00:00 and ~03:00 in Asia/Jerusalem it returned yesterday, so a projected retainer payment due today stayed `upcoming` for the first hours of each local day. It surfaced on 2026-10-14 at 02:00 as a failure in `retainerRepo.test.ts` ("refreshes due states…"), which built its "today" from local fields while the code compared against UTC.

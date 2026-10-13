@@ -1523,6 +1523,14 @@ A plural string is an object of CLDR forms (`zero|one|two|few|many|other`);
 `other`, with `{count}` always available. English needs `one` + `other`; Arabic
 all six (parity-tested in `src/hosted/i18n`).
 
+### Relative time goes through `Intl.RelativeTimeFormat` (MUT-92, ADR-019)
+"3 days ago", "1 week ago" come from `formatRelativeDate(iso, t, locale)`
+(`src/lib/utils.ts`), which hands the count to `Intl.RelativeTimeFormat` with
+`numeric: 'always'`, so the plural form is CLDR's, not a `{n} weeks ago`
+template. Only Today and Yesterday are translation keys (`time.today`,
+`time.yesterday`), to keep their capitalisation. Pass `getLocale(language)`.
+Any other count in a string goes through `tp()` above.
+
 ### One broadcast channel per tab (MUT-43)
 A tab that announces something to its other tabs must use the same
 `BroadcastChannel` object it listens on: the browser never delivers a message to

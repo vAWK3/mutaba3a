@@ -190,7 +190,6 @@ export interface Translations {
       payments: {
         title: string;
         for: string;
-        recordedOnEntry: string;
         openEntry: string;
       };
     };
@@ -355,10 +354,6 @@ export interface Translations {
   time: {
     today: string;
     yesterday: string;
-    daysAgo: string;
-    weeksAgo: string;
-    monthsAgo: string;
-    yearsAgo: string;
     daysOverdue: string;
     dueInDays: string;
   };
