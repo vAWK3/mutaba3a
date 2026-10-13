@@ -37,7 +37,15 @@ const envSchema = z.object({
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   /** Built hosted-portal assets (MUT-45), mounted by the Dockerfile. Unset = the server serves no portal, API-only. */
   PORTAL_DIST_DIR: z.string().min(1).optional(),
+  /** iOS/Android app-association files (MUT-111): all four or none — see the superRefine below. */
+  APPLE_TEAM_ID: z.string().min(1).optional(),
+  APPLE_BUNDLE_ID: z.string().min(1).optional(),
+  ANDROID_PACKAGE_NAME: z.string().min(1).optional(),
+  /** Comma-separated SHA-256 cert fingerprints (debug + upload-key at minimum, MUT-114). Split into an array in index.ts. */
+  ANDROID_SHA256_FINGERPRINTS: z.string().min(1).optional(),
 });
+
+const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
 
 export type Config = z.infer<typeof envSchema>;
 
@@ -54,5 +62,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
     throw new ConfigError(`Invalid configuration:\n${lines.join('\n')}`);
   }
-  return parsed.data;
+  const config = parsed.data;
+  const setKeys = APP_ASSOCIATION_KEYS.filter((key) => config[key] !== undefined);
+  if (setKeys.length > 0 && setKeys.length < APP_ASSOCIATION_KEYS.length) {
+    const missing = APP_ASSOCIATION_KEYS.filter((key) => !setKeys.includes(key));
+    throw new ConfigError(
+      `Invalid configuration:\n  app association (${APP_ASSOCIATION_KEYS.join(', ')}): all four or none must be set; missing ${missing.join(', ')}`,
+    );
+  }
+  return config;
 }
