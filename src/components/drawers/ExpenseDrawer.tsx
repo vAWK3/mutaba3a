@@ -18,6 +18,7 @@ import {
   useSeedExpenseCategories,
 } from '../../hooks/useExpenseQueries';
 import { VendorTypeahead } from '../ui/VendorTypeahead';
+import { Select } from '../ui';
 import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
@@ -408,9 +409,8 @@ export function ExpenseDrawer() {
             name="profileId"
             control={form.control}
             render={({ field }) => (
-              <select
-                className={cn('select', form.formState.errors.profileId && 'input-error')}
-                style={{ width: '100%' }}
+              <Select
+                invalid={Boolean(form.formState.errors.profileId)}
                 {...field}
               >
                 <option value="">{t('drawer.expense.profilePlaceholder')}</option>
@@ -419,7 +419,7 @@ export function ExpenseDrawer() {
                     {profile.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           />
           {form.formState.errors.profileId && (
@@ -446,10 +446,10 @@ export function ExpenseDrawer() {
                   name="frequency"
                   control={form.control}
                   render={({ field }) => (
-                    <select className="select" style={{ width: '100%' }} {...field}>
+                    <Select {...field}>
                       <option value="monthly">{t('expenses.recurring.monthly')}</option>
                       <option value="yearly">{t('expenses.recurring.yearly')}</option>
-                    </select>
+                    </Select>
                   )}
                 />
               </div>
@@ -471,11 +471,11 @@ export function ExpenseDrawer() {
                   name="endMode"
                   control={form.control}
                   render={({ field }) => (
-                    <select className="select" style={{ width: '100%' }} {...field}>
+                    <Select {...field}>
                       <option value="endOfYear">{t('expenses.recurring.endOfYear')}</option>
                       <option value="untilDate">{t('expenses.recurring.untilDate')}</option>
                       <option value="noEnd">{t('expenses.recurring.noEnd')}</option>
-                    </select>
+                    </Select>
                   )}
                 />
               </div>

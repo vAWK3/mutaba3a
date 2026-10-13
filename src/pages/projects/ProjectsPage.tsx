@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
-import { EmptyState } from '../../components/ui';
+import { EmptyState, Select } from '../../components/ui';
 import { useProjectSummaries, useProjects } from '../../hooks/useQueries';
 import { useSortState } from '../../hooks/useSortState';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
@@ -104,8 +104,7 @@ export function ProjectsPage() {
       <div className="page-content">
         <div className="filters-row">
           <SearchInput value={search} onChange={setSearch} placeholder={t('projects.searchPlaceholder')} />
-          <select
-            className="select"
+          <Select
             value={`${sortField}-${sortDir}`}
             onChange={(e) => {
               const [field, dir] = e.target.value.split('-') as [SortField, 'asc' | 'desc'];
@@ -120,7 +119,7 @@ export function ProjectsPage() {
             <option value="unpaid-asc">{t('common.sort.unpaidLow')}</option>
             <option value="activity-desc">{t('common.sort.activityRecent')}</option>
             <option value="activity-asc">{t('common.sort.activityOldest')}</option>
-          </select>
+          </Select>
         </div>
 
         {isLoading ? (

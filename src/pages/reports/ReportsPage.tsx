@@ -7,7 +7,7 @@
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { DateRangeControl, SearchInput } from '../../components/filters';
-import { EmptyState } from '../../components/ui';
+import { EmptyState, Select } from '../../components/ui';
 import { DownloadIcon } from '../../components/icons';
 import {
   useTransactions,
@@ -556,8 +556,7 @@ export function ReportsPage() {
       />
       <div className="page-content">
         <div className="filters-row">
-          <select
-            className="select"
+          <Select
             value={reportType}
             onChange={(e) => setReportType(e.target.value as ReportType)}
           >
@@ -566,10 +565,9 @@ export function ReportsPage() {
                 {t(rt.labelKey)}
               </option>
             ))}
-          </select>
+          </Select>
 
-          <select
-            className="select"
+          <Select
             value={currencyMode}
             onChange={(e) => setCurrencyMode(e.target.value as CurrencyMode)}
           >
@@ -578,7 +576,7 @@ export function ReportsPage() {
                 {t(cm.labelKey)}
               </option>
             ))}
-          </select>
+          </Select>
 
           {(reportType === 'by-project' || reportType === 'by-client') && (
             <SearchInput

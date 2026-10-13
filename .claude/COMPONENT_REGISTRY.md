@@ -643,19 +643,27 @@ Tests: `src/components/drawers/__tests__/OrphanedRecordsDrawer.test.tsx`, `src/d
 ---
 
 ### Select
-**Location**: `src/components/ui/Select.tsx`
-**Purpose**: Dropdown select with consistent styling.
+**Location**: `src/components/ui/Input.tsx` (exported alongside `Input`/`Textarea`)
+**Purpose**: Brand-styled native `<select>` wrapper — custom chevron, `--input-*` tokens, 16px body text, error state.
 
 ```tsx
-<Select
-  label="Currency"
-  options={[
-    { value: 'USD', label: 'US Dollar' },
-    { value: 'ILS', label: 'Israeli Shekel' },
-  ]}
-  {...register('currency')}
-/>
+<Select label="Currency" {...register('currency')}>
+  <option value="USD">US Dollar</option>
+  <option value="ILS">Israeli Shekel</option>
+</Select>
 ```
+
+Takes `<option>` children (same as a native select), not an `options` array. Use `invalid` for a style-only error border when the error message is rendered elsewhere (common in `react-hook-form` + `Controller` call sites); use `error` when `Select` should own the message.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `label?` | string | Select label |
+| `error?` | string | Error message (renders below the select) |
+| `invalid?` | boolean | Style-only error border, no message |
+| `hint?` | string | Helper text below the select |
+| `children` | ReactNode | `<option>` elements |
+| `...rest` | SelectHTMLAttributes | Standard select props |
 
 ---
 

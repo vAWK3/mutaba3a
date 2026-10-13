@@ -13,6 +13,7 @@ import {
 } from '../../hooks/useQueries';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
+import { Select } from '../../components/ui';
 import type { BusinessType, Currency, DocumentLanguage, DocumentType, DocumentSequence, TemplateId } from '../../types';
 
 // Form validation schema
@@ -465,13 +466,13 @@ export function ProfileDetailPage() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Business Type</label>
-                <select className="select" {...form.register('businessType')}>
+                <Select {...form.register('businessType')}>
                   {BUSINESS_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
                       {type.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="form-group">
                 <label className="form-label">Tax ID</label>
@@ -657,10 +658,10 @@ export function ProfileDetailPage() {
                 <div className="settings-label">Default Currency</div>
                 <div className="settings-description">Currency used by default for new documents</div>
               </div>
-              <select className="select" {...form.register('defaultCurrency')}>
+              <Select {...form.register('defaultCurrency')}>
                 <option value="USD">USD ($)</option>
                 <option value="ILS">ILS (&#8362;)</option>
-              </select>
+              </Select>
             </div>
 
             <div className="settings-row" style={{ marginBottom: 16 }}>
@@ -668,10 +669,10 @@ export function ProfileDetailPage() {
                 <div className="settings-label">Default Language</div>
                 <div className="settings-description">Language used by default for document content</div>
               </div>
-              <select className="select" {...form.register('defaultLanguage')}>
+              <Select {...form.register('defaultLanguage')}>
                 <option value="en">English</option>
                 <option value="ar">Arabic</option>
-              </select>
+              </Select>
             </div>
 
             <div className="settings-row" style={{ marginBottom: 16 }}>
@@ -679,13 +680,13 @@ export function ProfileDetailPage() {
                 <div className="settings-label">Default Template</div>
                 <div className="settings-description">PDF template style for documents</div>
               </div>
-              <select className="select" {...form.register('defaultTemplateId')}>
+              <Select {...form.register('defaultTemplateId')}>
                 {TEMPLATES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="settings-row" style={{ marginBottom: 16 }}>

@@ -3,6 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
+import { Select } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import {
   usePlan,
@@ -340,10 +341,10 @@ export function PlanAssumptionDrawer() {
               name="currency"
               control={form.control}
               render={({ field }) => (
-                <select className="select" style={{ width: '100%' }} {...field}>
+                <Select {...field}>
                   <option value="USD">USD</option>
                   <option value="ILS">ILS</option>
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -357,13 +358,13 @@ export function PlanAssumptionDrawer() {
               name="frequency"
               control={form.control}
               render={({ field }) => (
-                <select className="select" style={{ width: '100%' }} {...field}>
+                <Select {...field}>
                   {frequencyOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
           </div>

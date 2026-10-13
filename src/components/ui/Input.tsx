@@ -91,13 +91,15 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
   label?: string;
   error?: string;
   hint?: string;
+  /** Style-only error state for call sites that render their own error message elsewhere. */
+  invalid?: boolean;
   children: React.ReactNode;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, hint, children, className = '', id, ...props }, ref) => {
+  ({ label, error, hint, invalid, children, className = '', id, ...props }, ref) => {
     const inputId = id || (label ? `select-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined);
-    const hasError = Boolean(error);
+    const hasError = invalid ?? Boolean(error);
 
     return (
       <div className="input-wrapper">

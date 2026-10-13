@@ -3,6 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
+import { Select } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import { useOnboardingStore } from '../../lib/onboardingStore';
 import {
@@ -173,14 +174,14 @@ export function ProjectDrawer() {
               name="profileId"
               control={form.control}
               render={({ field }) => (
-                <select className="select" style={{ width: '100%' }} {...field}>
+                <Select {...field}>
                   <option value="">{t('common.defaultProfile')}</option>
                   {profiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -192,14 +193,14 @@ export function ProjectDrawer() {
             name="clientId"
             control={form.control}
             render={({ field }) => (
-              <select className="select" style={{ width: '100%' }} {...field}>
+              <Select {...field}>
                 <option value="">{t('drawer.project.clientPlaceholder')}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           />
         </div>
@@ -210,7 +211,7 @@ export function ProjectDrawer() {
             name="field"
             control={form.control}
             render={({ field }) => (
-              <select className="select" style={{ width: '100%' }} {...field}>
+              <Select {...field}>
                 <option value="">{t('drawer.project.fieldPlaceholder')}</option>
                 {FIELD_KEYS.map((f) => {
                   // Capitalize first letter for storage value (e.g., 'design' -> 'Design')
@@ -221,7 +222,7 @@ export function ProjectDrawer() {
                     </option>
                   );
                 })}
-              </select>
+              </Select>
             )}
           />
         </div>

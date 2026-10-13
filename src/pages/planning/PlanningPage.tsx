@@ -13,6 +13,7 @@ import {
   useArchivePlan,
 } from '../../hooks/usePlanQueries';
 import { useDrawerStore } from '../../lib/stores';
+import { Select } from '../../components/ui';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 // formatAmount is used in child components via props
 import { PlanSummaryStrip } from './components/PlanSummaryStrip';
@@ -274,8 +275,7 @@ export function PlanningPage() {
               ) : (
                 <div className="plan-name-display">
                   {plans.length > 1 ? (
-                    <select
-                      className="plan-select"
+                    <Select
                       value={selectedPlanId || ''}
                       onChange={(e) => handlePlanChange(e.target.value)}
                     >
@@ -284,7 +284,7 @@ export function PlanningPage() {
                           {p.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   ) : (
                     <span className="plan-name">{plan.name}</span>
                   )}

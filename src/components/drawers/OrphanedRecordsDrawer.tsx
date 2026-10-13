@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Drawer } from './Drawer';
+import { Select } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import { useToast } from '../../lib/toastStore';
 import { useBusinessProfiles } from '../../hooks/useQueries';
@@ -228,8 +229,8 @@ function OrphanGroup({ table, rows, profiles, profileFor, onChoose, disabled }: 
               <RowDetail row={row} locale={locale} />
             </div>
             {profiles && (
-              <select
-                className="select orphaned-records-row-select"
+              <Select
+                className="orphaned-records-row-select"
                 aria-label={t('orphanedRecords.profileFor', { record: row.label })}
                 value={profileFor(row)}
                 onChange={(e) => onChoose(row, e.target.value)}
@@ -240,7 +241,7 @@ function OrphanGroup({ table, rows, profiles, profileFor, onChoose, disabled }: 
                     {profile.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </li>
         ))}

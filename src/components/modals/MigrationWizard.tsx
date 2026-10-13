@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../../db/database';
 import { exportBackup } from '../../db/backup';
 import { Button } from '../ui/Button';
+import { Select } from '../ui';
 import './MigrationWizard.css';
 
 interface NeedsReviewRecord {
@@ -201,7 +202,7 @@ export function MigrationWizard() {
                       <td>{record.title || record.kind}</td>
                       <td>{(record.amountMinor / 100).toFixed(2)} {record.currency}</td>
                       <td>
-                        <select
+                        <Select
                           value={assignments[record.id] || ''}
                           onChange={(e) => setAssignments(prev => ({
                             ...prev,
@@ -211,7 +212,7 @@ export function MigrationWizard() {
                           {profiles.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
-                        </select>
+                        </Select>
                       </td>
                     </tr>
                   ))}

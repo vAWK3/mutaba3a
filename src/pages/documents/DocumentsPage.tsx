@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu } from '../../components/ui';
+import { EmptyState, RowActionsMenu, Select } from '../../components/ui';
 import { CheckIcon, LockIcon } from '../../components/icons';
 import {
   useDocuments,
@@ -93,8 +93,7 @@ export function DocumentsPage() {
       <div className="page-content">
         <div className="filters-row">
           {/* Document Type Filter */}
-          <select
-            className="select"
+          <Select
             value={typeFilter || ''}
             onChange={(e) => setTypeFilter((e.target.value as DocumentType) || undefined)}
           >
@@ -107,11 +106,10 @@ export function DocumentsPage() {
             <option value="proforma_invoice">Proforma Invoice</option>
             <option value="donation_receipt">Donation Receipt</option>
             <option value="payment_request">Payment Request</option>
-          </select>
+          </Select>
 
           {/* Status Filter */}
-          <select
-            className="select"
+          <Select
             value={statusFilter || ''}
             onChange={(e) => setStatusFilter((e.target.value as DocumentStatus) || undefined)}
           >
@@ -120,7 +118,7 @@ export function DocumentsPage() {
             <option value="issued">Issued</option>
             <option value="paid">Paid</option>
             <option value="voided">Voided</option>
-          </select>
+          </Select>
 
           <SearchInput
             value={search}

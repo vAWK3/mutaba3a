@@ -1104,22 +1104,6 @@ td {
   box-shadow: var(--shadow-1);
 }
 
-/* Select */
-.select {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  color: var(--text);
-  cursor: pointer;
-  min-width: 120px;
-}
-
-.select:hover {
-  border-color: var(--border-strong);
-}
-
 /* Input */
 .input {
   padding: var(--space-2) var(--space-3);

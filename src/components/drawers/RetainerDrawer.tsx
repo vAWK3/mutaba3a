@@ -14,6 +14,7 @@ import {
 import { cn, parseAmountToMinor, todayISO, formatAmount } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
+import { Select } from '../ui';
 import type { Currency, RetainerCadence, RetainerStatus } from '../../types';
 
 const schema = z.object({
@@ -273,9 +274,8 @@ export function RetainerDrawer() {
               name="profileId"
               control={form.control}
               render={({ field }) => (
-                <select
-                  className={cn('select', errors.profileId && 'input-error')}
-                  style={{ width: '100%' }}
+                <Select
+                  invalid={Boolean(errors.profileId)}
                   {...field}
                 >
                   <option value="">{t('drawer.expense.profilePlaceholder')}</option>
@@ -284,7 +284,7 @@ export function RetainerDrawer() {
                       {profile.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
             {errors.profileId && <p className="form-error">{t('validation.required')}</p>}
@@ -297,9 +297,8 @@ export function RetainerDrawer() {
               name="clientId"
               control={form.control}
               render={({ field }) => (
-                <select
-                  className={cn('select', errors.clientId && 'input-error')}
-                  style={{ width: '100%' }}
+                <Select
+                  invalid={Boolean(errors.clientId)}
                   {...field}
                 >
                   <option value="">{t('drawer.retainer.clientPlaceholder')}</option>
@@ -308,7 +307,7 @@ export function RetainerDrawer() {
                       {client.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
             {errors.clientId && <p className="form-error">{t('validation.required')}</p>}
@@ -346,10 +345,10 @@ export function RetainerDrawer() {
                 name="currency"
                 control={form.control}
                 render={({ field }) => (
-                  <select className="select" style={{ width: '100%' }} {...field}>
+                  <Select {...field}>
                     <option value="USD">USD</option>
                     <option value="ILS">ILS</option>
-                  </select>
+                  </Select>
                 )}
               />
             </div>
@@ -363,10 +362,10 @@ export function RetainerDrawer() {
                 name="cadence"
                 control={form.control}
                 render={({ field }) => (
-                  <select className="select" style={{ width: '100%' }} {...field}>
+                  <Select {...field}>
                     <option value="monthly">{t('retainers.cadence.monthly')}</option>
                     <option value="quarterly">{t('retainers.cadence.quarterly')}</option>
-                  </select>
+                  </Select>
                 )}
               />
             </div>
@@ -376,9 +375,7 @@ export function RetainerDrawer() {
                 name="paymentDay"
                 control={form.control}
                 render={({ field }) => (
-                  <select
-                    className="select"
-                    style={{ width: '100%' }}
+                  <Select
                     value={field.value}
                     onChange={(e) => field.onChange(Number(e.target.value))}
                   >
@@ -387,7 +384,7 @@ export function RetainerDrawer() {
                         {day}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
               />
             </div>
@@ -422,14 +419,14 @@ export function RetainerDrawer() {
               name="projectId"
               control={form.control}
               render={({ field }) => (
-                <select className="select" style={{ width: '100%' }} {...field}>
+                <Select {...field}>
                   <option value="">{t('drawer.retainer.projectPlaceholder')}</option>
                   {filteredProjects.map((project) => (
                     <option key={project.id} value={project.id}>
                       {project.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -443,12 +440,12 @@ export function RetainerDrawer() {
                 name="status"
                 control={form.control}
                 render={({ field }) => (
-                  <select className="select" style={{ width: '100%' }} {...field}>
+                  <Select {...field}>
                     <option value="draft">{t('retainers.status.draft')}</option>
                     <option value="active">{t('retainers.status.active')}</option>
                     <option value="paused">{t('retainers.status.paused')}</option>
                     <option value="ended">{t('retainers.status.ended')}</option>
-                  </select>
+                  </Select>
                 )}
               />
             </div>

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput } from '../../components/filters';
-import { EmptyState } from '../../components/ui';
+import { EmptyState, Select } from '../../components/ui';
 import { useRetainers, useRetainerDisplay, useRetainerSummary, useUpdateDueStates } from '../../hooks/useRetainerQueries';
 import { useClients, useBusinessProfiles } from '../../hooks/useQueries';
 import { useDrawerStore } from '../../lib/stores';
@@ -113,8 +113,7 @@ export function RetainersPage() {
           {profiles.length > 1 && (
             <div className="filter-section">
               <h4 className="filter-section-title">{t('drawer.expense.profile')}</h4>
-              <select
-                className="select filter-select"
+              <Select
                 value={profileFilter || ''}
                 onChange={(e) => setProfileFilter(e.target.value || undefined)}
               >
@@ -123,7 +122,7 @@ export function RetainersPage() {
                     {profile.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 
@@ -146,8 +145,7 @@ export function RetainersPage() {
 
           <div className="filter-section">
             <h4 className="filter-section-title">{t('retainers.filters.status')}</h4>
-            <select
-              className="select filter-select"
+            <Select
               value={statusFilter || ''}
               onChange={(e) => setStatusFilter(e.target.value as RetainerStatus | undefined || undefined)}
             >
@@ -156,13 +154,12 @@ export function RetainersPage() {
               <option value="active">{t('retainers.status.active')}</option>
               <option value="paused">{t('retainers.status.paused')}</option>
               <option value="ended">{t('retainers.status.ended')}</option>
-            </select>
+            </Select>
           </div>
 
           <div className="filter-section">
             <h4 className="filter-section-title">{t('retainers.filters.client')}</h4>
-            <select
-              className="select filter-select"
+            <Select
               value={clientFilter || ''}
               onChange={(e) => setClientFilter(e.target.value || undefined)}
             >
@@ -172,7 +169,7 @@ export function RetainersPage() {
                   {client.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="filter-section">

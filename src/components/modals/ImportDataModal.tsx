@@ -9,6 +9,7 @@ import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
 import { CSVValidationPreview } from '../csv/CSVValidationPreview';
+import { Select } from '../ui';
 import type { BusinessProfile } from '../../types';
 import './DeleteAllDataModal.css';
 
@@ -568,8 +569,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
                 <div className="import-mode-select">
                   <h4>Select Business Profile</h4>
                   <div className="import-profile-select">
-                    <select
-                      className="select"
+                    <Select
                       value={selectedProfileId || ''}
                       onChange={(e) => setSelectedProfileId(e.target.value)}
                     >
@@ -579,7 +579,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
                           {p.name} {p.nameEn && `(${p.nameEn})`}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                     <div className="text-muted text-sm" style={{ marginTop: '0.5rem' }}>
                       Choose which business profile to associate imported data with
                     </div>
@@ -624,8 +624,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
 
                   {importMode === 'merge' && (
                     <div className="import-profile-select">
-                      <select
-                        className="select"
+                      <Select
                         value={selectedProfileId || ''}
                         onChange={(e) => setSelectedProfileId(e.target.value)}
                       >
@@ -635,7 +634,7 @@ export function ImportDataModal({ onClose, onSuccess }: ImportDataModalProps) {
                             {p.name} {p.nameEn && `(${p.nameEn})`}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                   )}
                 </div>

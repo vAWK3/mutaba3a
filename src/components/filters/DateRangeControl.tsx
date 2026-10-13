@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getDateRangePreset } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
+import { Select } from '../ui';
 
 type DatePreset = 'this-month' | 'last-month' | 'this-year' | 'all';
 
@@ -86,8 +87,7 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
   return (
     <div className="date-range-control" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
       {/* No visible label beside it in the top bar, so it names itself (TD-009) */}
-      <select
-        className="select"
+      <Select
         aria-label={t('filters.period')}
         value={isCustomActive ? 'custom' : currentPreset}
         onChange={(e) => handlePresetChange(e.target.value)}
@@ -98,7 +98,7 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
           </option>
         ))}
         <option value="custom">{t('filters.custom')}</option>
-      </select>
+      </Select>
 
       {/* Show date range display for presets (not custom) */}
       {!isCustomActive && dateFrom && dateTo && (

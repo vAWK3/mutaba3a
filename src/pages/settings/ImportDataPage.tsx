@@ -9,6 +9,7 @@ import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
 import { CSVValidationPreview } from '../../components/csv/CSVValidationPreview';
+import { Select } from '../../components/ui';
 import type { BusinessProfile } from '../../types';
 import './ImportDataPage.css';
 
@@ -412,8 +413,7 @@ export function ImportDataPage() {
             {fileType === 'csv' && existingProfiles.length > 0 && (
               <div className="profile-select-section">
                 <h4>Select Business Profile</h4>
-                <select
-                  className="select"
+                <Select
                   value={selectedProfileId || ''}
                   onChange={(e) => setSelectedProfileId(e.target.value)}
                 >
@@ -423,7 +423,7 @@ export function ImportDataPage() {
                       {p.name} {p.nameEn && `(${p.nameEn})`}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <p className="help-text">
                   Choose which business profile to associate imported data with
                 </p>

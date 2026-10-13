@@ -252,6 +252,7 @@
   - Fix: pick the ink by the colour's luminance, and validate the field.
 **Remediation**: MUT-103 migrates call sites to the brand role names, removes the aliases and the duplicate layout block, replaces literals with tokens, puts amounts on `--font-mono`, and empties the allowlist.
 **Effort**: Large
+**Update (2026-10-13)**: Dropdowns are no longer part of this debt. Every raw `<select className="select">` in the app (69 occurrences across 25 files) was migrated to the existing `Select` component (`src/components/ui/Input.tsx`), which was previously wired up only on the dev-only `/theme-demo` route and never reached production. The stale pre-brand `.select` rule in `index.css` and the dead-`var()` `.plan-select`/`.filter-select` rules in `PlanningPage.css`/`RetainersPage.css` were removed. `Select` gained an `invalid?: boolean` prop (style-only error border, no message) for call sites that render their own error text. See [[Pattern: Select Styling]] in PATTERNS.md.
 
 ### TD-068: "All businesses" leftovers from the MUT-89 pre-landing review
 **Status**: Open

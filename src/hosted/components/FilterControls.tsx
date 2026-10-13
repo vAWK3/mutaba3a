@@ -1,5 +1,6 @@
 import { useId, useMemo, type ReactNode } from 'react';
 import { useLanguage, useT } from '../../lib/i18n/core';
+import { Select } from '../../components/ui/Input';
 import type { Customer, Project } from '../api/client';
 
 /**
@@ -36,14 +37,14 @@ function EntitySelect<T extends { id: string; name: string }>({ label, value, op
   return (
     <Labelled label={label}>
       {(id) => (
-        <select id={id} className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+        <Select id={id} value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
           <option value="">{t('hosted.filters.all')}</option>
           {sorted.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
             </option>
           ))}
-        </select>
+        </Select>
       )}
     </Labelled>
   );
@@ -66,9 +67,8 @@ export function CurrencyFilter({ value, onChange }: { value: string | undefined;
   return (
     <Labelled label={t('hosted.filters.currency')}>
       {(id) => (
-        <select
+        <Select
           id={id}
-          className="select"
           value={value ?? ''}
           onChange={(e) => onChange((CURRENCIES as readonly string[]).includes(e.target.value) ? (e.target.value as (typeof CURRENCIES)[number]) : undefined)}
         >
@@ -78,7 +78,7 @@ export function CurrencyFilter({ value, onChange }: { value: string | undefined;
               {currency}
             </option>
           ))}
-        </select>
+        </Select>
       )}
     </Labelled>
   );
@@ -99,14 +99,14 @@ export function SelectFilter<V extends string>({
   return (
     <Labelled label={label}>
       {(id) => (
-        <select id={id} className="select" value={value ?? ''} onChange={(e) => onChange((e.target.value || undefined) as V | undefined)}>
+        <Select id={id} value={value ?? ''} onChange={(e) => onChange((e.target.value || undefined) as V | undefined)}>
           <option value="">{t('hosted.filters.all')}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       )}
     </Labelled>
   );

@@ -15,6 +15,7 @@ import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
 import { DataToolsSection } from './DataToolsSection';
 import { useDrawerStore } from '../../lib/stores';
+import { Select } from '../../components/ui';
 
 // Stable download URLs (redirected by Netlify to GitHub Releases latest)
 const DOWNLOAD_URLS = {
@@ -344,9 +345,8 @@ export function SettingsPage() {
               <label className="settings-label" htmlFor={defaultCurrencyId}>{t('settings.currency.default')}</label>
               <div className="settings-description" id={defaultCurrencyDescId}>{t('settings.currency.defaultDesc')}</div>
             </div>
-            <select
+            <Select
               id={defaultCurrencyId}
-              className="select"
               aria-describedby={defaultCurrencyDescId}
               value={settings?.defaultCurrency}
               onChange={(e) => handleDefaultCurrencyChange(e.target.value as Currency)}
@@ -356,7 +356,7 @@ export function SettingsPage() {
                   {c}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 

@@ -61,10 +61,6 @@
   display: none;
 }
 
-.filter-select {
-  width: 100%;
-}
-
 /* Summary Stats */
 .retainers-summary {
   background: var(--surface);

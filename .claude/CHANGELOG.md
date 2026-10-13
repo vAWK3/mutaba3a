@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Brand v2 dropdown sweep: every select now uses the real Select component
+
+**Why:** User reported dropdowns/selectors hadn't been customized for the Brand v2 design system. Investigation found a brand-correct `Select` component already existed (`src/components/ui/Input.tsx` + `Input.css` — `--input-*` tokens, 16px body text, custom chevron) but was wired up only on the dev-only `/theme-demo` route; every real dropdown in the app (69 occurrences across 25 files) rendered a raw `<select className="select">` styled by a stale pre-brand rule in `index.css` (13px text, default browser arrow, generic `--surface`/`--border` tokens instead of the dedicated `--input-*` ones). Two page-specific classes (`PlanningPage.css`'s `.plan-select`, used once; `RetainersPage.css`'s `.filter-select`, used 3x) additionally referenced CSS variables (`--border-color`, `--bg-primary`) that don't exist anywhere in the codebase (tracked dead in `brand.test.ts`'s `KNOWN_DEAD_REFERENCES`, part of TD-079/MUT-103's backlog) and so rendered with no styling at all. User chose the full migration over a CSS-only patch.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean (both `tsconfig.app.json` and `tsconfig.hosted.json`), `eslint src` — same 12 pre-existing warnings as `main`, 0 errors, `npm run build` clean, `vitest run` — 3453 passed / 4 skipped across 229 files (includes 150 brand/CSS token tests).
+
+### Changed
+- Migrated every raw `<select>` in `src/` (drawers, pages, filters, modals, the hosted portal) to `<Select>` from `src/components/ui/Input.tsx`. Each call site dropped its `className="select"`/`style={{ width: '100%' }}` (the component supplies both) and kept every other prop (`value`, `onChange`, `{...field}`, `id`, `disabled`, `aria-label`, …) unchanged; no `<option>` children or surrounding `<label>`/error markup were touched.
+- `Select` gained an `invalid?: boolean` prop — a style-only error border with no rendered message — for the 4 files (`ExpenseDrawer.tsx`, `IncomeDrawer.tsx`, `RetainerDrawer.tsx`, `ExpenseFormFields.tsx`) that already render their own `<p className="form-error">` next to the field via `react-hook-form`; these previously toggled the border with `cn('select', errors.x && 'input-error')`.
+- `.claude/COMPONENT_REGISTRY.md`'s `Select` entry corrected: real location (`Input.tsx`, not a nonexistent `Select.tsx`), real API (`children`, not an `options` array), documents `invalid`.
+
+### Removed
+- Stale `.select`/`.select:hover` rule in `src/index.css` (pre-Brand-v2: `--text-sm`, generic `--surface`/`--border`, no focus state, no custom chevron) — nothing references it anymore now that every call site renders through the component.
+- `.plan-select` (`PlanningPage.css`) and `.filter-select` (`RetainersPage.css`) — both redundant with (or, for `.plan-select`, entirely broken due to dead vars under) the component's own styling.
+
+### Fixed
+- `src/hosted/components/FilterControls.tsx` and the local/hosted-shared `src/components/expenses/ExpenseFormFields.tsx` were initially migrated to import `Select` from the `components/ui` barrel (`'../ui'`/`'../../components/ui'`); the barrel re-exports `ProfileQuickPicker`, which transitively imports the app-only `useActiveProfile` hook, which reads `router.tsx`'s `staticData.owedLens` route field via global module augmentation — `tsconfig.hosted.json` deliberately excludes `router.tsx` (hosted has its own routing), so this broke `npm run build`'s `tsc -b` with `Property 'owedLens' does not exist on type 'StaticDataRouteOption'` in `useActiveProfile.ts`. Fixed by importing from the concrete file (`'../ui/Input'` / `'../../components/ui/Input'`) instead, matching how hosted already imports `Button`. Documented as a reusable gotcha in `PATTERNS.md`'s new "Pattern: Select Styling" section.
+
+### Technical
+- `.claude/TECH_DEBT.md` TD-079 updated: the dropdown/select portion of Brand v2's component sweep is done; the rest of TD-079 (legacy size/radius aliases, duplicate layout tokens, amount-mono gaps, colour literals, etc.) is unchanged and still open for MUT-103.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Privacy policy page for the landing site
 
 **Why:** Basel needed a public privacy-policy link to submit for app distribution. Scoped to exactly what the landing page offers (Mac, Windows, browser — no hosted product, no server change): local-first storage, the two outbound requests the app actually makes (Frankfurter FX rates, GitHub release checks), no accounts/analytics/tracking. Contact: info@malafat.app, Barmajiyat Ltd.

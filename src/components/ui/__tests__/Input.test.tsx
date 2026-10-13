@@ -238,6 +238,36 @@ describe('Select', () => {
     });
   });
 
+  describe('invalid prop (style-only error state)', () => {
+    it('should have error class when invalid is true, without rendering a message', () => {
+      render(
+        <Select invalid>
+          <option value="1">Option 1</option>
+        </Select>
+      );
+      expect(screen.getByRole('combobox')).toHaveClass('input-error');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('should not have error class when invalid is false, even with an error message set', () => {
+      render(
+        <Select invalid={false} error="Required">
+          <option value="1">Option 1</option>
+        </Select>
+      );
+      expect(screen.getByRole('combobox')).not.toHaveClass('input-error');
+    });
+
+    it('should fall back to the error prop when invalid is not provided', () => {
+      render(
+        <Select error="Required">
+          <option value="1">Option 1</option>
+        </Select>
+      );
+      expect(screen.getByRole('combobox')).toHaveClass('input-error');
+    });
+  });
+
   describe('hint', () => {
     it('should render hint when provided', () => {
       render(

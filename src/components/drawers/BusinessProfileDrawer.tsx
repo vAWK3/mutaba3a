@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
+import { Select } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import {
   useBusinessProfile,
@@ -314,13 +315,13 @@ export function BusinessProfileDrawer() {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Business Type</label>
-            <select className="select" {...form.register('businessType')}>
+            <Select {...form.register('businessType')}>
               {BUSINESS_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="form-group">
             <label className="form-label">Tax ID</label>
@@ -382,17 +383,17 @@ export function BusinessProfileDrawer() {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Default Currency</label>
-            <select className="select" {...form.register('defaultCurrency')}>
+            <Select {...form.register('defaultCurrency')}>
               <option value="USD">USD ($)</option>
               <option value="ILS">ILS (₪)</option>
-            </select>
+            </Select>
           </div>
           <div className="form-group">
             <label className="form-label">Default Language</label>
-            <select className="select" {...form.register('defaultLanguage')}>
+            <Select {...form.register('defaultLanguage')}>
               <option value="en">English</option>
               <option value="ar">Arabic</option>
-            </select>
+            </Select>
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams, useNavigate } from '@tanstack/react-router';
 import { PDFViewer } from '@react-pdf/renderer';
 import { TopBar } from '../../components/layout';
+import { Select } from '../../components/ui';
 import { CheckIcon, DownloadIcon, LockIcon } from '../../components/icons';
 import {
   useDocument,
@@ -395,8 +396,7 @@ export function DocumentDetailPage() {
                 <dd>{DOCUMENT_TYPE_LABELS[document.type]}</dd>
                 <dt>Status</dt>
                 <dd>
-                  <select
-                    className="select select-sm"
+                  <Select
                     value={document.status}
                     onChange={(e) => handleStatusChange(e.target.value as DocumentStatus)}
                     disabled={
@@ -411,7 +411,7 @@ export function DocumentDetailPage() {
                     <option value="issued">Issued</option>
                     <option value="paid">Paid</option>
                     <option value="voided">Voided</option>
-                  </select>
+                  </Select>
                 </dd>
                 <dt>Issue Date</dt>
                 <dd>{formatDate(document.issueDate, locale)}</dd>

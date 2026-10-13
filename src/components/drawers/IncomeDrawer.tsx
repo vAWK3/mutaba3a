@@ -18,6 +18,7 @@ import {
 } from '../../hooks/useQueries';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useNavigate } from '@tanstack/react-router';
+import { Select } from '../ui';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
 import {
@@ -439,10 +440,9 @@ export function IncomeDrawer() {
         name="profileId"
         control={form.control}
         render={({ field }) => (
-          <select
+          <Select
             id="income-profile"
-            className={cn('select', form.formState.errors.profileId && 'input-error')}
-            style={{ width: '100%' }}
+            invalid={Boolean(form.formState.errors.profileId)}
             {...field}
           >
             <option value="">{t('drawer.transaction.profilePlaceholder')}</option>
@@ -451,7 +451,7 @@ export function IncomeDrawer() {
                 {profile.name}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       />
       {errorText('profileId') && <p className="form-error">{errorText('profileId')}</p>}
@@ -656,10 +656,8 @@ export function IncomeDrawer() {
                   name="currency"
                   control={form.control}
                   render={({ field }) => (
-                    <select
+                    <Select
                       id="income-currency"
-                      className="select"
-                      style={{ width: '100%' }}
                       {...field}
                       disabled={paymentStateLocked}
                       onChange={(event) => {
@@ -673,7 +671,7 @@ export function IncomeDrawer() {
                           {currency}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   )}
                 />
               </div>

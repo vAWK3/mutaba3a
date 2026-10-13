@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Controller, type Control, type FieldErrors } from 'react-hook-form';
 import { cn } from '../../lib/utils';
+import { Select } from '../ui/Input';
 import type { ExpenseFormFieldsValues } from './expenseFormSchema';
 
 /**
@@ -128,13 +129,13 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
             name={'currency' as never}
             control={control}
             render={({ field }) => (
-              <select id="expense-currency" className="select" style={{ width: '100%' }} disabled={disabled} {...field}>
+              <Select id="expense-currency" disabled={disabled} {...field}>
                 {currencyOptions.map((code) => (
                   <option key={code} value={code}>
                     {code}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           />
         </div>
@@ -190,10 +191,9 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
           name={'categoryId' as never}
           control={control}
           render={({ field }) => (
-            <select
+            <Select
               id="expense-category"
-              className={cn('select', errors.categoryId && 'input-error')}
-              style={{ width: '100%' }}
+              invalid={Boolean(errors.categoryId)}
               disabled={disabled}
               {...field}
             >
@@ -203,7 +203,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
                   {cat.name}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         />
         {errors.categoryId && (

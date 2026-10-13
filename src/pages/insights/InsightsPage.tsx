@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { TopBar } from '../../components/layout';
 import { DateRangeControl } from '../../components/filters';
-import { EmptyState } from '../../components/ui';
+import { EmptyState, Select } from '../../components/ui';
 import { DownloadIcon, PrintIcon } from '../../components/icons';
 import {
   useTransactions,
@@ -871,8 +871,7 @@ export function InsightsPage() {
 
         {/* Filters row */}
         <div className="filters-row">
-          <select
-            className="select"
+          <Select
             value={currencyMode}
             onChange={(e) => setCurrencyMode(e.target.value as CurrencyMode)}
           >
@@ -881,7 +880,7 @@ export function InsightsPage() {
                 {t(cm.labelKey)}
               </option>
             ))}
-          </select>
+          </Select>
 
           <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
             <button

@@ -5,6 +5,7 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
+import { Select } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import {
   useDocument,
@@ -582,7 +583,7 @@ export function DocumentDrawer() {
               name="businessProfileId"
               control={control}
               render={({ field }) => (
-                <select className="select" {...field} disabled={isReadOnly}>
+                <Select {...field} disabled={isReadOnly}>
                   <option value="">Select profile...</option>
                   {businessProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
@@ -590,7 +591,7 @@ export function DocumentDrawer() {
                       {profile.isDefault ? ' - Default' : ''}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
             {form.formState.errors.businessProfileId && (
@@ -603,14 +604,14 @@ export function DocumentDrawer() {
               name="clientId"
               control={control}
               render={({ field }) => (
-                <select className="select" {...field} disabled={isReadOnly}>
+                <Select {...field} disabled={isReadOnly}>
                   <option value="">No client</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -624,14 +625,14 @@ export function DocumentDrawer() {
               name="refDocumentId"
               control={control}
               render={({ field }) => (
-                <select className="select" {...field} disabled={isReadOnly}>
+                <Select {...field} disabled={isReadOnly}>
                   <option value="">Select original document...</option>
                   {referenceableDocuments.map((doc) => (
                     <option key={doc.id} value={doc.id}>
                       {doc.number} - {formatMinorAmount(doc.totalMinor, doc.currency)}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -669,10 +670,10 @@ export function DocumentDrawer() {
               name="currency"
               control={control}
               render={({ field }) => (
-                <select className="select" {...field} disabled={isReadOnly}>
+                <Select {...field} disabled={isReadOnly}>
                   <option value="USD">USD ($)</option>
                   <option value="ILS">ILS (₪)</option>
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -682,10 +683,10 @@ export function DocumentDrawer() {
               name="language"
               control={control}
               render={({ field }) => (
-                <select className="select" {...field} disabled={isReadOnly}>
+                <Select {...field} disabled={isReadOnly}>
                   <option value="en">English</option>
                   <option value="ar">Arabic</option>
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -695,13 +696,13 @@ export function DocumentDrawer() {
               name="templateId"
               control={control}
               render={({ field }) => (
-                <select className="select" {...field} disabled={isReadOnly}>
+                <Select {...field} disabled={isReadOnly}>
                   {TEMPLATES.map((t) => (
                     <option key={t.value} value={t.value}>
                       {t.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             />
           </div>
@@ -887,13 +888,13 @@ export function DocumentDrawer() {
                     name={`payments.${index}.method`}
                     control={control}
                     render={({ field: f }) => (
-                      <select className="select" {...f} disabled={isReadOnly}>
+                      <Select {...f} disabled={isReadOnly}>
                         {PAYMENT_METHODS.map((m) => (
                           <option key={m.value} value={m.value}>
                             {m.label}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     )}
                   />
                 </div>

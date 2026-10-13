@@ -945,6 +945,38 @@ import { Button } from '@/components/ui/Button';
 
 ---
 
+### Pattern: Select Styling
+
+Dropdowns use the shared `Select` component (`src/components/ui/Input.tsx`, exported from the `src/components/ui` barrel) with CSS from `Input.css`. It wraps a native `<select>` with brand tokens (`--input-*`, `--radius-md`, 16px body text) and a custom chevron — a raw `<select className="select">` no longer carries any styling of its own (the stale global rule in `index.css` was removed, MUT-103 dropdown sweep).
+
+**Never render a raw `<select>` in app/portal screens.** Use the component:
+
+```tsx
+<Select label="Currency" {...register('currency')}>
+  <option value="USD">USD</option>
+  <option value="ILS">ILS</option>
+</Select>
+```
+
+Takes `<option>` children like a native select, not an `options` array. For `react-hook-form` + `Controller` call sites that already render their own `<p className="form-error">` next to the field, use `invalid` for a style-only error border instead of `error` (which would also render a second, duplicate message):
+
+```tsx
+<Controller
+  name="profileId"
+  control={form.control}
+  render={({ field }) => (
+    <Select invalid={Boolean(form.formState.errors.profileId)} {...field}>
+      ...
+    </Select>
+  )}
+/>
+{form.formState.errors.profileId && <p className="form-error">...</p>}
+```
+
+**Shared code that both the app and the hosted portal import must not use the `components/ui` barrel import** (`import { Select } from '../ui'`) — the barrel re-exports `ProfileQuickPicker`, which pulls in `useActiveProfile`, which reads a `staticData.owedLens` route field the app's `router.tsx` declares via global module augmentation. `tsconfig.hosted.json` deliberately excludes `router.tsx` (hosted has its own routing), so anything that drags that hook into the hosted TS program fails to compile. Import `Select` from the concrete file instead: `import { Select } from '../ui/Input'` (or `'../../components/ui/Input'` from `src/hosted/`) — this is already how hosted imports `Button`.
+
+---
+
 ### Pattern: Focus Styles
 
 Use `box-shadow` with `--focus-ring` token for focus states. Do not use `outline`.
