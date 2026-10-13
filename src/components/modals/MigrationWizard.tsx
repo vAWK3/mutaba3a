@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../../db/database';
-import { exportBackup } from '../../db/backup';
+import { backUpNow } from '../../db/backup';
 import { Button } from '../ui/Button';
 import { Select } from '../ui';
 import './MigrationWizard.css';
@@ -119,7 +119,7 @@ export function MigrationWizard() {
   }
 
   const handleBackup = async () => {
-    await exportBackup();
+    await backUpNow();
     setBackupDone(true);
   };
 

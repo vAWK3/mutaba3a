@@ -5,6 +5,7 @@
 
 import { db } from './database';
 import { enforceSingleDefaultProfile } from './profileDefault';
+import { settingsRepo } from './repository';
 import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 
 export interface BackupData {
@@ -56,6 +57,17 @@ export async function exportBackup(): Promise<void> {
 }
 
 /**
+ * Settings › Your data › Back up (MUT-88, ADR-071): download a full backup,
+ * then record when. Nothing is recorded if the file could not be produced.
+ * A browser can't confirm the user kept the download; producing it is the
+ * best signal available (MUT-90 builds its reminder on this date).
+ */
+export async function backUpNow(): Promise<void> {
+  await exportBackup();
+  await settingsRepo.update({ lastBackupAt: new Date().toISOString() });
+}
+
+/**
  * Restore database from a backup JSON file.
  * Clears all existing data and replaces with backup data.
  */
@@ -94,6 +106,8 @@ export async function restoreFromBackup(backupJson: string): Promise<{ recordsRe
 
     // An older backup can carry two defaults (MUT-88, ADR-071).
     await enforceSingleDefaultProfile(db.businessProfiles);
+    // The device now holds exactly this backup, so it is the last one made.
+    if (data.timestamp) await settingsRepo.update({ lastBackupAt: data.timestamp });
   });
 
   // A backup from an older build carries a settings row without `features`;
