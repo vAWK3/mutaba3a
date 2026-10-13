@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useT } from '../../../lib/i18n';
 import { formatAmount } from '../../../lib/utils';
 import type { MonthProjection, Currency } from '../../../types';
+import './MonthlyTimeline.css';
 
 interface MonthlyTimelineProps {
   projections: MonthProjection[];
@@ -169,121 +170,6 @@ export function MonthlyTimeline({ projections, currency, locale }: MonthlyTimeli
         </div>,
         document.body
       )}
-
-      <style>{`
-        .timeline-legend {
-          display: flex;
-          gap: 1rem;
-          font-size: 0.75rem;
-          color: var(--text-secondary);
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-        }
-
-        .legend-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-
-        .timeline-bar-group {
-          cursor: pointer;
-        }
-
-        .timeline-bar-group:hover .timeline-bar {
-          opacity: 0.8;
-        }
-
-        .timeline-bars-container {
-          display: flex;
-          gap: 2px;
-          align-items: flex-end;
-          height: 150px;
-          width: 100%;
-          justify-content: center;
-        }
-
-        .timeline-bar {
-          width: 12px;
-          border-radius: 2px 2px 0 0;
-          transition: opacity 0.15s ease;
-        }
-
-        .timeline-bar.in {
-          background: var(--success);
-        }
-
-        .timeline-bar.out {
-          background: var(--error);
-        }
-
-        .timeline-tooltip {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          padding: 0.75rem;
-          box-shadow: var(--shadow-2);
-          min-width: 180px;
-          pointer-events: none;
-        }
-
-        .timeline-tooltip-title {
-          font-weight: var(--weight-semibold);
-          margin-bottom: 0.5rem;
-          color: var(--text);
-        }
-
-        .timeline-tooltip-row {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: var(--text-label);
-          margin-bottom: 0.25rem;
-        }
-
-        .timeline-tooltip-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .timeline-tooltip-dot.in {
-          background: var(--success);
-        }
-
-        .timeline-tooltip-dot.out {
-          background: var(--error);
-        }
-
-        .timeline-tooltip-label {
-          color: var(--text-secondary);
-          flex: 1;
-        }
-
-        .timeline-tooltip-value {
-          font-weight: var(--weight-medium);
-          font-family: var(--font-mono);
-        }
-
-        .timeline-tooltip-value.positive {
-          color: var(--success);
-        }
-
-        .timeline-tooltip-value.negative {
-          color: var(--error);
-        }
-
-        .timeline-tooltip-divider {
-          height: 1px;
-          background: var(--border);
-          margin: 0.5rem 0;
-        }
-      `}</style>
     </div>
   );
 }

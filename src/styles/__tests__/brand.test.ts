@@ -398,14 +398,12 @@ describe('names', () => {
  * reference, or an entry that stops being dead, fails the test.
  */
 const KNOWN_DEAD_REFERENCES = [
-  '--bg-hover', '--bg-primary', '--bg-secondary', '--bg-tertiary', '--border-color',
-  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger',
-  '--color-expense', '--color-income', '--color-info', '--color-primary', '--color-success',
-  '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--color-warning', '--danger', '--danger-subtle',
+  '--bg-primary', '--bg-secondary', '--border-color',
+  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border',   '--color-success',
+  '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--danger', '--danger-subtle',
   '--error-bg', '--error-fg', '--font-serif', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
   '--positive', '--primary', '--primary-foreground', '--primary-subtle', '--shadow-lg', '--shadow-xl',
-  '--surface-active', '--surface-alt', '--surface-elevated', '--surface-raised', '--surface-secondary',
-  '--surface-tertiary', '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
+  '--surface-alt', '--surface-elevated', '--surface-raised',   '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
 ];
 
 describe('references', () => {
@@ -819,7 +817,6 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
  */
 const KNOWN_LITERALS: Record<string, number> = {
   'src/components/drawers/BusinessProfileDrawer.tsx': 6,
-  'src/components/drawers/PlanAssumptionDrawer.tsx': 1,
   'src/components/modals/DeleteAllDataModal.css': 3,
   'src/components/modals/DemoSeedModal.css': 6,
   'src/components/modals/MigrationWizard.css': 1,
@@ -836,14 +833,10 @@ const KNOWN_LITERALS: Record<string, number> = {
   'src/index.css': 35,
   'src/pages/expenses/ExpensesLedgerPage.tsx': 1,
   'src/pages/income/IncomePage.tsx': 2,
-  'src/pages/insights/InsightsPage.tsx': 4,
   'src/pages/landing/LandingPage.css': 8,
   'src/pages/landing/PrivacyPolicyPage.css': 1,
   'src/pages/landing/components/HeroSection.css': 2,
-  'src/pages/planning/PlanningPage.css': 33,
-  'src/pages/planning/components/MonthlyTimeline.tsx': 1,
   'src/pages/projects/ProjectDetailPage.tsx': 2,
-  'src/pages/retainers/RetainersPage.css': 21,
 };
 
 /**
@@ -864,9 +857,6 @@ const KNOWN_TABULAR_WITHOUT_MONO: string[] = [
   'src/pages/landing/LandingPage.css .landing-mock-client-owed, .landing-mock-client-overdue',
   'src/pages/landing/LandingPage.css .landing-mock-input--amount',
   'src/pages/landing/LandingPage.css .landing-mock-money',
-  'src/pages/planning/PlanningPage.css .assumption-amount',
-  'src/pages/planning/PlanningPage.css .category-total',
-  'src/pages/planning/PlanningPage.css .summary-card-value',
 ];
 
 describe('literals', () => {

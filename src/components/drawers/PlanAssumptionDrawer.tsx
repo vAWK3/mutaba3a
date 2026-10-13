@@ -21,6 +21,7 @@ import type {
   AssumptionFrequency,
   AssumptionConfidence,
 } from '../../types';
+import './PlanAssumptionDrawer.css';
 
 const schema = z.object({
   planId: z.string().min(1, 'Plan is required'),
@@ -435,120 +436,6 @@ export function PlanAssumptionDrawer() {
           />
         </div>
       </form>
-
-      <style>{`
-        .confidence-options {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .confidence-option {
-          cursor: pointer;
-        }
-
-        .confidence-option input {
-          display: none;
-        }
-
-        .confidence-badge {
-          display: inline-block;
-          padding: 0.5rem 1rem;
-          border-radius: 0.5rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-          border: 2px solid transparent;
-          transition: all 0.2s;
-        }
-
-        .confidence-badge.confirmed {
-          background: #e6f7ed;
-          color: #0d6832;
-          border-color: #a3e4bc;
-        }
-
-        .confidence-badge.likely {
-          background: #fef3e2;
-          color: #9a6700;
-          border-color: #f5d68a;
-        }
-
-        .confidence-badge.rough_guess {
-          background: #fce8e8;
-          color: #b91c1c;
-          border-color: #f5a3a3;
-        }
-
-        [data-theme="dark"] .confidence-badge.confirmed {
-          background: #064e2a;
-          color: #86efac;
-          border-color: #166534;
-        }
-
-        [data-theme="dark"] .confidence-badge.likely {
-          background: #713f12;
-          color: #fcd34d;
-          border-color: #a16207;
-        }
-
-        [data-theme="dark"] .confidence-badge.rough_guess {
-          background: #7f1d1d;
-          color: #fca5a5;
-          border-color: #b91c1c;
-        }
-
-        .confidence-option.selected .confidence-badge.confirmed {
-          background: #16a34a;
-          color: white;
-          border-color: #16a34a;
-        }
-
-        .confidence-option.selected .confidence-badge.likely {
-          background: #ca8a04;
-          color: white;
-          border-color: #ca8a04;
-        }
-
-        .confidence-option.selected .confidence-badge.rough_guess {
-          background: #dc2626;
-          color: white;
-          border-color: #dc2626;
-        }
-
-        .confidence-option:hover .confidence-badge {
-          transform: scale(1.02);
-        }
-
-        .segment-control {
-          display: flex;
-          gap: 0.25rem;
-          background: var(--bg-secondary);
-          padding: 0.25rem;
-          border-radius: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .segment-button {
-          padding: 0.5rem 0.75rem;
-          border: none;
-          background: transparent;
-          border-radius: 0.375rem;
-          cursor: pointer;
-          font-size: 0.875rem;
-          color: var(--text-secondary);
-          transition: all 0.2s;
-        }
-
-        .segment-button:hover {
-          background: var(--bg-tertiary);
-        }
-
-        .segment-button.active {
-          background: var(--bg-primary);
-          color: var(--text-primary);
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-        }
-      `}</style>
     </Drawer>
   );
 }
