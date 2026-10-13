@@ -4,7 +4,7 @@
 .demo-seed-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   z-index: 100;
 }
 
@@ -13,9 +13,9 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--surface, #111827);
-  border-radius: var(--radius-lg, 12px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
   width: 90%;
   max-width: 520px;
   max-height: 90vh;
@@ -29,8 +29,8 @@
   display: flex;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: var(--accent-subtle, rgba(59, 130, 246, 0.1));
-  border: 1px solid var(--accent, #3b82f6);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-5);
 }

@@ -2,7 +2,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   z-index: 10000;
   animation: fadeIn 150ms ease;
 }
@@ -13,9 +13,9 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--surface, #FFFFFF);
+  background: var(--surface);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3, 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15));
+  box-shadow: var(--shadow-1);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;

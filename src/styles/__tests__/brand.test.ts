@@ -399,11 +399,9 @@ describe('names', () => {
  */
 const KNOWN_DEAD_REFERENCES = [
   '--bg-primary', '--bg-secondary', '--border-color',
-  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border',   '--color-success',
-  '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--danger', '--danger-subtle',
-  '--error-bg', '--error-fg', '--font-serif', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
-  '--positive', '--primary', '--primary-foreground', '--primary-subtle', '--shadow-lg', '--shadow-xl',
-  '--surface-alt', '--surface-elevated', '--surface-raised',   '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
+  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border',     '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--danger', '--danger-subtle',
+  '--error-bg', '--error-fg', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
+  '--positive', '--primary', '--primary-foreground', '--primary-subtle',   '--surface-alt', '--surface-raised',   '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
 ];
 
 describe('references', () => {
@@ -817,13 +815,7 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
  */
 const KNOWN_LITERALS: Record<string, number> = {
   'src/components/drawers/BusinessProfileDrawer.tsx': 6,
-  'src/components/modals/DeleteAllDataModal.css': 3,
-  'src/components/modals/DemoSeedModal.css': 6,
-  'src/components/modals/MigrationWizard.css': 1,
-  'src/components/modals/ProfilePickerModal.css': 1,
-  'src/components/modals/WelcomeModal.css': 6,
   'src/components/ui/Button.css': 1,
-  'src/components/ui/DemoBanner.css': 10,
   'src/components/ui/EntityTypeahead.css': 2,
   'src/components/ui/ProfileBadge.css': 2,
   'src/components/ui/ProfileContextChip.css': 6,

@@ -8,14 +8,14 @@
 }
 
 .onboarding-card {
-  background: var(--surface-elevated);
+  background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-8);
   max-width: 480px;
   width: 100%;
   text-align: center;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-2);
 }
 
 .onboarding-title {
@@ -27,7 +27,7 @@
 
 .onboarding-subtitle {
   font-size: var(--text-body);
-  color: var(--text-muted);
+  color: var(--muted);
   margin-bottom: var(--space-6);
 }
 
@@ -42,8 +42,8 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--primary-subtle);
-  color: var(--primary);
+  background: var(--accent-subtle);
+  color: var(--on-accent-subtle);
   margin-bottom: var(--space-4);
 }
 
@@ -56,7 +56,7 @@
 
 .onboarding-step-description {
   font-size: var(--text-label);
-  color: var(--text-muted);
+  color: var(--muted);
   margin: 0;
 }
 
@@ -73,7 +73,7 @@
 
 .onboarding-actions .btn-ghost {
   width: 100%;
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 .onboarding-actions .btn-ghost:hover {

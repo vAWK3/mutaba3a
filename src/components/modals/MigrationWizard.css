@@ -1,7 +1,7 @@
 .migration-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -40,7 +40,7 @@
   font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   border: 2px solid var(--border);
-  color: var(--text-muted);
+  color: var(--muted);
   transition: all var(--transition-normal);
 }
 
@@ -64,14 +64,14 @@
 
 /* Content */
 .migration-content h2 {
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: var(--text-headline);
   font-weight: var(--weight-semibold);
   margin: 0 0 var(--space-2);
 }
 
 .migration-description {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: var(--text-label);
   line-height: var(--leading-relaxed);
   margin-bottom: var(--space-5);
@@ -106,14 +106,14 @@
 .migration-table thead {
   position: sticky;
   top: 0;
-  background: var(--surface-raised);
+  background: var(--surface-2);
 }
 
 .migration-table th {
   text-align: start;
   padding: var(--space-2) var(--space-3);
   font-weight: var(--weight-medium);
-  color: var(--text-muted);
+  color: var(--muted);
   border-bottom: 1px solid var(--border);
 }
 

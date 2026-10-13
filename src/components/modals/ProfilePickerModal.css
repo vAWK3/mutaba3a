@@ -3,7 +3,7 @@
 .profile-picker-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -19,7 +19,7 @@
 .profile-picker-modal {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-3);
   width: 100%;
   max-width: 400px;
   margin: var(--space-4);
@@ -45,7 +45,7 @@
 .profile-picker-title {
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
-  color: var(--foreground);
+  color: var(--text);
   margin: 0 0 var(--space-2);
 }
 
@@ -67,7 +67,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: var(--surface-raised);
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -114,7 +114,7 @@
 .profile-picker-option-name {
   display: block;
   font-weight: var(--weight-medium);
-  color: var(--foreground);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
