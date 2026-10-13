@@ -8636,7 +8636,7 @@ export interface components {
             isPersonalDefault: boolean;
         };
         /** @enum {string} */
-        Currency: "ILS" | "USD" | "EUR";
+        Currency: "ILS" | "USD" | "EUR" | "JOD";
         IncomeCaptureRules: {
             received: boolean;
             owed: boolean;

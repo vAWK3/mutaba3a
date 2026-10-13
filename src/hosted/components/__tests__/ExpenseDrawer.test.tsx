@@ -100,6 +100,52 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(createCall!.body).toMatchObject({ amount: '12.50', currency: 'USD', categoryId: 'cat-1' });
   });
 
+  it('creates a JOD expense with a 3-decimal amount (MUT-140: JOD is 3-decimal, not 2)', async () => {
+    const user = userEvent.setup();
+    let createCall: { body: unknown } | null = null;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': (req) => {
+        createCall = { body: req.body };
+        return ok({ id: 'e1' }, 201);
+      },
+    });
+
+    const { onClose } = renderDrawer();
+    await user.selectOptions(await screen.findByLabelText('Currency *'), 'JOD');
+    await user.type(await screen.findByPlaceholderText('0.00'), '45.678');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(createCall!.body).toMatchObject({ amount: '45.678', currency: 'JOD' });
+  });
+
+  it('rejects a JOD amount with a 4th decimal place', async () => {
+    const user = userEvent.setup();
+    const createExpense = vi.fn();
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': (req) => {
+        createExpense(req.body);
+        return ok({ id: 'e1' }, 201);
+      },
+    });
+
+    renderDrawer();
+    await user.selectOptions(await screen.findByLabelText('Currency *'), 'JOD');
+    await user.type(await screen.findByPlaceholderText('0.00'), '45.6789');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Enter a valid amount')).toBeInTheDocument();
+    expect(createExpense).not.toHaveBeenCalled();
+  });
+
   it('blocks the drawer body behind a spinner in edit mode until the expense loads', async () => {
     let resolveExpense: (r: Response) => void = () => {};
     route({

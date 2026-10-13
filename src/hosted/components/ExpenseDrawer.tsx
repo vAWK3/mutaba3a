@@ -3,9 +3,10 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../../components/expenses/ExpenseFormFields';
-import { DECIMAL_AMOUNT, expenseFormFieldsSchema } from '../../components/expenses/expenseFormSchema';
+import { expenseFormFieldsSchema } from '../../components/expenses/expenseFormSchema';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
+import { currencyExponent } from '../../lib/utils';
 import { useCreateExpense, useDeleteExpense, useExpense, useExpenseCategories, useUpdateExpense } from '../data/expenseQueries';
 import { useToast } from './Toast';
 import { ClientPicker } from './ClientPicker';
@@ -24,13 +25,26 @@ import type { CreateExpenseRequest, UpdateExpenseRequest } from '../api/client';
  * (read-only directories, no create-new), and its own CreateExpense/
  * UpdateExpense/DeleteExpense wiring. See mut-44-expense-capture.md §3/§6a.
  */
-const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR'] as const;
+const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR', 'JOD'] as const;
 
+// The shared schema caps currency at USD/ILS/EUR and its amount field has no
+// precision check -- this widens currency to JOD (MUT-140 scoped that out of
+// the portal; the server already accepts JOD on every money-typed endpoint,
+// see server/src/money.ts) and replaces the fixed 2-decimal DECIMAL_AMOUNT
+// regex with a currency-aware check, since JOD needs 3.
 const hostedExpenseSchema = expenseFormFieldsSchema.extend({
-  amount: z.string().min(1, 'Amount is required').regex(DECIMAL_AMOUNT, 'Invalid amount'),
+  currency: z.enum(CURRENCY_OPTIONS),
+  amount: z.string().min(1, 'Amount is required'),
   vendor: z.string().optional(),
   clientId: z.string().optional(),
   projectId: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.amount) return;
+  const exponent = currencyExponent(data.currency);
+  const decimalAmount = new RegExp(`^\\d+(\\.\\d{1,${exponent}})?$`);
+  if (!decimalAmount.test(data.amount)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid amount', path: ['amount'] });
+  }
 });
 
 export type HostedExpenseFormValues = z.infer<typeof hostedExpenseSchema>;
