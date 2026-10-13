@@ -103,3 +103,27 @@ variable "attachments_url_ttl_seconds" {
   type        = number
   default     = 900
 }
+
+variable "apple_team_id" {
+  description = "Apple Developer Team ID for the iOS app (MUT-111 AASA / universal links and saved-password trust). Empty (default) disables app-association serving; must be set together with apple_bundle_id, android_package_name and android_sha256_fingerprints, or left empty with them — see the lifecycle precondition on google_cloud_run_v2_service.api."
+  type        = string
+  default     = ""
+}
+
+variable "apple_bundle_id" {
+  description = "iOS bundle identifier (MUT-111). See apple_team_id."
+  type        = string
+  default     = ""
+}
+
+variable "android_package_name" {
+  description = "Android applicationId (MUT-111 Digital Asset Links). See apple_team_id."
+  type        = string
+  default     = ""
+}
+
+variable "android_sha256_fingerprints" {
+  description = "Comma-separated SHA-256 signing certificate fingerprints — debug and upload-key at minimum (MUT-114 adds the Play App Signing one later). See apple_team_id."
+  type        = string
+  default     = ""
+}

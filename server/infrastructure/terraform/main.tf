@@ -27,6 +27,15 @@ locals {
   secret_admin_token    = "mutaba3a-api-admin-token${local.suffix}"
   secret_session_pepper = "mutaba3a-api-session-pepper${local.suffix}"
 
+  # MUT-111: empty (default) = no env vars below, feature off — matches
+  # config.ts treating all four as absent. Set together in production.tfvars.
+  app_association_env = var.apple_team_id == "" ? {} : {
+    APPLE_TEAM_ID               = var.apple_team_id
+    APPLE_BUNDLE_ID             = var.apple_bundle_id
+    ANDROID_PACKAGE_NAME        = var.android_package_name
+    ANDROID_SHA256_FINGERPRINTS = var.android_sha256_fingerprints
+  }
+
   labels = {
     app         = "mutaba3a-api"
     environment = var.environment
@@ -344,6 +353,14 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      dynamic "env" {
+        for_each = local.app_association_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       startup_probe {
         http_get {
           path = "/health"
@@ -381,6 +398,19 @@ resource "google_cloud_run_v2_service" "api" {
 
   lifecycle {
     ignore_changes = [client, client_version]
+
+    precondition {
+      # MUT-111: config.ts enforces this again at server boot; catching it
+      # here surfaces the mistake at `terraform plan`, before a deploy. All
+      # four "is empty" booleans must agree — either all set or all empty.
+      condition = length(distinct([
+        var.apple_team_id == "",
+        var.apple_bundle_id == "",
+        var.android_package_name == "",
+        var.android_sha256_fingerprints == "",
+      ])) == 1
+      error_message = "apple_team_id, apple_bundle_id, android_package_name and android_sha256_fingerprints must all be set, or all left empty (MUT-111)."
+    }
   }
 
   depends_on = [

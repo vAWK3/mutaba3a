@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
-import { createApp } from '../app.js';
+import { createApp, type AppDependencies } from '../app.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
@@ -12,12 +12,19 @@ type Loose = any;
 const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;
 const ADMIN_TOKEN = 'test-admin-token-with-at-least-32-characters';
 
+const APP_ASSOCIATION: AppDependencies['appAssociation'] = {
+  appleTeamId: '4LCWA596X7',
+  appleBundleId: 'com.barmajiyat.mutaba3a',
+  androidPackageName: 'com.barmajiyat.mutaba3a',
+  androidSha256Fingerprints: ['AA:BB:CC'],
+};
+
 /**
  * MUT-45: the API serves the hosted-portal build from the same origin. These
  * tests use a fixture dist dir (not a real `npm run build:hosted` output) so
  * the server suite never depends on the frontend build running first.
  */
-function harness(portal?: { distDir: string } | null) {
+function harness(portal?: { distDir: string } | null, appAssociation?: AppDependencies['appAssociation']) {
   return createApp({
     store: new MemoryLedgerStore(),
     logger: pino({ level: 'silent' }),
@@ -26,6 +33,7 @@ function harness(portal?: { distDir: string } | null) {
     keyEnvironment: 'test',
     version: '0.1.0-test',
     ...(portal !== undefined ? { portal } : {}),
+    ...(appAssociation !== undefined ? { appAssociation } : {}),
   });
 }
 
@@ -43,6 +51,61 @@ describe('portal serving — disabled (default, matches every other test file)',
   it('/health is unaffected', async () => {
     const res = await app.request('/health');
     expect(res.status).toBe(200);
+  });
+});
+
+describe('portal serving — app association absent (MUT-111 default, matches every other test file)', () => {
+  it('the well-known paths get the JSON 404, not the portal shell, even with the portal build mounted', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'mutaba3a-portal-'));
+    await writeFile(join(distDir, 'index.html'), '<!doctype html><html><body>portal shell</body></html>');
+    const app = harness({ distDir });
+    try {
+      for (const path of ['/.well-known/apple-app-site-association', '/.well-known/assetlinks.json']) {
+        const res = await app.request(path);
+        expect(res.status).toBe(404);
+        expect(res.headers.get('content-type')).toContain('application/json');
+        expect((await read(res)).error.code).toBe('NOT_FOUND');
+      }
+    } finally {
+      await rm(distDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('portal serving — app association enabled', () => {
+  it('the well-known paths answer directly, without the portal build mounted', async () => {
+    const app = harness(null, APP_ASSOCIATION);
+    const res = await app.request('/.well-known/apple-app-site-association');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+  });
+
+  it('the well-known paths win over the SPA shell when both are mounted, and /health, /ready, CSP stay unaffected', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'mutaba3a-portal-'));
+    await writeFile(join(distDir, 'index.html'), '<!doctype html><html><body>portal shell</body></html>');
+    try {
+      const app = harness({ distDir }, APP_ASSOCIATION);
+
+      const aasa = await app.request('/.well-known/apple-app-site-association');
+      expect(aasa.status).toBe(200);
+      expect(aasa.headers.get('content-type')).toContain('application/json');
+      expect(await read(aasa)).toHaveProperty('applinks');
+
+      const assetlinks = await app.request('/.well-known/assetlinks.json');
+      expect(assetlinks.status).toBe(200);
+      expect(assetlinks.headers.get('content-type')).toContain('application/json');
+
+      const health = await app.request('/health');
+      expect(health.status).toBe(200);
+      const ready = await app.request('/ready');
+      expect(ready.status).toBe(200);
+
+      const expectedCsp =
+        "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+      expect(aasa.headers.get('content-security-policy')).toBe(expectedCsp);
+    } finally {
+      await rm(distDir, { recursive: true, force: true });
+    }
   });
 });
 

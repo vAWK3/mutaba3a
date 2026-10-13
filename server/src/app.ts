@@ -39,6 +39,7 @@ import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
 import { projectRoutes } from './routes/projects.js';
+import { wellKnownRoutes, type AppAssociationConfig } from './routes/well-known.js';
 import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
 
 export interface AppDependencies {
@@ -63,14 +64,28 @@ export interface AppDependencies {
   signInIpLimiter?: RateLimiter;
   /** Hosted-portal static build (MUT-45). Null or absent = API-only, today's behavior. */
   portal?: { distDir: string } | null;
+  /** iOS/Android app-association files (MUT-111). Null or absent = neither well-known path exists. */
+  appAssociation?: AppAssociationConfig | null;
 }
 
 /**
  * Paths the hosted-portal SPA fallback must never catch (hosted-portal.md
  * §9): everything else GET answers the portal shell for client-side routing.
+ * The two well-known paths are included even though a real route registered
+ * earlier already wins regardless (MUT-111): this is the same belt-and-
+ * suspenders reasoning as /health, /ready and /openapi.json — if an operator
+ * deploys the portal without appAssociation configured, these paths must
+ * still 404 as JSON, never silently serve the SPA shell to an Apple/Google
+ * crawler.
  */
 const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/'];
-const PORTAL_EXCLUDED_EXACT = new Set(['/health', '/ready', '/openapi.json']);
+const PORTAL_EXCLUDED_EXACT = new Set([
+  '/health',
+  '/ready',
+  '/openapi.json',
+  '/.well-known/apple-app-site-association',
+  '/.well-known/assetlinks.json',
+]);
 
 function isPortalExcludedPath(path: string): boolean {
   return PORTAL_EXCLUDED_EXACT.has(path) || PORTAL_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix));
@@ -217,6 +232,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', inboxRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
+  if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',

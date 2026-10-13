@@ -55,11 +55,26 @@ function RedirectToSignIn() {
   return null;
 }
 
-/** `/`: the first hosted profile, or S11 when the account has none. */
-export function HomeRedirect() {
+/** The first hosted profile at `to`, or S11 when the account has none. */
+function FirstProfileRedirect({ to }: { to: string }) {
   const { profiles } = useMe();
   if (profiles.length === 0) return <NoProfiles />;
-  return <Navigate to={`/p/${profiles[0].id}`} replace />;
+  return <Navigate to={`/p/${profiles[0].id}${to}`} replace />;
+}
+
+/** `/`: the first hosted profile, or S11 when the account has none. */
+export function HomeRedirect() {
+  return <FirstProfileRedirect to="" />;
+}
+
+/**
+ * `/capture`: the desktop-browser fallback for the iOS/Android universal
+ * link when the app isn't installed (MUT-111). AuthGate already gives this
+ * the same sign-in-then-return dance as every other authed route; there is
+ * no profile id in the URL, so it lands on the first profile's expenses page.
+ */
+export function CaptureRedirect() {
+  return <FirstProfileRedirect to="/expenses" />;
 }
 
 function NoProfiles() {

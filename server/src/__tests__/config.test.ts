@@ -90,3 +90,41 @@ describe('loadConfig — portal serving (MUT-45)', () => {
     expect(() => loadConfig({ ...base, PORTAL_DIST_DIR: '' })).toThrow('PORTAL_DIST_DIR');
   });
 });
+
+describe('loadConfig — app association files (MUT-111)', () => {
+  const appAssociation = {
+    APPLE_TEAM_ID: '4LCWA596X7',
+    APPLE_BUNDLE_ID: 'com.barmajiyat.mutaba3a',
+    ANDROID_PACKAGE_NAME: 'com.barmajiyat.mutaba3a',
+    ANDROID_SHA256_FINGERPRINTS: 'AA:BB:CC,DD:EE:FF',
+  };
+
+  it('defaults to none set (feature off)', () => {
+    const config = loadConfig(base);
+    expect(config.APPLE_TEAM_ID).toBeUndefined();
+    expect(config.APPLE_BUNDLE_ID).toBeUndefined();
+    expect(config.ANDROID_PACKAGE_NAME).toBeUndefined();
+    expect(config.ANDROID_SHA256_FINGERPRINTS).toBeUndefined();
+  });
+
+  it('accepts all four set', () => {
+    const config = loadConfig({ ...base, ...appAssociation });
+    expect(config).toMatchObject(appAssociation);
+  });
+
+  it.each([
+    ['APPLE_TEAM_ID'],
+    ['APPLE_BUNDLE_ID'],
+    ['ANDROID_PACKAGE_NAME'],
+    ['ANDROID_SHA256_FINGERPRINTS'],
+  ])('refuses %s set alone, naming it an all-or-nothing group', (missing) => {
+    const partial = { ...appAssociation };
+    delete (partial as Record<string, string>)[missing];
+    expect(() => loadConfig({ ...base, ...partial })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, ...partial })).toThrow('APPLE_TEAM_ID, APPLE_BUNDLE_ID, ANDROID_PACKAGE_NAME, ANDROID_SHA256_FINGERPRINTS');
+  });
+
+  it('refuses an empty string for any one of them', () => {
+    expect(() => loadConfig({ ...base, ...appAssociation, APPLE_TEAM_ID: '' })).toThrow(ConfigError);
+  });
+});

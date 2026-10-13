@@ -21,6 +21,7 @@ creation is 10–15 minutes of waiting.
   - [4a. Refresh Malafat's vendored contract](#4a-refresh-malafats-vendored-contract)
   - [4b. Give a person access to the hosted portal](#4b-give-a-person-access-to-the-hosted-portal-mut-37)
   - [4c. Cookies, CORS and CSP](#4c-cookies-cors-and-csp-mut-45--what-is-set-and-why)
+  - [4d. App association files](#4d-app-association-files-mut-111--what-is-set-and-why)
 - [5. Wire Malafat to it](#5-wire-malafat-to-it)
 - [6. Day-2 operations](#6-day-2-operations)
 - [7. Production record](#7-production-record)
@@ -336,6 +337,43 @@ cookies or CORS beyond what MUT-38 already built:
   `PATH_STYLED_HOST`, `virtualHostedStyle` not set) — and `connect-src` governs
   that call. Receipt *downloads* need no entry here: `downloadNavigator.open()`
   is a top-level navigation, which `connect-src` does not restrict.
+
+### 4d. App association files (MUT-111) — what is set and why
+
+iOS only trusts the portal's saved passwords and opens portal links in the app
+once the domain declares it via `GET /.well-known/apple-app-site-association`;
+Android needs the same declaration via `GET /.well-known/assetlinks.json`.
+Both are served by the API itself (`src/routes/well-known.ts`), generated from
+config so a domain move (MUT-112) changes no code.
+
+- **Config**: `apple_team_id`, `apple_bundle_id`, `android_package_name` and
+  `android_sha256_fingerprints` (Terraform variables, `production.tfvars`) —
+  all four or none; a `terraform plan` precondition and `config.ts`'s own
+  boot-time check both refuse a partial set. Empty (the default) disables both
+  routes entirely — same "absent dependency" shape as `PORTAL_DIST_DIR` and
+  `ATTACHMENTS_BUCKET`.
+- **Adding a fingerprint**: `android_sha256_fingerprints` is a comma-separated
+  list (the debug and upload-key fingerprints at minimum, MUT-114; the Play
+  App Signing fingerprint joins later, in the Android epic). Edit the value in
+  `production.tfvars`, `terraform apply`, done — no code change, no redeploy
+  of the image itself (only the Cloud Run revision's env vars change).
+- **Moving domains**: MUT-112's job, not this file's. When it lands, update
+  this section with whatever changes (if anything) in how these two routes
+  are reached — the `appID`/`package_name` values themselves don't change
+  just because the hostname did.
+- **Apple's CDN caches the AASA for up to about 24 hours.** A fingerprint or
+  path-list change deployed just now will not necessarily be visible to a
+  freshly-installed iOS app immediately — don't assume a redeploy is broken
+  just because Apple's side hasn't refreshed yet.
+- **Verifying it actually works is a manual, post-deploy step** — no test in
+  this repo's suite calls Apple or Google's live infrastructure. After a
+  deploy that touches these routes, run the live `run.app` URL through:
+  - Apple's AASA validator (e.g. `https://search.developer.apple.com/appsearch-validation-tool/`)
+  - Google's Digital Asset Links API tester
+    (`https://developers.google.com/digital-asset-links/tools/generator`)
+
+  Both must pass before MUT-113 (iOS) or MUT-114 (Android) can be verified
+  end to end.
 
 ## 5. Wire Malafat to it
 

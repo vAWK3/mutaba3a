@@ -115,6 +115,35 @@ export const ReadySchema = z
   .object({ status: z.enum(['ready', 'not_ready']), checks: z.object({ database: z.enum(['ok', 'failed']) }) })
   .openapi('Ready');
 
+// ---- App association (MUT-111) ---------------------------------------------
+
+export const AppleAppSiteAssociationSchema = z
+  .object({
+    applinks: z.object({
+      details: z.array(
+        z.object({
+          appID: z.string(),
+          paths: z.array(z.string()),
+        }),
+      ),
+    }),
+    webcredentials: z.object({ apps: z.array(z.string()) }),
+  })
+  .openapi('AppleAppSiteAssociation');
+
+export const AndroidAssetLinksSchema = z
+  .array(
+    z.object({
+      relation: z.array(z.string()),
+      target: z.object({
+        namespace: z.literal('android_app'),
+        package_name: z.string(),
+        sha256_cert_fingerprints: z.array(z.string()),
+      }),
+    }),
+  )
+  .openapi('AndroidAssetLinks');
+
 // ---- Admin (operator) -------------------------------------------------------
 
 export const CreateOrganizationRequestSchema = z
