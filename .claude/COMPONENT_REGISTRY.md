@@ -185,7 +185,7 @@ Tests: `src/hooks/__tests__/useDocumentTitle.test.ts`.
 
 ### useHeroCta
 **Location**: `src/pages/landing/useHeroCta.ts`
-**Purpose**: The landing page's one device-matched button (L4): `{ kind, href, Icon, label, hint, shortLabel, alternative }`. It is shared by `HeroSection` and `LandingHeader`, so both always go to the same place. Both read the release through `useLatestRelease`, which shares one GitHub call.
+**Purpose**: The landing page's one device-matched button (L4): `{ href, Icon, label, hint, shortLabel, alternative }`. Each `shortLabel` must be part of its `label`, because the bar's button uses the label as its accessible name (WCAG 2.5.3, tested). It is shared by `HeroSection` and `LandingHeader`, so both always go to the same place. Both read the release through `useLatestRelease`, which shares one GitHub call.
 Tests: `LandingHeader.test.tsx`, `HeroSection.test.tsx`.
 
 ### detectDevice / currentDevice

@@ -90,7 +90,7 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 ### Landing header and motion (MUT-77, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|
-| `src/hooks/__tests__/useLatestRelease.test.ts` | Unit (hook) | R6 contract: cache hit → no fetch; concurrent mounts → one fetch; shared failure → error to both, then the next call retries; `useCheckForUpdates` still fetches after a settle |
+| `src/hooks/__tests__/useLatestRelease.test.ts` | Unit (hook) | R6 contract: cache hit → no fetch; concurrent mounts → one fetch; shared failure → error to both, then the next call retries; `useCheckForUpdates` still fetches after a settle; a stalled call times out at 10s and the next call asks again; a failed cache write keeps the release |
 | `src/hooks/__tests__/useInView.test.ts` | Unit (hook) | null until the first report or without IntersectionObserver; in/out; options passed through; once → disconnect and stay true; disconnect on unmount |
 | `src/hooks/__tests__/useDocumentTitle.test.ts` | Unit (hook) | Sets and follows the title |
 | `src/components/brand/__tests__/Wordmark.test.tsx` | Component | Name + decorative mark at size; caller classes |
@@ -99,7 +99,7 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 | `src/pages/landing/__tests__/ChapterSection.test.tsx` | Component | Below the fold → pending → done once; never pending in view, under reduced motion, or without IntersectionObserver |
 | `src/pages/landing/__tests__/landingCss.test.ts` | Unit (node, CSS) | No `transition: all` (landing + theme); no `[data-theme` in landing CSS; press tokens on 5 buttons, no literal scale; text links dim; sticky 85% frost with the -webkit- prefix; solid under reduced transparency and `@supports not`; hidden button uses visibility; AR tracking 0; reveal uses `--stagger-rise`, zeroed under reduced motion |
 | `PrivacyPolicyPage.test.tsx`, `src/pages/download/__tests__/DownloadPage.test.tsx` | Component | Tab title EN/AR |
-| `qa/specs/web/landing.spec.ts` | E2E (Playwright, preview build) | `@web.landing.header-cta`, `.transparency` (CDP), `.press` (+ reduced motion), `.hover-light` (contrast + colour held), `.375` EN/AR (no overlap, wordmark not clipped, fits, `#get-it` below the bar), `.title`, `.reveal` (+ reduced motion) |
+| `qa/specs/web/landing.spec.ts` | E2E (Playwright, preview build) | `@web.landing.header-cta`, `.transparency` (CDP), `.press` (buttons scale, FAQ dims, + reduced motion), `.hover-light` (contrast + colour held), `.375` at 375/320 EN/AR (no overlap, wordmark not clipped, fits, 44px target, `#get-it` jump lands below the bar), `.title`, `.reveal` (+ reduced motion), `.privacy-bar` (no button, no GitHub call, home link) |
 | `qa/specs/web/brand.spec.ts` › contrast-landing | E2E | Axe light/dark also with the bar and its button over a chapter |
 | Manual (TD-121) | — | Safari with Reduce Transparency |
 
