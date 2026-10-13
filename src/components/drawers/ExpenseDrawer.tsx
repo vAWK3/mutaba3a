@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore } from '../../lib/stores';
 import { useBusinessProfiles, useProjects } from '../../hooks/useQueries';
@@ -28,66 +27,7 @@ import { useToast } from '../../lib/toastStore';
 import { ALL_CATEGORIES } from '../../db/defaultExpenseCategories';
 import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../expenses/ExpenseFormFields';
 import type { Currency, ExpenseFrequency, RecurringEndMode } from '../../types';
-
-const schema = z.object({
-  expenseType: z.enum(['onetime', 'recurring']),
-  profileId: z.string().min(1, 'Profile is required'),
-  amount: z.string().min(1, 'Amount is required'),
-  currency: z.enum(['USD', 'ILS', 'EUR', 'JOD']),
-  occurredAt: z.string().min(1, 'Date is required'),
-  title: z.string().optional(),
-  vendor: z.string().optional(),
-  vendorId: z.string().optional(),
-  clientId: z.string().optional(),
-  projectId: z.string().optional(),
-  categoryId: z.string().min(1, 'Category is required'),
-  notes: z.string().optional(),
-  // Recurring fields
-  frequency: z.enum(['monthly', 'yearly']).optional(),
-  startDate: z.string().optional(),
-  endMode: z.enum(['endOfYear', 'untilDate', 'noEnd']).optional(),
-  endDate: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.expenseType === 'recurring') {
-    if (!data.title) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Title is required for recurring expenses',
-        path: ['title'],
-      });
-    }
-    if (!data.frequency) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Frequency is required',
-        path: ['frequency'],
-      });
-    }
-    if (!data.startDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Start date is required',
-        path: ['startDate'],
-      });
-    }
-    if (!data.endMode) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'End mode is required',
-        path: ['endMode'],
-      });
-    }
-    if (data.endMode === 'untilDate' && !data.endDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'End date is required',
-        path: ['endDate'],
-      });
-    }
-  }
-});
-
-type FormData = z.infer<typeof schema>;
+import { schema, type FormData } from './expenseDrawerFormSchema';
 
 export function ExpenseDrawer() {
   const { expenseDrawer, closeExpenseDrawer } = useDrawerStore();
