@@ -48,6 +48,11 @@ import type {
   PaymentByClientRow,
   RecentPaymentRow,
   ProfileScope,
+  Plan,
+  PlanAssumption,
+  PlanScenario,
+  PlanFilters,
+  AssumptionCategory,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
 
@@ -292,6 +297,50 @@ export interface IPaymentRecordRepository {
 }
 
 // ============================================================================
+// Plan Repository Interfaces (Financial Planning, an optional area)
+// ============================================================================
+
+/** Plans are archived, never deleted, so `delete` is omitted. */
+export interface IPlanRepository {
+  list(filters?: PlanFilters): Promise<Plan[]>;
+  get(id: string): Promise<Plan | undefined>;
+  create(data: Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>): Promise<Plan>;
+  update(id: string, data: Partial<Plan>): Promise<void>;
+  archive(id: string): Promise<void>;
+  /** Copies the plan with its assumptions and scenarios; `undefined` when the source is missing. */
+  duplicate(id: string, newName?: string): Promise<Plan | undefined>;
+  activate(id: string): Promise<void>;
+}
+
+export interface IPlanAssumptionRepository {
+  getByPlan(planId: string): Promise<PlanAssumption[]>;
+  getByPlanAndCategory(planId: string, category: AssumptionCategory): Promise<PlanAssumption[]>;
+  getForScenario(planId: string, scenarioId?: string): Promise<PlanAssumption[]>;
+  get(id: string): Promise<PlanAssumption | undefined>;
+  create(data: Omit<PlanAssumption, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlanAssumption>;
+  update(id: string, data: Partial<PlanAssumption>): Promise<void>;
+  delete(id: string): Promise<void>;
+  deleteByPlan(planId: string): Promise<void>;
+  /** Count and total per category, counting only assumptions in `currency`. */
+  getCategorySummary(
+    planId: string,
+    currency: Currency
+  ): Promise<Record<AssumptionCategory, { count: number; totalMinor: number }>>;
+}
+
+export interface IPlanScenarioRepository {
+  getByPlan(planId: string): Promise<PlanScenario[]>;
+  getDefault(planId: string): Promise<PlanScenario | undefined>;
+  get(id: string): Promise<PlanScenario | undefined>;
+  create(data: Omit<PlanScenario, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlanScenario>;
+  update(id: string, data: Partial<PlanScenario>): Promise<void>;
+  /** `false` when the scenario is missing or is the plan's default, which cannot be deleted. */
+  delete(id: string): Promise<boolean>;
+  setDefault(id: string): Promise<void>;
+  createDefaultScenarios(planId: string, profileId: string): Promise<void>;
+}
+
+// ============================================================================
 // Complete Repository Provider Interface
 // ============================================================================
 
@@ -318,4 +367,7 @@ export interface IRepositoryProvider {
   recurringOccurrences: IRecurringOccurrenceRepository;
   retainerAgreements: IRetainerAgreementRepository;
   projectedIncome: IProjectedIncomeRepository;
+  plans: IPlanRepository;
+  planAssumptions: IPlanAssumptionRepository;
+  planScenarios: IPlanScenarioRepository;
 }

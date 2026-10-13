@@ -8,6 +8,7 @@ import {
 import { transactionRepo, clientRepo, settingsRepo, paymentRecordRepo, businessProfileRepo } from '../repository';
 import { expenseRepo } from '../expenseRepository';
 import { retainerRepo, projectedIncomeRepo } from '../retainerRepository';
+import { planRepo, planAssumptionRepo, planScenarioRepo } from '../planRepository';
 
 afterEach(() => {
   resetRepositories();
@@ -36,6 +37,14 @@ describe('repository provider', () => {
       expect(repos.base.transactions).toBe(transactionRepo);
       expect(repos.base.paymentRecords).toBe(paymentRecordRepo);
       expect(repos.base.businessProfiles).toBe(businessProfileRepo);
+    });
+
+    it('resolves the plan repositories through the seam (MUT-47)', () => {
+      const repos = getRepositories();
+
+      expect(repos.base.plans).toBe(planRepo);
+      expect(repos.base.planAssumptions).toBe(planAssumptionRepo);
+      expect(repos.base.planScenarios).toBe(planScenarioRepo);
     });
 
     it('fills every declared slot', () => {

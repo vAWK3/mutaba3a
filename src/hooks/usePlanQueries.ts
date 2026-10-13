@@ -1,9 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  planRepo,
-  planAssumptionRepo,
-  planScenarioRepo,
-} from '../db/planRepository';
+import { getRepositories } from '../db';
 import { calculatePlan, type FxRates } from '../services/planCalculationService';
 import { useFxRate } from './useFxRate';
 import type {
@@ -80,7 +76,7 @@ function invalidateAllPlanQueries(queryClient: ReturnType<typeof useQueryClient>
 export function usePlans(filters: PlanFilters = {}) {
   return useQuery({
     queryKey: planQueryKeys.plans(filters),
-    queryFn: () => planRepo.list(filters),
+    queryFn: () => getRepositories().base.plans.list(filters),
   });
 }
 
@@ -90,7 +86,7 @@ export function usePlans(filters: PlanFilters = {}) {
 export function usePlan(id: string) {
   return useQuery<Plan | null>({
     queryKey: planQueryKeys.plan(id),
-    queryFn: async () => (await planRepo.get(id)) ?? null,
+    queryFn: async () => (await getRepositories().base.plans.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -107,7 +103,7 @@ export function useCreatePlan() {
 
   return useMutation({
     mutationFn: (data: Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>) =>
-      planRepo.create(data),
+      getRepositories().base.plans.create(data),
     onSuccess: () => invalidateAllPlanQueries(queryClient),
   });
 }
@@ -120,7 +116,7 @@ export function useUpdatePlan() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Plan> }) =>
-      planRepo.update(id, data),
+      getRepositories().base.plans.update(id, data),
     onSuccess: () => invalidatePlanQueries(queryClient),
   });
 }
@@ -132,7 +128,7 @@ export function useArchivePlan() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => planRepo.archive(id),
+    mutationFn: (id: string) => getRepositories().base.plans.archive(id),
     onSuccess: () => invalidatePlanQueries(queryClient),
   });
 }
@@ -145,7 +141,7 @@ export function useDuplicatePlan() {
 
   return useMutation({
     mutationFn: ({ id, newName }: { id: string; newName?: string }) =>
-      planRepo.duplicate(id, newName),
+      getRepositories().base.plans.duplicate(id, newName),
     onSuccess: () => invalidateAllPlanQueries(queryClient),
   });
 }
@@ -157,7 +153,7 @@ export function useActivatePlan() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => planRepo.activate(id),
+    mutationFn: (id: string) => getRepositories().base.plans.activate(id),
     onSuccess: () => invalidatePlanQueries(queryClient),
   });
 }
@@ -172,7 +168,7 @@ export function useActivatePlan() {
 export function usePlanAssumptions(planId: string) {
   return useQuery({
     queryKey: planQueryKeys.planAssumptions(planId),
-    queryFn: () => planAssumptionRepo.getByPlan(planId),
+    queryFn: () => getRepositories().base.planAssumptions.getByPlan(planId),
     enabled: !!planId,
   });
 }
@@ -186,7 +182,7 @@ export function usePlanAssumptionsByCategory(
 ) {
   return useQuery({
     queryKey: planQueryKeys.planAssumptionsByCategory(planId, category),
-    queryFn: () => planAssumptionRepo.getByPlanAndCategory(planId, category),
+    queryFn: () => getRepositories().base.planAssumptions.getByPlanAndCategory(planId, category),
     enabled: !!planId,
   });
 }
@@ -197,7 +193,7 @@ export function usePlanAssumptionsByCategory(
 export function usePlanAssumption(id: string) {
   return useQuery<PlanAssumption | null>({
     queryKey: planQueryKeys.planAssumption(id),
-    queryFn: async () => (await planAssumptionRepo.get(id)) ?? null,
+    queryFn: async () => (await getRepositories().base.planAssumptions.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -214,7 +210,7 @@ export function useCreateAssumption() {
 
   return useMutation({
     mutationFn: (data: Omit<PlanAssumption, 'id' | 'createdAt' | 'updatedAt'>) =>
-      planAssumptionRepo.create(data),
+      getRepositories().base.planAssumptions.create(data),
     onSuccess: () => invalidateAssumptionQueries(queryClient),
   });
 }
@@ -227,7 +223,7 @@ export function useUpdateAssumption() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<PlanAssumption> }) =>
-      planAssumptionRepo.update(id, data),
+      getRepositories().base.planAssumptions.update(id, data),
     onSuccess: () => invalidateAssumptionQueries(queryClient),
   });
 }
@@ -239,7 +235,7 @@ export function useDeleteAssumption() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => planAssumptionRepo.delete(id),
+    mutationFn: (id: string) => getRepositories().base.planAssumptions.delete(id),
     onSuccess: () => invalidateAssumptionQueries(queryClient),
   });
 }
@@ -254,7 +250,7 @@ export function useDeleteAssumption() {
 export function usePlanScenarios(planId: string) {
   return useQuery({
     queryKey: planQueryKeys.planScenarios(planId),
-    queryFn: () => planScenarioRepo.getByPlan(planId),
+    queryFn: () => getRepositories().base.planScenarios.getByPlan(planId),
     enabled: !!planId,
   });
 }
@@ -265,7 +261,7 @@ export function usePlanScenarios(planId: string) {
 export function usePlanDefaultScenario(planId: string) {
   return useQuery<PlanScenario | null>({
     queryKey: planQueryKeys.planDefaultScenario(planId),
-    queryFn: async () => (await planScenarioRepo.getDefault(planId)) ?? null,
+    queryFn: async () => (await getRepositories().base.planScenarios.getDefault(planId)) ?? null,
     enabled: !!planId,
   });
 }
@@ -276,7 +272,7 @@ export function usePlanDefaultScenario(planId: string) {
 export function usePlanScenario(id: string) {
   return useQuery<PlanScenario | null>({
     queryKey: planQueryKeys.planScenario(id),
-    queryFn: async () => (await planScenarioRepo.get(id)) ?? null,
+    queryFn: async () => (await getRepositories().base.planScenarios.get(id)) ?? null,
     enabled: !!id,
   });
 }
@@ -293,7 +289,7 @@ export function useCreateScenario() {
 
   return useMutation({
     mutationFn: (data: Omit<PlanScenario, 'id' | 'createdAt' | 'updatedAt'>) =>
-      planScenarioRepo.create(data),
+      getRepositories().base.planScenarios.create(data),
     onSuccess: () => invalidateScenarioQueries(queryClient),
   });
 }
@@ -306,7 +302,7 @@ export function useUpdateScenario() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<PlanScenario> }) =>
-      planScenarioRepo.update(id, data),
+      getRepositories().base.planScenarios.update(id, data),
     onSuccess: () => invalidateScenarioQueries(queryClient),
   });
 }
@@ -318,7 +314,7 @@ export function useDeleteScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => planScenarioRepo.delete(id),
+    mutationFn: (id: string) => getRepositories().base.planScenarios.delete(id),
     onSuccess: () => invalidateScenarioQueries(queryClient),
   });
 }
@@ -330,7 +326,7 @@ export function useSetDefaultScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => planScenarioRepo.setDefault(id),
+    mutationFn: (id: string) => getRepositories().base.planScenarios.setDefault(id),
     onSuccess: () => invalidateScenarioQueries(queryClient),
   });
 }
@@ -381,7 +377,7 @@ export function usePlanCategorySummary(planId: string) {
     queryKey: ['planCategorySummary', planId],
     queryFn: () => {
       if (!plan) throw new Error('Plan not found');
-      return planAssumptionRepo.getCategorySummary(planId, plan.currency);
+      return getRepositories().base.planAssumptions.getCategorySummary(planId, plan.currency);
     },
     enabled: !!plan,
   });
