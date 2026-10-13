@@ -35,7 +35,7 @@ import { useProfileStore } from '../../lib/profileStore';
 import { BusinessTags } from '../../components/ui/ProfileBadge';
 import { useDrawerStore } from '../../lib/stores';
 import { owedEntriesSearch } from '../../lib/incomeSearch';
-import { formatAmount, formatDate, formatRelativeDate, cn } from '../../lib/utils';
+import { formatAmount, formatPaymentDate, formatRelativeDate, cn } from '../../lib/utils';
 import { useT, useLanguage, useDirection, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
 import type { ClientOwedIndexRow, Currency } from '../../types';
@@ -263,7 +263,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
       <td data-testid="client-last-payment">
         {row.lastPayment ? (
           <div className="client-index-lines">
-            <span>{formatDate(row.lastPayment.paidAt, locale)}</span>
+            <span>{formatPaymentDate(row.lastPayment.paidAt, locale)}</span>
             <span className="client-index-subline">
               {amount(row.lastPayment.amountMinor, row.lastPayment.currency, 'last')}
             </span>

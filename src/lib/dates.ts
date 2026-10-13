@@ -135,16 +135,20 @@ export function isFuturePaymentDate(paidAt: string, today: string = todayLocalIS
   return Number.isNaN(instant.getTime()) || formatLocalDate(instant) > today;
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * The local calendar day of a payment date (MUT-169). A Received fast-add
  * stores nowISO(), a UTC instant, while the payment drawer stores the day alone
  * (YYYY-MM-DD), so both kinds are on disk. Cutting a timestamp at 'T' gives its
  * UTC day, which in Asia/Jerusalem between 00:00 and 03:00 is yesterday; this
- * gives the day the user saw. A date-only value is returned as is, and an
- * unreadable timestamp falls back to the date written in it.
+ * gives the day the user saw. A YYYY-MM-DD value is returned as is. Anything
+ * else the browser can read (a CSV import may store '1/15/2024' or
+ * '2024-01-15 10:30') gives its local day; an unreadable value falls back to
+ * the date written before any 'T'.
  */
 export function paymentLocalDay(paidAt: string): string {
-  if (!paidAt.includes('T')) return paidAt;
+  if (DATE_ONLY.test(paidAt)) return paidAt;
   const instant = new Date(paidAt);
   return Number.isNaN(instant.getTime()) ? paidAt.split('T')[0] : formatLocalDate(instant);
 }

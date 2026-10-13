@@ -528,7 +528,7 @@ describe('ClientDetailPage', () => {
       renderPage();
 
       const row = rowOf(paymentsSection(), 'wire');
-      expect(row).toHaveTextContent(formatDate('2026-10-05', 'en-US'));
+      expect(row).toHaveTextContent('Oct 5, 2026');
       expect(row).toHaveTextContent('$200');
       expect(row).toHaveTextContent('Homepage');
     });

@@ -258,21 +258,35 @@ describe('dates', () => {
       expect(paymentLocalDay('2026-10-13')).toBe('2026-10-13');
     });
 
-    it("gives a timestamp's local calendar day, not its UTC day", () => {
-      // 01:30 on Oct 14 in Jerusalem is still Oct 13 in UTC
-      expect(paymentLocalDay('2026-10-13T22:30:00.000Z')).toBe('2026-10-14');
-    });
-
-    it('gives the same local day west of UTC', () => {
+    function inTimeZone(timeZone: string, fn: () => void) {
       const savedTz = process.env.TZ;
-      process.env.TZ = 'America/New_York';
+      process.env.TZ = timeZone;
       try {
-        // 20:30 on Oct 13 in New York is already Oct 14 in UTC
-        expect(paymentLocalDay('2026-10-14T00:30:00.000Z')).toBe('2026-10-13');
+        fn();
       } finally {
         if (savedTz === undefined) delete process.env.TZ;
         else process.env.TZ = savedTz;
       }
+    }
+
+    it("gives a timestamp's local calendar day, not its UTC day", () => {
+      inTimeZone('Asia/Jerusalem', () => {
+        // 01:30 on Oct 14 in Jerusalem is still Oct 13 in UTC
+        expect(paymentLocalDay('2026-10-13T22:30:00.000Z')).toBe('2026-10-14');
+      });
+    });
+
+    it('gives the same local day west of UTC', () => {
+      inTimeZone('America/New_York', () => {
+        // 20:30 on Oct 13 in New York is already Oct 14 in UTC
+        expect(paymentLocalDay('2026-10-14T00:30:00.000Z')).toBe('2026-10-13');
+      });
+    });
+
+    // A CSV import stores paidAt as typed
+    it('reads other date forms the browser understands as their local day', () => {
+      expect(paymentLocalDay('1/15/2024')).toBe('2024-01-15');
+      expect(paymentLocalDay('2024-01-15 10:30')).toBe('2024-01-15');
     });
 
     it('falls back to the written date of an unreadable timestamp', () => {
