@@ -131,7 +131,7 @@ describe('importProfileFile — merge', () => {
 
   it('reuses the profile\'s own client with the same email and its own project with the same name', async () => {
     await db.clients.add({ id: 'have-client', name: 'Acme Ltd', email: 'ap@acme.test', profileId: 'mine', createdAt: T, updatedAt: T });
-    await db.projects.add({ id: 'have-project', name: 'Site', profileId: 'mine', createdAt: T, updatedAt: T });
+    await db.projects.add({ id: 'have-project', name: 'Site', clientId: 'have-client', profileId: 'mine', createdAt: T, updatedAt: T });
 
     const result = await importProfileFile(exportFile(), { mode: 'merge', profileId: 'mine' });
 
@@ -139,6 +139,23 @@ describe('importProfileFile — merge', () => {
     expect(await db.projects.count()).toBe(1);
     expect((await db.transactions.toArray())[0]).toMatchObject({ clientId: 'have-client', projectId: 'have-project' });
     expect(result).toMatchObject({ clients: 0, projects: 0, transactions: 1 });
+  });
+
+  it('reuses a same-name project only when it belongs to the same client (review F1)', async () => {
+    // The profile already has "Site" for a different client; the file's "Site"
+    // belongs to Acme. Matching by name alone would hang Acme's income on the
+    // other client's project.
+    await db.clients.add({ id: 'other-client', name: 'Other', profileId: 'mine', createdAt: T, updatedAt: T });
+    await db.projects.add({ id: 'other-site', name: 'Site', clientId: 'other-client', profileId: 'mine', createdAt: T, updatedAt: T });
+
+    await importProfileFile(exportFile(), { mode: 'merge', profileId: 'mine' });
+
+    const tx = (await db.transactions.toArray())[0];
+    const acme = (await db.clients.toArray()).find((c) => c.name === 'Acme')!;
+    expect(await db.projects.count()).toBe(2);
+    expect(tx.clientId).toBe(acme.id);
+    expect(tx.projectId).not.toBe('other-site');
+    expect((await db.projects.get(tx.projectId!))?.clientId).toBe(acme.id);
   });
 
   it('does not treat two clients without an email as the same client', async () => {

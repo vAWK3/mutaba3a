@@ -47,6 +47,11 @@
 - A stored feature notice keeps only live areas, so a retired `invoices` key never shows as a raw i18n key.
 
 ### Fixed
+- **qa-reconcile review fixes (2026-10-13):**
+  - F1: a merged project is reused only when its name **and** its client match, so a same-name project under another client is never shared.
+  - F5 (pre-existing data loss): choosing a full Data-tools backup on Settings → Import cleared the database and restored nothing. It's now refused with a pointer to Data tools → Restore, and the legacy path never clears for a file with no rows.
+  - F3: export now includes archived clients and projects, so their entries stay linked after an import.
+  - F2 (re-import duplicates) and F4 (archived profile match) are deferred to TD-111.
 - **MUT-158:** Settings → Import ignored v2 profile exports and still said "Import Complete!". The new `src/db/profileImport.ts` imports as a new profile or merges into one, re-mints IDs and remaps every reference. Duplicates are matched inside the target profile only, and email-less profiles never match each other. The page gained the create/merge choice.
 
 ### Technical

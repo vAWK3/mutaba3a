@@ -2002,6 +2002,8 @@ Each acceptance criterion maps to a test (plan: `.claude/designs/mut-145-remove-
 | `src/pages/settings/__tests__/ImportDataPage.test.tsx` (new, ported from the modal) | 18 | The live import page: drop zone, errors, legacy replace, v2 create/merge choice, duplicates, stats without documents, and a real Settings → Export → Import round trip with links intact |
 | `ClientDetailPage`, `SidebarNav.features`, `OrphanedRecordsDrawer`, `migration-v20`, `migration-safety`, `settingsRepo`, `paymentRecords`, `RecordPaymentButton`, `brand` | updated | No invoice actions or Documents nav; partial-failure assign via a failing write instead of a lock; v20/restore enable nothing from documents; legacy-lock payment tests reframed |
 
+| qa-reconcile review regressions | +4 | F1 `profileImport.test.ts` (same-name project under another client stays separate); F5 `ImportDataPage.test.tsx` x2 (a full backup is refused and data kept; a file with nothing to import is refused); F3 round trip (an archived client and project keep their entries linked). Each was proven red before its fix. |
+
 **Retired:** `documentRepo.test.ts`, `features/documents/__tests__/{pdf,totals}.test.ts`, `paymentRequestService.test.ts`, `IncomeDrawer.locked.test.tsx`, and the ImportDataModal block of `ImportExportModals.test.tsx` (ported).
 
 **Gate (Node 22):** `npm run typecheck` clean, `npm run lint` 0 errors (5 pre-existing warnings), `npx vitest run` 233/233 files (3420 tests) green, `npm run build` succeeds; `dist-web` has 0 `react-pdf` hits and no `fonts/` (3.2 MB).

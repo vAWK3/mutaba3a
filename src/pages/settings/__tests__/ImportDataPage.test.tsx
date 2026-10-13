@@ -192,6 +192,37 @@ describe('ImportDataPage: choosing a file', () => {
   });
 });
 
+describe('ImportDataPage: never wipes data it cannot restore (review F5)', () => {
+  it('refuses a full Data-tools backup and leaves existing data untouched', async () => {
+    await db.clients.add(client);
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const backup = { version: 21, timestamp: T, tables: { clients: [{ ...client, id: 'from-backup' }] } };
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [mockFile(JSON.stringify(backup), 'mutaba3a-backup.json')], configurable: true });
+      fireEvent.change(input);
+    });
+
+    expect(await screen.findByText(/full backup/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import JSON/i })).toBeNull();
+    expect((await db.clients.toArray()).map((c) => c.id)).toEqual(['client-1']);
+  });
+
+  it('refuses a JSON file with nothing to import instead of clearing the database', async () => {
+    await db.clients.add(client);
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [mockFile(JSON.stringify({ hello: 'world' }), 'other.json')], configurable: true });
+      fireEvent.change(input);
+    });
+
+    expect(await screen.findByText(/nothing to import/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import JSON/i })).toBeNull();
+    expect(await db.clients.count()).toBe(1);
+  });
+});
+
 describe('ImportDataPage: legacy (v1) files', () => {
   it('replaces all data and switches on the areas the data belongs to', async () => {
     await db.clients.add({ ...client, id: 'existing-client', name: 'Existing Client' });
@@ -301,12 +332,13 @@ describe('ImportDataPage: v2 profile files (MUT-158)', () => {
     expect((await db.transactions.toArray())[0].clientId).toBe('client-1');
   });
 
-  it('reuses the target profile\'s own project with the same name when merging', async () => {
+  it('reuses the target profile\'s own project with the same name and client when merging', async () => {
     await db.businessProfiles.add(profile);
+    await db.clients.add(client);
     await db.projects.add(project);
     renderPage();
     await settle();
-    await chooseFile(JSON.stringify(v2File({ projects: [{ ...project, id: 'imported-project', notes: 'Imported version' }], clients: [], documents: [], documentSequences: [] })), 'backup.json');
+    await chooseFile(JSON.stringify(v2File({ projects: [{ ...project, id: 'imported-project', notes: 'Imported version' }], clients: [client], documents: [], documentSequences: [] })), 'backup.json');
 
     await importJson();
 
@@ -373,5 +405,36 @@ describe('Export → Import round trip (MUT-158)', () => {
     expect(tx).toMatchObject({ title: 'Test Transaction', amountMinor: 10000, currency: 'USD', clientId: c.id, projectId: pr.id, profileId: p.id });
     expect(doc).toMatchObject({ number: 'INV-001', totalMinor: 11800, businessProfileId: p.id, clientId: c.id, linkedTransactionIds: [tx.id] });
     expect((await db.fxRates.toArray())[0].rate).toBe(3.5);
+  });
+
+  it('keeps entries of an archived client and project linked to them (review F3)', async () => {
+    const archived = { ...client, id: 'client-old', name: 'Old Client', email: 'old@client.test', archivedAt: T };
+    await db.businessProfiles.add(profile);
+    await db.clients.add(archived);
+    await db.projects.add({ ...project, id: 'project-old', name: 'Old Project', clientId: 'client-old', archivedAt: T });
+    await db.transactions.add({ ...transaction, id: 'tx-old', title: 'Old work', clientId: 'client-old', projectId: 'project-old' });
+
+    let exported = '';
+    vi.spyOn(csvUtils, 'downloadTextFile').mockImplementation((_name: string, content: string) => {
+      exported = content;
+    });
+    const exportView = render(<ExportDataModal onClose={() => {}} />, { wrapper: TestWrapper });
+    await screen.findByText('Test Business');
+    await userEvent.click(screen.getByRole('button', { name: /JSON/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Export Test Business/i }));
+    await waitFor(() => expect(exported).not.toBe(''));
+    exportView.unmount();
+
+    await clearAll();
+    renderPage();
+    await chooseFile(exported, 'backup.json');
+    await importJson();
+
+    const [restoredClient] = await db.clients.toArray();
+    const [tx] = await db.transactions.toArray();
+    expect(restoredClient).toMatchObject({ name: 'Old Client', archivedAt: T });
+    const [restoredProject] = await db.projects.toArray();
+    expect(restoredProject).toMatchObject({ name: 'Old Project', archivedAt: T, clientId: restoredClient.id });
+    expect(tx).toMatchObject({ clientId: restoredClient.id, projectId: restoredProject.id });
   });
 });

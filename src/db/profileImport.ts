@@ -107,7 +107,9 @@ export async function importProfileFile(file: ProfileExportFile, target: Profile
 
     const projectIds = new Map<string, string>();
     for (const project of file.projects ?? []) {
-      const existing = ownProjects.find((p) => p.name === project.name);
+      // Same name is not enough: a project belongs to its client.
+      const clientId = remap(clientIds, project.clientId);
+      const existing = ownProjects.find((p) => p.name === project.name && p.clientId === clientId);
       if (existing) {
         projectIds.set(project.id as string, existing.id);
         continue;
@@ -118,7 +120,7 @@ export async function importProfileFile(file: ProfileExportFile, target: Profile
         ...(project as unknown as Project),
         id,
         profileId,
-        clientId: remap(clientIds, project.clientId),
+        clientId,
       });
       result.projects++;
     }

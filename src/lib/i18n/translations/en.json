@@ -634,7 +634,9 @@
         "merge": "Merge into an existing profile",
         "mergeDesc": "Adds the clients, projects and income to a profile you already have. The profile itself is not changed.",
         "selectProfile": "Choose a profile…"
-      }
+      },
+      "fullBackup": "This is a full backup. Restore it from Settings → Data tools → Restore; importing it here would replace your data with nothing.",
+      "nothingToImport": "This file has nothing to import. Choose a profile export, a legacy backup or a CSV file."
     }
   },
   "downloadBanner": {

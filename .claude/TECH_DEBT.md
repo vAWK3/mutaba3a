@@ -25,6 +25,10 @@
 **Priority**: Medium
 **Impact**: Settings → Export (`ExportDataModal`, v2 JSON) writes the profile, clients, projects, transactions, fx rates and retained documents only. Payment records own an entry's paid state (ADR-038/039), so after an export → import round trip a paid entry keeps `status`/`receivedAmountMinor` but has no payment history. `db.expenses`, receipts, recurring rules, retainers and categories are not exported at all. The full backup in Data tools (`backup.ts`) is unaffected and covers every table.
 **Fix**: Extend the v2 export and `importProfileFile` together (remap `paymentRecords.transactionId`, `expenses.profileId/clientId/projectId`, receipts' expense links), with a round-trip test per table. CSV import's expense rows landing in `transactions` is MUT-138.
+**Also deferred here (MUT-145 qa-reconcile review, 2026-10-13):**
+- **F2, re-import duplicates.** Importing the same file twice (merge, or create for an email-less profile, which `findMatchingProfile` can't match) adds every entry again and doubles owed totals. Merge "adds" by definition, and the old modal did the same. Fix: tag imported rows with their source ID and skip ones already imported into that profile.
+- **F4, archived match.** `ImportDataPage` matches against `useBusinessProfiles()`, which excludes archived profiles. A file whose profile is archived therefore defaults to create, and merge can't target it. Fix: match against `list(true)` and say the match is archived (or offer to unarchive).
+- `categoryId`/`linkedProjectedIncomeId` on imported transactions point at rows the v2 export doesn't carry.
 
 ### TD-110: BusinessProfileDrawer and ImportDataPage still hard-code English labels
 **Status**: Open

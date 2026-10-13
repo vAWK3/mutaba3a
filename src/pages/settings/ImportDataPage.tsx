@@ -40,6 +40,16 @@ interface CSVPreviewData {
   expenses: number;
 }
 
+/** A full Data-tools backup (`src/db/backup.ts`): restored from Data tools, never here. */
+function isFullBackup(data: unknown): boolean {
+  return typeof data === 'object' && data !== null && 'tables' in data && typeof (data as { tables: unknown }).tables === 'object';
+}
+
+/** A legacy (v1) export carries at least one array of rows to restore. */
+function hasLegacyRows(data: FileData): boolean {
+  return [data.clients, data.projects, data.transactions].some((rows) => Array.isArray(rows) && rows.length > 0);
+}
+
 export function ImportDataPage() {
   const t = useT();
   const navigate = useNavigate();
@@ -93,6 +103,18 @@ export function ImportDataPage() {
       } else {
         // Parse JSON
         const data = JSON.parse(text) as FileData;
+
+        // A full Data-tools backup ({ version, tables }) is restored from Data
+        // tools; the legacy path below would clear the database and restore
+        // nothing from it (review F5). Refuse anything with no rows to import.
+        if (isFullBackup(data)) {
+          setError(t('settings.import.fullBackup'));
+          return;
+        }
+        if (!(data.version === 2 && data.profile) && !hasLegacyRows(data)) {
+          setError(t('settings.import.nothingToImport'));
+          return;
+        }
         setFileData(data);
 
         if (data.version === 2 && data.profile) {
@@ -114,7 +136,7 @@ export function ImportDataPage() {
       setError(`Failed to read file. Please select a valid ${file.name.endsWith('.csv') ? 'CSV' : 'JSON'} file.`);
       console.error('File read error:', err);
     }
-  }, [existingProfiles]);
+  }, [existingProfiles, t]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -296,6 +318,8 @@ export function ImportDataPage() {
         stats.profiles = imported.profiles;
         stats.transactions = imported.transactions;
       } else if (importMode === 'legacy' && fileData) {
+        // Never clear the database for a file that brings nothing back.
+        if (!hasLegacyRows(fileData)) throw new Error(t('settings.import.nothingToImport'));
         await clearDatabase();
 
         if (fileData.clients?.length) {
