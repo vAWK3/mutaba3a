@@ -1,6 +1,7 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Dexie from 'dexie';
 import { MiniCrmDatabase, MIGRATED_PAYMENT_NOTE } from '../database';
+import { completeMigrationSafety, getLatestBackup } from '../migration-safety';
 
 /**
  * MUT-60 (TD-029): a Received create used to write status/paidAt/
@@ -230,5 +231,22 @@ describe('Migration v23: backfill payment records for uncovered paid income (MUT
 
     expect(fresh.verno).toBe(23);
     expect(await fresh.paymentRecords.count()).toBe(0);
+  });
+});
+
+describe('Migration safety after v22 → v23 (MUT-60)', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    await Dexie.delete('mutaba3a_backup');
+  });
+
+  it('validates the upgrade and writes a post-migration backup at v23', async () => {
+    localStorage.setItem('mutaba3a_last_known_version', '22');
+
+    const result = await completeMigrationSafety();
+
+    expect(result?.success).toBe(true);
+    const backup = await getLatestBackup();
+    expect(backup?.version).toBe(23);
   });
 });

@@ -688,6 +688,31 @@ describe('paymentRowsForIncome', () => {
   it('returns nothing for an unpaid entry with nothing received', () => {
     expect(paymentRowsForIncome(income(), [])).toEqual([]);
   });
+
+  /**
+   * MUT-60 AC: "Owed Now, Recent payments and Last payment are unchanged
+   * before and after the backfill." paymentRowsForIncome (the single
+   * derivation behind both Recent payments and Last payment, per its own
+   * doc comment above) must report the identical amount and paidAt whether
+   * the money is covered by the ADR-033 entry fallback or by the v23
+   * backfill's real record -- it dates the record tx.paidAt ?? occurredAt,
+   * the exact rule the entry row already uses. Owed Now (summarizeOwedByCurrency)
+   * doesn't need a test here: it takes only Transaction[], which the
+   * backfill never writes to.
+   */
+  it('reports the same amount and paidAt whether covered by the entry fallback or a backfilled record', () => {
+    const paidEntry = income({ status: 'paid', receivedAmountMinor: 10000, paidAt: '2026-09-25' });
+
+    const beforeBackfill = paymentRowsForIncome(paidEntry, []);
+    const backfilledRecord = record({ id: 'migrated-1', amountMinor: 10000, paidAt: paidEntry.paidAt });
+    const afterBackfill = paymentRowsForIncome(paidEntry, [backfilledRecord]);
+
+    expect(beforeBackfill).toHaveLength(1);
+    expect(afterBackfill).toHaveLength(1);
+    expect(afterBackfill[0].amountMinor).toBe(beforeBackfill[0].amountMinor);
+    expect(afterBackfill[0].paidAt).toBe(beforeBackfill[0].paidAt);
+    expect(afterBackfill[0].source).toBe('record'); // the only thing that changes
+  });
 });
 
 describe('latestPayment', () => {
