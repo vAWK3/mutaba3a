@@ -26,6 +26,7 @@ import {
   useRecentPayments,
   useCreateTransaction,
   useUpdateTransaction,
+  useCreateReceivedIncome,
 } from '../useQueries';
 import { useIncome, useReceivables } from '../useIncomeQueries';
 import type { BusinessProfile } from '../../types';
@@ -548,6 +549,38 @@ describe('transaction writes refresh the income lists (MUT-5)', () => {
     });
 
     await waitFor(() => expect(result.current.income.data?.[0]?.title).toBe('After'));
+  });
+
+  // MUT-60: a fast-added Received create goes through useCreateReceivedIncome
+  // (record-backed), not useCreateTransaction -- it must refresh the same
+  // lists and leave a PaymentRecord the drawer's history can read.
+  it('a Received create shows up in useIncome, as paid, with its PaymentRecord', async () => {
+    function useReceivedIncomeLists() {
+      return { income: useIncome({}), createReceived: useCreateReceivedIncome() };
+    }
+    const { result } = renderHook(useReceivedIncomeLists, { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.income.isSuccess).toBe(true));
+
+    let created: { id: string } | undefined;
+    await act(async () => {
+      created = await result.current.createReceived.mutateAsync({
+        data: {
+          kind: 'income',
+          amountMinor: 50000,
+          currency: 'USD',
+          occurredAt: '2026-10-11',
+          title: 'Design payment',
+        },
+        paidAt: '2026-10-09',
+      });
+    });
+
+    await waitFor(() => expect(result.current.income.data).toHaveLength(1));
+    expect(result.current.income.data?.[0]?.status).toBe('paid');
+
+    const records = await paymentRecordRepo.listByTransaction(created!.id);
+    expect(records).toHaveLength(1);
+    expect(records[0].paidAt).toBe('2026-10-09');
   });
 });
 

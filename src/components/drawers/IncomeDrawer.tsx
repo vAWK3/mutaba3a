@@ -6,6 +6,7 @@ import { useDrawerStore, type IncomeStatus } from '../../lib/stores';
 import {
   useTransaction,
   useCreateTransaction,
+  useCreateReceivedIncome,
   useUpdateTransaction,
   useDeleteTransaction,
   useProjects,
@@ -32,6 +33,7 @@ import {
 } from '../../lib/utils';
 import {
   buildIncomeCreate,
+  buildReceivedIncomeEntry,
   buildIncomeUpdate,
   isBelowRecordedTotal,
   recordedTotalMinor,
@@ -109,6 +111,7 @@ export function IncomeDrawer() {
   const { data: clients = [] } = useClients();
 
   const createMutation = useCreateTransaction();
+  const createReceivedMutation = useCreateReceivedIncome();
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
   const markSaved = useSavedFlashStore((s) => s.markSaved);
@@ -299,7 +302,10 @@ export function IncomeDrawer() {
         });
         markSaved({ kind: 'income', ids: [transactionId], clientId: values.clientId, clientName, profileId: values.profileId });
       } else {
-        const newTx = await createMutation.mutateAsync(buildIncomeCreate(values, nowISO()));
+        const newTx =
+          values.incomeStatus === 'received'
+            ? await createReceivedMutation.mutateAsync({ data: buildReceivedIncomeEntry(values), paidAt: nowISO() })
+            : await createMutation.mutateAsync(buildIncomeCreate(values));
         // Show toast with undo for duplicated transactions
         if (duplicateFromId && newTx) {
           showToast(t('toast.transactionDuplicated'), {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { transactionRepo, clientRepo, projectRepo } from '../repository';
+import { transactionRepo, clientRepo, projectRepo, paymentRecordRepo } from '../repository';
 import { expenseRepo } from '../expenseRepository';
 import { formatLocalDate } from '../../lib/dates';
 import type { Transaction, Client, Project } from '../../types';
@@ -514,6 +514,56 @@ describe('transactionRepo', () => {
       await expect(
         transactionRepo.markPaid(transaction.id, { paidAt: '2099-01-01' })
       ).rejects.toThrow('Payment date cannot be in the future');
+    });
+  });
+
+  describe('createReceivedIncome', () => {
+    const receivedFields = (overrides: Partial<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'paidAt' | 'receivedAmountMinor'>> = {}) => ({
+      kind: 'income' as const,
+      title: 'Design payment',
+      amountMinor: 50000,
+      currency: 'USD' as const,
+      occurredAt: '2026-10-11',
+      ...overrides,
+    });
+
+    /**
+     * MUT-60: a fast-added income entry saved as Received used to write
+     * status/paidAt/receivedAmountMinor straight onto the Transaction with no
+     * PaymentRecord (TD-029). createReceivedIncome composes create + markPaid
+     * so every Received entry becomes record-backed, like Mark-paid.
+     */
+    it('creates exactly one PaymentRecord for the full amount, dated paidAt', async () => {
+      const tx = await transactionRepo.createReceivedIncome(receivedFields(), '2026-10-09');
+
+      expect(tx.status).toBe('paid');
+      expect(tx.receivedAmountMinor).toBe(50000);
+      expect(tx.paidAt).toBe('2026-10-09');
+
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records).toHaveLength(1);
+      expect(records[0].amountMinor).toBe(50000);
+      expect(records[0].paidAt).toBe('2026-10-09');
+    });
+
+    it('is atomic: a rejected payment date leaves no Transaction row behind', async () => {
+      await expect(
+        transactionRepo.createReceivedIncome(receivedFields(), '2099-01-01')
+      ).rejects.toThrow('Payment date cannot be in the future');
+
+      const list = await transactionRepo.list();
+      expect(list).toHaveLength(0);
+    });
+
+    it('is editable afterward exactly like any other record-backed entry (the hasRecords branch, unchanged by this ticket)', async () => {
+      const tx = await transactionRepo.createReceivedIncome(receivedFields(), '2026-10-09');
+
+      // Payment state is owned by the record now -- an edit can't move it (ADR-039).
+      await transactionRepo.update(tx.id, { status: 'unpaid', paidAt: undefined, receivedAmountMinor: undefined });
+
+      const updated = await transactionRepo.get(tx.id);
+      expect(updated?.status).toBe('paid');
+      expect(updated?.receivedAmountMinor).toBe(50000);
     });
   });
 

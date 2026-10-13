@@ -486,6 +486,16 @@ describe('IncomeDrawer', () => {
         expect(transactions[0].paidAt).toBeDefined();
         expect(transactions[0].receivedAmountMinor).toBe(10000);
       });
+
+      // MUT-60 (TD-029): a Received create used to write these fields straight
+      // onto the Transaction with no PaymentRecord. It must be record-backed
+      // now, like any Mark-paid entry, so the client's Payments section and a
+      // future statement export can both see it.
+      const [transaction] = await transactionRepo.list({});
+      const records = await paymentRecordRepo.listByTransaction(transaction.id);
+      expect(records).toHaveLength(1);
+      expect(records[0].amountMinor).toBe(10000);
+      expect(records[0].paidAt).toBe(transaction.paidAt);
     });
 
     it.each(['Earned', 'Invoiced'] as const)('creates an unpaid entry when %s is chosen', async (status) => {
