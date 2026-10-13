@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PrismaLedgerStore } from '../../repositories/prisma.js';
-import { repairCaptureOrigins } from '../post-roll.js';
+import { backfillPersonalProfiles, repairCaptureOrigins } from '../post-roll.js';
 
 /**
  * deploy.sh step 6 (MUT-61): the migration backfills `origin` before the new
  * revision serves, so a payment a person captured through the old revision in
  * between — or after a rollback — keeps the default INTEGRATION. The repair
  * must mark exactly those CAPTURE, touch nothing else, and be repeatable.
+ *
+ * MUT-120 shipped with no backfill (ADR-037 amendment), so a user provisioned
+ * before it — or by the old revision during a roll — has no personal profile.
  */
 const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 
@@ -41,6 +44,62 @@ if (!url) {
       expect(await store.payments.getById(org.id, integration.id)).toMatchObject({ origin: 'INTEGRATION' });
       expect(await store.payments.getById(org.id, capture.id)).toMatchObject({ origin: 'CAPTURE', captureSource: 'app' });
       expect(await repairCaptureOrigins(db)).toBe(0);
+    });
+  });
+
+  describe('backfillPersonalProfiles', () => {
+    const at = new Date('2026-10-13T08:00:00Z');
+
+    /** What a pre-MUT-120 revision wrote: a user and a firm membership, no personal profile. */
+    async function legacyUser(tag: string, locale: 'en' | 'ar', firmId: string | null) {
+      const user = await db.user.create({
+        data: { email: `legacy-${tag}@firm.ps`, displayName: 'Legacy', passwordHash: 'x', locale, passwordChangedAt: at, createdAt: at, updatedAt: at },
+      });
+      if (firmId) await db.membership.create({ data: { userId: user.id, organizationId: firmId, createdAt: at } });
+      return user;
+    }
+
+    it('gives a legacy user a personal profile in their language with the firm’s currency and timezone, audited, and does nothing the second time', async () => {
+      const tag = randomUUID().slice(0, 8);
+      const firm = await store.organizations.create({ name: 'Firm', slug: `backfill-${tag}`, defaultCurrency: 'USD', timezone: 'Asia/Gaza' });
+      const user = await legacyUser(tag, 'ar', firm.id);
+
+      const first = await backfillPersonalProfiles(db, at);
+      const created = first.created.find((c) => c.userId === user.id);
+      expect(created).toBeDefined();
+      const personal = await db.organization.findUniqueOrThrow({ where: { personalOwnerUserId: user.id } });
+      expect(personal).toMatchObject({ id: created?.organizationId, name: 'شخصي', defaultCurrency: 'USD', timezone: 'Asia/Gaza' });
+      expect(personal.slug).toMatch(/^personal-/);
+      expect(await db.membership.findMany({ where: { userId: user.id }, orderBy: { organizationId: 'asc' } })).toHaveLength(2);
+      expect(await db.membership.findUnique({ where: { userId_organizationId: { userId: user.id, organizationId: personal.id } } })).not.toBeNull();
+      const audit = await db.auditEvent.findMany({ where: { organizationId: personal.id }, orderBy: { action: 'asc' } });
+      expect(audit.map((e) => [e.action, e.actorType])).toEqual([
+        ['membership.granted', 'SYSTEM'],
+        ['organization.created', 'SYSTEM'],
+      ]);
+      expect(audit.find((e) => e.action === 'organization.created')?.metadata).toEqual({ personal: true, ownerUserId: user.id, backfill: 'post-roll' });
+
+      const second = await backfillPersonalProfiles(db, at);
+      expect(second.created.map((c) => c.userId)).not.toContain(user.id);
+      expect(await db.organization.count({ where: { personalOwnerUserId: user.id } })).toBe(1);
+    });
+
+    it('leaves a user created with a personal profile alone', async () => {
+      const tag = randomUUID().slice(0, 8);
+      const { user, personalOrganization } = await store.users.create({ email: `current-${tag}@me.ps`, displayName: 'Solo', passwordHash: 'x', locale: 'en', personal: { name: 'Personal', slug: `personal-${tag}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at });
+
+      const result = await backfillPersonalProfiles(db, at);
+      expect([...result.created.map((c) => c.userId), ...result.skipped.map((s) => s.userId)]).not.toContain(user.id);
+      expect(await db.organization.findUniqueOrThrow({ where: { personalOwnerUserId: user.id } })).toMatchObject({ id: personalOrganization.id });
+    });
+
+    it('skips and reports a legacy user with no firm to take a currency and timezone from', async () => {
+      const tag = randomUUID().slice(0, 8);
+      const user = await legacyUser(tag, 'en', null);
+
+      const result = await backfillPersonalProfiles(db, at);
+      expect(result.skipped).toContainEqual({ userId: user.id, reason: 'NO_FIRM' });
+      expect(await db.organization.count({ where: { personalOwnerUserId: user.id } })).toBe(0);
     });
   });
 }

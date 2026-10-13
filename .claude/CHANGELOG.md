@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Backfill personal profiles for users provisioned before MUT-120
+
+**Why:** MUT-120 shipped with **no backfill** (ADR-037 amendment: "There were no existing users at the time"). One user has since been provisioned in production without a personal profile, so `/v1/me` lists no `isPersonalDefault` profile for them and the capture app (MUT-121) falls back to Unsorted.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, eslint on touched files clean, `npm run build` clean, `npm run test:db` 95 files / 1,671 passed.
+
+### Added
+- `backfillPersonalProfiles(db)` in `server/src/scripts/post-roll.ts`, run by `npm run post-roll` and so by `deploy.sh` step 6 on every deploy. For each user with no personal profile it creates one exactly as `POST /admin/v1/users` does: named `Personal`/`شخصي` by locale, `personal-<uuid>` slug, currency and timezone from the user's oldest firm, plus the membership. All of this runs in one transaction with two `SYSTEM` audit rows (`organization.created` with `backfill: 'post-roll'`, and `membership.granted`). It is idempotent. A concurrent create loses on the unique `personalOwnerUserId` index and is skipped. Users with no firm (`NO_FIRM`) or a non-IANA firm zone (`INVALID_TIMEZONE`, TD-091) are skipped and printed for hand provisioning.
+
+### Technical
+- `PERSONAL_PROFILE_NAME`/`personalProfileFor` moved from `routes/admin-users.ts` to `server/src/personal-profile.ts`, shared by the route and the backfill.
+- `server/src/scripts/__tests__/post-roll.test.ts`: three DB cases (legacy `ar` user backfilled from the firm with audit, then a no-op the second run; a current user left alone; a firmless legacy user skipped `NO_FIRM`).
+- `server/DEPLOYMENT.md` step 7 now lists the backfill's output.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Demo-account seed script for App Store screenshots (MUT-136)
 
 **Why:** The Flutter iOS app (`mutaba3a-flutter`, MUT-137) needs a hosted account that looks populated before it can capture App Store screenshots. `server/` had no demo-data seeding at all — accounts are only operator-provisioned via `provision:user` and start empty — and the web frontend's existing `demo_` seeder (`src/demo/`) only writes to browser IndexedDB, never the Postgres-backed API a native app actually consumes. Discovered along the way: every mutating `/v1/*` route this needed (customers, projects, income, expenses, receivables settle) already requires an `Idempotency-Key` and replays the exact prior response for a matching key+body (`idempotency.ts`), so the script needs no separate list-and-check-by-name logic — it just always POSTs with a deterministic key and lets the server's own idempotency ledger dedupe.
@@ -40,6 +56,8 @@
 
 ### Technical
 - `server/src/scripts/users.ts`: exported `adminClient`/`AdminClient`/`UserSummary`/`CliError` so the seed script can reuse the existing admin-API get-or-create pattern instead of duplicating it. No behavior change (existing `users-cli.test.ts` unaffected).
+
+---
 
 ## [Unreleased] - 2026-10-13 — Remove the dead mark-paid income hooks (MUT-98)
 

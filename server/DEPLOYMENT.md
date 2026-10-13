@@ -150,8 +150,11 @@ What you will see, and what to answer:
 6. `smoke.ts` runs the unauthenticated checks and prints `smoke: all checks passed`.
 7. The proxy starts again and `npm run post-roll` repairs rows the old revision
    wrote after the migration (MUT-61: a person's payment must be `origin
-   CAPTURE`). Normally prints `post-roll: 0 captured payment(s) re-marked
-   origin CAPTURE`; the proxy stops.
+   CAPTURE`) and gives any user without one a personal profile (MUT-120
+   shipped with no backfill). Normally prints `post-roll: 0 captured payment(s)
+   re-marked origin CAPTURE` and `post-roll: 0 personal profile(s) backfilled,
+   0 skipped`; the proxy stops. A `still has no personal profile` warning names
+   a user to provision by hand.
 8. The last line is the service URL: `https://mutaba3a-api-….a.run.app`. Keep it.
 
 Repeat runs are the same command; plan 2 shows no changes and the service

@@ -1583,6 +1583,9 @@ Plan: `.claude/designs/mut-120-personal-profile-tests.md`. ADR-037 amendment (MU
 
 Run: server lint 0, typecheck clean, `npm test` 1,333 passed (12 Postgres files skipped), `npm run test:db` on a dedicated database 1,423 passed (82 files), `openapi:check` up to date, build ok; root typecheck clean, `hosted:types:check` matches, `npx vitest run src/hosted` 145 passed.
 
+
+**Backfill (2026-10-13):** `scripts/__tests__/post-roll.test.ts` (`backfillPersonalProfiles`, DB only): a legacy `ar` user with a USD/Asia/Gaza firm gets `شخصي` with the firm's currency and zone, a membership and two `SYSTEM` audit rows, then nothing on the second run. A user created with a personal profile is untouched. A firmless legacy user is skipped `NO_FIRM`. Not covered: `INVALID_TIMEZONE` (the reason exists only for TD-091), and the concurrent-create `P2002` path.
+
 ## MUT-73 — device sync retired (2026-10-12)
 
 Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.
