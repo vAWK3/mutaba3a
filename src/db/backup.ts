@@ -36,25 +36,6 @@ export async function serializeAllTables(): Promise<BackupData> {
 }
 
 /**
- * Export backup as a downloadable JSON file.
- * Triggers a browser download with the backup data.
- */
-export async function exportBackup(): Promise<void> {
-  const data = await serializeAllTables();
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `mutaba3a-backup-v${data.version}-${new Date().toISOString().split('T')[0]}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/**
  * Restore database from a backup JSON file.
  * Clears all existing data and replaces with backup data.
  */

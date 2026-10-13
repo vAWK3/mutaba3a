@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { db, deleteAllData } from '../../db';
+import { getRepositories } from '../../db';
 import { useT } from '../../lib/i18n';
 import {
   toCsv,
@@ -51,9 +51,7 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
   const handleExportBackup = async () => {
     setExportStatus('exporting');
     try {
-      const clients = await db.clients.toArray();
-      const projects = await db.projects.toArray();
-      const transactions = await db.transactions.toArray();
+      const { clients, projects, transactions } = await getRepositories().base.dataset.exportCoreTables();
 
       const timestamp = new Date().toISOString().split('T')[0];
 
@@ -81,7 +79,7 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
   const handleDelete = async () => {
     setDeleteStatus('deleting');
     try {
-      await deleteAllData();
+      await getRepositories().base.dataset.wipeCoreData();
 
       // Invalidate all queries
       queryClient.invalidateQueries({ queryKey: ['transactions'] });

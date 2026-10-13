@@ -534,6 +534,24 @@ export const transactionRepo = {
     // applies to its own receivables (MUT-82), defined once
     return selectAttentionReceivables(transactions, today);
   },
+  /** Rows the v17 migration flagged for the user to file under a business (MigrationWizard). */
+  async listNeedsReview(): Promise<Transaction[]> {
+    // A filter, not the needsReview index: booleans are not valid IndexedDB keys.
+    return db.transactions.filter((tx) => tx.needsReview === true).toArray();
+  },
+
+  /**
+   * File each reviewed row under its chosen business and clear its flag. The
+   * write is exactly what the wizard wrote before MUT-47 (no updatedAt).
+   */
+  async resolveNeedsReview(assignments: Record<string, string>): Promise<void> {
+    for (const [txId, profileId] of Object.entries(assignments)) {
+      await db.transactions.update(txId, {
+        profileId,
+        needsReview: undefined,
+      });
+    }
+  },
 };
 
 // Project Summary Repository

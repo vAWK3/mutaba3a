@@ -8,6 +8,11 @@ export { getRepositories, setRepositories, resetRepositories } from './provider'
 export type { Repositories } from './provider';
 export { initDatabase, deleteAllData, clearDatabase, repairDatabase, getLastMigrationResult } from './seed';
 
+// Pure helpers and types the Settings import page needs; the storage half of
+// profileImport is reached through getRepositories().base.dataset (MUT-47).
+export { findMatchingProfile } from './profileImport';
+export type { ProfileExportFile, ProfileImportTarget } from './profileImport';
+
 // Migration safety exports
 export {
   createBackup,

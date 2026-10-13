@@ -57,6 +57,12 @@ import type {
   AssumptionCategory,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
+import type { BackupData } from './backup';
+import type { ProfileExportFile, ProfileImportTarget, ProfileImportResult } from './profileImport';
+import type { CsvImportRow, CsvImportOptions } from './csvImport';
+import type { IntegrityResult } from './integrityCheck';
+import type { OrphanedRecordSet } from './orphanedRecords';
+import type { Document, DocumentSequence } from './retained/documentSchema';
 
 // ============================================================================
 // Base Repository Interface
@@ -115,6 +121,10 @@ export interface ITransactionRepository
   getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals>;
   getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency>;
   getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]>;
+  /** Rows the v17 migration flagged for review (MigrationWizard). */
+  listNeedsReview(): Promise<Transaction[]>;
+  /** Sets each transaction's profileId and clears its needsReview flag. */
+  resolveNeedsReview(assignments: Record<string, string>): Promise<void>;
 }
 
 // ============================================================================
@@ -363,6 +373,56 @@ export interface IPlanScenarioRepository {
 }
 
 // ============================================================================
+// Dataset Repository Interface (whole-database operations, MUT-47)
+// ============================================================================
+
+/** Rows a per-business export carries (Settings → Export data). */
+export interface ProfileExportRows {
+  profile: BusinessProfile;
+  documents: Document[];
+  documentSequences: DocumentSequence[];
+  clients: Client[];
+  projects: Project[];
+  transactions: Transaction[];
+  fxRates: FxRate[];
+}
+
+/** A pre-v2 JSON export: flat arrays for the six tables it replaces. */
+export interface LegacyImportFile {
+  clients?: unknown[];
+  projects?: unknown[];
+  categories?: unknown[];
+  transactions?: unknown[];
+  fxRates?: unknown[];
+  settings?: unknown[];
+}
+
+/**
+ * Operations over the whole database rather than one entity: backup and
+ * restore, export and import, wipe, and the integrity and orphan checks.
+ */
+export interface IDatasetRepository {
+  /** Every table as plain rows, tagged with the schema version. */
+  serializeBackup(): Promise<BackupData>;
+  /** Replace everything with a backup; refuses one from a newer schema. */
+  restoreBackup(backupJson: string): Promise<{ recordsRestored: number; backupVersion: number }>;
+  exportProfile(profileId: string): Promise<ProfileExportRows>;
+  /** Fresh IDs for every row, every link remapped (MUT-158). */
+  importProfile(file: ProfileExportFile, target: ProfileImportTarget): Promise<ProfileImportResult>;
+  /** All or nothing: a failing write leaves the six tables as they were. */
+  importLegacyV1(file: LegacyImportFile): Promise<{ transactions: number }>;
+  csvValidationContext(): Promise<{ clientNames: string[]; projectNames: string[] }>;
+  importCsvRows(rows: CsvImportRow[], options: CsvImportOptions): Promise<{ transactions: number }>;
+  exportCoreTables(): Promise<{ clients: Client[]; projects: Project[]; transactions: Transaction[] }>;
+  /** Clears transactions, projects, clients, categories and FX rates; everything else is kept. */
+  wipeCoreData(): Promise<void>;
+  integrityCheck(): Promise<IntegrityResult>;
+  findOrphanedRecords(): Promise<OrphanedRecordSet>;
+  /** Switch on the optional areas loaded data belongs to; never throws. */
+  reconcileFeaturesAfterLoad(source: 'restore' | 'import' | 'demo'): Promise<void>;
+}
+
+// ============================================================================
 // Complete Repository Provider Interface
 // ============================================================================
 
@@ -392,4 +452,5 @@ export interface IRepositoryProvider {
   plans: IPlanRepository;
   planAssumptions: IPlanAssumptionRepository;
   planScenarios: IPlanScenarioRepository;
+  dataset: IDatasetRepository;
 }

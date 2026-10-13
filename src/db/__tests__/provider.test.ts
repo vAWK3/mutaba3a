@@ -9,6 +9,7 @@ import { transactionRepo, clientRepo, settingsRepo, paymentRecordRepo, businessP
 import { expenseRepo } from '../expenseRepository';
 import { retainerRepo, projectedIncomeRepo } from '../retainerRepository';
 import { planRepo, planAssumptionRepo, planScenarioRepo } from '../planRepository';
+import { datasetRepo } from '../dataset';
 
 afterEach(() => {
   resetRepositories();
@@ -45,6 +46,10 @@ describe('repository provider', () => {
       expect(repos.base.plans).toBe(planRepo);
       expect(repos.base.planAssumptions).toBe(planAssumptionRepo);
       expect(repos.base.planScenarios).toBe(planScenarioRepo);
+    });
+
+    it('resolves whole-database operations through the dataset slot (MUT-47)', () => {
+      expect(getRepositories().base.dataset).toBe(datasetRepo);
     });
 
     it('fills every declared slot', () => {
