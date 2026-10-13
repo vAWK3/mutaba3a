@@ -69,6 +69,7 @@ web_modules/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 release.env
 deploy.env
 !deploy.env.example

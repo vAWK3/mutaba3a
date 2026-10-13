@@ -24,6 +24,7 @@
     "db:migrate:status": "scripts/db.sh status",
     "db:psql": "scripts/db.sh psql",
     "db:proxy": "scripts/db.sh proxy",
+    "db:run": "scripts/db.sh run --",
     "openapi:generate": "tsx src/scripts/export-openapi.ts",
     "openapi:check": "tsx src/scripts/export-openapi.ts --check",
     "provision": "tsx src/scripts/provision.ts",

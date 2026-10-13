@@ -8,6 +8,13 @@
 #   TF_STATE_BUCKET=<bucket> npm run db:migrate:status   # prisma migrate status (read-only)
 #   TF_STATE_BUCKET=<bucket> npm run db:psql             # interactive psql
 #   TF_STATE_BUCKET=<bucket> npm run db:proxy            # keep the proxy up until Ctrl-C (for other tools)
+#   TF_STATE_BUCKET=<bucket> npm run db:run -- <command> # run any command with DATABASE_URL set
+#
+# TF_STATE_BUCKET (and ENVIRONMENT / PROXY_PORT, if you override them) can
+# instead live in server/.env.prod (gitignored — see .env.prod.example) so you
+# don't have to export them by hand every time:
+#
+#   npm run db:run -- npm run backfill:personal-categories -- --dry
 #
 # How it reaches the database: `terraform output` (remote state) gives the
 # instance connection name and the local URL, cloud-sql-proxy listens on
@@ -21,10 +28,18 @@
 #   DATABASE_URL=postgresql://mutaba3a:mutaba3a@localhost:54329/mutaba3a_dev npm run db:migrate:status
 set -euo pipefail
 
+SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [[ -f "${SERVER_DIR}/.env.prod" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${SERVER_DIR}/.env.prod"
+  set +a
+fi
+
 COMMAND="${1:-}"
 ENVIRONMENT="${ENVIRONMENT:-production}"
 PROXY_PORT="${PROXY_PORT:-5440}"
-SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${SERVER_DIR}/infrastructure/terraform"
 PROXY_PID=""
 
@@ -36,23 +51,34 @@ trap cleanup EXIT
 
 usage() {
   cat <<EOF
-usage: scripts/db.sh <migrate|status|psql|proxy>
+usage: scripts/db.sh <migrate|status|psql|proxy|run> [-- <command> [args...]]
 
   migrate   prisma migrate deploy (forward-only; applies every pending migration)
   status    prisma migrate status (read-only; shows pending migrations)
   psql      interactive psql session
   proxy     start cloud-sql-proxy and wait until Ctrl-C
+  run       run an arbitrary command with DATABASE_URL set, e.g.
+              scripts/db.sh run -- npm run backfill:personal-categories -- --dry
 
 Production (default): set TF_STATE_BUCKET; the connection comes from terraform output.
 Local: set DATABASE_URL and the command runs against it with no proxy.
+Both TF_STATE_BUCKET and DATABASE_URL may instead come from server/.env.prod (gitignored).
 EOF
 }
 
 case "${COMMAND}" in
-  migrate|status|psql|proxy) ;;
+  migrate|status|psql|proxy|run) ;;
   -h|--help|help|"") usage; [[ -n "${COMMAND}" ]] && exit 0 || exit 2 ;;
   *) usage; die "unknown command: ${COMMAND}" ;;
 esac
+shift || true
+
+RUN_ARGS=()
+if [[ "${COMMAND}" == "run" ]]; then
+  [[ "${1:-}" == "--" ]] && shift
+  [[ $# -gt 0 ]] || die "run needs a command: scripts/db.sh run -- <command> [args...]"
+  RUN_ARGS=("$@")
+fi
 
 # ---------------------------------------------------------------------------
 # Resolve the database URL: explicit DATABASE_URL, or production via the proxy
@@ -113,6 +139,10 @@ case "${COMMAND}" in
     info "  ${URL}"
     info "Ctrl-C to stop"
     wait "${PROXY_PID}"
+    ;;
+  run)
+    info "running (${ENVIRONMENT}): ${RUN_ARGS[*]}"
+    DATABASE_URL="${URL}" "${RUN_ARGS[@]}"
     ;;
 esac
 popd >/dev/null
