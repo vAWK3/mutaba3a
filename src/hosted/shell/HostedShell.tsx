@@ -23,6 +23,7 @@ const SECTIONS = [
   { path: '/payments', key: 'payments', exact: false },
   { path: '/documents', key: 'documents', exact: false },
   { path: '/expenses', key: 'expenses', exact: false },
+  { path: '/conversions', key: 'conversions', exact: false },
 ] as const;
 
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {

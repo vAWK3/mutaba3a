@@ -33,6 +33,8 @@ export type CreateExpenseRequest = Schemas['CreateExpenseRequest'];
 export type UpdateExpenseRequest = Schemas['UpdateExpenseRequest'];
 export type CreateReceiptUploadRequest = Schemas['CreateReceiptUploadRequest'];
 export type CreateReceiptUploadResponse = Schemas['CreateReceiptUploadResponse'];
+export type Conversion = Schemas['Conversion'];
+export type CreateConversionRequest = Schemas['CreateConversionRequest'];
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
 export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
@@ -237,4 +239,12 @@ export const api = {
       `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
       { profileId },
     ),
+
+  // Conversions (MUT-161) — create + read only, no update/delete.
+  conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>
+    request<Get<'/v1/conversions'>>('GET', '/v1/conversions', { profileId, query }),
+  conversion: (profileId: string, conversionId: string) =>
+    request<Get<'/v1/conversions/{conversionId}'>>('GET', `/v1/conversions/${encodeURIComponent(conversionId)}`, { profileId }),
+  createConversion: (profileId: string, body: CreateConversionRequest, idempotencyKey: string) =>
+    request<Conversion>('POST', '/v1/conversions', { profileId, body, idempotencyKey }),
 };

@@ -4433,6 +4433,89 @@ components:
         - currency
         - occurredOn
       additionalProperties: false
+    Conversion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        toAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits
+        toCurrency:
+          $ref: "#/components/schemas/Currency"
+        notes:
+          type: string
+          nullable: true
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - occurredOn
+        - amount
+        - currency
+        - toAmount
+        - toCurrency
+        - notes
+        - createdByUserId
+        - createdAt
+    CreateConversionRequest:
+      type: object
+      properties:
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Greater than zero, in the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        toAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Greater than zero, in toCurrency's fractional digits
+        toCurrency:
+          $ref: "#/components/schemas/Currency"
+        notes:
+          type: string
+          maxLength: 4000
+      required:
+        - occurredOn
+        - amount
+        - currency
+        - toAmount
+        - toCurrency
+      additionalProperties: false
+    ConversionPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversion"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
     InboxEntryPage:
       type: object
       properties:
@@ -9914,6 +9997,194 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/conversions:
+    post:
+      tags:
+        - Conversions
+      summary: Log a currency conversion
+      description: Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038); backdated is accepted.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversionRequest"
+      responses:
+        "201":
+          description: Logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversion"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Conversions
+      summary: List conversions, newest first
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive
+          required: false
+          description: Inclusive
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive
+          required: false
+          description: Inclusive
+          name: to
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/Currency"
+              - description: Matches either leg
+          required: false
+          description: Matches either leg
+          name: currency
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/conversions/{conversionId}:
+    get:
+      tags:
+        - Conversions
+      summary: A single conversion
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: conversionId
+          in: path
+      responses:
+        "200":
+          description: The conversion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversion"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
           content:
             application/json:
               schema:

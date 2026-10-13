@@ -1,0 +1,111 @@
+import { useMemo } from 'react';
+import { useLanguage } from '../../../lib/i18n/core';
+import { Button } from '../../../components/ui/Button';
+import type { Conversion } from '../../api/client';
+import { CurrencyFilter, DateFilter, FilterBar } from '../../components/FilterControls';
+import { HostedTable, type Column } from '../../components/HostedTable';
+import { Empty, QueryView } from '../../components/QueryView';
+import { ConversionDrawer } from '../../components/ConversionDrawer';
+import { isNarrowed, type ConversionsPageSearch } from '../../data/filters';
+import { useConversions } from '../../data/conversionQueries';
+import { DecimalAmount } from '../../format/DecimalAmount';
+import { formatDay } from '../../format/dates';
+import { useProfile } from '../../session/me';
+import { NoMatch, PageHeader, ShowMore } from './shared';
+
+/**
+ * Conversions (MUT-161): create + read only, the hosted counterpart of the
+ * local app's /conversions page. List is read-only presentation; the drawer
+ * is the one write surface, opened via `?newConversion=1`. No row click —
+ * there is nothing to edit.
+ */
+
+interface ConversionRow {
+  id: string;
+  date: string;
+  fromAmount: string;
+  fromCurrency: Conversion['currency'];
+  toAmount: string;
+  toCurrency: Conversion['toCurrency'];
+  notes: string;
+}
+
+function shape(items: Conversion[], language: 'en' | 'ar'): ConversionRow[] {
+  return items.map((c) => ({
+    id: c.id,
+    date: formatDay(c.occurredOn, language),
+    fromAmount: c.amount,
+    fromCurrency: c.currency,
+    toAmount: c.toAmount,
+    toCurrency: c.toCurrency,
+    notes: c.notes ?? '—',
+  }));
+}
+
+export interface ConversionsListProps {
+  filters: ConversionsPageSearch;
+  setFilters: (next: ConversionsPageSearch) => void;
+}
+
+export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
+  const profile = useProfile();
+  const { t, language } = useLanguage();
+  const list = useConversions(profile.id, filters);
+
+  const rows = useMemo(() => (list.data ? shape(list.data, language) : undefined), [list.data, language]);
+
+  const columns = useMemo<Column<ConversionRow>[]>(
+    () => [
+      { key: 'date', header: t('hosted.conversions.columns.date'), cell: (r) => r.date },
+      { key: 'from', header: t('hosted.conversions.columns.from'), numeric: true, cell: (r) => <DecimalAmount value={r.fromAmount} currency={r.fromCurrency} /> },
+      { key: 'to', header: t('hosted.conversions.columns.to'), numeric: true, cell: (r) => <DecimalAmount value={r.toAmount} currency={r.toCurrency} /> },
+      { key: 'notes', header: t('hosted.conversions.columns.notes'), cell: (r) => r.notes },
+    ],
+    [t],
+  );
+
+  const patch = (change: Partial<ConversionsPageSearch>) => setFilters({ ...filters, ...change });
+  const openNew = () => setFilters({ ...filters, newConversion: true });
+  const closeDrawer = () => setFilters({ ...filters, newConversion: undefined });
+
+  const recordButton = (
+    <Button variant="primary" size="sm" onClick={openNew}>
+      {t('hosted.conversions.record')}
+    </Button>
+  );
+
+  return (
+    <>
+      <PageHeader title={t('hosted.conversions.title')}>{recordButton}</PageHeader>
+      <FilterBar>
+        <CurrencyFilter value={filters.currency} onChange={(currency) => patch({ currency })} />
+        <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
+        <DateFilter label={t('hosted.filters.to')} value={filters.to} onChange={(to) => patch({ to })} />
+      </FilterBar>
+      <QueryView
+        queries={[list]}
+        data={rows}
+        isEmpty={(r) => r.length === 0}
+        empty={
+          isNarrowed(filters, { newConversion: undefined }) ? (
+            <NoMatch onClear={() => setFilters({})} />
+          ) : (
+            <Empty title={t('hosted.conversions.empty.title')} body={t('hosted.conversions.empty.body')} action={recordButton} />
+          )
+        }
+      >
+        {(r) => (
+          <>
+            <HostedTable label={t('hosted.conversions.title')} columns={columns} rows={r} rowKey={(row) => row.id} />
+            <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
+          </>
+        )}
+      </QueryView>
+      {filters.newConversion && <ConversionDrawer profileId={profile.id} onClose={closeDrawer} />}
+    </>
+  );
+}
+
+export function ConversionsPage(props: ConversionsListProps) {
+  return <ConversionsList {...props} />;
+}

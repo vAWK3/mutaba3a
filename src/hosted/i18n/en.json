@@ -56,7 +56,8 @@
         "receivables": "Receivables",
         "payments": "Payments",
         "documents": "Documents",
-        "expenses": "Expenses"
+        "expenses": "Expenses",
+        "conversions": "Conversions"
       },
       "switcher": {
         "label": "Switch profile",
@@ -326,6 +327,40 @@
         "amountInvalid": "Enter a valid amount",
         "dateInvalid": "Enter a valid date",
         "conflict": "This expense changed elsewhere — showing the latest version",
+        "network": "Couldn't reach the server. Try again."
+      }
+    },
+    "conversions": {
+      "title": "Conversions",
+      "record": "Log conversion",
+      "columns": {
+        "date": "Date",
+        "from": "From",
+        "to": "To",
+        "notes": "Notes"
+      },
+      "empty": {
+        "title": "No conversions logged on this profile yet",
+        "body": "Currency conversions logged for this profile appear here."
+      },
+      "drawer": {
+        "newTitle": "Log conversion",
+        "fromAmount": "From amount",
+        "fromCurrency": "From currency",
+        "toAmount": "To amount",
+        "toCurrency": "To currency",
+        "amountPlaceholder": "0.00",
+        "date": "Date",
+        "notes": "Notes",
+        "notesPlaceholder": "Optional notes",
+        "impliedRate": "Implied rate: 1 {from} = {rate} {to}"
+      },
+      "errors": {
+        "amountInvalid": "Enter a valid amount",
+        "toAmountInvalid": "Enter a valid amount",
+        "dateInvalid": "Enter a valid date",
+        "sameCurrency": "Choose a different currency to convert to",
+        "conflict": "This conversion changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
       }
     }

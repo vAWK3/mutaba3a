@@ -114,6 +114,29 @@ export const parseExpenseDrawer = (raw: Raw): ExpenseDrawerSearch =>
 export type ExpensesPageSearch = ExpenseFilters & ExpenseDrawerSearch;
 export const parseExpensesPage = (raw: Raw): ExpensesPageSearch => ({ ...parseExpenses(raw), ...parseExpenseDrawer(raw) });
 
+export interface ConversionFilters {
+  currency?: Currency;
+  from?: string;
+  to?: string;
+}
+export const parseConversions = (raw: Raw): ConversionFilters =>
+  compact({
+    currency: oneOf(raw.currency, CURRENCIES),
+    from: day(raw.from),
+    to: day(raw.to),
+  });
+
+/** The conversions drawer's own URL state: `?newConversion=1` to create. Create-only (MUT-161) — no `?conversion=<id>` to edit. */
+export interface ConversionDrawerSearch {
+  newConversion?: true;
+}
+export const parseConversionDrawer = (raw: Raw): ConversionDrawerSearch =>
+  compact({ newConversion: raw.newConversion === '1' || raw.newConversion === true ? true : undefined });
+
+/** The /conversions route's full search: the list's own filters plus the drawer's open state. */
+export type ConversionsPageSearch = ConversionFilters & ConversionDrawerSearch;
+export const parseConversionsPage = (raw: Raw): ConversionsPageSearch => ({ ...parseConversions(raw), ...parseConversionDrawer(raw) });
+
 export const DOCUMENT_KINDS = ['INVOICE', 'RECEIPT', 'OTHER'] as const;
 
 export interface DocumentFilters {

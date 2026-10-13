@@ -206,3 +206,23 @@ describe('GET /v1/conversions/{id}', () => {
     expect((await h.app.request('/v1/conversions/00000000-0000-4000-8000-0000000000dd', { headers: p.as(a.org.id) })).status).toBe(404);
   });
 });
+
+describe('regression: a conversion never appears in any /v1/summaries/* result (MUT-161 AC)', () => {
+  it('leaves the organization summary byte-identical after logging a conversion', async () => {
+    const { h, a, p, create } = await setup();
+    await h.app.request('/v1/income', json({ kind: 'received', amount: '250.00', currency: 'ILS', occurredOn: '2026-10-05' }, { ...p.as(a.org.id), ...idem() }));
+    const before = await read(await h.app.request('/v1/summaries/organization', { headers: p.as(a.org.id) }));
+    await create({});
+    const after = await read(await h.app.request('/v1/summaries/organization', { headers: p.as(a.org.id) }));
+    expect(after).toEqual(before);
+  });
+
+  it('leaves the expenses summary byte-identical after logging a conversion', async () => {
+    const { h, a, p, create } = await setup();
+    await h.app.request('/v1/expenses', json({ occurredOn: '2026-10-05', amount: '40.00', currency: 'ILS' }, { ...p.as(a.org.id), ...idem() }));
+    const before = await read(await h.app.request('/v1/summaries/expenses', { headers: p.as(a.org.id) }));
+    await create({});
+    const after = await read(await h.app.request('/v1/summaries/expenses', { headers: p.as(a.org.id) }));
+    expect(after).toEqual(before);
+  });
+});
