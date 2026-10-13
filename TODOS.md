@@ -85,3 +85,17 @@
 **Context:** Found during MUT-107's own verification pass (2026-10-13), not part of its acceptance criteria — contingency fee proposals don't touch audit ordering. Logged here rather than fixed inline to avoid unrelated scope creep on that ticket.
 
 **Depends on / blocked by:** Nothing; can be picked up any time.
+
+## 9. The desktop app keeps a file-write permission nothing uses once invoice PDFs are gone
+
+**What:** Remove the Tauri `fs` plugin and its capabilities: `tauri-plugin-fs` in `src-tauri/Cargo.toml:28`, `.plugin(tauri_plugin_fs::init())` in `src-tauri/src/lib.rs:12`, `@tauri-apps/plugin-fs` in `package.json`, and the `fs:default`, `fs:allow-mkdir` and `fs:allow-write` (`$DOCUMENT/Mutaba3a/**`) entries in `src-tauri/capabilities/default.json`.
+
+**Why:** Its only JS consumer was `src/services/pdfArchival.ts`, which saved exported invoice PDFs to `Documents/Mutaba3a/`. MUT-145 deletes that service along with document generation. After that, the permission is unused privilege.
+
+**Pros of fixing:** Least privilege. The desktop app can no longer write to the user's Documents folder, and one native plugin leaves the build.
+
+**Cons / cost / risk:** It touches Rust config and the Tauri capability schema, so it needs a desktop build (`make` desktop target) to verify. The MUT-145 gate is JS-only, so this was kept out of that ticket on purpose.
+
+**Context:** Decided in MUT-145's eng review (2026-10-13, D10). Start by grepping `plugin-fs` across `src` to confirm no consumer appeared since. Then remove the four pieces above and build the desktop app.
+
+**Depends on / blocked by:** MUT-145 merged (it deletes `pdfArchival.ts`).
