@@ -79,7 +79,6 @@
       "expense": "Add Expense",
       "client": "Add Client",
       "project": "Add Project",
-      "document": "New Document",
       "transaction": "New Transaction"
     }
   },
@@ -87,8 +86,7 @@
     "income": "Income",
     "expense": "Expense",
     "project": "Project",
-    "client": "Client",
-    "document": "Document"
+    "client": "Client"
   },
   "transactions": {
     "emptySearch": "Try adjusting your search or filters",
@@ -378,7 +376,7 @@
       "byClient": "Outstanding by Client",
       "byProject": "Outstanding by Project",
       "totalUnpaid": "Total Unpaid",
-      "invoices": "Invoices"
+      "invoices": "Entries"
     }
   },
   "reports": {
@@ -471,7 +469,7 @@
       "default": "Default",
       "confirmArchive": "Are you sure you want to archive this business profile?",
       "actionsFor": "Actions for {name}",
-      "empty": "No business profiles yet. Create one to start issuing invoices."
+      "empty": "No business profiles yet. Create one to start recording income."
     },
     "preferences": {
       "title": "Preferences",
@@ -534,10 +532,10 @@
       "exportFormatCSV": "CSV (Recommended)",
       "exportFormatJSON": "JSON (Legacy)",
       "exportFormatCSVDesc": "CSV format can be opened in Excel/Sheets and re-imported using the import tool.",
-      "exportFormatJSONDesc": "JSON format includes all data including documents and settings. Use for complete backups.",
+      "exportFormatJSONDesc": "JSON format includes all your data and settings. Use for complete backups.",
       "exportComplete": "Export Complete",
       "exportCompleteDesc": "Your data has been exported successfully.",
-      "selectProfileDesc": "Select a business profile to export. All documents, clients, projects, and transactions associated with this profile will be included.",
+      "selectProfileDesc": "Select a business profile to export. All clients, projects, and transactions associated with this profile will be included.",
       "exporting": "Exporting...",
       "exported": "Exported successfully!",
       "exportFailed": "Export failed",
@@ -854,6 +852,13 @@
       "schedulePreview": "Schedule Preview",
       "enterDetailsForPreview": "Enter amount and start date to see schedule",
       "andMore": "and more..."
+    },
+    "businessProfile": {
+      "sectionIdentity": "Identity",
+      "sectionMoney": "Money",
+      "sectionContact": "Contact (optional)",
+      "defaultCurrency": "Default currency",
+      "defaultCurrencyHint": "New income entries for this business start in this currency."
     }
   },
   "filters": {
@@ -916,7 +921,7 @@
     "subtitle": "Let's set up your business profile",
     "infoTitle": "What is a Business Profile?",
     "bullet1": "Your company name, logo, and branding",
-    "bullet2": "Contact information for invoices",
+    "bullet2": "Contact details for your business",
     "bullet3": "Tax ID and registration details",
     "multipleProfiles": "You can create multiple profiles if you manage different businesses.",
     "setUpNow": "Set Up Now",
@@ -1167,7 +1172,7 @@
       "q3": "How do I back up, or move to another device?",
       "a3": "Export a backup from Settings, then import it on the other device. Your data lives only on your device, so clearing your browser data or uninstalling the app deletes it — export a backup first.",
       "q4": "Can I track more than one business?",
-      "a4": "Yes. Give each business its own profile, with its own clients, numbers and documents, and switch between them in one click.",
+      "a4": "Yes. Give each business its own profile, with its own clients and income, and switch between them in one click.",
       "q5": "Which currencies does it support?",
       "a5": "{currencies}. Each amount keeps the currency it was earned in, and totals are shown per currency — never converted behind your back.",
       "q6": "Web app or desktop — and does it work offline, or on my phone?",
@@ -1197,11 +1202,11 @@
       },
       "dataStorage": {
         "title": "Where your data lives",
-        "body": "Everything you enter — clients, projects, income, expenses, and documents — is stored locally: in your browser's storage when you use the web app, or in a local database file when you use the Mac or Windows app. We never see it, and it never leaves your device unless you choose to export it."
+        "body": "Everything you enter — clients, projects, income, expenses, and receipts — is stored locally: in your browser's storage when you use the web app, or in a local database file when you use the Mac or Windows app. We never see it, and it never leaves your device unless you choose to export it."
       },
       "whatYouEnter": {
         "title": "What you enter",
-        "body": "You control what goes into Mutaba3a: client names and contact details, project and income records, optional expenses, and any documents you generate. None of this is sent to us."
+        "body": "You control what goes into Mutaba3a: client names and contact details, project and income records, optional expenses, and any receipts you attach. None of this is sent to us."
       },
       "network": {
         "title": "The few things that reach the network",

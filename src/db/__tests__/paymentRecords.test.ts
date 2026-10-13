@@ -502,11 +502,10 @@ describe('paymentRecordRepo', () => {
     });
   });
 
-  // ADR-030: lockedAt protects the invoice facts (amount, currency, client,
-  // date), not payment tracking. Paying an invoiced receivable is the normal
-  // flow, so it must keep working -- see recalculateReceivedAmount.
-  describe('locked transactions', () => {
-    it('should accept a payment against a locked transaction and mark it paid', async () => {
+  // MUT-145: document locks are gone. A row an exported document once locked
+  // still carries stale lockedAt fields; payments must treat it like any row.
+  describe('legacy document-locked transactions (MUT-145)', () => {
+    it('accepts a payment and marks it paid', async () => {
       await db.transactions.update(incomeId, {
         lockedAt: '2024-01-16T00:00:00.000Z',
         lockedByDocumentId: 'doc-1',
@@ -525,7 +524,7 @@ describe('paymentRecordRepo', () => {
       expect(tx?.lockedAt).toBe('2024-01-16T00:00:00.000Z');
     });
 
-    it('should still reject an overpayment on a locked transaction', async () => {
+    it('still rejects an overpayment', async () => {
       await db.transactions.update(incomeId, {
         lockedAt: '2024-01-16T00:00:00.000Z',
         lockedByDocumentId: 'doc-1',

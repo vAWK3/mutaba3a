@@ -6,8 +6,7 @@
  * narrows only this list; Owed Now and Payments are never filtered (D5).
  *
  * Row actions keep their earlier gates: Record payment through
- * RecordPaymentButton (MUT-6), invoice actions while Invoices is on (MUT-13),
- * the project tag linking only while Projects is on (MUT-16).
+ * RecordPaymentButton (MUT-6) and the project tag linking only while Projects is on (MUT-16).
  */
 
 import { useMemo, useState } from 'react';

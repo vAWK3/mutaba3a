@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useId, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,42 +13,26 @@ import {
 } from '../../hooks/useQueries';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
-import type { BusinessType, Currency, DocumentLanguage } from '../../types';
+import type { Currency } from '../../types';
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
   nameEn: z.string().optional(),
-  email: z.string().email('Invalid email'),
+  // Optional since MUT-145: only an invoice letterhead needed it.
+  email: z.union([z.literal(''), z.string().email('Invalid email')]).optional(),
   phone: z.string().optional(),
-  taxId: z.string().optional(),
-  businessType: z.enum(['exempt', 'authorized', 'company', 'lawyer', 'none']),
-  address1: z.string().optional(),
-  address1En: z.string().optional(),
-  city: z.string().optional(),
-  cityEn: z.string().optional(),
-  country: z.string().optional(),
-  countryEn: z.string().optional(),
-  postalCode: z.string().optional(),
   primaryColor: z.string().optional(),
   defaultCurrency: z.enum(['USD', 'ILS', 'EUR']),
-  defaultLanguage: z.enum(['ar', 'en']),
   isDefault: z.boolean(),
 });
 
 type FormData = z.infer<typeof schema>;
 
-const BUSINESS_TYPES: { value: BusinessType; label: string }[] = [
-  { value: 'none', label: 'Individual / Freelancer' },
-  { value: 'exempt', label: 'Exempt Dealer' },
-  { value: 'authorized', label: 'Authorized Dealer' },
-  { value: 'company', label: 'Company / Corporation' },
-  { value: 'lawyer', label: 'Lawyer / Law Firm' },
-];
-
 export function BusinessProfileDrawer() {
   const { businessProfileDrawer, closeBusinessProfileDrawer } = useDrawerStore();
   const { mode, profileId } = businessProfileDrawer;
   const t = useT();
+  const fieldId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
@@ -64,18 +48,8 @@ export function BusinessProfileDrawer() {
       nameEn: '',
       email: '',
       phone: '',
-      taxId: '',
-      businessType: 'none',
-      address1: '',
-      address1En: '',
-      city: '',
-      cityEn: '',
-      country: '',
-      countryEn: '',
-      postalCode: '',
       primaryColor: '#3b82f6',
       defaultCurrency: 'USD',
-      defaultLanguage: 'en',
       isDefault: false,
     },
   });
@@ -86,21 +60,11 @@ export function BusinessProfileDrawer() {
       form.reset({
         name: existingProfile.name,
         nameEn: existingProfile.nameEn || '',
-        email: existingProfile.email,
+        email: existingProfile.email || '',
         phone: existingProfile.phone || '',
-        taxId: existingProfile.taxId || '',
-        businessType: existingProfile.businessType,
-        address1: existingProfile.address1 || '',
-        address1En: existingProfile.address1En || '',
-        city: existingProfile.city || '',
-        cityEn: existingProfile.cityEn || '',
-        country: existingProfile.country || '',
-        countryEn: existingProfile.countryEn || '',
-        postalCode: existingProfile.postalCode || '',
         primaryColor: existingProfile.primaryColor || '#3b82f6',
         // Stays USD/ILS/EUR-only (MUT-140 scope: JOD not added to profile-default currency).
         defaultCurrency: existingProfile.defaultCurrency as 'USD' | 'ILS' | 'EUR',
-        defaultLanguage: existingProfile.defaultLanguage,
         isDefault: existingProfile.isDefault,
       });
       if (existingProfile.logoDataUrl) {
@@ -127,21 +91,11 @@ export function BusinessProfileDrawer() {
     const profileData = {
       name: data.name,
       nameEn: data.nameEn || undefined,
-      email: data.email,
+      email: data.email || undefined,
       phone: data.phone || undefined,
-      taxId: data.taxId || undefined,
-      businessType: data.businessType as BusinessType,
-      address1: data.address1 || undefined,
-      address1En: data.address1En || undefined,
-      city: data.city || undefined,
-      cityEn: data.cityEn || undefined,
-      country: data.country || undefined,
-      countryEn: data.countryEn || undefined,
-      postalCode: data.postalCode || undefined,
       logoDataUrl: logoPreview || undefined,
       primaryColor: data.primaryColor || undefined,
       defaultCurrency: data.defaultCurrency as Currency,
-      defaultLanguage: data.defaultLanguage as DocumentLanguage,
       isDefault: data.isDefault,
     };
 
@@ -215,207 +169,153 @@ export function BusinessProfileDrawer() {
         </>
       }
     >
-      <form id="business-profile-form" onSubmit={form.handleSubmit(onSubmit)}>
-        {/* Logo */}
-        <div className="form-group">
-          <label className="form-label">Logo</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {logoPreview ? (
-              <img
-                src={logoPreview}
-                alt="Logo preview"
-                style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 4 }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 64,
-                  height: 64,
-                  backgroundColor: 'var(--color-bg-secondary)',
-                  borderRadius: 4,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--color-text-tertiary)',
-                  fontSize: 12,
-                }}
-              >
-                No logo
-              </div>
-            )}
-            <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
-              {logoPreview ? 'Change' : 'Upload'}
-            </button>
-            {logoPreview && (
-              <button type="button" className="btn btn-ghost" onClick={() => setLogoPreview(null)}>
-                Remove
+      <form id="business-profile-form" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        {/* Identity: who this business is (MUT-145 IA) */}
+        <section className="profile-drawer-section" aria-labelledby={`${fieldId}-identity`}>
+          <h3 className="profile-drawer-section-title" id={`${fieldId}-identity`}>
+            {t('drawer.businessProfile.sectionIdentity')}
+          </h3>
+
+          <div className="form-group">
+            <span className="form-label">Logo</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {logoPreview ? (
+                <img
+                  src={logoPreview}
+                  alt="Logo preview"
+                  style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 4 }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 64,
+                    height: 64,
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--color-text-tertiary)',
+                    fontSize: 12,
+                  }}
+                >
+                  No logo
+                </div>
+              )}
+              <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+                {logoPreview ? 'Change' : 'Upload'}
               </button>
-            )}
+              {logoPreview && (
+                <button type="button" className="btn btn-ghost" onClick={() => setLogoPreview(null)}>
+                  Remove
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleLogoChange}
+              style={{ display: 'none' }}
+            />
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleLogoChange}
-            style={{ display: 'none' }}
-          />
-        </div>
 
-        {/* Business Name */}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Business Name (Arabic) *</label>
-            <input
-              type="text"
-              className={cn('input', form.formState.errors.name && 'input-error')}
-              placeholder="اسم الشركة"
-              dir="rtl"
-              {...form.register('name')}
-            />
-            {form.formState.errors.name && (
-              <p className="form-error">{form.formState.errors.name.message}</p>
-            )}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor={`${fieldId}-name`}>Business Name (Arabic) *</label>
+              <input
+                id={`${fieldId}-name`}
+                type="text"
+                className={cn('input', form.formState.errors.name && 'input-error')}
+                placeholder="اسم الشركة"
+                dir="rtl"
+                {...form.register('name')}
+              />
+              {form.formState.errors.name && (
+                <p className="form-error">{form.formState.errors.name.message}</p>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor={`${fieldId}-nameEn`}>Business Name (English)</label>
+              <input
+                id={`${fieldId}-nameEn`}
+                type="text"
+                className="input"
+                placeholder="Company Name"
+                {...form.register('nameEn')}
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Business Name (English)</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="Company Name"
-              {...form.register('nameEn')}
-            />
-          </div>
-        </div>
 
-        {/* Contact */}
-        <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Email *</label>
-            <input
-              type="email"
-              className={cn('input', form.formState.errors.email && 'input-error')}
-              placeholder="email@example.com"
-              {...form.register('email')}
-            />
-            {form.formState.errors.email && (
-              <p className="form-error">{form.formState.errors.email.message}</p>
-            )}
+            <label className="form-label" htmlFor={`${fieldId}-color`}>Brand Color</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                id={`${fieldId}-color`}
+                type="color"
+                style={{ width: 40, height: 32, padding: 0, border: 'none', cursor: 'pointer' }}
+                {...form.register('primaryColor')}
+              />
+              <input
+                type="text"
+                className="input"
+                style={{ width: 120 }}
+                placeholder="#3b82f6"
+                aria-label="Brand Color hex"
+                {...form.register('primaryColor')}
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Phone</label>
-            <input
-              type="tel"
-              className="input"
-              placeholder="+972 50 000 0000"
-              {...form.register('phone')}
-            />
-          </div>
-        </div>
+        </section>
 
-        {/* Business Type & Tax ID */}
-        <div className="form-row">
+        {/* Money: the default currency for new income entries */}
+        <section className="profile-drawer-section" aria-labelledby={`${fieldId}-money`}>
+          <h3 className="profile-drawer-section-title" id={`${fieldId}-money`}>
+            {t('drawer.businessProfile.sectionMoney')}
+          </h3>
           <div className="form-group">
-            <label className="form-label">Business Type</label>
-            <Select {...form.register('businessType')}>
-              {BUSINESS_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Tax ID</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="Tax/VAT Number"
-              {...form.register('taxId')}
-            />
-          </div>
-        </div>
-
-        {/* Address */}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Address (Arabic)</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="العنوان"
-              dir="rtl"
-              {...form.register('address1')}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Address (English)</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="123 Main St"
-              {...form.register('address1En')}
-            />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">City (Arabic)</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="المدينة"
-              dir="rtl"
-              {...form.register('city')}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">City (English)</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="City"
-              {...form.register('cityEn')}
-            />
-          </div>
-        </div>
-
-        {/* Defaults */}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Document Currency</label>
-            <Select {...form.register('defaultCurrency')}>
+            <label className="form-label" htmlFor={`${fieldId}-currency`}>
+              {t('drawer.businessProfile.defaultCurrency')}
+            </label>
+            <Select id={`${fieldId}-currency`} {...form.register('defaultCurrency')}>
               <option value="USD">USD ($)</option>
               <option value="ILS">ILS (₪)</option>
             </Select>
+            <p className="form-hint">{t('drawer.businessProfile.defaultCurrencyHint')}</p>
           </div>
-          <div className="form-group">
-            <label className="form-label">Document Language</label>
-            <Select {...form.register('defaultLanguage')}>
-              <option value="en">English</option>
-              <option value="ar">Arabic</option>
-            </Select>
-          </div>
-        </div>
+        </section>
 
-        {/* Brand Color */}
-        <div className="form-group">
-          <label className="form-label">Brand Color</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="color"
-              style={{ width: 40, height: 32, padding: 0, border: 'none', cursor: 'pointer' }}
-              {...form.register('primaryColor')}
-            />
-            <input
-              type="text"
-              className="input"
-              style={{ width: 120 }}
-              placeholder="#3b82f6"
-              {...form.register('primaryColor')}
-            />
+        {/* Contact: optional */}
+        <section className="profile-drawer-section" aria-labelledby={`${fieldId}-contact`}>
+          <h3 className="profile-drawer-section-title" id={`${fieldId}-contact`}>
+            {t('drawer.businessProfile.sectionContact')}
+          </h3>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor={`${fieldId}-email`}>Email</label>
+              <input
+                id={`${fieldId}-email`}
+                type="email"
+                className={cn('input', form.formState.errors.email && 'input-error')}
+                placeholder="email@example.com"
+                {...form.register('email')}
+              />
+              {form.formState.errors.email && (
+                <p className="form-error">{form.formState.errors.email.message}</p>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor={`${fieldId}-phone`}>Phone</label>
+              <input
+                id={`${fieldId}-phone`}
+                type="tel"
+                className="input"
+                placeholder="+972 50 000 0000"
+                {...form.register('phone')}
+              />
+            </div>
           </div>
-        </div>
+        </section>
 
         {/* Default Profile */}
         <div className="form-group">

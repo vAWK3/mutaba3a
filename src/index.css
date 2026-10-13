@@ -842,6 +842,20 @@ td {
   margin-top: var(--space-5);
 }
 
+/* Business profile drawer sections (MUT-145 IA): Identity, Money, Contact */
+.profile-drawer-section + .profile-drawer-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.profile-drawer-section-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
 .orphaned-records-group-title {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
@@ -2317,36 +2331,6 @@ div.input-with-prefix {
   gap: var(--space-3);
 }
 
-/* Document Guard - No Profile State */
-.document-guard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: var(--space-8) var(--space-4);
-  min-height: 300px;
-}
-
-.document-guard-icon {
-  color: var(--accent-text);
-  margin-bottom: var(--space-4);
-}
-
-.document-guard-title {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-  color: var(--text);
-  margin: 0 0 var(--space-2) 0;
-}
-
-.document-guard-description {
-  font-size: var(--text-sm);
-  color: var(--muted);
-  margin: 0 0 var(--space-5) 0;
-  max-width: 280px;
-}
-
 /* Type Selector in Drawer */
 .type-selector {
   display: grid;
@@ -2384,39 +2368,6 @@ div.input-with-prefix {
   margin-top: 2px;
 }
 
-/* Document Type Grid (7 types) */
-.document-type-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.document-type-btn {
-  padding: var(--space-2) var(--space-3);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  text-align: center;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-}
-
-.document-type-btn:hover:not(:disabled) {
-  border-color: var(--border-strong);
-}
-
-.document-type-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-.document-type-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Form Sections */
 .form-section {
   margin: var(--space-5) 0;
@@ -2436,34 +2387,6 @@ div.input-with-prefix {
 .form-section-title {
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
-}
-
-/* Line Items Editor */
-.line-item-row {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  margin-bottom: var(--space-2);
-}
-
-.line-item-main {
-  flex: 3;
-}
-
-.line-item-qty {
-  width: 70px;
-}
-
-.line-item-rate {
-  width: 100px;
-}
-
-.line-item-total {
-  width: 100px;
-  text-align: right;
-  font-weight: var(--weight-medium);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
 }
 
 /* Totals Section */
@@ -2837,18 +2760,6 @@ a.project-tag:hover {
   display: inline-block;
 }
 
-/* Document indicator */
-.doc-indicator {
-  color: var(--accent-text);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-}
-
-.doc-indicator:hover {
-  color: var(--accent-hover);
-}
-
 /* Responsive Table - Compact Mode */
 .date-cell-compact {
   display: flex;
@@ -2976,14 +2887,6 @@ a.project-tag:hover {
   color: var(--text-secondary);
   white-space: pre-wrap;
   font-size: var(--text-sm);
-}
-
-/* PDF Preview Container */
-.pdf-preview-container {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
 }
 
 /* Success button variant */

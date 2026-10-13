@@ -344,35 +344,21 @@ export interface TransactionDisplay extends Transaction {
 // Business Profile Types
 // ============================================================================
 
-// Business type for tax purposes
-export type BusinessType = 'exempt' | 'authorized' | 'company' | 'lawyer' | 'none';
-
-// Document language
-export type DocumentLanguage = 'ar' | 'en';
-
 // Payment method
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'cheque' | 'credit_card' | 'other';
 
-// Business Profile entity (multi-identity support)
+// Business Profile entity (multi-identity support).
+// MUT-145 dropped the invoice-letterhead fields (tax ID, addresses, business
+// type, document language). Older rows keep them; nothing reads them.
 export interface BusinessProfile {
   id: string;
   name: string;                    // Business name (Arabic)
   nameEn?: string;                 // Business name (English)
-  email: string;
+  email?: string;                  // Optional contact detail (MUT-145)
   phone?: string;
-  taxId?: string;
-  businessType: BusinessType;
-  address1?: string;
-  address1En?: string;
-  city?: string;
-  cityEn?: string;
-  country?: string;
-  countryEn?: string;
-  postalCode?: string;
   logoDataUrl?: string;            // Base64 encoded logo (offline-first)
-  primaryColor?: string;           // Brand color hex
-  defaultCurrency: Currency;
-  defaultLanguage: DocumentLanguage;
+  primaryColor?: string;           // Profile color hex (badges, avatars)
+  defaultCurrency: Currency;       // Default for new income entries
   isDefault: boolean;              // Only one can be default
 
   createdAt: string;

@@ -11,7 +11,7 @@ import type { Currency, PaymentStatus, TransactionDisplay } from '../../types';
 
 export interface WorkRow {
   id: string;
-  /** The entry itself, for the row actions (Record payment, Mark paid, invoice) */
+  /** The entry itself, for the row actions (Record payment, Mark paid, duplicate) */
   tx: TransactionDisplay;
   /** When the work was done (occurredAt) */
   date: string;
