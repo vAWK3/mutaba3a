@@ -549,7 +549,6 @@
       "invalidFile": "Invalid backup file format",
       "downloadTemplate": "Download CSV Template",
       "downloadTemplateBtn": "Download CSV Template",
-      "deleteAll": "Delete All Data",
       "deleteAllDesc": "Permanently delete all local data",
       "deleteAllBtn": "Delete all data…",
       "reset": "Reset Data",

@@ -3128,7 +3128,7 @@ a.project-tag:hover {
 }
 
 /* Delete all data (MUT-88): alone below every card, set apart by space and a
-   rule, quiet until hovered; the modal carries the weight (backup + typed word). */
+   rule; the modal behind it asks for a backup and a typed word. */
 .settings-danger-zone {
   display: flex;
   align-items: center;

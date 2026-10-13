@@ -557,7 +557,6 @@
       "invalidFile": "صيغة ملف النسخة الاحتياطية غير صالحة",
       "downloadTemplate": "تحميل قالب CSV",
       "downloadTemplateBtn": "تحميل قالب CSV",
-      "deleteAll": "حذف جميع البيانات",
       "deleteAllDesc": "حذف جميع البيانات المحلية نهائياً",
       "deleteAllBtn": "حذف جميع البيانات…",
       "reset": "إعادة تعيين البيانات",
@@ -577,7 +576,7 @@
         },
         "stepB": {
           "title": "الخطوة 2: التأكيد",
-          "confirmLabel": "اكتب {word} للتأكيد",
+          "confirmLabel": "اكتب «{word}» للتأكيد",
           "confirmWord": "حذف",
           "btn": "حذف نهائيًا",
           "deleting": "جارٍ الحذف…",

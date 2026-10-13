@@ -361,10 +361,7 @@ export function SettingsPage() {
           {/* Delete all data (MUT-88): alone at the very bottom, outside every
               card, behind a backup and a typed word (DeleteAllDataModal). */}
           <section className="settings-danger-zone" aria-label={t('settings.yourData.deleteZoneLabel')}>
-            <div>
-              <div className="settings-label text-danger">{t('settings.data.deleteAll')}</div>
-              <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
-            </div>
+            <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
             <div className="settings-danger-zone-action">
               {deleteSuccessMessage && (
                 <span className="text-sm text-success">{deleteSuccessMessage}</span>
