@@ -2,7 +2,17 @@
 <html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!--
+      The portal's publicDir is src/hosted/public, so these ./public/ files are
+      bundled as hashed /assets/* copies: the only path the portal server caches
+      (MUT-104, D3). One copy of each icon serves the app and the portal.
+    -->
+    <link rel="icon" type="image/svg+xml" href="./public/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./public/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./public/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./public/apple-touch-icon.png" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FCF6ED" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#221B2D" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="referrer" content="same-origin" />
