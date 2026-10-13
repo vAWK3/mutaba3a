@@ -345,10 +345,10 @@
 2. **`useAttentionReceivables` has no app consumer.** Home selects its list from `useReceivables` (ADR-055). Both copies (`useQueries.ts`, `useIncomeQueries.ts`) and their tests remain, and so does `transactionRepo.getAttentionReceivables` in the repository interface (it now calls the shared selector). Not deleted here: `useQueries.ts` was MUT-73's area while this lane was open.
 3. **Home's Recent payments rows** still open their client by mouse only (Needs attention's rows gained a link), and at 375 px the date and amount squeeze the client column to one letter.
 4. **Toasts and assistive technology.** `ToastContainer` mounts with its first toast, so its `role="status"` region is not in the page before the message and some screen readers won't announce it. Undo has no keyboard shortcut and sits at the end of the tab order; MUT-82 only pauses the timer once focus or the pointer reaches it.
-5. **The bidi isolate helper is copied four times** (`PartialPaymentDrawer`, `IncomeDrawer`, `OwedNowSummary`, `HomeNeedsAttention`).
+5. ~~**The bidi isolate helper is copied four times** (`PartialPaymentDrawer`, `IncomeDrawer`, `OwedNowSummary`, `HomeNeedsAttention`).~~ **Done 2026-10-13 (MUT-110):** also found copied in `RecurringAttentionList` and `RecurringMarkPaidDrawer` (6 sites total, not 4). Consolidated to two shared helpers in `lib/utils.ts`: `isolate()` (FSI, names) and the new `isolateAmount()` (LRI, amounts) -- the private copies were all FSI, which is wrong for an Arabic-formatted amount (see MUT-110, a real bug this duplication caused).
 6. **Untested lines.** `exitSnapshot`'s id stripping (found in the browser after the owner paused new tests) has no unit test; the integration test drives the flow but not a drawer opened during another's exit.
 7. ~~**The browser spec is not in `qa/`.**~~ **Done 2026-10-12:** recovered from checkpoint `660ba96` and ported as `web.home.attention-pay-{full,partial,reduced-motion,rtl}` (`qa/specs/web/home.spec.ts`); the axe check runs inside the full-payment flow. TEST_PLAN § MUT-82.
-**Remediation**: 1 with TD-063 / MUT-60. 2: MUT-73 has landed, so delete both hooks and their tests, and `getAttentionReceivables` if nothing else reads it. 3: give Recent payments the same link cell and the container-query layout (`HomeNeedsAttention.css`). 4: keep the toast region mounted and empty; consider Cmd/Ctrl+Z for the Undo showing. 5: one `isolate` in `lib/utils.ts`. 6: add an `exitSnapshot.test.ts` case: a clone has no `[id]`. 7: done.
+**Remediation**: 1 with TD-063 / MUT-60. 2: MUT-73 has landed, so delete both hooks and their tests, and `getAttentionReceivables` if nothing else reads it. 3: give Recent payments the same link cell and the container-query layout (`HomeNeedsAttention.css`). 4: keep the toast region mounted and empty; consider Cmd/Ctrl+Z for the Undo showing. 5: done. 6: add an `exitSnapshot.test.ts` case: a clone has no `[id]`. 7: done.
 **Effort**: Small each
 
 ### TD-066: Income's Received / Unpaid strip ignores the page's filters
@@ -1266,24 +1266,22 @@ they test the menu element itself) and keep only its positioning logic.
 ---
 
 ### TD-032: The two `+ Add` menus share their actions but not their click behaviour
-**Status**: Open (ticketed as MUT-57)
+**Status**: Resolved (MUT-57, 2026-10-13)
 **Priority**: Low
-**Introduced**: MUT-15, 2026-10-11 (pre-existing; out of the ticket's scope)
+**Introduced**: MUT-15, 2026-10-11 (pre-existing; out of that ticket's scope)
 **Decision** (Basel, 2026-10-11): both menus open the drawer **in place** (no
 navigation to the list) and all four actions are profile-aware in both.
-MUT-57 moves them onto one set of handlers.
-**Impact**: both menus offer the same actions in the same order
-(`visibleAddMenuActions`), but the sidebar **New** menu opens the drawer and
-navigates to the list (`/income`, `/clients`, `/expenses`, `/projects`) and
-creates clients and projects without the profile picker, while the top bar
-**Add** menu opens every drawer in place and is profile-aware for all four.
-A user gets a different result from the same label depending on which button
-they used.
+**Resolution**: `useAddMenuActions()` (`src/hooks/useAddMenuActions.ts`) is now
+the one set of create handlers behind both menus. `SidebarNav`'s New menu and
+`TopBar`'s Add menu each call `run(action, event, returnFocus)` and render a
+`ProfileQuickPicker` for all four actions; the sidebar's `navigate(...)` calls
+after opening a drawer are gone, and Client/Project creation from either menu
+is now profile-aware under All businesses, same as Income/Expense already
+were. Income/Expense still call `setWorkingProfile` on execute (unchanged
+behaviour, now shared instead of duplicated); Client/Project never did and
+still don't.
 
-**Remediation**: decide one behaviour (drawer-first says in place) and move
-the handlers next to `visibleAddMenuActions` so both menus call the same one.
-
-**Effort**: Small (decision first)
+**Effort**: Small
 
 ---
 

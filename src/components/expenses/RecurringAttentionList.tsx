@@ -15,14 +15,11 @@ import { useId } from 'react';
 import { useMenuButton } from '../../hooks/useMenuButton';
 import { MoreIcon } from '../icons';
 import { CurrencyAmounts } from '../ui/CurrencyAmounts';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount, isolateAmount } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
 import { currencyTotals, formatMonthList, type RecurringAttentionGroup } from './recurringAttention';
 import './RecurringAttentionList.css';
-
-/** FIRST STRONG ISOLATE … POP DIRECTIONAL ISOLATE around an amount inside a sentence */
-const isolate = (text: string) => `\u2068${text}\u2069`;
 
 type GroupAction = (group: RecurringAttentionGroup) => void;
 
@@ -80,7 +77,7 @@ function RecurringAttentionRow({ group, onMarkPaid, onSkipAll, onSnoozeAll, onEd
     locale
   );
   const period = t(`expenses.recurring.attention.perPeriod.${group.frequency}`, {
-    amount: isolate(formatAmount(group.periodAmountMinor, group.currency, locale)),
+    amount: isolateAmount(formatAmount(group.periodAmountMinor, group.currency, locale)),
   });
 
   const run = (action: GroupAction) => () => {

@@ -26,6 +26,7 @@ import {
   formatAmount,
   formatDate,
   getLocaleFromLanguage,
+  isolateAmount,
   nowISO,
   parseAmountInput,
   todayISO,
@@ -106,10 +107,6 @@ const STATUS_HINT_KEYS: Record<IncomeStatus, string> = {
   invoiced: 'drawer.income.statusInvoicedHint',
   received: 'drawer.income.statusReceivedHint',
 };
-
-// Bidi isolates: keep an amount whole inside a sentence of either direction
-const FIRST_STRONG_ISOLATE = '\u2068';
-const POP_ISOLATE = '\u2069';
 
 // Map stored status to the drawer's three-step status: paid → received,
 // unpaid → invoiced (the storage does not keep earned vs invoiced apart).
@@ -410,7 +407,7 @@ export function IncomeDrawer() {
     if (!error?.message) return null;
     if (error.type === BELOW_RECORDED) {
       const amount = formatAmount(recordedMinor, existingTx?.currency ?? watchedCurrency, locale);
-      return t(error.message, { amount: `${FIRST_STRONG_ISOLATE}${amount}${POP_ISOLATE}` });
+      return t(error.message, { amount: isolateAmount(amount) });
     }
     if (error.type === CURRENCY_MISMATCH) {
       return t(error.message, { typed: amountInputCurrency(form.getValues('amount')) ?? '', currency: watchedCurrency });

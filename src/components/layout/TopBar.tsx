@@ -1,14 +1,12 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useProfileAwareAction } from '../../hooks/useProfileAwareAction';
+import { useAddMenuActions } from '../../hooks/useAddMenuActions';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { ProfileQuickPicker } from '../ui/ProfileQuickPicker';
 import { ProfileBadge } from '../ui/ProfileBadge';
-import { useDrawerStore } from '../../lib/stores';
 import { useT, useDirection } from '../../lib/i18n';
-import { useFeatureFlags } from '../../lib/features/useFeatures';
 import { useMenuButton } from '../../hooks/useMenuButton';
-import { visibleAddMenuActions, type AddMenuAction } from './addMenuActions';
+import type { AddMenuAction } from './addMenuActions';
 import { FxRateReadout } from './FxRateReadout';
 
 interface Breadcrumb {
@@ -76,52 +74,14 @@ const addMenuEntries: Record<AddMenuAction, { labelKey: string; icon: React.Comp
 
 function AddMenu() {
   const menu = useMenuButton();
-  const actions = visibleAddMenuActions(useFeatureFlags());
-  const { openIncomeDrawer, openExpenseDrawer, openClientDrawer, openProjectDrawer } = useDrawerStore();
+  const { actions, run, pickers } = useAddMenuActions();
   const t = useT();
-
-  // Profile-aware actions for income and expense
-  const incomeAction = useProfileAwareAction({
-    onExecute: (profileId) => {
-      openIncomeDrawer({ mode: 'create', defaultStatus: 'earned', defaultProfileId: profileId });
-    },
-  });
-
-  const expenseAction = useProfileAwareAction({
-    onExecute: (profileId) => {
-      openExpenseDrawer({ mode: 'create', defaultProfileId: profileId });
-    },
-  });
-  const clientAction = useProfileAwareAction({
-    onExecute: (profileId) => {
-      openClientDrawer({ mode: 'create', defaultProfileId: profileId });
-    },
-  });
-
-  const projectAction = useProfileAwareAction({
-    onExecute: (profileId) => {
-      openProjectDrawer({ mode: 'create', defaultProfileId: profileId });
-    },
-  });
 
   const handleAction = (action: AddMenuAction, event: React.MouseEvent<HTMLElement>) => {
     menu.close();
     // A business picker, if one opens, gives focus back to the Add button (MUT-89)
     const returnFocus = menu.buttonProps.ref.current;
-    switch (action) {
-      case 'income':
-        incomeAction.trigger(event, returnFocus);
-        break;
-      case 'expense':
-        expenseAction.trigger(event, returnFocus);
-        break;
-      case 'client':
-        clientAction.trigger(event, returnFocus);
-        break;
-      case 'project':
-        projectAction.trigger(event, returnFocus);
-        break;
-    }
+    run(action, event, returnFocus);
   };
 
   return (
@@ -154,10 +114,10 @@ function AddMenu() {
       </div>
 
       {/* Profile quick pickers for each action type */}
-      <ProfileQuickPicker {...incomeAction.pickerProps} />
-      <ProfileQuickPicker {...expenseAction.pickerProps} />
-      <ProfileQuickPicker {...clientAction.pickerProps} />
-      <ProfileQuickPicker {...projectAction.pickerProps} />
+      <ProfileQuickPicker {...pickers.income.pickerProps} />
+      <ProfileQuickPicker {...pickers.expense.pickerProps} />
+      <ProfileQuickPicker {...pickers.client.pickerProps} />
+      <ProfileQuickPicker {...pickers.project.pickerProps} />
     </>
   );
 }

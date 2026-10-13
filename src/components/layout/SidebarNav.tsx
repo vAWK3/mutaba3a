@@ -1,18 +1,16 @@
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { cn } from "../../lib/utils";
 import { useT } from "../../lib/i18n";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { ProfileSwitcher } from "./ProfileSwitcher";
-import { useDrawerStore } from "../../lib/stores";
-import { useProfileStore } from "../../lib/profileStore";
-import { useProfileAwareAction } from "../../hooks/useProfileAwareAction";
+import { useAddMenuActions } from "../../hooks/useAddMenuActions";
 import { ProfileQuickPicker } from "../ui/ProfileQuickPicker";
 import { useFeatureFlags } from "../../lib/features/useFeatures";
 import { useMenuButton } from "../../hooks/useMenuButton";
 import { DocumentIcon as SharedDocumentIcon } from "../icons";
 import type { FeatureKey } from "../../types";
-import { visibleAddMenuActions, type AddMenuAction } from "./addMenuActions";
+import type { AddMenuAction } from "./addMenuActions";
 import { ThemeToggle } from "./ThemeToggle";
 
 // Storage key for collapsed state
@@ -101,45 +99,13 @@ const newMenuEntries: Record<
 
 export function SidebarNav() {
   const location = useLocation();
-  const navigate = useNavigate();
   const t = useT();
   const { hasUpdate } = useCheckForUpdates();
   const features = useFeatureFlags();
   const enabledOptionalItems = optionalItems.filter((item) => features[item.feature]);
-  const newMenuActions = visibleAddMenuActions(features);
+  const { actions: newMenuActions, run, pickers } = useAddMenuActions();
   const [collapsed, toggleCollapsed] = useCollapsedState();
   const newMenu = useMenuButton();
-
-  // Global drawer state from stores
-  const openIncomeDrawer = useDrawerStore((s) => s.openIncomeDrawer);
-  const openClientDrawer = useDrawerStore((s) => s.openClientDrawer);
-  const openProjectDrawer = useDrawerStore((s) => s.openProjectDrawer);
-  const openExpenseDrawer = useDrawerStore((s) => s.openExpenseDrawer);
-
-  // The list it opens shows the business the entry goes into: make it the
-  // working business first, keeping All businesses as it is (MUT-89, ADR-051)
-  const setWorkingProfile = useProfileStore((s) => s.setWorkingProfile);
-
-  // Profile-aware action hooks for income and expense creation
-  const incomeAction = useProfileAwareAction({
-    onExecute: (profileId) => {
-      setWorkingProfile(profileId);
-      openIncomeDrawer({
-        mode: "create",
-        defaultStatus: "earned",
-        defaultProfileId: profileId,
-      });
-      navigate({ to: "/income" });
-    },
-  });
-
-  const expenseAction = useProfileAwareAction({
-    onExecute: (profileId) => {
-      setWorkingProfile(profileId);
-      openExpenseDrawer({ mode: "create", defaultProfileId: profileId });
-      navigate({ to: "/expenses" });
-    },
-  });
 
   // Check if a nav item is active
   const isItemActive = (item: NavItem): boolean => {
@@ -152,7 +118,8 @@ export function SidebarNav() {
     );
   };
 
-  // Handle new menu action
+  // Handle new menu action: opens the drawer in place, asking for the
+  // business under All businesses (MUT-57, TD-032)
   const handleNewAction = (
     action: AddMenuAction,
     event: React.MouseEvent<HTMLElement>,
@@ -160,24 +127,7 @@ export function SidebarNav() {
     newMenu.close();
     // A business picker, if one opens, gives focus back to the New button (MUT-89)
     const returnFocus = newMenu.buttonProps.ref.current;
-    switch (action) {
-      case "income":
-        // Profile-aware: shows the business picker under All businesses
-        incomeAction.trigger(event, returnFocus);
-        break;
-      case "expense":
-        // Profile-aware: shows the business picker under All businesses
-        expenseAction.trigger(event, returnFocus);
-        break;
-      case "client":
-        openClientDrawer({ mode: "create" });
-        navigate({ to: "/clients" });
-        break;
-      case "project":
-        openProjectDrawer({ mode: "create" });
-        navigate({ to: "/projects" });
-        break;
-    }
+    run(action, event, returnFocus);
   };
 
   // Render a single nav item
@@ -304,9 +254,11 @@ export function SidebarNav() {
           </div>
         )}
 
-        {/* Profile pickers for income/expense creation in "All Profiles" mode */}
-        <ProfileQuickPicker {...incomeAction.pickerProps} />
-        <ProfileQuickPicker {...expenseAction.pickerProps} />
+        {/* Profile pickers for all four create actions in "All Profiles" mode (MUT-57) */}
+        <ProfileQuickPicker {...pickers.income.pickerProps} />
+        <ProfileQuickPicker {...pickers.expense.pickerProps} />
+        <ProfileQuickPicker {...pickers.client.pickerProps} />
+        <ProfileQuickPicker {...pickers.project.pickerProps} />
       </div>
 
       {/* Main Navigation */}

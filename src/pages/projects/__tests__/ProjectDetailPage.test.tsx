@@ -100,20 +100,6 @@ vi.mock('../../../hooks/useQueries', async () => {
   };
 });
 
-// Mock income queries
-const mockMarkPaidMutation = vi.fn();
-vi.mock('../../../hooks/useIncomeQueries', async () => {
-  const actual = await vi.importActual('../../../hooks/useIncomeQueries');
-  return {
-    ...actual,
-    useMarkIncomePaid: () => ({
-      mutate: mockMarkPaidMutation,
-      mutateAsync: vi.fn(),
-      isPending: false,
-    }),
-  };
-});
-
 // Mock data
 const mockProject: Project = {
   id: 'project-1',

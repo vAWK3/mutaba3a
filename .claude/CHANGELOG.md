@@ -28,6 +28,77 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Remove the dead mark-paid income hooks (MUT-98)
+
+**Why:** `useMarkIncomePaid` and `useRecordIncomePartialPayment` (`useIncomeQueries.ts`) were exported and documented but had no caller outside tests -- every live "mark paid" path has gone through `PartialPaymentDrawer` → `useCreatePaymentRecord` since MUT-18/ADR-038 and MUT-86. A second, undocumented-as-dead way to mark income paid (writing `status`/`paidAt` via `transactionRepo.markPaid` directly, bypassing payment records) is exactly the split ADR-039 exists to prevent -- the risk was the next contributor finding a documented hook and wiring it back up.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,430 passed / 4 skipped.
+
+### Removed
+- `useMarkIncomePaid`, `useRecordIncomePartialPayment` (`src/hooks/useIncomeQueries.ts`).
+- The doc references to `useMarkIncomePaid` in `useQueries.ts` (the `useTransactions` JSDoc bullet, and `useMarkTransactionPaid`'s `@deprecated` notice -- now points at `PartialPaymentDrawer`/`useCreatePaymentRecord` instead of a hook that no longer exists).
+- Three stale test mocks (`ClientDetailPage.test.tsx`, `IncomePage.test.tsx`, `ProjectDetailPage.test.tsx`) -- none of the three components actually called the hook; all three already mark paid through `openPartialPaymentDrawer`.
+- The dedicated `useMarkIncomePaid`/`useRecordIncomePartialPayment` test suite in `useIncomeQueries.test.tsx` (not named in the ticket, but it directly imported and exercised both deleted symbols) and the one `useMarkIncomePaid invalidates paymentRecords` case in the "income writes refresh the payment lists" block.
+- `transactionRepo.markPaid` is unchanged -- still reachable, still covered by its own repository tests (`transactionRepo.test.ts`, `paymentRecords.test.ts`, `partialPayment.test.ts`).
+
+---
+
+## [Unreleased] - 2026-10-13 — Hosted portal: correct the read-only income copy for personal profiles after MUT-65 (MUT-93)
+
+**Why:** `hosted-portal.md` §7.4 and `hosted.readOnly.none` hard-coded "Income isn't recorded on hosted profiles yet" for any profile Malafat doesn't feed. MUT-65 shipped income capture for the signed-in user's own personal profile via the phone app, making that sentence false for exactly that profile. Flagged (not built) in MUT-65's design doc §9, filed as this ticket. **Copy only** (Basel, 2026-10-13): the portal stays read-only-by-design; unsuppressing "Record payment"/edit affordances for a personal profile is a separate follow-up (MUT-133).
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,434 passed / 4 skipped.
+
+### Added
+- `hosted.readOnly.personal` (en/ar): shown on a personal profile instead of the old "isn't recorded yet" copy.
+
+### Fixed
+- `ReadOnlyNotice` now checks `profile.isPersonalDefault` **before** its `access.payments === 'read-write'` early return. Without this, a personal profile's notice would have silently vanished once MUT-65 made its session access read-write -- with no replacement guidance, since the portal still has no "Record payment" affordance built. A non-personal, non-Malafat profile (genuinely no income capture) keeps the original "none" copy unchanged.
+
+### Technical
+- `src/hosted/pages/__tests__/views.test.tsx`: new case for a personal profile with `access.payments: 'read-write'`, asserting the new copy and that no record/edit affordance appears.
+- `hosted-portal.md` §7.4 updated to document the three-way branch and checking order.
+
+---
+
+## [Unreleased] - 2026-10-13 — Arabic amounts inside a sentence read right-to-left (MUT-110)
+
+**Why:** `formatAmount(…, 'ar')` prepends a U+200F RLM (a strong RTL character); the shared `isolate()` (FSI) takes its direction from the first strong character inside it, so an Arabic-formatted amount wrapped in `isolate()` renders right-to-left -- `$US 7,550` instead of `7,550 US$`. MUT-81 moved `OwedNowSummary` from LRI to the shared FSI `isolate()`, reasoning an amount "has no strong character," which doesn't hold once `Intl.NumberFormat('ar', ...)` is in the picture. FSI is right for names (MUT-81's actual case); wrong for amounts.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,434 passed / 4 skipped.
+
+### Added
+- `isolateAmount()` (`src/lib/utils.ts`): wraps an amount in a left-to-right isolate (LRI, U+2066…U+2069), matching the `<bdi dir="ltr">` convention already used for a standalone amount. `isolate()` (FSI) stays for names.
+
+### Fixed
+- Six sites wrapped an amount in the wrong isolate -- three (`OwedNowSummary`, `PartialPaymentDrawer` ×3, `HomeNeedsAttention`) via the shared FSI `isolate()`; three (`RecurringAttentionList`, `RecurringMarkPaidDrawer`, `IncomeDrawer`) via a private FSI copy. All six now use `isolateAmount()`. `HomeNeedsAttention`'s client-name wrap (a name, not an amount) keeps `isolate()`.
+- `PartialPaymentDrawer.test.tsx`'s `plain()` helper only stripped FSI/PDI; it now also strips LRI so it doesn't leak a stray isolate character into an assertion now that these sites use LRI.
+- `IncomeDrawer.test.tsx`'s below-recorded error assertion and `OwedNowSummary.test.tsx`'s MUT-81 tripwire both pinned FSI; both now pin LRI, with the tripwire's comment updated to explain why.
+
+### Technical
+- `OwedNowSummary.test.tsx` gained a controllable `mockLanguage` ('en' | 'ar') and a new Arabic render test proving the overdue line reads in the same order as the standalone amount (ticket AC #4).
+- TD-064 item 5 ("the bidi isolate helper is copied four times") resolved -- it was actually six sites, all private copies were FSI (the bug), now consolidated to `isolate()` / `isolateAmount()` in `lib/utils.ts`.
+
+---
+
+## [Unreleased] - 2026-10-13 — Both + Add menus open the drawer in place and ask for the profile (MUT-57)
+
+**Why:** since MUT-15 both `+ Add` menus offered the same actions but behaved differently (TD-032): the sidebar's New menu opened the drawer then navigated to the list, and skipped the profile picker for Client/Project; the top bar's Add menu opened every drawer in place and was profile-aware for all four. Decision (Basel, 2026-10-11): both menus open the drawer in place, all four actions profile-aware in both.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,431 passed / 4 skipped.
+
+### Added
+- `useAddMenuActions()` (`src/hooks/useAddMenuActions.ts`): the one set of create handlers behind both menus, returning `{ actions, run, pickers }`.
+- `src/hooks/__tests__/useAddMenuActions.test.tsx`: covers all four actions opening their drawer in place with no navigation, profile-aware behaviour under All businesses, and that Income/Expense set the working profile while Client/Project don't (unchanged from before).
+
+### Changed
+- `SidebarNav`'s New menu now calls `useAddMenuActions()` instead of its own `incomeAction`/`expenseAction` + inline Client/Project cases; its `navigate(...)` calls after opening a drawer are gone, and it now renders a `ProfileQuickPicker` for all four actions (previously only Income/Expense).
+- `TopBar`'s Add menu now calls the same shared hook instead of declaring its own four `useProfileAwareAction` instances; behaviour unchanged (it already opened in place and was profile-aware for all four).
+- `SidebarNav.features.test.tsx`'s MUT-89 test updated: asserts no navigation instead of a specific route, and reads the last 4 (not 2) `useProfileAwareAction` calls now that the shared hook always wires up all four actions.
+- TD-032 resolved.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Contingency fee proposals: propose upfront + rate, approval creates the agreement (MUT-107)
 
 **Why:** since M8, approving a fee proposal is how every agreement is born (MUT-40/MAL-943) except CONTINGENCY (MUT-100), which could only be created directly with no client-approval record. Design already reviewed and locked inside MUT-100's plan (§11, decisions D9/D10); deferred there because MAL-1077 excluded it. Server-only; pairs with Malafat ticket MAL-1094 (not yet built) for the UI. Brief: `.claude/designs/mut-107-contingency-fee-proposals.md`. ADR-060.

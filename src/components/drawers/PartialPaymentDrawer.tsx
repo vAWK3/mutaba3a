@@ -8,7 +8,7 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { cn, formatAmount, formatDate, isolate, todayISO } from '../../lib/utils';
+import { cn, formatAmount, formatDate, isolateAmount, todayISO } from '../../lib/utils';
 import { isFuturePaymentDate } from '../../lib/dates';
 import { describePaymentAmount, minorToAmountInput, type PaymentAmountState } from '../../lib/paymentEntry';
 import type { Currency, PaymentRecord } from '../../types';
@@ -142,7 +142,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
     : settled
       ? t('transactions.partialPayment.title')
       : t('transactions.partialPayment.titleLeft', {
-          amount: isolate(formatAmount(remainingAmountMinor, transaction.currency, locale)),
+          amount: isolateAmount(formatAmount(remainingAmountMinor, transaction.currency, locale)),
         });
 
   const footer = (
@@ -250,13 +250,13 @@ function amountLine(
     case 'stillOwed':
       return {
         tone: 'owed',
-        text: t('transactions.partialPayment.stillOwed', { amount: isolate(formatAmount(state.leftMinor, currency, locale)) }),
+        text: t('transactions.partialPayment.stillOwed', { amount: isolateAmount(formatAmount(state.leftMinor, currency, locale)) }),
       };
     case 'over':
       return {
         tone: 'error',
         text: t('transactions.partialPayment.overpayment', {
-          amount: isolate(formatAmount(Math.max(0, state.allowedMinor), currency, locale)),
+          amount: isolateAmount(formatAmount(Math.max(0, state.allowedMinor), currency, locale)),
         }),
       };
     case 'invalid':

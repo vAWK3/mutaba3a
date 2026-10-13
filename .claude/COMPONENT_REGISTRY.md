@@ -99,7 +99,7 @@ Tests: `src/components/layout/__tests__/ThemeToggle.test.tsx`, `src/lib/theme/__
 | `breadcrumbs?` | BreadcrumbItem[] | Navigation trail |
 | `actions?` | ReactNode | Right-side action buttons |
 
-The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon. The right side starts with `FxRateReadout` on every page (MUT-79), whether or not the Add menu is shown.
+The `+ Add` menu renders `visibleAddMenuActions(useFeatureFlags())` (Income, Client, then Expense/Project while on; MUT-15) with `useMenuButton` keyboard behaviour; `addMenuEntries` maps each action to its label and icon, and `useAddMenuActions()` (MUT-57) supplies the click behaviour -- the same hook `SidebarNav`'s New menu calls. The right side starts with `FxRateReadout` on every page (MUT-79), whether or not the Add menu is shown.
 
 ### FxRateReadout
 **Location**: `src/components/layout/FxRateReadout.tsx` (+ `.css`)
@@ -121,7 +121,20 @@ Tests: `src/components/layout/__tests__/FxRateReadout.test.tsx`, `popoverPositio
 visibleAddMenuActions(flags); // ['income', 'client'] with every area off
 ```
 
-Core actions first, optional appended, so a switch never moves a core entry. Each menu maps an `AddMenuAction` to its own label, icon and click behaviour. Tests: `layout/__tests__/addMenuActions.test.ts` (all 64 flag combinations keep Income, Client first).
+Core actions first, optional appended, so a switch never moves a core entry. Each menu maps an `AddMenuAction` to its own label and icon only; click behaviour comes from `useAddMenuActions` below. Tests: `layout/__tests__/addMenuActions.test.ts` (all 64 flag combinations keep Income, Client first).
+
+### useAddMenuActions
+**Location**: `src/hooks/useAddMenuActions.ts`
+**Purpose**: The one set of create handlers behind both `+ Add` menus (MUT-57, TD-032 resolved). Both menus open the drawer **in place** -- neither navigates -- and all four actions are profile-aware.
+
+```ts
+const { actions, run, pickers } = useAddMenuActions();
+// actions: AddMenuAction[] from visibleAddMenuActions
+// run(action, event, returnFocus): triggers that action's useProfileAwareAction
+// pickers.income / .expense / .client / .project: each one's pickerProps for ProfileQuickPicker
+```
+
+Income and Expense call `setWorkingProfile(profileId)` before opening their drawer (unchanged from pre-MUT-57 sidebar behaviour, now shared); Client and Project don't (neither menu did before). Tests: `hooks/__tests__/useAddMenuActions.test.tsx`.
 
 ---
 

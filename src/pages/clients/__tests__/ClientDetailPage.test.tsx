@@ -216,7 +216,6 @@ const payments: PaymentByClientRow[] = [
   },
 ];
 
-const mockMarkPaid = vi.fn();
 let useIncomeSpy: ReturnType<typeof vi.spyOn>;
 let useProjectsSpy: ReturnType<typeof vi.spyOn>;
 
@@ -272,9 +271,6 @@ describe('ClientDetailPage', () => {
       isLoading: false,
     } as ReturnType<typeof useQueries.useClient>);
     useProjectsSpy = vi.spyOn(useQueries, 'useProjects');
-    vi.spyOn(useIncomeQueries, 'useMarkIncomePaid').mockReturnValue({
-      mutate: mockMarkPaid,
-    } as unknown as ReturnType<typeof useIncomeQueries.useMarkIncomePaid>);
     mockWork(() => workRows);
     mockReceivables(receivables);
     mockPayments(payments);
@@ -531,7 +527,6 @@ describe('ClientDetailPage', () => {
       fireEvent.click(within(rowOf(workSection(), 'Homepage')).getByLabelText('Actions'));
       fireEvent.click(screen.getByText('Mark Paid'));
       expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-partial' });
-      expect(mockMarkPaid).not.toHaveBeenCalled();
     });
   });
 

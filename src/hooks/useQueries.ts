@@ -111,7 +111,6 @@ export interface QueryGate {
  * For income-only queries, use:
  * - `useIncome` for fetching income transactions
  * - `useReceivables` for unpaid income
- * - `useMarkIncomePaid` for marking income as paid
  *
  * For expenses, use hooks from `useExpenseQueries.ts`.
  */
@@ -181,8 +180,9 @@ export function useUpdateTransaction() {
 }
 
 /**
- * @deprecated Use `useMarkIncomePaid` from `useIncomeQueries.ts` instead.
- * This hook is kept for backwards compatibility until the next release migration.
+ * @deprecated Mark paid now routes through `PartialPaymentDrawer` and
+ * `useCreatePaymentRecord` (MUT-18/ADR-038, MUT-86). This hook is kept for
+ * backwards compatibility until the next release migration.
  */
 export function useMarkTransactionPaid() {
   const queryClient = useQueryClient();

@@ -1906,7 +1906,14 @@ device sync, ADR-053; the hooks now call `transactionRepo.markPaid` directly,
 and `paymentRequestService` remains a caller.)* `src/hooks/useTransactionActions.ts` duplicates the
 same dateless pattern this ADR fixes but has no production caller; left alone
 here and logged as tech debt (TD-046) rather than deleted as a scope expansion
-of a bug-fix ticket.
+of a bug-fix ticket. *(2026-10-13, MUT-98: `useMarkIncomePaid` is deleted, not
+kept — it had gained no caller since the 2026-10-12 note above, which is
+exactly the divergent-path risk ADR-039 names. `useMarkTransactionPaid`
+(`useQueries.ts`) stays, still called by `useTransactionActions.ts`.
+`paymentRequestService.ts` calls `transactionRepo.markPaid` directly, not
+through either hook — this ADR's "paymentRequestService remains a caller"
+line above was imprecise about which primitive; `transactionRepo.markPaid`
+itself is unaffected by this deletion either way.)*
 
 **Alternatives Considered**: prompting for a date inline on the quick action
 (rejected — grows a form into a menu item on four surfaces instead of reusing

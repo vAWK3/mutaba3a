@@ -30,7 +30,7 @@ import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useDrawerStore } from '../../lib/stores';
 import { toWorkRow, type WorkRow } from '../clients/clientProfileRows';
 import { CheckCircleIcon } from '../icons';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount, isolate, isolateAmount } from '../../lib/utils';
 import { todayLocalISO } from '../../lib/dates';
 import { selectAttentionReceivables } from '../../lib/attention';
 import { captureRowExit } from '../../lib/motion/rowExit';
@@ -45,9 +45,6 @@ export interface HomeNeedsAttentionProps {
   /** Under All businesses, the businesses to tag rows with (MUT-89) */
   businesses?: ReadonlyMap<string, BusinessProfile>;
 }
-
-// Bidi isolate: keep a name or an amount whole inside a sentence of either direction
-const isolate = (text: string) => `⁨${text}⁩`;
 
 const focusIsLost = () => !document.activeElement || document.activeElement === document.body;
 
@@ -108,7 +105,7 @@ export function HomeNeedsAttention({ profileId, businesses }: HomeNeedsAttention
       : openIncomeDrawer({ mode: 'edit', transactionId: row.id });
 
   const recordedMessage = (row: WorkRow, record: PaymentRecord) => {
-    const amount = isolate(formatAmount(record.amountMinor, row.currency, locale));
+    const amount = isolateAmount(formatAmount(record.amountMinor, row.currency, locale));
     return row.tx.clientName
       ? t('overview.paymentRecorded', { amount, client: isolate(row.tx.clientName) })
       : t('overview.paymentRecordedNoClient', { amount });

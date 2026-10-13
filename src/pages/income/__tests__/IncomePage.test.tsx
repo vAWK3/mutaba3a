@@ -155,19 +155,6 @@ vi.mock('../../../hooks/useQueries', () => ({
   useDefaultBusinessProfile: () => ({ data: null, isLoading: false }),
 }));
 
-// Mock income queries
-const mockMarkPaidMutation = vi.fn();
-vi.mock('../../../hooks/useIncomeQueries', async () => {
-  const actual = await vi.importActual('../../../hooks/useIncomeQueries');
-  return {
-    ...actual,
-    useMarkIncomePaid: () => ({
-      mutateAsync: mockMarkPaidMutation,
-      isPending: false,
-    }),
-  };
-});
-
 // Mock income transactions data
 const mockIncomeTransactions: TransactionDisplay[] = [
   {
