@@ -433,21 +433,23 @@ describe('SidebarNav New menu under All businesses (MUT-89)', () => {
     mockNavigate.mockClear();
   });
 
+  // useAddMenuActions (MUT-57) calls useProfileAwareAction in a fixed order:
+  // income, expense, client, project -- the last four pushes are one render.
   it.each([
-    ['income', 0, '/income'],
-    ['expense', 1, '/expenses'],
-  ])('opens the %s list in the business the picker chose, keeping All businesses on', async (_kind, index, path) => {
+    ['income', 0],
+    ['expense', 1],
+  ])('creates the %s in the business the picker chose, keeping All businesses on, without navigating (MUT-57)', async (_kind, index) => {
     installFakeSettings();
     act(() => useProfileStore.setState({ activeProfileId: 'studio', allBusinesses: true }));
     profileActions.length = 0;
     renderNav();
-    await waitFor(() => expect(profileActions.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(profileActions.length).toBeGreaterThanOrEqual(4));
 
-    const [incomeAction, expenseAction] = profileActions.slice(-2);
+    const [incomeAction, expenseAction] = profileActions.slice(-4);
     act(() => [incomeAction, expenseAction][index].onExecute('teaching'));
 
     expect(useProfileStore.getState()).toMatchObject({ activeProfileId: 'teaching', allBusinesses: true });
-    expect(mockNavigate).toHaveBeenCalledWith({ to: path });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 

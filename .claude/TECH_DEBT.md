@@ -1266,24 +1266,22 @@ they test the menu element itself) and keep only its positioning logic.
 ---
 
 ### TD-032: The two `+ Add` menus share their actions but not their click behaviour
-**Status**: Open (ticketed as MUT-57)
+**Status**: Resolved (MUT-57, 2026-10-13)
 **Priority**: Low
-**Introduced**: MUT-15, 2026-10-11 (pre-existing; out of the ticket's scope)
+**Introduced**: MUT-15, 2026-10-11 (pre-existing; out of that ticket's scope)
 **Decision** (Basel, 2026-10-11): both menus open the drawer **in place** (no
 navigation to the list) and all four actions are profile-aware in both.
-MUT-57 moves them onto one set of handlers.
-**Impact**: both menus offer the same actions in the same order
-(`visibleAddMenuActions`), but the sidebar **New** menu opens the drawer and
-navigates to the list (`/income`, `/clients`, `/expenses`, `/projects`) and
-creates clients and projects without the profile picker, while the top bar
-**Add** menu opens every drawer in place and is profile-aware for all four.
-A user gets a different result from the same label depending on which button
-they used.
+**Resolution**: `useAddMenuActions()` (`src/hooks/useAddMenuActions.ts`) is now
+the one set of create handlers behind both menus. `SidebarNav`'s New menu and
+`TopBar`'s Add menu each call `run(action, event, returnFocus)` and render a
+`ProfileQuickPicker` for all four actions; the sidebar's `navigate(...)` calls
+after opening a drawer are gone, and Client/Project creation from either menu
+is now profile-aware under All businesses, same as Income/Expense already
+were. Income/Expense still call `setWorkingProfile` on execute (unchanged
+behaviour, now shared instead of duplicated); Client/Project never did and
+still don't.
 
-**Remediation**: decide one behaviour (drawer-first says in place) and move
-the handlers next to `visibleAddMenuActions` so both menus call the same one.
-
-**Effort**: Small (decision first)
+**Effort**: Small
 
 ---
 

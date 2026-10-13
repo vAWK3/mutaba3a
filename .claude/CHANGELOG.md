@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Both + Add menus open the drawer in place and ask for the profile (MUT-57)
+
+**Why:** since MUT-15 both `+ Add` menus offered the same actions but behaved differently (TD-032): the sidebar's New menu opened the drawer then navigated to the list, and skipped the profile picker for Client/Project; the top bar's Add menu opened every drawer in place and was profile-aware for all four. Decision (Basel, 2026-10-11): both menus open the drawer in place, all four actions profile-aware in both.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,431 passed / 4 skipped.
+
+### Added
+- `useAddMenuActions()` (`src/hooks/useAddMenuActions.ts`): the one set of create handlers behind both menus, returning `{ actions, run, pickers }`.
+- `src/hooks/__tests__/useAddMenuActions.test.tsx`: covers all four actions opening their drawer in place with no navigation, profile-aware behaviour under All businesses, and that Income/Expense set the working profile while Client/Project don't (unchanged from before).
+
+### Changed
+- `SidebarNav`'s New menu now calls `useAddMenuActions()` instead of its own `incomeAction`/`expenseAction` + inline Client/Project cases; its `navigate(...)` calls after opening a drawer are gone, and it now renders a `ProfileQuickPicker` for all four actions (previously only Income/Expense).
+- `TopBar`'s Add menu now calls the same shared hook instead of declaring its own four `useProfileAwareAction` instances; behaviour unchanged (it already opened in place and was profile-aware for all four).
+- `SidebarNav.features.test.tsx`'s MUT-89 test updated: asserts no navigation instead of a specific route, and reads the last 4 (not 2) `useProfileAwareAction` calls now that the shared hook always wires up all four actions.
+- TD-032 resolved.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Contingency fee proposals: propose upfront + rate, approval creates the agreement (MUT-107)
 
 **Why:** since M8, approving a fee proposal is how every agreement is born (MUT-40/MAL-943) except CONTINGENCY (MUT-100), which could only be created directly with no client-approval record. Design already reviewed and locked inside MUT-100's plan (§11, decisions D9/D10); deferred there because MAL-1077 excluded it. Server-only; pairs with Malafat ticket MAL-1094 (not yet built) for the UI. Brief: `.claude/designs/mut-107-contingency-fee-proposals.md`. ADR-060.
