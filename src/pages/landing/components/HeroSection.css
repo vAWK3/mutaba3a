@@ -77,7 +77,7 @@
 .hero-cta-primary:hover {
   color: var(--bg);
   text-decoration: none;
-  opacity: 0.88;
+  opacity: var(--landing-hover-dim);
 }
 
 .hero-cta-primary:active {
@@ -126,7 +126,7 @@
 }
 
 .hero-cta-alt:active {
-  opacity: 0.6;
+  opacity: var(--landing-press-dim);
 }
 
 /* The Clients list */

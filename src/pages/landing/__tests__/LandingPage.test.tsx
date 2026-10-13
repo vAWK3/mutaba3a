@@ -217,6 +217,12 @@ describe('LandingPage header button (MUT-77)', () => {
     expect(headerCta()).toHaveAttribute('data-visible', 'false');
   });
 
+  it('watches the hero button below the sticky bar, so it counts as gone once it slides under the bar', () => {
+    renderLanding('en');
+    const observer = FakeIntersectionObserver.instances.find((o) => o.observed.includes(heroCta()))!;
+    expect(observer.options?.rootMargin).toMatch(/^-\d+px 0px 0px 0px$/);
+  });
+
   it('stays hidden in a browser with no IntersectionObserver, where the hero button is the way in', () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     renderLanding('en');

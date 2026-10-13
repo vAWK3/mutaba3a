@@ -130,7 +130,7 @@ export function DownloadPage() {
   const detectedOS = useMemo(() => detectOS(), []);
   const { release, isLoading } = useLatestRelease();
   const t = useT();
-  useDocumentTitle(t('landing.meta.pageTitle', { page: t('download.title') }));
+  useDocumentTitle(t('common.pageTitle', { page: t('download.title') }));
 
   const handleToastClose = useCallback(() => {
     setToastVisible(false);

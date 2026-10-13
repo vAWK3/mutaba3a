@@ -14,6 +14,8 @@ import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../..
  * prove the contract the CSS keys off and that both buttons always agree.
  */
 
+const releaseHook = vi.hoisted(() => ({ calls: 0 }));
+
 const release = vi.hoisted(() => ({
   current: {
     release: { version: '0.1.4', releaseNotesUrl: 'https://example.test/notes', hasMacBuild: true, hasWindowsBuild: true } as ReleaseInfo | null,
@@ -23,7 +25,10 @@ const release = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../hooks/useLatestRelease', () => ({
-  useLatestRelease: () => release.current,
+  useLatestRelease: () => {
+    releaseHook.calls += 1;
+    return release.current;
+  },
 }));
 
 vi.mock('../../../hooks/usePrefersReducedMotion', () => ({
@@ -65,6 +70,7 @@ function headerCta(): HTMLAnchorElement {
 }
 
 beforeEach(() => {
+  releaseHook.calls = 0;
   localStorage.clear();
   installFakeIntersectionObserver();
 });
@@ -115,7 +121,7 @@ describe('LandingHeader', () => {
   it.each([
     ['mac', 'Download', 'Download for Mac'],
     ['windows', 'Download', 'Download for Windows'],
-    ['iphone', 'Open the app', 'Open the web app'],
+    ['iphone', 'Web app', 'Open the web app'],
   ] as const)('on %s it goes where the hero button goes, with a short label and the full name', (device, short, full) => {
     asDevice(device);
     renderHeader({ withHero: true });
@@ -125,16 +131,38 @@ describe('LandingHeader', () => {
     expect(headerCta()).toHaveAccessibleName(full);
   });
 
-  it('shows its button by default, for pages with no hero', () => {
+  it.each(['mac', 'windows', 'iphone'] as const)(
+    'on %s the visible label is part of the accessible name, in both languages (WCAG 2.5.3, voice control)',
+    (device) => {
+      asDevice(device);
+      for (const language of ['en', 'ar'] as const) {
+        const { unmount } = renderHeader({ language });
+        const name = headerCta().getAttribute('aria-label')!.toLowerCase();
+        const visible = headerCta().textContent!.trim().toLowerCase();
+        expect(name).toContain(visible);
+        unmount();
+      }
+    },
+  );
+
+  it('on a page with no hero: no button, no GitHub lookup, and the wordmark goes home', () => {
     localStorage.setItem('mutaba3a-language', 'en');
     render(
       <ThemeProvider>
         <LanguageProvider>
-          <LandingHeader />
+          <LandingHeader homeHref="/" />
         </LanguageProvider>
       </ThemeProvider>,
     );
-    expect(headerCta()).toHaveAttribute('data-visible', 'true');
+    expect(document.querySelector('[data-part="header-cta"]')).toBeNull();
+    expect(releaseHook.calls).toBe(0);
+    expect(document.querySelector('.landing-header-brand')).toHaveAttribute('href', '/');
+  });
+
+  it('keeps the language switch at the end edge: the button comes before it', () => {
+    renderHeader();
+    const actions = document.querySelector('.landing-header-actions')!;
+    expect(actions.lastElementChild).toHaveClass('landing-lang-toggle');
   });
 
   it('shows the scroll-edge fade only once the top of the page has scrolled away', () => {

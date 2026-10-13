@@ -6,7 +6,6 @@ import { chooseHeroCta, secondaryHeroLink, type HeroAlternative, type HeroCta } 
 import { AppleIcon, BrowserIcon, WindowsIcon } from './components/PlatformIcons';
 
 export interface HeroCtaConfig {
-  kind: HeroCta;
   href: string;
   Icon: ComponentType<{ size?: number }>;
   /** Translation keys: the hero's full label and hint, and the header bar's short label. */
@@ -16,7 +15,7 @@ export interface HeroCtaConfig {
   alternative: HeroAlternative;
 }
 
-const CTA: Record<HeroCta, Omit<HeroCtaConfig, 'kind' | 'alternative'>> = {
+const CTA: Record<HeroCta, Omit<HeroCtaConfig, 'alternative'>> = {
   mac: {
     href: DOWNLOAD_URLS.mac,
     Icon: AppleIcon,
@@ -49,5 +48,5 @@ export function useHeroCta(): HeroCtaConfig {
   const { release } = useLatestRelease();
   const device = useMemo(() => currentDevice(), []);
   const kind = chooseHeroCta(device, release?.hasWindowsBuild !== false);
-  return { kind, ...CTA[kind], alternative: secondaryHeroLink(kind) };
+  return { ...CTA[kind], alternative: secondaryHeroLink(kind) };
 }

@@ -23,6 +23,9 @@
 
 /* Page */
 .landing-page {
+  /* Press and hover dims for the landing page's controls and text links (MUT-77) */
+  --landing-press-dim: 0.6;
+  --landing-hover-dim: 0.88;
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
@@ -46,7 +49,8 @@
    Header: the slim sticky frosted bar (MUT-77, brief L9)
    ============================================ */
 
-/* Zero-height marker at the very top: the bar watches it to know the page has scrolled */
+/* A 1px sentinel at the very top (net zero layout through the negative margin): the
+   bar watches it to know the page has scrolled. It needs a height for the observer. */
 .landing-top-sentinel {
   height: 1px;
   margin-bottom: -1px;
@@ -59,8 +63,9 @@
   /* 85% keeps text readable over any content even where reduced transparency
      isn't reported (Safari, MUT-77 D3) */
   background: color-mix(in oklab, var(--bg) 85%, transparent);
-  backdrop-filter: saturate(1.8) blur(20px);
-  -webkit-backdrop-filter: saturate(1.8) blur(20px);
+  /* A light blur: the base is already 85% opaque, and a smaller radius is cheaper to redo every scroll frame */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -96,7 +101,8 @@
   opacity: 1;
 }
 
-.landing-header-bar {
+/* Two classes: the phone rule for .landing-container resets padding, and must not take the bar's */
+.landing-header .landing-header-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -138,6 +144,34 @@
 
 .landing-wordmark-short {
   display: none;
+}
+
+/* Phones: 44px tap targets in the bar (Apple HIG) */
+@media (max-width: 640px) {
+  .landing-lang-toggle,
+  .landing-header-cta {
+    min-height: 44px;
+  }
+}
+
+/* The narrowest phones (320–360): the bar's button keeps its icon; its full name stays as the accessible name */
+@media (max-width: 360px) {
+  .landing-header-cta-label {
+    display: none;
+  }
+}
+
+/* In-page jumps and focused elements land below the sticky bar, not under it (WCAG 2.4.11) */
+html:has(.landing-header) {
+  scroll-padding-top: var(--space-16);
+}
+
+/* Printing or saving before scrolling: never print a chapter visual still waiting to rise in */
+@media print {
+  .landing-chapter-visual[data-reveal] {
+    opacity: 1;
+    translate: none;
+  }
 }
 
 /* A phone has room for the mark and one name beside the switch and the button */
@@ -223,13 +257,17 @@
     visibility 0s linear var(--duration-toggle);
 }
 
-.landing-header-cta:hover {
+.landing-header-cta[data-visible="true"]:hover {
   color: var(--bg);
   text-decoration: none;
-  opacity: 0.88;
+  opacity: var(--landing-hover-dim);
+  /* The hover dim is quick like the hero's; the show/hide fade above keeps its own length */
+  transition:
+    opacity 0.15s ease,
+    transform var(--duration-press) var(--ease-spring);
 }
 
-.landing-header-cta:active {
+.landing-header-cta[data-visible="true"]:active {
   transform: scale(var(--press-scale));
 }
 
@@ -767,7 +805,7 @@ a.landing-get-it-option:focus-visible {
 
 /* Text links dim on press; scaling a line of text reads as a glitch */
 .landing-get-it-meta a:active {
-  opacity: 0.6;
+  opacity: var(--landing-press-dim);
 }
 
 /* ============================================
@@ -807,7 +845,7 @@ a.landing-get-it-option:focus-visible {
 }
 
 .landing-footer-links a:active {
-  opacity: 0.6;
+  opacity: var(--landing-press-dim);
 }
 
 /* ============================================

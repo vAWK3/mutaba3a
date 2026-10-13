@@ -69,10 +69,9 @@ describe('landing CSS', () => {
 
   it.each([
     ['.hero-cta-primary:active', 'HeroSection.css'],
-    ['.landing-header-cta:active', 'LandingPage.css'],
+    ['.landing-header-cta[data-visible="true"]:active', 'LandingPage.css'],
     ['.landing-lang-toggle:active', 'LandingPage.css'],
     ['a.landing-get-it-option:active', 'LandingPage.css'],
-    ['.landing-faq-question:active', 'FAQSection.css'],
   ])('presses %s in with the brand press tokens', (selector, fileName) => {
     const root = landingRoots.find(({ file }) => file.endsWith(`/${fileName}`))!.root;
     expect(baseDeclarations(root, selector)).toMatchObject({ transform: 'scale(var(--press-scale))' });
@@ -88,11 +87,34 @@ describe('landing CSS', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('dims text links on press instead of scaling them', () => {
-    for (const selector of ['.hero-cta-alt:active', '.landing-footer-links a:active']) {
+  it.each(['.hero-cta-alt:active', '.landing-footer-links a:active', '.landing-get-it-meta a:active', '.landing-faq-question:active'])(
+    'dims %s on press instead of scaling it (text links, and the full-width FAQ rows)',
+    (selector) => {
       const all = landingRoots.flatMap(({ root }) => rulesFor(root, selector).map((r) => declarations(r.rule)));
-      expect(Object.assign({}, ...all)).toHaveProperty('opacity');
+      expect(Object.assign({}, ...all)).toMatchObject({ opacity: 'var(--landing-press-dim)' });
+      expect(Object.assign({}, ...all)).not.toHaveProperty('transform');
+    },
+  );
+
+  it('dims hover and press from the page\'s two dim values, never a literal opacity', () => {
+    const offenders: string[] = [];
+    for (const { file, root } of landingRoots) {
+      root.walkRules(/:(hover|active)/, (rule) => {
+        rule.walkDecls('opacity', (decl) => {
+          if (!decl.value.startsWith('var(--landing-')) offenders.push(`${file}: ${rule.selector} opacity: ${decl.value}`);
+        });
+      });
     }
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the bar\'s padding on phones: its rule out-ranks the phone rule for .landing-container', () => {
+    expect(baseDeclarations(landingPageCss, '.landing-header .landing-header-bar')).toMatchObject({ 'padding-block': 'var(--space-3)' });
+  });
+
+  it('only dims the bar\'s button on hover while it is shown, so hovering never blocks its fade-out', () => {
+    expect(rulesFor(landingPageCss, '.landing-header-cta:hover')).toEqual([]);
+    expect(baseDeclarations(landingPageCss, '.landing-header-cta[data-visible="true"]:hover')).toHaveProperty('opacity');
   });
 
   describe('the frosted bar', () => {

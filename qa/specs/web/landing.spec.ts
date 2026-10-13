@@ -26,7 +26,13 @@ async function openLanding(page: Page, language: 'en' | 'ar' = 'en') {
 }
 
 const header = (page: Page) => page.getByRole('banner');
-const headerCta = (page: Page) => page.locator('[data-part="header-cta"]');
+const headerCtaLocators = new WeakMap<Page, Locator>();
+/** One locator per page, so helpers can tell the sticky bar's button apart. */
+function headerCtaLocatorFor(page: Page): Locator {
+  if (!headerCtaLocators.has(page)) headerCtaLocators.set(page, page.locator('[data-part="header-cta"]'));
+  return headerCtaLocators.get(page)!;
+}
+const headerCta = (page: Page) => headerCtaLocatorFor(page);
 const heroCta = (page: Page) => page.locator('.hero-cta-primary');
 
 /** The bar's button has finished fading in. */
@@ -44,18 +50,33 @@ async function scrollPastHero(page: Page) {
   await scrollTo(page, heroBottom + 200);
 }
 
-/** Presses the pointer on `target` and reads its transform once the press has settled, then lets go elsewhere (no click). */
-async function pressedTransform(page: Page, target: Locator): Promise<string> {
-  await target.scrollIntoViewIfNeeded();
+/**
+ * Puts the pointer on `target` where it is now. Playwright's own hover/scroll-into-view would scroll a
+ * sticky bar's button to its in-flow spot at the top of the page, which brings the hero back and hides it.
+ */
+async function pointAt(page: Page, target: Locator) {
+  const box = (await target.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+/** Holds the pointer down on `target` until `property` settles to `expected`, then lets go elsewhere (no click). */
+async function expectPressed(page: Page, target: Locator, property: 'transform' | 'opacity', expected: RegExp, name: string) {
+  if (target !== headerCtaLocatorFor(page)) await target.scrollIntoViewIfNeeded();
   const box = (await target.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.waitForTimeout(300);
-  const transform = await target.evaluate((el) => getComputedStyle(el).transform);
-  await page.mouse.move(1, 1);
-  await page.mouse.up();
-  return transform;
+  try {
+    await expect
+      .poll(() => target.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property), { message: name })
+      .toMatch(expected);
+  } finally {
+    await page.mouse.move(1, 1);
+    await page.mouse.up();
+  }
 }
+
+const PRESSED = /^matrix\(0\.96, 0, 0, 0\.96,/;
+const NOT_SCALED = /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/;
 
 /** Problems inside the bar: the wordmark clipped, or the wordmark and the actions overlapping. */
 function barProblems(page: Page): Promise<string[]> {
@@ -124,30 +145,27 @@ test('the bar is frosted by default and solid when reduced transparency is asked
   });
 });
 
-test('every landing button presses in, and not under reduced motion', { tag: '@web.landing.press' }, async ({ page, step }) => {
+test('every landing button gives press feedback, and nothing scales under reduced motion', { tag: '@web.landing.press' }, async ({ page, step }) => {
   const buttons = (p: Page) => ({
     'hero button': heroCta(p),
     'language switch': p.locator('.landing-lang-toggle'),
     'get it card': p.locator('a.landing-get-it-option').first(),
-    'FAQ question': p.locator('.landing-faq-question').first(),
   });
+  const faq = (p: Page) => p.locator('.landing-faq-question').first();
 
-  await step('Motion allowed: each presses in to the brand scale', async () => {
+  await step('Motion allowed: buttons press in to the brand scale; the full-width FAQ rows dim', async () => {
     await openLanding(page);
-    for (const [name, button] of Object.entries(buttons(page))) {
-      expect(await pressedTransform(page, button), name).toMatch(/^matrix\(0\.96, 0, 0, 0\.96,/);
-    }
+    for (const [name, button] of Object.entries(buttons(page))) await expectPressed(page, button, 'transform', PRESSED, name);
+    await expectPressed(page, faq(page), 'opacity', /^0\.6$/, 'FAQ question');
     await scrollPastHero(page);
-    await expect(headerCta(page)).toBeVisible();
-    expect(await pressedTransform(page, headerCta(page)), 'header button').toMatch(/^matrix\(0\.96, 0, 0, 0\.96,/);
+    await expectHeaderCtaShown(page);
+    await expectPressed(page, headerCta(page), 'transform', PRESSED, 'header button');
   });
 
   await step('Reduced motion: nothing scales', async () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await scrollTo(page, 0);
-    for (const [name, button] of Object.entries(buttons(page))) {
-      expect(await pressedTransform(page, button), name).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
-    }
+    for (const [name, button] of Object.entries(buttons(page))) await expectPressed(page, button, 'transform', NOT_SCALED, name);
   });
 });
 
@@ -174,7 +192,7 @@ test('hovering a landing control in OS light mode keeps its label colour and rea
   await step('The hero button: same label colour, no underline, at least 4.5:1 on its fill', async () => {
     const before = await readColours(heroCta(page));
     await heroCta(page).hover();
-    await page.waitForTimeout(300);
+    await expect.poll(() => heroCta(page).evaluate((el) => getComputedStyle(el).opacity)).toBe('0.88');
     const after = await readColours(heroCta(page));
     expect(after.color).toBe(before.color);
     expect(after.decoration).toBe('none');
@@ -190,7 +208,7 @@ test('hovering a landing control in OS light mode keeps its label colour and rea
       await control.scrollIntoViewIfNeeded();
       const before = await readColours(control);
       await control.hover();
-      await page.waitForTimeout(300);
+      await expect.poll(() => control.evaluate((el) => el.matches(':hover'))).toBe(true);
       const after = await readColours(control);
       expect(after.color).toBe(before.color);
       expect(after.decoration).toBe('none');
@@ -198,15 +216,15 @@ test('hovering a landing control in OS light mode keeps its label colour and rea
     await scrollPastHero(page);
     await expect(headerCta(page)).toBeVisible();
     const before = await readColours(headerCta(page));
-    await headerCta(page).hover();
-    await page.waitForTimeout(300);
+    await pointAt(page, headerCta(page));
+    await expect.poll(() => headerCta(page).evaluate((el) => getComputedStyle(el).opacity)).toBe('0.88');
     expect((await readColours(headerCta(page))).color).toBe(before.color);
   });
 });
 
-for (const language of ['en', 'ar'] as const) {
-  test(`at 375 in ${language.toUpperCase()} the bar fits and overlaps nothing`, { tag: '@web.landing.375' }, async ({ page, step }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
+for (const [width, language] of [[375, 'en'], [375, 'ar'], [320, 'en'], [320, 'ar']] as const) {
+  test(`at ${width} in ${language.toUpperCase()} the bar fits and overlaps nothing`, { tag: '@web.landing.375' }, async ({ page, step }) => {
+    await page.setViewportSize({ width, height: 812 });
 
     await step('At the top: the bar sits above the hero, one line, no sideways scroll', async () => {
       await openLanding(page, language);
@@ -216,8 +234,8 @@ for (const language of ['en', 'ar'] as const) {
       }
       expect(bar.height).toBeLessThan(80);
       expect(await barProblems(page)).toEqual([]);
-      await expectNoHorizontalOverflow(page, `landing ${language} 375`);
-      await attachScreenshot(page, `bar-top-375-${language}`);
+      await expectNoHorizontalOverflow(page, `landing ${language} ${width}`);
+      await attachScreenshot(page, `bar-top-${width}-${language}`);
     });
 
     await step('Scrolled: the button fits inside the bar and the viewport', async () => {
@@ -225,19 +243,22 @@ for (const language of ['en', 'ar'] as const) {
       await expectHeaderCtaShown(page);
       const cta = (await headerCta(page).boundingBox())!;
       expect(cta.x).toBeGreaterThanOrEqual(0);
-      expect(cta.x + cta.width).toBeLessThanOrEqual(375);
+      expect(cta.x + cta.width).toBeLessThanOrEqual(width);
+      expect(cta.height, 'a 44px tap target').toBeGreaterThanOrEqual(44);
       expect((await header(page).boundingBox())!.height).toBeLessThan(80);
       expect(await barProblems(page)).toEqual([]);
-      await expectNoHorizontalOverflow(page, `landing ${language} 375 scrolled`);
-      await attachScreenshot(page, `bar-scrolled-375-${language}`);
+      await expectNoHorizontalOverflow(page, `landing ${language} ${width} scrolled`);
+      await attachScreenshot(page, `bar-scrolled-${width}-${language}`);
     });
 
     await step('Jumping to Get it: its heading lands below the bar', async () => {
       await page.goto('/#get-it');
       await expect(page.locator('#get-it-title')).toBeVisible();
+      // Wait for the (smooth) jump to land, with an upper bound so a jump that never happened can't pass
       const bar = (await header(page).boundingBox())!;
-      const heading = (await page.locator('#get-it-title').boundingBox())!;
-      expect(heading.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+      const headingTop = () => page.locator('#get-it-title').evaluate((el) => el.getBoundingClientRect().top);
+      await expect.poll(headingTop).toBeLessThan(bar.y + bar.height + 200);
+      expect(await headingTop()).toBeGreaterThanOrEqual(bar.y + bar.height);
     });
   });
 }
@@ -267,4 +288,17 @@ test('chapter visuals rise in once on scroll, and are simply there under reduced
     await expect(figure(page)).not.toHaveAttribute('data-reveal');
     expect(await figure(page).evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
   });
+});
+
+test('the privacy policy has the bar without the button, and its wordmark goes home', { tag: '@web.landing.privacy-bar' }, async ({ page }) => {
+  await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+  let releaseCalls = 0;
+  page.on('request', (request) => {
+    if (request.url().startsWith('https://api.github.com/')) releaseCalls += 1;
+  });
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(headerCta(page)).toHaveCount(0);
+  await expect(header(page).locator('.landing-header-brand')).toHaveAttribute('href', '/');
+  expect(releaseCalls).toBe(0);
 });

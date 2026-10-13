@@ -26,14 +26,14 @@ const SECTION_KEYS = [
  */
 export function PrivacyPolicyPage() {
   const t = useT();
-  useDocumentTitle(t('landing.meta.pageTitle', { page: t('landing.privacyPolicy.title') }));
+  useDocumentTitle(t('common.pageTitle', { page: t('landing.privacyPolicy.title') }));
 
   return (
     <div className="landing-page">
       <a href="#main-content" className="landing-skip-link">
         {t('landing.skipToContent')}
       </a>
-      <LandingHeader />
+      <LandingHeader homeHref="/" />
       <main id="main-content">
         <article className="landing-section privacy-policy" aria-labelledby="privacy-policy-title">
           <div className="landing-container privacy-policy-container">

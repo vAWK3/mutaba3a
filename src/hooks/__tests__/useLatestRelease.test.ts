@@ -71,9 +71,14 @@ describe('useLatestRelease', () => {
     const pending = deferred<Response>();
     fetchMock.mockReturnValue(pending.promise);
 
-    const hero = renderHook(() => useLatestRelease());
-    const getIt = renderHook(() => useLatestRelease());
-    pending.resolve(okResponse());
+    let hero, getIt;
+    try {
+      hero = renderHook(() => useLatestRelease());
+      getIt = renderHook(() => useLatestRelease());
+    } finally {
+      // Settle the shared request whatever happens, so it can't leak into the next test
+      pending.resolve(okResponse());
+    }
 
     await waitFor(() => expect(hero.result.current.isLoading).toBe(false));
     await waitFor(() => expect(getIt.result.current.isLoading).toBe(false));
@@ -118,5 +123,43 @@ describe('useCheckForUpdates after the landing fetch settled', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.current.latestVersion).toBe('0.1.4');
+  });
+});
+
+describe('fetchLatestRelease when GitHub stalls', () => {
+  it('gives up after the timeout, so the shared request settles and the next call asks again', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementationOnce(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+          }),
+      );
+      const stalled = fetchLatestRelease();
+      const settled = expect(stalled).rejects.toBeDefined();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    fetchMock.mockResolvedValueOnce(okResponse());
+    await expect(fetchLatestRelease()).resolves.toMatchObject({ version: '0.1.4' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the release when the session cache can\'t be written', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+    fetchMock.mockResolvedValue(okResponse());
+
+    const { result } = renderHook(() => useLatestRelease());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.error).toBeNull();
+    expect(result.current.release?.version).toBe('0.1.4');
+    vi.restoreAllMocks();
   });
 });

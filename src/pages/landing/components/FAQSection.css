@@ -33,15 +33,16 @@
   cursor: pointer;
   transition:
     color 0.15s ease,
-    transform var(--duration-press) var(--ease-spring);
+    opacity var(--duration-press) ease;
 }
 
 .landing-faq-question:hover {
   color: var(--accent-text);
 }
 
+/* A full-width row dims on press: scaling it would slide the start-aligned question toward the centre */
 .landing-faq-question:active {
-  transform: scale(var(--press-scale));
+  opacity: var(--landing-press-dim);
 }
 
 .landing-faq-question:focus-visible {
