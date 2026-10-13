@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../../db/database';
+import { expenseRepo } from '../../../db/expenseRepository';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ExportDataModal } from '../../../components/modals/ExportDataModal';
 import * as csvUtils from '../../../utils/csv';
@@ -436,5 +437,51 @@ describe('Export → Import round trip (MUT-158)', () => {
     const [restoredProject] = await db.projects.toArray();
     expect(restoredProject).toMatchObject({ name: 'Old Project', archivedAt: T, clientId: restoredClient.id });
     expect(tx).toMatchObject({ clientId: restoredClient.id, projectId: restoredProject.id });
+  });
+});
+
+describe('ImportDataPage: CSV expense import (MUT-138)', () => {
+  // The shared TABLES/clearAll above doesn't cover db.expenses/db.expenseCategories
+  // (real expenses live there since MUT-14, not db.transactions).
+  beforeEach(async () => {
+    await db.expenses.clear();
+    await db.expenseCategories.clear();
+  });
+
+  afterEach(async () => {
+    await db.expenses.clear();
+    await db.expenseCategories.clear();
+  });
+
+  it('creates an imported expense row in db.expenses, not db.transactions (AC1, AC3)', async () => {
+    const csv = [
+      'type,name,email,phone,client,project,field,amount,currency,status,date,dueDate,paidAt,category,notes',
+      'expense,Office Rent,,,,,,150.50,USD,,2026-01-15,,,Rent,',
+    ].join('\n');
+
+    renderPage();
+    await chooseFile(csv, 'import.csv');
+
+    await userEvent.click(screen.getByRole('button', { name: /Next: Validate Data/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Import 1 Row/i })).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('button', { name: /Import 1 Row/i }));
+
+    await screen.findByText('Import Complete!');
+
+    const expenses = await expenseRepo.list({});
+    expect(expenses).toHaveLength(1);
+    expect(expenses[0].title).toBe('Office Rent');
+    expect(expenses[0].amountMinor).toBe(15050);
+
+    expect(await db.transactions.count()).toBe(0);
+    expect(await db.categories.count()).toBe(0);
+
+    // Zero prior profiles: a default profile is auto-created and attached
+    const profiles = await db.businessProfiles.toArray();
+    expect(profiles).toHaveLength(1);
+    expect(expenses[0].profileId).toBe(profiles[0].id);
   });
 });

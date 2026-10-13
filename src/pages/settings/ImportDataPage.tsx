@@ -5,10 +5,11 @@ import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
 import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
 import { findMatchingProfile, importProfileFile, type ProfileExportFile } from '../../db/profileImport';
-import { useT } from '../../lib/i18n';
+import { useT, useLanguage } from '../../lib/i18n';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
+import { importExpenseRow, resolveImportProfileId } from '../../utils/csvImport';
 import { CSVValidationPreview } from '../../components/csv/CSVValidationPreview';
 import { Select } from '../../components/ui';
 import { parseAmountToMinor } from '../../lib/utils';
@@ -53,6 +54,7 @@ function hasLegacyRows(data: FileData): boolean {
 
 export function ImportDataPage() {
   const t = useT();
+  const { language } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -184,6 +186,12 @@ export function ImportDataPage() {
       if (fileType === 'csv') {
         const selectedRows = csvRows.filter((_, index) => selectedRowIndices.includes(index));
 
+        // One profile for every entity this CSV import creates: the profile
+        // selector above already requires a choice when any profile exists
+        // (see the "Next: Validate" button's disabled condition), so this
+        // only auto-creates a default profile in the zero-profile case.
+        const profileId = await resolveImportProfileId(selectedProfileId, language);
+
         const clientNameToId = new Map<string, string>();
         const projectNameToId = new Map<string, string>();
 
@@ -208,6 +216,7 @@ export function ImportDataPage() {
               email: row.email || undefined,
               phone: row.phone || undefined,
               notes: row.notes || undefined,
+              profileId,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             });
@@ -232,6 +241,7 @@ export function ImportDataPage() {
               clientId,
               field: row.field || undefined,
               notes: row.notes || undefined,
+              profileId,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             });
@@ -261,51 +271,18 @@ export function ImportDataPage() {
             dueDate: row.dueDate || undefined,
             paidAt: row.paidAt || (status === 'paid' ? row.date : undefined),
             notes: row.notes || undefined,
+            profileId,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
           stats.transactions++;
         }
 
+        // Import expenses into db.expenses (MUT-138 — previously written as
+        // kind:'expense' transactions, invisible on /expenses since MUT-14)
         for (const row of expenseRows) {
-          if (!row.amount || !row.currency || !row.date) continue;
-
-          const clientId = row.client ? clientNameToId.get(row.client) : undefined;
-          const projectId = row.project ? projectNameToId.get(row.project) : undefined;
-
-          const amountMinor = Math.round(parseFloat(row.amount) * 100);
-
-          let categoryId: string | undefined;
-          if (row.category) {
-            const existingCategory = await db.categories.where('name').equals(row.category).first();
-            if (existingCategory) {
-              categoryId = existingCategory.id;
-            } else {
-              categoryId = crypto.randomUUID();
-              await db.categories.add({
-                id: categoryId,
-                kind: 'expense',
-                name: row.category,
-              });
-            }
-          }
-
-          await db.transactions.add({
-            id: crypto.randomUUID(),
-            kind: 'expense',
-            status: 'paid',
-            title: row.name || 'Expense',
-            clientId,
-            projectId,
-            categoryId,
-            amountMinor,
-            currency: row.currency as 'USD' | 'ILS' | 'EUR',
-            occurredAt: row.date,
-            notes: row.notes || undefined,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          stats.transactions++;
+          const created = await importExpenseRow(row, { profileId, clientNameToId, projectNameToId });
+          if (created) stats.transactions++;
         }
 
         // MUT-141: conversions always use currency-aware parsing (parseAmountToMinor)
