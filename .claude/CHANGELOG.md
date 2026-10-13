@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Demo-account seed script for App Store screenshots (MUT-136)
+
+**Why:** The Flutter iOS app (`mutaba3a-flutter`, MUT-137) needs a hosted account that looks populated before it can capture App Store screenshots. `server/` had no demo-data seeding at all — accounts are only operator-provisioned via `provision:user` and start empty — and the web frontend's existing `demo_` seeder (`src/demo/`) only writes to browser IndexedDB, never the Postgres-backed API a native app actually consumes. Discovered along the way: every mutating `/v1/*` route this needed (customers, projects, income, expenses, receivables settle) already requires an `Idempotency-Key` and replays the exact prior response for a matching key+body (`idempotency.ts`), so the script needs no separate list-and-check-by-name logic — it just always POSTs with a deterministic key and lets the server's own idempotency ledger dedupe.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm run build` clean, `npm test` (vitest run) 1,566 passed / 18 skipped (one pre-existing, unrelated intermittent flake in `routes-m6.test.ts`'s audit-pagination test, reproduced independently on `main`).
+
+### Added
+- `server/src/scripts/seed-demo-account.ts` + `seed-demo-account/{adminAccount,apiClient,fixtures}.ts` (`npm run seed:demo-account`): get-or-create a local `qa@mutaba3a.test` personal profile, rotate its password every run, then seed 8 clients/projects with a realistic spread of received/overdue/upcoming/part-paid/settled income and expenses, all dated relative to "now" (never future, ADR-038).
+- README section documenting the script next to `provision:user`/`rotate:password`.
+
+### Technical
+- `server/src/scripts/users.ts`: exported `adminClient`/`AdminClient`/`UserSummary`/`CliError` so the seed script can reuse the existing admin-API get-or-create pattern instead of duplicating it. No behavior change (existing `users-cli.test.ts` unaffected).
+
 ## [Unreleased] - 2026-10-13 — Remove the dead mark-paid income hooks (MUT-98)
 
 **Why:** `useMarkIncomePaid` and `useRecordIncomePartialPayment` (`useIncomeQueries.ts`) were exported and documented but had no caller outside tests -- every live "mark paid" path has gone through `PartialPaymentDrawer` → `useCreatePaymentRecord` since MUT-18/ADR-038 and MUT-86. A second, undocumented-as-dead way to mark income paid (writing `status`/`paidAt` via `transactionRepo.markPaid` directly, bypassing payment records) is exactly the split ADR-039 exists to prevent -- the risk was the next contributor finding a documented hook and wiring it back up.
