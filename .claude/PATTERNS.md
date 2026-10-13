@@ -589,6 +589,13 @@ test asserting on dates must pin the clock with
 `vi.useFakeTimers({ shouldAdvanceTime: true })` and `vi.setSystemTime(...)`;
 `shouldAdvanceTime` keeps Testing Library's `waitFor` from deadlocking.
 
+A test about "today" passes in daytime whether the code reads the local or the
+UTC date. Pin an instant where the two differ instead: `atInstantIn(timeZone,
+instant, fn)` (`src/test/atInstantIn.ts`, data-layer tests without `waitFor`)
+sets `TZ` and fakes only `Date`, e.g. `atInstantIn('Asia/Jerusalem',
+'2026-10-13T22:30:00.000Z', …)` is 01:30 on the 14th locally and the 13th in
+UTC. `retainerRepo.test.ts` and `paymentRecords.test.ts` use it.
+
 ---
 
 ### Pattern: i18n
