@@ -655,7 +655,7 @@ export function ProfileDetailPage() {
 
             <div className="settings-row" style={{ marginBottom: 16 }}>
               <div>
-                <div className="settings-label">Default Currency</div>
+                <div className="settings-label">Document Currency</div>
                 <div className="settings-description">Currency used by default for new documents</div>
               </div>
               <Select {...form.register('defaultCurrency')}>
@@ -666,7 +666,7 @@ export function ProfileDetailPage() {
 
             <div className="settings-row" style={{ marginBottom: 16 }}>
               <div>
-                <div className="settings-label">Default Language</div>
+                <div className="settings-label">Document Language</div>
                 <div className="settings-description">Language used by default for document content</div>
               </div>
               <Select {...form.register('defaultLanguage')}>

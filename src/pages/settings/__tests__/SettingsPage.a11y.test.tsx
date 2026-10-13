@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { DEFAULT_SETTINGS } from '../../../db/defaultSettings';
@@ -16,6 +16,12 @@ const profiles = [
   createMockBusinessProfile({ id: 'p-2', name: 'Side Gig', isDefault: false }),
 ];
 
+const { useSettingsMock, updateSettingsMutate, setThemeMock } = vi.hoisted(() => ({
+  useSettingsMock: vi.fn(),
+  updateSettingsMutate: vi.fn(),
+  setThemeMock: vi.fn(),
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   Link: ({ children }: { children: ReactNode }) => <a href="#">{children}</a>,
@@ -26,22 +32,15 @@ vi.mock('../../../components/layout', () => ({
 }));
 
 vi.mock('../../../hooks/useQueries', () => ({
-  useSettings: () => ({
-    data: { ...DEFAULT_SETTINGS, enabledCurrencies: ['USD', 'ILS'], defaultCurrency: 'USD' },
-    isLoading: false,
-  }),
-  useUpdateSettings: () => ({ mutate: vi.fn() }),
+  useSettings: useSettingsMock,
+  useUpdateSettings: () => ({ mutate: updateSettingsMutate }),
   useBusinessProfiles: () => ({ data: profiles }),
   useSetDefaultBusinessProfile: () => ({ mutate: vi.fn(), isPending: false }),
   useArchiveBusinessProfile: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-vi.mock('../../../hooks/useCheckForUpdates', () => ({
-  useCheckForUpdates: () => ({ latestVersion: null, hasUpdate: false, isLoading: false, error: null }),
-}));
-
 vi.mock('../../../lib/theme', () => ({
-  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
+  useTheme: () => ({ theme: 'light', setTheme: setThemeMock }),
   THEME_MODES: ['light', 'dark', 'system'],
 }));
 
@@ -57,6 +56,7 @@ vi.mock('../../../components/modals', () => ({
 // Sections with their own tests
 vi.mock('../AdvancedFeaturesSection', () => ({ AdvancedFeaturesSection: () => null }));
 vi.mock('../DataToolsSection', () => ({ DataToolsSection: () => null }));
+vi.mock('../AboutSection', () => ({ AboutSection: () => null }));
 
 import { SettingsPage } from '../SettingsPage';
 
@@ -67,6 +67,19 @@ function renderPage() {
     </LanguageProvider>,
   );
 }
+
+beforeEach(() => {
+  // The language test below exercises the real LanguageProvider (it persists
+  // to localStorage), so every test starts from a clean, English default.
+  localStorage.removeItem('mutaba3a-language');
+  updateSettingsMutate.mockClear();
+  setThemeMock.mockClear();
+  useSettingsMock.mockReset();
+  useSettingsMock.mockReturnValue({
+    data: { ...DEFAULT_SETTINGS, enabledCurrencies: ['USD', 'ILS'], defaultCurrency: 'USD' },
+    isLoading: false,
+  });
+});
 
 // TD-009: axe's select-name, button-name and heading-order fired on Settings
 describe('SettingsPage accessibility', () => {
@@ -102,14 +115,9 @@ describe('SettingsPage accessibility', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: en.settings.title })).toBeInTheDocument();
     for (const title of [
-      en.settings.language.title,
-      en.settings.theme.title,
       en.settings.profile.title,
-      en.settings.currency.title,
+      en.settings.preferences.title,
       en.settings.data.title,
-      en.settings.about.title,
-      en.settings.updates.title,
-      en.settings.desktopApp.title,
     ]) {
       expect(screen.getByRole('heading', { level: 2, name: title })).toBeInTheDocument();
     }
@@ -117,5 +125,87 @@ describe('SettingsPage accessibility', () => {
     for (const title of container.querySelectorAll('.settings-section-title')) {
       expect(title.tagName).toBe('H2');
     }
+  });
+
+  it('puts Business Profiles first and Data last, among the sections rendered inline', () => {
+    // Advanced Features, About and Data Tools are mocked to null here (they
+    // have their own placement/heading tests) so only these three sections'
+    // h2s are observable in this render. Language, Theme and Currency merged
+    // into one "Preferences" heading (MUT-139).
+    const { container } = renderPage();
+
+    const titles = Array.from(container.querySelectorAll('.settings-section-title')).map((el) => el.textContent);
+    expect(titles).toEqual([
+      en.settings.profile.title,
+      en.settings.preferences.title,
+      en.settings.data.title,
+    ]);
+  });
+
+  it('keeps Language, Theme and Currency as plain text inside the merged Preferences card', () => {
+    renderPage();
+
+    expect(screen.getByText(en.settings.preferences.description)).toBeInTheDocument();
+    expect(screen.getByText(en.settings.language.title)).toBeInTheDocument();
+    expect(screen.getByText(en.settings.theme.title)).toBeInTheDocument();
+    // The "Currency" subdivider is plain text, not a heading (no h3 allowed).
+    const subdivider = screen.getByText(en.settings.currency.title);
+    expect(subdivider.tagName).not.toBe('H2');
+    expect(subdivider.tagName).not.toBe('H3');
+  });
+
+  it('switches theme through its segmented control', () => {
+    renderPage();
+
+    const themeGroup = screen.getByRole('radiogroup', { name: en.settings.theme.title });
+    fireEvent.click(within(themeGroup).getByRole('radio', { name: en.settings.theme.dark }));
+
+    expect(setThemeMock).toHaveBeenCalledWith('dark');
+  });
+
+  it('switches language through its segmented control (real LanguageProvider)', () => {
+    renderPage();
+
+    const languageGroup = screen.getByRole('radiogroup', { name: en.settings.language.title });
+    expect(within(languageGroup).getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(within(languageGroup).getByRole('radio', { name: 'العربية' }));
+
+    expect(within(languageGroup).getByRole('radio', { name: 'العربية' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(languageGroup).getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  describe('enabled currencies', () => {
+    it('toggles a currency off and updates enabledCurrencies', () => {
+      renderPage();
+
+      fireEvent.click(screen.getByRole('button', { name: 'ILS' }));
+
+      expect(updateSettingsMutate).toHaveBeenCalledWith({ enabledCurrencies: ['USD'] });
+    });
+
+    it('toggles a disabled currency back on', () => {
+      useSettingsMock.mockReturnValue({
+        data: { ...DEFAULT_SETTINGS, enabledCurrencies: ['USD'], defaultCurrency: 'USD' },
+        isLoading: false,
+      });
+      renderPage();
+
+      fireEvent.click(screen.getByRole('button', { name: 'ILS' }));
+
+      expect(updateSettingsMutate).toHaveBeenCalledWith({ enabledCurrencies: ['USD', 'ILS'] });
+    });
+
+    it('refuses to disable the last remaining currency', () => {
+      useSettingsMock.mockReturnValue({
+        data: { ...DEFAULT_SETTINGS, enabledCurrencies: ['USD'], defaultCurrency: 'USD' },
+        isLoading: false,
+      });
+      renderPage();
+
+      fireEvent.click(screen.getByRole('button', { name: 'USD' }));
+
+      expect(updateSettingsMutate).not.toHaveBeenCalled();
+    });
   });
 });

@@ -11,23 +11,20 @@ import {
 import { useT, useLanguage } from '../../lib/i18n';
 import { useTheme, THEME_MODES } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
-import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
+import { AboutSection } from './AboutSection';
 import { DataToolsSection } from './DataToolsSection';
 import { useDrawerStore } from '../../lib/stores';
 import { Select } from '../../components/ui';
-
-// Stable download URLs (redirected by Netlify to GitHub Releases latest)
-const DOWNLOAD_URLS = {
-  mac: '/download/mac',
-  windows: '/download/windows',
-} as const;
-
-// App version injected by Vite at build time
-declare const __APP_VERSION__: string | undefined;
-const APP_VERSION = __APP_VERSION__ || '0.0.0';
+import { SegmentedControl } from '../../components/ui/SegmentedControl';
+import { ProfileBadge } from '../../components/ui/ProfileBadge';
 import type { Currency, BusinessProfile } from '../../types';
 import type { Language } from '../../lib/i18n/types';
+
+const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
+  { value: 'en', label: 'English' },
+  { value: 'ar', label: 'العربية' },
+];
 
 // Profile Actions Menu Component
 interface ProfileActionsMenuProps {
@@ -154,7 +151,6 @@ export function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
-  const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
 
   // Business profiles
   const { data: businessProfiles = [] } = useBusinessProfiles();
@@ -163,22 +159,24 @@ export function SettingsPage() {
   const { openBusinessProfileDrawer } = useDrawerStore();
   const defaultCurrencyId = useId();
   const defaultCurrencyDescId = useId();
+  const languageLabelId = useId();
+  const themeLabelId = useId();
 
-  // const handleCurrencyToggle = (currency: Currency) => {
-  //   if (!settings) return;
+  const handleCurrencyToggle = (currency: Currency) => {
+    if (!settings) return;
 
-  //   const current = settings.enabledCurrencies;
-  //   const isEnabled = current.includes(currency);
+    const current = settings.enabledCurrencies;
+    const isEnabled = current.includes(currency);
 
-  //   // Don't allow disabling if only one currency is enabled
-  //   if (isEnabled && current.length === 1) return;
+    // Don't allow disabling if only one currency is enabled
+    if (isEnabled && current.length === 1) return;
 
-  //   const updated = isEnabled
-  //     ? current.filter((c) => c !== currency)
-  //     : [...current, currency];
+    const updated = isEnabled
+      ? current.filter((c) => c !== currency)
+      : [...current, currency];
 
-  //   updateMutation.mutate({ enabledCurrencies: updated });
-  // };
+    updateMutation.mutate({ enabledCurrencies: updated });
+  };
 
   const handleDefaultCurrencyChange = (currency: Currency) => {
     updateMutation.mutate({ defaultCurrency: currency });
@@ -210,54 +208,13 @@ export function SettingsPage() {
     <>
       <TopBar title={t('settings.title')} hideAddMenu />
       <div className="page-content" style={{ maxWidth: 600 }}>
-        {/* Language Settings */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.language.title')}</h2>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.language.description')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {(['en', 'ar'] as Language[]).map((lang) => (
-                <button
-                  key={lang}
-                  className={`btn btn-sm ${language === lang ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setLanguage(lang)}
-                >
-                  {lang === 'en' ? 'English' : 'العربية'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Theme Settings */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.theme.title')}</h2>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.theme.description')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {THEME_MODES.map((mode) => (
-                <button
-                  key={mode}
-                  className={`btn btn-sm ${theme === mode ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setTheme(mode)}
-                >
-                  {t(`settings.theme.${mode}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* Business Profiles */}
         <div className="settings-section">
           <div className="settings-section-header">
-            <h2 className="settings-section-title">{t('settings.profile.title')}</h2>
+            <div>
+              <h2 className="settings-section-title">{t('settings.profile.title')}</h2>
+              <p className="settings-section-description">{t('settings.profile.description')}</p>
+            </div>
             <button
               className="btn btn-sm btn-secondary"
               onClick={() => openBusinessProfileDrawer({ mode: 'create' })}
@@ -275,12 +232,14 @@ export function SettingsPage() {
               {businessProfiles.map((profile) => (
                 <div key={profile.id} className="business-profile-item">
                   <div className="business-profile-info">
-                    {profile.logoDataUrl && (
+                    {profile.logoDataUrl ? (
                       <img
                         src={profile.logoDataUrl}
                         alt=""
                         className="business-profile-logo"
                       />
+                    ) : (
+                      <ProfileBadge profile={profile} size="md" decorative />
                     )}
                     <div className="business-profile-details">
                       <Link
@@ -316,27 +275,55 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* Currency Settings */}
+        {/* Preferences (MUT-139): language, theme and currency merged — all three
+            are quick, low-stakes, personal-ish defaults, so one card earns its
+            header instead of three. The "Currency" label below is plain text,
+            not a heading (SettingsPage.a11y.test.tsx forbids h3s). */}
         <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.currency.title')}</h2>
-
-          {/* <div className="settings-row">
+          <div className="settings-section-header">
             <div>
-              <div className="settings-label">{t('settings.currency.enabled')}</div>
-              <div className="settings-description">{t('settings.currency.enabledDesc')}</div>
+              <h2 className="settings-section-title">{t('settings.preferences.title')}</h2>
+              <p className="settings-section-description">{t('settings.preferences.description')}</p>
             </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-label" id={languageLabelId}>{t('settings.language.title')}</div>
+            <SegmentedControl
+              labelledBy={languageLabelId}
+              value={language}
+              onChange={setLanguage}
+              options={LANGUAGE_OPTIONS}
+            />
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-label" id={themeLabelId}>{t('settings.theme.title')}</div>
+            <SegmentedControl
+              labelledBy={themeLabelId}
+              value={theme}
+              onChange={setTheme}
+              options={THEME_MODES.map((mode) => ({ value: mode, label: t(`settings.theme.${mode}`) }))}
+            />
+          </div>
+
+          <div className="settings-subdivider">{t('settings.currency.title')}</div>
+
+          <div className="settings-row">
+            <div className="settings-label">{t('settings.currency.enabled')}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               {(['USD', 'ILS'] as Currency[]).map((curr) => (
                 <button
                   key={curr}
-                  className={`btn btn-sm ${settings?.enabledCurrencies.includes(curr) ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-sm ${settings?.enabledCurrencies.includes(curr) ? 'currency-toggle-on' : 'btn-secondary'}`}
+                  aria-pressed={settings?.enabledCurrencies.includes(curr)}
                   onClick={() => handleCurrencyToggle(curr)}
                 >
                   {curr}
                 </button>
               ))}
             </div>
-          </div> */}
+          </div>
 
           <div className="settings-row">
             <div>
@@ -363,159 +350,60 @@ export function SettingsPage() {
         {/* Advanced features (MUT-12) */}
         <AdvancedFeaturesSection />
 
-        {/* Data Management */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.data.title')}</h2>
+        {/* About, Updates, Desktop App (MUT-139: merged, one topic) */}
+        <AboutSection />
 
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.data.export')}</div>
-              <div className="settings-description">{t('settings.data.exportDesc')}</div>
-            </div>
-            <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
-              {t('settings.data.exportBtn')}
-            </button>
-          </div>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.data.import')}</div>
-              <div className="settings-description">{t('settings.data.importDesc')}</div>
-            </div>
-            <button className="btn btn-secondary" onClick={() => navigate({ to: '/settings/import' })}>
-              {t('settings.data.importBtn')}
-            </button>
-          </div>
-
-          <div className="settings-row" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 8 }}>
-            <div>
-              <div className="settings-label text-danger">{t('settings.data.deleteAll')}</div>
-              <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {deleteSuccessMessage && (
-                <span className="text-sm text-success">{deleteSuccessMessage}</span>
-              )}
-              <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
-                {t('settings.data.deleteAllBtn')}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* About */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.about.title')}</h2>
-          <div className="text-muted">
-            <p>{t('settings.about.name')}</p>
-            <p className="text-sm" style={{ marginTop: 8 }}>
-              {t('settings.about.description')}
-            </p>
-            <p className="text-sm" style={{ marginTop: 12 }}>
-              {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{APP_VERSION}</span>
-            </p>
-          </div>
-
-          <div className="settings-row" style={{ marginTop: 16 }}>
-            <div>
-              <div className="settings-label">{t('settings.about.support')}</div>
-              <div className="settings-description">{t('settings.about.supportDesc')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <a
-                href="https://buymeacoffee.com/elmokhtbr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary"
-              >
-                {t('settings.about.buyMeCoffee')}
-              </a>
-              <a
-                href="https://ko-fi.com/elmokhtbr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary"
-              >
-                {t('settings.about.kofi')}
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Updates */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.updates.title')}</h2>
-
-          {isCheckingUpdate ? (
-            <div className="text-muted">{t('settings.updates.checking')}</div>
-          ) : updateError ? (
-            <div className="text-muted">{t('settings.updates.checkFailed')}</div>
-          ) : hasUpdate ? (
-            <div className="settings-update-card">
-              <div className="settings-update-card-content">
-                <div className="settings-update-card-title">{t('settings.updates.updateAvailable')}</div>
-                <div className="settings-update-card-versions">
-                  {t('settings.updates.currentVersion')}: <span className="settings-update-card-version">{APP_VERSION}</span>
-                  {' → '}
-                  {t('settings.updates.latestVersion')}: <span className="settings-update-card-version">{latestVersion}</span>
-                </div>
+        {/* Data Management + Data Tools: one family, not two unrelated cards
+            (MUT-139) — wrapping them collapses the usual section gap to a
+            tight, deliberate one (.settings-family in index.css). */}
+        <div className="settings-family">
+          <div className="settings-section">
+            <div className="settings-section-header">
+              <div>
+                <h2 className="settings-section-title">{t('settings.data.title')}</h2>
+                <p className="settings-section-description">{t('settings.data.description')}</p>
               </div>
-              <a href="/download" className="btn btn-primary">
-                {t('settings.updates.updateNow')}
-              </a>
             </div>
-          ) : (
+
             <div className="settings-row">
               <div>
-                <div className="settings-label">{t('settings.updates.upToDate')}</div>
-                <div className="settings-description">
-                  {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{APP_VERSION}</span>
-                </div>
+                <div className="settings-label">{t('settings.data.export')}</div>
+                <div className="settings-description">{t('settings.data.exportDesc')}</div>
+              </div>
+              <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
+                {t('settings.data.exportBtn')}
+              </button>
+            </div>
+
+            <div className="settings-row">
+              <div>
+                <div className="settings-label">{t('settings.data.import')}</div>
+                <div className="settings-description">{t('settings.data.importDesc')}</div>
+              </div>
+              <button className="btn btn-secondary" onClick={() => navigate({ to: '/settings/import' })}>
+                {t('settings.data.importBtn')}
+              </button>
+            </div>
+
+            <div className="settings-row settings-row-danger">
+              <div>
+                <div className="settings-label text-danger">{t('settings.data.deleteAll')}</div>
+                <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {deleteSuccessMessage && (
+                  <span className="text-sm text-success">{deleteSuccessMessage}</span>
+                )}
+                <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
+                  {t('settings.data.deleteAllBtn')}
+                </button>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Desktop App */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.desktopApp.title')}</h2>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.desktopApp.download')}</div>
-              <div className="settings-description">{t('settings.desktopApp.downloadDesc')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <a
-                href={DOWNLOAD_URLS.mac}
-                className="btn btn-secondary"
-                rel="noopener"
-              >
-                {t('settings.desktopApp.downloadMac')}
-              </a>
-              <a
-                href={DOWNLOAD_URLS.windows}
-                className="btn btn-secondary"
-                rel="noopener"
-              >
-                {t('settings.desktopApp.downloadWindows')}
-              </a>
-            </div>
           </div>
 
-          <div className="settings-row">
-            <div>
-              <div className="settings-label" style={{ color: 'var(--color-text-muted)' }}>{t('download.allVersions')}</div>
-            </div>
-            <a href="/download" className="btn btn-ghost">
-              {t('settings.desktopApp.downloadBtn')}
-            </a>
-          </div>
+          <DataToolsSection />
         </div>
       </div>
-
-      {/* Data Tools Section */}
-      <DataToolsSection />
 
       {/* Export Data Modal */}
       {showExportModal && (

@@ -65,6 +65,43 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Settings visual redesign (MUT-139 follow-up, ADR-064)
+
+**Why:** After the IA reorg below, every section was still a flat bordered-title block with no material hierarchy. Basel asked for a visual pass applying the app's existing Brand v2 tokens, then asked to tighten it twice (merge Preferences+Currency into one card; cut every new subtitle to a fragment). Verified against a real Playwright screenshot in both themes, which caught two defects the wireframe alone couldn't show.
+
+**Run on this branch (Node 22):** `npm run lint` 0 errors, `npm run typecheck` clean, `npm run test` settings-scoped suites green (full suite was last run clean at 3470/3474 before this commit's final two CSS/JSX tweaks, which only touched class names and a margin rule). Verified live in a browser (light + dark) via Playwright.
+
+### Added
+- `SegmentedControl` (`src/components/ui/SegmentedControl.tsx`) — single-select radiogroup with a sliding thumb, used for Language and Theme. First real consumer of the `--ease-spring`/`--duration-toggle` brand tokens.
+- `settings.preferences.title`/`description` i18n keys (en + ar); `settings.profile.description`, `settings.data.description`.
+
+### Changed
+- Every `.settings-section` now has real card chrome (surface/border/shadow/radius) instead of a bare bottom-border title.
+- Language + Theme + Currency merged into one "Preferences" card (further than the IA pass's reorder) — the "Currency" group inside is a plain-text divider, never a heading.
+- `DataToolsSection` moves inside the `page-content` width cap and is wrapped with Data in a new `.settings-family` div — reverses one ADR-063 decision (confirmed with Basel first) after a real screenshot showed the tint alone didn't read as nested.
+- Enabled-currencies toggle pills use a soft `accent-subtle` fill instead of solid `btn-primary` — a screenshot showed the solid fill read as too loud next to the segmented controls in the same card.
+- Business Profiles list reuses `ProfileBadge` (already used by `ProfileSwitcher`) as the no-logo avatar fallback.
+
+## [Unreleased] - 2026-10-13 — Settings IA reorg (MUT-139)
+
+**Why:** `/settings` grew section-by-section with no IA pass: Theme was briefly suspected to be a duplicate control (investigation found it's an intentional shared-state pattern, MUT-79 — no change made), "Enabled currencies" was commented-out dead code since the initial commit, Data/Data Tools and About/Updates/Desktop App read as fragmented, and "Default Currency"/"Default Language" collided between the global Settings page and two per-profile forms. Design brief: `.claude/designs/settings-ia-reorg.md`.
+
+**Run on this branch (Node 22):** `npm run lint` 0 errors (12 pre-existing warnings, none introduced), `npm run typecheck` clean, `npm run test` 229 files / 3461 passed / 4 skipped, `npm run build` clean.
+
+### Added
+- `AboutSection.tsx` — merges the former About/Updates/Desktop App sections under one heading (no h3 subheadings allowed, per `SettingsPage.a11y.test.tsx`); `useCheckForUpdates()` moved in.
+- Enabled-currencies toggle restored in `SettingsPage.tsx` (USD/ILS) — i18n keys already existed in both languages, the code was just never uncommented.
+- TD-107 (EUR has no toggle control), TD-108 (`/settings/import` doesn't use the shared `TopBar`/breadcrumb pattern) logged in `TECH_DEBT.md`.
+
+### Changed
+- `SettingsPage.tsx` section order: Business Profiles → Language → Theme → Currency → Advanced Features → About → Data → Data Tools. Business Profiles moves to the top (everything else is profile-scoped); Data and Data Tools become the last two sections so their proximity costs zero visual change (About gives up the conventional bottom slot instead).
+- "Default Currency"/"Default Language" renamed to "Document Currency"/"Document Language" in `ProfileDetailPage.tsx`'s Document Defaults tab and `BusinessProfileDrawer.tsx`, to disambiguate from the global Settings page's identically-named fields (different scope: per-profile document generation vs. interface locale/display currency).
+
+### Technical
+- `DataToolsSection` deliberately NOT merged into "Data" — it has its own standalone test asserting its own heading; proximity achieved via page order only, not a header merge.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Backfill personal profiles for users provisioned before MUT-120
 
 **Why:** MUT-120 shipped with **no backfill** (ADR-037 amendment: "There were no existing users at the time"). One user has since been provisioned in production without a personal profile, so `/v1/me` lists no `isPersonalDefault` profile for them and the capture app (MUT-121) falls back to Unsorted.
