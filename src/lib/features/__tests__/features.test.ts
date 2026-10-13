@@ -9,7 +9,7 @@ import {
 } from '../features';
 
 describe('feature vocabulary', () => {
-  it('lists the six optional areas in display order', () => {
+  it('lists the seven optional areas in display order', () => {
     expect([...FEATURE_KEYS]).toEqual([
       'invoices',
       'retainers',
@@ -17,6 +17,7 @@ describe('feature vocabulary', () => {
       'insights',
       'planning',
       'projects',
+      'conversions',
     ]);
   });
 
@@ -27,9 +28,11 @@ describe('feature vocabulary', () => {
     }
   });
 
-  it('names the probed tables for every key, none for insights, and vendors under expenses', () => {
+  it('names the probed tables for every key, none for insights or conversions, and vendors under expenses', () => {
     expect(Object.keys(FEATURE_DATA_PROBES).sort()).toEqual([...FEATURE_KEYS].sort());
     expect(FEATURE_DATA_PROBES.insights).toEqual([]);
+    // MUT-141: a brand-new kind with no pre-existing data to hide behind an off toggle
+    expect(FEATURE_DATA_PROBES.conversions).toEqual([]);
     expect(FEATURE_DATA_PROBES.expenses.map((p) => p.table)).toEqual(['expenses', 'vendors']);
     // Projects have no soft delete (archivedAt only), so any row counts
     expect(FEATURE_DATA_PROBES.projects).toEqual([{ table: 'projects', softDelete: false }]);
