@@ -387,12 +387,13 @@ a {
   transition: color 0.15s ease;
 }
 
-a:hover {
+/* Unclassed links only, for :hover and :visited alike: a classed link is a control (a
+   button, a CTA) or a text link with its own :hover, and a bare `a:hover` or `a:visited`
+   (0,1,1) would out-rank its single-class colour (TD-122). */
+a:not([class]):hover {
   color: var(--link-hover);
 }
 
-/* Unclassed links only: a classed link is styled as a control (a button, a CTA), and
-   `a:visited` would out-rank its single-class colour once the URL is in the history. */
 a:not([class]):visited {
   color: var(--link-visited);
 }

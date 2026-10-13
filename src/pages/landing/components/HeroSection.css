@@ -114,6 +114,7 @@
 }
 
 .hero-cta-alt:hover {
+  color: var(--link-hover);
   text-decoration: underline;
 }
 

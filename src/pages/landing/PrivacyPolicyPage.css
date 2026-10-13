@@ -59,6 +59,7 @@
 }
 
 .privacy-policy-back:hover {
+  color: var(--link-hover);
   text-decoration: underline;
 }
 

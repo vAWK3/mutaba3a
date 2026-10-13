@@ -94,3 +94,22 @@ features:
     expect:
       - og:title is "تابع مالك، بأمان.", og:image is the absolute https og-card-ar-1200x630.png at 1200×630, twitter:card is summary_large_image
       - The debugger shows the wide Arabic card
+  - id: link-hover
+    title: Hovered button-links keep their label colour and gain no underline; classed text links still underline; unclassed links take the link hover (TD-122)
+    tier: secondary
+    paths:
+      - src/pages/landing/**
+      - src/pages/download/**
+      - src/pages/clients/**
+      - src/pages/settings/AboutSection.tsx
+      - src/components/layout/**
+      - src/components/home/**
+    steps:
+      - In light mode, then dark mode, hover the landing hero button, a Get it card, the sidebar mark, Home's Needs attention client link and Settings › About's link buttons
+      - Hover the hero's other link, the privacy page's back link, a client's name on Clients and the client breadcrumb
+      - Hover an unclassed link
+    expect:
+      - Controls keep their label colour (or the one their own hover sets) and computed text-decoration-line stays none
+      - Text links compute text-decoration-line underline
+      - The unclassed link takes --link-hover and an underline
+
