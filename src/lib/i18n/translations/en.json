@@ -64,6 +64,7 @@
     "documents": "Documents",
     "retainers": "Retainers",
     "expenses": "Expenses",
+    "conversions": "Conversions",
     "reports": "Reports",
     "settings": "Settings",
     "theme": "Theme: {mode}",
@@ -81,7 +82,8 @@
       "client": "Add Client",
       "project": "Add Project",
       "document": "New Document",
-      "transaction": "New Transaction"
+      "transaction": "New Transaction",
+      "conversion": "Add Conversion"
     }
   },
   "addMenu": {
@@ -89,7 +91,8 @@
     "expense": "Expense",
     "project": "Project",
     "client": "Client",
-    "document": "Document"
+    "document": "Document",
+    "conversion": "Conversion"
   },
   "transactions": {
     "title": "Transactions",
@@ -742,6 +745,37 @@
       "editRule": "Edit recurring rule"
     },
     "receiptsAttached": "{count} receipt(s) attached"
+  },
+  "conversions": {
+    "title": "Conversions",
+    "description": "Money moved between currencies, kept out of your income and expense totals",
+    "addButton": "Log conversion",
+    "empty": "No conversions logged yet",
+    "emptyHint": "Log a conversion to record money moved between currencies",
+    "confirmDelete": "Delete this conversion? This can't be undone.",
+    "deleteSuccess": "Conversion deleted",
+    "deleteError": "Failed to delete conversion",
+    "columns": {
+      "date": "Date",
+      "from": "From",
+      "to": "To",
+      "rate": "Rate",
+      "notes": "Note"
+    },
+    "drawer": {
+      "new": "Log Conversion",
+      "edit": "Edit Conversion",
+      "profile": "Business",
+      "profilePlaceholder": "Select a business",
+      "fromAmount": "From amount",
+      "fromCurrency": "From currency",
+      "toAmount": "To amount",
+      "toCurrency": "To currency",
+      "impliedRate": "Rate: 1 {from} = {rate} {to}",
+      "date": "Date",
+      "notes": "Note",
+      "notesPlaceholder": "Optional note"
+    }
   },
   "drawer": {
     "income": {

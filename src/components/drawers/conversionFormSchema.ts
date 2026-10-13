@@ -10,6 +10,7 @@ import { parseAmountInput } from '../../lib/utils';
  * the drawer component, matching expenseDrawerFormSchema.ts's convention.
  */
 export const schema = z.object({
+  profileId: z.string().optional(),
   fromAmount: z.string().min(1, 'Amount is required'),
   fromCurrency: z.enum(['USD', 'ILS', 'EUR', 'JOD']),
   toAmount: z.string().min(1, 'Amount is required'),

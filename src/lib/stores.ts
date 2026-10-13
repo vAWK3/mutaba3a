@@ -126,6 +126,20 @@ interface DrawerState {
   }) => void;
   closeExpenseDrawer: () => void;
 
+  // Conversion drawer (MUT-141)
+  conversionDrawer: {
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    transactionId?: string;
+    defaultProfileId?: string;
+  };
+  openConversionDrawer: (options?: {
+    mode?: 'create' | 'edit';
+    transactionId?: string;
+    defaultProfileId?: string;
+  }) => void;
+  closeConversionDrawer: () => void;
+
   // Retainer drawer
   retainerDrawer: {
     isOpen: boolean;
@@ -377,6 +391,27 @@ export const useDrawerStore = create<DrawerState>((set) => ({
   closeExpenseDrawer: () =>
     set({
       expenseDrawer: {
+        isOpen: false,
+        mode: 'create',
+      },
+    }),
+
+  conversionDrawer: {
+    isOpen: false,
+    mode: 'create',
+  },
+  openConversionDrawer: (options) =>
+    set({
+      conversionDrawer: {
+        isOpen: true,
+        mode: options?.mode || 'create',
+        transactionId: options?.transactionId,
+        defaultProfileId: options?.defaultProfileId,
+      },
+    }),
+  closeConversionDrawer: () =>
+    set({
+      conversionDrawer: {
         isOpen: false,
         mode: 'create',
       },
