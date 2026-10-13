@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { I18nProvider } from '../../../lib/i18n/core';
 import { DecimalAmount, formatDecimal, isZeroDecimal } from '../DecimalAmount';
-import { formatDay, formatInstant, formatSize } from '../dates';
+import { formatDay, formatInstant, formatSize, todayInZone, todayLocalISO } from '../dates';
 
 describe('formatDecimal', () => {
   it.each([
@@ -62,5 +62,27 @@ describe('dates', () => {
   it('formats sizes for people', () => {
     expect(formatSize(2048, 'en')).toBe('2 kB');
     expect(formatSize(3 * 1024 * 1024 + 200_000, 'en')).toBe('3.2 MB');
+  });
+});
+
+describe('todayInZone (MUT-133 R3)', () => {
+  // 2026-10-13T22:30Z is already the 14th in Jerusalem (UTC+3) and still the 13th in New York (UTC-4).
+  const instant = new Date('2026-10-13T22:30:00Z');
+
+  it('reads the calendar day in a zone ahead of UTC', () => {
+    expect(todayInZone('Asia/Jerusalem', instant)).toBe('2026-10-14');
+  });
+
+  it('reads the calendar day in a zone behind UTC', () => {
+    expect(todayInZone('America/New_York', instant)).toBe('2026-10-13');
+  });
+
+  it('turns over exactly at local midnight', () => {
+    expect(todayInZone('Asia/Jerusalem', new Date('2026-10-13T20:59:59Z'))).toBe('2026-10-13');
+    expect(todayInZone('Asia/Jerusalem', new Date('2026-10-13T21:00:00Z'))).toBe('2026-10-14');
+  });
+
+  it('falls back to the browser calendar for a zone Intl does not know', () => {
+    expect(todayInZone('Not/AZone', instant)).toBe(todayLocalISO(instant));
   });
 });
