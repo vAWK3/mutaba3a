@@ -96,7 +96,7 @@ export function isDateInRange(date: string, start: string, end: string): boolean
  * Create a zeroed AmountByCurrency object
  */
 export function zeroAmounts(): AmountByCurrency {
-  return { USD: 0, ILS: 0, EUR: 0 };
+  return { USD: 0, ILS: 0, EUR: 0, JOD: 0 };
 }
 
 /**
@@ -337,12 +337,14 @@ export function calculateForecastKPIs(
     USD: cashOnHand.USD + coming.USD - leaving.USD,
     ILS: cashOnHand.ILS + coming.ILS - leaving.ILS,
     EUR: cashOnHand.EUR + coming.EUR - leaving.EUR,
+    JOD: cashOnHand.JOD + coming.JOD - leaving.JOD,
   };
 
   const netForecast: AmountByCurrency = {
     USD: coming.USD - leaving.USD,
     ILS: coming.ILS - leaving.ILS,
     EUR: coming.EUR - leaving.EUR,
+    JOD: coming.JOD - leaving.JOD,
   };
 
   return {
@@ -413,6 +415,7 @@ export function calculateMonthActuals(
     USD: received.USD - expenseTotal.USD,
     ILS: received.ILS - expenseTotal.ILS,
     EUR: received.EUR - expenseTotal.EUR,
+    JOD: received.JOD - expenseTotal.JOD,
   };
 
   return {

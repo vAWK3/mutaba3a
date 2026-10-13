@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore, type IncomeStatus } from '../../lib/stores';
 import {
@@ -24,6 +23,7 @@ import { useActiveProfile } from '../../hooks/useActiveProfile';
 import {
   amountInputCurrency,
   cn,
+  currencyExponent,
   formatAmount,
   formatDate,
   getLocaleFromLanguage,
@@ -47,6 +47,7 @@ import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import type { TxStatus } from '../../types';
+import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeFormSchema';
 
 /**
  * IncomeDrawer
@@ -60,34 +61,6 @@ import type { TxStatus } from '../../types';
  * entry has them (ADR-030): the drawer then shows the status read-only and
  * never writes those fields. Write rules live in lib/incomeEntry.ts.
  */
-
-const INCOME_STATUSES = ['earned', 'invoiced', 'received'] as const satisfies readonly IncomeStatus[];
-const CURRENCIES = ['USD', 'ILS', 'EUR'] as const;
-
-const schema = z.object({
-  incomeStatus: z.enum(INCOME_STATUSES),
-  profileId: z.string().min(1, 'validation.profileRequired'),
-  amount: z
-    .string()
-    .trim()
-    .min(1, 'validation.amountRequired')
-    .refine((value) => !value || parseAmountInput(value) !== null, 'validation.amountInvalid')
-    .refine((value) => (parseAmountInput(value) ?? 1) > 0, 'validation.amountPositive'),
-  currency: z.enum(CURRENCIES),
-  occurredAt: z.string().min(1, 'validation.dateRequired'),
-  clientId: z.string().optional(),
-  /** Text left in the client box without picking a client (MUT-5) */
-  clientDraft: z
-    .string()
-    .optional()
-    .refine((value) => !value, 'validation.clientNotPicked'),
-  projectId: z.string().optional(),
-  dueDate: z.string().optional(),
-  title: z.string().optional(),
-  notes: z.string().optional(),
-});
-
-type FormData = z.infer<typeof schema>;
 
 /** Fields rendered inside "More details"; an error in one of them opens it. */
 const DETAIL_FIELDS = ['incomeStatus', 'dueDate', 'currency', 'occurredAt', 'projectId', 'notes'] as const;
@@ -228,7 +201,7 @@ export function IncomeDrawer() {
       reset({
         incomeStatus: getIncomeStatusFromTx(existingTx.status),
         profileId: existingTx.profileId || initialProfileId,
-        amount: (existingTx.amountMinor / 100).toString(),
+        amount: (existingTx.amountMinor / 10 ** currencyExponent(existingTx.currency)).toString(),
         currency: existingTx.currency,
         occurredAt: existingTx.occurredAt.split('T')[0],
         clientId: existingTx.clientId || '',
@@ -248,7 +221,7 @@ export function IncomeDrawer() {
       reset({
         incomeStatus: 'invoiced',
         profileId: sourceTx.profileId || initialProfileId,
-        amount: (sourceTx.amountMinor / 100).toString(),
+        amount: (sourceTx.amountMinor / 10 ** currencyExponent(sourceTx.currency)).toString(),
         currency: sourceTx.currency,
         occurredAt: todayISO(),
         clientId: sourceTx.clientId || '',
@@ -292,7 +265,7 @@ export function IncomeDrawer() {
 
   const onSubmit = async (data: FormData) => {
     if (isLocked || recordsPending) return; // the notice explains / the records are still loading
-    const amountMinor = parseAmountInput(data.amount);
+    const amountMinor = parseAmountInput(data.amount, { currency: data.currency });
     if (amountMinor === null) return; // the schema already reported it
 
     // "€100" in a USD entry is never quietly saved as $100; the currency sits under More details

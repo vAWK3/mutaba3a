@@ -186,7 +186,8 @@ export function DocumentDrawer() {
 
   useEffect(() => {
     if (mode !== 'create' || !linkedTx) return;
-    setValue('currency', linkedTx.currency);
+    // Documents stay USD/ILS/EUR-only (feature slated for removal, MUT-14X)
+    setValue('currency', linkedTx.currency as 'USD' | 'ILS' | 'EUR');
     if (linkedTx.clientId) setValue('clientId', linkedTx.clientId);
     setValue('items', [
       { name: linkedTx.title || '', quantity: 1, rateMinor: linkedTx.amountMinor, discountMinor: 0, taxExempt: false },
@@ -259,7 +260,7 @@ export function DocumentDrawer() {
         subject: existingDoc.subject || '',
         brief: existingDoc.brief || '',
         notes: existingDoc.notes || '',
-        currency: existingDoc.currency,
+        currency: existingDoc.currency as 'USD' | 'ILS' | 'EUR',
         language: existingDoc.language,
         templateId: existingDoc.templateId,
         issueDate: existingDoc.issueDate.split('T')[0],
@@ -276,7 +277,7 @@ export function DocumentDrawer() {
         payments: existingDoc.payments.map((p) => ({
           id: p.id,
           amountMinor: p.amountMinor,
-          currency: p.currency,
+          currency: p.currency as 'USD' | 'ILS' | 'EUR',
           method: p.method,
           notes: p.notes || '',
           paidAt: p.paidAt.split('T')[0],
@@ -291,7 +292,7 @@ export function DocumentDrawer() {
     const profileId = watchedBusinessProfileId;
     const profile = businessProfiles.find((p) => p.id === profileId);
     if (profile && mode === 'create' && !existingDoc) {
-      setValue('currency', profile.defaultCurrency);
+      setValue('currency', profile.defaultCurrency as 'USD' | 'ILS' | 'EUR');
       setValue('language', profile.defaultLanguage);
     }
   }, [watchedBusinessProfileId, businessProfiles, mode, existingDoc, setValue]);
@@ -301,7 +302,7 @@ export function DocumentDrawer() {
     if (refDocument && mode === 'create' && selectedType === 'credit_note') {
       setValue('businessProfileId', refDocument.businessProfileId);
       setValue('clientId', refDocument.clientId || '');
-      setValue('currency', refDocument.currency);
+      setValue('currency', refDocument.currency as 'USD' | 'ILS' | 'EUR');
       setValue('language', refDocument.language);
       setValue('templateId', refDocument.templateId);
       setValue('taxRate', refDocument.taxRate);

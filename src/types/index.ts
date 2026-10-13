@@ -1,5 +1,5 @@
 // Currency types
-export type Currency = 'USD' | 'ILS' | 'EUR';
+export type Currency = 'USD' | 'ILS' | 'EUR' | 'JOD';
 
 // Currency mode for reports (BOTH shows separate totals per currency)
 export type CurrencyMode = 'USD' | 'ILS' | 'BOTH';
@@ -954,6 +954,7 @@ export interface AmountByCurrency {
   USD: number;
   ILS: number;
   EUR: number;
+  JOD: number;
 }
 
 /**

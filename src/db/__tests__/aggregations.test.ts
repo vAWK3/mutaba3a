@@ -920,10 +920,20 @@ describe('sumExpensesByCurrency', () => {
 
     const result = sumExpensesByCurrency(expenses);
 
-    expect(result).toEqual({ USD: 20000, ILS: 20000, EUR: 0 });
+    expect(result).toEqual({ USD: 20000, ILS: 20000, EUR: 0, JOD: 0 });
   });
 
   it('returns zeros for empty input', () => {
-    expect(sumExpensesByCurrency([])).toEqual({ USD: 0, ILS: 0, EUR: 0 });
+    expect(sumExpensesByCurrency([])).toEqual({ USD: 0, ILS: 0, EUR: 0, JOD: 0 });
+  });
+
+  it('sums JOD expenses in their own bucket (MUT-140 x MUT-94 merge)', () => {
+    // Without a JOD key, getOverviewTotals adds undefined to the JOD
+    // expensesMinor and shows NaN; JOD expenses were also silently dropped.
+    const result = sumExpensesByCurrency([
+      createExpense({ currency: 'JOD', amountMinor: 1500 }),
+      createExpense({ currency: 'JOD', amountMinor: 250 }),
+    ]);
+    expect(result.JOD).toBe(1750);
   });
 });

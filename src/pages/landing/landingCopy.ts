@@ -10,6 +10,7 @@ export const CURRENCY_NAME_KEYS: Record<Currency, string> = {
   USD: 'landing.currency.USD',
   ILS: 'landing.currency.ILS',
   EUR: 'landing.currency.EUR',
+  JOD: 'landing.currency.JOD',
 };
 
 /** Number of FAQ entries; keys are `landing.faq.q1..qN` / `a1..aN`. */

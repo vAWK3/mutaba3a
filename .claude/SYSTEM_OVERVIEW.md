@@ -8,7 +8,7 @@
 
 ## 1. Product Vision
 
-**Mutaba3a** (متابعة, Arabic for "follow-up") is a **privacy-first, offline-only** mini CRM and finance tracker designed for freelancers, consultants, and small service businesses operating in multi-currency environments (primarily USD/ILS/EUR).
+**Mutaba3a** (متابعة, Arabic for "follow-up") is a **privacy-first, offline-only** mini CRM and finance tracker designed for freelancers, consultants, and small service businesses operating in multi-currency environments (USD/ILS/EUR, plus JOD for income/expense entry).
 
 ### Core Philosophy
 - **Privacy by Design**: Zero telemetry, no cloud dependency, data never leaves the device
@@ -184,7 +184,7 @@ tables.
     - The client profile still says "Untitled" (TD-076).
 - **Adding income (MUT-5 / ADR-039)**: the income drawer is the work record.
   - **Fast path:** "What did you do?" (focused), the amount (currency prefix, LTR in Arabic, Arabic-Indic digits accepted, ambiguous input or a symbol naming another currency refused) and the client. Title, Tab, amount, Tab, client, Enter, Enter saves, even while a new client is still being created.
-  - **More details:** status, due date, currency (USD/ILS/EUR), date, project, notes and the profile. Its summary line names the defaults in use. A new entry starts in its profile's currency.
+  - **More details:** status, due date, currency (USD/ILS/EUR/JOD — JOD accepts up to 3 decimal places, the others 2), date, project, notes and the profile. Its summary line names the defaults in use. A new entry starts in its profile's currency.
   - **Typed client:** a client name typed but not picked either matches exactly and is picked, or blocks the save with a message.
   - **Edits never rewrite payment data.** An entry with recorded payments shows status and currency read-only, and the repository enforces the same rules.
   - **Typeahead keyboard contract:** one contract serves every picker.
@@ -202,7 +202,7 @@ tables.
 | Client Management | ✅ Complete | Index, detail, archive |
 | Project Management | ✅ Complete | Index, detail, linked transactions |
 | Document Generation | ✅ Complete | Invoice, receipt, credit note, PDF export |
-| Multi-Currency | ✅ Complete | USD, ILS, EUR; per-currency reports |
+| Multi-Currency | ✅ Complete | USD, ILS, EUR, JOD (income/expense entry); per-currency reports |
 | Expense Tracking | ✅ Complete | Profile-scoped, receipts, categories |
 | Retainer Agreements | ✅ Complete | Monthly/quarterly, matching workflow |
 | Business Profiles | ✅ Complete | Multi-identity, branding |
