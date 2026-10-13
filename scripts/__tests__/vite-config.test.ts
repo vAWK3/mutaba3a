@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
-import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX } from '../../vite.config';
+import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX, socialMetaTags } from '../../vite.config';
+import ar from '../../src/lib/i18n/translations/ar.json';
 import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
@@ -78,6 +79,53 @@ describe('vite.config', () => {
         expect.arrayContaining(['favicon.svg', 'favicon-32.png', 'favicon-16.png', 'apple-touch-icon.png']),
       );
       for (const asset of PWA_INCLUDE_ASSETS) expect(existsSync(repoPath(`public/${asset}`)), asset).toBe(true);
+    });
+  });
+
+  describe('social preview (MUT-104)', () => {
+    const tags = (origin = 'https://mutaba3a.app') =>
+      Object.fromEntries(
+        socialMetaTags(origin).map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]),
+      );
+
+    it('builds the card from the Arabic landing hero, so the preview says what the page says (D4, D9)', () => {
+      const meta = tags();
+      expect(meta['og:title']).toBe(`${ar.landing.hero.headlineLine1} ${ar.landing.hero.headlineLine2}`);
+      expect(meta['og:description']).toBe(ar.landing.hero.subheadline);
+      expect(meta['og:site_name']).toBe('متابعة');
+      expect(meta['og:locale']).toBe('ar_AR');
+      expect(meta['og:locale:alternate']).toBe('en_US');
+      expect(meta['twitter:title']).toBe(meta['og:title']);
+      expect(meta['twitter:description']).toBe(meta['og:description']);
+    });
+
+    it('points at the wide Arabic card by absolute URL, at its real size', () => {
+      const meta = tags();
+      expect(meta['og:url']).toBe('https://mutaba3a.app/');
+      expect(meta['og:image']).toBe('https://mutaba3a.app/og-card-ar-1200x630.png');
+      expect(meta['twitter:image']).toBe(meta['og:image']);
+      expect(meta['twitter:card']).toBe('summary_large_image');
+      const file = repoPath('public/og-card-ar-1200x630.png');
+      expect(pngSize(file)).toEqual([Number(meta['og:image:width']), Number(meta['og:image:height'])]);
+      expect(meta['og:image:alt']).toContain('متابعة');
+    });
+
+    it('drops a trailing slash from the configured origin', () => {
+      expect(tags('https://staging.mutaba3a.app/')['og:image']).toBe('https://staging.mutaba3a.app/og-card-ar-1200x630.png');
+    });
+
+    it.each(['http://mutaba3a.app', 'mutaba3a.app', '', 'https://'])('refuses %j as an origin, failing the build', (origin) => {
+      expect(() => socialMetaTags(origin)).toThrow(/MUTABA3A_PUBLIC_ORIGIN/);
+    });
+
+    it('adds the tags to the web build only: desktop has no public URL and the portal is noindex', () => {
+      expect(pluginNames(resolve('web').plugins)).toContain('mutaba3a:social-meta');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:social-meta');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:social-meta');
+    });
+
+    it('keeps the share cards out of the service worker precache', () => {
+      expect(PWA_WORKBOX?.globIgnores).toContain('og-*.png');
     });
   });
 

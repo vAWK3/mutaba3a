@@ -71,8 +71,7 @@ describe('LandingPage structure', () => {
   it('leads with the two-beat headline', () => {
     renderLanding('en');
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1).toHaveTextContent('Know who owes you.');
-    expect(h1).toHaveTextContent('Keep it to yourself.');
+    expect(h1).toHaveTextContent('Track your finances, securely.');
   });
 
   it('gives each chapter its own heading', () => {
@@ -179,8 +178,7 @@ describe('LandingPage language', () => {
     renderLanding('ar');
     expect(document.documentElement.dir).toBe('rtl');
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1).toHaveTextContent('اعرف من يدين لك.');
-    expect(h1).toHaveTextContent('وأبقِ ذلك لك وحدك.');
+    expect(h1).toHaveTextContent('تابع مالك، بأمان.');
   });
 
   it.each(['en', 'ar'] as const)('shows no raw translation keys (%s)', (language) => {

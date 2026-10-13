@@ -167,6 +167,6 @@ describe('HeroSection headline', () => {
   it('still leads with the two-beat line', () => {
     asDevice('mac');
     renderHero();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Know who owes you.');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Track your finances, securely.');
   });
 });

@@ -1,8 +1,9 @@
-import { defineConfig, type Plugin, type UserConfig } from "vite";
+import { defineConfig, type HtmlTagDescriptor, type Plugin, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
+import ar from "./src/lib/i18n/translations/ar.json";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
 const DEFAULT_DEV_API_ORIGIN = "http://127.0.0.1:8787";
@@ -34,6 +35,58 @@ function emitHostedEntryAsIndex(): Plugin {
   };
 }
 
+/** Where the landing page is served; override with MUTABA3A_PUBLIC_ORIGIN (e.g. a staging host). */
+const DEFAULT_PUBLIC_ORIGIN = "https://mutaba3a.app";
+
+/** The share card in `public/`: Claude Design's Arabic card, 1.91:1 so feeds show it large (MUT-104, D9). */
+const SOCIAL_CARD = { path: "/og-card-ar-1200x630.png", width: 1200, height: 630 };
+
+/**
+ * Open Graph and Twitter tags for link previews (MUT-104). Crawlers run no
+ * JavaScript, so the card has one language: Arabic, built from the landing
+ * hero copy so the preview never drifts from the page (D4, D9). Throws on an
+ * origin that isn't https, so a bad MUTABA3A_PUBLIC_ORIGIN fails the build
+ * instead of shipping broken cards. Vite escapes the attribute values.
+ */
+export function socialMetaTags(origin: string): HtmlTagDescriptor[] {
+  if (!/^https:\/\/[^/\s]+\/?$/.test(origin)) {
+    throw new Error(`MUTABA3A_PUBLIC_ORIGIN must be an https origin, got ${JSON.stringify(origin)}`);
+  }
+  const base = origin.replace(/\/$/, "");
+  const { headlineLine1, headlineLine2, subheadline } = ar.landing.hero;
+  const title = `${headlineLine1} ${headlineLine2}`;
+  const image = `${base}${SOCIAL_CARD.path}`;
+  const og = {
+    "og:type": "website",
+    "og:site_name": PWA_MANIFEST.name,
+    "og:url": `${base}/`,
+    "og:title": title,
+    "og:description": subheadline,
+    "og:locale": "ar_AR",
+    "og:locale:alternate": "en_US",
+    "og:image": image,
+    "og:image:width": String(SOCIAL_CARD.width),
+    "og:image:height": String(SOCIAL_CARD.height),
+    "og:image:alt": `${PWA_MANIFEST.name}: ${title}`,
+  };
+  const twitter = {
+    "twitter:card": "summary_large_image",
+    "twitter:title": title,
+    "twitter:description": subheadline,
+    "twitter:image": image,
+  };
+  return [
+    ...Object.entries(og).map(([property, content]) => ({ tag: "meta", attrs: { property, content }, injectTo: "head" as const })),
+    ...Object.entries(twitter).map(([name, content]) => ({ tag: "meta", attrs: { name, content }, injectTo: "head" as const })),
+  ];
+}
+
+/** Adds the link-preview tags to the landing page's HTML. Web build only: desktop has no public URL. */
+function socialMeta(): Plugin {
+  const tags = socialMetaTags(process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN);
+  return { name: "mutaba3a:social-meta", transformIndexHtml: () => tags };
+}
+
 /**
  * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
  * licence forbids converting) is cached on use instead of being precached on
@@ -50,6 +103,8 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   ],
   // Limit what files get precached
   globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+  // Share cards are for crawlers, never shown in the app (MUT-104)
+  globIgnores: ["og-*.png"],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -145,6 +200,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
+    ...(buildMode === "web" ? [socialMeta()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",
