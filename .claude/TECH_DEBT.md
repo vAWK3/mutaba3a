@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-113: `server/` audit: 3 highs from `deepmerge-ts` via Prisma's config package
+**Status**: Open
+**Ticket**: chore/npm-audit-2026-10-13 (found, not fixed)
+**Added**: 2026-10-13
+**Priority**: Low
+**Impact**: `npm audit` in `server/` (own lockfile, `prisma` 6.19.3) reports GHSA-ggr8-5vv4-36mx: `deepmerge-ts` < 8 can exhaust the stack when merging recursive object graphs. It reaches the server through `prisma` → `@prisma/config`, which reads the Prisma config when the CLI runs (generate, migrate). The only fix npm offers is `npm audit fix --force`, which moves `prisma` to 6.12.0, a version npm flags as breaking.
+**Fix**: Check whether a 6.x `prisma`/`@prisma/config` release has moved to `deepmerge-ts` ≥ 8. If one has, bump `prisma` and `@prisma/client` together and run `prisma:generate` plus the server suite. If none has, judge whether an `overrides` pin to `deepmerge-ts@^8` is safe for `@prisma/config` (a major across its declared range), or accept the debt: the input is our own config file, not request data.
+
+### TD-112: npm 10.9.8 crashes resolving this tree (`Cannot read properties of null (reading 'edgesOut')`)
+**Status**: Open
+**Ticket**: chore/npm-audit-2026-10-13
+**Added**: 2026-10-13
+**Priority**: Low
+**Impact**: On Node 22.23.1's bundled npm 10.9.8, `npm audit fix` and any `npm install <pkg>` in the root package crash in arborist's `#loadPeerSet` while resolving `vitest`'s peer set (`jsdom` → optional `canvas`). `npm ci` is unaffected, because it doesn't build an ideal tree. That keeps the release pipeline working, but nobody can change a root dependency with the repo's own npm.
+**Fix**: Resolve dependency changes with `npx npm@11.6.2 install …`, which keeps lockfile v3 so npm 10 can still `npm ci` from it. Alternatively, move the toolchain to an npm version without the bug and record it in `engines`/`.nvmrc`. Remove this entry once a plain `npm install` works.
+
 ### TD-111: The per-profile export leaves out payment records, expenses, receipts and retainers
 **Status**: Open
 **Ticket**: MUT-145 / MUT-158 (found while fixing import)
