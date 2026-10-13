@@ -19,6 +19,7 @@
     "preview:desktop": "vite preview --mode desktop --outDir dist-desktop",
     "preview:hosted": "vite preview --mode hosted --outDir dist-hosted",
     "tauri": "tauri",
+    "icons:desktop": "tauri icon public/icons/icon-1024.png && node -e \"for (const d of ['android', 'ios']) require('fs').rmSync('src-tauri/icons/' + d, { recursive: true, force: true })\"",
     "deploy": "./deploy.sh",
     "release": "tsx scripts/release.ts",
     "test": "vitest",

@@ -97,3 +97,29 @@ describe('favicon.svg (MUT-104)', () => {
     expect(svg).not.toMatch(/c2pa|<metadata/i);
   });
 });
+
+describe('desktop icons (MUT-104, D2)', () => {
+  const conf = JSON.parse(readFileSync(repoPath('src-tauri/tauri.conf.json'), 'utf8')) as { bundle: { icon: string[] } };
+  const scripts = (JSON.parse(readFileSync(repoPath('package.json'), 'utf8')) as { scripts: Record<string, string> })
+    .scripts;
+
+  it.each(conf.bundle.icon)('ships %s, at the size its name promises', (icon) => {
+    const file = repoPath(`src-tauri/${icon}`);
+    expect(existsSync(file), file).toBe(true);
+    const size = /(\d+)x(\d+)(@2x)?\.png$/.exec(icon);
+    if (size) {
+      const scale = size[3] ? 2 : 1;
+      expect(pngSize(file)).toEqual([Number(size[1]) * scale, Number(size[2]) * scale]);
+    }
+  });
+
+  it('regenerates every desktop icon from the delivered full-bleed Brand v2 art', () => {
+    expect(scripts['icons:desktop']).toMatch(/^tauri icon public\/icons\/icon-1024\.png\b/);
+  });
+
+  it('keeps no mobile or stale icons: there is no Tauri mobile target and the phone app is Flutter', () => {
+    for (const leftover of ['android', 'ios', 'icon-1024.png']) {
+      expect(existsSync(repoPath(`src-tauri/icons/${leftover}`)), leftover).toBe(false);
+    }
+  });
+});
