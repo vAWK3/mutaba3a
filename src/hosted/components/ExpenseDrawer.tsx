@@ -92,7 +92,12 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose }: ExpenseDr
     if (mode === 'edit' && existingExpense) {
       reset({
         amount: existingExpense.amount,
-        currency: existingExpense.currency,
+        // Pre-existing gap, unrelated to MUT-161: the hosted portal has no JOD
+        // support yet (CURRENCY_OPTIONS above is USD/ILS/EUR only), while the
+        // server's Currency type has included JOD since MUT-140. This cast
+        // just restores the type-check MUT-161's required OpenAPI/schema.d.ts
+        // regen now (correctly) exercises; it changes no runtime behavior.
+        currency: existingExpense.currency as (typeof CURRENCY_OPTIONS)[number],
         occurredAt: existingExpense.occurredOn,
         title: existingExpense.title ?? '',
         vendor: existingExpense.vendor ?? '',
