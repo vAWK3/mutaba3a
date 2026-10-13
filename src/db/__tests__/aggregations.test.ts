@@ -18,8 +18,25 @@ import {
   clientScopeOf,
   owedNowRemaining,
   partitionOwedNow,
+  filterExpensesByDateAndCurrency,
+  filterExpensesByEntity,
+  filterExpensesByEntityAndDate,
+  sumExpensesMinor,
+  sumExpensesByCurrency,
 } from '../aggregations';
-import type { Transaction, Client, Project, Category, PaymentRecord, PaymentByClientRow } from '../../types';
+import type { Transaction, Client, Project, Category, PaymentRecord, PaymentByClientRow, Expense } from '../../types';
+
+// Helper to create test expenses (MUT-94: expenses live in their own table since MUT-14)
+const createExpense = (overrides: Partial<Expense> = {}): Expense => ({
+  id: `exp-${Math.random().toString(36).substr(2, 9)}`,
+  profileId: 'profile-1',
+  amountMinor: 10000,
+  currency: 'USD',
+  occurredAt: '2024-01-15',
+  createdAt: '2024-01-15T10:00:00.000Z',
+  updatedAt: '2024-01-15T10:00:00.000Z',
+  ...overrides,
+});
 
 // Helper to create test transactions
 const createTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
@@ -784,5 +801,129 @@ describe('partitionOwedNow', () => {
     expect(result.noClient).toEqual({ owed: [], count: 0 });
     expect(result.archivedClients).toEqual({ owed: [], count: 0 });
     expect(result.entriesByClient.size).toBe(0);
+  });
+});
+
+// MUT-94: the Expenses strip / project summaries read expensesMinor from
+// db.transactions, but real expenses live in db.expenses since MUT-14. These
+// helpers are the expense-table equivalents of the filter/sum functions above.
+describe('filterExpensesByDateAndCurrency', () => {
+  it('excludes deleted expenses', () => {
+    const expenses = [createExpense({ id: 'e1' }), createExpense({ id: 'e2', deletedAt: '2024-01-16T00:00:00.000Z' })];
+
+    const result = filterExpensesByDateAndCurrency(expenses, {});
+
+    expect(result.map((e) => e.id)).toEqual(['e1']);
+  });
+
+  it('filters by date range', () => {
+    const expenses = [
+      createExpense({ id: 'in-range', occurredAt: '2024-01-15' }),
+      createExpense({ id: 'before', occurredAt: '2023-12-31' }),
+      createExpense({ id: 'after', occurredAt: '2024-02-01' }),
+    ];
+
+    const result = filterExpensesByDateAndCurrency(expenses, { dateFrom: '2024-01-01', dateTo: '2024-01-31' });
+
+    expect(result.map((e) => e.id)).toEqual(['in-range']);
+  });
+
+  it('filters by currency', () => {
+    const expenses = [
+      createExpense({ id: 'usd', currency: 'USD' }),
+      createExpense({ id: 'ils', currency: 'ILS' }),
+    ];
+
+    const result = filterExpensesByDateAndCurrency(expenses, { currency: 'USD' });
+
+    expect(result.map((e) => e.id)).toEqual(['usd']);
+  });
+
+  it('returns empty for empty input', () => {
+    expect(filterExpensesByDateAndCurrency([], {})).toEqual([]);
+  });
+});
+
+describe('filterExpensesByEntity', () => {
+  it('filters by project', () => {
+    const expenses = [
+      createExpense({ id: 'this-project', projectId: 'proj-1' }),
+      createExpense({ id: 'other-project', projectId: 'proj-2' }),
+      createExpense({ id: 'no-project' }),
+    ];
+
+    const result = filterExpensesByEntity(expenses, 'project', 'proj-1');
+
+    expect(result.map((e) => e.id)).toEqual(['this-project']);
+  });
+
+  it('filters by client', () => {
+    const expenses = [
+      createExpense({ id: 'this-client', clientId: 'client-1' }),
+      createExpense({ id: 'other-client', clientId: 'client-2' }),
+    ];
+
+    const result = filterExpensesByEntity(expenses, 'client', 'client-1');
+
+    expect(result.map((e) => e.id)).toEqual(['this-client']);
+  });
+
+  it('excludes deleted expenses and honors a currency filter', () => {
+    const expenses = [
+      createExpense({ id: 'live', projectId: 'proj-1', currency: 'USD' }),
+      createExpense({ id: 'deleted', projectId: 'proj-1', currency: 'USD', deletedAt: '2024-01-16T00:00:00.000Z' }),
+      createExpense({ id: 'wrong-currency', projectId: 'proj-1', currency: 'ILS' }),
+    ];
+
+    const result = filterExpensesByEntity(expenses, 'project', 'proj-1', 'USD');
+
+    expect(result.map((e) => e.id)).toEqual(['live']);
+  });
+});
+
+describe('filterExpensesByEntityAndDate', () => {
+  it('combines entity and date filtering', () => {
+    const expenses = [
+      createExpense({ id: 'match', projectId: 'proj-1', occurredAt: '2024-01-15' }),
+      createExpense({ id: 'wrong-date', projectId: 'proj-1', occurredAt: '2024-03-01' }),
+      createExpense({ id: 'wrong-project', projectId: 'proj-2', occurredAt: '2024-01-15' }),
+    ];
+
+    const result = filterExpensesByEntityAndDate(expenses, 'project', 'proj-1', {
+      dateFrom: '2024-01-01',
+      dateTo: '2024-01-31',
+    });
+
+    expect(result.map((e) => e.id)).toEqual(['match']);
+  });
+});
+
+describe('sumExpensesMinor', () => {
+  it('sums amounts across expenses', () => {
+    const expenses = [createExpense({ amountMinor: 15000 }), createExpense({ amountMinor: 25000 })];
+
+    expect(sumExpensesMinor(expenses)).toBe(40000);
+  });
+
+  it('returns 0 for empty input', () => {
+    expect(sumExpensesMinor([])).toBe(0);
+  });
+});
+
+describe('sumExpensesByCurrency', () => {
+  it('splits totals per currency, never mixing them', () => {
+    const expenses = [
+      createExpense({ currency: 'USD', amountMinor: 15000 }),
+      createExpense({ currency: 'USD', amountMinor: 5000 }),
+      createExpense({ currency: 'ILS', amountMinor: 20000 }),
+    ];
+
+    const result = sumExpensesByCurrency(expenses);
+
+    expect(result).toEqual({ USD: 20000, ILS: 20000, EUR: 0 });
+  });
+
+  it('returns zeros for empty input', () => {
+    expect(sumExpensesByCurrency([])).toEqual({ USD: 0, ILS: 0, EUR: 0 });
   });
 });
