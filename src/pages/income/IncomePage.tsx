@@ -136,6 +136,16 @@ export function IncomePage() {
           },
         ]
       : []),
+    ...(row.canEditPayment
+      ? [
+          {
+            label: t('transactions.partialPayment.editPayment'),
+            // Fix a payment's date from the ledger (MUT-169): the drawer opens
+            // on the entry's payment, or lists them when there are several
+            onClick: () => openPartialPaymentDrawer({ transactionId: row.id, intent: 'editPayment' }),
+          },
+        ]
+      : []),
     {
       label: t('common.duplicate'),
       icon: <CopyIcon size={16} />,
