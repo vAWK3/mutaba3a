@@ -434,7 +434,7 @@ export function serializeFeeProposalSummary(p: FeeProposalRecord | null) {
   return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId, contingency: proposalContingency(p) };
 }
 
-/** MUT-42: the original amount, formatted in its own currency — never converted. */
+/** MUT-161: both legs formatted in their own currency — never converted. */
 export function serializeConversion(c: ConversionRecord) {
   return {
     id: c.id,
@@ -449,6 +449,7 @@ export function serializeConversion(c: ConversionRecord) {
   };
 }
 
+/** MUT-42: the original amount, formatted in its own currency — never converted. */
 export function serializeExpense(e: ExpenseRecord) {
   return {
     id: e.id,
