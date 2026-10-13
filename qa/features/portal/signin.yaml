@@ -5,6 +5,8 @@ tier: core
 paths:
   - src/hosted/pages/auth/**
   - src/hosted/hosted.css
+  - src/hosted/components/Brand.tsx
+  - hosted.html
   - src/styles/**
   - src/assets/fonts/**
 features:
@@ -24,3 +26,12 @@ features:
       - Open /sign-in in light mode, then in dark mode
     expect:
       - No axe violation, colour-contrast included
+  - id: brand-chrome
+    title: Sign-in leads with the Brand v2 mark + name lockup, and the tab icons are the bundled hashed copies (MUT-104)
+    tier: secondary
+    legacy: [MUT-104]
+    steps:
+      - Stub /v1 to 401 and open /sign-in, under OS light then OS dark
+    expect:
+      - The Wordmark shows the mark (mark-dark.svg on the dark canvas) beside the product name
+      - Every icon link in the head points at /assets/*, and each returns 200

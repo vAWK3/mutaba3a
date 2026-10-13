@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { syncThemeColorMeta } from './themeColorMeta';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -79,6 +80,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       // Set explicit theme
       document.documentElement.setAttribute('data-theme', theme);
     }
+    syncThemeColorMeta(theme);
 
     // Persist to localStorage
     localStorage.setItem(STORAGE_KEY, theme);

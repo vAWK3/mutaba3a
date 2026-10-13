@@ -11,6 +11,7 @@ import { useMenuButton } from "../../hooks/useMenuButton";
 import type { FeatureKey } from "../../types";
 import type { AddMenuAction } from "./addMenuActions";
 import { ThemeToggle } from "./ThemeToggle";
+import { BrandMark } from "../brand/BrandMark";
 
 // Storage key for collapsed state
 const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
@@ -184,16 +185,7 @@ export function SidebarNav() {
       {/* Header with brand and collapse toggle */}
       <div className="sidebar-header">
         <Link to="/" className="brand" aria-label="متابعة">
-          <img
-            className="brand-mark"
-            src="/icons/icon-512.png"
-            srcSet="/icons/icon-512.png 1x, /icons/icon-1024.png 2x"
-            alt=""
-            width={28}
-            height={28}
-            loading="eager"
-            decoding="async"
-          />
+          <BrandMark size={28} className="brand-mark" />
           {!collapsed && (
             <span className="brand-name" lang="ar" dir="rtl">
               متابعة

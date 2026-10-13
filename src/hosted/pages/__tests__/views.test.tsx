@@ -280,7 +280,8 @@ describe('Documents', () => {
     expect(screen.getByText('Still uploading')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Download invoice-014.pdf' }));
     await waitFor(() => expect(open).toHaveBeenCalledWith('https://storage.googleapis.com/signed/invoice-014.pdf?X-Goog-Signature=abc'));
-    expect(container.querySelector('iframe, object, embed, img')).toBeNull();
+    // The shell's Brand v2 mark (MUT-104) is the only image allowed on the page
+    expect(container.querySelector('iframe, object, embed, img:not(.hp-wordmark-mark)')).toBeNull();
   });
 
   it('toasts when the download cannot be prepared', async () => {

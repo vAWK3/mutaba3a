@@ -219,9 +219,8 @@ td {
   background: color-mix(in oklab, var(--surface) 85%, var(--accent) 15%);
 }
 
+/* The Brand v2 mark has no tile of its own, so no radius or shadow (MUT-104) */
 .brand-mark {
-  border-radius: 10px;
-  box-shadow: var(--shadow-1);
   flex: 0 0 auto;
 }
 
