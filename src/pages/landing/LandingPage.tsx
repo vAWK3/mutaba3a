@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import './LandingPage.css';
 import { useT } from '../../lib/i18n';
 import { useInView } from '../../hooks/useInView';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import {
   LandingHeader,
   HeroSection,
@@ -22,11 +23,7 @@ export function LandingPage() {
   const heroCtaRef = useRef<HTMLAnchorElement>(null);
   // Unknown (no report yet, or no IntersectionObserver) reads as "on screen": the hero's button is the way in.
   const heroCtaGone = useInView(heroCtaRef) === false;
-  const title = t('landing.meta.title');
-
-  useEffect(() => {
-    document.title = title;
-  }, [title]);
+  useDocumentTitle(t('landing.meta.title'));
 
   useEffect(() => {
     // iOS Safari applies :active only when a touch listener is present, so without this taps get no press state (L10).

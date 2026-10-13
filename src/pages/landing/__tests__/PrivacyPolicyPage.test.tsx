@@ -59,4 +59,12 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('سياسة الخصوصية');
     expect(document.body.textContent).not.toMatch(/\blanding\.[a-zA-Z]/);
   });
+
+  it.each([
+    ['en', 'Mutaba3a — Privacy Policy'],
+    ['ar', 'متابعة — سياسة الخصوصية'],
+  ] as const)('names the tab in the active language (%s, MUT-77)', (language, title) => {
+    renderPage(language);
+    expect(document.title).toBe(title);
+  });
 });
