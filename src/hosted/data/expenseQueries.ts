@@ -32,9 +32,12 @@ export function useExpenses(profileId: string, filters: ExpenseFilters) {
     customerId: filters.customerId,
     from: filters.from,
     to: filters.to,
+    anchor: filters.anchor,
   };
+  // The anchor starts the first page only (MUT-91); later pages follow its nextCursor.
+  const { anchor, ...listFilters } = key;
   return useCursorList<Expense>(profileKey(profileId, 'expenses', key), (cursor) =>
-    api.expenses(profileId, { limit: PAGE_LIMIT, cursor, ...key }),
+    api.expenses(profileId, { limit: PAGE_LIMIT, ...listFilters, ...(cursor ? { cursor } : { anchor }) }),
   );
 }
 

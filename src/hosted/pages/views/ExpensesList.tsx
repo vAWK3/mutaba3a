@@ -6,6 +6,8 @@ import { CategoryFilter, ClientFilter, DateFilter, FilterBar } from '../../compo
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ExpenseDrawer } from '../../components/ExpenseDrawer';
+import { AnchoredNote, SavedNotice } from '../../components/SavedNotice';
+import { useSavedFlashRows } from '../../../lib/useSavedFlash';
 import { isNarrowed, type ExpensesPageSearch } from '../../data/filters';
 import { useCustomerDirectory } from '../../data/queries';
 import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
@@ -69,6 +71,16 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
     [list.data, categoriesQuery.data, customers.data, categoriesById, language],
   );
 
+  // After-save (MUT-91): the list claims a save once every query it renders
+  // from has settled. A query in error counts as settled, so the notice still
+  // confirms the write behind the Unreachable card (eng review D4).
+  const queries = [list, categoriesQuery, customers];
+  const ids = useMemo(() => rows?.map((r) => r.id) ?? [], [rows]);
+  const flashed = useSavedFlashRows('hosted-expenses', ids, {
+    isLoading: !rows && !queries.some((q) => q.isError),
+    isFetching: queries.some((q) => q.isFetching),
+  });
+
   const columns = useMemo<Column<ExpenseRow>[]>(
     () => [
       { key: 'date', header: t('hosted.expenses.columns.date'), cell: (r) => r.date },
@@ -100,8 +112,9 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
         <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
         <DateFilter label={t('hosted.filters.to')} value={filters.to} onChange={(to) => patch({ to })} />
       </FilterBar>
+      {filters.anchor && <AnchoredNote onShowLatest={() => setFilters({ ...filters, anchor: undefined })} />}
       <QueryView
-        queries={[list, categoriesQuery, customers]}
+        queries={queries}
         data={rows}
         isEmpty={(r) => r.length === 0}
         empty={
@@ -114,11 +127,19 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
       >
         {(r) => (
           <>
-            <HostedTable label={t('hosted.expenses.title')} columns={columns} rows={r} rowKey={(row) => row.id} onRowClick={openEdit} />
+            <HostedTable
+              label={t('hosted.expenses.title')}
+              columns={columns}
+              rows={r}
+              rowKey={(row) => row.id}
+              onRowClick={openEdit}
+              rowClassName={(row) => (flashed(row.id) ? 'row-flash' : undefined)}
+            />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={(anchor) => setFilters({ anchor })} anchor={filters.anchor} />
       {(filters.newExpense || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}

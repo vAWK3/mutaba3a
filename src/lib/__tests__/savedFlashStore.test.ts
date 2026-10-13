@@ -256,6 +256,25 @@ describe('useSavedFlashStore', () => {
     });
   });
 
+  it('settleMessage marks that save messaged and keeps its resolution; a stale flash is ignored (MUT-91)', () => {
+    const { result } = renderHook(() => useSavedFlashStore());
+    const first = income();
+    act(() => {
+      result.current.markSaved(first);
+      result.current.registerList('list-a');
+      result.current.reportSettled('list-a', ['tx-0'], true);
+    });
+    expect(result.current.claimed).toBe(false);
+    act(() => result.current.settleMessage(first));
+    expect(result.current.pending).toMatchObject({ ids: ['tx-1'], messaged: true });
+    expect(result.current.claimed).toBe(false);
+
+    const second = income({ ids: ['tx-2'] });
+    act(() => result.current.markSaved(second));
+    act(() => result.current.settleMessage(first));
+    expect(result.current.pending).toBe(second);
+  });
+
   it('clear resets everything', () => {
     const { result } = renderHook(() => useSavedFlashStore());
     act(() => {

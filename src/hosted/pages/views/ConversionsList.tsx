@@ -6,6 +6,8 @@ import { CurrencyFilter, DateFilter, FilterBar } from '../../components/FilterCo
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ConversionDrawer } from '../../components/ConversionDrawer';
+import { AnchoredNote, SavedNotice } from '../../components/SavedNotice';
+import { useSavedFlashRows } from '../../../lib/useSavedFlash';
 import { isNarrowed, type ConversionsPageSearch } from '../../data/filters';
 import { useConversions } from '../../data/conversionQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
@@ -54,6 +56,10 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
 
   const rows = useMemo(() => (list.data ? shape(list.data, language) : undefined), [list.data, language]);
 
+  // After-save (MUT-91, eng review D7): the same claim as the expenses list.
+  const ids = useMemo(() => rows?.map((r) => r.id) ?? [], [rows]);
+  const flashed = useSavedFlashRows('hosted-conversions', ids, { isLoading: !rows && !list.isError, isFetching: list.isFetching });
+
   const columns = useMemo<Column<ConversionRow>[]>(
     () => [
       { key: 'date', header: t('hosted.conversions.columns.date'), cell: (r) => r.date },
@@ -82,6 +88,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
         <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
         <DateFilter label={t('hosted.filters.to')} value={filters.to} onChange={(to) => patch({ to })} />
       </FilterBar>
+      {filters.anchor && <AnchoredNote onShowLatest={() => setFilters({ ...filters, anchor: undefined })} />}
       <QueryView
         queries={[list]}
         data={rows}
@@ -96,11 +103,18 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
       >
         {(r) => (
           <>
-            <HostedTable label={t('hosted.conversions.title')} columns={columns} rows={r} rowKey={(row) => row.id} />
+            <HostedTable
+              label={t('hosted.conversions.title')}
+              columns={columns}
+              rows={r}
+              rowKey={(row) => row.id}
+              rowClassName={(row) => (flashed(row.id) ? 'row-flash' : undefined)}
+            />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={(anchor) => setFilters({ anchor })} anchor={filters.anchor} />
       {filters.newConversion && <ConversionDrawer profileId={profile.id} onClose={closeDrawer} />}
     </>
   );

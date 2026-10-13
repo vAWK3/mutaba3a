@@ -127,6 +127,18 @@
   font-size: var(--text-body);
 }
 .hp-toast .hp-banner-icon { color: var(--error); }
+/* The after-save notice (MUT-91): the toast's place and shape, without the error colour. */
+.hp-toast-info { align-items: center; border-color: var(--border); border-inline-start-color: var(--accent); }
+
+/* Above a list started at a saved record (MUT-91 anchor). */
+.hp-anchored {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+}
 
 /* ---------- Sign-in ---------- */
 

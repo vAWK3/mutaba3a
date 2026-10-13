@@ -92,6 +92,8 @@ export interface ExpenseFilters {
   currency?: Currency;
   from?: string;
   to?: string;
+  /** Start the list at this expense (MUT-91): set by Show after a save the list didn't show. */
+  anchor?: string;
 }
 export const parseExpenses = (raw: Raw): ExpenseFilters =>
   compact({
@@ -100,6 +102,7 @@ export const parseExpenses = (raw: Raw): ExpenseFilters =>
     currency: oneOf(raw.currency, CURRENCIES),
     from: day(raw.from),
     to: day(raw.to),
+    anchor: id(raw.anchor),
   });
 
 /** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create. */
@@ -118,12 +121,15 @@ export interface ConversionFilters {
   currency?: Currency;
   from?: string;
   to?: string;
+  /** Start the list at this conversion (MUT-91): set by Show after a save the list didn't show. */
+  anchor?: string;
 }
 export const parseConversions = (raw: Raw): ConversionFilters =>
   compact({
     currency: oneOf(raw.currency, CURRENCIES),
     from: day(raw.from),
     to: day(raw.to),
+    anchor: id(raw.anchor),
   });
 
 /** The conversions drawer's own URL state: `?newConversion=1` to create. Create-only (MUT-161) — no `?conversion=<id>` to edit. */

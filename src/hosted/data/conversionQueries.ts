@@ -14,8 +14,12 @@ const PAGE_LIMIT = 50;
 const STALE_MS = 30_000;
 
 export function useConversions(profileId: string, filters: ConversionFilters) {
-  const key = { currency: filters.currency, from: filters.from, to: filters.to };
-  return useCursorList<Conversion>(profileKey(profileId, 'conversions', key), (cursor) => api.conversions(profileId, { limit: PAGE_LIMIT, cursor, ...key }));
+  const key = { currency: filters.currency, from: filters.from, to: filters.to, anchor: filters.anchor };
+  // The anchor starts the first page only (MUT-91); later pages follow its nextCursor.
+  const { anchor, ...listFilters } = key;
+  return useCursorList<Conversion>(profileKey(profileId, 'conversions', key), (cursor) =>
+    api.conversions(profileId, { limit: PAGE_LIMIT, ...listFilters, ...(cursor ? { cursor } : { anchor }) }),
+  );
 }
 
 export function useConversion(profileId: string, conversionId: string) {

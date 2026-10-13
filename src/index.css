@@ -2138,26 +2138,32 @@ div.input-with-prefix {
 /* The saved-row flash (MUT-81, R1): a soft tint plus a 3px leading rail,
    fading over 1.5s to match savedFlashStore's FLASH_MS. A tint alone would
    be indistinguishable from the app's many existing --accent-subtle
-   "selected" states; the rail (a logical inline-start edge, so it mirrors
-   in RTL) reads at a glance without the row already having your attention. */
+   "selected" states; the rail reads at a glance without the row already
+   having your attention. Any table's rows (the app's .data-table, the
+   portal's .table; MUT-91). box-shadow has no logical form, so the rail is
+   mirrored by hand for RTL, where the first cell is the rightmost. */
 @keyframes saved-flash-fade {
   from { background-color: var(--accent-subtle); }
   to { background-color: transparent; }
 }
 
-.data-table tr.row-flash td {
+tr.row-flash > td {
   animation: saved-flash-fade 1.5s ease-out forwards;
 }
 
-.data-table tr.row-flash td:first-child {
+tr.row-flash > td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+[dir="rtl"] tr.row-flash > td:first-child {
+  box-shadow: inset -3px 0 0 var(--accent);
 }
 
 /* The AC: reduced motion keeps the tint, without the fade animation. The
    class itself is still removed by savedFlashStore's timer after FLASH_MS;
    this only turns the fade from an animated transition into a held state. */
 @media (prefers-reduced-motion: reduce) {
-  .data-table tr.row-flash td {
+  tr.row-flash > td {
     animation: none;
     background-color: var(--accent-subtle);
   }

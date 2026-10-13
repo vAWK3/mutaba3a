@@ -75,6 +75,10 @@ interface SavedFlashState {
   reportSettled: (listId: string, ids: string[], settled: boolean) => void;
   markSaved: (flash: SavedFlash) => void;
   rearm: (flash: SavedFlash) => void;
+  /** The message for this save has been shown (or its page left): mark it
+   *  messaged so it can't be raised again. Resolution is untouched; a call for
+   *  a save that is no longer pending is ignored (MUT-91, the portal notice). */
+  settleMessage: (flash: SavedFlash) => void;
   clear: () => void;
 }
 
@@ -162,6 +166,10 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
       for (const entry of lists.values()) entry.reportedForCurrentSave = false;
       set({ pending: flash, claimed: null, flashIds: [] });
       tryResolve();
+    },
+
+    settleMessage: (flash) => {
+      set((state) => (state.pending === flash && !flash.messaged ? { pending: { ...flash, messaged: true } } : {}));
     },
 
     clear: () => {

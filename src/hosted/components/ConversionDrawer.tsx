@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
 import { useCreateConversion } from '../data/conversionQueries';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useToast } from './Toast';
 import { Drawer } from './Drawer';
 import { applyConversionApiError } from './conversionApiErrors';
@@ -58,7 +59,9 @@ export function ConversionDrawer({ profileId, onClose }: ConversionDrawerProps) 
         toCurrency: values.toCurrency,
         notes: values.notes || undefined,
       };
-      await createMutation.mutateAsync(body);
+      const created = await createMutation.mutateAsync(body);
+      // After-save feedback (MUT-91, eng review D7), from the drawer as for expenses.
+      useSavedFlashStore.getState().markSaved({ kind: 'conversion', ids: [created.id], profileId });
       onClose();
     } catch (error) {
       applyConversionApiError(error, setError, errorLabels, showToast);

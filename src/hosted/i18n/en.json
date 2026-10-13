@@ -363,6 +363,14 @@
         "conflict": "This conversion changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
       }
+    },
+    "savedFlash": {
+      "saved": "Saved",
+      "expenseSaved": "Expense saved",
+      "conversionSaved": "Conversion saved",
+      "show": "Show",
+      "anchored": "Showing from a saved entry",
+      "showLatest": "Show latest"
     }
   }
 }
