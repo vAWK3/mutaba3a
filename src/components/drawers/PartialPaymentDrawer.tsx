@@ -8,8 +8,8 @@ import {
   useUpdatePaymentRecord,
   useDeletePaymentRecord,
 } from '../../hooks/useQueries';
-import { cn, formatAmount, formatDate, isolateAmount, todayISO } from '../../lib/utils';
-import { isFuturePaymentDate } from '../../lib/dates';
+import { cn, formatAmount, formatDate, formatPaymentDate, isolateAmount, todayISO } from '../../lib/utils';
+import { isFuturePaymentDate, paymentLocalDay } from '../../lib/dates';
 import { describePaymentAmount, minorToAmountInput, type PaymentAmountState } from '../../lib/paymentEntry';
 import type { Currency, PaymentRecord } from '../../types';
 import { useDrawerStore } from '../../lib/stores';
@@ -33,6 +33,11 @@ import './PartialPaymentDrawer.css';
  * `onRecorded` hears the record a save created, just before the drawer
  * closes, so the screen that opened it can offer Undo (MUT-82). An update or
  * a delete is not reported.
+ *
+ * Opened with the 'editPayment' intent (MUT-169: the /income ledger and the
+ * income drawer), it never offers to record a payment. An entry with one
+ * record opens on that record's edit, date first; one with several lists them
+ * to pick from; one whose records failed to load says so, with Retry.
  */
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
@@ -44,6 +49,7 @@ interface PartialPaymentDrawerProps {
 }
 
 const FORM_ID = 'partial-payment-form';
+const NO_RECORDS: PaymentRecord[] = [];
 
 export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: PartialPaymentDrawerProps) {
   const t = useT();
@@ -53,9 +59,19 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
 
   const { partialPaymentDrawer, editPaymentRecord } = useDrawerStore();
   const editingRecordId = partialPaymentDrawer.editingPaymentRecordId;
+  const editIntent = partialPaymentDrawer.intent === 'editPayment';
 
   const { data: transaction, isLoading: txLoading } = useTransactionDisplay(transactionId);
-  const { data: paymentRecords = [], isLoading: recordsLoading } = usePaymentRecords(transactionId);
+  const {
+    data: loadedRecords,
+    isLoading: recordsLoading,
+    isError: recordsError,
+    isFetching: recordsFetching,
+    refetch: refetchRecords,
+  } = usePaymentRecords(transactionId);
+  const paymentRecords = loadedRecords ?? NO_RECORDS;
+  // Nothing to show: a failed background refetch keeps the records already loaded
+  const recordsFailed = recordsError && !loadedRecords;
   const createMutation = useCreatePaymentRecord();
   const updateMutation = useUpdatePaymentRecord();
   const deleteMutation = useDeletePaymentRecord();
@@ -63,14 +79,15 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
 
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
 
-  const editingRecord = useMemo(
-    () => editingRecordId ? paymentRecords.find((r) => r.id === editingRecordId) : undefined,
-    [editingRecordId, paymentRecords]
-  );
+  // Under the edit intent, an entry's only record is the one to edit
+  const editingRecord = useMemo(() => {
+    if (editingRecordId) return paymentRecords.find((r) => r.id === editingRecordId);
+    return editIntent && paymentRecords.length === 1 ? paymentRecords[0] : undefined;
+  }, [editingRecordId, editIntent, paymentRecords]);
 
   // An edit waits for its record. Mounting the form without it would fall
   // back to create mode, and the button would record a second payment.
-  const waitingForRecord = !!editingRecordId && recordsLoading;
+  const waitingForRecord = (!!editingRecordId || editIntent) && recordsLoading;
 
   if (txLoading || !transaction || waitingForRecord) {
     return (
@@ -81,6 +98,40 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
       </Drawer>
     );
   }
+
+  // A failed read looks like no records: under the edit intent that would say
+  // a paid entry has no payments, so it says the read failed instead (MUT-169)
+  if (editIntent && recordsFailed) {
+    return (
+      <Drawer
+        title={t('transactions.partialPayment.editPayment')}
+        onClose={onClose}
+        footer={
+          <div className="pay-drawer-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              {t('common.close')}
+            </button>
+          </div>
+        }
+      >
+        <div className="drawer-notice" role="alert">
+          <div className="drawer-notice-body">{t('transactions.partialPayment.loadFailed')}</div>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => void refetchRecords()}
+            disabled={recordsFetching}
+            aria-busy={recordsFetching}
+          >
+            {recordsFetching ? t('common.loading') : t('drawer.income.paymentsRetry')}
+          </button>
+        </div>
+      </Drawer>
+    );
+  }
+
+  // Asked to edit an entry with no record, or several: list them, record nothing
+  const pickerMode = editIntent && !editingRecord;
 
   const receivedAmountMinor = transaction.receivedAmountMinor ?? 0;
   const remainingAmountMinor = transaction.amountMinor - receivedAmountMinor;
@@ -101,6 +152,19 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
   // The opener still hears a payment recorded from the entry's view
   const returnToEntry = () => {
     useDrawerStore.getState().openPartialPaymentDrawer({ transactionId, onRecorded });
+  };
+
+  // Leaving a record's edit (saved or cancelled). Under the edit intent the
+  // job was this edit: with one record it is done, with several the list
+  // comes back for the next. Otherwise, back to the entry's view.
+  const leaveEdit = () => {
+    if (!editIntent) {
+      returnToEntry();
+    } else if (paymentRecords.length > 1) {
+      useDrawerStore.getState().openPartialPaymentDrawer({ transactionId, onRecorded, intent: 'editPayment' });
+    } else {
+      onClose();
+    }
   };
 
   const handleRecorded = (record: PaymentRecord) => {
@@ -132,12 +196,12 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
         profileId: transaction.profileId,
       });
     }
-    returnToEntry();
+    leaveEdit();
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
-  const title = editingRecord
+  const title = editingRecord || pickerMode
     ? t('transactions.partialPayment.editPayment')
     : settled
       ? t('transactions.partialPayment.title')
@@ -147,7 +211,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
 
   const footer = (
     <div className="pay-drawer-actions">
-      {settled ? (
+      {settled || pickerMode ? (
         <button type="button" className="btn btn-secondary" onClick={onClose}>
           {t('common.close')}
         </button>
@@ -156,7 +220,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={editingRecord ? returnToEntry : onClose}
+            onClick={editingRecord ? leaveEdit : onClose}
             disabled={isPending}
           >
             {t('common.cancel')}
@@ -175,7 +239,13 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
 
   return (
     <Drawer title={title} onClose={onClose} footer={footer}>
-      {settled ? (
+      {pickerMode ? (
+        <p className={paymentRecords.length === 0 ? 'card-empty' : 'form-hint'}>
+          {paymentRecords.length === 0
+            ? t('transactions.partialPayment.noPayments')
+            : t('transactions.partialPayment.choosePayment')}
+        </p>
+      ) : settled ? (
         <p className="pay-drawer-status pay-drawer-status--done">
           <CheckIcon />
           {t('transactions.partialPayment.paidInFull')}
@@ -190,6 +260,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
           allowedMinor={allowedMinor}
           locale={locale}
           editingRecord={editingRecord}
+          focusDate={editIntent}
           createMutation={createMutation}
           updateMutation={updateMutation}
           isPending={isPending}
@@ -212,7 +283,7 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
                 record={record}
                 currency={transaction.currency}
                 locale={locale}
-                isEditing={editingRecordId === record.id}
+                isEditing={editingRecord?.id === record.id}
                 isDeleting={deletingRecordId === record.id}
                 disabled={isPending}
                 onEdit={() => editPaymentRecord({ transactionId, paymentRecordId: record.id })}
@@ -278,6 +349,7 @@ function PaymentForm({
   allowedMinor,
   locale,
   editingRecord,
+  focusDate = false,
   createMutation,
   updateMutation,
   isPending,
@@ -291,6 +363,8 @@ function PaymentForm({
   allowedMinor: number;
   locale: string;
   editingRecord?: PaymentRecord;
+  /** Open on the date, not the amount: the drawer was opened to fix a payment's date (MUT-169) */
+  focusDate?: boolean;
   createMutation: ReturnType<typeof useCreatePaymentRecord>;
   updateMutation: ReturnType<typeof useUpdatePaymentRecord>;
   isPending: boolean;
@@ -316,19 +390,28 @@ function PaymentForm({
   // is the UTC one, which hands a user west of UTC tomorrow's date in the
   // evening and one east of UTC yesterday's after midnight -- silently wrong
   // on a field the user is now one confirm away from accepting.
-  const [paidAt, setPaidAt] = useState(() => (editingRecord ? editingRecord.paidAt.split('T')[0] : todayISO()));
+  // An edited record opens on the day the lists show it: a Received fast-add
+  // stores nowISO(), whose UTC day is yesterday after midnight in Israel (MUT-169).
+  const [paidAt, setPaidAt] = useState(() => (editingRecord ? paymentLocalDay(editingRecord.paidAt) : todayISO()));
   const [notes, setNotes] = useState(() => editingRecord?.notes ?? '');
-  const [dateOpen, setDateOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(focusDate);
   const [notesOpen, setNotesOpen] = useState(() => !!editingRecord?.notes);
   // A field the user just opened takes focus; one open from the start doesn't
   const [focusTarget, setFocusTarget] = useState<'date' | 'notes' | null>(null);
   const [showAmountErrors, setShowAmountErrors] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Focused and selected, so typing replaces the prefill with a partial amount
+  // Focused and selected, so typing replaces the prefill with a partial amount;
+  // or the date, when that is what the drawer was opened to fix
   useEffect(() => {
+    if (focusDate) {
+      dateRef.current?.focus();
+      return;
+    }
     amountRef.current?.focus();
     amountRef.current?.select();
+    // Mount only: focus is placed once, when the form opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -337,7 +420,10 @@ function PaymentForm({
   }, [focusTarget]);
 
   const amountState = describePaymentAmount(amountText, currency, allowedMinor);
-  const line = amountLine(amountState, showAmountErrors, currency, locale, t);
+  // An edit that leaves the amount as it was never trips the amount checks: a
+  // legacy entry recorded over its total (ADR-030) can still have its date fixed
+  const amountUnchanged = !!editingRecord && amountText === minorToAmountInput(editingRecord.amountMinor, currency);
+  const line = amountUnchanged && amountState.kind === 'over' ? null : amountLine(amountState, showAmountErrors, currency, locale, t);
   const today = todayISO();
   const dateLabel = paidAt === today ? t('time.today') : formatDate(`${paidAt}T00:00:00`, locale);
 
@@ -345,7 +431,9 @@ function PaymentForm({
     e.preventDefault();
     setError(null);
 
-    if (amountState.kind !== 'paidInFull' && amountState.kind !== 'stillOwed') {
+    const amountMinor =
+      amountState.kind === 'paidInFull' || amountState.kind === 'stillOwed' ? amountState.amountMinor : undefined;
+    if (amountMinor === undefined && !amountUnchanged) {
       setShowAmountErrors(true);
       amountRef.current?.focus();
       return;
@@ -360,13 +448,21 @@ function PaymentForm({
       return;
     }
 
-    const payment = { amountMinor: amountState.amountMinor, paidAt, notes: notes.trim() || undefined };
+    const trimmedNotes = notes.trim() || undefined;
     try {
       if (editingRecord) {
-        await updateMutation.mutateAsync({ id: editingRecord.id, transactionId, data: payment });
+        // Only what changed: an untouched date keeps its stored instant (a
+        // fast-add's UTC timestamp) instead of being rewritten as a day (MUT-169)
+        const changes: { amountMinor?: number; paidAt?: string; notes?: string } = {};
+        if (!amountUnchanged && amountMinor !== undefined) changes.amountMinor = amountMinor;
+        if (paidAt !== paymentLocalDay(editingRecord.paidAt)) changes.paidAt = paidAt;
+        if (trimmedNotes !== (editingRecord.notes || undefined)) changes.notes = trimmedNotes;
+        if (Object.keys(changes).length > 0) {
+          await updateMutation.mutateAsync({ id: editingRecord.id, transactionId, data: changes });
+        }
         onUpdated();
       } else {
-        const record = await createMutation.mutateAsync({ transactionId, ...payment });
+        const record = await createMutation.mutateAsync({ transactionId, amountMinor: amountMinor!, paidAt, notes: trimmedNotes });
         onRecorded(record);
       }
     } catch (err) {
@@ -568,7 +664,7 @@ function PaymentRecordRow({
     <div className={cn('pay-drawer-record', isEditing && 'pay-drawer-record--editing')}>
       <div className="pay-drawer-record-main">
         <div className="pay-drawer-record-line">
-          <span className="pay-drawer-record-date">{formatDate(record.paidAt, locale)}</span>
+          <span className="pay-drawer-record-date">{formatPaymentDate(record.paidAt, locale)}</span>
           <span className="pay-drawer-record-amount">{formatAmount(record.amountMinor, currency, locale)}</span>
         </div>
         {record.notes && <span className="pay-drawer-record-notes">{record.notes}</span>}
@@ -580,6 +676,7 @@ function PaymentRecordRow({
           onClick={onEdit}
           disabled={disabled}
           title={t('transactions.partialPayment.editPayment')}
+          aria-label={t('transactions.partialPayment.editPayment')}
         >
           &#9998;
         </button>
@@ -589,6 +686,7 @@ function PaymentRecordRow({
           onClick={onDelete}
           disabled={disabled}
           title={t('transactions.partialPayment.deletePayment')}
+          aria-label={t('transactions.partialPayment.deletePayment')}
         >
           &#128465;
         </button>

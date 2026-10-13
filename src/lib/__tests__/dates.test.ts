@@ -9,6 +9,7 @@ import {
   daysOverdue,
   isDueSoon,
   isFuturePaymentDate,
+  paymentLocalDay,
   type ReceivableLike,
 } from '../dates';
 
@@ -247,6 +248,49 @@ describe('dates', () => {
       vi.setSystemTime(new Date(2026, 9, 5, 9, 0));
       expect(isFuturePaymentDate('2026-10-05')).toBe(false);
       expect(isFuturePaymentDate('2026-10-06')).toBe(true);
+    });
+  });
+
+  // MUT-169 (D6): a Received fast-add stores nowISO(), a UTC instant, while an
+  // edit stores the date alone. The edit form must open on the day the lists show.
+  describe('paymentLocalDay', () => {
+    it('passes a date-only value through', () => {
+      expect(paymentLocalDay('2026-10-13')).toBe('2026-10-13');
+    });
+
+    function inTimeZone(timeZone: string, fn: () => void) {
+      const savedTz = process.env.TZ;
+      process.env.TZ = timeZone;
+      try {
+        fn();
+      } finally {
+        if (savedTz === undefined) delete process.env.TZ;
+        else process.env.TZ = savedTz;
+      }
+    }
+
+    it("gives a timestamp's local calendar day, not its UTC day", () => {
+      inTimeZone('Asia/Jerusalem', () => {
+        // 01:30 on Oct 14 in Jerusalem is still Oct 13 in UTC
+        expect(paymentLocalDay('2026-10-13T22:30:00.000Z')).toBe('2026-10-14');
+      });
+    });
+
+    it('gives the same local day west of UTC', () => {
+      inTimeZone('America/New_York', () => {
+        // 20:30 on Oct 13 in New York is already Oct 14 in UTC
+        expect(paymentLocalDay('2026-10-14T00:30:00.000Z')).toBe('2026-10-13');
+      });
+    });
+
+    // A CSV import stores paidAt as typed
+    it('reads other date forms the browser understands as their local day', () => {
+      expect(paymentLocalDay('1/15/2024')).toBe('2024-01-15');
+      expect(paymentLocalDay('2024-01-15 10:30')).toBe('2024-01-15');
+    });
+
+    it('falls back to the written date of an unreadable timestamp', () => {
+      expect(paymentLocalDay('2026-10-13Tnonsense')).toBe('2026-10-13');
     });
   });
 

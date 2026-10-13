@@ -528,9 +528,23 @@ describe('ClientDetailPage', () => {
       renderPage();
 
       const row = rowOf(paymentsSection(), 'wire');
-      expect(row).toHaveTextContent(formatDate('2026-10-05', 'en-US'));
+      expect(row).toHaveTextContent('Oct 5, 2026');
       expect(row).toHaveTextContent('$200');
       expect(row).toHaveTextContent('Homepage');
+    });
+
+    // MUT-169: an edited payment is saved date-only, which new Date() reads as
+    // UTC midnight -- the evening before west of UTC
+    it('shows a payment on its own day west of UTC', () => {
+      const savedTz = process.env.TZ;
+      process.env.TZ = 'America/New_York';
+      try {
+        renderPage();
+        expect(rowOf(paymentsSection(), 'wire')).toHaveTextContent('Oct 5, 2026');
+      } finally {
+        if (savedTz === undefined) delete process.env.TZ;
+        else process.env.TZ = savedTz;
+      }
     });
 
     it('fetches the full history, not the work-list period', () => {

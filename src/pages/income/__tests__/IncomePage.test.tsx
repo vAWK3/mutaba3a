@@ -63,6 +63,7 @@ vi.mock('../../../lib/i18n', () => ({
       'income.clientScope.clear': 'Clear filter: {name}',
       'common.markPaid': 'Mark as Paid',
       'common.duplicate': 'Duplicate',
+      'transactions.partialPayment.editPayment': 'Edit Payment',
       'transactions.status.paid': 'Paid',
       'transactions.status.unpaid': 'Unpaid',
       'transactions.status.partial': 'Partial ({{percent}}%)',
@@ -912,6 +913,53 @@ describe('IncomePage', () => {
       expect(screen.getAllByRole('button', { name: /record payment/i })).toHaveLength(3);
       const paidRow = screen.getByText('Website Redesign').closest('tr');
       expect(paidRow?.querySelector('button.btn-secondary')).toBeNull();
+    });
+
+    // MUT-169: fix a payment's date from the ledger, not just the client page
+    describe('Edit Payment', () => {
+      async function kebabItems(user: ReturnType<typeof userEvent.setup>, rowText: string) {
+        const row = screen.getByText(rowText).closest('tr') as HTMLElement;
+        await user.click(within(row).getByRole('button', { name: 'Actions' }));
+        return screen.getAllByRole('menuitem').map((item) => item.textContent);
+      }
+
+      it.each([
+        ['a fully paid row', 0, 'Website Redesign'],
+        ['a part-paid row', 3, 'Gamma LLC'],
+      ])('is offered on %s and opens the drawer to edit its payment', async (_label, index, rowText) => {
+        const user = userEvent.setup();
+        const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+        vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+          data: [mockIncomeTransactions[index]],
+          isLoading: false,
+        } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+        renderWithProviders(<IncomePage />);
+        await waitFor(() => expect(screen.getByText(rowText)).toBeInTheDocument());
+
+        expect(await kebabItems(user, rowText)).toContain('Edit Payment');
+        await user.click(screen.getByRole('menuitem', { name: 'Edit Payment' }));
+
+        expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({
+          transactionId: mockIncomeTransactions[index].id,
+          intent: 'editPayment',
+        });
+        expect(mockOpenTransactionDrawer).not.toHaveBeenCalled();
+      });
+
+      it('is not offered on a row with nothing received', async () => {
+        const user = userEvent.setup();
+        const useIncomeQueries = await import('../../../hooks/useIncomeQueries');
+        vi.spyOn(useIncomeQueries, 'useIncome').mockReturnValue({
+          data: [mockIncomeTransactions[1]], // Beta Inc - unpaid
+          isLoading: false,
+        } as unknown as ReturnType<typeof useIncomeQueries.useIncome>);
+
+        renderWithProviders(<IncomePage />);
+        await waitFor(() => expect(screen.getByText('Beta Inc')).toBeInTheDocument());
+
+        expect(await kebabItems(user, 'Beta Inc')).not.toContain('Edit Payment');
+      });
     });
 
     it('should show correct payment status for partial payment', async () => {

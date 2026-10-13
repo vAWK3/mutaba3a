@@ -5,6 +5,8 @@ tier: core
 paths:
   - src/components/drawers/PartialPaymentDrawer.tsx
   - src/components/drawers/PartialPaymentDrawer.css
+  - src/pages/income/IncomePage.tsx
+  - src/pages/income/incomeRows.ts
 features:
   - id: full-settle
     title: "Record Payment on an unpaid row settles it in full in two clicks (MUT-86)"
@@ -42,3 +44,25 @@ features:
       - Open the Payment date field and the Add note field
     expect:
       - No new accessibility violations beyond the known Record-Payment-button contrast issue
+  - id: edit-payment-date
+    title: "A paid row's menu fixes its payment date, and Enter saves it (MUT-169)"
+    tier: core
+    legacy: [MUT-169]
+    steps:
+      - Log an income entry and settle it in full
+      - Open Edit Payment from the row's Actions menu
+      - Type a date three days ago in the focused date field and press Enter
+      - Reopen Edit Payment
+    expect:
+      - The drawer opens on the payment, titled Edit Payment, with the date focused and set to today
+      - Enter updates the payment and closes the drawer
+      - Reopened, it is still one payment, on the new date, with nothing to record
+  - id: edit-payment-date-rtl
+    title: "In Arabic a paid row's menu fixes its payment date (MUT-169)"
+    tier: secondary
+    legacy: [MUT-169]
+    steps:
+      - Log an income entry, settle it in full, switch to Arabic
+      - Edit the payment date from the row's menu and Update
+    expect:
+      - The Arabic drawer opens on the payment with the date focused, and the new date is saved

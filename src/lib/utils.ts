@@ -1,6 +1,6 @@
 import type { Currency } from '../types';
 import type { Language } from './i18n';
-import { formatLocalDate, todayLocalISO, daysUntilDue } from './dates';
+import { formatLocalDate, todayLocalISO, daysUntilDue, paymentLocalDay } from './dates';
 
 /**
  * Get the locale string for Intl APIs based on language
@@ -261,6 +261,15 @@ export function formatDate(isoString: string, locale: string = 'en-US'): string 
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+/**
+ * A payment date as the user's own day (MUT-169). formatDate() would read a
+ * date-only paidAt as UTC midnight, the evening before west of UTC; this reads
+ * it, and a timestamp, as the local calendar day (paymentLocalDay).
+ */
+export function formatPaymentDate(paidAt: string, locale: string = 'en-US'): string {
+  return formatDate(`${paymentLocalDay(paidAt)}T00:00:00`, locale);
 }
 
 export function formatDateShort(isoString: string, locale: string = 'en-US'): string {
