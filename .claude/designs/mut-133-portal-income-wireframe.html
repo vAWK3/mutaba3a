@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-133 Portal Income Wireframe</title>
+<style>
+/* Brand v2 primitives copied from src/styles/brand/mutaba3a-theme.css (MUT-102), mapped the way src/styles/theme.css maps them. */
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Regular.otf");font-weight:400;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Medium.otf");font-weight:500;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Bold.otf");font-weight:700;font-display:swap}
+@font-face{font-family:"Thmanyah Serif Display";src:url("../../src/assets/fonts/thmanyah-serif-display-bold.otf");font-weight:700;font-display:swap}
+:root{
+  --m-canvas:oklch(0.975 0.014 80);--m-surface:oklch(0.993 0.008 80);--m-line:oklch(0.92 0.015 300);--m-field-bg:oklch(0.965 0.012 300);
+  --m-ink:oklch(0.33 0.05 300);--m-ink2:oklch(0.442 0.043 298.7);--m-primary:oklch(0.55 0.14 295);--m-primary-hover:oklch(0.46 0.142 293.8);
+  --m-on-primary:oklch(0.98 0.012 80);--m-focus:oklch(0.6 0.13 295);--m-lavender:oklch(0.9 0.06 295);--m-lavender-ink:oklch(0.401 0.114 294.5);
+  --m-mint:oklch(0.9 0.06 165);--m-mint-ink:oklch(0.387 0.076 170.2);--m-rose:oklch(0.9 0.06 10);--m-rose-ink:oklch(0.398 0.103 14.8);
+  --m-peach:oklch(0.9 0.06 55);--m-peach-ink:oklch(0.4 0.104 50.8);--m-butter:oklch(0.93 0.07 95);--m-butter-ink:oklch(0.419 0.083 74.8);
+  --m-shadow-tint:oklch(0.45 0.08 300);
+  --font-body:"Thmanyah Sans",system-ui,sans-serif;--font-display:"Thmanyah Serif Display",serif;--font-num:"IBM Plex Mono","Thmanyah Sans",ui-monospace,monospace;
+  --text-micro:.6875rem;--text-label:.8125rem;--text-body:1rem;--text-headline:1.25rem;--text-title:2rem;
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;
+  --radius-xs:4px;--radius-sm:12px;--radius-md:14px;--radius-lg:18px;--radius-pill:999px;
+  --bg:var(--m-canvas);--surface:var(--m-surface);--surface-2:var(--m-field-bg);--text:var(--m-ink);--muted:var(--m-ink2);--border:var(--m-line);
+  --error:var(--m-rose-ink);--error-subtle:var(--m-rose);--btn-fill:var(--m-primary-hover);
+  --shadow-drawer:0 1px 2px color-mix(in oklch,var(--m-shadow-tint) 6%,transparent),0 12px 40px color-mix(in oklch,var(--m-shadow-tint) 12%,transparent);
+}
+[data-theme="dark"]{
+  --m-canvas:oklch(0.24 0.035 300);--m-surface:oklch(0.29 0.04 300);--m-line:oklch(0.4 0.04 300);--m-field-bg:oklch(0.34 0.045 300);
+  --m-ink:oklch(0.95 0.015 80);--m-ink2:oklch(0.78 0.03 300);--m-primary:oklch(0.78 0.11 295);--m-primary-hover:oklch(0.82 0.1 295);
+  --m-on-primary:oklch(0.27 0.06 300);--m-focus:oklch(0.75 0.12 295);--m-lavender:oklch(0.38 0.07 295);--m-lavender-ink:oklch(0.88 0.08 295);
+  --m-mint:oklch(0.38 0.07 165);--m-mint-ink:oklch(0.88 0.08 165);--m-rose:oklch(0.38 0.07 10);--m-rose-ink:oklch(0.88 0.08 10);
+  --m-peach:oklch(0.38 0.07 55);--m-peach-ink:oklch(0.88 0.08 55);--m-butter:oklch(0.4 0.06 85);--m-butter-ink:oklch(0.9 0.09 95);
+  --m-shadow-tint:oklch(0.15 0.03 300);
+}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-body);line-height:1.5}
+::selection{background:var(--m-lavender);color:var(--m-lavender-ink)}
+.wrap{max-width:1240px;margin:0 auto;padding:var(--space-6) var(--space-4) var(--space-8)}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;padding:var(--space-3) var(--space-4);background:var(--surface);border-bottom:1px solid var(--border)}
+.toolbar strong{margin-inline-end:auto;font-size:var(--text-label)}
+.toolbar button{font:inherit;font-size:var(--text-label);padding:var(--space-1) var(--space-3);border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);cursor:pointer}
+h1.doc{font-family:var(--font-display);font-size:var(--text-title);font-weight:700;margin:var(--space-4) 0 var(--space-1)}
+.lede{color:var(--muted);max-width:72ch;margin:0 0 var(--space-6)}
+h2.sec{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:var(--space-8) 0 var(--space-2)}
+.note{color:var(--muted);font-size:var(--text-label);max-width:80ch;margin:0 0 var(--space-3)}
+.gap{display:inline-block;font-size:var(--text-micro);font-weight:500;letter-spacing:.02em;padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-butter);color:var(--m-butter-ink);vertical-align:middle;margin-inline-start:var(--space-2)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:var(--space-5);align-items:start}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+@media (pointer: coarse){td.sticky .btn-sm{height:44px;min-height:44px;padding-inline:var(--space-4)}}
+/* Portal page */
+.page{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5);overflow:hidden}
+.ph{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-4)}
+.ph h3{font-family:var(--font-display);font-size:var(--text-title);font-weight:700;margin:0}
+.btn{font:inherit;font-size:var(--text-label);font-weight:500;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);border:1px solid transparent;cursor:pointer;min-height:36px}
+.btn-primary{background:var(--btn-fill);color:var(--m-on-primary)}
+.btn-secondary{background:var(--surface);color:var(--text);border-color:var(--border)}
+.btn-sm{padding:var(--space-1) var(--space-3);min-height:32px}
+.btn:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--m-focus),0 0 0 5px oklch(0.6 0.13 295 / .14)}
+.filters{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-3)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:var(--radius-pill);padding:3px}
+.seg span{font-size:var(--text-label);padding:var(--space-1) var(--space-3);border-radius:var(--radius-pill);color:var(--muted)}
+.seg span.on{background:var(--m-lavender);color:var(--m-lavender-ink);font-weight:500}
+.chip{font-size:var(--text-label);padding:var(--space-1) var(--space-3);border:1px solid var(--border);border-radius:var(--radius-pill);color:var(--muted);background:var(--surface)}
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md)}
+table{width:100%;border-collapse:collapse;font-size:var(--text-label)}
+th{text-align:start;color:var(--muted);font-weight:500;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:var(--space-3);border-bottom:1px solid var(--border);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.num{text-align:end;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.badge{font-size:var(--text-micro);font-weight:500;padding:2px var(--space-2);border-radius:var(--radius-pill)}
+.b-due{background:var(--m-peach);color:var(--m-peach-ink)}.b-over{background:var(--m-rose);color:var(--m-rose-ink)}
+.b-part{background:var(--m-butter);color:var(--m-butter-ink)}.b-paid{background:var(--m-mint);color:var(--m-mint-ink)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.readonly{display:flex;gap:var(--space-2);align-items:center;font-size:var(--text-label);color:var(--muted);background:var(--surface-2);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);margin-bottom:var(--space-3)}
+/* Drawer */
+.drawer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-drawer);display:flex;flex-direction:column;min-height:560px}
+.dh{display:flex;justify-content:space-between;align-items:center;padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border)}
+.dh h4{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:0}
+.x{border:0;background:none;color:var(--muted);font-size:1.25rem;cursor:pointer}
+.db{padding:var(--space-5);display:flex;flex-direction:column;gap:var(--space-4);flex:1}
+.df{padding:var(--space-3) var(--space-5);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:var(--space-2)}
+.fg label{display:block;font-size:var(--text-label);font-weight:500;margin-bottom:var(--space-1)}
+.input{width:100%;font:inherit;font-size:var(--text-body);color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);min-height:44px}
+.input.num{font-family:var(--font-num)}
+.row2{display:grid;grid-template-columns:1fr 120px;gap:var(--space-3)}
+.hint{font-size:var(--text-label);color:var(--muted);margin-top:var(--space-1)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:var(--space-1) var(--space-4);font-size:var(--text-label);background:var(--surface-2);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4)}
+.facts dt{color:var(--muted)}.facts dd{margin:0}
+.big{font-family:var(--font-num);font-size:var(--text-headline);font-weight:500}
+.optional{color:var(--muted);font-weight:400}
+.legend{font-size:var(--text-label);color:var(--muted);margin-top:var(--space-3)}
+.sticky{position:sticky;inset-inline-end:0;background:var(--surface);border-inline-start:1px solid var(--border)}
+th.sticky{background:var(--surface)}
+.ctx{font-size:var(--text-label);color:var(--muted);margin:var(--space-1) 0 0;overflow-wrap:anywhere}
+.live{font-size:var(--text-label);margin-top:var(--space-1)}
+.live.owed{color:var(--muted)}.live.done{color:var(--m-mint-ink)}.live.over{color:var(--m-rose-ink)}
+.disclosure{display:flex;align-items:baseline;gap:var(--space-3);flex-wrap:wrap}
+.disclosure button{font:inherit;font-size:var(--text-label);font-weight:500;background:none;border:0;padding:0;color:var(--m-primary-hover);cursor:pointer}
+.disclosure .sum{font-size:var(--text-label);color:var(--muted)}
+.honest{font-size:var(--text-label);color:var(--muted);padding:var(--space-2) var(--space-5) 0}
+.toast{display:inline-flex;gap:var(--space-2);align-items:center;font-size:var(--text-label);background:var(--m-mint);color:var(--m-mint-ink);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);margin-top:var(--space-3)}
+.radios{display:inline-flex;background:var(--surface-2);border-radius:var(--radius-pill);padding:3px}
+.radios span{font-size:var(--text-label);padding:var(--space-1) var(--space-4);border-radius:var(--radius-pill);color:var(--muted)}
+.radios span.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:0 1px 2px color-mix(in oklch,var(--m-shadow-tint) 12%,transparent)}
+.skel{height:14px;border-radius:var(--radius-xs);background:var(--surface-2);margin:var(--space-1) 0}
+.tag{display:inline-block;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-lavender);color:var(--m-lavender-ink);vertical-align:middle;margin-inline-start:var(--space-2)}
+</style>
+</head>
+<body>
+<div class="toolbar" role="toolbar" aria-label="Wireframe controls">
+  <strong>MUT-133 · portal income writes · after design review</strong>
+  <button type="button" id="theme">Toggle dark</button>
+  <button type="button" id="dir">Toggle RTL (العربية)</button>
+</div>
+<main class="wrap">
+  <h1 class="doc" data-en="Add income and Record payment on a personal profile" data-ar="إضافة دخل وتسجيل دفعة على الملف الشخصي">Add income and Record payment on a personal profile</h1>
+  <p class="lede" data-en="The plan after the design review (2026-10-14). Lavender tags name the decision behind each element." data-ar="الخطة بعد مراجعة التصميم. الوسوم البنفسجية تشير إلى القرار وراء كل عنصر.">The plan after the design review (2026-10-14). Lavender tags name the decision behind each element.</p>
+
+  <h2 class="sec">1 · Receivables (personal profile) and New income drawer</h2>
+  <p class="note">No lock notice (12A). The header action reads "+ Add income" (11A). Record payment is a secondary sm button in a sticky end column (Pass 5, 8A) that grows to 44px on touch (10A). Narrow this window to see the column stay pinned.</p>
+  <div class="grid">
+    <section class="page" aria-label="Receivables page">
+      <div class="ph">
+        <h3 tabindex="-1" data-en="Receivables" data-ar="المستحقات">Receivables</h3>
+        <button class="btn btn-primary" type="button" data-en="+ Add income" data-ar="+ إضافة دخل">+ Add income</button>
+      </div>
+      <div class="filters">
+        <span class="seg"><span class="on" data-en="Open" data-ar="مفتوحة">Open</span><span data-en="Settled" data-ar="مسددة">Settled</span><span data-en="All" data-ar="الكل">All</span></span>
+        <span class="chip" data-en="Client" data-ar="العميل">Client</span><span class="chip" data-en="Matter" data-ar="الملف">Matter</span><span class="chip" data-en="Currency" data-ar="العملة">Currency</span>
+      </div>
+      <div class="tw">
+        <table aria-label="Receivables">
+          <thead><tr>
+            <th data-en="Client" data-ar="العميل">Client</th><th data-en="Matter" data-ar="الملف">Matter</th><th data-en="Due" data-ar="الاستحقاق">Due</th>
+            <th class="num" data-en="Amount" data-ar="المبلغ">Amount</th><th class="num" data-en="Paid" data-ar="المدفوع">Paid</th><th class="num" data-en="Outstanding" data-ar="المتبقي">Outstanding</th>
+            <th data-en="Status" data-ar="الحالة">Status</th><th class="sticky"><span class="vh">Actions</span></th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Nour Studio</td><td>Brand refresh</td><td>15 Sep 2026</td><td class="num"><bdi dir="ltr">$2,400.00</bdi></td><td class="num"><bdi dir="ltr">$0.00</bdi></td><td class="num"><bdi dir="ltr">$2,400.00</bdi></td><td><span class="badge b-over" data-en="Overdue" data-ar="متأخر">Overdue</span></td><td class="sticky"><button class="btn btn-secondary btn-sm" type="button" aria-label="Record payment, remaining: $2,400.00" data-en="Record payment" data-ar="تسجيل دفعة">Record payment</button></td></tr>
+            <tr><td>Haddad Legal</td><td>—</td><td>15 Oct 2026</td><td class="num"><bdi dir="ltr">₪8,000.00</bdi></td><td class="num"><bdi dir="ltr">₪3,000.00</bdi></td><td class="num"><bdi dir="ltr">₪5,000.00</bdi></td><td><span class="badge b-part" data-en="Partly paid" data-ar="مدفوع جزئياً">Partly paid</span></td><td class="sticky"><button class="btn btn-secondary btn-sm" type="button" aria-label="Record payment, remaining: ₪5,000.00" data-en="Record payment" data-ar="تسجيل دفعة">Record payment</button></td></tr>
+            <tr><td>Saleh &amp; Co</td><td>Annual retainer</td><td>15 Nov 2026</td><td class="num"><bdi dir="ltr">JOD 950.000</bdi></td><td class="num"><bdi dir="ltr">JOD 0.000</bdi></td><td class="num"><bdi dir="ltr">JOD 950.000</bdi></td><td><span class="badge b-due" data-en="Due" data-ar="مستحق">Due</span></td><td class="sticky"><button class="btn btn-secondary btn-sm" type="button" aria-label="Record payment, remaining: JOD 950.000" data-en="Record payment" data-ar="تسجيل دفعة">Record payment</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="toast" role="status"><span data-en="Saved · ₪500.00 owed by Nour Studio" data-ar="تم الحفظ · ₪500.00 مستحقة على Nour Studio">Saved · ₪500.00 owed by Nour Studio</span></div><span class="tag">3A polite status, no Undo</span>
+    </section>
+
+    <aside class="drawer" aria-label="New income drawer">
+      <div class="dh"><h4 data-en="New income" data-ar="دخل جديد">New income</h4><button class="x" type="button" aria-label="Close">×</button></div>
+      <div class="db">
+        <div class="fg"><label id="kind-l" data-en="Kind" data-ar="النوع">Kind</label><span class="radios" role="radiogroup" aria-labelledby="kind-l"><span role="radio" aria-checked="false" data-en="Received" data-ar="مستلم">Received</span><span class="on" role="radio" aria-checked="true" data-en="Owed" data-ar="مستحق">Owed</span></span> <span class="tag">7A radiogroup</span></div>
+        <div class="fg"><label data-en="Amount" data-ar="المبلغ">Amount</label><input class="input num" dir="ltr" inputmode="decimal" placeholder="0.00"></div>
+        <div class="fg"><label data-en="Client" data-ar="العميل">Client</label><input class="input" placeholder="Search clients"></div>
+        <div class="fg"><label data-en="What was it for?" data-ar="مقابل ماذا؟">What was it for?</label><input class="input" placeholder="e.g. Logo redesign"></div>
+        <div class="disclosure"><button type="button" aria-expanded="false" data-en="More details" data-ar="تفاصيل أكثر">More details</button><span class="sum"><bdi dir="ltr">ILS</bdi> · <span data-en="today" data-ar="اليوم">today</span> · <span data-en="due 15 Nov" data-ar="الاستحقاق ١٥ نوفمبر">due 15 Nov</span></span><span class="tag">1A fast path</span></div>
+        <p class="hint" data-en="Inside More details: Currency, Date, Due date (Owed) or Method (Received), Matter, Notes. An error inside opens it." data-ar="داخل التفاصيل: العملة، التاريخ، تاريخ الاستحقاق أو طريقة الدفع، الملف، الملاحظات.">Inside More details: Currency, Date, Due date (Owed) or Method (Received), Matter, Notes. An error inside opens it.</p>
+      </div>
+      <div class="df"><button class="btn btn-secondary" type="button" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" type="button" data-en="Save income" data-ar="حفظ الدخل">Save income</button></div>
+    </aside>
+  </div>
+
+  <h2 class="sec">2 · Record payment drawer: loaded, and loading</h2>
+  <p class="note">The title carries what's left; a context line wraps, never truncates (2A). The live line comes from the fresh outstanding (4A). The honest note (6A) sits above the footer. While loading, the drawer opens at once with a skeleton (5A).</p>
+  <div class="grid">
+    <aside class="drawer" aria-label="Record payment drawer (loading)" style="min-height:360px">
+      <div class="dh"><h4 data-en="Record payment" data-ar="تسجيل دفعة">Record payment</h4><button class="x" type="button" aria-label="Close">×</button></div>
+      <div class="db" aria-busy="true">
+        <div class="skel" style="width:70%"></div>
+        <div class="fg"><label data-en="Amount" data-ar="المبلغ">Amount</label><div class="skel" style="height:44px;border-radius:12px"></div></div>
+        <span class="tag">5A skeleton, Save disabled</span>
+      </div>
+      <div class="df"><button class="btn btn-secondary" type="button" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" type="button" disabled style="opacity:.5" data-en="Record payment" data-ar="تسجيل دفعة">Record payment</button></div>
+    </aside>
+    <aside class="drawer" aria-label="Record payment drawer">
+      <div class="dh"><div><h4><span data-en="Record payment" data-ar="تسجيل دفعة">Record payment</span> · <bdi dir="ltr" style="font-family:var(--font-num)">₪5,000.00</bdi> <span data-en="left" data-ar="متبقٍ">left</span></h4><p class="ctx">Haddad Legal · — · <span data-en="due 15 Oct 2026" data-ar="الاستحقاق ١٥ أكتوبر ٢٠٢٦">due 15 Oct 2026</span></p></div><button class="x" type="button" aria-label="Close">×</button></div>
+      <div class="db">
+        <div class="fg"><label data-en="Amount (ILS)" data-ar="المبلغ (ILS)">Amount (ILS)</label><input class="input num" dir="ltr" value="2000.00" inputmode="decimal"><p class="live owed" role="status"><bdi dir="ltr">₪3,000.00</bdi> <span data-en="still owed" data-ar="ما زال مستحقاً">still owed</span></p></div>
+        <div class="fg"><label data-en="Paid on" data-ar="تاريخ الدفع">Paid on</label><input class="input" type="date" value="2026-10-14"><p class="hint" data-en="Today in the profile's timezone (R3)." data-ar="اليوم بتوقيت الملف.">Today in the profile's timezone (R3).</p></div>
+        <div class="fg"><label id="m-l" data-en="Method" data-ar="طريقة الدفع">Method</label><span class="radios" role="radiogroup" aria-labelledby="m-l"><span class="on" role="radio" aria-checked="true" data-en="Cash" data-ar="نقداً">Cash</span><span role="radio" aria-checked="false" data-en="Bank" data-ar="تحويل بنكي">Bank</span></span></div>
+        <p class="note" style="margin:0">Other live states: <span class="live done">Paid in full</span> · <span class="live over">Exceeds what's left (₪5,000.00), Save blocked</span></p>
+      </div>
+      <p class="honest" data-en="Check the amount: a recorded payment can't be changed yet." data-ar="تحقّق من المبلغ: لا يمكن تعديل الدفعة بعد تسجيلها حالياً.">Check the amount: a recorded payment can't be changed yet.</p>
+      <div class="df"><button class="btn btn-secondary" type="button" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" type="button" data-en="Record payment" data-ar="تسجيل دفعة">Record payment</button></div>
+    </aside>
+  </div>
+
+  <h2 class="sec">3 · Malafat-fed profile: unchanged (regression contract, AC4)</h2>
+  <section class="page" aria-label="Malafat profile receivables">
+    <div class="ph"><h3 data-en="Receivables" data-ar="المستحقات">Receivables</h3></div>
+    <p class="readonly" role="note"><span aria-hidden="true">🔒</span> <span data-en="Malafat records income and payments for this profile. To change them, use Malafat." data-ar="يسجّل ملفات الدخل والدفعات لهذا الملف. لتعديلها استخدم ملفات.">Malafat records income and payments for this profile. To change them, use Malafat.</span></p>
+    <div class="tw"><table aria-label="Receivables (Malafat)"><thead><tr><th>Client</th><th>Matter</th><th>Due</th><th class="num">Outstanding</th><th>Status</th></tr></thead>
+    <tbody><tr><td>Al-Amal Co</td><td>Case 2026/14</td><td>30 Oct 2026</td><td class="num"><bdi dir="ltr">$1,200.00</bdi></td><td><span class="badge b-due">Due</span></td></tr></tbody></table></div>
+    <p class="legend">No header button and no actions column; <code>?newIncome=</code> / <code>?settle=</code> do nothing. (The lock glyph stands in for the portal's LockIcon.)</p>
+  </section>
+</main>
+<script>
+(function(){
+  var root=document.documentElement;
+  document.getElementById('theme').addEventListener('click',function(){root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';});
+  document.getElementById('dir').addEventListener('click',function(){
+    var rtl=root.dir!=='rtl';root.dir=rtl?'rtl':'ltr';root.lang=rtl?'ar':'en';
+    document.querySelectorAll('[data-en]').forEach(function(el){el.textContent=rtl?el.dataset.ar:el.dataset.en;});
+  });
+})();
+</script>
+</body>
+</html>
