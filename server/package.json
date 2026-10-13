@@ -37,6 +37,7 @@
     "smoke": "tsx src/scripts/smoke.ts",
     "seed:demo-account": "tsx src/scripts/seed-demo-account.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
+    "backfill:personal-categories": "tsx src/scripts/backfill-personal-expense-categories.ts",
     "post-roll": "tsx src/scripts/post-roll.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
