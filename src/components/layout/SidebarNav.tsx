@@ -8,7 +8,6 @@ import { useAddMenuActions } from "../../hooks/useAddMenuActions";
 import { ProfileQuickPicker } from "../ui/ProfileQuickPicker";
 import { useFeatureFlags } from "../../lib/features/useFeatures";
 import { useMenuButton } from "../../hooks/useMenuButton";
-import { DocumentIcon as SharedDocumentIcon } from "../icons";
 import type { FeatureKey } from "../../types";
 import type { AddMenuAction } from "./addMenuActions";
 import { ThemeToggle } from "./ThemeToggle";
@@ -68,7 +67,6 @@ const coreItems: NavItem[] = [
 // Advanced-features switch is on, in the "More" section below the core.
 const optionalItems: (NavItem & { feature: FeatureKey })[] = [
   { path: "/expenses", labelKey: "nav.expenses", icon: ExpensesIcon, feature: "expenses" },
-  { path: "/documents", labelKey: "nav.documents", icon: DocumentIcon, feature: "invoices" },
   { path: "/retainers", labelKey: "nav.retainers", icon: RetainerIcon, feature: "retainers" },
   { path: "/insights", labelKey: "nav.insights", icon: InsightsIcon, feature: "insights" },
   { path: "/planning", labelKey: "nav.planning", icon: PlanningIcon, feature: "planning" },
@@ -297,10 +295,6 @@ export function SidebarNav() {
 }
 
 // Icons
-
-function DocumentIcon({ className }: { className?: string }) {
-  return <SharedDocumentIcon size={18} className={className} />;
-}
 
 function RetainerIcon({ className }: { className?: string }) {
   return (

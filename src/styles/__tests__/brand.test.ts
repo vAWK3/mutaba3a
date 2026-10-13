@@ -55,7 +55,11 @@ describe('fonts', () => {
   });
 
   it('keeps no Thmanyah copy in public/ (the portal cannot see it; one location only)', () => {
-    expect(readdirSync(repoPath('public/fonts')).filter((name) => /thmanyah/i.test(name))).toEqual([]);
+    // MUT-145 deleted public/fonts (the PDF-only TTFs); if it ever comes back,
+    // it still must not hold a Thmanyah copy.
+    const dir = repoPath('public/fonts');
+    const names = existsSync(dir) ? readdirSync(dir) : [];
+    expect(names.filter((name) => /thmanyah/i.test(name))).toEqual([]);
   });
 
   it('declares Thmanyah Sans 400/500/700 and Serif Display 400/700, all swap, all from the bundled files', () => {

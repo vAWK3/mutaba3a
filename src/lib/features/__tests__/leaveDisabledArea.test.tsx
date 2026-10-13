@@ -113,10 +113,10 @@ describe('useLeaveDisabledArea (MUT-15)', () => {
   });
 
   it('keeps the page when a different area is switched off (the guard re-runs and admits)', async () => {
-    const fake = installFakeSettings({ features: { expenses: true, invoices: true } });
+    const fake = installFakeSettings({ features: { expenses: true, retainers: true } });
     const { router, queryClient, invalidate } = await renderAt('/expenses', 'expenses page');
 
-    fake.set({ features: { expenses: true, invoices: false } });
+    fake.set({ features: { expenses: true, retainers: false } });
     await settingsChanged(queryClient);
 
     await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));

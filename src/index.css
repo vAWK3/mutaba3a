@@ -3293,6 +3293,22 @@ a.project-tag:hover {
   font-weight: var(--weight-medium);
 }
 
+/* MUT-145: the name opens the profile drawer in place (no detail page). */
+.business-profile-name-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: var(--weight-medium);
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.business-profile-name-button:hover {
+  text-decoration: underline;
+}
+
 .business-profile-meta {
   display: flex;
   align-items: center;

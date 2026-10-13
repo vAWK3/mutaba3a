@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Currency, TxKind, DocumentType, Currency as CurrencyType, PaymentRecord } from '../types';
+import type { Currency, TxKind, Currency as CurrencyType, PaymentRecord } from '../types';
 
 // Income status for the income drawer (Earned/Invoiced/Received)
 export type IncomeStatus = 'earned' | 'invoiced' | 'received';
@@ -73,29 +73,6 @@ interface DrawerState {
   };
   openProjectDrawer: (options?: { mode?: 'create' | 'edit'; projectId?: string; defaultClientId?: string; defaultProfileId?: string }) => void;
   closeProjectDrawer: () => void;
-
-  // Document drawer
-  documentDrawer: {
-    isOpen: boolean;
-    mode: 'create' | 'edit';
-    documentId?: string;
-    defaultType?: DocumentType;
-    defaultClientId?: string;
-    defaultBusinessProfileId?: string;
-    refDocumentId?: string; // For credit notes
-    /** Income entry to prefill from and link to the created document (MUT-13) */
-    linkTransactionId?: string;
-  };
-  openDocumentDrawer: (options?: {
-    mode?: 'create' | 'edit';
-    documentId?: string;
-    defaultType?: DocumentType;
-    defaultClientId?: string;
-    defaultBusinessProfileId?: string;
-    refDocumentId?: string;
-    linkTransactionId?: string;
-  }) => void;
-  closeDocumentDrawer: () => void;
 
   // Business Profile drawer
   businessProfileDrawer: {
@@ -308,31 +285,6 @@ export const useDrawerStore = create<DrawerState>((set) => ({
   closeProjectDrawer: () =>
     set({
       projectDrawer: {
-        isOpen: false,
-        mode: 'create',
-      },
-    }),
-
-  documentDrawer: {
-    isOpen: false,
-    mode: 'create',
-  },
-  openDocumentDrawer: (options) =>
-    set({
-      documentDrawer: {
-        isOpen: true,
-        mode: options?.mode || 'create',
-        documentId: options?.documentId,
-        defaultType: options?.defaultType,
-        defaultClientId: options?.defaultClientId,
-        defaultBusinessProfileId: options?.defaultBusinessProfileId,
-        refDocumentId: options?.refDocumentId,
-        linkTransactionId: options?.linkTransactionId,
-      },
-    }),
-  closeDocumentDrawer: () =>
-    set({
-      documentDrawer: {
         isOpen: false,
         mode: 'create',
       },

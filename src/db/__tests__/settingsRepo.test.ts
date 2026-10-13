@@ -96,12 +96,12 @@ describe('settingsRepo', () => {
     });
 
     it('clears the notice without touching the features', async () => {
-      await settingsRepo.update({ features: { ...DEFAULT_FEATURES, invoices: true }, featureNotice: ['invoices'] });
+      await settingsRepo.update({ features: { ...DEFAULT_FEATURES, retainers: true }, featureNotice: ['retainers'] });
       await settingsRepo.update({ featureNotice: undefined });
 
       const settings = await settingsRepo.get();
       expect(settings.featureNotice).toBeUndefined();
-      expect(settings.features?.invoices).toBe(true);
+      expect(settings.features?.retainers).toBe(true);
     });
 
     it('seeds the same default row that get() falls back to: a fresh install has every area off and no notice', async () => {

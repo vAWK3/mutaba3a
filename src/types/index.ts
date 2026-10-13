@@ -74,11 +74,7 @@ export interface Transaction {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
-  linkedDocumentId?: string; // Optional link to invoice/receipt document
   linkedProjectedIncomeId?: string; // Optional link to projected income (from retainer)
-  // Immutability (locked when linked document is exported)
-  lockedAt?: string;           // ISO timestamp - locked when linked doc exported
-  lockedByDocumentId?: string; // ID of document that caused lock
   archivedAt?: string;         // ISO timestamp when archived
   needsReview?: boolean;       // Set during migration v17 for records needing user confirmation
 }
@@ -110,7 +106,6 @@ export interface FxRate {
 // The list of keys lives in src/lib/features/features.ts (FEATURE_KEYS);
 // this union is the type-level mirror so the types module stays import-free.
 export type FeatureKey =
-  | 'invoices'
   | 'retainers'
   | 'expenses'
   | 'insights'
@@ -346,22 +341,8 @@ export interface TransactionDisplay extends Transaction {
 }
 
 // ============================================================================
-// Document / Invoice Types
+// Business Profile Types
 // ============================================================================
-
-// Document types (invoice, receipt, etc.)
-export type DocumentType =
-  | 'invoice'
-  | 'receipt'
-  | 'invoice_receipt'
-  | 'credit_note'
-  | 'price_offer'
-  | 'proforma_invoice'
-  | 'donation_receipt'
-  | 'payment_request';
-
-// Document status
-export type DocumentStatus = 'draft' | 'issued' | 'paid' | 'voided';
 
 // Business type for tax purposes
 export type BusinessType = 'exempt' | 'authorized' | 'company' | 'lawyer' | 'none';
@@ -371,9 +352,6 @@ export type DocumentLanguage = 'ar' | 'en';
 
 // Payment method
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'cheque' | 'credit_card' | 'other';
-
-// Template ID type
-export type TemplateId = 'template1' | 'template2' | 'template3';
 
 // Business Profile entity (multi-identity support)
 export interface BusinessProfile {
@@ -397,144 +375,9 @@ export interface BusinessProfile {
   defaultLanguage: DocumentLanguage;
   isDefault: boolean;              // Only one can be default
 
-  // Document defaults
-  website?: string;
-  defaultTemplateId?: TemplateId;
-  defaultTaxRate?: number;         // e.g., 0.17 for 17%
-  allowedCurrencies?: Currency[];  // Restrict available currencies
-
-  // Payment/Bank details (for PDF footer)
-  bankName?: string;
-  bankBranch?: string;
-  bankAccountNumber?: string;
-  bankIban?: string;
-  paymentNotes?: string;           // Additional payment instructions
-
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
-}
-
-// Document line item (embedded in Document.items)
-export interface DocumentItem {
-  name: string;
-  quantity: number;
-  rateMinor: number;               // Price per unit in minor units (cents/agorot)
-  rateVatMinor: number;            // Price including VAT in minor units
-  discountMinor: number;           // Discount in minor units
-  taxExempt: boolean;
-}
-
-// Document payment record (embedded in Document.payments)
-export interface DocumentPayment {
-  id: string;
-  amountMinor: number;
-  currency: Currency;
-  method: PaymentMethod;
-  details?: Record<string, unknown>;
-  notes?: string;
-  paidAt: string;
-}
-
-// Document entity (Invoice, Receipt, Credit Note, etc.)
-export interface Document {
-  id: string;
-  number: string;                  // Auto-generated: INV-001, REC-001, etc.
-  type: DocumentType;
-  status: DocumentStatus;
-  businessProfileId: string;       // FK to BusinessProfile
-  clientId?: string;               // FK to Client
-
-  // Document content
-  subject?: string;
-  brief?: string;
-  notes?: string;
-
-  // Line items (embedded array)
-  items: DocumentItem[];
-
-  // Payment records (for receipts)
-  payments: DocumentPayment[];
-
-  // Amounts (stored in minor units)
-  subtotalMinor: number;
-  discountMinor: number;
-  taxMinor: number;
-  totalMinor: number;
-  taxRate: number;                 // e.g., 0.18 for 18%
-  vatEnabled: boolean;             // Toggle VAT on/off per document
-
-  // Currency & Language
-  currency: Currency;
-  language: DocumentLanguage;
-
-  // Dates
-  issueDate: string;               // ISO date
-  dueDate?: string;                // ISO date
-  paidAt?: string;                 // ISO timestamp when fully paid
-
-  // References
-  refDocumentId?: string;          // For credit notes, links to original document
-  linkedTransactionIds: string[];  // Links to transactions table
-
-  // Template
-  templateId: string;              // 'template1' | 'template2' | 'template3'
-
-  // Metadata
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string;              // Soft delete
-
-  // Immutability & Export tracking
-  lockedAt?: string;               // ISO timestamp - first export locks document
-  exportCount: number;             // Number of PDF exports (starts at 0)
-  lastExportedAt?: string;         // ISO timestamp of last export
-
-  // PDF Archival (Tauri desktop only)
-  pdfSavedPath?: string;           // Full path to archived PDF on disk
-  pdfSavedAt?: string;             // ISO timestamp when saved
-  pdfVersion?: number;             // PDF version (0 = never exported, 1+ = exported versions)
-  pdfVersionHistory?: Array<{      // History of all PDF versions
-    version: number;
-    path: string;
-    savedAt: string;
-  }>;
-
-  // Archive (soft-hide from lists)
-  archivedAt?: string;             // ISO timestamp when archived
-}
-
-// Document sequence for auto-numbering
-export interface DocumentSequence {
-  id: string;                      // "{businessProfileId}:{documentType}"
-  businessProfileId: string;
-  documentType: DocumentType;
-  lastNumber: number;
-  prefix: string;                  // Custom prefix (default: "INV", "REC", etc.)
-  prefixEnabled: boolean;          // Toggle prefix on/off
-  updatedAt: string;
-}
-
-// Query filters for documents
-export interface DocumentFilters {
-  dateFrom?: string;
-  dateTo?: string;
-  currency?: Currency;
-  type?: DocumentType;
-  status?: DocumentStatus;
-  businessProfileId?: string;
-  clientId?: string;
-  search?: string;
-  limit?: number;
-  offset?: number;
-  sort?: { by: string; dir: 'asc' | 'desc' };
-  includeArchived?: boolean;       // Include archived documents (default: false)
-}
-
-// Document with resolved names for display
-export interface DocumentDisplay extends Document {
-  clientName?: string;
-  businessProfileName?: string;
 }
 
 // ============================================================================

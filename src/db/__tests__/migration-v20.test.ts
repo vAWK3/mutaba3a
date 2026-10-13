@@ -76,8 +76,11 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
     expect(upgraded.verno).toBe(21); // the v20 upgrade runs on the way to v21
 
     const row = (await upgraded.settings.get('default')) as Settings;
-    expect(row.features).toEqual({ ...DEFAULT_FEATURES, invoices: true, projects: true });
-    expect(row.featureNotice).toEqual(['invoices', 'projects']);
+    // MUT-145: the document row no longer switches anything on (invoices is
+    // retired), but it survives the upgrade untouched (ADR-029).
+    expect(row.features).toEqual({ ...DEFAULT_FEATURES, projects: true });
+    expect(row.featureNotice).toEqual(['projects']);
+    expect(await upgraded.table('documents').count()).toBe(1);
     expect(row.enabledCurrencies).toEqual(['USD', 'EUR']);
     expect(row.defaultCurrency).toBe('EUR');
   });

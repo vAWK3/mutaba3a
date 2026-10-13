@@ -444,25 +444,6 @@ export async function validateMigration(): Promise<MigrationValidationResult> {
     }
   }
 
-  // V8+: Documents should have exportCount
-  if (version >= 8) {
-    try {
-      const docsWithoutExportCount = await db.documents
-        .filter(d => d.exportCount === undefined && !d.deletedAt)
-        .count();
-      if (docsWithoutExportCount > 0) {
-        issues.push({
-          table: 'documents',
-          severity: 'warning',
-          message: `${docsWithoutExportCount} documents missing exportCount`,
-          count: docsWithoutExportCount,
-        });
-      }
-    } catch {
-      // Table might not exist
-    }
-  }
-
   // Check for orphaned references
   try {
     // Transactions referencing non-existent clients

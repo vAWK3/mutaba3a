@@ -4,9 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LanguageProvider } from '../lib/i18n';
 import type {
   BusinessProfile,
-  Document,
   Client,
-  DocumentItem,
   Project,
   Transaction,
   Category,
@@ -98,66 +96,6 @@ export function createMockClient(overrides: Partial<Client> = {}): Client {
     notes: '',
     createdAt: now,
     updatedAt: now,
-    ...overrides,
-  };
-}
-
-export function createMockDocumentItem(overrides: Partial<DocumentItem> = {}): DocumentItem {
-  return {
-    name: 'Test Item',
-    quantity: 1,
-    rateMinor: 10000, // $100.00
-    rateVatMinor: 11700, // $117.00 with 17% VAT
-    discountMinor: 0,
-    taxExempt: false,
-    ...overrides,
-  };
-}
-
-export function createMockDocument(overrides: Partial<Document> = {}): Document {
-  const now = new Date().toISOString();
-  const items = overrides.items || [createMockDocumentItem()];
-
-  // Calculate totals
-  const subtotalMinor = items.reduce((sum, item) =>
-    sum + (item.quantity * item.rateMinor - item.discountMinor), 0);
-  const taxMinor = items.reduce((sum, item) => {
-    if (item.taxExempt) return sum;
-    const itemTotal = item.quantity * item.rateMinor - item.discountMinor;
-    return sum + Math.round(itemTotal * 0.17);
-  }, 0);
-  const totalMinor = subtotalMinor + taxMinor;
-
-  return {
-    id: `doc-${Math.random().toString(36).substr(2, 9)}`,
-    number: 'INV-0001',
-    type: 'invoice',
-    status: 'draft',
-    businessProfileId: 'profile-1',
-    clientId: 'client-1',
-    subject: 'Test Invoice',
-    brief: 'Test brief description',
-    notes: 'Test notes',
-    items,
-    payments: [],
-    subtotalMinor,
-    discountMinor: 0,
-    taxMinor,
-    totalMinor,
-    taxRate: 0.17,
-    vatEnabled: true,
-    currency: 'USD',
-    language: 'en',
-    issueDate: now,
-    dueDate: undefined,
-    paidAt: undefined,
-    refDocumentId: undefined,
-    linkedTransactionIds: [],
-    templateId: 'template1',
-    exportCount: 0,
-    createdAt: now,
-    updatedAt: now,
-    deletedAt: undefined,
     ...overrides,
   };
 }

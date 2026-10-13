@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { reconcileFeaturesWithData } from '../lib/features/features';
 import type { MonthCloseStatus } from './retained/monthCloseSchema';
+import type { Document, DocumentSequence } from './retained/documentSchema';
 import type {
   Client,
   Project,
@@ -9,8 +10,6 @@ import type {
   FxRate,
   Settings,
   BusinessProfile,
-  Document,
-  DocumentSequence,
   Expense,
   RecurringRule,
   RecurringOccurrence,
@@ -45,8 +44,8 @@ export class MiniCrmDatabase extends Dexie {
   fxRates!: Table<FxRate, string>;
   settings!: Table<Settings, string>;
 
-  // Document/Invoice tables
   businessProfiles!: Table<BusinessProfile, string>;
+  // Retained since MUT-145 retired document generation (ADR-029)
   documents!: Table<Document, string>;
   documentSequences!: Table<DocumentSequence, string>;
 

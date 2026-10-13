@@ -99,35 +99,32 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     expect(screen.getByText('nav.settings')).toBeInTheDocument();
   });
 
-  it('shows only Documents when invoices is on', async () => {
-    installFakeSettings({ features: { invoices: true } });
+  it('shows only Retainers when retainers is on', async () => {
+    installFakeSettings({ features: { retainers: true } });
     renderNav();
 
-    expect(await screen.findByText('nav.documents')).toBeInTheDocument();
+    expect(await screen.findByText('nav.retainers')).toBeInTheDocument();
     expect(optionalHeader()).toBeInTheDocument();
-    expect(screen.queryByText('nav.retainers')).toBeNull();
-    expect(screen.getByText('nav.documents').closest('a')).toHaveAttribute('href', '/documents');
+    expect(screen.getByText('nav.retainers').closest('a')).toHaveAttribute('href', '/retainers');
   });
 
-  it('shows Documents then Retainers when both are on', async () => {
-    installFakeSettings({ features: { invoices: true, retainers: true } });
+  it('never shows Documents, even with a stored invoices switch (MUT-145)', async () => {
+    installFakeSettings({ features: { invoices: true, retainers: true } as never });
     renderNav();
 
-    const docs = await screen.findByText('nav.documents');
-    const ret = await screen.findByText('nav.retainers');
-    expect(ret.closest('a')).toHaveAttribute('href', '/retainers');
-    // order: Documents before Retainers
-    expect(docs.compareDocumentPosition(ret) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(await screen.findByText('nav.retainers')).toBeInTheDocument();
+    expect(screen.queryByText('nav.documents')).toBeNull();
+    expect(document.querySelector('a[href="/documents"]')).toBeNull();
   });
 
-  it('shows Expenses in the optional section, before Documents, and offers it in + Add only while on (MUT-14)', async () => {
-    installFakeSettings({ features: { expenses: true, invoices: true } });
+  it('shows Expenses in the optional section, before Retainers, and offers it in + Add only while on (MUT-14)', async () => {
+    installFakeSettings({ features: { expenses: true, retainers: true } });
     renderNav();
 
     const expenses = await screen.findByText('nav.expenses');
-    const docs = await screen.findByText('nav.documents');
+    const ret = await screen.findByText('nav.retainers');
     expect(expenses.closest('a')).toHaveAttribute('href', '/expenses');
-    expect(expenses.compareDocumentPosition(docs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(expenses.compareDocumentPosition(ret) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(screen.getByText('nav.new'));
     expect(await screen.findByText('nav.newMenu.expense')).toBeInTheDocument();
@@ -211,7 +208,7 @@ describe('SidebarNav insights, planning and projects (MUT-16)', () => {
   });
 });
 
-const ALL_ON = { invoices: true, retainers: true, expenses: true, insights: true, planning: true, projects: true };
+const ALL_ON = { retainers: true, expenses: true, insights: true, planning: true, projects: true };
 
 /** The sidebar's destinations in DOM (and so Tab) order; label key, or `title` when collapsed. */
 function navLinks(container: HTMLElement): string[] {
@@ -249,7 +246,6 @@ describe('SidebarNav core shape (MUT-15)', () => {
       'nav.clients',
       'nav.income',
       'nav.expenses',
-      'nav.documents',
       'nav.retainers',
       'nav.insights',
       'nav.planning',
@@ -257,7 +253,7 @@ describe('SidebarNav core shape (MUT-15)', () => {
       'nav.settings',
     ]);
     const more = optionalHeader()!.closest('.nav-section')!;
-    expect(more.querySelectorAll('a.nav-item')).toHaveLength(6);
+    expect(more.querySelectorAll('a.nav-item')).toHaveLength(5);
   });
 
   it('adds and removes an area below the core without re-creating the core entries', async () => {
@@ -321,12 +317,10 @@ describe('SidebarNav active state (MUT-15)', () => {
     ['/clients/c1', 'nav.clients'],
     ['/income', 'nav.income'],
     ['/expenses', 'nav.expenses'],
-    ['/documents/d1/edit', 'nav.documents'],
     ['/retainers', 'nav.retainers'],
     ['/insights', 'nav.insights'],
     ['/planning', 'nav.planning'],
     ['/projects/p1', 'nav.projects'],
-    ['/settings/profiles/p1', 'nav.settings'],
     ['/settings/import', 'nav.settings'],
   ])('on %s only %s is active', async (pathname, expected) => {
     mockPathname = pathname;

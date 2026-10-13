@@ -40,12 +40,15 @@ function sessionTables(): Table<DatedRow, string>[] {
     db.transactions,
     db.paymentRecords,
     db.expenses,
-    db.documents,
     db.retainerAgreements,
   ] as unknown as Table<DatedRow, string>[];
 }
 
-/** Tables whose non-sample rows mean the person has data of their own. */
+/**
+ * Tables whose non-sample rows mean the person has data of their own.
+ * `documents` stays after MUT-145: invoices issued before document generation
+ * was retired are still the person's data (ADR-029, ADR-042).
+ */
 function ownDataTables(): Table<DatedRow, string>[] {
   return [db.clients, db.projects, db.transactions, db.expenses, db.documents] as unknown as Table<
     DatedRow,

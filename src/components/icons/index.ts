@@ -5,7 +5,6 @@ export { ChevronLeftIcon } from './ChevronLeftIcon';
 export { ChevronRightIcon } from './ChevronRightIcon';
 export { ArrowRightIcon } from './ArrowRightIcon';
 export { CopyIcon } from './CopyIcon';
-export { DocumentIcon } from './DocumentIcon';
 export { FolderIcon } from './FolderIcon';
 export { LockIcon } from './LockIcon';
 export { MoreIcon } from './MoreIcon';

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useId } from 'react';
-import { useNavigate, Link } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { TopBar } from '../../components/layout';
 import {
   useSettings,
@@ -242,15 +242,14 @@ export function SettingsPage() {
                       <ProfileBadge profile={profile} size="md" decorative />
                     )}
                     <div className="business-profile-details">
-                      <Link
-                        to="/settings/profiles/$profileId"
-                        params={{ profileId: profile.id }}
-                        className="business-profile-name"
-                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      <button
+                        type="button"
+                        className="business-profile-name business-profile-name-button"
+                        onClick={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
                       >
                         {profile.name}
                         {profile.nameEn && <span className="text-muted"> ({profile.nameEn})</span>}
-                      </Link>
+                      </button>
                       <div className="business-profile-meta text-muted text-sm">
                         {profile.email}
                         {profile.isDefault && (
@@ -263,7 +262,7 @@ export function SettingsPage() {
                   </div>
                   <ProfileActionsMenu
                     profile={profile}
-                    onEdit={() => navigate({ to: '/settings/profiles/$profileId', params: { profileId: profile.id } })}
+                    onEdit={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
                     onSetDefault={() => setDefaultMutation.mutate(profile.id)}
                     onArchive={() => archiveMutation.mutate(profile.id)}
                     isSetDefaultPending={setDefaultMutation.isPending}

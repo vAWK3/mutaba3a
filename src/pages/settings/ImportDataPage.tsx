@@ -57,7 +57,7 @@ export function ImportDataPage() {
   const [importMode, setImportMode] = useState<ImportMode>('create');
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
-  const [importStats, setImportStats] = useState<{ profiles: number; documents: number; transactions: number } | null>(null);
+  const [importStats, setImportStats] = useState<{ profiles: number; transactions: number } | null>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
     try {
@@ -157,7 +157,7 @@ export function ImportDataPage() {
     setError('');
 
     try {
-      const stats = { profiles: 0, documents: 0, transactions: 0 };
+      const stats = { profiles: 0, transactions: 0 };
 
       if (fileType === 'csv') {
         const selectedRows = csvRows.filter((_, index) => selectedRowIndices.includes(index));
@@ -524,7 +524,6 @@ export function ImportDataPage() {
               {importStats && (
                 <>
                   Imported {importStats.profiles > 0 && `${importStats.profiles} profile, `}
-                  {importStats.documents > 0 && `${importStats.documents} documents, `}
                   {importStats.transactions > 0 && `${importStats.transactions} transactions`}
                 </>
               )}

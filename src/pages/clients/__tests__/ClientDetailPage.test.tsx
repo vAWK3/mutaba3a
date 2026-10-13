@@ -3,7 +3,7 @@
  *
  * MUT-3: the client profile is one page with three sections -- Owed Now,
  * Work and billing, Payments -- answering the product's three questions with
- * no tab clicks. The MUT-6 (Record payment), MUT-13 (invoices, retainers) and
+ * no tab clicks. The MUT-6 (Record payment), MUT-13 (retainers) and
  * MUT-16 (projects switch) behaviours are re-asserted on the new sections.
  * Since MUT-84 the page is the Clients layout's profile pane: the layout's
  * top bar names the client, so the page renders the profile body only.
@@ -29,7 +29,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 // Advanced-feature switches: off unless a test turns one on; projects starts on
-const featureFlags: Record<string, boolean> = { invoices: false, retainers: false, projects: true };
+const featureFlags: Record<string, boolean> = { retainers: false, projects: true };
 vi.mock('../../../lib/features/useFeatures', () => ({
   useFeatureEnabled: (key: string) => featureFlags[key] ?? false,
   // the top bar's Add menu reads the whole map (MUT-15)
@@ -78,8 +78,6 @@ vi.mock('../../../lib/i18n', () => {
     'transactions.partialPayment.editPayment': 'Edit Payment',
     'transactions.partialPayment.notes': 'Notes',
     'transactions.partialPayment.migratedNote': 'Carried over from the old total',
-    'transactions.generateInvoice': 'Generate invoice',
-    'transactions.viewInvoice': 'View invoice',
     'filters.status.all': 'All',
     'filters.status.paid': 'Paid',
     'filters.status.unpaid': 'Unpaid',
@@ -101,7 +99,6 @@ vi.mock('../../../lib/i18n', () => {
 const mockOpenClientDrawer = vi.fn();
 const mockOpenProjectDrawer = vi.fn();
 const mockOpenIncomeDrawer = vi.fn();
-const mockOpenDocumentDrawer = vi.fn();
 const mockOpenRetainerDrawer = vi.fn();
 const mockOpenPartialPaymentDrawer = vi.fn();
 const mockEditPaymentRecord = vi.fn();
@@ -110,7 +107,6 @@ vi.mock('../../../lib/stores', () => ({
     openClientDrawer: mockOpenClientDrawer,
     openProjectDrawer: mockOpenProjectDrawer,
     openIncomeDrawer: mockOpenIncomeDrawer,
-    openDocumentDrawer: mockOpenDocumentDrawer,
     openRetainerDrawer: mockOpenRetainerDrawer,
     openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
     editPaymentRecord: mockEditPaymentRecord,
@@ -262,7 +258,6 @@ describe('ClientDetailPage', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-10-11T12:00:00'));
     useSavedFlashStore.getState().clear();
-    featureFlags.invoices = false;
     featureFlags.retainers = false;
     featureFlags.projects = true;
 
@@ -587,36 +582,12 @@ describe('ClientDetailPage', () => {
   });
 
   describe('Advanced-feature entry points (MUT-13, MUT-16)', () => {
-    it('offers no invoice actions while invoices is off', () => {
+    it('offers no invoice actions on any entry, even one linked to a legacy document (MUT-145)', () => {
       renderPage();
       fireEvent.click(within(rowOf(workSection(), 'Design sprint')).getByLabelText('Actions'));
-      expect(screen.queryByText('Generate invoice')).toBeNull();
-      expect(screen.queryByText('View invoice')).toBeNull();
-    });
-
-    it('offers Generate invoice on an entry without a document when invoices is on', () => {
-      featureFlags.invoices = true;
-      renderPage();
-
-      fireEvent.click(within(rowOf(workSection(), 'Design sprint')).getByLabelText('Actions'));
-      fireEvent.click(screen.getByText('Generate invoice'));
-
-      expect(mockOpenDocumentDrawer).toHaveBeenCalledWith({
-        mode: 'create',
-        defaultType: 'invoice',
-        defaultClientId: 'client-1',
-        linkTransactionId: 'tx-overdue',
-      });
-    });
-
-    it('offers View invoice on an entry linked to a document when invoices is on', () => {
-      featureFlags.invoices = true;
-      renderPage();
-
+      expect(screen.queryByText(/invoice/i)).toBeNull();
       fireEvent.click(within(rowOf(workSection(), 'Logo')).getByLabelText('Actions'));
-      fireEvent.click(screen.getByText('View invoice'));
-
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/documents/$documentId', params: { documentId: 'doc-9' } });
+      expect(screen.queryByText(/invoice/i)).toBeNull();
     });
 
     it('shows no retainers card while retainers is off', () => {

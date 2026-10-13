@@ -25,7 +25,7 @@ describe('reconcileFeaturesWithData', () => {
     expect(result).toEqual(['projects']);
     const row = await readRow();
     expect(row?.features?.projects).toBe(true);
-    expect(row?.features?.invoices).toBe(false);
+    expect(row?.features?.retainers).toBe(false);
     expect(row?.featureNotice).toEqual(['projects']);
     expect(row?.enabledCurrencies).toEqual(DEFAULT_SETTINGS.enabledCurrencies);
   });
@@ -51,12 +51,12 @@ describe('reconcileFeaturesWithData', () => {
   });
 
   it('merges a newly enabled key into a pending notice, ordered and without duplicates', async () => {
-    await db.settings.put({ ...DEFAULT_SETTINGS, features: { invoices: true }, featureNotice: ['invoices'] });
-    await db.documents.add({ id: 'd1', createdAt: now, updatedAt: now } as never);
+    await db.settings.put({ ...DEFAULT_SETTINGS, features: { retainers: true }, featureNotice: ['retainers'] });
+    await db.retainerAgreements.add({ id: 'r1', createdAt: now } as never);
     await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
 
     expect(await reconcileFeaturesWithData(db)).toEqual(['projects']);
-    expect((await readRow())?.featureNotice).toEqual(['invoices', 'projects']);
+    expect((await readRow())?.featureNotice).toEqual(['retainers', 'projects']);
   });
 
   it('creates the settings row from the defaults when none exists', async () => {
