@@ -40,7 +40,7 @@
 **Added**: 2026-10-13 (MUT-136 build)
 **Priority**: Low
 **Impact**: every seeded income/expense/settle call carries a deterministic Idempotency-Key that embeds the computed date (`seed-<client>-<project>-income-<slug>-<occurredOn>`), so a same-day re-run replays cleanly, but a re-run on a *later* day computes different dates — a different key — and creates a fresh batch on top of the same customers/projects (which dedupe, since their keys don't depend on date). This is deliberate: the alternative (an absolute, fixed fixture date) would eventually make the "Recent entries" screen look stale, and there's no `GET /v1/income` list route a script could use to check "did I already seed this transaction" some other way. The seeded account's record count is only bounded by how often someone actually re-runs the script by hand.
-**Fix**: none planned — local dev/screenshot tooling only, not production data. If it ever matters, the fix would be a `GET /v1/income` (or similar) list route the script could use to check existence before creating, replacing the date-keyed Idempotency-Key scheme.
+**Fix**: none planned — screenshot tooling, plus (since 2026-10-13) the occasional manual refresh of the store-review account in prod, where a few extra recent entries are harmless. If it ever matters, the fix would be a `GET /v1/income` (or similar) list route the script could use to check existence before creating, replacing the date-keyed Idempotency-Key scheme.
 
 ### TD-106: Expenses have two sources of truth — `db.expenses` and legacy `kind:'expense'` transactions
 **Status**: Open

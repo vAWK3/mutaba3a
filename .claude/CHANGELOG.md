@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Seed script can keep a store-review account's password
+
+**Why:** Basel needs a populated hosted account for App Store / Play reviewers. `seed:demo-account` already builds one, but it rotated the password on every run — which also revokes every session — so re-seeding the reviewer account would break the credentials entered in App Store Connect and Play Console and fail a review in progress.
+
+**Run (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` 1,571 passed / 18 skipped (DB-only suites; no local `DATABASE_URL`).
+
+### Changed
+- `server/src/scripts/seed-demo-account/adminAccount.ts`: `ensureSeedAccount` takes `keepPassword`; for an existing account it uses that password instead of rotating and returns `rotated: false`. A new account still gets an issued password (the admin API can't set a chosen one).
+- `server/src/scripts/seed-demo-account.ts`: reads `MUTABA3A_SEED_PASSWORD`; when it's kept, the password isn't printed, and a wrong one fails with a message naming the variable instead of a raw 401.
+- `server/README.md`: store-review account runbook.
+
+### Tests
+- `adminAccount.test.ts`: kept password still signs in and an existing session survives; a new account ignores `keepPassword`.
+- `seed-demo-account.test.ts`: re-seed with `MUTABA3A_SEED_PASSWORD` doesn't print or change it; a wrong one fails clearly and leaves the issued password working.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Brand v2 dropdown sweep: every select now uses the real Select component
 
 **Why:** User reported dropdowns/selectors hadn't been customized for the Brand v2 design system. Investigation found a brand-correct `Select` component already existed (`src/components/ui/Input.tsx` + `Input.css` — `--input-*` tokens, 16px body text, custom chevron) but was wired up only on the dev-only `/theme-demo` route; every real dropdown in the app (69 occurrences across 25 files) rendered a raw `<select className="select">` styled by a stale pre-brand rule in `index.css` (13px text, default browser arrow, generic `--surface`/`--border` tokens instead of the dedicated `--input-*` ones). Two page-specific classes (`PlanningPage.css`'s `.plan-select`, used once; `RetainersPage.css`'s `.filter-select`, used 3x) additionally referenced CSS variables (`--border-color`, `--bg-primary`) that don't exist anywhere in the codebase (tracked dead in `brand.test.ts`'s `KNOWN_DEAD_REFERENCES`, part of TD-079/MUT-103's backlog) and so rendered with no styling at all. User chose the full migration over a CSS-only patch.

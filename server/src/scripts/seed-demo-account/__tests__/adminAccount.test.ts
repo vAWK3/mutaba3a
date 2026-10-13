@@ -58,6 +58,27 @@ describe('ensureSeedAccount (MUT-136)', () => {
     await expect(signIn(deps, OPTIONS.email, first.password)).rejects.toThrow();
   });
 
+  it('keeps an existing account\'s password when one is supplied, so handed-out credentials keep working', async () => {
+    const { deps, admin } = harness();
+    const first = await ensureSeedAccount(admin, OPTIONS);
+    const reviewerSession = await signIn(deps, OPTIONS.email, first.password);
+
+    const second = await ensureSeedAccount(admin, { ...OPTIONS, keepPassword: first.password });
+    expect(second).toMatchObject({ userId: first.userId, password: first.password, rotated: false });
+    await expect(signIn(deps, OPTIONS.email, first.password)).resolves.toMatchObject({});
+    // Not rotating also means not revoking: a reviewer already signed in stays signed in.
+    const me = await deps.fetch(`${deps.baseUrl}/v1/me`, { headers: { authorization: `Bearer ${reviewerSession.token}` } });
+    expect(me.status).toBe(200);
+  });
+
+  it('still issues a fresh password when the account does not exist yet, since none can be chosen', async () => {
+    const { deps, admin } = harness();
+    const creds = await ensureSeedAccount(admin, { ...OPTIONS, keepPassword: 'a-password-nobody-was-ever-issued' });
+    expect(creds.rotated).toBe(true);
+    expect(creds.password).not.toBe('a-password-nobody-was-ever-issued');
+    await expect(signIn(deps, OPTIONS.email, creds.password)).resolves.toMatchObject({});
+  });
+
   it('fails visibly on a bad admin token, rather than silently creating a duplicate account', async () => {
     const { store, deps } = harness();
     const wrongAdmin = adminClient(deps.fetch, deps.baseUrl, 'not-the-real-admin-token');

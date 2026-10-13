@@ -57,11 +57,29 @@ export MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2)
 npm run seed:demo-account
 ```
 
-Safe to re-run: the account and its password are reused (the password is
-rotated fresh every run and printed once at the end — sign in with the latest
-one), and every write carries a deterministic Idempotency-Key, so a same-day
+Safe to re-run: the account is reused (its password is rotated fresh every
+run and printed once at the end — sign in with the latest one — unless
+`MUTABA3A_SEED_PASSWORD` holds the current one, see below), and every write carries a deterministic Idempotency-Key, so a same-day
 re-run replays instead of duplicating. A later re-run reuses the same
 customers/projects and just adds another batch of recent-looking transactions.
+
+**Store-review account.** App Store and Play reviewers need a populated
+account in the environment the store build talks to (the build's
+`MUTABA3A_API_BASE_URL`). Use the same script against that URL with a
+dedicated address, and enter the printed password in App Store Connect
+(App Review Information › Sign-in required) and Play Console (App content ›
+App access):
+
+```bash
+export MUTABA3A_ADMIN_TOKEN=$(gcloud secrets versions access latest \
+  --secret=mutaba3a-api-admin-token --project=$GCP_PROJECT_ID)
+npm run seed:demo-account -- --url "$URL" --email review@mutaba3a.app --name "App Review"
+```
+
+To refresh its data later **without** breaking the credentials you handed out
+(a rotation also signs the reviewer out), pass the current password back:
+`MUTABA3A_SEED_PASSWORD='<current>' npm run seed:demo-account -- --url "$URL" --email review@mutaba3a.app`.
+A wrong value fails without touching the account.
 
 Every script takes `--url` (default `http://localhost:8787`). Password hashing
 is argon2id; `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` / `ARGON2_PARALLELISM`

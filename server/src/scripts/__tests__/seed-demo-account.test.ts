@@ -29,9 +29,9 @@ function harness(initialNow: () => Date = () => new Date('2026-06-15T12:00:00Z')
   const fetchFn = ((input: string | URL | Request, init?: RequestInit) => app.request(input as string, init)) as typeof fetch;
   const out: string[] = [];
   const err: string[] = [];
-  const run = (argv: string[] = [], runNow: () => Date = initialNow, adminToken: string | null = ADMIN_TOKEN) => {
+  const run = (argv: string[] = [], runNow: () => Date = initialNow, adminToken: string | null = ADMIN_TOKEN, seedPassword?: string) => {
     current = runNow;
-    return runSeedDemoAccount(argv, { fetch: fetchFn, url: URL_BASE, adminToken: adminToken ?? undefined, now: runNow, out: (l) => out.push(l), err: (l) => err.push(l) } satisfies SeedDemoAccountDeps);
+    return runSeedDemoAccount(argv, { fetch: fetchFn, url: URL_BASE, adminToken: adminToken ?? undefined, seedPassword, now: runNow, out: (l) => out.push(l), err: (l) => err.push(l) } satisfies SeedDemoAccountDeps);
   };
   return { store, run, out, err };
 }
@@ -144,6 +144,32 @@ describe('seed-demo-account CLI (MUT-136)', () => {
     expect(code).toBe(0);
     const secondPassword = h.out.find((l) => l.startsWith('  password:'))!.split(': ')[1]!;
     expect(secondPassword).not.toBe(firstPassword);
+  });
+
+  it('with MUTABA3A_SEED_PASSWORD set, re-seeds without changing the password or printing it', async () => {
+    const h = harness();
+    await h.run();
+    const issued = h.out.find((l) => l.startsWith('  password:'))!.split(': ')[1]!;
+    h.out.length = 0;
+
+    const code = await h.run([], undefined, ADMIN_TOKEN, issued);
+    expect(code).toBe(0);
+    expect(h.out.join('\n')).toContain('seeded 8 customers');
+    expect(h.out.join('\n')).not.toContain(issued);
+    expect(h.out.some((l) => l.includes('password unchanged'))).toBe(true);
+  });
+
+  it('with a wrong MUTABA3A_SEED_PASSWORD, fails with a clear message instead of rotating', async () => {
+    const h = harness();
+    await h.run();
+    const issued = h.out.find((l) => l.startsWith('  password:'))!.split(': ')[1]!;
+
+    const code = await h.run([], undefined, ADMIN_TOKEN, 'not-the-issued-password');
+    expect(code).not.toBe(0);
+    expect(h.err.join('\n')).toContain('MUTABA3A_SEED_PASSWORD');
+    // The issued password is untouched, so whoever holds it can still sign in.
+    h.out.length = 0;
+    expect(await h.run([], undefined, ADMIN_TOKEN, issued)).toBe(0);
   });
 
   it('fails without MUTABA3A_ADMIN_TOKEN, printing a clear message and seeding nothing', async () => {
