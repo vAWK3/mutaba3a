@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import { useSavedFlashStore, type SavedFlash } from '../../../lib/savedFlashStore';
+import { BACKSTOP_MS, useSavedFlashStore, type SavedFlash } from '../../../lib/savedFlashStore';
 import { NOTICE_MS, SavedNotice } from '../SavedNotice';
 
 /** The portal's view of an unclaimed save (MUT-91, eng review D4/D5). */
@@ -85,5 +85,57 @@ describe('SavedNotice', () => {
     first.unmount();
     notice();
     expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
+  });
+
+  it('holds while hovered or focused and finishes its time afterwards (WCAG 2.2.1, like the app toast)', () => {
+    vi.useFakeTimers();
+    notice();
+    unclaimed(flash());
+    const box = screen.getByRole('status');
+    act(() => vi.advanceTimersByTime(NOTICE_MS / 2));
+    fireEvent.mouseEnter(box);
+    act(() => vi.advanceTimersByTime(NOTICE_MS * 2));
+    expect(screen.getByText('Expense saved')).toBeInTheDocument();
+    fireEvent.mouseLeave(box);
+    fireEvent.focus(screen.getByRole('button', { name: 'Show' }));
+    act(() => vi.advanceTimersByTime(NOTICE_MS * 2));
+    expect(screen.getByText('Expense saved')).toBeInTheDocument();
+    fireEvent.blur(screen.getByRole('button', { name: 'Show' }));
+    act(() => vi.advanceTimersByTime(NOTICE_MS / 2 - 10));
+    expect(screen.getByText('Expense saved')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(20));
+    expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
+  });
+
+  it('a save left behind before its list answered does not greet a later visit', () => {
+    vi.useFakeTimers();
+    const first = notice();
+    act(() => {
+      const store = useSavedFlashStore.getState();
+      store.registerList('list');
+      store.markSaved(flash());
+      store.reportSettled('list', ['e-1'], false);
+    });
+    // Leave the page: the notice and the list unmount before the list settles.
+    first.unmount();
+    act(() => useSavedFlashStore.getState().deregisterList('list'));
+    act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+    expect(useSavedFlashStore.getState().claimed).toBe(false);
+    notice();
+    expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
+  });
+
+  it('does not announce an old claimed save again on a later visit', () => {
+    const first = notice();
+    act(() => {
+      const store = useSavedFlashStore.getState();
+      store.registerList('list');
+      store.markSaved(flash());
+      store.reportSettled('list', ['e-9'], true);
+    });
+    expect(screen.getByText('Saved', { selector: '.sr-only' })).toBeInTheDocument();
+    first.unmount();
+    notice();
+    expect(screen.queryByText('Saved', { selector: '.sr-only' })).not.toBeInTheDocument();
   });
 });

@@ -177,3 +177,14 @@ export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
 export function isNarrowed(filters: object, defaults: object = {}): boolean {
   return Object.entries(filters).some(([key, value]) => value !== undefined && (defaults as Raw)[key] !== value);
 }
+
+/**
+ * The server's answer when a list's `anchor` names a record that is gone
+ * (deleted, another profile's, a stale bookmark): a 404 with this reason, so it
+ * is never mistaken for a removed profile. The list drops the anchor (MUT-91).
+ */
+export function isStaleAnchor(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('status' in error) || (error as { status: unknown }).status !== 404) return false;
+  const details = (error as { details?: unknown }).details;
+  return Boolean(details && typeof details === 'object' && (details as { reason?: unknown }).reason === 'ANCHOR_NOT_FOUND');
+}

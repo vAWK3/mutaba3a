@@ -10,6 +10,7 @@ import { AnchoredNote, SavedNotice } from '../../components/SavedNotice';
 import { useSavedFlashRows } from '../../../lib/useSavedFlash';
 import { isNarrowed, type ConversionsPageSearch } from '../../data/filters';
 import { useConversions } from '../../data/conversionQueries';
+import { useAnchoredList } from '../../data/anchoredList';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
@@ -58,6 +59,9 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
 
   // After-save (MUT-91, eng review D7): the same claim as the expenses list.
   const ids = useMemo(() => rows?.map((r) => r.id) ?? [], [rows]);
+  const anchored = useAnchoredList(filters, setFilters, list.error);
+  // The list's own filters only: opening the drawer is not a filter change.
+  const filtersKey = JSON.stringify({ ...filters, newConversion: undefined });
   const flashed = useSavedFlashRows('hosted-conversions', ids, { isLoading: !rows && !list.isError, isFetching: list.isFetching });
 
   const columns = useMemo<Column<ConversionRow>[]>(
@@ -88,10 +92,10 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
         <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
         <DateFilter label={t('hosted.filters.to')} value={filters.to} onChange={(to) => patch({ to })} />
       </FilterBar>
-      {filters.anchor && <AnchoredNote onShowLatest={() => setFilters({ ...filters, anchor: undefined })} />}
+      {filters.anchor && !anchored.staleAnchor && <AnchoredNote onShowLatest={anchored.showLatest} focusRequest={anchored.focusRequest} />}
       <QueryView
-        queries={[list]}
-        data={rows}
+        queries={anchored.staleAnchor ? [] : [list]}
+        data={anchored.staleAnchor ? undefined : rows}
         isEmpty={(r) => r.length === 0}
         empty={
           isNarrowed(filters, { newConversion: undefined }) ? (
@@ -114,7 +118,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
           </>
         )}
       </QueryView>
-      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={(anchor) => setFilters({ anchor })} anchor={filters.anchor} />
+      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} />
       {filters.newConversion && <ConversionDrawer profileId={profile.id} onClose={closeDrawer} />}
     </>
   );

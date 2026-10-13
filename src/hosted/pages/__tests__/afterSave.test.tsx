@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import { useSavedFlashStore } from '../../../lib/savedFlashStore';
+import { BACKSTOP_MS, useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { CUSTOMERS, page } from './fixtures';
 
 /**
@@ -144,13 +144,97 @@ describe('portal expenses: after save', () => {
     await user.click(await rowWith('Office supplies'));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
     await screen.findByText('No expenses recorded on this profile yet');
-    await new Promise((resolve) => setTimeout(resolve, 1300)); // past the backstop
+    await new Promise((resolve) => setTimeout(resolve, BACKSTOP_MS + 100)); // past the backstop
     expect(useSavedFlashStore.getState().pending).toBeNull();
     expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
   });
 });
 
+describe('portal expenses: after save, the hard paths (review)', () => {
+  it('a failed save marks nothing', async () => {
+    const { user } = portal(`/p/${ORG_A}/expenses`, {
+      'GET /v1/expenses': () => ok(page([expense()])),
+      'POST /v1/expenses': () => fail(422, 'VALIDATION_FAILED'),
+    });
+    await screen.findByText('Office supplies');
+    await recordExpense(user);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled());
+    expect(useSavedFlashStore.getState().pending).toBeNull();
+    expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
+  });
+
+  it('a save whose list refetch fails still says "Expense saved" behind the Unreachable card (D4)', async () => {
+    let saved = false;
+    const { user } = portal(`/p/${ORG_A}/expenses`, {
+      'GET /v1/expenses': () => (saved ? fail(503, 'UNAVAILABLE') : ok(page([expense()]))),
+      'POST /v1/expenses': () => {
+        saved = true;
+        return ok(expense({ id: E2, title: 'Printer ink' }), 201);
+      },
+    });
+    await screen.findByText('Office supplies');
+    await recordExpense(user);
+    expect(await screen.findByText('Expense saved', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("Can't reach Mutaba3a right now")).toBeInTheDocument();
+  });
+
+  it('Show lands even when the list was already anchored on that expense (filters changed, anchor did not)', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/expenses?anchor=${E2}&categoryId=${OTHER_CATEGORY}`, {
+      'GET /v1/expenses': (req) =>
+        ok(page(req.url.searchParams.get('categoryId') ? [] : [expense({ id: E2, title: 'Printer ink' }), expense()])),
+      [`GET /v1/expenses/${E2}`]: () => ok(expense({ id: E2, title: 'Printer ink', receipts: [] })),
+      [`PATCH /v1/expenses/${E2}`]: () => ok(expense({ id: E2, title: 'Printer ink', version: 2 })),
+    });
+    await screen.findByText('Nothing matches these filters.');
+    // The edit drawer opened by URL, as a row click would.
+    await act(async () => {
+      await router.navigate({ to: '.', search: (prev: Record<string, unknown>) => ({ ...prev, expense: E2 }), replace: true });
+    });
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+    const notice = (await screen.findByText('Expense saved')).closest('[role="status"]') as HTMLElement;
+    await user.click(within(notice).getByRole('button', { name: 'Show' }));
+    await waitFor(() => expect(locationOf(router)).not.toContain('categoryId'));
+    await waitFor(async () => expect(await rowWith('Printer ink')).toHaveClass('row-flash'));
+  });
+
+  it('Show moves focus to the note above the anchored list, not to the page body', async () => {
+    const { user } = portal(`/p/${ORG_A}/expenses?categoryId=${OTHER_CATEGORY}`, {
+      'GET /v1/expenses': (req) => ok(page(req.url.searchParams.get('anchor') === E2 ? [expense({ id: E2, title: 'Printer ink' })] : [])),
+      'POST /v1/expenses': () => ok(expense({ id: E2, title: 'Printer ink' }), 201),
+    });
+    await screen.findByText('Nothing matches these filters.');
+    await recordExpense(user);
+    const notice = (await screen.findByText('Expense saved')).closest('[role="status"]') as HTMLElement;
+    await user.click(within(notice).getByRole('button', { name: 'Show' }));
+    const note = await screen.findByText('Showing from a saved entry');
+    await waitFor(() => expect(note.closest('.hp-anchored')).toHaveFocus());
+  });
+});
+
 describe('portal expenses: an anchored list', () => {
+  it('a stale anchor (the record is gone) drops itself and shows the latest list, not the Unreachable card', async () => {
+    const { router, api } = portal(`/p/${ORG_A}/expenses?anchor=${E2}`, {
+      'GET /v1/expenses': (req) =>
+        req.url.searchParams.get('anchor') ? fail(404, 'NOT_FOUND', { field: 'anchor', reason: 'ANCHOR_NOT_FOUND' }) : ok(page([expense()])),
+    });
+    expect(await screen.findByText('Office supplies')).toBeInTheDocument();
+    expect(locationOf(router)).not.toContain('anchor');
+    expect(screen.queryByText("Can't reach Mutaba3a right now")).not.toBeInTheDocument();
+    expect(api.count('GET /v1/me')).toBe(1); // not mistaken for a removed profile
+  });
+
+  it('Show more on an anchored list follows the cursor and sends no anchor', async () => {
+    const { user, api } = portal(`/p/${ORG_A}/expenses?anchor=${E2}`, {
+      'GET /v1/expenses': (req) =>
+        req.url.searchParams.get('cursor') === 'c2' ? ok(page([expense({ occurredOn: '2026-07-01' })])) : ok(page([expense({ id: E2, title: 'Printer ink' })], 'c2')),
+    });
+    await screen.findByText('Printer ink');
+    await user.click(screen.getByRole('button', { name: 'Show more' }));
+    await screen.findByText('Office supplies');
+    const next = api.calls.find((c) => c.url.pathname === '/v1/expenses' && c.url.searchParams.get('cursor') === 'c2')!;
+    expect(next.url.searchParams.has('anchor')).toBe(false);
+  });
+
   it('deleting the record the list is anchored on drops the anchor instead of a 404 dead end', async () => {
     vi.stubGlobal('confirm', () => true);
     let deleted = false;

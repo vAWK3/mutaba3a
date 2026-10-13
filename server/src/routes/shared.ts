@@ -61,7 +61,8 @@ export async function ledgerPageStart<C extends { occurredOn: string; id: string
   if (query.anchor && query.cursor) throw new ApiError('VALIDATION_FAILED', 'anchor and cursor cannot be combined', { field: 'anchor' });
   if (query.anchor) {
     const record = await loadAnchor(query.anchor);
-    if (!record) throw new ApiError('NOT_FOUND', notFoundMessage);
+    // A reason, so a client can tell a stale anchor from a removed profile (both 404) and just drop it.
+    if (!record) throw new ApiError('NOT_FOUND', notFoundMessage, { field: 'anchor', reason: 'ANCHOR_NOT_FOUND' });
     return { occurredOn: record.occurredOn, id: record.id, inclusive: true } as C;
   }
   return query.cursor ? decode(query.cursor) : null;

@@ -33,7 +33,8 @@ function cssFiles(dir: string): string[] {
 
 describe('press feedback (L10)', () => {
   it('Buttons and .press controls scale to the press token on pointer-down, with no transform', () => {
-    const active = rule(indexCss, ':is(.btn, .press):active:not(:disabled)');
+    // Nor a control greyed out with aria-disabled (still focusable, e.g. IncomeDrawer's Edit payment).
+    const active = rule(indexCss, ':is(.btn, .press):active:not(:disabled):not([aria-disabled="true"])');
     expect(active).toMatch(/\bscale:\s*var\(--press-scale\)/);
     expect(active).not.toMatch(/transform/);
   });

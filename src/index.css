@@ -101,12 +101,13 @@ button:disabled {
    `.press`, presses in on pointer-down from the brand tokens; reduced motion
    zeroes them in theme.css. The individual `scale` property, never transform,
    so a control already positioned by a transform doesn't move when pressed.
-   Button.css lists `scale` in .btn's own transition. */
+   Button.css lists `scale` in .btn's own transition. A control greyed out
+   with aria-disabled (still focusable) doesn't press either. */
 .press {
   transition: scale var(--duration-press) var(--ease-spring);
 }
 
-:is(.btn, .press):active:not(:disabled) {
+:is(.btn, .press):active:not(:disabled):not([aria-disabled="true"]) {
   scale: var(--press-scale);
 }
 
@@ -2140,22 +2141,24 @@ div.input-with-prefix {
    be indistinguishable from the app's many existing --accent-subtle
    "selected" states; the rail reads at a glance without the row already
    having your attention. Any table's rows (the app's .data-table, the
-   portal's .table; MUT-91). box-shadow has no logical form, so the rail is
-   mirrored by hand for RTL, where the first cell is the rightmost. */
+   portal's .table; MUT-91), at the specificity of `.data-table tr:hover td`
+   so the held reduced-motion tint still wins over hover. box-shadow has no
+   logical form, so the rail is mirrored by hand for RTL, where the first
+   cell is the rightmost. */
 @keyframes saved-flash-fade {
   from { background-color: var(--accent-subtle); }
   to { background-color: transparent; }
 }
 
-tr.row-flash > td {
+:is(.data-table, .table) tr.row-flash > td {
   animation: saved-flash-fade 1.5s ease-out forwards;
 }
 
-tr.row-flash > td:first-child {
+:is(.data-table, .table) tr.row-flash > td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-[dir="rtl"] tr.row-flash > td:first-child {
+[dir="rtl"] :is(.data-table, .table) tr.row-flash > td:first-child {
   box-shadow: inset -3px 0 0 var(--accent);
 }
 
@@ -2163,7 +2166,7 @@ tr.row-flash > td:first-child {
    class itself is still removed by savedFlashStore's timer after FLASH_MS;
    this only turns the fade from an animated transition into a held state. */
 @media (prefers-reduced-motion: reduce) {
-  tr.row-flash > td {
+  :is(.data-table, .table) tr.row-flash > td {
     animation: none;
     background-color: var(--accent-subtle);
   }

@@ -22,8 +22,9 @@ export interface SavedFlash {
    *  looked up again when the message resolves (Test review finding). */
   clientName?: string;
   profileId: string;
-  /** Set by `rearm` after Show: the original "Saved to X" message must never
-   *  fire twice for the same save. */
+  /** Set once this save's message has been shown: by `rearm` after the app's
+   *  Show, or by `settleMessage` when the portal notice is shown, timed out or
+   *  left (MUT-91). The original message must never fire twice for one save. */
   messaged?: boolean;
 }
 
@@ -35,6 +36,10 @@ export const FLASH_MS = 1500;
  *  still fetching when it fires is waited for instead: the portal refetches
  *  over the network and can take longer than this (MUT-91, eng review D3). */
 export const BACKSTOP_MS = 1200;
+
+/** However long a list keeps fetching, a save resolves by then: a hung request
+ *  must not leave the person with neither a tint nor a message (MUT-91 review). */
+export const MAX_WAIT_MS = 10_000;
 
 export function matchesFlash(ids: readonly string[], flash: SavedFlash | null): boolean {
   if (!flash) return false;
@@ -76,14 +81,16 @@ interface SavedFlashState {
   markSaved: (flash: SavedFlash) => void;
   rearm: (flash: SavedFlash) => void;
   /** The message for this save has been shown (or its page left): mark it
-   *  messaged so it can't be raised again. Resolution is untouched; a call for
-   *  a save that is no longer pending is ignored (MUT-91, the portal notice). */
+   *  messaged so it can't be raised again, and resolve it as not claimed if no
+   *  list has answered yet, so it can't tint a row on a later visit either. A
+   *  call for a save that is no longer pending is ignored (MUT-91, the portal notice). */
   settleMessage: (flash: SavedFlash) => void;
   clear: () => void;
 }
 
 let flashTimer: ReturnType<typeof setTimeout> | undefined;
 let backstopTimer: ReturnType<typeof setTimeout> | undefined;
+let ceilingTimer: ReturnType<typeof setTimeout> | undefined;
 /** Once the backstop has fired, a list that settled before the save and has
  *  not re-rendered since counts as reported: only fetching lists are waited on. */
 let backstopElapsed = false;
@@ -91,8 +98,10 @@ let backstopElapsed = false;
 function clearTimers() {
   clearTimeout(flashTimer);
   clearTimeout(backstopTimer);
+  clearTimeout(ceilingTimer);
   flashTimer = undefined;
   backstopTimer = undefined;
+  ceilingTimer = undefined;
 }
 
 export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
@@ -120,6 +129,12 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
       clearTimers();
       set({ claimed: false });
     }
+  }
+
+  function armCeiling(flash: SavedFlash) {
+    ceilingTimer = setTimeout(() => {
+      set((state) => (state.pending === flash && state.claimed === null ? { claimed: false } : {}));
+    }, MAX_WAIT_MS);
   }
 
   return {
@@ -153,6 +168,7 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
         if (lists.size === 0) set({ claimed: false });
         else tryResolve();
       }, BACKSTOP_MS);
+      armCeiling(flash);
       // A list already mounted and settled (e.g. the client profile's own
       // entry list, re-rendered from the same invalidation that created this
       // save) may already match -- check immediately, don't wait for its
@@ -165,11 +181,12 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
       backstopElapsed = false;
       for (const entry of lists.values()) entry.reportedForCurrentSave = false;
       set({ pending: flash, claimed: null, flashIds: [] });
+      armCeiling(flash);
       tryResolve();
     },
 
     settleMessage: (flash) => {
-      set((state) => (state.pending === flash && !flash.messaged ? { pending: { ...flash, messaged: true } } : {}));
+      set((state) => (state.pending === flash && !flash.messaged ? { pending: { ...flash, messaged: true }, claimed: state.claimed ?? false } : {}));
     },
 
     clear: () => {

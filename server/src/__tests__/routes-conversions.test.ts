@@ -221,7 +221,10 @@ describe('GET /v1/conversions', () => {
     expect(bothBody.error.details.field).toBe('anchor');
     const unknown = await h.app.request('/v1/conversions?anchor=00000000-0000-4000-8000-0000000000ee', { headers: p.as(b.org.id) });
     expect(unknown.status).toBe(404);
-    expect((await read(unknown)).error.code).toBe('NOT_FOUND');
+    const unknownBody = await read(unknown);
+    expect(unknownBody.error.code).toBe('NOT_FOUND');
+    // Not the 'profile gone' 404: a client can tell a stale anchor apart and drop it.
+    expect(unknownBody.error.details).toMatchObject({ field: 'anchor', reason: 'ANCHOR_NOT_FOUND' });
     expect((await h.app.request(`/v1/conversions?anchor=${theirs.id}`, { headers: p.as(b.org.id) })).status).toBe(404);
     expect((await h.app.request('/v1/conversions?anchor=not-a-uuid', { headers: p.as(b.org.id) })).status).toBe(422);
   });

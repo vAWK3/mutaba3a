@@ -62,6 +62,22 @@
   - In Arabic, a save hidden by a filter, with a 1.6s refetch, shows the notice. Show then anchors on the saved record, and the row tints with the rail on the right.
 - `test:db` (Postgres store contract) was not run locally (no test database); CI runs it.
 
+### Fixed in review (/qa-reconcile + /review)
+- **Stale anchors:** a deleted or bookmarked anchor no longer shows "Can't reach Mutaba3a" and re-checks `/v1/me`. The API's anchor 404 carries `reason: ANCHOR_NOT_FOUND`, and `useAnchoredList` drops the anchor and shows the latest list. A delete of the anchored expense drops it too.
+- **Notice:**
+  - It holds while hovered or focused (WCAG 2.2.1, as the app toast does).
+  - Show moves focus to the anchored note.
+  - Show now lands when the list was already anchored on that record.
+- **Saves:**
+  - A save left before its list answered no longer greets, announces or tints on a later visit.
+  - `MAX_WAIT_MS` caps a hung refetch.
+  - Sign-out clears the store.
+- **Press and tint:**
+  - Press feedback skips `aria-disabled` controls.
+  - The row tint keeps `.data-table`'s specificity, so the reduced-motion held tint beats hover again.
+- **Stale docs:** the registry's row-flash line and the `messaged` doc.
+- **New debt:** TD-123 (two local controls press outside `.press`; MUT-77) and TD-124 (portal notice follow-ups).
+
 ---
 
 ## [Unreleased] - 2026-10-14 — A retainer's schedule no longer skips months (TD-120)

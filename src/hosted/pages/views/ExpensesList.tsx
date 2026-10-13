@@ -10,6 +10,7 @@ import { AnchoredNote, SavedNotice } from '../../components/SavedNotice';
 import { useSavedFlashRows } from '../../../lib/useSavedFlash';
 import { isNarrowed, type ExpensesPageSearch } from '../../data/filters';
 import { useCustomerDirectory } from '../../data/queries';
+import { useAnchoredList } from '../../data/anchoredList';
 import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -76,6 +77,9 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   // confirms the write behind the Unreachable card (eng review D4).
   const queries = [list, categoriesQuery, customers];
   const ids = useMemo(() => rows?.map((r) => r.id) ?? [], [rows]);
+  const anchored = useAnchoredList(filters, setFilters, list.error);
+  // The list's own filters only: opening the drawer is not a filter change.
+  const filtersKey = JSON.stringify({ ...filters, expense: undefined, newExpense: undefined });
   const flashed = useSavedFlashRows('hosted-expenses', ids, {
     isLoading: !rows && !queries.some((q) => q.isError),
     isFetching: queries.some((q) => q.isFetching),
@@ -115,10 +119,10 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
         <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
         <DateFilter label={t('hosted.filters.to')} value={filters.to} onChange={(to) => patch({ to })} />
       </FilterBar>
-      {filters.anchor && <AnchoredNote onShowLatest={() => setFilters({ ...filters, anchor: undefined })} />}
+      {filters.anchor && !anchored.staleAnchor && <AnchoredNote onShowLatest={anchored.showLatest} focusRequest={anchored.focusRequest} />}
       <QueryView
-        queries={queries}
-        data={rows}
+        queries={anchored.staleAnchor ? [] : queries}
+        data={anchored.staleAnchor ? undefined : rows}
         isEmpty={(r) => r.length === 0}
         empty={
           isNarrowed(filters, { newExpense: undefined, expense: undefined }) ? (
@@ -142,7 +146,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           </>
         )}
       </QueryView>
-      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={(anchor) => setFilters({ anchor })} anchor={filters.anchor} />
+      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} />
       {(filters.newExpense || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}

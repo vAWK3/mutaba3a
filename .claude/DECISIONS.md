@@ -2459,7 +2459,10 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - **The backstop no longer resolves "not claimed" while a registered list is still fetching** (eng review D3). The portal refetches over the network, and 1.2s is not enough. Once the backstop has fired, a list that settled before the save and never re-rendered stops holding resolution.
 - **The portal's presentation is its own `SavedNotice`, page-local, not a toast** (D5). It names no cause (D4).
 - **Show sets the server `anchor`** (ADR-074) and re-arms only once the page renders with that anchor. Re-arming on the click let the old filters' render resolve "not here" first.
-- `settleMessage` marks a notice shown when it times out, its page unmounts or Show is pressed.
+- `settleMessage` marks a save shown when its notice times out, Show is pressed or its page unmounts, and resolves it as not claimed if no list has answered, so a later visit neither re-shows nor re-tints it.
+- `MAX_WAIT_MS` (10s) caps how long a list still fetching can hold a save unresolved (review: the portal's fetch has no timeout).
+- The portal's `endSession` clears the store with the query cache.
+- Show re-arms when the page renders with the new filters (`filtersKey`), not just a new anchor value, so Show works on a list already anchored on that record.
 
 ---
 
@@ -2918,6 +2921,8 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
    - The record is read through the tenant-scoped getter, so another organization's id is a plain 404.
    - `ledgerPageStart` (`server/src/routes/shared.ts`) is the one place both routes use.
    - API 1.21.0-mut91.
+   - **A missing anchor is a 404 with `details: { field: 'anchor', reason: 'ANCHOR_NOT_FOUND' }`** (review). The portal's `QueryView` reads any 404 as "the profile is gone", so the reason lets `useAnchoredList` drop a stale anchor (a bookmark, or a delete elsewhere) and show the latest list instead.
+4. **Press feedback skips a control greyed out with `aria-disabled="true"`** (review; MUT-169's still-focusable Edit payment), as it skips `:disabled`.
 
 **Consequences**:
 - **MUT-77** (landing, built in parallel on `transform: scale`) must move to `scale` or `.press` when it merges; the guard test will say so.

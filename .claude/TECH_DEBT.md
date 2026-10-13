@@ -18,6 +18,26 @@
 
 ## Open Debt
 
+### TD-123: Two local-app controls press on their own `transform`, outside the `.press` rule (ADR-074)
+**Status**: Open
+**Ticket**: MUT-91 (found by its /review red team)
+**Added**: 2026-10-14
+**Priority**: Low
+**Impact**: ADR-074 makes `.btn`/`.press` with the CSS `scale` property the one press rule. `.update-banner-cta:active { transform: scale(0.98) }` (`UpdateBanner.css:65`) has no reduced-motion override, so it ignores `prefers-reduced-motion`. `.sample-bar-action/-secondary:active { transform: scale(0.97) }` (`SampleDataBar.css:51`) carries its own. MUT-77's landing branch also presses with `transform: scale(var(--press-scale))`; when it merges, `pressFeedback.test.ts` fails on it by design.
+**Fix**: Give these controls `.press` and delete their own `:active` transforms and transform transitions. MUT-77 adopts `.press`, and its E2E reads `getComputedStyle(el).scale`, not `transform`.
+
+### TD-124: The portal's after-save notice: overlap with the error toast, focus after "Show latest", Show replaces the filtered URL
+**Status**: Open
+**Ticket**: MUT-91 (design review findings, kept by D5)
+**Added**: 2026-10-14
+**Priority**: Low
+**Impact**:
+- `.hp-toast-info` uses the error toast's fixed slot, so an error toast raised within its 6s (sign-out or download failure) sits on top of it. This is the con D5 accepted.
+- "Show latest" unmounts the focused note and focus falls to the page body. Show itself now focuses the note.
+- Show replaces the URL's filters (`useReplaceSearch`), so Back can't restore a filter the person had built.
+- The memory store looks anchors up by exact id while Postgres compares uuids case-insensitively. Ids are lowercase in practice.
+**Fix**: Stack both toasts in one fixed flex column, or render the notice through `ToastProvider` with a variant. Focus the page heading after "Show latest" (it needs `tabIndex={-1}`). Push a history entry for Show. Lowercase the anchor in `parseExpenses`/`parseConversions`.
+
 ### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
 **Status**: Resolved 2026-10-14. `generateSchedule` steps an integer month index (`year * 12 + month`) from the start date's own year and month, builds each period with `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate`, and stops when the period start is past `horizon` (string compare). Four `retainerRepo.test.ts` cases pin it (31st monthly, leap February, 31st quarterly, 1st in New York).
 **Added**: 2026-10-14 (found while fixing the retainer "today", TD-014)
