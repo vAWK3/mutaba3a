@@ -42,7 +42,10 @@ export function profile(overrides: Partial<HostedProfile> = {}): HostedProfile {
     defaultCurrency: 'ILS',
     timezone: 'Asia/Jerusalem',
     writerOfRecord: 'MALAFAT',
-    access: { payments: 'read', expenses: 'read-write' },
+    access: { payments: 'read', expenses: 'read-write', capture: 'read-write' },
+    // What /v1/me publishes for a Malafat-fed profile (MUT-61, MUT-120).
+    income: { received: true, owed: false, customer: 'linked-required' },
+    isPersonalDefault: false,
     ...overrides,
   };
 }
