@@ -20,7 +20,7 @@ interface RestoreBackupModalProps {
 }
 
 /**
- * Settings › Your data › Restore with a full backup (MUT-88, ADR-071). A
+ * Settings › Your data › Restore with a full backup (MUT-88, ADR-072). A
  * restore replaces everything on the device, so it asks first and names the
  * backup by date and size. A failed restore leaves the data untouched and
  * says why, in the current language.

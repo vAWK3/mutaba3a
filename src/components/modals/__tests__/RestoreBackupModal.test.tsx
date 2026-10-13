@@ -5,7 +5,7 @@ import { LanguageProvider } from '../../../lib/i18n';
 import { RestoreBackupModal } from '../RestoreBackupModal';
 
 /**
- * MUT-88 (ADR-071): Restore with a full backup replaces everything on the
+ * MUT-88 (ADR-072): Restore with a full backup replaces everything on the
  * device, so it asks first and says which backup and how much it holds.
  */
 

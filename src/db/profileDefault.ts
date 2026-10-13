@@ -3,7 +3,7 @@ import type { BusinessProfile } from '../types';
 import { DEMO_ID_PREFIX } from '../demo/constants';
 
 /**
- * Exactly one default business (MUT-88, ADR-071).
+ * Exactly one default business (MUT-88, ADR-072).
  *
  * Every write that can change which profile is the default runs
  * `enforceSingleDefaultProfile` inside its own transaction: the repo's

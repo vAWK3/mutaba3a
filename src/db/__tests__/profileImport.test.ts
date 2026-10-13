@@ -97,7 +97,7 @@ describe('importProfileFile — create', () => {
     expect((await db.businessProfiles.get('mine'))?.isDefault).toBe(true);
   });
 
-  // MUT-88 (ADR-071): making the imported profile the default clears the old one.
+  // MUT-88 (ADR-072): making the imported profile the default clears the old one.
   it('makes the new profile the only default when told to', async () => {
     await db.businessProfiles.add({ id: 'mine', name: 'Mine', defaultCurrency: 'USD', isDefault: true, createdAt: T, updatedAt: T } as BusinessProfile);
     await importProfileFile(exportFile(), { mode: 'create', makeDefault: true });

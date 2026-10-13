@@ -2077,3 +2077,26 @@ clients that did not exist.
 
 **Instances**: `importProfileFile` (tests: `profileImport.test.ts`, and the
 Export → Import round trip in `ImportDataPage.test.tsx`).
+
+### Pattern: One rule settles an invariant inside every writer's transaction (MUT-88)
+
+**When**: a table-wide invariant ("exactly one default business") can be broken by more than one write path, some outside the repo (seed, import, restore, migration).
+
+**How**:
+- Write one pure picker (`pickDefaultProfileId`) and one enforcer that takes a Dexie `Table` (`enforceSingleDefaultProfile`).
+- Call the enforcer *inside* each writer's own transaction, so the repair commits with the write that needed it.
+- A writer that means "make this one" flags its row first and passes its id as the preference.
+- Repair existing devices once in a `version(n).upgrade(tx)` that logs, never throws.
+
+**Never**: read the invariant's state before a transaction and write it inside (the seed's old `existingDefault` read raced the welcome modal), or rely on every caller remembering to clear the others.
+
+**Instances**: `src/db/profileDefault.ts` (repo, `seedDemoData`, `importProfileFile`, `restoreFromBackup`, Dexie v22).
+
+### Pattern: A one-slot hand-off carries a File across a route change (MUT-88)
+
+**When**: one screen picks a file and another screen owns what happens to it (Settings › Restore → `/settings/import`).
+
+**How**: a module-level slot (`setPendingImport` / `takePendingImport` in `src/lib/dataFiles.ts`), taken once. The receiving page takes it in an effect gated on the data it needs (the profiles query), so it decides against real data. Take-once means a remount or a later visit never re-imports. StrictMode is safe: the async state lands on the preserved fiber.
+
+**Never**: put file contents in the URL or history state, or ask the person to pick the same file twice.
+

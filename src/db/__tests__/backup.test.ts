@@ -5,7 +5,7 @@ import { backUpNow, restoreFromBackup, serializeAllTables } from '../backup';
 import type { BusinessProfile } from '../../types';
 
 /**
- * MUT-88 (ADR-071): Settings › Your data shows when the last backup was made.
+ * MUT-88 (ADR-072): Settings › Your data shows when the last backup was made.
  * `backUpNow` stamps `settings.lastBackupAt` only once the backup file was
  * produced; restoring a backup sets it to that backup's own timestamp, since
  * the data on the device is now exactly that backup.

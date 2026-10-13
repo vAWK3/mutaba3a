@@ -3,7 +3,7 @@ import Dexie from 'dexie';
 import { MiniCrmDatabase } from '../database';
 
 /**
- * MUT-88 (ADR-071): v22 changes no schema. It repairs devices that already
+ * MUT-88 (ADR-072): v22 changes no schema. It repairs devices that already
  * hold two default businesses (the demo-seed race), so the one-default rule
  * holds for data written before the rule existed. A real profile outranks a
  * `demo_` sample one.

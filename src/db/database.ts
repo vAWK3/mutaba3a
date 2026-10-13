@@ -940,7 +940,7 @@ export class MiniCrmDatabase extends Dexie {
       syncHistory: null,
     });
 
-    // V22 (MUT-88, ADR-071): no schema change. Repair devices holding more
+    // V22 (MUT-88, ADR-072): no schema change. Repair devices holding more
     // than one default business (the demo-seed race left two Default badges);
     // every profile writer settles this itself from now on. Like v20, a
     // failure is logged, never thrown: it must not leave the app unable to open.

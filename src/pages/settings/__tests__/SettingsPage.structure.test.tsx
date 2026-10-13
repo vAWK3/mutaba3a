@@ -5,7 +5,7 @@ import { ThemeProvider } from '../../../lib/theme';
 import en from '../../../lib/i18n/translations/en.json';
 
 /**
- * MUT-88 (ADR-071), AC "each action exists exactly once": the whole Settings
+ * MUT-88 (ADR-072), AC "each action exists exactly once": the whole Settings
  * page, with its real sections, offers every data action once. Before, Export
  * Data and Export Backup were two exports, and Import Data and Import Backup
  * two restores.

@@ -3,7 +3,7 @@ import { db } from '../../db/database';
 import type { BusinessProfile } from '../../types';
 
 /**
- * MUT-88 (ADR-071): the seed reads "does the person already have a default?"
+ * MUT-88 (ADR-072): the seed reads "does the person already have a default?"
  * before its transaction. If the welcome modal creates "Default Profile" in
  * that gap, the seed used to write a second default, and the sample business
  * sat beside the person's own with a Default badge. The seed now settles the

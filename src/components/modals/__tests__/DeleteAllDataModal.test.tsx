@@ -6,7 +6,7 @@ import ar from '../../../lib/i18n/translations/ar.json';
 import { DeleteAllDataModal } from '../DeleteAllDataModal';
 
 /**
- * MUT-88 (ADR-071): Delete all data sits behind a real backup and a typed
+ * MUT-88 (ADR-072): Delete all data sits behind a real backup and a typed
  * word. Step 1 used to download three CSVs that Restore can't read; it now
  * makes the same full backup as Settings › Back up.
  */

@@ -143,7 +143,7 @@ afterEach(async () => {
   await clearAll();
 });
 
-// MUT-88 (ADR-071): Settings › Your data › Restore hands a CSV or a
+// MUT-88 (ADR-072): Settings › Your data › Restore hands a CSV or a
 // one-business export straight to this page, so it is never picked twice.
 describe('ImportDataPage: a file handed over from Restore', () => {
   afterEach(() => {

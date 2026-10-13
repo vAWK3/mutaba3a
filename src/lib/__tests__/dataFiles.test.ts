@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { classifyDataFile, setPendingImport, takePendingImport } from '../dataFiles';
 
 /**
- * MUT-88 (ADR-071): Settings › Your data has one Restore. It reads the file
+ * MUT-88 (ADR-072): Settings › Your data has one Restore. It reads the file
  * once and decides where it goes: a full backup replaces everything (after a
  * confirmation), a one-business export or a CSV opens the import page.
  */

@@ -128,7 +128,7 @@ describe('businessProfileRepo', () => {
       expect(fetched?.isDefault).toBe(true);
     });
 
-    // MUT-88 (ADR-071): while any active profile exists, one of them is the
+    // MUT-88 (ADR-072): while any active profile exists, one of them is the
     // default; a list with no default can no longer be written.
     it('makes the only active profile the default even when created as non-default', async () => {
       const only = await businessProfileRepo.create(createTestProfile({ isDefault: false }));
@@ -217,7 +217,7 @@ describe('businessProfileRepo', () => {
     });
   });
 
-  // MUT-88 (ADR-071): exactly one default, decided by one rule for every writer.
+  // MUT-88 (ADR-072): exactly one default, decided by one rule for every writer.
   describe('exactly one default', () => {
     const at = (iso: string) => ({ createdAt: iso, updatedAt: iso });
     const countDefaults = async () => (await db.businessProfiles.toArray()).filter((p) => p.isDefault).length;

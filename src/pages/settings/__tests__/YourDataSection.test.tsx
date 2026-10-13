@@ -10,7 +10,7 @@ import ar from '../../../lib/i18n/translations/ar.json';
 import { YourDataSection } from '../YourDataSection';
 
 /**
- * Settings › Your data (MUT-88, ADR-071): Back up, Restore, Export a
+ * Settings › Your data (MUT-88, ADR-072): Back up, Restore, Export a
  * business, Export receipts and Check data, each once. Ported case for case
  * from the deleted DataToolsSection suite (review D3); the intended changes
  * are the heading, Back up's "Last backed up" line, and Restore asking before

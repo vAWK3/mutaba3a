@@ -74,7 +74,7 @@ describe('Profile Association - Auto-assignment', () => {
       expect(client.profileId).toBeUndefined();
     });
 
-    // MUT-88 (ADR-071): the only active business is always the default, so a
+    // MUT-88 (ADR-072): the only active business is always the default, so a
     // client created next to it is assigned to it instead of left orphaned.
     it('assigns the only business even when it was created without the default flag', async () => {
       const only = await businessProfileRepo.create({

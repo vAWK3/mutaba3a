@@ -134,7 +134,7 @@ export interface Settings {
   featureNotice?: FeatureKey[];
   /**
    * When the last full backup was made on this device (ISO), shown in
-   * Settings › Your data (MUT-88, ADR-071). Set by `backUpNow` once the file
+   * Settings › Your data (MUT-88, ADR-072). Set by `backUpNow` once the file
    * was produced, and by a restore to that backup's own timestamp.
    */
   lastBackupAt?: string;

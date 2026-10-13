@@ -139,7 +139,7 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
       // Insert in dependency order
       await db.businessProfiles.bulkPut(profiles);
       // The existingDefault read above ran outside this transaction; settle the
-      // default here so a profile created meanwhile keeps it (MUT-88, ADR-071).
+      // default here so a profile created meanwhile keeps it (MUT-88, ADR-072).
       await enforceSingleDefaultProfile(db.businessProfiles);
       await db.clients.bulkPut(clients);
       await db.projects.bulkPut(projects);

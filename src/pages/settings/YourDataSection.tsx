@@ -41,7 +41,7 @@ function pickFile(accept: string, onPick: (file: File) => void) {
 }
 
 /**
- * Settings › Your data (MUT-88, ADR-071): one home for every data action.
+ * Settings › Your data (MUT-88, ADR-072): one home for every data action.
  * Back up (with when it last happened), Restore (one picker; the file decides
  * where it goes), Export a business, Export receipts and Check data.
  * Replaces the old Data block and Data Tools card, which offered two exports

@@ -138,7 +138,7 @@ describe('SettingsPage accessibility', () => {
     }
   });
 
-  // MUT-88 (ADR-071) replaces MUT-139's "Business Profiles first, Data last":
+  // MUT-88 (ADR-072) replaces MUT-139's "Business Profiles first, Data last":
   // Businesses, General, Features, About, Your data, then Delete all data
   // alone, outside every card.
   it('orders the sections Businesses, General, Features, About, Your data', () => {

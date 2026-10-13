@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Settings in five groups, one home per action (MUT-88, ADR-072)
+
+**Why:** Settings offered two exports and two restores. Delete all data sat beside them, and its "back up first" step saved CSVs that Restore can't read. The settings column scrolled in its own 600px box. Two Default badges could appear.
+
+### Added
+- `YourDataSection`: Back up (with "Last backed up: <date>"), Restore, Export a business, Export receipts and Check data, each once.
+- `RestoreBackupModal`: asks before a full backup replaces everything, and names its date and record count (Arabic plural forms included).
+- `src/lib/dataFiles.ts`: `classifyDataFile` plus the one-slot hand-off to `/settings/import`.
+- `src/db/profileDefault.ts`: `pickDefaultProfileId` / `enforceSingleDefaultProfile`.
+- `backUpNow()` and `useBackUp()`, and `Settings.lastBackupAt`. Dexie **v22**: a one-time repair of extra defaults.
+
+### Changed
+- Settings order: Businesses, General (was Preferences), Features (was Advanced features), About ("Mutaba3a", was "Mutaba3a - Mini CRM"), Your data, then Delete all data alone below every card. `.page-content` is the one scroll area; `.settings-column` caps the width.
+- Delete all data: step 1 makes the same full backup as Back up; step 2 is a typed word (DELETE / «حذف»).
+- Every profile writer (repo, demo seed, profile import, restore) settles "exactly one default" in its own transaction. Real profiles outrank `demo_` sample ones.
+- `ExportDataModal` is titled "Export a business". The import page's full-backup message points to Settings › Your data › Restore. The QA export spec follows the new labels.
+
+### Removed
+- `DataToolsSection` (its tests moved to `YourDataSection.test.tsx`), the inline Data block, the duplicate Import Backup handler, the CSV "backup" in the delete modal, `.settings-family`, `.settings-section-nested`, `.settings-row-danger`, and the now-unused i18n keys.
+
+### Technical
+- New tests: `profileDefault`, `migration-v22`, `backup`, `seedDefault`, `dataFiles`, `RestoreBackupModal`, `DeleteAllDataModal`, `YourDataSection`, `SettingsPage.structure`. ImportDataPage gains three handoff tests. The current-version assertions in migration-v20/v21 and the retained-schema tests now expect 22.
+- Gate (per Basel, no full suite): targeted suites (`src/pages/settings`, `src/components/modals`, `src/db`, `src/demo`, `dataFiles`, `src/lib/i18n`): 699/700 pass. The one failure was `ImportDataPage` "reuses the target profile's own project…", which passes when the file runs alone (25/25, twice): a load-sensitive 50 ms wait. `typecheck` is clean; `lint` has 0 errors (6 warnings, all in files this ticket did not touch); `build` and `test:bundles` pass; the page was checked in the browser (EN + AR).
+
 ## [Unreleased] - 2026-10-13 — Privacy policy covers the iPhone and Android apps
 
 **Why:** `/privacy` covered only the local-only Mac, Windows and browser apps, and said there was no account, no server and that data never leaves the device. None of that holds for the Flutter iPhone/Android apps (`mutaba3a-flutter`). They sign in with email and password against the hosted API (device sessions, MUT-64), store entries on Cloud Run/Cloud SQL (`me-west1`), upload receipts to a private GCS bucket, and keep a Drift cache plus an offline outbox on the phone. Facts were taken from that app's code and `server/infrastructure/terraform`. The apps have no analytics or crash SDKs, and no push or exchange-rate calls.

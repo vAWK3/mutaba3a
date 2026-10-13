@@ -904,7 +904,7 @@ export const businessProfileRepo = {
   },
 
   // Every write below settles "exactly one default" in the same transaction
-  // (MUT-88, ADR-071): a profile made default passes its id as the preference.
+  // (MUT-88, ADR-072): a profile made default passes its id as the preference.
   async create(data: Omit<BusinessProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<BusinessProfile> {
     const now = nowISO();
     const profile: BusinessProfile = {

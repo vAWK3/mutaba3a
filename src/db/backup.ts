@@ -57,7 +57,7 @@ export async function exportBackup(): Promise<void> {
 }
 
 /**
- * Settings › Your data › Back up (MUT-88, ADR-071): download a full backup,
+ * Settings › Your data › Back up (MUT-88, ADR-072): download a full backup,
  * then record when. Nothing is recorded if the file could not be produced.
  * A browser can't confirm the user kept the download; producing it is the
  * best signal available (MUT-90 builds its reminder on this date).
@@ -104,7 +104,7 @@ export async function restoreFromBackup(backupJson: string): Promise<{ recordsRe
       }
     }
 
-    // An older backup can carry two defaults (MUT-88, ADR-071).
+    // An older backup can carry two defaults (MUT-88, ADR-072).
     await enforceSingleDefaultProfile(db.businessProfiles);
     // The device now holds exactly this backup, so it is the last one made.
     if (data.timestamp) await settingsRepo.update({ lastBackupAt: data.timestamp });

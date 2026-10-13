@@ -110,7 +110,7 @@ Gate (Node 22: `export PATH=/Users/basel/.nvm/versions/node/v22.23.1/bin:$PATH`)
 
 ## Knowledge updates at build
 
-- **ADR-071:** Settings Your data: one Back up, one type-sniffing Restore, the data layer owns "one default business", `lastBackupAt` lives on the settings row. It amends ADR-063 §2 and ADR-064 §4 (the Data Tools family is removed).
+- **ADR-072:** Settings Your data: one Back up, one type-sniffing Restore, the data layer owns "one default business", `lastBackupAt` lives on the settings row. It amends ADR-063 §2 and ADR-064 §4 (the Data Tools family is removed).
 - **CHANGELOG, COMPONENT_REGISTRY** (YourDataSection, RestoreBackupModal, backUpNow, `lib/dataFiles`, enforceSingleDefaultProfile; drop DataToolsSection and the stale ConfirmModal), **TEST_PLAN**, **SYSTEM_OVERVIEW** (Settings).
 - **PATTERNS:** a one-slot handoff module for passing a File across a route change.
 
@@ -327,7 +327,7 @@ finding above. Run with Claude Code or Codex; checkbox as you ship.
   - Surfaced by: the MUT-160 precedent
   - Files: qa/specs/**, e2e/**
   - Verify: run the affected specs on a preview build
-- [ ] **T6 (P2, human: ~1h / CC: ~5min)** — knowledge — ADR-071 (amends ADR-063 §2 and ADR-064 §4), CHANGELOG, COMPONENT_REGISTRY (and drop the stale ConfirmModal), TEST_PLAN, SYSTEM_OVERVIEW, PATTERNS (one-slot handoff)
+- [ ] **T6 (P2, human: ~1h / CC: ~5min)** — knowledge — ADR-072 (amends ADR-063 §2 and ADR-064 §4), CHANGELOG, COMPONENT_REGISTRY (and drop the stale ConfirmModal), TEST_PLAN, SYSTEM_OVERVIEW, PATTERNS (one-slot handoff)
   - Surfaced by: the CLAUDE.md knowledge protocol
   - Verify: the files are updated in the docs(knowledge) commit
 

@@ -2083,3 +2083,18 @@ New `kind: 'conversion'` on `Transaction`, excluded from P&L totals, on a new de
 
 **What was run (Node 22):** `npm run lint` 0 errors (13 pre-existing warnings, unrelated — the `react-hooks/incompatible-library` `watch()` warning already exists on every other React Hook Form drawer) · `npm run typecheck` clean · `npm run build` succeeded (new `ConversionsPage` chunk code-split as expected) · full `vitest run` (no path filter): 3,536 passed / 4 skipped, after the `/qa-reconcile` fix above.
 
+## MUT-88 — Settings in five groups, one home per action (2026-10-13, ADR-072)
+
+| AC | Tests |
+|---|---|
+| Each action exactly once; duplicates removed | `SettingsPage.structure.test.tsx` (real sections: six buttons once each; the old Export JSON / Export Backup / Import Data / Import Backup and the Data Tools heading are gone), `YourDataSection.test.tsx` (row order, once each) |
+| Last backup date stored and shown | `backup.test.ts` (stamp on success only; restore sets the backup's timestamp; newer-version refusal keeps data), `YourDataSection.test.tsx` ("Last backed up" / "Not backed up yet", EN + AR) |
+| One scroll area | `SettingsPage.a11y.test.tsx` (every section inside `.settings-column`; `.page-content` uncapped). Browser check: one scroller, at full width |
+| Exactly one default | `profileDefault.test.ts` (pick rules + enforce), `businessProfileRepo.test.ts` (two creates, archive hands the default to the earliest real profile, unset moves it, repair on next write), `profileImport.test.ts` (makeDefault), `seedDefault.test.ts` (the welcome-modal race), `backup.test.ts` (restore with two defaults), `migration-v22.test.ts` |
+| No Sync row | `SettingsPage.a11y.test.tsx` |
+| Order + typed confirmation | `SettingsPage.a11y.test.tsx` (Businesses, General, Features, About, Your data; Delete last and outside every card), `DeleteAllDataModal.test.tsx` (locked until backup + word; case and space tolerant; Arabic حذف; backup failure keeps step 2 locked; real backup, not CSV) |
+| Restore routing | `dataFiles.test.ts`, `RestoreBackupModal.test.tsx` (date, count, plural, cancel, failure inline), `YourDataSection.test.tsx` (full → confirm → restore; CSV / business export → import page; unknown → toast), `ImportDataPage.test.tsx` (hand-off preview, profile match after load, taken once) |
+
+Regression contract (review D3): all 6 DataToolsSection cases are ported to `YourDataSection.test.tsx`, and all 9 SettingsPage.a11y cases are kept (the order case is rewritten on purpose).
+QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a business". It was not run here; run it on a preview build. The language and theme specs are already broken by MUT-139's radios (MUT-160).
+
