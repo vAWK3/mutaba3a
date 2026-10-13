@@ -6,15 +6,14 @@
  * narrows only this list; Owed Now and Payments are never filtered (D5).
  *
  * Row actions keep their earlier gates: Record payment through
- * RecordPaymentButton (MUT-6), invoice actions while Invoices is on (MUT-13),
- * the project tag linking only while Projects is on (MUT-16).
+ * RecordPaymentButton (MUT-6) and the project tag linking only while Projects is on (MUT-16).
  */
 
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { SearchInput, StatusSegment, DateRangeControl } from '../filters';
 import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton, AmountWithConversion, EmptyState, type RowAction } from '../ui';
-import { CheckIcon, CopyIcon, DocumentIcon } from '../icons';
+import { CheckIcon, CopyIcon } from '../icons';
 import { useIncome, type IncomeFilters } from '../../hooks/useIncomeQueries';
 import { useSavedFlashRows } from '../../hooks/useSavedFlash';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
@@ -49,9 +48,7 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = getLocale(language);
-  const navigate = useNavigate();
-  const { openIncomeDrawer, openProjectDrawer, openPartialPaymentDrawer, openDocumentDrawer } = useDrawerStore();
-  const invoicesEnabled = useFeatureEnabled('invoices');
+  const { openIncomeDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const projectsEnabled = useFeatureEnabled('projects');
 
   // One filter object, so a change is one state update and one query key
@@ -105,28 +102,6 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
     if (row.isReceivable && row.paymentStatus !== 'paid') {
       // Opens the date-aware payment drawer (MUT-18) instead of stamping today silently.
       actions.push({ label: t('common.markPaid'), icon: <CheckIcon size={16} />, onClick: () => openPartialPaymentDrawer({ transactionId: row.id }) });
-    }
-    if (invoicesEnabled) {
-      const documentId = row.tx.linkedDocumentId;
-      actions.push(
-        documentId
-          ? {
-              label: t('transactions.viewInvoice'),
-              icon: <DocumentIcon size={16} />,
-              onClick: () => navigate({ to: '/documents/$documentId', params: { documentId } }),
-            }
-          : {
-              label: t('transactions.generateInvoice'),
-              icon: <DocumentIcon size={16} />,
-              onClick: () =>
-                openDocumentDrawer({
-                  mode: 'create',
-                  defaultType: row.paymentStatus === 'paid' ? 'receipt' : 'invoice',
-                  defaultClientId: clientId,
-                  linkTransactionId: row.id,
-                }),
-            }
-      );
     }
     actions.push({
       label: t('common.duplicate'),

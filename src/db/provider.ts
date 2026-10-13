@@ -27,8 +27,6 @@ import {
   fxRateRepo,
   settingsRepo,
   businessProfileRepo,
-  documentSequenceRepo,
-  documentRepo,
   paymentRecordRepo,
 } from './repository';
 import {
@@ -59,8 +57,6 @@ const dexieBase = {
   fxRates: fxRateRepo,
   settings: settingsRepo,
   businessProfiles: businessProfileRepo,
-  documentSequences: documentSequenceRepo,
-  documents: documentRepo,
   paymentRecords: paymentRecordRepo,
   expenses: expenseRepo,
   expenseCategories: expenseCategoryRepo,

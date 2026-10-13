@@ -55,7 +55,11 @@ describe('fonts', () => {
   });
 
   it('keeps no Thmanyah copy in public/ (the portal cannot see it; one location only)', () => {
-    expect(readdirSync(repoPath('public/fonts')).filter((name) => /thmanyah/i.test(name))).toEqual([]);
+    // MUT-145 deleted public/fonts (the PDF-only TTFs); if it ever comes back,
+    // it still must not hold a Thmanyah copy.
+    const dir = repoPath('public/fonts');
+    const names = existsSync(dir) ? readdirSync(dir) : [];
+    expect(names.filter((name) => /thmanyah/i.test(name))).toEqual([]);
   });
 
   it('declares Thmanyah Sans 400/500/700 and Serif Display 400/700, all swap, all from the bundled files', () => {
@@ -388,8 +392,8 @@ describe('names', () => {
  */
 const KNOWN_DEAD_REFERENCES = [
   '--bg-hover', '--bg-primary', '--bg-secondary', '--bg-tertiary', '--border-color',
-  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger', '--color-error',
-  '--color-expense', '--color-income', '--color-info', '--color-muted', '--color-primary', '--color-success',
+  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger',
+  '--color-expense', '--color-income', '--color-info', '--color-primary', '--color-success',
   '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--color-warning', '--danger', '--danger-subtle',
   '--error-bg', '--error-fg', '--font-serif', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
   '--positive', '--primary', '--primary-foreground', '--primary-subtle', '--shadow-lg', '--shadow-xl',

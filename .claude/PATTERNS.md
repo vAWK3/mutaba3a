@@ -796,15 +796,14 @@ Code-split routes and heavy components.
 
 ```typescript
 // src/router.tsx
-const DocumentsPage = lazy(() => import('./pages/documents/DocumentsPage'));
 const InsightsPage = lazy(() => import('./pages/insights/InsightsPage'));
 
 // Route definition
 {
-  path: '/documents',
+  path: '/insights',
   component: () => (
     <Suspense fallback={<PageSkeleton />}>
-      <DocumentsPage />
+      <InsightsPage />
     </Suspense>
   ),
 }
@@ -819,29 +818,25 @@ const InsightsPage = lazy(() => import('./pages/insights/InsightsPage'));
 Throw typed errors for business rule violations.
 
 ```typescript
-// Custom errors
-export class DocumentLockedError extends Error {
-  documentId: string;
-  constructor(message: string, documentId: string) {
+// Custom error (src/db/repository.ts)
+export class PaymentRecordError extends Error {
+  paymentRecordId?: string;
+  transactionId?: string;
+  constructor(message: string, opts?: { paymentRecordId?: string; transactionId?: string }) {
     super(message);
-    this.name = 'DocumentLockedError';
-    this.documentId = documentId;
+    this.name = 'PaymentRecordError';
+    this.paymentRecordId = opts?.paymentRecordId;
+    this.transactionId = opts?.transactionId;
   }
 }
 
-// Throw in repository
-if (document.lockedAt) {
-  throw new DocumentLockedError('Document is locked', document.id);
+// Throw in repository (paymentRecordRepo.create: overpayment, ADR-030)
+if (otherPaymentsMinor + data.amountMinor > tx.amountMinor) {
+  throw new PaymentRecordError('Payment exceeds the remaining balance', { transactionId: tx.id });
 }
 
-// Catch in mutation
-onError: (error) => {
-  if (error instanceof DocumentLockedError) {
-    toast.error('Cannot edit locked document');
-  } else {
-    toast.error('An error occurred');
-  }
-}
+// Catch where the save happens (IncomeDrawer)
+const message = name === 'PaymentRecordError' ? t('drawer.income.savePaymentsChanged') : t('drawer.income.saveFailed');
 ```
 
 ---
@@ -1190,10 +1185,10 @@ Three places, always together: the **route** gets `beforeLoad: requireFeature('<
 the **sidebar entry** goes into `optionalItems` in `SidebarNav.tsx` with its
 `feature` key (the "More" section renders only enabled items); **entry points**
 on other pages read `useFeatureEnabled('<key>')` and render nothing while off.
-Data and repository guards never read a flag: a document lock, a sequence or a
-retainer behaves identically whether the area is on or off, and the UI only
-changes how it *explains* the data (the locked income notice links to the
-document when invoices is on and points at Settings when it is off). Deep links
+Data and repository guards never read a flag: a retainer or a vendor behaves
+identically whether its area is on or off; the UI only changes what it shows.
+(A retired area, like invoices since MUT-145, loses its key entirely: a stored
+flag or notice entry for it is filtered out on read, ADR-067.) Deep links
 into a gated area from other surfaces (home attention items, legacy menus) are
 either removed while the area is off or left to bounce via the guard; prefer
 removing when the item's only action is the deep link.
@@ -1821,7 +1816,7 @@ A secondary field with a sensible default (the payment date, "Today ›") or one
 Under MUT-5's strict grammar, deleting a digit from a prefilled "3,550" leaves "3,55", which can't be read. Prefill amount fields with `minorToAmountInput`: "3550" or "887.50". It uses integer arithmetic, never `String(minor / 100)`, which gives "887.5".
 
 ### A co-located stylesheet prefixes its classes with the component
-`index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, used by the document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.
+`index.css` still has short global names with fixed sizes from older screens (`.payment-row`, `.payment-amount { width: 120px }`, from the retired document forms). A component's own stylesheet uses a prefix (`pay-drawer-…`) so that it can't pick those rules up. Grep `src/**/*.css` for a class name before using it.
 
 ---
 
@@ -2060,3 +2055,25 @@ Two writers can meet on one unposted installment: a lazy read posting it and a c
 ### Serialize writes to one aggregate on its row lock, then read
 `correctOutcome` starts with `SELECT … FROM agreements … FOR UPDATE` and only then reads the version. A concurrent correction waits, then sees the new version and is `stale`; without the lock it got past the version check and failed later with a misleading reason. A Postgres contract test racing two calls with `Promise.allSettled` catches the difference (it failed 2 of 3 runs with the lock removed).
 
+---
+
+### Pattern: An import re-mints every ID and remaps every reference (MUT-158)
+
+**When**: bringing exported rows back into a database that may already hold
+rows, possibly under a different profile.
+
+**How**: `src/db/profileImport.ts`. Mint the new IDs up front, one map per
+table (old → new), so rows that point at each other (transactions ↔
+retained documents) can be written in any order. Write every row with its
+references rewritten through those maps. A reference to a row the file
+doesn't carry is dropped, never left dangling. Run it all in one Dexie
+`rw` transaction so a failure leaves nothing half-imported. Find
+duplicates only inside the target profile (clients by a non-empty email,
+projects by name), because clients belong to one business (ADR-049).
+
+**Never**: give rows new IDs while copying their foreign keys verbatim.
+The deleted `ImportDataModal` did that, and every imported entry pointed at
+clients that did not exist.
+
+**Instances**: `importProfileFile` (tests: `profileImport.test.ts`, and the
+Export → Import round trip in `ImportDataPage.test.tsx`).

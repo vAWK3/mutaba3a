@@ -127,33 +127,22 @@ const reportsRoute = createRoute({
   },
 });
 
-// Documents routes
-const documentsRoute = createRoute({
+// Retired document routes (MUT-145): document generation is gone. Stale
+// links and bookmarks land on Home, where a switched-off area also sends them.
+const legacyDocumentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/documents',
-  beforeLoad: requireFeature('invoices'),
-  component: lazyPage(() => import('./pages/documents'), 'DocumentsPage'),
+  beforeLoad: () => {
+    throw redirect({ to: '/' });
+  },
 });
 
-const documentNewRoute = createRoute({
+const legacyDocumentsSplatRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/documents/new',
-  beforeLoad: requireFeature('invoices'),
-  component: lazyPage(() => import('./pages/documents'), 'DocumentFormPage'),
-});
-
-const documentDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/documents/$documentId',
-  beforeLoad: requireFeature('invoices'),
-  component: lazyPage(() => import('./pages/documents'), 'DocumentDetailPage'),
-});
-
-const documentEditRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/documents/$documentId/edit',
-  beforeLoad: requireFeature('invoices'),
-  component: lazyPage(() => import('./pages/documents'), 'DocumentFormPage'),
+  path: '/documents/$',
+  beforeLoad: () => {
+    throw redirect({ to: '/' });
+  },
 });
 
 // Settings route
@@ -163,11 +152,14 @@ const settingsRoute = createRoute({
   component: lazyPage(() => import('./pages/settings/SettingsPage'), 'SettingsPage'),
 });
 
-// Profile detail route (under settings)
-const profileDetailRoute = createRoute({
+// Retired profile detail page (MUT-145): profiles are edited in the business
+// profile drawer from Settings.
+const legacyProfileDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/profiles/$profileId',
-  component: lazyPage(() => import('./pages/settings/ProfileDetailPage'), 'ProfileDetailPage'),
+  beforeLoad: () => {
+    throw redirect({ to: '/settings' });
+  },
 });
 
 // Import data route (under settings)
@@ -338,10 +330,8 @@ const routeTree = rootRoute.addChildren([
   projectsRoute,
   projectDetailRoute,
   clientsRoute.addChildren([clientsIndexRoute, clientDetailRoute]),
-  documentsRoute,
-  documentNewRoute,
-  documentDetailRoute,
-  documentEditRoute,
+  legacyDocumentsRoute,
+  legacyDocumentsSplatRoute,
   // Expense routes
   expensesRoute,
   expenseProfilesRoute,
@@ -359,7 +349,7 @@ const routeTree = rootRoute.addChildren([
   // Reports route
   reportsRoute,
   settingsRoute,
-  profileDetailRoute,
+  legacyProfileDetailRoute,
   importDataRoute,
   themeDemoRoute,
 ]);

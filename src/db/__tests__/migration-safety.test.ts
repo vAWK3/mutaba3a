@@ -188,6 +188,9 @@ describe('Migration Safety', () => {
 
     it('switches on the optional areas the restored data belongs to (MUT-12)', async () => {
       const now = new Date().toISOString();
+      await db.retainerAgreements.clear();
+      await db.retainerAgreements.add({ id: 'r-1', createdAt: now } as never);
+      // A retained document (MUT-145) rides along: restored, but enables nothing.
       await db.documents.add({ id: 'doc-1', createdAt: now, updatedAt: now } as never);
       await db.settings.put({
         id: 'default',
@@ -197,23 +200,26 @@ describe('Migration Safety', () => {
       });
       const backup = await createBackup();
 
-      // A later state where the user had turned invoices on, then the restore
+      // A later state where the user had turned retainers on, then the restore
       // brings back the pre-v20 settings row without `features`.
       await db.settings.put({
         id: 'default',
         enabledCurrencies: ['USD', 'ILS'],
         defaultCurrency: 'USD',
         defaultBaseCurrency: 'ILS',
-        features: { invoices: true },
+        features: { retainers: true },
       });
+      await db.retainerAgreements.clear();
       await db.documents.clear();
 
       expect(await restoreFromBackup(backup)).toBe(true);
 
       const settings = await db.settings.get('default');
-      expect(settings?.features?.invoices).toBe(true);
-      expect(settings?.featureNotice).toEqual(['invoices']);
+      expect(settings?.features?.retainers).toBe(true);
+      expect(settings?.featureNotice).toEqual(['retainers']);
+      expect(await db.retainerAgreements.count()).toBe(1);
       expect(await db.documents.count()).toBe(1);
+      await db.retainerAgreements.clear();
     });
   });
 

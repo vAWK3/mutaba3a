@@ -97,12 +97,14 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
         }
       });
 
+      // Archived clients and projects are exported too (archivedAt kept), so
+      // their entries stay linked after an import (review F3).
       const profileClients = await db.clients
-        .filter((c) => c.profileId === selectedProfileId && !c.archivedAt)
+        .filter((c) => c.profileId === selectedProfileId)
         .toArray();
 
       const profileProjects = await db.projects
-        .filter((p) => p.profileId === selectedProfileId && !p.archivedAt)
+        .filter((p) => p.profileId === selectedProfileId)
         .toArray();
 
       const profileTransactions = await db.transactions
@@ -117,14 +119,13 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
       });
 
       const relatedClients = await db.clients
-        .filter((c) => !c.archivedAt && (c.profileId === selectedProfileId || !c.profileId) && clientIds.has(c.id))
+        .filter((c) => (c.profileId === selectedProfileId || !c.profileId) && clientIds.has(c.id))
         .toArray();
 
       relatedClients.forEach((c) => clientIds.add(c.id));
 
       const relatedProjects = await db.projects
         .filter((p) => {
-          if (p.archivedAt) return false;
           if (p.profileId && p.profileId !== selectedProfileId) return false;
           if (projectIds.has(p.id)) return true;
           return !!p.clientId && clientIds.has(p.clientId);

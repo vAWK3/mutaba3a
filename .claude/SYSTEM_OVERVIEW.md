@@ -20,7 +20,7 @@
 ### Target Users
 - Freelancers managing multiple clients and projects
 - Consultants tracking retainers and billable work
-- Small businesses needing invoice/receipt generation
+- Small businesses that bill outside the app and track who owes what here (document generation retired, MUT-145)
 - Users in regions with privacy concerns or unreliable internet
 
 ---
@@ -111,7 +111,7 @@ tables.
 | **Client** | Has many Projects, Transactions | Root entity for billing |
 | **Project** | Belongs to Client, has many Transactions | Scopes work |
 | **Transaction** | Belongs to Client, Project; links to Document | kind: income/expense, status: paid/unpaid |
-| **Document** | Belongs to BusinessProfile, Client; links to Transactions | Invoices, receipts, credit notes |
+| **Document** (retained) | Rows from before MUT-145; nothing renders them | Retained table only (ADR-029/066): backup + profile export/import |
 | **BusinessProfile** | Has many Documents, Expenses, Retainers | Multi-identity support |
 | **RetainerAgreement** | Belongs to Client, Project | Generates ProjectedIncome |
 | **Expense** | Belongs to BusinessProfile, has Receipts | Profile-scoped costs |
@@ -142,8 +142,8 @@ tables.
   ("Paid? Two taps."). The future-date rule is one helper,
   `isFuturePaymentDate` in `lib/dates.ts`, shared with the repository
 - **Overpayment is rejected** — the sum of a transaction's payments can never
-  exceed its amount (ADR-030). Payments on a locked (invoiced) transaction are
-  allowed: the lock protects the invoice facts, not payment tracking
+  exceed its amount (ADR-030). No entry is ever locked: document locks were
+  removed with document generation (MUT-145, ADR-067)
 - **Owed Now** = remaining balance of unpaid, non-deleted, non-archived income,
   per currency, overdue part split out — one helper, `summarizeOwedByCurrency`
   (ADR-033), for every screen that shows it. Home and the Clients list sum the
@@ -190,10 +190,10 @@ tables.
   - **Typeahead keyboard contract:** one contract serves every picker.
   - **Offline (ADR-040):** local reads and saves run whether or not the device is online; only the live FX rate waits for the network.
   - **App frame (MUT-79):** nothing floats over content. The live FX rate is a top-bar readout (`$1 = ₪3.06 ▾`) with a popover showing the rates, their source, date and Refresh. The Light/Dark/System toggle sits beside Settings in the sidebar footer. The Mac-app offer (Mac browsers only, until dismissed) and the desktop update bar sit in flow at the bottom of the main area.
-- **Client profile (MUT-3 / ADR-033)** — `/clients/:id` (beside the list on a wide window, full page otherwise, MUT-84) is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, invoice actions while Invoices is on, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). The retainers card follows while Retainers is on.
+- **Client profile (MUT-3 / ADR-033)** — `/clients/:id` (beside the list on a wide window, full page otherwise, MUT-84) is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). The retainers card follows while Retainers is on.
 - **Drawer motion (MUT-80 / ADR-044)**: every drawer (local and portal) renders the shared `DrawerFrame`. It springs in from its edge, follows a horizontal drag with a rubber band, and dismisses on a release past half (projected momentum); a press catches it mid-motion. Closing is immediate: the exit is an inert snapshot sliding out along the same edge (mirrored in RTL; cross-fades under reduced motion). Focus is trapped while open and returns to the trigger. `motion@13.4.4` is a dependency.
 - **Unassigned records (2026-10-11)**: records saved without a `profileId` show in no profile's lists. `OrphanedRecordsBanner` (AppShell) counts them with `runIntegrityCheck`; its **Review now** opens `OrphanedRecordsDrawer` in place, which lists the clients, projects, income and expenses involved and assigns them all to the default profile or one by one, each starting on its linked client's profile. "Unassigned" is defined once (`isOrphaned`, `src/db/orphanedRecords.ts`). Clients and Projects no longer open a modal by themselves. Locked income entries can't be assigned yet (TD-035).
-- **Optional areas (Advanced features, MUT-12 / ADR-032)** — invoices, retainers, expenses, insights, planning and projects are switches in Settings, off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/documents*` and `/retainers` redirect home while off; the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Data tools). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home.
+- **Optional areas (Advanced features, MUT-12 / ADR-032)** — retainers, expenses, insights, planning and projects are switches in Settings (invoices retired by MUT-145, ADR-067), off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/retainers` redirects home while off (`/documents*` always redirects home since MUT-145); the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Data tools). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home.
 - **Expenses Needs attention (MUT-87, ADR-052)** — one row per recurring rule, not one card per missed month: "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", grouped by the pure `groupOccurrencesByRule`; the header totals each currency side by side (`CurrencyAmounts`). **Mark Paid** opens `RecurringMarkPaidDrawer`: the payments, all checked, each with its date and an editable amount; saving writes one expense per checked payment, **dated on its own expected date**, in one all-or-nothing write (`confirmPayments` inside `recurringOccurrences.runAtomically`). Skip and Snooze apply per payment in the drawer, or to all from the row's ⋯ menu (`useMenuButton`); snoozing is a view of the same drawer. The per-month confirm and snooze modals are gone; the forecast keeps a read-only card. Editing a rule now refreshes the rows (`invalidateRecurringRuleQueries`). Still looks back only 90 days (TD-069).
 
 | Feature | Status | Notes |
@@ -201,7 +201,7 @@ tables.
 | Transaction Ledger | ✅ Complete | Full CRUD, filters, search |
 | Client Management | ✅ Complete | Index, detail, archive |
 | Project Management | ✅ Complete | Index, detail, linked transactions |
-| Document Generation | ✅ Complete | Invoice, receipt, credit note, PDF export |
+| Document Generation | 🗑️ Retired (MUT-145) | The app records what happened and issues no documents; tables retained (ADR-067) |
 | Multi-Currency | ✅ Complete | USD, ILS, EUR, JOD (income/expense entry); per-currency reports |
 | Expense Tracking | ✅ Complete | Profile-scoped, receipts, categories |
 | Retainer Agreements | ✅ Complete | Monthly/quarterly, matching workflow |
@@ -309,10 +309,9 @@ npm run tauri build      # macOS/Windows bundles
 - **Paired-device tokens are removed**: every desktop launch deletes the retired `paired_devices.json` from the app config directory
 - **No data transmitted** without explicit user action
 
-### Document Immutability
-- Documents **locked after first PDF export** (audit trail)
-- Locked documents cannot be edited, only archived
-- Linked transactions locked when document is exported
+### Document Immutability (retired)
+- Retired with document generation (MUT-145, ADR-067, supersedes ADR-014). Stale
+  `lockedAt` values on old rows are ignored; every entry is editable.
 
 ---
 
@@ -368,7 +367,7 @@ Device-to-device sync was retired in MUT-73 (ADR-053).
 ### Why This Model Works
 1. **Privacy-first users** willing to pay for trustworthy software
 2. **No recurring costs** for us (no servers to run)
-3. **Desktop builds add value** (PDF archival, better perf, native UX)
+3. **Desktop builds add value** (offline local database, better perf, native UX)
 4. **Low barrier to entry** ensures adoption
 
 ### Distribution Channels
@@ -415,7 +414,6 @@ Device-to-device sync was retired in MUT-73 (ADR-053).
 | **State** | Zustand | 5.0.9 | UI state |
 | **Database** | Dexie | 4.2.1 | IndexedDB wrapper |
 | **Desktop** | Tauri | 2.x | Native shell |
-| **PDF** | @react-pdf/renderer | 4.3.2 | Document generation |
 | **Testing** | Vitest | 4.0.16 | Unit/integration tests |
 | **Linting** | ESLint | 9.x | Code quality |
 | **Types** | TypeScript | 5.9.3 | Type safety |
@@ -445,16 +443,11 @@ mini-crm/
 │   │
 │   ├── pages/                 # Route page components
 │   │   ├── overview/         # Dashboard
-│   │   ├── transactions/     # Ledger
 │   │   ├── projects/         # Project CRUD
 │   │   ├── clients/          # Client CRUD
-│   │   ├── documents/        # Invoice/receipt management
 │   │   ├── expenses/         # Expense tracking
 │   │   ├── retainers/        # Retainer agreements
 │   │   └── settings/         # App configuration
-│   │
-│   ├── features/              # Domain feature modules
-│   │   └── documents/        # Invoice PDF generation
 │   │
 │   ├── db/                    # Data layer
 │   │   ├── database.ts       # Dexie schema
@@ -506,7 +499,6 @@ mini-crm/
 | First Contentful Paint | <1.5s | ~1.2s |
 | Time to Interactive | <3s | ~2.5s |
 | Ledger render (100 rows) | <50ms | ~30ms |
-| PDF generation | <2s | ~1.5s |
 
 ### Database Scaling
 

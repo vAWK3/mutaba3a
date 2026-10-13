@@ -10,7 +10,7 @@
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, DocumentDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -265,7 +265,7 @@ Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Advanced-featur
 
 ### ClientWorkSection
 **Location**: `src/components/clients/ClientWorkSection.tsx`
-**Purpose**: "What have I worked on for this client?" on the client profile (MUT-3): the client's income entries as one table — date, title with project tag, amount, status with due/overdue line, remaining balance on partial rows — with its own filter row (date range, status, search held as one object) and the row actions (Record payment via `RecordPaymentButton`, Mark paid, invoice actions while Invoices is on, duplicate). No work at all → `EmptyState` with one action, Add income, prefilled with the client; filters that hide every row → "No entries match" + Clear filters. Rows are shaped by `toWorkRow` (`clientProfileRows.ts`) in a `useMemo`.
+**Purpose**: "What have I worked on for this client?" on the client profile (MUT-3): the client's income entries as one table — date, title with project tag, amount, status with due/overdue line, remaining balance on partial rows — with its own filter row (date range, status, search held as one object) and the row actions (Record payment via `RecordPaymentButton`, Mark paid, Duplicate). No work at all → `EmptyState` with one action, Add income, prefilled with the client; filters that hide every row → "No entries match" + Clear filters. Rows are shaped by `toWorkRow` (`clientProfileRows.ts`) in a `useMemo`.
 
 ```tsx
 <ClientWorkSection clientId={clientId} />
@@ -594,23 +594,17 @@ Tests: `src/components/drawers/__tests__/RecurringMarkPaidDrawer.test.tsx`.
 
 ---
 
-### DocumentDrawer
-**Location**: `src/components/drawers/DocumentDrawer.tsx`
-**Purpose**: Quick view/actions for documents.
-
-**Note**: Full document editing is in `/documents/:id/edit` page.
-
----
-
 ### BusinessProfileDrawer
 **Location**: `src/components/drawers/BusinessProfileDrawer.tsx`
-**Purpose**: Create/edit business profiles.
+**Purpose**: Create and edit business profiles. Since MUT-145 this is the only profile editor: Settings opens it in edit mode, and `ProfileDetailPage` is gone.
 
-**Features**:
-- Logo upload (base64)
-- Tax settings
-- Bank details
-- Default currency/language
+**Features** (ADR-067, IA review):
+- Identity: logo upload (base64), name (Arabic, required), English name, colour
+- Money: default currency for new income entries
+- Contact (optional): email (validated when given), phone
+- Make default toggle; labels wired to inputs (`useId`); `noValidate` so zod owns the messages
+
+**Tests**: `src/components/__tests__/BusinessProfileDrawer.test.tsx`
 
 ---
 
@@ -848,8 +842,8 @@ gate deciding where that affordance appears, so the surfaces cannot drift
 four call sites, and one surface had none).
 
 **Gate**: renders `null` unless `kind === 'income' && paymentStatus !== 'paid'
-&& (remainingAmountMinor ?? 0) > 0`. A `lockedAt` transaction is deliberately
-**not** excluded -- paying an invoice is the normal flow (ADR-030).
+&& (remainingAmountMinor ?? 0) > 0`. (A stale `lockedAt` on a legacy row is
+ignored; document locks are gone since MUT-145, ADR-067.)
 
 **Props-in, no store import**, like the rest of `components/ui`: the caller
 passes `onRecordPayment` using the drawer hook it already holds. The click
@@ -1563,7 +1557,6 @@ import {
   DollarIcon,
   UserIcon,
   FolderIcon,
-  DocumentIcon,
   SettingsIcon,
   SyncIcon,
 } from '@/components/icons';
@@ -1751,3 +1744,22 @@ Tokens go through `TokenStore` (`src/services/tokenStore.ts`, in memory only, TD
 **Tests**:
 - `src/services/oauth/__tests__/`: 74 cases, including the CIMD document check against `public/.well-known/oauth-client.json`;
 - the 10 Rust tests in `callback.rs`.
+
+---
+
+### importProfileFile / findMatchingProfile (MUT-158, inside MUT-145)
+**Location**: `src/db/profileImport.ts`
+**Purpose**: The single importer for v2 per-profile exports (Settings → Import). It creates a new profile or merges into one, re-mints every ID in one Dexie transaction, and remaps every reference: client, project and profile on transactions, plus `businessProfileId`, `clientId` and `linkedTransactionIds` on retained documents. Duplicates are found inside the target profile only. `findMatchingProfile` picks the existing profile a file belongs to (by id, or by a non-empty email on both sides).
+
+```ts
+const existing = findMatchingProfile(profiles, file);
+await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id } : { mode: 'create', makeDefault: profiles.length === 0 });
+```
+
+**Tests**: `src/db/__tests__/profileImport.test.ts` (unit), `src/pages/settings/__tests__/ImportDataPage.test.tsx` (page + Export → Import round trip)
+
+---
+
+### Retained document schema (MUT-145)
+**Location**: `src/db/retained/documentSchema.ts`
+**Purpose**: Types the retained `documents`/`documentSequences` tables (ADR-029/066). Only the indexed and linking keys are typed. Nothing renders these rows; the type exists for the Dexie tables, backup and the profile export/import. Same pattern as `engagementSchema.ts` and `monthCloseSchema.ts`.

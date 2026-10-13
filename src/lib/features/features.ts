@@ -20,7 +20,6 @@ export type { FeatureKey } from '../../types';
 
 /** Display order in Settings; also the order of auto-enable notices. */
 export const FEATURE_KEYS = [
-  'invoices',
   'retainers',
   'expenses',
   'insights',
@@ -102,7 +101,6 @@ interface Probe {
  * (`Expense.vendorId`), so they switch expenses on.
  */
 export const FEATURE_DATA_PROBES: Readonly<Record<FeatureKey, readonly Probe[]>> = Object.freeze({
-  invoices: [{ table: 'documents', softDelete: true }],
   retainers: [{ table: 'retainerAgreements', softDelete: false }],
   expenses: [
     { table: 'expenses', softDelete: true },

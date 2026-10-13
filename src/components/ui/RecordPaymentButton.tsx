@@ -50,8 +50,7 @@ export function RecordPaymentButton({
   const remainingAmountMinor = transaction.remainingAmountMinor ?? 0;
 
   // There is nothing to record against an expense, a settled receivable, or a
-  // row whose balance is already covered. A locked (invoiced) transaction is
-  // deliberately not excluded -- paying an invoice is the normal flow (ADR-030).
+  // row whose balance is already covered.
   if (
     transaction.kind !== 'income' ||
     transaction.paymentStatus === 'paid' ||

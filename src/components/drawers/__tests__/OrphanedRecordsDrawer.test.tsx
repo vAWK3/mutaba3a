@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, screen, waitFor, within, createMockBusinessProfile } from '../../../test/utils';
 import { db } from '../../../db/database';
+import { getRepositories } from '../../../db/provider';
 import { useDrawerStore } from '../../../lib/stores';
 import { useToastStore } from '../../../lib/toastStore';
 import en from '../../../lib/i18n/translations/en.json';
@@ -196,12 +197,18 @@ describe('OrphanedRecordsDrawer', () => {
     });
   });
 
-  it('saves the other rows and keeps a locked income entry listed when it cannot be assigned', async () => {
+  it('saves the other rows and keeps an income entry listed when it cannot be assigned', async () => {
     await db.businessProfiles.add(profile('p-main', 'Main', true));
     await db.clients.add(client('c-orphan', 'Orphan Client'));
-    await db.transactions.add(
-      income('tx-locked', { title: 'Invoiced work', lockedAt: STAMP, lockedByDocumentId: 'doc-1' }),
-    );
+    await db.transactions.add(income('tx-locked', { title: 'Invoiced work' }));
+    // A write that fails for one row (the document lock that used to cause
+    // this is gone since MUT-145; any failed write must behave the same way).
+    const transactions = getRepositories().base.transactions;
+    const realUpdate = transactions.update.bind(transactions);
+    vi.spyOn(transactions, 'update').mockImplementation(async (id, data) => {
+      if (id === 'tx-locked') throw new Error('write failed');
+      return realUpdate(id, data);
+    });
     const user = userEvent.setup();
     vi.spyOn(console, 'error').mockImplementation(() => {});
 

@@ -9,9 +9,8 @@ import {
 } from '../features';
 
 describe('feature vocabulary', () => {
-  it('lists the six optional areas in display order', () => {
+  it('lists the five optional areas in display order (invoices retired, MUT-145)', () => {
     expect([...FEATURE_KEYS]).toEqual([
-      'invoices',
       'retainers',
       'expenses',
       'insights',
@@ -58,9 +57,15 @@ describe('resolveFeatures', () => {
   });
 
   it('coerces non-boolean values to off, never on by accident', () => {
-    const flags = resolveFeatures({ expenses: 'yes', invoices: 1 } as unknown as Record<string, boolean>);
+    const flags = resolveFeatures({ expenses: 'yes', retainers: 1 } as unknown as Record<string, boolean>);
     expect(flags.expenses).toBe(false);
-    expect(flags.invoices).toBe(false);
+    expect(flags.retainers).toBe(false);
+  });
+
+  it('drops a stored invoices switch, retired with document generation (MUT-145)', () => {
+    const flags = resolveFeatures({ invoices: true, expenses: true });
+    expect(flags.expenses).toBe(true);
+    expect(flags).not.toHaveProperty('invoices');
   });
 });
 
@@ -96,8 +101,8 @@ describe('featuresTurnedOff (MUT-15)', () => {
   });
 
   it('lists several keys in FEATURE_KEYS order', () => {
-    const before = resolveFeatures({ projects: true, invoices: true, planning: true });
-    expect(featuresTurnedOff(before, DEFAULT_FEATURES)).toEqual(['invoices', 'planning', 'projects']);
+    const before = resolveFeatures({ projects: true, retainers: true, planning: true });
+    expect(featuresTurnedOff(before, DEFAULT_FEATURES)).toEqual(['retainers', 'planning', 'projects']);
   });
 
   it('reports only the key that went off when another went on', () => {

@@ -130,7 +130,6 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
                   <li>{t('demo.modal.item.clients')}</li>
                   <li>{t('demo.modal.item.projects')}</li>
                   <li>{t('demo.modal.item.transactions')}</li>
-                  <li>{t('demo.modal.item.documents')}</li>
                   <li>{t('demo.modal.item.retainers')}</li>
                   <li>{t('demo.modal.item.expenses')}</li>
                 </ul>
@@ -163,10 +162,6 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
                 <div className="demo-stat">
                   <span className="demo-stat-value">{stats.transactions}</span>
                   <span className="demo-stat-label">{t('demo.stats.transactions')}</span>
-                </div>
-                <div className="demo-stat">
-                  <span className="demo-stat-value">{stats.documents}</span>
-                  <span className="demo-stat-label">{t('demo.stats.documents')}</span>
                 </div>
               </div>
             </div>

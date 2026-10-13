@@ -4,7 +4,6 @@ import { IncomeDrawer } from "../drawers/IncomeDrawer";
 import { ClientDrawer } from "../drawers/ClientDrawer";
 import { ProjectDrawer } from "../drawers/ProjectDrawer";
 import { BusinessProfileDrawer } from "../drawers/BusinessProfileDrawer";
-import { DocumentDrawer } from "../drawers/DocumentDrawer";
 import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
 import { RetainerDrawer } from "../drawers/RetainerDrawer";
 import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
@@ -49,7 +48,6 @@ export function AppShell({ children }: AppShellProps) {
     clientDrawer,
     projectDrawer,
     businessProfileDrawer,
-    documentDrawer,
     expenseDrawer,
     retainerDrawer,
     retainerMatchingDrawer,
@@ -137,11 +135,6 @@ export function AppShell({ children }: AppShellProps) {
       {businessProfileDrawer.isOpen && (
         <InlineErrorBoundary>
           <BusinessProfileDrawer />
-        </InlineErrorBoundary>
-      )}
-      {documentDrawer.isOpen && (
-        <InlineErrorBoundary>
-          <DocumentDrawer />
         </InlineErrorBoundary>
       )}
       {expenseDrawer.isOpen && (

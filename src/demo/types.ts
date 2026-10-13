@@ -21,7 +21,6 @@ export interface DemoDataStats {
   clients: number;
   projects: number;
   transactions: number;
-  documents: number;
   retainers: number;
   projectedIncome: number;
   expenses: number;

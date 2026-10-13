@@ -1993,4 +1993,27 @@ JOD is a 3-decimal (fils) currency, unlike USD/ILS/EUR (all 2-decimal) — the r
 
 **Scope note:** document/invoice generation (`DocumentFormPage.tsx`, `DocumentDrawer.tsx`, `LineItemsTable.tsx`) was briefly widened to accept JOD, then reverted — that whole feature is being removed (MUT-145, product direction is digital-ledger-only). `DocumentPdf.tsx`'s fix above stayed, since it's the same defensive type-completeness category as the aggregation fixes, not new JOD feature investment in a surface that's going away.
 
+## MUT-145 — Retire document generation; MUT-158 — profile import (2026-10-13)
+
+Each acceptance criterion maps to a test (plan: `.claude/designs/mut-145-remove-documents.md`).
+
+| File | Added / changed | Covers |
+|---|---|---|
+| `src/__tests__/noDeadDocumentModules.test.ts` (new) | 15 | AC1/AC7 guard: deleted paths stay gone (documents module and pages, DocumentDrawer, TransactionsPage, ProfileDetailPage, ImportDataModal, PDF services, DocumentIcon, `public/fonts`); `@react-pdf/renderer` not a dependency; no app source names a deleted module or an absolute `/fonts/` path; barrels clean |
+| `src/db/__tests__/retainedDocumentSchema.test.ts` (new) | 3 | AC3: both tables stay at v21; rows read back unchanged and round-trip through backup/restore |
+| `src/db/__tests__/transactionRepo.test.ts` | 2 rewritten, isLocked block removed | AC2: a row seeded with `lockedAt`/`lockedByDocumentId` updates and soft-deletes |
+| `src/components/drawers/__tests__/IncomeDrawer.legacyLock.test.tsx` (replaces `.locked`) | 2 | AC2: a legacy-locked entry opens editable with no notice and saves an edit |
+| `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx` | +2 | A stored retired key (`invoices`) never renders a raw i18n key; a notice of only retired keys shows no banner |
+| `src/__tests__/router.gateKeys.test.ts`, `router.gates.test.ts` | +4, lists trimmed | `/documents`, `/documents/$`, `/settings/profiles/$profileId` redirect; document routes no longer exist |
+| `src/lib/features/__tests__/*` | updated | AC4: five areas; a stored `invoices` switch is dropped; retained documents enable nothing and survive gating |
+| `src/components/__tests__/BusinessProfileDrawer.test.tsx` | +5, 2 removed | IA: Identity/Money/Contact order; no letterhead fields; name-only create with no email; a malformed email is still rejected; edit keeps stale letterhead fields |
+| `src/db/__tests__/profileImport.test.ts` (new) | 11 | MUT-158: create/merge remap every ID and link (incl. retained documents); profile-scoped duplicates; email-less profiles never match; FX dedupe; existing sequence kept |
+| `src/pages/settings/__tests__/ImportDataPage.test.tsx` (new, ported from the modal) | 18 | The live import page: drop zone, errors, legacy replace, v2 create/merge choice, duplicates, stats without documents, and a real Settings → Export → Import round trip with links intact |
+| `ClientDetailPage`, `SidebarNav.features`, `OrphanedRecordsDrawer`, `migration-v20`, `migration-safety`, `settingsRepo`, `paymentRecords`, `RecordPaymentButton`, `brand` | updated | No invoice actions or Documents nav; partial-failure assign via a failing write instead of a lock; v20/restore enable nothing from documents; legacy-lock payment tests reframed |
+
+| qa-reconcile review regressions | +4 | F1 `profileImport.test.ts` (same-name project under another client stays separate); F5 `ImportDataPage.test.tsx` x2 (a full backup is refused and data kept; a file with nothing to import is refused); F3 round trip (an archived client and project keep their entries linked). Each was proven red before its fix. |
+
+**Retired:** `documentRepo.test.ts`, `features/documents/__tests__/{pdf,totals}.test.ts`, `paymentRequestService.test.ts`, `IncomeDrawer.locked.test.tsx`, and the ImportDataModal block of `ImportExportModals.test.tsx` (ported).
+
+**Gate (Node 22):** `npm run typecheck` clean, `npm run lint` 0 errors (5 pre-existing warnings), `npx vitest run` 233/233 files (3420 tests) green, `npm run build` succeeds; `dist-web` has 0 `react-pdf` hits and no `fonts/` (3.2 MB).
 

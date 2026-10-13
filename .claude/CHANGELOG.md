@@ -28,6 +28,39 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Retire document/invoice generation; a ledger-shaped profile; profile import works again (MUT-145, MUT-158)
+
+**Why:** Mutaba3a records what happened (income, expenses, who owes what) and does not issue documents. MUT-2 had gated invoices behind the `invoices` area; MUT-145 removes the feature (ADR-067). Filed receipts and the hosted portal's attachments are a different feature and are untouched.
+
+### Removed
+- Document generation: `src/features/documents`, `src/pages/documents`, `DocumentDrawer`, `PdfDownloadChoiceModal`, `DocumentIcon`, `paymentRequestService`, `pdfArchival`, `documentRepo`/`documentSequenceRepo` and their hooks, the document drawer store, demo documents, `@react-pdf/renderer`, and `public/fonts/` (4.3 MB of PDF-only TTFs). The `invoices` optional area and the client-row invoice actions are gone.
+- Unrouted dead code: `TransactionsPage` (`/transactions` → `/income`) and `ImportDataModal` (never rendered).
+- `ProfileDetailPage`: profiles are edited in `BusinessProfileDrawer` only.
+- From `BusinessProfile`: `businessType`, `defaultLanguage`, `website`, template/VAT/allowed-currency defaults, bank/payment details, and the 8 letterhead-only fields. Old rows keep the values; nothing reads them.
+- 111 lines of document CSS and 16 document-only i18n keys (en and ar).
+
+### Changed
+- No entry is ever locked: the transaction lock guards, `isLocked`, `TransactionLockedError` and the income drawer's locked notice are gone. Legacy-locked entries are editable, and no rows are rewritten.
+- `/documents`, `/documents/*` and `/settings/profiles/:id` redirect to Home and Settings.
+- `BusinessProfileDrawer` is grouped Identity / Money / Contact (optional). "Document Currency" became "Default currency". Email is optional. Labels are wired to their inputs.
+- Copy no longer claims document generation: the Settings empty state, the Data export descriptions, the welcome bullet, the Insights "Entries" column, the landing FAQ and the privacy policy ("receipts you attach").
+- A stored feature notice keeps only live areas, so a retired `invoices` key never shows as a raw i18n key.
+
+### Fixed
+- **qa-reconcile review fixes (2026-10-13):**
+  - F1: a merged project is reused only when its name **and** its client match, so a same-name project under another client is never shared.
+  - F5 (pre-existing data loss): choosing a full Data-tools backup on Settings → Import cleared the database and restored nothing. It's now refused with a pointer to Data tools → Restore, and the legacy path never clears for a file with no rows.
+  - F3: export now includes archived clients and projects, so their entries stay linked after an import.
+  - F2 (re-import duplicates) and F4 (archived profile match) are deferred to TD-111.
+- **MUT-158:** Settings → Import ignored v2 profile exports and still said "Import Complete!". The new `src/db/profileImport.ts` imports as a new profile or merges into one, re-mints IDs and remaps every reference. Duplicates are matched inside the target profile only, and email-less profiles never match each other. The page gained the create/merge choice.
+
+### Technical
+- Tables retained (ADR-029): `documents`/`documentSequences` at v21, typed by `src/db/retained/documentSchema.ts`. Guards: `noDeadDocumentModules.test.ts`, `retainedDocumentSchema.test.ts`.
+- New ADR-067 (renumbered on merge: MAL-1118 took ADR-066). ADR-014 superseded; ADR-030 §2 moot; ADR-032 narrowed to five areas. TD-024, TD-025 and TD-109 resolved; TD-110 and TD-111 added; TODOS #9 (Tauri fs permission).
+- `brand.test.ts`'s dead-token ratchet dropped `--color-error`/`--color-muted` (only the deleted modal used them).
+
+**Files:** see `git log pre-mut-145..feat/mut-145-remove-documents`.
+
 ## [Unreleased] - 2026-10-13 — MAL-1118: personal profiles seed a household expense-category preset
 
 **Why:** MUT-143 adds expense categories to personal profiles in the iPhone app, and a person's own profile was being seeded the general business list (Office Rent, Bank Fees, Salaries). Since MUT-120 "no Malafat writer" covers both a person's own profile and a firm with no Malafat link, so the new preset keys on `personalOwnerUserId` (ADR-066).
@@ -47,6 +80,7 @@
 - `routes-expenses.test.ts`: the old "general preset on a personal profile" test ran on an unconnected firm — renamed to say so and now checks the audit row (the paging test's title had the same mislabel and is renamed too); new English and Arabic tests seed a real personal profile (via `/admin/v1/users`' `personalProfile.id`) once, as SYSTEM, with `{ preset: 'personal', count: 10, locale }`.
 
 ---
+
 
 ## [Unreleased] - 2026-10-13 — Merge MUT-140 into main: renumbering and a JOD/MUT-94 semantic fix
 

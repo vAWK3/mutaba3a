@@ -78,13 +78,6 @@ export function withErrorToast<T extends Record<string, any>>(opts: T): T {
 function getErrorMessage(error: unknown, fallback?: string): string {
   if (error && typeof error === 'object' && 'message' in error) {
     const msg = (error as { message: string }).message;
-    // TransactionLockedError: make it user-friendly
-    if (msg.includes('locked by document')) {
-      const docMatch = msg.match(/document\s+(\S+)/);
-      return docMatch
-        ? `This entry is locked by document ${docMatch[1]}; its details can't change.`
-        : "This entry is locked by an exported document; its details can't change.";
-    }
     // PartialPaymentError: already has good messages
     if (msg.includes('Payment amount') || msg.includes('Partial payments') || msg.includes('already fully paid')) {
       return msg;

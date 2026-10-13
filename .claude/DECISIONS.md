@@ -398,7 +398,7 @@ interface HLC {
 
 ## ADR-014: Document Immutability After Export
 
-**Status**: Active
+**Status**: Superseded by ADR-067 (MUT-145, 2026-10-13): document generation is retired and no entry is locked any more
 **Date**: 2024-08
 **Context**: Exported documents (invoices) should not be editable for audit compliance.
 
@@ -1141,7 +1141,7 @@ under §1.
 ## ADR-030: Overpayment Is Rejected; Locked Transactions Still Accept Payments
 
 **Date**: 2026-10-10
-**Status**: Accepted
+**Status**: Accepted (§1 overpayment stands; §2 locked transactions is moot since ADR-067 removed the lock)
 **Context**: MUT-6 (epic MUT-1)
 
 **Context**: MUT-6 promotes "Record payment" from a kebab entry to the most
@@ -1269,7 +1269,7 @@ could have been verified by that build.
 
 ## ADR-032: Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data
 
-**Status**: Active
+**Status**: Active, narrowly overridden by ADR-067: the `invoices` area is retired, five areas remain
 **Date**: 2026-10-10
 **Context**: MUT-12 (epic MUT-2). The 2026-10-05 intake kept invoices,
 retainers, expenses, insights, planning and projects as *optional*; the
@@ -2691,3 +2691,26 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 **Alternatives considered**:
 - Key on writer-null, the ticket's literal wording: rejected — a firm with no Malafat link would get Groceries and Gifts instead of Office Rent and Bank Fees, permanently.
 - Mirror the personal preset into `src/db/defaultExpenseCategories.ts` to keep D2's parity rule universal: rejected — dead code in the desktop bundle, one careless edit away from the fallback picker.
+
+
+## ADR-067: Document Generation Is Retired; Its Tables Stay, Its Lock Is Unwound in Code, Its Profile Fields Go (Supersedes ADR-014; Narrow Override of ADR-032 and MUT-13)
+
+**Date**: 2026-10-13
+**Status**: Accepted
+**Context**: MUT-145 (epic MUT-2). Plan and eng-review ledger: `.claude/designs/mut-145-remove-documents.md` (D1–D15, R1–R4, T1–T3, IA1–IA4).
+
+Mutaba3a records what happened (income, expenses, who owes what). It does not issue documents. MUT-2 had gated invoices/receipts/credit notes/price offers behind the `invoices` optional area (MUT-13, ADR-032). MUT-145 removes the feature outright. Filed receipts (expense attachments, the receipts ZIP) and the hosted portal's `/documents` attachments (ADR-028) are a different feature and stay.
+
+**Decision**:
+1. **Code goes, tables stay (applies ADR-029; eng-review D5).** The documents module, pages, drawer, PDF renderer (`@react-pdf/renderer`), numbering, payment-request service, PDF archival, the `invoices` switch and its probe are deleted. `documents`/`documentSequences` stay at schema v21. Their row types live in `src/db/retained/documentSchema.ts`; only indexed and linking keys are typed, and the rest is opaque. The rows still round-trip through backup/restore and the per-profile export/import. No schema bump and no row rewrite.
+2. **The lock is unwound in code, not by migration (D6).** It existed only as guards in `transactionRepo.update`/`softDelete`, `isLocked`, `TransactionLockedError` and IncomeDrawer's notice. Deleting them unlocks every legacy-locked entry at once. Stale `lockedAt`/`lockedByDocumentId`/`linkedDocumentId` stay inert in old rows, and the types no longer declare them.
+3. **A stored `invoices` key is inert.** `resolveFeatures` already drops unknown keys. `useFeatureNotice` now filters a pending notice through `FEATURE_KEYS`, so a v20 upgrader's banner never shows a raw i18n key (D7).
+4. **Stale links land somewhere real (D3).** `/documents`, `/documents/*` and `/settings/profiles/:id` redirect to `/` and `/settings`. The router has no not-found component.
+5. **The business profile is ledger-shaped (D1, T1, IA1–IA4).** `businessType`, `defaultLanguage`, `website`, template/VAT/allowed-currency defaults, bank/payment details and the 8 letterhead fields (`taxId`, `address1/En`, `city/En`, `country/En`, `postalCode`) leave the type; old rows keep them. Email becomes optional. The profile is edited only in `BusinessProfileDrawer` (Identity / Money / Contact), and `ProfileDetailPage` is deleted. `nameEn`, `logoDataUrl`, `email`, `phone` and `primaryColor` stay because live screens read them.
+6. **No UI claims document generation.** That covers en/ar copy (Settings, welcome, Insights, Data export) and the landing FAQ and privacy text (ADR-041): "documents you generate" became "receipts you attach". The income status "Invoiced" stays: it is a ledger state (billed outside the app).
+7. **Profile import is fixed in the same change (MUT-158, approved mid-build).** The dead `ImportDataModal` was the only v2 importer, and it mis-linked rows. `src/db/profileImport.ts` re-mints IDs and remaps every reference in one transaction. It dedupes inside the target profile only (ADR-049), never rewrites a merged-into profile, and matches profiles by id or by a non-empty email on both sides.
+
+**Consequences**: The removal deletes about 17k lines across 105 files and drops a dependency plus 4.3 MB of PDF-only fonts from every build. Guards: `noDeadDocumentModules.test.ts` (paths, names, `@react-pdf`, `/fonts/`, barrels) and `retainedDocumentSchema.test.ts` (tables at v21 and the backup round trip). Follow-ups: TODOS #9 (drop the Tauri fs plugin and `$DOCUMENT` write capability); MUT-106 is obsolete; the per-profile export still omits payment records, expenses and receipts (TD-111).
+
+**Alternatives Considered**: dropping the tables with a v22 migration, as the ticket text first said (rejected: issued invoices are user records, ADR-029); a v22 upgrade clearing the lock fields (rejected: same user outcome with a forced bump and row rewrites); keeping the dead modal as the v2 importer (rejected: unrendered and mis-linking); db-wide duplicate detection on import (rejected: links one business's entries to another's client).
+

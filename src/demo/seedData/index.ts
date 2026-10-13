@@ -20,7 +20,6 @@ import { createDemoCategories, createDemoExpenseCategories } from './categories'
 import { createDemoRetainers } from './retainers';
 import { createDemoProjectedIncome } from './projectedIncome';
 import { createDemoTransactions } from './transactions';
-import { createDemoDocuments, createDemoDocumentSequences } from './documents';
 import { createDemoExpenses, createDemoRecurringRules } from './expenses';
 
 /**
@@ -50,6 +49,7 @@ export async function removeDemoData(): Promise<void> {
       db.categories,
       db.transactions,
       db.businessProfiles,
+      // Retained (MUT-145): older demo seeds wrote demo_ documents; clear them too.
       db.documents,
       db.documentSequences,
       db.retainerAgreements,
@@ -116,8 +116,6 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
   const retainers = createDemoRetainers();
   const projectedIncome = createDemoProjectedIncome();
   const transactions = createDemoTransactions();
-  const documents = createDemoDocuments();
-  const documentSequences = createDemoDocumentSequences();
   const recurringRules = createDemoRecurringRules();
   const expenses = createDemoExpenses();
 
@@ -130,8 +128,6 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
       db.categories,
       db.transactions,
       db.businessProfiles,
-      db.documents,
-      db.documentSequences,
       db.retainerAgreements,
       db.projectedIncome,
       db.expenses,
@@ -148,14 +144,12 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
       await db.retainerAgreements.bulkPut(retainers);
       await db.projectedIncome.bulkPut(projectedIncome);
       await db.transactions.bulkPut(transactions);
-      await db.documents.bulkPut(documents);
-      await db.documentSequences.bulkPut(documentSequences);
       await db.recurringRules.bulkPut(recurringRules);
       await db.expenses.bulkPut(expenses);
     }
   );
 
-  // The demo exercises invoices, retainers, expenses and projects: switch
+  // The demo exercises retainers, expenses and projects: switch
   // those areas on so a fresh install does not show a mostly empty app (MUT-12).
   const featuresEnabled = await reconcileFeaturesAfterDataLoad('demo', db);
   if (!announceFeatures && featuresEnabled.length > 0) {
@@ -169,7 +163,6 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
     clients: clients.length,
     projects: projects.length,
     transactions: transactions.length,
-    documents: documents.length,
     retainers: retainers.length,
     projectedIncome: projectedIncome.length,
     expenses: expenses.length,

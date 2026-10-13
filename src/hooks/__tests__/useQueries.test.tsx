@@ -3,20 +3,13 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { db } from '../../db/database';
-import { businessProfileRepo, documentRepo, clientRepo, transactionRepo, paymentRecordRepo } from '../../db/repository';
+import { businessProfileRepo, clientRepo, transactionRepo, paymentRecordRepo } from '../../db/repository';
 import {
   useTransaction,
   useClient,
   useClientSummary,
   useProject,
   useProjectSummary,
-  useDocuments,
-  useDocument,
-  useCreateDocument,
-  useUpdateDocument,
-  useMarkDocumentPaid,
-  useVoidDocument,
-  useDeleteDocument,
   useBusinessProfiles,
   useBusinessProfile,
   useDefaultBusinessProfile,
@@ -35,7 +28,7 @@ import {
   useUpdateTransaction,
 } from '../useQueries';
 import { useIncome, useReceivables } from '../useIncomeQueries';
-import type { BusinessProfile, Document } from '../../types';
+import type { BusinessProfile } from '../../types';
 
 // Create a test query client
 function createTestQueryClient() {
@@ -241,202 +234,6 @@ describe('Business Profile Hooks', () => {
   });
 });
 
-describe('Document Hooks', () => {
-  let testProfile: BusinessProfile;
-  let testClient: { id: string; name: string };
-
-  beforeEach(async () => {
-    await db.documents.clear();
-    await db.documentSequences.clear();
-    await db.businessProfiles.clear();
-    await db.clients.clear();
-
-    testProfile = await businessProfileRepo.create({
-      name: 'Test Company',
-      email: 'test@example.com',
-      businessType: 'company',
-      defaultCurrency: 'USD',
-      defaultLanguage: 'en',
-      isDefault: true,
-    });
-
-    testClient = await clientRepo.create({
-      name: 'Test Client',
-      email: 'client@example.com',
-    });
-  });
-
-  afterEach(async () => {
-    await db.documents.clear();
-    await db.documentSequences.clear();
-    await db.businessProfiles.clear();
-    await db.clients.clear();
-  });
-
-  const createTestDocument = (): Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt'> => ({
-    type: 'invoice',
-    status: 'draft',
-    businessProfileId: testProfile.id,
-    clientId: testClient.id,
-    subject: 'Test Invoice',
-    items: [
-      {
-        name: 'Test Item',
-        quantity: 1,
-        rateMinor: 10000,
-        rateVatMinor: 11700,
-        discountMinor: 0,
-        taxExempt: false,
-      },
-    ],
-    payments: [],
-    subtotalMinor: 10000,
-    discountMinor: 0,
-    taxMinor: 1700,
-    totalMinor: 11700,
-    taxRate: 0.17,
-    vatEnabled: true,
-    currency: 'USD',
-    language: 'en',
-    issueDate: new Date().toISOString().split('T')[0],
-    linkedTransactionIds: [],
-    templateId: 'template1',
-    exportCount: 0,
-  });
-
-  describe('useDocuments', () => {
-    it('should return empty array when no documents exist', async () => {
-      const { result } = renderHook(() => useDocuments({}), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toEqual([]);
-    });
-
-    it('should return documents with filters', async () => {
-      await documentRepo.create(createTestDocument());
-      await documentRepo.create({ ...createTestDocument(), type: 'receipt' });
-
-      const { result } = renderHook(() => useDocuments({ type: 'invoice' }), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toHaveLength(1);
-      expect(result.current.data?.[0].type).toBe('invoice');
-    });
-  });
-
-  describe('useDocument', () => {
-    it('should return a specific document by id', async () => {
-      const created = await documentRepo.create(createTestDocument());
-
-      const { result } = renderHook(() => useDocument(created.id), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data?.id).toBe(created.id);
-      expect(result.current.data?.number).toBe('INV-0001');
-    });
-
-    it('should not fetch when id is empty', async () => {
-      const { result } = renderHook(() => useDocument(''), {
-        wrapper: createWrapper(),
-      });
-
-      expect(result.current.isFetching).toBe(false);
-    });
-  });
-
-  describe('useCreateDocument', () => {
-    it('should create a new document with auto-generated number', async () => {
-      const { result } = renderHook(() => useCreateDocument(), {
-        wrapper: createWrapper(),
-      });
-
-      const doc = await result.current.mutateAsync(createTestDocument());
-
-      expect(doc.id).toBeDefined();
-      expect(doc.number).toBe('INV-0001');
-    });
-  });
-
-  describe('useUpdateDocument', () => {
-    it('should update an existing document', async () => {
-      const created = await documentRepo.create(createTestDocument());
-
-      const { result } = renderHook(() => useUpdateDocument(), {
-        wrapper: createWrapper(),
-      });
-
-      await result.current.mutateAsync({
-        id: created.id,
-        data: { subject: 'Updated Subject' },
-      });
-
-      const updated = await documentRepo.get(created.id);
-      expect(updated?.subject).toBe('Updated Subject');
-    });
-  });
-
-  describe('useMarkDocumentPaid', () => {
-    it('should mark a document as paid', async () => {
-      const created = await documentRepo.create({ ...createTestDocument(), status: 'issued' });
-
-      const { result } = renderHook(() => useMarkDocumentPaid(), {
-        wrapper: createWrapper(),
-      });
-
-      await result.current.mutateAsync(created.id);
-
-      const updated = await documentRepo.get(created.id);
-      expect(updated?.status).toBe('paid');
-      expect(updated?.paidAt).toBeDefined();
-    });
-  });
-
-  describe('useVoidDocument', () => {
-    it('should void a document', async () => {
-      const created = await documentRepo.create({ ...createTestDocument(), status: 'issued' });
-
-      const { result } = renderHook(() => useVoidDocument(), {
-        wrapper: createWrapper(),
-      });
-
-      await result.current.mutateAsync(created.id);
-
-      const updated = await documentRepo.get(created.id);
-      expect(updated?.status).toBe('voided');
-    });
-  });
-
-  describe('useDeleteDocument', () => {
-    it('should soft delete a document', async () => {
-      const created = await documentRepo.create(createTestDocument());
-
-      const { result } = renderHook(() => useDeleteDocument(), {
-        wrapper: createWrapper(),
-      });
-
-      await result.current.mutateAsync(created.id);
-
-      const deleted = await documentRepo.get(created.id);
-      expect(deleted?.deletedAt).toBeDefined();
-    });
-  });
-});
-
-/**
- * MUT-6 AC #5: after a payment is saved, the row status, the remaining amount
- * and Owed Now refresh with no manual refresh.
- *
- * This suite exists because invalidatePaymentRecordQueries used to invalidate
- * only the payment-record and legacy transaction keys, leaving /income and the
- * client Receivables tab showing a stale balance for up to the 60s staleTime
- * -- right after the moment that matters most.
- */
 describe('Payment Record Hooks', () => {
   beforeEach(async () => {
     await db.transactions.clear();
@@ -673,9 +470,6 @@ describe('By-id hooks resolve null for a missing row', () => {
     await expectResolvesNull(() => useProject(MISSING_ID));
   });
 
-  it('useDocument resolves to null, no console error', async () => {
-    await expectResolvesNull(() => useDocument(MISSING_ID));
-  });
 
   it('useBusinessProfile resolves to null, no console error', async () => {
     await expectResolvesNull(() => useBusinessProfile(MISSING_ID));

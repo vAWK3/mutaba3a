@@ -11,7 +11,6 @@ describe('useDrawerStore', () => {
         transactionDrawer: { isOpen: false, mode: 'create' },
         clientDrawer: { isOpen: false, mode: 'create' },
         projectDrawer: { isOpen: false, mode: 'create' },
-        documentDrawer: { isOpen: false, mode: 'create' },
         businessProfileDrawer: { isOpen: false, mode: 'create' },
         expenseDrawer: { isOpen: false, mode: 'create' },
         retainerDrawer: { isOpen: false, mode: 'create' },
@@ -212,49 +211,6 @@ describe('useDrawerStore', () => {
       });
 
       expect(useDrawerStore.getState().projectDrawer.isOpen).toBe(false);
-    });
-  });
-
-  describe('documentDrawer', () => {
-    it('should open document drawer', () => {
-      act(() => {
-        useDrawerStore.getState().openDocumentDrawer();
-      });
-
-      expect(useDrawerStore.getState().documentDrawer.isOpen).toBe(true);
-    });
-
-    it('should open document drawer with all options', () => {
-      act(() => {
-        useDrawerStore.getState().openDocumentDrawer({
-          mode: 'edit',
-          documentId: 'doc-1',
-          defaultType: 'invoice',
-          defaultClientId: 'client-1',
-          defaultBusinessProfileId: 'profile-1',
-          refDocumentId: 'ref-doc-1',
-        });
-      });
-
-      const state = useDrawerStore.getState().documentDrawer;
-      expect(state.mode).toBe('edit');
-      expect(state.documentId).toBe('doc-1');
-      expect(state.defaultType).toBe('invoice');
-      expect(state.defaultClientId).toBe('client-1');
-      expect(state.defaultBusinessProfileId).toBe('profile-1');
-      expect(state.refDocumentId).toBe('ref-doc-1');
-    });
-
-    it('should close document drawer', () => {
-      act(() => {
-        useDrawerStore.getState().openDocumentDrawer();
-      });
-
-      act(() => {
-        useDrawerStore.getState().closeDocumentDrawer();
-      });
-
-      expect(useDrawerStore.getState().documentDrawer.isOpen).toBe(false);
     });
   });
 

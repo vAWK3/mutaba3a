@@ -29,15 +29,15 @@ afterEach(() => {
 describe('requireFeature', () => {
   it('redirects to home while the area is off', async () => {
     installFakeSettings();
-    const error = await thrownBy(requireFeature('invoices'));
+    const error = await thrownBy(requireFeature('retainers'));
     expect(error).toBeDefined();
     expect(isRedirect(error)).toBe(true);
     expect((error as { options: { to: string } }).options.to).toBe('/');
   });
 
   it('lets the navigation through when the area is on', async () => {
-    installFakeSettings({ features: { invoices: true } });
-    await expect(requireFeature('invoices')()).resolves.toBeUndefined();
+    installFakeSettings({ features: { retainers: true } });
+    await expect(requireFeature('retainers')()).resolves.toBeUndefined();
   });
 
   it('honours a custom redirect target', async () => {
@@ -56,9 +56,9 @@ describe('requireFeature', () => {
 
   it('reads the flag on every call, so a toggle is honoured by the next navigation', async () => {
     const settings = installFakeSettings();
-    const guard = requireFeature('invoices');
+    const guard = requireFeature('retainers');
     expect(isRedirect(await thrownBy(guard))).toBe(true);
-    settings.get.mockResolvedValueOnce({ ...DEFAULT_SETTINGS, features: { invoices: true } });
+    settings.get.mockResolvedValueOnce({ ...DEFAULT_SETTINGS, features: { retainers: true } });
     await expect(guard()).resolves.toBeUndefined();
     expect(settings.get).toHaveBeenCalledTimes(2);
   });

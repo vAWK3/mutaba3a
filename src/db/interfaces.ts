@@ -29,11 +29,6 @@ import type {
   TransactionDisplay,
   Currency,
   BusinessProfile,
-  Document,
-  DocumentSequence,
-  DocumentFilters,
-  DocumentDisplay,
-  DocumentType,
   Expense,
   ExpenseDisplay,
   ExpenseFilters,
@@ -110,7 +105,6 @@ export interface ITransactionRepository
   softDelete(id: string): Promise<void>;
   archive(id: string): Promise<void>;
   unarchive(id: string): Promise<void>;
-  isLocked(id: string): Promise<boolean>;
   getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals>;
   getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency>;
   getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]>;
@@ -166,43 +160,6 @@ export interface IBusinessProfileRepository extends BaseRepository<BusinessProfi
   getDefault(): Promise<BusinessProfile | undefined>;
   setDefault(id: string): Promise<void>;
   archive(id: string): Promise<void>;
-}
-
-// ============================================================================
-// Document Sequence Repository Interface
-// ============================================================================
-
-export interface IDocumentSequenceRepository {
-  getNextNumber(businessProfileId: string, documentType: DocumentType): Promise<string>;
-  get(businessProfileId: string, documentType: DocumentType): Promise<DocumentSequence | undefined>;
-  listByBusinessProfile(businessProfileId: string): Promise<DocumentSequence[]>;
-  update(businessProfileId: string, documentType: DocumentType, data: Partial<DocumentSequence>): Promise<void>;
-  getOrCreate(businessProfileId: string, documentType: DocumentType): Promise<DocumentSequence>;
-}
-
-// ============================================================================
-// Document Repository Interface
-// ============================================================================
-
-export interface IDocumentRepository {
-  list(filters?: DocumentFilters): Promise<DocumentDisplay[]>;
-  get(id: string): Promise<Document | undefined>;
-  getByNumber(number: string): Promise<Document | undefined>;
-  isNumberTaken(number: string, excludeId?: string): Promise<boolean>;
-  create(data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt'>): Promise<Document>;
-  createWithNumber(data: Omit<Document, 'id' | 'createdAt' | 'updatedAt'> & { number: string }): Promise<Document>;
-  getNextAvailableNumber(businessProfileId: string, type: DocumentType): Promise<string>;
-  update(id: string, data: Partial<Document>): Promise<void>;
-  markPaid(id: string): Promise<void>;
-  markVoided(id: string): Promise<void>;
-  markIssued(id: string): Promise<void>;
-  softDelete(id: string): Promise<void>;
-  linkTransactions(documentId: string, transactionIds: string[]): Promise<void>;
-  unlinkTransaction(documentId: string, transactionId: string): Promise<void>;
-  lockAfterExport(id: string, pdfSavedPath?: string): Promise<number>;
-  isLocked(id: string): Promise<boolean>;
-  archive(id: string): Promise<void>;
-  unarchive(id: string): Promise<void>;
 }
 
 // ============================================================================
@@ -352,8 +309,6 @@ export interface IRepositoryProvider {
   fxRates: IFxRateRepository;
   settings: ISettingsRepository;
   businessProfiles: IBusinessProfileRepository;
-  documentSequences: IDocumentSequenceRepository;
-  documents: IDocumentRepository;
   paymentRecords: IPaymentRecordRepository;
   expenses: IExpenseRepository;
   expenseCategories: IExpenseCategoryRepository;

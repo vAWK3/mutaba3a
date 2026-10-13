@@ -107,7 +107,7 @@ describe('RecordPaymentButton', () => {
       expect(container).toBeEmptyDOMElement();
     });
 
-    it('renders on a locked transaction -- lockedAt does not block payments', () => {
+    it('renders on a legacy document-locked entry (stale lockedAt is ignored, MUT-145)', () => {
       render(
         <RecordPaymentButton
           transaction={makeTransaction({

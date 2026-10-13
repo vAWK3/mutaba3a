@@ -841,24 +841,6 @@ describe('IncomeDrawer', () => {
         expect(updatedTx?.receivedAmountMinor).toBeUndefined();
       });
     });
-
-    it('still shows the lock notice and disables Save on a locked entry', async () => {
-      const tx = await transactionRepo.create({
-        kind: 'income',
-        status: 'unpaid',
-        profileId: testProfileId,
-        amountMinor: 25000,
-        currency: 'USD',
-        occurredAt: '2024-03-15',
-        lockedAt: '2024-03-20T00:00:00.000Z',
-        lockedByDocumentId: 'doc-1',
-      });
-
-      await openEdit(tx.id);
-
-      expect(await screen.findByTestId('income-locked-notice')).toBeInTheDocument();
-      expect(saveButton()).toBeDisabled();
-    });
   });
 
   describe('payment data on edit (MUT-5)', () => {

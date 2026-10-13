@@ -5,7 +5,8 @@ import { detectFeaturesWithData, PROBED_TABLES } from '../features';
 const now = new Date().toISOString();
 
 async function clearProbedTables() {
-  await Promise.all(PROBED_TABLES.map((name) => db.table(name).clear()));
+  // documents is retained but no longer probed (MUT-145); clear it too.
+  await Promise.all([...PROBED_TABLES, 'documents'].map((name) => db.table(name).clear()));
 }
 
 describe('detectFeaturesWithData', () => {
@@ -16,13 +17,12 @@ describe('detectFeaturesWithData', () => {
     expect(await detectFeaturesWithData(db)).toEqual([]);
   });
 
-  it('reports invoices when a live document exists', async () => {
+  it('a retained document row switches nothing on (MUT-145)', async () => {
     await db.documents.add({ id: 'd1', createdAt: now, updatedAt: now } as never);
-    expect(await detectFeaturesWithData(db)).toEqual(['invoices']);
+    expect(await detectFeaturesWithData(db)).toEqual([]);
   });
 
   it('ignores soft-deleted rows', async () => {
-    await db.documents.add({ id: 'd1', deletedAt: now, createdAt: now, updatedAt: now } as never);
     await db.expenses.add({ id: 'e1', deletedAt: now, createdAt: now, updatedAt: now } as never);
     await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
     expect(await detectFeaturesWithData(db)).toEqual(['projects']);
@@ -45,7 +45,6 @@ describe('detectFeaturesWithData', () => {
   });
 
   it('never reports insights, which owns no data', async () => {
-    await db.documents.add({ id: 'd1', createdAt: now, updatedAt: now } as never);
     await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
     await db.expenses.add({ id: 'e1', createdAt: now, updatedAt: now } as never);
     await db.vendors.add({ id: 'v1', createdAt: now } as never);
@@ -53,7 +52,7 @@ describe('detectFeaturesWithData', () => {
     await db.retainerAgreements.add({ id: 'r1', createdAt: now } as never);
     const found = await detectFeaturesWithData(db);
     expect(found).not.toContain('insights');
-    expect(found).toHaveLength(5);
+    expect(found).toHaveLength(4);
   });
 
   it('gives the same answer through a Dexie transaction as through db', async () => {

@@ -43,10 +43,7 @@ export function WelcomeModal() {
 
     await createMutation.mutateAsync({
       name: defaultName,
-      email: '',
-      businessType: 'none',
       defaultCurrency: 'USD',
-      defaultLanguage: language === 'ar' ? 'ar' : 'en',
       isDefault: true,
     });
   };

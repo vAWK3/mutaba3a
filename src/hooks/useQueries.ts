@@ -6,10 +6,6 @@ import type {
   Client,
   Project,
   Currency,
-  Document,
-  DocumentFilters,
-  DocumentType,
-  DocumentSequence,
   BusinessProfile,
   PaymentByClientFilters,
   ClientSummary,
@@ -78,10 +74,6 @@ export const queryKeys = {
   categories: (kind?: 'income' | 'expense') => ['categories', { kind }] as const,
   settings: () => ['settings'] as const,
   fxRate: (base: Currency, quote: Currency) => ['fxRate', base, quote] as const,
-  // Document/Invoice keys
-  documents: (filters: DocumentFilters) => ['documents', filters] as const,
-  document: (id: string) => ['document', id] as const,
-  documentSequences: (businessProfileId: string) => ['documentSequences', businessProfileId] as const,
   // Business Profile keys
   businessProfiles: () => ['businessProfiles'] as const,
   businessProfile: (id: string) => ['businessProfile', id] as const,
@@ -500,140 +492,6 @@ export function useUpdateSettings() {
 }
 
 // ============================================================================
-// Document/Invoice hooks
-// ============================================================================
-
-/**
- * Invalidates all document-related queries.
- */
-function invalidateDocumentQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: ['documents'] });
-  queryClient.invalidateQueries({ queryKey: ['document'] });
-}
-
-export function useDocuments(filters: DocumentFilters) {
-  return useQuery({
-    queryKey: queryKeys.documents(filters),
-    queryFn: () => getRepositories().base.documents.list(filters),
-  });
-}
-
-export function useDocument(id: string) {
-  return useQuery<Document | null>({
-    queryKey: queryKeys.document(id),
-    queryFn: async () => (await getRepositories().base.documents.get(id)) ?? null,
-    enabled: !!id,
-  });
-}
-
-export function useCreateDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt'>) =>
-      getRepositories().base.documents.create(data),
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      // Also invalidate transactions if documents create transactions
-      invalidateTransactionQueries(queryClient);
-    },
-  });
-}
-
-export function useUpdateDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Document> }) =>
-      getRepositories().base.documents.update(id, data),
-    onSuccess: () => invalidateDocumentQueries(queryClient),
-  });
-}
-
-export function useMarkDocumentPaid() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => getRepositories().base.documents.markPaid(id),
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      invalidateTransactionQueries(queryClient);
-    },
-  });
-}
-
-export function useVoidDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => getRepositories().base.documents.markVoided(id),
-    onSuccess: () => invalidateDocumentQueries(queryClient),
-  });
-}
-
-export function useIssueDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => getRepositories().base.documents.markIssued(id),
-    onSuccess: () => invalidateDocumentQueries(queryClient),
-  });
-}
-
-export function useDeleteDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => getRepositories().base.documents.softDelete(id),
-    onSuccess: () => invalidateDocumentQueries(queryClient),
-  });
-}
-
-export function useArchiveDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => getRepositories().base.documents.archive(id),
-    onSuccess: () => invalidateDocumentQueries(queryClient),
-  });
-}
-
-export function useUnarchiveDocument() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => getRepositories().base.documents.unarchive(id),
-    onSuccess: () => invalidateDocumentQueries(queryClient),
-  });
-}
-
-export function useLockDocumentAfterExport() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, pdfSavedPath }: { id: string; pdfSavedPath?: string }) =>
-      getRepositories().base.documents.lockAfterExport(id, pdfSavedPath),
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      invalidateTransactionQueries(queryClient);
-    },
-  });
-}
-
-export function useLinkDocumentTransactions() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ documentId, transactionIds }: { documentId: string; transactionIds: string[] }) =>
-      getRepositories().base.documents.linkTransactions(documentId, transactionIds),
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      invalidateTransactionQueries(queryClient);
-    },
-  });
-}
-
-// ============================================================================
 // Business Profile hooks
 // ============================================================================
 
@@ -711,100 +569,5 @@ export function useArchiveBusinessProfile() {
   return useMutation({
     mutationFn: (id: string) => getRepositories().base.businessProfiles.archive(id),
     onSuccess: () => invalidateBusinessProfileQueries(queryClient),
-  });
-}
-
-// ============================================================================
-// Document Sequence hooks
-// ============================================================================
-
-export function useDocumentSequences(businessProfileId: string) {
-  return useQuery({
-    queryKey: queryKeys.documentSequences(businessProfileId),
-    queryFn: () => getRepositories().base.documentSequences.listByBusinessProfile(businessProfileId),
-    enabled: !!businessProfileId,
-  });
-}
-
-export function useDocumentSequence(businessProfileId: string, documentType: DocumentType) {
-  return useQuery({
-    queryKey: [...queryKeys.documentSequences(businessProfileId), documentType],
-    queryFn: () => getRepositories().base.documentSequences.getOrCreate(businessProfileId, documentType),
-    enabled: !!businessProfileId && !!documentType,
-  });
-}
-
-export function useUpdateDocumentSequence() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      businessProfileId,
-      documentType,
-      updates,
-    }: {
-      businessProfileId: string;
-      documentType: DocumentType;
-      updates: Partial<DocumentSequence>;
-    }) => getRepositories().base.documentSequences.update(businessProfileId, documentType, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documentSequences'] });
-    },
-  });
-}
-
-export function useIsDocumentNumberTaken() {
-  return useMutation({
-    mutationFn: ({ number, excludeId }: { number: string; excludeId?: string }) =>
-      getRepositories().base.documents.isNumberTaken(number, excludeId),
-  });
-}
-
-// ============================================================================
-// Payment Request hooks
-// ============================================================================
-
-export function useCreatePaymentRequest() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: Omit<Document, 'id' | 'number' | 'createdAt' | 'updatedAt' | 'linkedTransactionIds'>) => {
-      const { createPaymentRequestWithReceivable } = await import('../services/paymentRequestService');
-      return createPaymentRequestWithReceivable({ documentData: data });
-    },
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      invalidateTransactionQueries(queryClient);
-    },
-  });
-}
-
-export function useRecordPaymentForRequest() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ documentId, paidAt }: { documentId: string; paidAt: string }) => {
-      const { recordPaymentForRequest } = await import('../services/paymentRequestService');
-      return recordPaymentForRequest(documentId, paidAt);
-    },
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      invalidateTransactionQueries(queryClient);
-    },
-  });
-}
-
-export function useVoidPaymentRequest() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (documentId: string) => {
-      const { voidPaymentRequest } = await import('../services/paymentRequestService');
-      return voidPaymentRequest(documentId);
-    },
-    onSuccess: () => {
-      invalidateDocumentQueries(queryClient);
-      invalidateTransactionQueries(queryClient);
-    },
   });
 }

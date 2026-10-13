@@ -47,14 +47,14 @@ afterEach(() => {
 describe('FeatureNoticeBanner', () => {
   it('names the auto-enabled areas, links to Settings, and clears the notice only on dismiss', async () => {
     const fake = installFakeSettings({
-      features: { invoices: true, projects: true },
-      featureNotice: ['invoices', 'projects'],
+      features: { expenses: true, projects: true },
+      featureNotice: ['expenses', 'projects'],
     });
 
     render(<FeatureNoticeBanner />, { wrapper: Wrapper });
 
     const banner = await screen.findByTestId('feature-notice-banner');
-    expect(banner).toHaveTextContent('Invoices and receipts');
+    expect(banner).toHaveTextContent('Expenses');
     expect(banner).toHaveTextContent('Projects');
     expect(banner).not.toHaveTextContent('{features}');
     expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute('href', '/settings');
@@ -67,7 +67,7 @@ describe('FeatureNoticeBanner', () => {
 
     await waitFor(() => expect(fake.settings.update).toHaveBeenCalledTimes(1));
     expect(fake.settings.update).toHaveBeenCalledWith({ featureNotice: undefined });
-    expect(fake.read().features).toEqual({ invoices: true, projects: true });
+    expect(fake.read().features).toEqual({ expenses: true, projects: true });
     await waitFor(() => expect(screen.queryByTestId('feature-notice-banner')).toBeNull());
   });
 
@@ -82,5 +82,31 @@ describe('FeatureNoticeBanner', () => {
     });
     expect(screen.queryByTestId('feature-notice-banner')).toBeNull();
     expect(fake.settings.update).not.toHaveBeenCalled();
+  });
+
+  // A notice stored before an area was retired (e.g. invoices, MUT-145) must
+  // never render a raw i18n key; the read side keeps only live areas.
+  it('drops retired areas from a stored notice and names only live ones', async () => {
+    installFakeSettings({ featureNotice: ['invoices', 'engagements', 'expenses'] as never });
+
+    render(<FeatureNoticeBanner />, { wrapper: Wrapper });
+
+    const banner = await screen.findByTestId('feature-notice-banner');
+    expect(banner).toHaveTextContent('Expenses');
+    expect(banner).not.toHaveTextContent('settings.features.items');
+    expect(banner).not.toHaveTextContent('engagements');
+    expect(banner).not.toHaveTextContent(/invoice/i);
+  });
+
+  it('renders nothing when every area in the stored notice is retired', async () => {
+    const fake = installFakeSettings({ featureNotice: ['invoices'] as never });
+
+    render(<FeatureNoticeBanner />, { wrapper: Wrapper });
+
+    await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(screen.queryByTestId('feature-notice-banner')).toBeNull();
   });
 });

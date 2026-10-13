@@ -18,8 +18,28 @@
 
 ## Open Debt
 
-### TD-109: Document/invoice currency narrow-casts are dead weight once MUT-145 lands
+### TD-111: The per-profile export leaves out payment records, expenses, receipts and retainers
 **Status**: Open
+**Ticket**: MUT-145 / MUT-158 (found while fixing import)
+**Added**: 2026-10-13
+**Priority**: Medium
+**Impact**: Settings → Export (`ExportDataModal`, v2 JSON) writes the profile, clients, projects, transactions, fx rates and retained documents only. Payment records own an entry's paid state (ADR-038/039), so after an export → import round trip a paid entry keeps `status`/`receivedAmountMinor` but has no payment history. `db.expenses`, receipts, recurring rules, retainers and categories are not exported at all. The full backup in Data tools (`backup.ts`) is unaffected and covers every table.
+**Fix**: Extend the v2 export and `importProfileFile` together (remap `paymentRecords.transactionId`, `expenses.profileId/clientId/projectId`, receipts' expense links), with a round-trip test per table. CSV import's expense rows landing in `transactions` is MUT-138.
+**Also deferred here (MUT-145 qa-reconcile review, 2026-10-13):**
+- **F2, re-import duplicates.** Importing the same file twice (merge, or create for an email-less profile, which `findMatchingProfile` can't match) adds every entry again and doubles owed totals. Merge "adds" by definition, and the old modal did the same. Fix: tag imported rows with their source ID and skip ones already imported into that profile.
+- **F4, archived match.** `ImportDataPage` matches against `useBusinessProfiles()`, which excludes archived profiles. A file whose profile is archived therefore defaults to create, and merge can't target it. Fix: match against `list(true)` and say the match is archived (or offer to unarchive).
+- `categoryId`/`linkedProjectedIncomeId` on imported transactions point at rows the v2 export doesn't carry.
+
+### TD-110: BusinessProfileDrawer and ImportDataPage still hard-code English labels
+**Status**: Open
+**Ticket**: MUT-145
+**Added**: 2026-10-13
+**Priority**: Low
+**Impact**: MUT-145 put every string it added or changed on these screens through i18n (section titles, Default currency, the create/merge choice). The untouched labels are still literal English in an RTL-first app: "Business Name (Arabic) *", "Email", "Phone", "Logo", "Brand Color", "Set as default profile", the drawer titles, and most of ImportDataPage's step copy.
+**Fix**: Move the remaining literals to `drawer.businessProfile.*` and `settings.import.*` keys in en and ar.
+
+### TD-109: Document/invoice currency narrow-casts are dead weight once MUT-145 lands
+**Status**: Resolved 2026-10-13 by MUT-145 (the document files and their casts are deleted)
 **Ticket**: MUT-140 (introduced); resolved by MUT-145
 **Added**: 2026-10-13
 **Priority**: Low
@@ -1225,7 +1245,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ### TD-024: The legacy import is duplicated in `ImportDataModal` and `ImportDataPage`
-**Status**: Open
+**Status**: Resolved 2026-10-13 by MUT-145 (ImportDataModal deleted; ImportDataPage is the only importer, tested)
 **Priority**: Low
 **Introduced**: when the import page was added beside the modal (surfaced by MUT-12, 2026-10-10)
 **Impact**: Every change to the legacy import (MUT-12 added the feature reconcile) is made twice; the two copies already differ slightly.
@@ -1237,7 +1257,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ### TD-025: Legacy `/transactions` page keeps an ungated "Generate invoice" action
-**Status**: Open
+**Status**: Resolved 2026-10-13 by MUT-145 (the unrouted TransactionsPage is deleted)
 **Priority**: Low
 **Introduced**: when `/transactions` became a redirect to `/income` (surfaced by MUT-13, 2026-10-10)
 **Impact**: `src/pages/transactions/TransactionsPage.tsx` still renders a Generate/View invoice menu that ignores the Invoices switch. Unreachable today (the route redirects), so no user impact; it is dead code waiting for the MUT-2 deletion pass.

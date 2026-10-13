@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { transactionRepo, clientRepo, projectRepo, TransactionLockedError } from '../repository';
+import { transactionRepo, clientRepo, projectRepo } from '../repository';
 import { expenseRepo } from '../expenseRepository';
 import { formatLocalDate } from '../../lib/dates';
 import type { Transaction, Client, Project } from '../../types';
@@ -403,41 +403,42 @@ describe('transactionRepo', () => {
       expect(updated?.updatedAt).toBeDefined();
     });
 
-    it('should throw error when updating locked transaction', async () => {
+    // MUT-145: documents are gone, so a row an exported document once locked
+    // is an ordinary entry. Its stale lock fields stay in the row (no
+    // rewrite, ADR-029) and nothing reads them.
+    it('updates a legacy document-locked transaction (MUT-145)', async () => {
       const transaction = await transactionRepo.create(createTestTransaction());
-
-      // Lock the transaction
       await db.transactions.update(transaction.id, {
         lockedAt: new Date().toISOString(),
         lockedByDocumentId: 'doc-123',
-      });
+      } as never);
 
-      await expect(
-        transactionRepo.update(transaction.id, { title: 'New Title' })
-      ).rejects.toThrow(TransactionLockedError);
+      await transactionRepo.update(transaction.id, { title: 'New Title', amountMinor: 12345 });
+
+      const updated = await transactionRepo.get(transaction.id);
+      expect(updated?.title).toBe('New Title');
+      expect(updated?.amountMinor).toBe(12345);
     });
 
-    it('should refuse to soft-delete a locked transaction (MUT-13)', async () => {
+    it('soft-deletes a legacy document-locked transaction (MUT-145)', async () => {
       const transaction = await transactionRepo.create(createTestTransaction());
       await db.transactions.update(transaction.id, {
         lockedAt: new Date().toISOString(),
         lockedByDocumentId: 'doc-123',
-      });
+      } as never);
 
-      await expect(transactionRepo.softDelete(transaction.id)).rejects.toThrow(TransactionLockedError);
-      expect((await db.transactions.get(transaction.id))?.deletedAt).toBeUndefined();
+      await transactionRepo.softDelete(transaction.id);
+
+      expect((await db.transactions.get(transaction.id))?.deletedAt).toBeDefined();
     });
 
-    it('should allow archiving locked transaction', async () => {
+    it('archives a legacy document-locked transaction', async () => {
       const transaction = await transactionRepo.create(createTestTransaction());
 
-      // Lock the transaction
       await db.transactions.update(transaction.id, {
         lockedAt: new Date().toISOString(),
         lockedByDocumentId: 'doc-123',
-      });
-
-      // Archiving should still work
+      } as never);
       await transactionRepo.archive(transaction.id);
 
       const archived = await transactionRepo.get(transaction.id);
@@ -551,22 +552,6 @@ describe('transactionRepo', () => {
 
       const unarchived = await transactionRepo.get(transaction.id);
       expect(unarchived?.archivedAt).toBeUndefined();
-    });
-  });
-
-  describe('isLocked', () => {
-    it('should return false for unlocked transaction', async () => {
-      const transaction = await transactionRepo.create(createTestTransaction());
-      const isLocked = await transactionRepo.isLocked(transaction.id);
-      expect(isLocked).toBe(false);
-    });
-
-    it('should return true for locked transaction', async () => {
-      const transaction = await transactionRepo.create(createTestTransaction());
-      await db.transactions.update(transaction.id, { lockedAt: new Date().toISOString() });
-
-      const isLocked = await transactionRepo.isLocked(transaction.id);
-      expect(isLocked).toBe(true);
     });
   });
 
