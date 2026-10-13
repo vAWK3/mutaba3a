@@ -45,6 +45,24 @@ issued an API key or bound to Malafat.
 Sign a person out everywhere: `npm run revoke:sessions -- --email nour@firm.ps`
 (an operator reset or a disable does this too).
 
+**Seed a demo account (MUT-136).** The iOS app (`mutaba3a-flutter`) needs a
+hosted account that looks populated for App Store screenshots. Against a
+*local* dev server only, get-or-create `qa@mutaba3a.test` (a personal profile,
+no firm) and fill it with 8 realistic clients/projects and a spread of
+received/owed/settled/overdue income, plus expenses — every date is relative
+to "now", so it's never future-dated (ADR-038) no matter when you run it:
+
+```bash
+export MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2)
+npm run seed:demo-account
+```
+
+Safe to re-run: the account and its password are reused (the password is
+rotated fresh every run and printed once at the end — sign in with the latest
+one), and every write carries a deterministic Idempotency-Key, so a same-day
+re-run replays instead of duplicating. A later re-run reuses the same
+customers/projects and just adds another batch of recent-looking transactions.
+
 Every script takes `--url` (default `http://localhost:8787`). Password hashing
 is argon2id; `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` / `ARGON2_PARALLELISM`
 default to OWASP profile 1 and the service refuses to start below it.
