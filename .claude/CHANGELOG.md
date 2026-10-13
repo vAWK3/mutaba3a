@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — A retainer's schedule no longer skips months (TD-120)
+
+**Why:** `scheduleGenerator.generateSchedule` walked months with `new Date(retainer.startDate)` and a local `setMonth(+1)` (or `+3`). The date-only start parses as UTC midnight while `setMonth`/`getMonth`/`getFullYear` are local, so a start on the 31st jumped from January to "Feb 31" = 3 March in every timezone, and west of UTC a start on the 1st read as the previous month and then skipped one. A missing row is missing expected income and leaves a payment nothing to match.
+
+### Fixed
+- `src/db/retainerRepository.ts` `generateSchedule`: the cursor is an integer month index (`year * 12 + month`) read from the start date's string, stepped by 1 or 3. Each period comes from the existing `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate` helpers, so a payment day past the month's end is clamped (Feb 28, or 29 in a leap year). The loop stops when the period start is past `horizon`, compared as strings. The skip rules (period ends before the start date, period already exists, period starts after the end date) and idempotency are unchanged.
+
+### Changed
+- The horizon check is now on the period start, not on a cursor carrying the start date's day of month. For a start mid-month, the last month whose first day falls on or before the horizon now always gets its row; before, it was dropped when the horizon's day of month was earlier than the start's.
+
+### Technical
+- `src/db/__tests__/retainerRepo.test.ts`: four cases under "every month and quarter gets a row (TD-120)", each at a fixed instant via `atInstantIn`. All four failed on the old loop.
+- `.claude/TECH_DEBT.md`: TD-120 resolved.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Retainer projections use the local "today", not the UTC one (TD-014)
 
 **Why:** `src/db/retainerRepository.ts` kept a private `todayISO()` built from `toISOString()`, the UTC date that ADR-022 forbids. Between 00:00 and ~03:00 in Asia/Jerusalem it returned yesterday, so a projected retainer payment due today stayed `upcoming` for the first hours of each local day. It surfaced on 2026-10-14 at 02:00 as a failure in `retainerRepo.test.ts` ("refreshes due states…"), which built its "today" from local fields while the code compared against UTC.

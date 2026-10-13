@@ -19,7 +19,7 @@
 ## Open Debt
 
 ### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
-**Status**: Open
+**Status**: Resolved 2026-10-14. `generateSchedule` steps an integer month index (`year * 12 + month`) from the start date's own year and month, builds each period with `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate`, and stops when the period start is past `horizon` (string compare). Four `retainerRepo.test.ts` cases pin it (31st monthly, leap February, 31st quarterly, 1st in New York).
 **Added**: 2026-10-14 (found while fixing the retainer "today", TD-014)
 **Priority**: Medium
 **Impact**: `scheduleGenerator.generateSchedule` (`src/db/retainerRepository.ts`) walks months with `currentDate = new Date(retainer.startDate)` and `currentDate.setMonth(+1)` (or +3). A date-only string parses as UTC midnight, but `setMonth`, `getMonth` and `getFullYear` are local. Starting on 2026-01-31, `setMonth(1)` lands on "Feb 31" = 3 March, so February never gets a projected row, in every timezone. West of UTC a start on the 1st reads as the last day of the previous month locally, so the month after the first is skipped the same way (New York, 2026-01-01: Dec, Jan, Mar, Apr). Missing rows mean missing expected income and nothing to match a payment to.

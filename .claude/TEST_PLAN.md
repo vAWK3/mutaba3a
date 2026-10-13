@@ -2188,3 +2188,16 @@ Every case runs at 01:30 on 2026-10-14 in Asia/Jerusalem (`2026-10-13T22:30:00.0
 `paymentRecords.test.ts` now imports the shared `atInstantIn` instead of its own copy. Both files pass with host `TZ` = Asia/Jerusalem, America/New_York, UTC and Pacific/Kiritimati.
 
 Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.
+
+## TD-120 — a retainer's schedule gets every month and quarter (2026-10-14)
+
+`src/db/__tests__/retainerRepo.test.ts` › `scheduleGenerator` › `generateSchedule` › "every month and quarter gets a row (TD-120)". Each case runs at a fixed instant with `atInstantIn`, so the 12-month horizon is fixed and the full list of period starts can be asserted. All four failed on the old `Date` cursor.
+
+| Case | Instant / zone | Asserts |
+|---|---|---|
+| Monthly, starts 2026-01-31, pays on the 31st | 2026-01-20, Asia/Jerusalem | 13 consecutive months Jan 2026 – Jan 2027; February ends and is paid 2026-02-28; April paid 2026-04-30 |
+| Monthly, starts 2028-01-31 (leap year) | 2028-01-20, Asia/Jerusalem | 13 consecutive months; February ends and is paid 2028-02-29 |
+| Quarterly, starts 2026-03-31, pays on the 31st | 2026-03-20, Asia/Jerusalem | Q1 2026 – Q1 2027, five rows, each paid on the last day of the quarter's last month (Jun 30, Sep 30, …) |
+| Monthly, starts 2026-01-01 | 2026-01-10, America/New_York | 13 consecutive months, first paid 2026-01-15 |
+
+`retainerRepo.test.ts` (39) passes with host `TZ` = Asia/Jerusalem, America/New_York, UTC, Pacific/Kiritimati and Pacific/Honolulu. Related suites (RetainerDrawer, useRetainerQueries, gating/reconcile/probes, provider, migration-safety): 55/55. Full suite not run at the user's request; `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `openapi:check` up to date.
