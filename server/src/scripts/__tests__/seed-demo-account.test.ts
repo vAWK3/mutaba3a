@@ -172,6 +172,17 @@ describe('seed-demo-account CLI (MUT-136)', () => {
     expect(await h.run([], undefined, ADMIN_TOKEN, issued)).toBe(0);
   });
 
+  it('rejects an empty or malformed --url (an unset shell variable) before calling anything', async () => {
+    const h = harness();
+    for (const url of ['', 'not a url']) {
+      h.err.length = 0;
+      const code = await h.run(['--url', url]);
+      expect(code).toBe(2);
+      expect(h.err.join('\n')).toContain('--url');
+    }
+    expect(await h.store.users.findByEmail('qa@mutaba3a.test')).toBeNull();
+  });
+
   it('fails without MUTABA3A_ADMIN_TOKEN, printing a clear message and seeding nothing', async () => {
     const h = harness();
     const code = await h.run([], undefined, null);

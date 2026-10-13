@@ -9,7 +9,7 @@
 
 import { formatLocalDate } from '../../lib/dates';
 import { orderCurrencyAmounts, type CurrencyAmount } from '../../lib/currencyAmounts';
-import { parseAmountInput, amountInputCurrency } from '../../lib/utils';
+import { parseAmountInput, amountInputCurrency, currencyExponent } from '../../lib/utils';
 import type { Currency, ExpenseFrequency, VirtualOccurrenceDisplay } from '../../types';
 
 export interface RecurringAttentionGroup {
@@ -111,8 +111,8 @@ export function snoozeDateAfter(today: string, days: number): string {
 }
 
 /** What the drawer's amount field holds before anyone edits it: "80", "95.5". */
-export function amountInputValue(amountMinor: number): string {
-  return (amountMinor / 100).toString();
+export function amountInputValue(amountMinor: number, currency: Currency): string {
+  return (amountMinor / 10 ** currencyExponent(currency)).toString();
 }
 
 /** A typed payment amount, or the translation key that says why it can't be read. */
@@ -127,7 +127,7 @@ export type PaymentAmountReading =
  * match the entry's currency).
  */
 export function readPaymentAmount(value: string, currency: Currency): PaymentAmountReading {
-  const amountMinor = parseAmountInput(value);
+  const amountMinor = parseAmountInput(value, { currency });
   if (amountMinor === null) return { error: { key: 'validation.amountInvalid' } };
   const typed = amountInputCurrency(value);
   if (typed && typed !== currency) {

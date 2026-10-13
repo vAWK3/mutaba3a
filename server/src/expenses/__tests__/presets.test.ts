@@ -31,7 +31,7 @@ describe('expense category presets', () => {
     expect(presetFor({ writerOfRecord: null, personal: true }, 'en')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
     expect(presetFor({ writerOfRecord: null, personal: true }, 'ar')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
     expect(presetFor({ writerOfRecord: null, personal: false }, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
-    // ADR-065: Malafat as writer of record wins, even over the personal mark.
+    // ADR-066: Malafat as writer of record wins, even over the personal mark.
     expect(presetFor({ writerOfRecord: 'MALAFAT', personal: true }, 'en').preset).toBe('lawFirm');
   });
 

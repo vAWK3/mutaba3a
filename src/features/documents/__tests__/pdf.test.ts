@@ -213,13 +213,20 @@ describe('PDF Style Utilities', () => {
 });
 
 describe('Amount Formatting', () => {
-  // Testing the format function logic directly
-  function formatAmount(amountMinor: number, currency: 'USD' | 'ILS'): string {
-    const amount = amountMinor / 100;
-    const symbol = currency === 'USD' ? '$' : '₪';
+  // Testing the format function logic directly -- mirrors DocumentPdf.tsx's
+  // local formatAmount (a separate implementation from src/lib/utils.ts's,
+  // since @react-pdf/renderer text content can't rely on Intl.NumberFormat
+  // the same way). MUT-140: made currency-aware (JOD = 3 decimals).
+  const EXPONENT: Record<'USD' | 'ILS' | 'EUR' | 'JOD', number> = { USD: 2, ILS: 2, EUR: 2, JOD: 3 };
+
+  function formatAmount(amountMinor: number, currency: 'USD' | 'ILS' | 'EUR' | 'JOD'): string {
+    const exponent = EXPONENT[currency];
+    const amount = amountMinor / 10 ** exponent;
+    const symbols: Record<string, string> = { USD: '$', ILS: '₪', EUR: '€' };
+    const symbol = symbols[currency] || `${currency} `;
     const formatted = amount.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: exponent,
+      maximumFractionDigits: exponent,
     });
     return `${symbol}${formatted}`;
   }
@@ -240,6 +247,12 @@ describe('Amount Formatting', () => {
   it('should handle decimal amounts', () => {
     expect(formatAmount(99, 'USD')).toBe('$0.99');
     expect(formatAmount(1, 'USD')).toBe('$0.01');
+  });
+
+  it('formats JOD at 3 decimal places (fils) instead of 2', () => {
+    expect(formatAmount(100123, 'JOD')).toBe('JOD 100.123');
+    expect(formatAmount(1, 'JOD')).toBe('JOD 0.001');
+    expect(formatAmount(100000, 'JOD')).toBe('JOD 100.000');
   });
 });
 

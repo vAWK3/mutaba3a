@@ -98,7 +98,8 @@ export function BusinessProfileDrawer() {
         countryEn: existingProfile.countryEn || '',
         postalCode: existingProfile.postalCode || '',
         primaryColor: existingProfile.primaryColor || '#3b82f6',
-        defaultCurrency: existingProfile.defaultCurrency,
+        // Stays USD/ILS/EUR-only (MUT-140 scope: JOD not added to profile-default currency).
+        defaultCurrency: existingProfile.defaultCurrency as 'USD' | 'ILS' | 'EUR',
         defaultLanguage: existingProfile.defaultLanguage,
         isDefault: existingProfile.isDefault,
       });

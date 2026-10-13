@@ -3,6 +3,7 @@ import type {
   Document as DocumentEntity,
   BusinessProfile,
   Client,
+  Currency,
 } from '../../../types';
 import { getTexts, getDocumentTypeLabel } from './texts';
 import { getTemplateStyles, getFontFamily, getTextAlign, type TemplateId } from './styles';
@@ -12,15 +13,21 @@ import { PdfFooter } from './PdfFooter';
 // Import fonts (side effect - registers fonts)
 import './fonts';
 
-// Format amount from minor units to display string
-function formatAmount(amountMinor: number, currency: 'USD' | 'ILS' | 'EUR'): string {
-  const amount = amountMinor / 100;
+// Format amount from minor units to display string. A separate implementation
+// from src/lib/utils.ts's formatAmount -- @react-pdf/renderer text content
+// can't rely on Intl.NumberFormat the same way -- so it carries its own
+// currency-exponent table (MUT-140: JOD is 3 decimals, not 2).
+const EXPONENT: Record<Currency, number> = { USD: 2, ILS: 2, EUR: 2, JOD: 3 };
+
+function formatAmount(amountMinor: number, currency: Currency): string {
+  const exponent = EXPONENT[currency];
+  const amount = amountMinor / 10 ** exponent;
   const symbols: Record<string, string> = { USD: '$', ILS: '₪', EUR: '€' };
-  const symbol = symbols[currency] || '';
+  const symbol = symbols[currency] || `${currency} `;
 
   const formatted = amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: exponent,
+    maximumFractionDigits: exponent,
   });
 
   return `${symbol}${formatted}`;

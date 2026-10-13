@@ -19,6 +19,6 @@ describe('landing copy', () => {
   });
 
   it('names every supported currency', () => {
-    expect(Object.keys(CURRENCY_NAME_KEYS).sort()).toEqual(['EUR', 'ILS', 'USD']);
+    expect(Object.keys(CURRENCY_NAME_KEYS).sort()).toEqual(['EUR', 'ILS', 'JOD', 'USD']);
   });
 });

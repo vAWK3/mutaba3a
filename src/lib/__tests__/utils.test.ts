@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   getLocaleFromLanguage,
+  currencyExponent,
   formatAmount,
   formatAmountShort,
   parseAmountToMinor,
@@ -70,6 +71,15 @@ describe('utils', () => {
     });
   });
 
+  describe('currencyExponent', () => {
+    it('returns 2 for USD/ILS/EUR and 3 for JOD', () => {
+      expect(currencyExponent('USD')).toBe(2);
+      expect(currencyExponent('ILS')).toBe(2);
+      expect(currencyExponent('EUR')).toBe(2);
+      expect(currencyExponent('JOD')).toBe(3);
+    });
+  });
+
   describe('formatAmount', () => {
     it('should format USD amount correctly', () => {
       expect(formatAmount(10000, 'USD')).toBe('$100');
@@ -94,6 +104,13 @@ describe('utils', () => {
       const result = formatAmount(10000, 'USD', 'ar');
       // Arabic locale should format differently
       expect(result).toContain('100');
+    });
+
+    it('formats JOD at 3 decimal places (fils) instead of 2', () => {
+      // Intl separates the ISO code from the amount with a non-breaking space (U+00A0)
+      expect(formatAmount(100000, 'JOD')).toBe('JOD 100');
+      expect(formatAmount(100123, 'JOD')).toBe('JOD 100.123');
+      expect(formatAmount(1, 'JOD')).toBe('JOD 0.001');
     });
   });
 
@@ -123,28 +140,34 @@ describe('utils', () => {
 
   describe('parseAmountToMinor', () => {
     it('should parse clean numbers', () => {
-      expect(parseAmountToMinor('100')).toBe(10000);
-      expect(parseAmountToMinor('100.50')).toBe(10050);
-      expect(parseAmountToMinor('1000.00')).toBe(100000);
+      expect(parseAmountToMinor('100', 'USD')).toBe(10000);
+      expect(parseAmountToMinor('100.50', 'USD')).toBe(10050);
+      expect(parseAmountToMinor('1000.00', 'USD')).toBe(100000);
     });
 
     it('should strip non-numeric characters', () => {
-      expect(parseAmountToMinor('$100')).toBe(10000);
-      expect(parseAmountToMinor('₪100.50')).toBe(10050);
+      expect(parseAmountToMinor('$100', 'USD')).toBe(10000);
+      expect(parseAmountToMinor('₪100.50', 'ILS')).toBe(10050);
     });
 
     it('should handle negative amounts', () => {
-      expect(parseAmountToMinor('-100')).toBe(-10000);
+      expect(parseAmountToMinor('-100', 'USD')).toBe(-10000);
     });
 
     it('should return 0 for invalid input', () => {
-      expect(parseAmountToMinor('abc')).toBe(0);
-      expect(parseAmountToMinor('')).toBe(0);
+      expect(parseAmountToMinor('abc', 'USD')).toBe(0);
+      expect(parseAmountToMinor('', 'USD')).toBe(0);
     });
 
     it('should round fractional cents', () => {
-      expect(parseAmountToMinor('100.999')).toBe(10100);
-      expect(parseAmountToMinor('100.001')).toBe(10000);
+      expect(parseAmountToMinor('100.999', 'USD')).toBe(10100);
+      expect(parseAmountToMinor('100.001', 'USD')).toBe(10000);
+    });
+
+    it('parses JOD at 3 decimals (fils) instead of rounding to 2 — the exact bug class this ticket fixes', () => {
+      expect(parseAmountToMinor('100.123', 'JOD')).toBe(100123);
+      expect(parseAmountToMinor('100.9995', 'JOD')).toBe(101000); // rounds the 4th digit, keeps 3
+      expect(parseAmountToMinor('100.0001', 'JOD')).toBe(100000);
     });
   });
 
@@ -176,7 +199,7 @@ describe('utils', () => {
       ['0.29', 29],
       ['1.01', 101],
     ])('parses %j as %i minor units', (input, expected) => {
-      expect(parseAmountInput(input)).toBe(expected);
+      expect(parseAmountInput(input, { currency: 'USD' })).toBe(expected);
     });
 
     it.each([
@@ -216,21 +239,35 @@ describe('utils', () => {
       // longer than any amount anyone types
       '1'.padStart(65, '0'),
     ])('rejects %j', (input) => {
-      expect(parseAmountInput(input)).toBeNull();
+      expect(parseAmountInput(input, { currency: 'USD' })).toBeNull();
     });
 
     it('reads a long run of spaces before stray text in linear time', () => {
       const pasted = '1' + ' '.repeat(50_000) + 'x';
       const started = performance.now();
-      expect(parseAmountInput(pasted)).toBeNull();
+      expect(parseAmountInput(pasted, { currency: 'USD' })).toBeNull();
       expect(performance.now() - started).toBeLessThan(100);
     });
 
     it('rounds extra decimals half-up on the string, never through float math, when asked to', () => {
-      expect(parseAmountInput('100.999', { maxDecimals: Infinity })).toBe(10100);
-      expect(parseAmountInput('1.005', { maxDecimals: Infinity })).toBe(101);
-      expect(parseAmountInput('0.285', { maxDecimals: Infinity })).toBe(29);
-      expect(parseAmountInput('100.001', { maxDecimals: Infinity })).toBe(10000);
+      expect(parseAmountInput('100.999', { currency: 'USD', maxDecimals: Infinity })).toBe(10100);
+      expect(parseAmountInput('1.005', { currency: 'USD', maxDecimals: Infinity })).toBe(101);
+      expect(parseAmountInput('0.285', { currency: 'USD', maxDecimals: Infinity })).toBe(29);
+      expect(parseAmountInput('100.001', { currency: 'USD', maxDecimals: Infinity })).toBe(10000);
+    });
+
+    it('accepts up to 3 decimals for JOD and rejects a 4th, where USD/ILS/EUR cap at 2', () => {
+      expect(parseAmountInput('100.123', { currency: 'JOD' })).toBe(100123);
+      expect(parseAmountInput('100', { currency: 'JOD' })).toBe(100000);
+      expect(parseAmountInput('100.1234', { currency: 'JOD' })).toBeNull();
+      // the exact regression this ticket exists to prevent: USD stays capped at 2
+      // decimals even though the arithmetic is now exponent-driven, not hardcoded
+      expect(parseAmountInput('100.123', { currency: 'USD' })).toBeNull();
+    });
+
+    it('rounds extra JOD decimals half-up to 3 places when asked to, mirroring the USD 2-place case', () => {
+      expect(parseAmountInput('100.9995', { currency: 'JOD', maxDecimals: Infinity })).toBe(101000);
+      expect(parseAmountInput('100.0001', { currency: 'JOD', maxDecimals: Infinity })).toBe(100000);
     });
   });
 
@@ -244,6 +281,8 @@ describe('utils', () => {
       ['ils 5', 'ILS'],
       ['\u20AC5', 'EUR'],
       ['5 EUR', 'EUR'],
+      ['5 JOD', 'JOD'],
+      ['jod 5', 'JOD'],
     ])('reads the currency %j names as %s', (input, currency) => {
       expect(amountInputCurrency(input)).toBe(currency);
     });
@@ -255,8 +294,8 @@ describe('utils', () => {
 
   describe('Arabic-Indic digits in the lenient parsers', () => {
     it('parseAmountToMinor and parseCurrencyInput read Arabic-Indic digits', () => {
-      expect(parseAmountToMinor('١٢٠٠')).toBe(120000);
-      expect(parseCurrencyInput('١٬٢٠٠٫٥٠')).toBe(120050);
+      expect(parseAmountToMinor('١٢٠٠', 'USD')).toBe(120000);
+      expect(parseCurrencyInput('١٬٢٠٠٫٥٠', 'USD')).toBe(120050);
     });
 
     it('formatCurrencyInput converts Arabic-Indic digits and separators as you type', () => {
@@ -268,21 +307,25 @@ describe('utils', () => {
 
   describe('parseCurrencyInput', () => {
     it('should parse clean numbers', () => {
-      expect(parseCurrencyInput('100')).toBe(10000);
-      expect(parseCurrencyInput('100.50')).toBe(10050);
+      expect(parseCurrencyInput('100', 'USD')).toBe(10000);
+      expect(parseCurrencyInput('100.50', 'USD')).toBe(10050);
     });
 
     it('should strip currency symbols', () => {
-      expect(parseCurrencyInput('$100')).toBe(10000);
-      expect(parseCurrencyInput('₪100')).toBe(10000);
+      expect(parseCurrencyInput('$100', 'USD')).toBe(10000);
+      expect(parseCurrencyInput('₪100', 'ILS')).toBe(10000);
     });
 
     it('should handle empty input', () => {
-      expect(parseCurrencyInput('')).toBe(0);
+      expect(parseCurrencyInput('', 'USD')).toBe(0);
     });
 
     it('should handle negative values', () => {
-      expect(parseCurrencyInput('-50')).toBe(-5000);
+      expect(parseCurrencyInput('-50', 'USD')).toBe(-5000);
+    });
+
+    it('parses JOD at 3 decimals instead of 2', () => {
+      expect(parseCurrencyInput('100.123', 'JOD')).toBe(100123);
     });
   });
 

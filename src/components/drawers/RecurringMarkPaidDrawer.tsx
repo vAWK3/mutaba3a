@@ -79,7 +79,7 @@ export function RecurringMarkPaidDrawer({ group, initialView = 'list', onClose }
   const busy = markPaid.isPending || skip.isPending || snooze.isPending;
 
   const rows = group.occurrences.map((occurrence) => {
-    const value = typed[occurrence.expectedDate] ?? amountInputValue(occurrence.effectiveAmount);
+    const value = typed[occurrence.expectedDate] ?? amountInputValue(occurrence.effectiveAmount, group.currency);
     return {
       occurrence,
       checked: !unchecked.has(occurrence.expectedDate),

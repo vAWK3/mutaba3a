@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-109: Document/invoice currency narrow-casts are dead weight once MUT-145 lands
+**Status**: Open
+**Ticket**: MUT-140 (introduced); resolved by MUT-145
+**Added**: 2026-10-13
+**Priority**: Low
+**Impact**: MUT-140 widened the shared `Currency` type to include JOD. `DocumentDrawer.tsx`, `DocumentFormPage.tsx`, `ProfileDetailPage.tsx`, `BusinessProfileDrawer.tsx`, `RetainerDrawer.tsx`, and `PlanAssumptionDrawer.tsx` each needed `as 'USD' | 'ILS' | 'EUR'` casts at several "assign a wide Currency-typed source into a narrower form field" spots to keep compiling, since those surfaces deliberately don't support JOD. The document-related casts are pure dead weight once MUT-145 (full removal of document/invoice generation) lands — those files disappear entirely. The retainer/plan-assumption/profile-settings casts are not dead weight; they reflect a real, durable scope boundary (JOD stays out of those surfaces) and should stay even after MUT-145.
+**Fix**: no action needed before MUT-145 — the casts are correct and harmless in the meantime. When MUT-145 lands, no separate cleanup ticket is needed either, since deleting the files removes the casts along with them.
+
 ### TD-107: Enabled-currencies toggle has no control for a currency outside USD/ILS
 **Status**: Open
 **Ticket**: MUT-139
@@ -49,6 +57,7 @@
 **Priority**: Medium
 **Impact**: since MUT-14, real expense creation writes `db.expenses` only. But `ImportDataModal.tsx`/`ImportDataPage.tsx` still import expenses as `kind:'expense'` transactions into `db.transactions`, and demo seed data (`src/demo/seedData/transactions.ts`) does the same. Anything imported that way never appears on `/expenses` (which reads `db.expenses` exclusively), and `TransactionsPage.tsx`'s row-click handler for such a row opens the expense drawer with the transaction's id as `expenseId`, looking up the wrong table. MUT-94 made every totals reader (`transactionRepo.getOverviewTotals(ByCurrency)`, `projectSummaryRepo`, `InsightsPage`'s monthly trend) sum both sources additively so totals stay correct either way, but that's a totals-level patch, not a fix for the underlying two-table split.
 **Fix**: MUT-138 — Import should write `db.expenses` via `expenseRepo.create`, not `kind:'expense'` transactions; fix or confirm the TransactionsPage edit-routing for any pre-existing legacy rows.
+
 
 ### TD-104: A payment allocation or reversal that loses a deadlock answers 500
 **Status**: Open

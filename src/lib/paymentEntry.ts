@@ -1,5 +1,5 @@
 import type { Currency } from '../types';
-import { amountInputCurrency, parseAmountInput } from './utils';
+import { amountInputCurrency, currencyExponent, parseAmountInput } from './utils';
 
 /**
  * What a typed payment amount means against the most that may still be paid
@@ -29,7 +29,7 @@ export type PaymentAmountState =
  */
 export function describePaymentAmount(raw: string, currency: Currency, allowedMinor: number): PaymentAmountState {
   if (!raw.trim()) return { kind: 'empty' };
-  const amountMinor = parseAmountInput(raw);
+  const amountMinor = parseAmountInput(raw, { currency });
   if (amountMinor === null) return { kind: 'invalid' };
   const typed = amountInputCurrency(raw);
   if (typed && typed !== currency) return { kind: 'currencyMismatch', typed };
@@ -39,17 +39,17 @@ export function describePaymentAmount(raw: string, currency: Currency, allowedMi
   return { kind: 'stillOwed', amountMinor, leftMinor: allowedMinor - amountMinor };
 }
 
-const MINOR_PER_MAJOR = 100;
-const MINOR_DIGITS = 2;
-
 /**
  * Minor units as the text an amount field is prefilled with: "3550" or
- * "887.50". Never grouped, so deleting a digit can't leave an unreadable
- * "3,55"; cents always as two digits. Integer arithmetic, so no float noise.
+ * "887.50" (or "887.500" for JOD). Never grouped, so deleting a digit can't
+ * leave an unreadable "3,55"; fractional part always at the currency's own
+ * digit count. Integer arithmetic, so no float noise.
  */
-export function minorToAmountInput(amountMinor: number): string {
-  const whole = Math.trunc(amountMinor / MINOR_PER_MAJOR);
-  const cents = amountMinor % MINOR_PER_MAJOR;
-  if (cents === 0) return String(whole);
-  return `${whole}.${String(cents).padStart(MINOR_DIGITS, '0')}`;
+export function minorToAmountInput(amountMinor: number, currency: Currency): string {
+  const exponent = currencyExponent(currency);
+  const minorPerMajor = 10 ** exponent;
+  const whole = Math.trunc(amountMinor / minorPerMajor);
+  const fraction = amountMinor % minorPerMajor;
+  if (fraction === 0) return String(whole);
+  return `${whole}.${String(fraction).padStart(exponent, '0')}`;
 }

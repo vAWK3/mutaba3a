@@ -9,6 +9,18 @@ export function getLocaleFromLanguage(language: Language): string {
   return language === 'ar' ? 'ar' : 'en-US';
 }
 
+// Fractional digits each currency carries in minor-unit arithmetic. JOD is the
+// one 3-decimal (fils) currency here; every other one is 2-decimal. Mirrors
+// server/src/money.ts's EXPONENT -- kept as a separate client-side constant
+// (client and server already duplicate Currency/SUPPORTED_CURRENCIES
+// independently, with no shared package between them).
+const CURRENCY_EXPONENT: Record<Currency, number> = { USD: 2, ILS: 2, EUR: 2, JOD: 3 };
+
+/** The number of decimal places a currency's minor units carry (2, or 3 for JOD). */
+export function currencyExponent(currency: Currency): number {
+  return CURRENCY_EXPONENT[currency];
+}
+
 // Intl.NumberFormat is costly to build and formatAmount runs once per amount
 // cell, so one formatter per locale + currency is kept and reused.
 const amountFormatters = new Map<string, Intl.NumberFormat>();
@@ -21,11 +33,11 @@ export function formatAmount(amountMinor: number, currency: Currency, locale: st
       style: 'currency',
       currency,
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: CURRENCY_EXPONENT[currency],
     });
     amountFormatters.set(key, formatter);
   }
-  return formatter.format(amountMinor / 100);
+  return formatter.format(amountMinor / 10 ** CURRENCY_EXPONENT[currency]);
 }
 
 export function formatAmountShort(amountMinor: number, currency: Currency): string {
@@ -90,8 +102,8 @@ export function isolateAmount(text: string): string {
 const GROUP_SPACES = /[ \u00A0\u2009\u202F]+/g;
 // The only words an amount may carry: one currency symbol or code, before or after it.
 // The suffix has no leading \s* (trimmed after instead), so a long run of spaces can't backtrack.
-const CURRENCY_PREFIX = /^(US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC])\s*/i;
-const CURRENCY_SUFFIX = /(US\$|USD|ILS|NIS|EUR|[$\u20AA\u20AC])$/i;
+const CURRENCY_PREFIX = /^(US\$|USD|ILS|NIS|EUR|JOD|[$\u20AA\u20AC])\s*/i;
+const CURRENCY_SUFFIX = /(US\$|USD|ILS|NIS|EUR|JOD|[$\u20AA\u20AC])$/i;
 const CURRENCY_TOKENS: Record<string, Currency> = {
   $: 'USD',
   US$: 'USD',
@@ -101,13 +113,13 @@ const CURRENCY_TOKENS: Record<string, Currency> = {
   NIS: 'ILS',
   '\u20AC': 'EUR',
   EUR: 'EUR',
+  JOD: 'JOD',
 };
 // No amount anyone types is longer; anything longer is refused before any pattern runs
 const MAX_AMOUNT_INPUT_LENGTH = 64;
 // Whole digits, or digits grouped by commas in threes (no leading 0 group), then decimals.
 // Anything else ("12,5", "1.200,50", "0,500", "2k") is ambiguous and is rejected, never guessed at.
 const AMOUNT_PATTERN = /^(-?)(\d+|[1-9]\d{0,2}(?:,\d{3})+)?(?:\.(\d*))?$/;
-const MINOR_DIGITS = 2;
 
 /**
  * Convert Arabic-Indic (U+0660–0669) and Extended Arabic-Indic (U+06F0–06F9)
@@ -123,8 +135,16 @@ export function normalizeNumerals(value: string): string {
 
 export interface ParseAmountOptions {
   /**
-   * Most decimals accepted (default 2). Pass Infinity to round extra decimals
-   * half-up instead of rejecting them (the lenient wrappers below).
+   * The amount's currency -- required, not defaulted. Determines both the
+   * default `maxDecimals` and the minor-unit scale (2 places for most
+   * currencies, 3 for JOD). A default here would let a future JOD call site
+   * compile without passing it and silently round to 2 decimals instead of 3.
+   */
+  currency: Currency;
+  /**
+   * Most decimals accepted (default: the currency's own exponent). Pass
+   * Infinity to round extra decimals half-up instead of rejecting them (the
+   * lenient wrappers below).
    */
   maxDecimals?: number;
 }
@@ -162,8 +182,10 @@ function splitCurrencyToken(value: string): TypedAmount | null {
  * amountInputCurrency for which). The conversion runs on the digits, so no
  * float rounding creeps in.
  */
-export function parseAmountInput(value: string, options: ParseAmountOptions = {}): number | null {
-  const { maxDecimals = MINOR_DIGITS } = options;
+export function parseAmountInput(value: string, options: ParseAmountOptions): number | null {
+  const { currency } = options;
+  const exponent = CURRENCY_EXPONENT[currency];
+  const { maxDecimals = exponent } = options;
   const typed = splitCurrencyToken(value);
   if (!typed) return null;
 
@@ -174,9 +196,9 @@ export function parseAmountInput(value: string, options: ParseAmountOptions = {}
   if (fraction.length > maxDecimals) return null;
 
   const whole = Number(wholePart.replace(/,/g, '') || '0');
-  const cents = Number(fraction.slice(0, MINOR_DIGITS).padEnd(MINOR_DIGITS, '0'));
-  const roundUp = fraction.length > MINOR_DIGITS && Number(fraction[MINOR_DIGITS]) >= 5 ? 1 : 0;
-  const minor = whole * 100 + cents + roundUp;
+  const minorFraction = Number(fraction.slice(0, exponent).padEnd(exponent, '0'));
+  const roundUp = fraction.length > exponent && Number(fraction[exponent]) >= 5 ? 1 : 0;
+  const minor = whole * 10 ** exponent + minorFraction + roundUp;
   if (!Number.isSafeInteger(minor)) return null;
   return sign ? -minor : minor;
 }
@@ -187,20 +209,23 @@ export function parseAmountInput(value: string, options: ParseAmountOptions = {}
  * it with the entry's currency rather than silently dropping the symbol.
  */
 export function amountInputCurrency(value: string): Currency | undefined {
-  if (parseAmountInput(value, { maxDecimals: Infinity }) === null) return undefined;
+  // `currency` here only selects the exponent used for the minor-unit scale,
+  // which this call ignores -- it only checks parseability, then reads the
+  // typed token separately. Any valid currency is safe to pass.
+  if (parseAmountInput(value, { currency: 'USD', maxDecimals: Infinity }) === null) return undefined;
   return splitCurrencyToken(value)?.currency;
 }
 
-export function parseAmountToMinor(value: string): number {
-  return parseAmountInput(value, { maxDecimals: Infinity }) ?? 0;
+export function parseAmountToMinor(value: string, currency: Currency): number {
+  return parseAmountInput(value, { currency, maxDecimals: Infinity }) ?? 0;
 }
 
 /**
  * Parse a currency input string to minor units (cents).
  * Handles various formats like "100", "100.50", "$100", etc.; 0 when unreadable.
  */
-export function parseCurrencyInput(value: string): number {
-  return parseAmountInput(value, { maxDecimals: Infinity }) ?? 0;
+export function parseCurrencyInput(value: string, currency: Currency): number {
+  return parseAmountInput(value, { currency, maxDecimals: Infinity }) ?? 0;
 }
 
 /**

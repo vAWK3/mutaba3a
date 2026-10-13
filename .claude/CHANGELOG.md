@@ -30,7 +30,7 @@
 
 ## [Unreleased] - 2026-10-13 — MAL-1118: personal profiles seed a household expense-category preset
 
-**Why:** MUT-143 adds expense categories to personal profiles in the iPhone app, and a person's own profile was being seeded the general business list (Office Rent, Bank Fees, Salaries). Since MUT-120 "no Malafat writer" covers both a person's own profile and a firm with no Malafat link, so the new preset keys on `personalOwnerUserId` (ADR-065).
+**Why:** MUT-143 adds expense categories to personal profiles in the iPhone app, and a person's own profile was being seeded the general business list (Office Rent, Bank Fees, Salaries). Since MUT-120 "no Malafat writer" covers both a person's own profile and a firm with no Malafat link, so the new preset keys on `personalOwnerUserId` (ADR-066).
 
 **Run (Node 22):** server `npm run lint` clean, `npm run typecheck` clean, `npm test` 1,575 passed / 18 skipped (DB-only suites; no local `DATABASE_URL`), `openapi:check` up to date; root `npm run typecheck` clean, `npm run test:run` 3,477 passed / 4 skipped, `hosted:types:check` in sync.
 
@@ -47,6 +47,38 @@
 - `routes-expenses.test.ts`: the old "general preset on a personal profile" test ran on an unconnected firm — renamed to say so and now checks the audit row (the paging test's title had the same mislabel and is renamed too); new English and Arabic tests seed a real personal profile (via `/admin/v1/users`' `personalProfile.id`) once, as SYSTEM, with `{ preset: 'personal', count: 10, locale }`.
 
 ---
+
+## [Unreleased] - 2026-10-13 — Merge MUT-140 into main: renumbering and a JOD/MUT-94 semantic fix
+
+**Renumbered on merge:** MUT-140's ADR-062 → **ADR-065** and TD-105 → **TD-109**. Main already used both numbers (MUT-94 expense totals; seed-demo re-run).
+**Fixed (merge-time semantic conflict):** MUT-94 added two `Record<Currency, number>` literals with only USD/ILS/EUR after MUT-140 branched (`db/aggregations.ts` `sumExpensesByCurrency`, `ExpensesLedgerPage` strip totals). With JOD in the union, the build broke. Worse, `getOverviewTotals` would have added `undefined` to the JOD bucket's `expensesMinor` and shown NaN, and JOD expenses would have been dropped from the sum. Both literals now carry `JOD: 0`, and `aggregations.test.ts` pins the JOD bucket.
+**Fixed (MUT-140 branch, before merge):** `paymentEntry.test.ts` called `minorToAmountInput` without the currency that ADR-065 made required, and got `'NaN.NaN'`. tsconfig.app excludes tests, so typecheck could not see it. A JOD (exponent 3) case was added.
+**Verified on the merged tree (Node 22):** typecheck clean; lint 0 errors; db, expenses, drawers, utils and paymentEntry suites green. The full suite ran on the branch: 229/230 files, the one failure being the test fixed above.
+
+## [Unreleased] - 2026-10-13 — Add JOD as a supported currency for income and expense entry (MUT-140)
+
+**Why:** JOD is a 3-decimal currency (fils), unlike USD/ILS/EUR here (all 2-decimal). The sister Flutter app hit this exact issue: shipped JOD at 2 decimals first (MUT-72), then needed a dedicated follow-up (MUT-119) to rework its money codec because the 2-decimal assumption was baked into shared formatting code. This repo had the identical risk shape — `src/lib/utils.ts`'s formatAmount/parseAmountInput/parseAmountToMinor/parseCurrencyInput hardcoded `/100` and 2 decimals globally, as did several independent duplicate formatters found during the audit (DocumentPdf.tsx, DocumentDrawer.tsx, recurringAttention.ts, paymentEntry.ts).
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean (0 errors; 12 pre-existing warnings unrelated to this change), `npm run build` succeeds. Targeted `vitest run` on every changed test file green (250 tests); the full suite was not re-run this session per explicit instruction — land with a full `npm test` pass before merge.
+
+### Added
+- `'JOD'` added to `Currency` (`src/types/index.ts`) and `SUPPORTED_CURRENCIES`/`EXPONENT` (`server/src/money.ts`, already per-currency-aware).
+- `currencyExponent()` exported from `src/lib/utils.ts` — the single source for "how many decimal places does this currency carry" (2, or 3 for JOD), reused by `csv.ts`, `DocumentDrawer.tsx`, `recurringAttention.ts`, `paymentEntry.ts` instead of each re-deriving it.
+- JOD selectable directly in `IncomeDrawer`/`ExpenseDrawer` (no Settings precondition — matches how EUR already behaves; the Settings "enabled currencies" toggle and per-profile `allowedCurrencies` don't actually gate these dropdowns today).
+
+### Changed
+- `parseAmountInput`/`parseAmountToMinor`/`parseCurrencyInput` (`src/lib/utils.ts`): `currency` is now a **required** parameter (no default) — a future JOD call site fails to compile instead of silently rounding to 2 decimals. Every caller updated: `IncomeDrawer`, `ExpenseDrawer`, `RetainerDrawer`, `PlanAssumptionDrawer`, `recurringAttention.ts`, `paymentEntry.ts`.
+- `IncomeDrawer`'s amount validation moved from chained `z.string().refine()` to a schema-level `superRefine`, since decimal-precision validity is now currency-dependent (can't be checked on the `amount` field alone without seeing the sibling `currency` field). Schema extracted to `incomeFormSchema.ts` for direct testability and to keep the drawer file component-only (Vite fast-refresh).
+- `ExpenseFormFields`'s generic type constraint (shared with the hosted portal's own expense drawer) decoupled from `expenseFormFieldsSchema` so local's wider currency union type-checks without widening the portal's actual runtime validation schema, which has its own hardcoded 2-decimal regex and is out of this ticket's scope.
+- Overview/Clients/Projects aggregation totals (`lib/aggregations.ts`, `db/aggregations.ts`) and the landing page's currency FAQ (`landingCopy.ts`) updated for JOD — each an exhaustive `Record<Currency, ...>` that the type widening forced a real decision on, not a mechanical type fix.
+
+### Fixed
+- Three real "amount 10x too large" bugs found auditing every hardcoded `/100` conversion in the codebase: `IncomeDrawer`/`ExpenseDrawer`'s edit/duplicate reset handlers, `csv.ts`'s CSV export, and `DocumentDrawer.tsx`'s own independent `formatMinorAmount` — all bypassed the (now currency-aware) shared formatter.
+- (qa-reconcile gap) `ExpenseDrawer`'s amount field never validated decimal precision for any currency — only checked non-empty. A USD expense typed with a 3rd decimal silently rounded via `parseAmountToMinor`'s lenient path instead of being rejected. Added the same amount/currency `superRefine` cross-field check `IncomeDrawer` already has; schema extracted to `expenseDrawerFormSchema.ts` (same fast-refresh/testability reasoning as `incomeFormSchema.ts`). `ExpenseDrawer.schema.test.ts` is this drawer's first test file.
+
+### Technical
+- Document/invoice generation (`DocumentFormPage.tsx`, `DocumentDrawer.tsx`) was briefly widened to accept JOD, then reverted: the feature is being removed entirely (MUT-145, product direction is digital-ledger-only), so investing JOD support there was pointless. The narrow-cast fixes needed to keep those files type-safe under the now-wider global `Currency` stayed, since that's unavoidable regardless of documents' fate.
+- See `.claude/designs/mut-140-jod-currency.md` for the full engineering plan and plan-review findings.
 
 ## [Unreleased] - 2026-10-13 — Seed script can keep a store-review account's password
 
@@ -169,6 +201,7 @@
 - `server/src/scripts/users.ts`: exported `adminClient`/`AdminClient`/`UserSummary`/`CliError` so the seed script can reuse the existing admin-API get-or-create pattern instead of duplicating it. No behavior change (existing `users-cli.test.ts` unaffected).
 
 ---
+
 
 ## [Unreleased] - 2026-10-13 — Remove the dead mark-paid income hooks (MUT-98)
 

@@ -44,7 +44,19 @@ export interface ExpenseCategoryOption {
   name: string;
 }
 
-export interface ExpenseFormFieldsProps<T extends ExpenseFormFieldsValues> {
+/**
+ * The shape this component actually needs, generically -- `currency` is
+ * widened to `string` here (rather than reusing `ExpenseFormFieldsValues`
+ * directly) so that local's ExpenseDrawer can carry a wider currency union
+ * (MUT-140: + JOD) than the hosted portal's `expenseFormFieldsSchema`,
+ * without touching that schema -- it's the portal's actual runtime
+ * validation (`hostedExpenseSchema = expenseFormFieldsSchema.extend(...)`),
+ * which has its own 2-decimal-only `DECIMAL_AMOUNT` regex and is out of
+ * this ticket's scope.
+ */
+export type ExpenseFormFieldsShape = Omit<ExpenseFormFieldsValues, 'currency'> & { currency: string };
+
+export interface ExpenseFormFieldsProps<T extends ExpenseFormFieldsShape> {
   control: Control<T>;
   errors: FieldErrors<T>;
   categories: ExpenseCategoryOption[];
@@ -65,7 +77,7 @@ export interface ExpenseFormFieldsProps<T extends ExpenseFormFieldsValues> {
   titleRequired?: boolean;
 }
 
-export function ExpenseFormFields<T extends ExpenseFormFieldsValues>({
+export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
   control,
   errors,
   categories,

@@ -245,7 +245,8 @@ export function DocumentFormPage() {
         subject: existingDoc.subject || '',
         brief: existingDoc.brief || '',
         notes: existingDoc.notes || '',
-        currency: existingDoc.currency,
+        // Documents stay USD/ILS/EUR-only (feature slated for removal, MUT-14X)
+        currency: existingDoc.currency as 'USD' | 'ILS' | 'EUR',
         language: existingDoc.language,
         templateId: existingDoc.templateId,
         issueDate: existingDoc.issueDate.split('T')[0],
@@ -262,7 +263,7 @@ export function DocumentFormPage() {
         payments: existingDoc.payments.map((p) => ({
           id: p.id,
           amountMinor: p.amountMinor,
-          currency: p.currency,
+          currency: p.currency as 'USD' | 'ILS' | 'EUR',
           method: p.method,
           notes: p.notes || '',
           paidAt: p.paidAt.split('T')[0],
@@ -283,7 +284,7 @@ export function DocumentFormPage() {
         subject: sourceDoc.subject || '',
         brief: sourceDoc.brief || '',
         notes: sourceDoc.notes || '',
-        currency: sourceDoc.currency,
+        currency: sourceDoc.currency as 'USD' | 'ILS' | 'EUR',
         language: sourceDoc.language,
         templateId: sourceDoc.templateId,
         issueDate: todayISO(), // Reset to today for new document
@@ -308,7 +309,7 @@ export function DocumentFormPage() {
     const profileId = form.getValues('businessProfileId');
     const profile = businessProfiles.find((p) => p.id === profileId);
     if (profile && !isEditMode && !existingDoc) {
-      setValue('currency', profile.defaultCurrency);
+      setValue('currency', profile.defaultCurrency as 'USD' | 'ILS' | 'EUR');
       setValue('language', profile.defaultLanguage);
     }
   }, [watchedBusinessProfileId, businessProfiles, isEditMode, existingDoc, setValue]);

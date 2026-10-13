@@ -1003,7 +1003,7 @@ Plan: `.claude/designs/mut-42-hosted-expenses-tests.md`. The tests were written 
 
 ### MAL-1118 — personal expense-category preset (`server/`)
 
-Tests written red first (ADR-065).
+Tests written red first (ADR-066).
 
 | Area | File | What is pinned |
 |---|---|---|
@@ -1970,4 +1970,27 @@ Wireframe: `.claude/designs/mut-139-settings-visual-redesign-wireframe.html`, bu
 | `src/components/ui/__tests__/ProfileBadge.test.tsx`, `BusinessProfileDrawer.test.tsx` | Unchanged — `ProfileBadge` reused as-is for the Business Profiles no-logo fallback, no new test needed since its existing contract already covers this use |
 
 **What was run (Node 22):** `npm run lint` 0 errors; `npm run typecheck` clean; `npx vitest run` on the settings + SegmentedControl suites green throughout; full-suite run (3,470/3,474) was clean immediately before the final two CSS/JSX tweaks (family-wrapper margins, currency-pill colour), which touched only class names and a CSS rule, not test-observable behavior. Verified live via Playwright against the dev server, light and dark themes — this caught two defects the wireframe couldn't show: Data Tools still read as a separate full-width section (tint alone wasn't enough; fixed by moving it inside the width cap, confirmed with Basel first) and the enabled-currencies pills' solid fill read as visually loud next to the new segmented controls (fixed with a softer tint).
+
+---
+
+## MUT-140 — JOD currency support (2026-10-13)
+
+JOD is a 3-decimal (fils) currency, unlike USD/ILS/EUR (all 2-decimal) — the risk this ticket guards against is the exact one the sister Flutter app hit (MUT-72 → MUT-119): a 2-decimal assumption baked into shared formatting code, discovered only after shipping.
+
+| File | Added | Covers |
+|---|---|---|
+| `server/src/__tests__/money.test.ts` | +5 | JOD parses/formats/round-trips at 3 decimals; rejects a 4th fractional digit; `isSupportedCurrency('JOD')` and `currencyExponent` for all four currencies |
+| `src/lib/__tests__/utils.test.ts` | +9 | `formatAmount`/`parseAmountInput`/`parseAmountToMinor`/`parseCurrencyInput` at JOD's 3 decimals, including the `maxDecimals: Infinity` half-up rounding path; the regression case proving USD still caps at 2 decimals after the arithmetic generalized from hardcoded base-100 to exponent-driven; `amountInputCurrency` reads a JOD token; new `currencyExponent()` unit |
+| `src/components/drawers/__tests__/IncomeDrawer.schema.test.ts` (new) | 5 | The amount/currency `superRefine` cross-field check directly against the exported zod schema (cheaper and more precise than a full component render): JOD accepts 3 decimals, rejects a 4th; USD still rejects a 3rd after the schema restructuring; non-positive amounts rejected for any currency |
+| `src/components/drawers/__tests__/IncomeDrawer.locked.test.tsx` | 0 (regression) | Full suite re-run green after the schema `superRefine` restructuring and the `incomeFormSchema.ts` extraction — no behavior change to the locked-transaction flow |
+| `src/utils/__tests__/csv.test.ts` | +2 (new `exportDataToCSV` describe block) | A JOD transaction exports at 3 decimals (not rounded to 2 — this was a real bug: the hardcoded `/100` divisor produced a 10x-too-large amount); a USD transaction is unaffected |
+| `src/utils/__tests__/csvValidation.test.ts` | +1 (1 updated) | JOD accepted as a valid CSV currency; the "invalid currency" error message updated to list JOD among the valid options |
+| `src/features/documents/__tests__/pdf.test.ts` | +1 | `DocumentPdf.tsx`'s independent local `formatAmount` (a second, separate implementation from `utils.ts`'s) also made currency-aware — found mid-ticket: the PDF renderer doesn't use `Intl.NumberFormat` the same way, so it carries its own exponent table that had the identical hardcoded-2-decimal bug |
+| `src/pages/landing/__tests__/landingCopy.test.ts` | 1 updated | The public FAQ's currency list now includes JOD (`CURRENCY_NAME_KEYS` is an exhaustive `Record<Currency, string>` — the type widening forced this as a real decision, not a type-check formality) |
+| `src/components/drawers/__tests__/ExpenseDrawer.schema.test.ts` (new — this drawer's first test file) | 6 | qa-reconcile gap found and closed same-session: ExpenseDrawer's amount field never validated decimal precision for any currency (only non-empty) — a USD expense typed with a 3rd decimal silently rounded instead of being rejected. Added the same amount/currency `superRefine` cross-field check as `IncomeDrawer` (schema extracted to `expenseDrawerFormSchema.ts`): JOD accepts 3 decimals, rejects a 4th; USD rejects a 3rd; non-positive rejected; the pre-existing recurring-type cross-field checks still enforced (regression) |
+
+**What was run (Node 22):** `npm run typecheck` clean · `npm run lint` 0 errors (12 pre-existing warnings, unrelated) · `npm run build` succeeded. Targeted `vitest run` on every file listed above: 256 tests passed. **The full suite (`vitest run` with no path filter) was not re-run this session** (explicit instruction mid-session) — run it before merge to confirm no regression outside the files touched here.
+
+**Scope note:** document/invoice generation (`DocumentFormPage.tsx`, `DocumentDrawer.tsx`, `LineItemsTable.tsx`) was briefly widened to accept JOD, then reverted — that whole feature is being removed (MUT-145, product direction is digital-ledger-only). `DocumentPdf.tsx`'s fix above stayed, since it's the same defensive type-completeness category as the aggregation fixes, not new JOD feature investment in a surface that's going away.
+
 

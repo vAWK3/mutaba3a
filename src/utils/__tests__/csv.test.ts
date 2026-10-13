@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { toCsv, downloadTextFile, parseCSV, generateImportTemplate } from '../csv';
+import { toCsv, downloadTextFile, parseCSV, generateImportTemplate, exportDataToCSV } from '../csv';
 
 describe('csv utilities', () => {
   describe('toCsv', () => {
@@ -372,6 +372,48 @@ expense,Software subscription,,,,,,99.99,USD,,2024-01-01,,,Software,`;
       expect(dataRows.length).toBeGreaterThan(0);
       expect(dataRows[0]).toHaveProperty('type');
       expect(dataRows[0]).toHaveProperty('name');
+    });
+  });
+
+  describe('exportDataToCSV', () => {
+    it('exports a JOD transaction amount at 3 decimal places, not rounded to 2 (MUT-140)', () => {
+      const csv = exportDataToCSV({
+        clients: [],
+        projects: [],
+        transactions: [
+          {
+            id: 'tx1',
+            kind: 'income',
+            status: 'paid',
+            amountMinor: 100123, // 100.123 JOD
+            currency: 'JOD',
+            occurredAt: '2024-01-15',
+          },
+        ],
+      });
+
+      const rows = parseCSV(csv);
+      expect(rows[0].amount).toBe('100.123');
+      expect(rows[0].currency).toBe('JOD');
+    });
+
+    it('exports a USD transaction amount at 2 decimal places, unaffected by the JOD change', () => {
+      const csv = exportDataToCSV({
+        clients: [],
+        projects: [],
+        transactions: [
+          {
+            id: 'tx1',
+            kind: 'expense',
+            amountMinor: 10050,
+            currency: 'USD',
+            occurredAt: '2024-01-15',
+          },
+        ],
+      });
+
+      const rows = parseCSV(csv);
+      expect(rows[0].amount).toBe('100.50');
     });
   });
 

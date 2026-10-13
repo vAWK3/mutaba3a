@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore } from '../../lib/stores';
 import { useBusinessProfiles, useProjects } from '../../hooks/useQueries';
@@ -23,72 +22,13 @@ import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
-import { cn, parseAmountToMinor, todayISO } from '../../lib/utils';
+import { cn, currencyExponent, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
 import { ALL_CATEGORIES } from '../../db/defaultExpenseCategories';
 import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../expenses/ExpenseFormFields';
 import type { Currency, ExpenseFrequency, RecurringEndMode } from '../../types';
-
-const schema = z.object({
-  expenseType: z.enum(['onetime', 'recurring']),
-  profileId: z.string().min(1, 'Profile is required'),
-  amount: z.string().min(1, 'Amount is required'),
-  currency: z.enum(['USD', 'ILS', 'EUR']),
-  occurredAt: z.string().min(1, 'Date is required'),
-  title: z.string().optional(),
-  vendor: z.string().optional(),
-  vendorId: z.string().optional(),
-  clientId: z.string().optional(),
-  projectId: z.string().optional(),
-  categoryId: z.string().min(1, 'Category is required'),
-  notes: z.string().optional(),
-  // Recurring fields
-  frequency: z.enum(['monthly', 'yearly']).optional(),
-  startDate: z.string().optional(),
-  endMode: z.enum(['endOfYear', 'untilDate', 'noEnd']).optional(),
-  endDate: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.expenseType === 'recurring') {
-    if (!data.title) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Title is required for recurring expenses',
-        path: ['title'],
-      });
-    }
-    if (!data.frequency) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Frequency is required',
-        path: ['frequency'],
-      });
-    }
-    if (!data.startDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Start date is required',
-        path: ['startDate'],
-      });
-    }
-    if (!data.endMode) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'End mode is required',
-        path: ['endMode'],
-      });
-    }
-    if (data.endMode === 'untilDate' && !data.endDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'End date is required',
-        path: ['endDate'],
-      });
-    }
-  }
-});
-
-type FormData = z.infer<typeof schema>;
+import { schema, type FormData } from './expenseDrawerFormSchema';
 
 export function ExpenseDrawer() {
   const { expenseDrawer, closeExpenseDrawer } = useDrawerStore();
@@ -108,7 +48,9 @@ export function ExpenseDrawer() {
     defaultValues: {
       expenseType: isRecurring ? 'recurring' : 'onetime',
       profileId: defaultProfileId || '',
-      amount: prefillData?.amountMinor ? (prefillData.amountMinor / 100).toString() : '',
+      amount: prefillData?.amountMinor
+        ? (prefillData.amountMinor / 10 ** currencyExponent(prefillData.currency || 'USD')).toString()
+        : '',
       currency: prefillData?.currency || 'USD',
       occurredAt: prefillData?.occurredAt?.split('T')[0] || todayISO(),
       title: prefillData?.title || '',
@@ -174,7 +116,7 @@ export function ExpenseDrawer() {
       reset({
         expenseType: 'onetime',
         profileId: existingExpense.profileId,
-        amount: (existingExpense.amountMinor / 100).toString(),
+        amount: (existingExpense.amountMinor / 10 ** currencyExponent(existingExpense.currency)).toString(),
         currency: existingExpense.currency,
         occurredAt: existingExpense.occurredAt.split('T')[0],
         title: existingExpense.title || '',
@@ -198,7 +140,7 @@ export function ExpenseDrawer() {
       reset({
         expenseType: 'recurring',
         profileId: existingRule.profileId,
-        amount: (existingRule.amountMinor / 100).toString(),
+        amount: (existingRule.amountMinor / 10 ** currencyExponent(existingRule.currency)).toString(),
         currency: existingRule.currency,
         occurredAt: existingRule.startDate,
         title: existingRule.title,
@@ -233,7 +175,7 @@ export function ExpenseDrawer() {
           title: data.title || '',
           vendor: data.vendor || undefined,
           categoryId: data.categoryId || undefined,
-          amountMinor: parseAmountToMinor(data.amount),
+          amountMinor: parseAmountToMinor(data.amount, data.currency),
           currency: data.currency as Currency,
           frequency: data.frequency as ExpenseFrequency,
           dayOfMonth,
@@ -260,7 +202,7 @@ export function ExpenseDrawer() {
           clientId: data.clientId || undefined,
           projectId: data.projectId || undefined,
           categoryId: data.categoryId || undefined,
-          amountMinor: parseAmountToMinor(data.amount),
+          amountMinor: parseAmountToMinor(data.amount, data.currency),
           currency: data.currency as Currency,
           occurredAt: new Date(data.occurredAt).toISOString(),
           notes: data.notes || undefined,
@@ -431,7 +373,7 @@ export function ExpenseDrawer() {
           control={form.control}
           errors={form.formState.errors}
           categories={categories}
-          currencyOptions={['USD', 'ILS']}
+          currencyOptions={['USD', 'ILS', 'JOD']}
           amountInputMode="number"
           labels={expenseFormLabels}
           showDate={selectedExpenseType === 'onetime'}

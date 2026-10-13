@@ -2653,9 +2653,26 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - CSS-only sliding thumb via radio inputs and `:checked` siblings (no JS measurement): rejected — Language/Theme are controlled by existing app state (`useLanguage`/`useTheme`), not local form state, so the control has to be driven by `value`/`onChange` props either way; a measured-thumb approach composes with that directly.
 - Leaving Data Tools outside the capped container and accepting it reads as "a separate quieter section" rather than nested: offered to Basel as the status-quo option; he chose to fix the width instead once he saw the screenshot.
 
+## ADR-065: Money-Parsing Functions Require an Explicit `currency` Parameter — No Default
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-140 added JOD (a 3-decimal/fils currency) alongside USD/ILS/EUR (all 2-decimal). `src/lib/utils.ts`'s `formatAmount`/`parseAmountInput`/`parseAmountToMinor`/`parseCurrencyInput` previously hardcoded a 2-decimal assumption (`/100`, `MINOR_DIGITS = 2`) with no currency parameter at all. The sister Flutter app hit the identical risk shape: it shipped JOD at 2 decimals first (MUT-72) as an accepted shortcut, then needed a dedicated, riskier follow-up ticket (MUT-119) to rework its money codec because the 2-decimal assumption was baked into shared formatting/parsing code with no compiler signal pointing at the call sites that needed fixing.
+
+**Decision**: `parseAmountInput`'s `ParseAmountOptions.currency` and `parseAmountToMinor`/`parseCurrencyInput`'s `currency` parameter are **required, with no default value**. The exponent (2 or 3 decimal places) is derived from the passed currency via `currencyExponent()`, never from a global constant. A caller that omits currency fails to compile; it cannot silently fall back to a 2-decimal assumption the way the pre-MUT-140 code (and the Flutter app's first pass) did.
+
+**Consequences**:
+- Every existing call site across the codebase had to be updated to pass its own transaction/entry's currency explicitly (`IncomeDrawer`, `ExpenseDrawer`, `RetainerDrawer`, `PlanAssumptionDrawer`, `recurringAttention.ts`, `paymentEntry.ts`, `csv.ts`, `DocumentDrawer.tsx`) — a larger one-time diff than a defaulted parameter would have required, but it surfaced several genuine pre-existing bugs along the way (hardcoded `/100` conversions in reset/prefill handlers and CSV export that a default would have let continue compiling silently wrong).
+- Adding a future 5th currency repeats this same forced-migration shape by design — that is the intended safety property, not a cost to engineer around.
+- `amountInputCurrency()` (detects a typed currency symbol/code in free text) still calls `parseAmountInput` internally and must pass *some* currency even though the result's scale is irrelevant to its own logic (it only checks parseability, then reads the token separately via `splitCurrencyToken`) — it passes `'USD'` with a comment explaining why any currency is safe there.
+
+**Alternatives considered**:
+- Default `currency` to `'USD'` to minimize the diff: rejected — this is the exact failure mode ADR exists to prevent. A future JOD (or 5th-currency) call site added without passing currency would compile cleanly and silently round wrong, discovered only in production, mirroring the Flutter app's MUT-72→MUT-119 path.
+- Keep a global `MINOR_DIGITS = 2` constant and special-case JOD inline at each call site: rejected — reintroduces the global-assumption shape this decision exists to remove, just with more scattered special-casing instead of one per-currency source of truth (`CURRENCY_EXPONENT`/`currencyExponent()`).
+
 ---
 
-## ADR-065: A Person's Own Profile Seeds a Personal Expense Preset, Keyed on `personalOwnerUserId`, Not on "No Writer of Record" (Amends MUT-42 D2)
+## ADR-066: A Person's Own Profile Seeds a Personal Expense Preset, Keyed on `personalOwnerUserId`, Not on "No Writer of Record" (Amends MUT-42 D2)
 
 **Status**: Active
 **Date**: 2026-10-13
