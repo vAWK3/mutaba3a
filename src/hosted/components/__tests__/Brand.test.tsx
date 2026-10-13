@@ -34,4 +34,12 @@ describe('Wordmark (MUT-104)', () => {
     expect(wordmark).toHaveTextContent(name);
     expect(wordmark).toHaveClass('hp-side-wordmark');
   });
+
+  it('leads with the decorative Brand v2 mark for the active theme', () => {
+    localStorage.setItem('mutaba3a-theme', 'dark');
+    const { container } = renderWordmark('en');
+    const img = container.querySelector('.hp-wordmark img');
+    expect(img).toHaveAttribute('alt', '');
+    expect(img?.getAttribute('src')).toMatch(/\/mark-dark\.svg/);
+  });
 });

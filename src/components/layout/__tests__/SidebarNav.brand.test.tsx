@@ -59,6 +59,12 @@ describe('SidebarNav brand link (MUT-104)', () => {
     expect(brandLink()).toHaveTextContent('متابعة');
   });
 
+  it('draws the Brand v2 mark for the active theme, not the PNG app icon', () => {
+    localStorage.setItem('mutaba3a-theme', 'dark');
+    renderNav();
+    expect(mark()?.getAttribute('src')).toMatch(/\/mark-dark\.svg/);
+  });
+
   it('keeps only the mark when collapsed', () => {
     renderNav();
     fireEvent.click(screen.getByRole('button', { name: 'nav.collapse' }));
