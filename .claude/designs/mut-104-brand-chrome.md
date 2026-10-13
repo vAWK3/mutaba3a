@@ -153,6 +153,13 @@ Actual answer: A "Link single public/ copy" (D3, Basel, 2026-10-13)
 Accepted scope: column A of the grid. `hostedConfig().publicDir` stays `src/hosted/public` (it may now be empty; Vite tolerates that). The existing vite-config assertion is unchanged. Verify `dist-hosted` emits hashed icon files and that `test:bundles` passes.
 History: none
 
+### R7: Claude Design delivery (build phase, 2026-10-13)
+Finding: the delivered `og-card-ar-1200x630.png` / `og-card-en-1200x630.png` used "تابع مالك، بأمان." / "Track your finances, securely.", not the landing hero copy; the delivered `favicon.svg` again had classes and no `<style>` (rendered solid black, verified with `rsvg-convert`).
+State: approved
+Actual answer: D9, Basel: "fix the headline in arabic and in english to be consistent with تابع مالك بأمان"; earlier the same turn: "copy them to where we need to use them".
+Accepted scope: the landing hero headline changes in en + ar to match the card; `public/og-card-ar-1200x630.png` ships with `summary_large_image` at 1200×630 (supersedes R4/D5's square); the English card and the square mark move to `docs/brand/` (not shipped); the delivered favicon's class structure is kept, with the missing styles added in code. The R4 tech-debt item for a designed card is not needed.
+History: R4/D5 approved the square + `summary` until a designed card arrived; it arrived before the build ended.
+
 ## Section 1 — Architecture findings
 1. [P2] (confidence: 9/10) plan §6 "Copy comes from the translation files": no language is named. `index.html:7` `<title>متابعة</title>` sits under `<html lang="en">`. Crawlers run no JS, so the card has exactly one language. → R3
 2. [P2] (confidence: 9/10) `public/og-mark-1200.png` is "PNG image data, 1200 x 1200" (`file`). `summary_large_image` and Facebook/LinkedIn large cards are 1.91:1, so a square image is cropped or shown as a small thumbnail. → R4

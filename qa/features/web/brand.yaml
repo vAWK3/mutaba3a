@@ -8,6 +8,12 @@ paths:
   - src/index.css
   - src/main.tsx
   - vite.config.ts
+  - index.html
+  - public/favicon*
+  - public/apple-touch-icon.png
+  - public/og-card-*
+  - src/components/brand/**
+  - src/lib/theme/themeColorMeta.ts
 features:
   - id: contrast-app
     title: Home, the payment drawer, Income, the income drawer, Clients beside a profile and Settings pass axe in light and dark, colour contrast included (MUT-102)
@@ -57,3 +63,34 @@ features:
     expect:
       - The page never scrolls sideways and the drawer sits inside the window
       - A screenshot of each surface is attached for review
+  - id: chrome-icons
+    title: The tab shows the Brand v2 favicon, a cream tile in a light browser and a plum tile in a dark one, and the head has the PNG fallbacks and apple-touch icon (MUT-104)
+    tier: core
+    legacy: [MUT-104]
+    steps:
+      - Emulate OS light, then OS dark, and open /app/clients
+      - Open /favicon.svg directly in each scheme
+    expect:
+      - The favicon tile is #FBF1D8 in light and #221B2D in dark, never black
+      - The head links /favicon.svg, /favicon-32.png, /favicon-16.png and /apple-touch-icon.png, and each returns 200
+  - id: mark-follows-theme
+    title: The sidebar mark and the browser bar colour follow the theme toggle's Light, Dark and System (MUT-104)
+    tier: core
+    legacy: [MUT-104]
+    paths:
+      - src/components/layout/SidebarNav.tsx
+    steps:
+      - Under OS light, then OS dark, toggle Light, Dark, System
+    expect:
+      - The sidebar mark is mark.svg on the light canvas and mark-dark.svg on the dark one
+      - Both theme-color metas hold the chosen canvas for Light or Dark, and the per-scheme canvas for System
+  - id: link-preview
+    title: The built landing page carries the Arabic link-preview card (MUT-104)
+    tier: secondary
+    legacy: [MUT-104]
+    steps:
+      - Build the web app and read dist-web/index.html
+      - After a deploy, paste the site URL into a social-card debugger
+    expect:
+      - og:title is "تابع مالك، بأمان.", og:image is the absolute https og-card-ar-1200x630.png at 1200×630, twitter:card is summary_large_image
+      - The debugger shows the wide Arabic card

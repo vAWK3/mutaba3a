@@ -87,6 +87,16 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ## Current Test Coverage
 
+### Brand chrome (MUT-104, added 2026-10-13)
+| File | Type | Covers |
+|------|------|--------|
+| `scripts/__tests__/brand-head.test.ts` | Unit (node) | Both heads' icon links resolve at their sizes; theme-color = token canvases; no manual manifest; portal links `./public/` copies; every `favicon.svg` class styled, dark rule, no C2PA; desktop icons present at their sizes, `icons:desktop` source, no mobile leftovers |
+| `scripts/__tests__/vite-config.test.ts` › PWA manifest, social preview | Unit (node) | Manifest colours = tokens; icons/include assets exist at size; OG/Twitter tags from the Arabic hero, absolute https card at its real size, origin validation, web-only plugin, cards not precached |
+| `src/components/brand/__tests__/BrandMark.test.tsx` | Component | Light/Dark/System (live OS change), toggle press, decorative + sized |
+| `src/lib/theme/__tests__/themeColorMeta.test.tsx` | Component | theme-color follows explicit Light/Dark, System restores, no-meta page |
+| `SidebarNav.brand.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx` | Component (regression, R6) | Home link + accessible name, collapsed keeps the mark, theme-aware mark; portal name in EN/AR with a decorative mark |
+| Manual (TD-118) | — | macOS Dock (Tahoe), Windows taskbar + MSI/NSIS, OG debugger after deploy, iOS Add to Home Screen |
+
 ### Existing Test Files (Updated 2026-03-14)
 
 #### Repository & Unit Tests

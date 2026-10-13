@@ -2788,3 +2788,29 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - A generic kind column on a shared table, per the ticket's literal text: rejected once reading the schema showed no such table exists; would have meant retrofitting every other kind onto a new shared model instead, a far larger and riskier change than this ticket's scope.
 - Migrating the local app's `useConversionQueries.ts`/`ConversionDrawer.tsx` to call the hosted API: not possible as stated — those files are the local/offline app's own Dexie-backed surface, structurally separate from `src/hosted/**`, and must stay Dexie-only per the project's local-first architecture.
 - Full CRUD (matching `/v1/expenses`): offered as an explicit choice before planning further; create+read-only chosen since the ticket's AC never asked for edit/undo and a smaller, schema-minimal surface serves MUT-159 better.
+
+## ADR-071: Brand Chrome Comes From One Copy of Each Asset: Full-Bleed Desktop Icons, Portal Icons Bundled From public/, Build-Time Arabic Link Previews, theme-color Follows the In-App Theme
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-104 wired the Brand v2 icons and browser chrome. Four facts shaped it: the delivered `favicon.svg` (and Claude Design's re-export) styled its shapes by class but shipped no `<style>`, so it rendered solid black; macOS 26 Tahoe puts an app icon with a transparent margin, or the wrong corner shape, in a grey box; the portal server caches only hashed `/assets/*` (everything else is `no-store`); and crawlers run no JavaScript, so a link preview has exactly one language. Plan and decisions D1–D9: `.claude/designs/mut-104-brand-chrome.md`.
+
+**Decision**:
+1. **Desktop icons are generated, full-bleed, by `npm run icons:desktop`** (`tauri icon public/icons/icon-1024.png`), for every platform. No padded macOS master (D2): Apple's pre-Tahoe 824/1024 grid is exactly the transparent margin Tahoe boxes in grey. The unused Tauri `android/`/`ios/` sets are deleted (no Tauri mobile target; the phone app is Flutter).
+2. **The portal links the web build's `public/` icons as `./public/…`** (D3). `public/` is not the portal's publicDir, so Vite 7 emits them as hashed `/assets/*` files (it never inlines `rel=icon`/`apple-touch-icon` hrefs), which the portal caches immutable. One copy of each icon; `src/hosted/public/favicon.svg` is gone.
+3. **`favicon.svg` carries its own light and dark `<style>`** and no C2PA block (editing a signed file leaves a false claim). Any re-export must keep a rule for every class; `brand-head.test.ts` fails otherwise.
+4. **Link previews are built at build time, in `vite.config.ts`, for the web build only** (D1): `socialMetaTags(origin)` reads the Arabic landing hero (D4) and points at Claude Design's 1200×630 Arabic card with `summary_large_image` (D9). The origin is `MUTABA3A_PUBLIC_ORIGIN` (default `https://mutaba3a.app`); a non-https value fails the build. Share cards are kept out of the SW precache.
+5. **The landing headline is "Track your finances, securely." / "تابع مالك، بأمان."** in both languages (Basel, D9), so the card, the page and the preview text say one thing.
+6. **`<meta name="theme-color">` follows the in-app theme** (D6): the heads set one per OS scheme; `syncThemeColorMeta` (called from ThemeProvider's apply effect) paints both with the chosen canvas for an explicit Light or Dark, and restores them for System. Colours come from `tokens.json`.
+7. **`BrandMark`** (`src/components/brand/BrandMark.tsx`) picks `mark.svg` or `mark-dark.svg` from `useTheme().resolvedTheme`; the sidebar and the portal `Wordmark` use it.
+
+**Consequences**:
+- Every icon href, size and colour in both heads, the manifest and `tauri.conf.json` is pinned by a test (`scripts/__tests__/brand-head.test.ts`, `vite-config.test.ts`).
+- Desktop icon art is not machine-checked (no PNG decoder in the repo); a Dock/taskbar look is manual (TD-118, TD-119).
+- The web/desktop vite snapshot gained one plugin name (`mutaba3a:social-meta`, web only).
+
+**Alternatives considered**:
+- A padded macOS master: right for macOS 12–15, grey-boxed on Tahoe (rejected, D2).
+- Copies of the icons in `src/hosted/public` with a byte-equality test: conventional, but duplicated and served `no-store` (rejected, D3).
+- Square `og-mark-1200.png` with `summary`: shipped briefly in the plan (D5), superseded when Claude Design delivered the wide card (D9); the square now lives in `docs/brand/`.
+- A static theme-color by OS scheme only: mismatched bars when the in-app theme overrides the OS (rejected, D6).

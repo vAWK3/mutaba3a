@@ -28,6 +28,35 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Brand v2 icons and browser chrome (MUT-104)
+
+**Why:** The Brand v2 icons were placed but not wired: the manifest was still January navy, the heads had a single favicon, which rendered solid black because the delivered SVG had no `<style>`; the desktop app shipped the January icon; the sidebar used a PNG; and the landing had no link preview. Plan, eng review and decisions D1–D9: `.claude/designs/mut-104-brand-chrome.md`; ADR-071.
+
+### Added
+- `index.html` / `hosted.html`: SVG favicon + 32/16 PNG fallbacks, apple-touch icon, theme-color per OS scheme. The portal links `./public/…`, bundled to hashed `/assets/*` (D3).
+- Link previews (web build only): `socialMetaTags()` + `mutaba3a:social-meta` plugin in `vite.config.ts`; Arabic copy from the landing hero, Claude Design's `public/og-card-ar-1200x630.png`, `summary_large_image`; origin from `MUTABA3A_PUBLIC_ORIGIN` (`.env.example`).
+- `BrandMark` (`src/components/brand/`): theme-aware Brand v2 mark in the sidebar and the portal `Wordmark` lockup.
+- `syncThemeColorMeta` (`src/lib/theme/themeColorMeta.ts`): browser tab/title bar follows the in-app Light/Dark/System toggle (D6).
+- `npm run icons:desktop`: regenerates every Tauri icon from `public/icons/icon-1024.png`.
+
+### Changed
+- PWA manifest `theme_color`/`background_color` `#070C16` → `#FCF6ED`; favicons + apple-touch precached; manifest and include list exported (`PWA_MANIFEST`, `PWA_INCLUDE_ASSETS`).
+- `public/favicon.svg`: light and dark styles inline; C2PA block removed.
+- `src-tauri/icons/*`: Brand v2 full-bleed art (D2, Tahoe grey-box risk).
+- Landing headline (en + ar): "Track your finances, securely." / "تابع مالك، بأمان." (Basel, D9).
+- `.brand-mark` loses the tile radius and shadow it had for the PNG.
+
+### Removed
+- `src/hosted/public/favicon.svg` (duplicate), `src-tauri/icons/android|ios` and the January `icon-1024.png` (unused).
+- `public/og-mark-1200.png` → `docs/brand/` (unused once the wide card landed); `docs/brand/og-card-en-1200x630.png` added as a kit reference.
+
+### Technical
+- New tests: `brand-head.test.ts`, vite-config manifest + social preview suites, `BrandMark.test.tsx`, `themeColorMeta.test.tsx`, regression tests `SidebarNav.brand.test.tsx` and hosted `Brand.test.tsx` (R6). `src/test/pngSize.ts` and `src/test/osColorScheme.ts` test helpers.
+- The vite web snapshot gains `mutaba3a:social-meta`; the portal Documents test now allows only the decorative mark as an image.
+- TD-118 (manual Windows/pre-Tahoe/OG checks), TD-119 (icon pixels not machine-checked; Claude Design SVG exports drop `<style>`).
+
+---
+
 ## [Unreleased] - 2026-10-13 — Privacy policy covers the iPhone and Android apps
 
 **Why:** `/privacy` covered only the local-only Mac, Windows and browser apps, and said there was no account, no server and that data never leaves the device. None of that holds for the Flutter iPhone/Android apps (`mutaba3a-flutter`). They sign in with email and password against the hosted API (device sessions, MUT-64), store entries on Cloud Run/Cloud SQL (`me-west1`), upload receipts to a private GCS bucket, and keep a Drift cache plus an offline outbox on the phone. Facts were taken from that app's code and `server/infrastructure/terraform`. The apps have no analytics or crash SDKs, and no push or exchange-rate calls.

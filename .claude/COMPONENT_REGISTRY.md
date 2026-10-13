@@ -9,7 +9,7 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
+| **Layout** | AppShell, SidebarNav, BrandMark, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
@@ -71,6 +71,12 @@
 - **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
 - New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
 - **Footer (MUT-79):** Settings and `ThemeToggle` share `.sidebar-footer-row` (stacked on the 64px rail).
+
+### BrandMark
+**Location**: `src/components/brand/BrandMark.tsx`
+**Purpose**: The Brand v2 mark (MUT-104, ADR-071): `mark.svg` on the light canvas, `mark-dark.svg` (butter dot) on the dark one, chosen from `useTheme().resolvedTheme`, so Light, Dark and System (live OS changes included) all follow ThemeToggle. Decorative (`alt=""`): the link or heading around it carries the name. Props: `size` (px), `className`. Used by `SidebarNav`'s brand link and the portal `Wordmark` (`src/hosted/components/Brand.tsx`, imported by direct path).
+
+Tests: `src/components/brand/__tests__/BrandMark.test.tsx`, `SidebarNav.brand.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
 
 ### ThemeToggle
 **Location**: `src/components/layout/ThemeToggle.tsx`

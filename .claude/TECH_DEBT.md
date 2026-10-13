@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-119: Desktop icon art isn't machine-checked, and Claude Design's SVG export drops `<style>`
+**Status**: Open
+**Ticket**: MUT-104
+**Added**: 2026-10-13
+**Priority**: Low
+**Impact**: `brand-head.test.ts` pins every desktop icon's presence and size and the `icons:desktop` source, but not its pixels: hand-copying the January set back would pass. Separately, Claude Design's export of `favicon.svg` twice came back with classes and no `<style>` (solid black when rendered); the test catches it, but a re-export can't be dropped in as-is.
+**Fix**: Add a small PNG decode (zlib inflate + unfilter, or a dev dependency such as `pngjs`) to assert the 128 px icon's corner is transparent and its centre is the cream tile `#FBF1D8`. Ask for SVG exports with styles inlined as `fill` attributes, or keep restyling them by hand.
+
+### TD-118: Brand v2 desktop icon unverified on Windows and on pre-Tahoe macOS; OG card unvalidated until deploy
+**Status**: Open
+**Ticket**: MUT-104
+**Added**: 2026-10-13
+**Priority**: Medium
+**Impact**: The MUT-104 acceptance criteria name the Windows taskbar and both installers, and a social-card debugger. Neither can run from the Mac release host before a deploy. The full-bleed icon (D2) may also look ~24% larger than its neighbours in a macOS 12–15 Dock.
+**Fix**: Basel: install the `build-windows.yml` MSI and NSIS artifacts and check the taskbar, Start menu and installer icons; after the next web deploy, paste `https://mutaba3a.app/` into LinkedIn Post Inspector / opengraph.xyz. If a pre-Tahoe Mac shows an oversized icon and that matters, revisit D2.
+
 ### TD-117: Hosted conversions have no JOD support (expenses now do)
 **Status**: Open
 **Ticket**: MUT-161 (found during build), narrowed after `7428c63` ("hosted currency fix", same day) gave `ExpenseDrawer` full JOD support
