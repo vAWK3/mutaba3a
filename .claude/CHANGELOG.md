@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Every Received income entry is record-backed, not just Mark-paid ones (MUT-60, TD-029)
+
+**Why:** Fast-adding income and marking it Received wrote `status`/`paidAt`/`receivedAmountMinor` straight onto the Transaction with no `PaymentRecord` (TD-029). ADR-033 papered over it on read (a synthetic `entry` row), but the payment drawer's history, a future statement export, and MUT-169 (editing a payment's date from the ledger) all needed a real record to exist. Plan + eng review: `.claude/designs/mut-60-payment-record-backfill.md`.
+
+### Added
+- `transactionRepo.createReceivedIncome(data, paidAt)`: composes the existing `create` + `markPaid` atomically (one `db.transaction`) — zero changes to either. `IncomeDrawer`'s Received create now calls this instead of writing payment fields directly.
+- `buildReceivedIncomeEntry` (`src/lib/incomeEntry.ts`), `useCreateReceivedIncome` (`src/hooks/useQueries.ts`).
+- Dexie **v23**: backfills one `PaymentRecord` per uncovered paid/part-paid income transaction for data written before this ticket. Generalizes v18's backfill (which assumed zero existing records) to subtract whatever records already exist. Future-dated legacy `paidAt` is clamped to today (MUT-18). Archived, soft-deleted and non-income rows are skipped. `uncoveredPaymentAmount` (`src/db/database.ts`) is exported as a pure function, unit-tested directly.
+
+### Fixed
+- CSV import (`src/db/csvImport.ts`, found in eng review): the income loop writes `db.transactions.add()` directly, bypassing `transactionRepo` entirely, so a paid row had the same record-less gap through a third door nothing else in this ticket touches. It now writes the covering `PaymentRecord` too — the v23 backfill only fixes data that exists at migration time, not future imports.
+
+### Changed
+- `buildIncomeCreate` no longer handles `incomeStatus: 'received'` — only the unpaid/invoiced write. The edit path needed no change: MUT-5/ADR-039's `hasRecords` branch already does the right thing once a record exists.
+- `ITransactionRepository` (`src/db/interfaces.ts`) gains `createReceivedIncome`.
+
+### Technical
+- New tests: `database.test.ts` (pure `uncoveredPaymentAmount`), `migration-v23.test.ts` (backfill + migration-safety), `csvImport.test.ts` income cases, plus coverage added to `transactionRepo.test.ts`, `useQueries.test.tsx`, `IncomeDrawer.test.tsx`, `paymentRecords.test.ts`, `aggregations.test.ts` (Owed Now / Recent payments / Last payment proven unchanged by the backfill).
+- The current-version assertions in migration-v20/v21/v22, the retained-schema tests, and one stale assertion in `expensesGatingDataSafety.test.ts` (already wrong since MUT-88's v22 bump, caught running the full suite) now expect **23**.
+- TD-029 resolved. Full suite: 3693/3697 pass (4 pre-existing skips), 262/262 files. `lint` 0 errors (6 pre-existing warnings, none in touched files). `typecheck` and `build` clean.
+
+---
+
 ## [Unreleased] - 2026-10-13 — The storage seam is complete and linted (MUT-47, ADR-071)
 
 **Why:** CLAUDE.md's done-gate named a `test:integration` script that never existed, and TD-013 claimed only five objects sat outside the repository provider. In the code, plans, retainer matching, CSV import, export, delete-all, the migration wizard, demo seeding and five more helpers all reached Dexie around the seam, and nothing checked it.
