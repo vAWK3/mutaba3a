@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Edit a payment's date from the ledger and the entry (MUT-169)
+
+**Why:** Fast-added Received income is dated *now* (`nowISO()`), and users fix the date hours or days later from `/income`. A fully paid row there had no way to reach its payment (its Record Payment button hides and its menu had only Duplicate). The income drawer told people to manage payments from the client page. Plan and eng-review decisions D1–D7: `.claude/designs/mut-169-edit-payment-from-ledger.md`.
+
+### Added
+- **The payment drawer's `editPayment` intent** (`partialPaymentDrawer.intent`, `PartialPaymentIntent` in `lib/stores.ts`). An entry with one payment opens straight into its edit, with the date open and focused (D3). Several payments are listed to pick from, with no create form. With none, it says so. Saving one payment closes the drawer; with several, the list comes back. `editPaymentRecord` keeps the intent for the same entry, as it does `onRecorded`.
+- **/income row menu → Edit Payment** on any row with money received (`IncomeRow.canEditPayment`), paid or part-paid.
+- **Income drawer: "Last payment {date} · Edit Payment"** up front on an entry with payments. It hands over to the payment drawer with the intent. While the form has unsaved changes, the button is disabled and a hint says to save first (D2). New `drawer-notice--info` variant (neutral, one row).
+- `paymentLocalDay` (`lib/dates.ts`) and `formatPaymentDate` (`lib/utils.ts`).
+
+### Fixed
+- **The edit form prefilled a payment's UTC day.** A fast-add saved between local midnight and ~03:00 in Israel opened a day early, and any save moved it back a day. It now prefills the local day (D1).
+- **A date-only payment showed a day early west of UTC** in the payment drawer's history and the client's Payments list (`new Date('YYYY-MM-DD')` is UTC midnight). Both now use `formatPaymentDate` (D5).
+- Under the intent, a failed payment-records read shows the load-failed notice with Try again, never "No payments recorded yet" (D7).
+
+### Changed
+- `drawer.income.paymentsRecordedHint` no longer says "Manage payments from the client page" (en, ar). New keys: `drawer.income.lastPayment`, `drawer.income.saveBeforePayment`.
+
+### Technical
+- Tests: drawer intent (1/several/none/loading/failed, save/cancel paths, focus, local-day prefill, future date), store intent, `canEditPayment`, the ledger menu, the income-drawer link and its dirty guard, `paymentLocalDay`/`formatPaymentDate` in UTC+ and UTC− zones, the client Payments list west of UTC, and entry recalculation after a date move (`paymentRecords.test.ts`, D4). QA: `@web.record-payment.edit-payment-date` and `-rtl`.
+- Files: `src/lib/{stores,dates,utils}.ts`, `src/components/drawers/{PartialPaymentDrawer.tsx,PartialPaymentDrawer.css,IncomeDrawer.tsx}`, `src/pages/income/{incomeRows.ts,IncomePage.tsx}`, `src/components/clients/ClientPaymentsSection.tsx`, `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`, `qa/specs/web/record-payment.spec.ts`, `qa/features/web/record-payment.yaml`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — The Settings QA specs find Language and Theme as radiogroups (MUT-160)
 
 **Why:** Since MUT-139, Settings → Language and Theme are `SegmentedControl` radiogroups, each named by its row label. MUT-103 (`5bd1b09`) moved the Language clicks to `radio`, but `qa/specs/web/settings.spec.ts` still waited for a `Language` and a `Theme` heading, and still clicked Dark, Light and System as buttons. So `@web.settings.language` and `@web.settings.theme` timed out on every run.
