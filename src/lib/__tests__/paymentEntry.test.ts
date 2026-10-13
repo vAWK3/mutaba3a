@@ -61,18 +61,24 @@ describe('describePaymentAmount', () => {
 
 describe('minorToAmountInput', () => {
   it('writes whole amounts without decimals or grouping', () => {
-    expect(minorToAmountInput(355000)).toBe('3550');
-    expect(minorToAmountInput(100)).toBe('1');
+    expect(minorToAmountInput(355000, 'USD')).toBe('3550');
+    expect(minorToAmountInput(100, 'USD')).toBe('1');
   });
 
   it('writes both decimals when there are cents', () => {
-    expect(minorToAmountInput(88750)).toBe('887.50');
-    expect(minorToAmountInput(5)).toBe('0.05');
+    expect(minorToAmountInput(88750, 'USD')).toBe('887.50');
+    expect(minorToAmountInput(5, 'USD')).toBe('0.05');
+  });
+
+  it('writes three decimals for JOD (exponent 3)', () => {
+    expect(minorToAmountInput(3550000, 'JOD')).toBe('3550');
+    expect(minorToAmountInput(1500, 'JOD')).toBe('1.500');
+    expect(minorToAmountInput(5, 'JOD')).toBe('0.005');
   });
 
   it('round-trips through describePaymentAmount', () => {
     for (const minor of [1, 5, 99, 100, 88750, 355000, 123456789]) {
-      expect(describePaymentAmount(minorToAmountInput(minor), 'USD', minor)).toEqual({
+      expect(describePaymentAmount(minorToAmountInput(minor, 'USD'), 'USD', minor)).toEqual({
         kind: 'paidInFull',
         amountMinor: minor,
       });
