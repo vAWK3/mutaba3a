@@ -1154,6 +1154,8 @@ export interface LedgerStore {
   inboxEntries: InboxEntryRepository;
   /** MUT-131: idempotency for organization-independent writes (POST /v1/inbox's create). */
   userIdempotency: UserIdempotencyRepository;
+  /** MUT-161: conversions on hosted profiles; session-only, invisible to API keys (store guard `{ read: 'conversions' }`). Create + read only. */
+  conversions: ConversionRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -1317,6 +1319,59 @@ export interface ExpenseRepository {
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
   /** Null for an id the organization never had; `changed: false` when it was already deleted. */
   softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseRecord; changed: boolean } | null>;
+}
+
+/** MUT-161: a logged currency conversion. Create + read only — no `version`/`deletedAt`, unlike Expense. */
+export interface ConversionRecord {
+  id: string;
+  organizationId: string;
+  occurredOn: IsoDate;
+  /** The source leg. */
+  amountMinor: bigint;
+  currency: string;
+  /** The destination leg. Never equal to `currency`. */
+  toAmountMinor: bigint;
+  toCurrency: string;
+  notes: string | null;
+  createdByUserId: string;
+  createdAt: Date;
+}
+
+export interface CreateConversionInput {
+  organizationId: string;
+  occurredOn: IsoDate;
+  amountMinor: bigint;
+  currency: string;
+  toAmountMinor: bigint;
+  toCurrency: string;
+  notes: string | null;
+  createdByUserId: string;
+}
+
+export interface ConversionFilter {
+  /** Inclusive. */
+  from?: IsoDate;
+  /** Inclusive. */
+  to?: IsoDate;
+  /** Matches either leg's currency. */
+  currency?: string;
+}
+
+/** Conversions page newest first: (occurredOn, id) descending. */
+export interface ConversionCursor {
+  occurredOn: IsoDate;
+  id: string;
+}
+
+export interface ConversionPage {
+  items: ConversionRecord[];
+  nextCursor: ConversionCursor | null;
+}
+
+export interface ConversionRepository {
+  create(input: CreateConversionInput, at: Date): Promise<ConversionRecord>;
+  getById(organizationId: string, id: string): Promise<ConversionRecord | null>;
+  list(organizationId: string, filter: ConversionFilter, page: { limit: number; cursor: ConversionCursor | null }): Promise<ConversionPage>;
 }
 
 export interface ExpenseCategoryRecord {

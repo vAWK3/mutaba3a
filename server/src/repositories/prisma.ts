@@ -69,6 +69,10 @@ import type {
   UserLocale,
   UserRecord,
   UserRepository,
+  ConversionCursor,
+  ConversionFilter,
+  ConversionRecord,
+  ConversionRepository,
   ExpenseCategoryRecord,
   ExpenseCategoryRepository,
   ExpenseCursor,
@@ -1074,6 +1078,23 @@ export class PrismaLedgerStore implements LedgerStore {
     },
   };
 
+  // ---- MUT-161: conversions (create + read only) ----------------------------
+
+  readonly conversions: ConversionRepository = {
+    create: (input, at) => translate(() => this.prisma.conversion.create({ data: { ...input, createdAt: at } })),
+    getById: (organizationId, id) => this.prisma.conversion.findFirst({ where: { id, organizationId } }),
+    list: async (organizationId, filter, page) => {
+      const rows: ConversionRecord[] = await this.prisma.conversion.findMany({
+        where: { organizationId, ...conversionWhere(filter), ...conversionCursorWhere(page.cursor) },
+        orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const items = rows.slice(0, page.limit);
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { occurredOn: last.occurredOn, id: last.id } : null };
+    },
+  };
+
   readonly expenseCategories: ExpenseCategoryRepository = {
     create: async (organizationId, input, at) =>
       toExpenseCategory(await translate(() => this.prisma.expenseCategory.create({ data: { organizationId, name: input.name, nameKey: categoryNameKey(input.name), color: input.color, createdAt: at, updatedAt: at } }))),
@@ -1237,6 +1258,19 @@ function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
 
 /** Newest first: rows strictly before the cursor in (occurredOn, id) descending order. */
 function expenseCursorWhere(cursor: ExpenseCursor | null): Prisma.ExpenseWhereInput {
+  if (!cursor) return {};
+  return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: { lt: cursor.id } }] }] };
+}
+
+function conversionWhere(f: ConversionFilter): Prisma.ConversionWhereInput {
+  return {
+    ...(f.from || f.to ? { occurredOn: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } } : {}),
+    ...(f.currency ? { OR: [{ currency: f.currency }, { toCurrency: f.currency }] } : {}),
+  };
+}
+
+/** Newest first: rows strictly before the cursor in (occurredOn, id) descending order. */
+function conversionCursorWhere(cursor: ConversionCursor | null): Prisma.ConversionWhereInput {
   if (!cursor) return {};
   return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: { lt: cursor.id } }] }] };
 }

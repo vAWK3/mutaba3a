@@ -58,6 +58,11 @@ import type {
   FeeProposalRecord,
   FeeProposalRepository,
   FeeProposalTransitionPatch,
+  ConversionCursor,
+  ConversionFilter,
+  ConversionRecord,
+  ConversionRepository,
+  CreateConversionInput,
   CreateExpenseInput,
   CreateExpenseReceiptInput,
   ExpenseCategoryInput,
@@ -144,6 +149,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly exps = new Map<string, ExpenseRecord>();
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
+  private readonly convs = new Map<string, ConversionRecord>();
   private readonly inbox = new Map<string, InboxEntryRecord>();
 
   readonly organizations: OrganizationRepository = {
@@ -1207,6 +1213,30 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
+  // ---- MUT-161: conversions (create + read only) ----------------------------
+
+  readonly conversions: ConversionRepository = {
+    create: async (input: CreateConversionInput, at) => {
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('conversions.organizationId');
+      const record: ConversionRecord = { id: randomUUID(), ...input, createdAt: at };
+      this.convs.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const c = this.convs.get(id);
+      return c && c.organizationId === organizationId ? { ...c } : null;
+    },
+    list: async (organizationId, filter: ConversionFilter, page) => {
+      const rows = [...this.convs.values()]
+        .filter((c) => c.organizationId === organizationId && matchesConversion(c, filter) && (!page.cursor || isBeforeConversionCursor(c, page.cursor)))
+        .sort(newestConversionFirst)
+        .slice(0, page.limit + 1);
+      const items = rows.slice(0, page.limit).map((c) => ({ ...c }));
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { occurredOn: last.occurredOn, id: last.id } : null };
+    },
+  };
+
   readonly expenseCategories: ExpenseCategoryRepository = {
     create: async (organizationId, input: ExpenseCategoryInput, at) => {
       if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('expense_categories.organizationId');
@@ -1459,6 +1489,24 @@ function newestFirst(a: ExpenseRecord, b: ExpenseRecord): number {
 
 function isBeforeExpenseCursor(e: ExpenseRecord, cursor: ExpenseCursor): boolean {
   return e.occurredOn < cursor.occurredOn || (e.occurredOn === cursor.occurredOn && e.id < cursor.id);
+}
+
+function matchesConversion(c: ConversionRecord, f: ConversionFilter): boolean {
+  return (
+    (!f.from || c.occurredOn >= f.from) &&
+    (!f.to || c.occurredOn <= f.to) &&
+    (!f.currency || c.currency === f.currency || c.toCurrency === f.currency)
+  );
+}
+
+/** (occurredOn, id) descending. ISO dates compare as strings. */
+function newestConversionFirst(a: ConversionRecord, b: ConversionRecord): number {
+  if (a.occurredOn !== b.occurredOn) return a.occurredOn < b.occurredOn ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+function isBeforeConversionCursor(c: ConversionRecord, cursor: ConversionCursor): boolean {
+  return c.occurredOn < cursor.occurredOn || (c.occurredOn === cursor.occurredOn && c.id < cursor.id);
 }
 
 /** The inbox's own newest-first order: (createdAt, id) descending, so entries captured in the same millisecond still page without gaps or repeats. */

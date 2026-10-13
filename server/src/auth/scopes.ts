@@ -35,7 +35,7 @@ export type KeyScope = (typeof SCOPES)[number];
  * in. Never issuable to a key, never in SCOPES, so the vocabulary Malafat sees
  * is unchanged.
  */
-export const SESSION_ONLY_SCOPES = ['expenses:read', 'expenses:write', 'capture:write'] as const;
+export const SESSION_ONLY_SCOPES = ['expenses:read', 'expenses:write', 'capture:write', 'conversions:read', 'conversions:write'] as const;
 export type SessionOnlyScope = (typeof SESSION_ONLY_SCOPES)[number];
 
 /** Anything requireScope can demand. */

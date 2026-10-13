@@ -182,6 +182,7 @@ model Organization {
   expenses          Expense[]
   expenseCategories ExpenseCategory[]
   expenseReceipts   ExpenseReceipt[]
+  conversions       Conversion[]
 
   @@map("organizations")
 }
@@ -242,6 +243,7 @@ model User {
 
   expenses        Expense[]
   expenseReceipts ExpenseReceipt[]
+  conversions     Conversion[]
   /// MUT-65: income captured by this person.
   payments        Payment[]
   /// MUT-66: this person's unsorted captures, owned by them and by no profile.
@@ -978,4 +980,31 @@ model ExpenseReceipt {
   /// The receipts of one expense.
   @@index([organizationId, expenseId, createdAt])
   @@map("expense_receipts")
+}
+
+/// A logged currency-conversion event (MUT-161, server side of MUT-141): money moved from one
+/// currency to another, in its own table rather than a kind column on an existing model — every
+/// other kind of hosted write (Expense, Receivable, Payment) is its own model, and a separate table
+/// is also what makes exclusion from every summary query structural rather than an allowlist to
+/// maintain. Create + read only (no update/delete): a logging mistake is corrected with a new entry.
+model Conversion {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  /// Calendar date in the organization timezone, YYYY-MM-DD.
+  occurredOn      String       @db.VarChar(10)
+  /// The source leg.
+  amountMinor     BigInt
+  currency        String       @db.VarChar(3)
+  /// The destination leg. Never equal to `currency` (ADR TBD / route validation).
+  toAmountMinor   BigInt
+  toCurrency      String       @db.VarChar(3)
+  notes           String?
+  createdByUserId String       @db.Uuid
+  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime
+
+  /// The ledger: newest first by date within an organization.
+  @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])
+  @@map("conversions")
 }

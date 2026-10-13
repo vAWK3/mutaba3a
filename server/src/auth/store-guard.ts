@@ -180,6 +180,12 @@ export const STORE_ACCESS: StoreAccess = {
     fileAsExpense: { write: 'expenses' },
     fileAsIncome: { write: 'payments' },
   },
+  // MUT-161: create + read only — no update/delete method exists to classify.
+  conversions: {
+    create: { write: 'conversions' },
+    getById: { read: 'conversions' },
+    list: { read: 'conversions' },
+  },
 };
 
 export interface StoreGuard {

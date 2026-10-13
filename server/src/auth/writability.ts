@@ -13,7 +13,7 @@ import { isScope, type Scope } from './scopes.js';
  * authenticate() and requireScope(), and drives the store guard
  * (store-guard.ts) from the same rows.
  */
-export type Domain = 'integration' | 'customers' | 'projects' | 'agreements' | 'payments' | 'attachments' | 'summaries' | 'audit' | 'expenses' | 'capture' | 'identity';
+export type Domain = 'integration' | 'customers' | 'projects' | 'agreements' | 'payments' | 'attachments' | 'summaries' | 'audit' | 'expenses' | 'capture' | 'identity' | 'conversions';
 export type Access = 'read-write' | 'read' | 'none';
 export type WriterOfRecord = 'MALAFAT' | 'USER' | null;
 /** The two columns of the matrix that are enforced on the server. */
@@ -51,6 +51,8 @@ export const WRITABILITY_MATRIX: readonly MatrixRow[] = [
   // row so it never widens `payments`: Owed, settle, credits and allocations stay the payments row's business.
   { domain: 'capture', scopes: ['capture:write'], routes: '/v1/income*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
   { domain: 'identity', scopes: [], routes: '/v1/me, /v1/sessions/current', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
+  // MUT-161: logged currency conversions. Session-only, same shape as `expenses` — create + read only, no API key access.
+  { domain: 'conversions', scopes: ['conversions:read', 'conversions:write'], routes: '/v1/conversions*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
 ];
 
 function granted(access: Access, scope: string): boolean {
