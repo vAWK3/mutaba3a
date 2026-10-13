@@ -76,7 +76,9 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   // from has settled. A query in error counts as settled, so the notice still
   // confirms the write behind the Unreachable card (eng review D4).
   const queries = [list, categoriesQuery, customers];
-  const ids = useMemo(() => rows?.map((r) => r.id) ?? [], [rows]);
+  // A list in error shows no rows (QueryView), so its stale rows can't claim a save either.
+  const listInError = queries.some((q) => q.isError);
+  const ids = useMemo(() => (listInError ? [] : rows?.map((r) => r.id) ?? []), [rows, listInError]);
   const anchored = useAnchoredList(filters, setFilters, list.error);
   // The list's own filters only: opening the drawer is not a filter change.
   const filtersKey = JSON.stringify({ ...filters, expense: undefined, newExpense: undefined });
@@ -146,7 +148,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           </>
         )}
       </QueryView>
-      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} />
+      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={listInError} />
       {(filters.newExpense || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}

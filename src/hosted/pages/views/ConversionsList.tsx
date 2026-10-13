@@ -58,7 +58,8 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
   const rows = useMemo(() => (list.data ? shape(list.data, language) : undefined), [list.data, language]);
 
   // After-save (MUT-91, eng review D7): the same claim as the expenses list.
-  const ids = useMemo(() => rows?.map((r) => r.id) ?? [], [rows]);
+  // A list in error shows no rows (QueryView), so its stale rows can't claim a save either.
+  const ids = useMemo(() => (list.isError ? [] : rows?.map((r) => r.id) ?? []), [rows, list.isError]);
   const anchored = useAnchoredList(filters, setFilters, list.error);
   // The list's own filters only: opening the drawer is not a filter change.
   const filtersKey = JSON.stringify({ ...filters, newConversion: undefined });
@@ -118,7 +119,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
           </>
         )}
       </QueryView>
-      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} />
+      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={list.isError} />
       {filters.newConversion && <ConversionDrawer profileId={profile.id} onClose={closeDrawer} />}
     </>
   );

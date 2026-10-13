@@ -295,6 +295,19 @@ describe('useSavedFlashStore', () => {
     expect(result.current.flashIds).toEqual([]);
   });
 
+  it('a claimed save settled before its tint ends still clears the tint on time (MUT-91 re-review)', () => {
+    const { result } = renderHook(() => useSavedFlashStore());
+    act(() => {
+      result.current.registerList('list-a');
+      result.current.reportSettled('list-a', ['tx-1'], true);
+      result.current.markSaved(income());
+    });
+    expect(result.current.flashIds).toEqual(['tx-1']);
+    act(() => result.current.settleMessage(result.current.pending!));
+    act(() => vi.advanceTimersByTime(FLASH_MS));
+    expect(result.current.flashIds).toEqual([]);
+  });
+
   it('clear resets everything', () => {
     const { result } = renderHook(() => useSavedFlashStore());
     act(() => {

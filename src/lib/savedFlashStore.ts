@@ -116,7 +116,8 @@ export const useSavedFlashStore = create<SavedFlashState>((set, get) => {
         clearTimers();
         set({ claimed: true, flashIds: pending.ids });
         flashTimer = setTimeout(() => {
-          set((state) => (state.pending === pending ? { flashIds: [] } : {}));
+          // By the save's ids, not the object: settleMessage swaps in a messaged copy (MUT-91).
+          set((state) => (state.pending?.ids === pending.ids ? { flashIds: [] } : {}));
         }, FLASH_MS);
         return;
       }

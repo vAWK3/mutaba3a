@@ -76,6 +76,10 @@
   - Press feedback skips `aria-disabled` controls.
   - The row tint keeps `.data-table`'s specificity, so the reduced-motion held tint beats hover again.
 - **Stale docs:** the registry's row-flash line and the `messaged` doc.
+- **Re-review fixes:**
+  - A claimed save settled within its 1.5s tint no longer leaves the row tinted for good. The tint timer keys on the save's ids, not the object.
+  - A list in error reports no rows, so stale data can't claim an edit and hide D4's notice.
+  - The stale-anchor drop navigates once.
 - **New debt:** TD-123 (two local controls press outside `.press`; MUT-77) and TD-124 (portal notice follow-ups).
 
 ---

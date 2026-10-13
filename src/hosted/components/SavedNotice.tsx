@@ -38,13 +38,16 @@ export interface SavedNoticeProps {
   anchor?: string;
   /** Changes whenever the list's filters do (anchor included). */
   filtersKey: string;
+  /** The list shows its Unreachable card: a save it claimed is out of sight, so say it anyway (D4). */
+  listInError?: boolean;
 }
 
-export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersKey }: SavedNoticeProps) {
+export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersKey, listInError = false }: SavedNoticeProps) {
   const { t } = useLanguage();
   const { pending, claimed } = useSavedFlashResolution();
   const ours = pending && pending.kind === kind && pending.profileId === profileId ? pending : null;
-  const candidate = ours && claimed === false && !ours.messaged ? ours : null;
+  const outOfSight = claimed === false || (claimed === true && listInError);
+  const candidate = ours && outOfSight && !ours.messaged ? ours : null;
 
   // Leaving the page settles whatever save of ours is still pending.
   useEffect(
@@ -64,7 +67,7 @@ export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersK
     store.rearm(shown);
   }, [filtersKey, anchor, kind, profileId]);
 
-  if (ours && claimed === true && (!ours.messaged || anchor === ours.ids[0])) {
+  if (ours && claimed === true && !listInError && (!ours.messaged || anchor === ours.ids[0])) {
     return (
       <span className="sr-only" role="status" aria-live="polite">
         {t('hosted.savedFlash.saved')}
@@ -74,7 +77,10 @@ export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersK
   if (!candidate) return null;
 
   const show = () => {
-    useSavedFlashStore.getState().settleMessage(candidate);
+    const store = useSavedFlashStore.getState();
+    // Claimed by a list that then failed: reopen it, so the anchored list can claim it again.
+    if (store.claimed === true) store.rearm({ ...candidate, messaged: true });
+    else store.settleMessage(candidate);
     onShow(candidate.ids[0]);
   };
   return <NoticeBox key={candidate.ids[0]} flash={candidate} message={message} showLabel={t('hosted.savedFlash.show')} onShow={show} />;

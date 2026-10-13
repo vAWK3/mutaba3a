@@ -36,7 +36,15 @@
 - "Show latest" unmounts the focused note and focus falls to the page body. Show itself now focuses the note.
 - Show replaces the URL's filters (`useReplaceSearch`), so Back can't restore a filter the person had built.
 - The memory store looks anchors up by exact id while Postgres compares uuids case-insensitively. Ids are lowercase in practice.
-**Fix**: Stack both toasts in one fixed flex column, or render the notice through `ToastProvider` with a variant. Focus the page heading after "Show latest" (it needs `tabIndex={-1}`). Push a history entry for Show. Lowercase the anchor in `parseExpenses`/`parseConversions`.
+- Show on a list whose filters are already exactly `{ anchor: <that id> }` (and whose refetch errored or hit `MAX_WAIT_MS`) navigates to the same URL, so it neither re-arms nor refetches; the notice goes and the list stays as it was (re-review, confidence 5).
+- Coming back to `?anchor=<id>` (Back, a bookmark) after Show's claim can mount the hidden "Saved" status again (re-review, confidence 4).
+**Fix**:
+- Stack both toasts in one fixed flex column, or render the notice through `ToastProvider` with a variant.
+- Focus the page heading after "Show latest" (it needs `tabIndex={-1}`).
+- Push a history entry for Show.
+- Lowercase the anchor in `parseExpenses`/`parseConversions`.
+- When the filters already equal `{ anchor }`, have Show re-arm and refetch directly.
+- Render the hidden status only in the render where a re-armed save resolves.
 
 ### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
 **Status**: Resolved 2026-10-14. `generateSchedule` steps an integer month index (`year * 12 + month`) from the start date's own year and month, builds each period with `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate`, and stops when the period start is past `horizon` (string compare). Four `retainerRepo.test.ts` cases pin it (31st monthly, leap February, 31st quarterly, 1st in New York).

@@ -178,6 +178,21 @@ describe('portal expenses: after save, the hard paths (review)', () => {
     expect(screen.getByText("Can't reach Mutaba3a right now")).toBeInTheDocument();
   });
 
+  it('an edit whose refetch fails is not claimed by the stale rows: the notice still confirms it (D4)', async () => {
+    let saved = false;
+    const { user } = portal(`/p/${ORG_A}/expenses`, {
+      'GET /v1/expenses': () => (saved ? fail(503, 'UNAVAILABLE') : ok(page([expense()]))),
+      [`GET /v1/expenses/${E1}`]: () => ok(expense({ receipts: [] })),
+      [`PATCH /v1/expenses/${E1}`]: () => {
+        saved = true;
+        return ok(expense({ version: 2 }));
+      },
+    });
+    await user.click(await rowWith('Office supplies'));
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Expense saved', {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
   it('Show lands even when the list was already anchored on that expense (filters changed, anchor did not)', async () => {
     const { user, router } = portal(`/p/${ORG_A}/expenses?anchor=${E2}&categoryId=${OTHER_CATEGORY}`, {
       'GET /v1/expenses': (req) =>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isStaleAnchor } from './filters';
 
 /**
@@ -14,9 +14,14 @@ export function useAnchoredList<F extends { anchor?: string }>(filters: F, setFi
   const [focusRequest, setFocusRequest] = useState(0);
   const staleAnchor = Boolean(filters.anchor) && isStaleAnchor(listError);
 
+  // Once per stale anchor: setFilters is a new function every render, so read the latest through a ref.
+  const latest = useRef({ filters, setFilters });
   useEffect(() => {
-    if (staleAnchor) setFilters({ ...filters, anchor: undefined });
-  }, [staleAnchor, filters, setFilters]);
+    latest.current = { filters, setFilters };
+  });
+  useEffect(() => {
+    if (staleAnchor) latest.current.setFilters({ ...latest.current.filters, anchor: undefined });
+  }, [staleAnchor]);
 
   const show = (anchor: string) => {
     setFocusRequest((n) => n + 1);
