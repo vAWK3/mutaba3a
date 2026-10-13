@@ -3,7 +3,7 @@
 One look across the landing page, the web/desktop app, the hosted portal and the iPhone app.
 Delivered 2026-10-12. Tracked in Jira as epic **MUT-101**:
 MUT-102 (foundation: tokens, fonts and the type scale), MUT-103 (app sweep), MUT-104 (icons and browser chrome),
-MUT-105 (iPhone app) and MUT-106 (invoice PDFs). MUT-77 (landing) and MUT-91 (portal) are re-cut to build on MUT-102.
+MUT-105 (iPhone app) and MUT-106 (invoice PDFs; obsolete since MUT-145 retired document generation). MUT-77 (landing) and MUT-91 (portal) are re-cut to build on MUT-102.
 
 ## Source of truth
 
@@ -40,9 +40,8 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 | `icon-192.png`, `icon-512.png`, `maskable-512.png`, `icon-1024.png` | `public/icons/` | PWA manifest (`vite.config.ts`) and the sidebar logo |
 | `og-mark-1200.png` | `public/` | Open Graph / social preview (not wired yet) |
 | `mark.svg`, `mark-dark.svg` | `src/assets/brand/` | wordmark in the sidebar, the landing header and the portal header (bundled, so all three builds get it) |
-| Thmanyah Sans 400/500/700, Thmanyah Serif Display 400/700 (`.otf`, delivered bytes) | `src/assets/fonts/` | UI in every build: declared once in `src/styles/brand/fonts.css` and bundled, so web, desktop (offline) and portal all serve hashed copies under `/assets/` (MUT-102, D4). Invoice PDFs register them with `?url` imports (MUT-106). sha256-pinned in `brand.test.ts` and checked in every dist by `check-bundles` |
+| Thmanyah Sans 400/500/700, Thmanyah Serif Display 400/700 (`.otf`, delivered bytes) | `src/assets/fonts/` | UI in every build: declared once in `src/styles/brand/fonts.css` and bundled, so web, desktop (offline) and portal all serve hashed copies under `/assets/` (MUT-102, D4). sha256-pinned in `brand.test.ts` and checked in every dist by `check-bundles` |
 | IBM Plex Mono 400/500, UI | `@fontsource/ibm-plex-mono` (OFL woff2), imported by `fonts.css` | figures in every build, portal included |
-| IBM Plex Mono 400/500 (`.ttf`) | `public/fonts/` | invoice PDFs only (MUT-106) |
 | iOS AppIcon set, Android mipmaps | Flutter repo (`ios/Runner/Assets.xcassets`, `android/app/src/main/res`) | iPhone/Android app |
 | Desktop icons (`.icns`, `.ico`, PNGs) | `src-tauri/icons/` | **still the January set**: regenerate from `public/icons/icon-1024.png` (check the macOS margin first) |
 | `head-snippet.html`, `manifest-snippet.json` | `docs/brand/` | reference for wiring `index.html`, `hosted.html` and the VitePWA manifest; not shipped |
@@ -65,7 +64,7 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 
 - **Weights:** Thmanyah ships 400/500/700 and Plex Mono 400/500, so ask for one of those (a `600` renders with the Bold file). Headings are Serif Display 700 in both scripts; figures are Plex Mono 500 with tabular numerals.
 - **Retired by the foundation ticket (MUT-102):** the `@fontsource-variable/inter`, `@fontsource-variable/source-serif-4` and `@fontsource/ibm-plex-sans-arabic` packages are uninstalled.
-- **Still to retire:** the PDF-only `public/fonts/{Amiri,IBMPlexSans,IBMPlexSansArabic,SourceSerif4}-*.ttf`, which `src/features/documents/pdf/fonts.ts` loads until invoice PDFs move to Thmanyah (MUT-106).
+- **Retired (MUT-145, 2026-10-13):** `public/fonts/` and every PDF-only TTF in it were deleted with document generation; `noDeadDocumentModules.test.ts` fails if the folder comes back.
 
 ## Thmanyah licence: read before shipping web builds
 
@@ -77,4 +76,4 @@ The licence is embedded in the font files (name table, id 13). Its terms:
   - letting end users extract them "including through web embedding";
   - modifying them. That rules out subsetting and `.otf` → `.woff2` conversion, so serve the files unmodified.
 
-The iPhone app, the desktop installer and the PDFs are clearly covered. Raw `.otf` files served to browsers (landing, web app, portal) are the grey zone. The licence directs exceptions to **ask@thmanyah.com**, so get a written OK before a web release.
+The iPhone app and the desktop installer are clearly covered. Raw `.otf` files served to browsers (landing, web app, portal) are the grey zone. The licence directs exceptions to **ask@thmanyah.com**, so get a written OK before a web release.
