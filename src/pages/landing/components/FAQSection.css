@@ -31,11 +31,17 @@
   font-weight: var(--weight-medium);
   text-align: start;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    transform var(--duration-press) var(--ease-spring);
 }
 
 .landing-faq-question:hover {
   color: var(--accent-text);
+}
+
+.landing-faq-question:active {
+  transform: scale(var(--press-scale));
 }
 
 .landing-faq-question:focus-visible {

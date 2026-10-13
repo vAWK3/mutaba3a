@@ -1,41 +1,18 @@
-import { useMemo, type ComponentType } from 'react';
+import type { Ref } from 'react';
 import { useT } from '../../../lib/i18n';
-import { useLatestRelease } from '../../../hooks/useLatestRelease';
-import { DOWNLOAD_URLS, WEB_APP_URL } from '../../../content/download-config';
-import { currentDevice } from '../../../lib/platform';
-import { chooseHeroCta, secondaryHeroLink, type HeroCta } from '../heroCta';
-import { AppleIcon, BrowserIcon, WindowsIcon } from './PlatformIcons';
+import { WEB_APP_URL } from '../../../content/download-config';
+import { useHeroCta } from '../useHeroCta';
 import { ClientsListMock } from './mocks';
 import './HeroSection.css';
 
-const CTA: Record<HeroCta, { href: string; Icon: ComponentType; label: string; hint: string }> = {
-  mac: {
-    href: DOWNLOAD_URLS.mac,
-    Icon: AppleIcon,
-    label: 'landing.hero.ctaMac',
-    hint: 'landing.hero.ctaMacHint',
-  },
-  windows: {
-    href: DOWNLOAD_URLS.windowsMsi,
-    Icon: WindowsIcon,
-    label: 'landing.hero.ctaWindows',
-    hint: 'landing.hero.ctaWindowsHint',
-  },
-  web: {
-    href: WEB_APP_URL,
-    Icon: BrowserIcon,
-    label: 'landing.hero.ctaWeb',
-    hint: 'landing.hero.ctaWebHint',
-  },
-};
+interface HeroSectionProps {
+  /** The device-matched button, for the header bar to watch (MUT-77). */
+  ctaRef?: Ref<HTMLAnchorElement>;
+}
 
-export function HeroSection() {
+export function HeroSection({ ctaRef }: HeroSectionProps) {
   const t = useT();
-  const { release } = useLatestRelease();
-  const device = useMemo(() => currentDevice(), []);
-  const cta = chooseHeroCta(device, release?.hasWindowsBuild !== false);
-  const { href, Icon, label, hint } = CTA[cta];
-  const alternative = secondaryHeroLink(cta);
+  const { href, Icon, label, hint, alternative } = useHeroCta();
 
   return (
     <section data-part="hero" aria-labelledby="hero-title" className="landing-section landing-hero">
@@ -49,7 +26,7 @@ export function HeroSection() {
             <p className="landing-subheadline-large">{t('landing.hero.subheadline')}</p>
 
             <div className="hero-cta">
-              <a href={href} className="hero-cta-primary">
+              <a ref={ctaRef} href={href} className="hero-cta-primary">
                 <Icon />
                 <span className="hero-cta-text">
                   <span className="hero-cta-label">{t(label)}</span>

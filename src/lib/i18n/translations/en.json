@@ -1164,9 +1164,22 @@
   },
   "landing": {
     "skipToContent": "Skip to main content",
+    "meta": {
+      "title": "Mutaba3a — Track your finances, securely",
+      "pageTitle": "Mutaba3a — {page}"
+    },
+    "header": {
+      "wordmark": "Mutaba3a · متابعة",
+      "cta": {
+        "mac": "Download",
+        "windows": "Download",
+        "web": "Open the app"
+      }
+    },
     "langToggle": {
       "en": "EN",
-      "ar": "AR"
+      "ar": "AR",
+      "label": "Switch language"
     },
     "hero": {
       "headlineLine1": "Track your finances,",

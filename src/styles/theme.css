@@ -104,6 +104,7 @@
   --duration-toggle: var(--m-dur-toggle);
   --duration-nav: var(--m-dur-nav);
   --stagger-step: var(--m-stagger);
+  --stagger-rise: var(--m-stagger-rise);
   --press-scale: var(--m-press-scale);
 }
 
@@ -113,6 +114,7 @@
     --duration-toggle: 0ms;
     --duration-nav: 0ms;
     --stagger-step: 0ms;
+    --stagger-rise: 0px;
     --press-scale: 1;
   }
 }
@@ -528,10 +530,6 @@ textarea::placeholder {
 /* Transition utilities */
 .transition-colors {
   transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.transition-all {
-  transition: all 0.15s ease;
 }
 
 /* Truncate text */

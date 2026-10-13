@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
+import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
 
 function renderPage(language: 'en' | 'ar') {
   localStorage.setItem('mutaba3a-language', language);
   return render(
-    <LanguageProvider>
-      <PrivacyPolicyPage />
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <PrivacyPolicyPage />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 

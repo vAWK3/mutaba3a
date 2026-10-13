@@ -1,51 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useInView } from '../useInView';
-
-/** A stand-in IntersectionObserver the test drives by hand. */
-class FakeObserver {
-  static instances: FakeObserver[] = [];
-  readonly observed: Element[] = [];
-  disconnected = false;
-
-  constructor(
-    readonly callback: IntersectionObserverCallback,
-    readonly options?: IntersectionObserverInit,
-  ) {
-    FakeObserver.instances.push(this);
-  }
-
-  observe(element: Element) {
-    this.observed.push(element);
-  }
-
-  disconnect() {
-    this.disconnected = true;
-  }
-
-  unobserve() {}
-
-  takeRecords() {
-    return [];
-  }
-
-  /** Reports `element` entering (true) or leaving (false) the viewport. */
-  report(isIntersecting: boolean) {
-    act(() => {
-      this.callback(
-        [{ isIntersecting, target: this.observed[0] } as IntersectionObserverEntry],
-        this as unknown as IntersectionObserver,
-      );
-    });
-  }
-}
+import { FakeIntersectionObserver as FakeObserver, installFakeIntersectionObserver } from '../../test/intersectionObserver';
 
 const element = document.createElement('div');
 const ref = { current: element };
 
 beforeEach(() => {
-  FakeObserver.instances = [];
-  vi.stubGlobal('IntersectionObserver', FakeObserver);
+  installFakeIntersectionObserver();
 });
 
 afterEach(() => {

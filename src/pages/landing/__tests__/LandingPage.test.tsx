@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
+import { ThemeProvider } from '../../../lib/theme';
 import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { LandingPage } from '../LandingPage';
+import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
 
 const release = vi.hoisted(() => ({
   current: {
@@ -24,9 +26,11 @@ vi.mock('../../../hooks/useLatestRelease', () => ({
 function renderLanding(language: 'en' | 'ar') {
   localStorage.setItem('mutaba3a-language', language);
   return render(
-    <LanguageProvider>
-      <LandingPage />
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <LandingPage />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 
@@ -189,5 +193,43 @@ describe('LandingPage language', () => {
   it("uses the app's own Record payment label in the payment chapter", () => {
     renderLanding('en');
     expect(part('chapter-payment')).toHaveTextContent('Record Payment');
+  });
+});
+
+describe('LandingPage header button (MUT-77)', () => {
+  beforeEach(() => installFakeIntersectionObserver());
+  afterEach(() => vi.unstubAllGlobals());
+
+  const heroCta = () => document.querySelector<HTMLAnchorElement>('.hero-cta-primary')!;
+  const headerCta = () => document.querySelector<HTMLAnchorElement>('[data-part="header-cta"]')!;
+
+  it('keeps it hidden until it is known that the hero button has scrolled away', () => {
+    renderLanding('en');
+    expect(headerCta()).toHaveAttribute('data-visible', 'false');
+
+    FakeIntersectionObserver.reportFor(heroCta(), true);
+    expect(headerCta()).toHaveAttribute('data-visible', 'false');
+
+    FakeIntersectionObserver.reportFor(heroCta(), false);
+    expect(headerCta()).toHaveAttribute('data-visible', 'true');
+
+    FakeIntersectionObserver.reportFor(heroCta(), true);
+    expect(headerCta()).toHaveAttribute('data-visible', 'false');
+  });
+
+  it('stays hidden in a browser with no IntersectionObserver, where the hero button is the way in', () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    renderLanding('en');
+    expect(headerCta()).toHaveAttribute('data-visible', 'false');
+  });
+});
+
+describe('LandingPage title (MUT-77)', () => {
+  it('follows the active language', () => {
+    renderLanding('en');
+    expect(document.title).toBe('Mutaba3a — Track your finances, securely');
+
+    fireEvent.click(screen.getByRole('button', { name: /Switch language/ }));
+    expect(document.title).toBe('متابعة — تابع مالك، بأمان');
   });
 });
