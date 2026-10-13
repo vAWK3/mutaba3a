@@ -42,6 +42,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Hosted `/v1/conversions` API, server side of MUT-141/MUT-159 (MUT-161)
+
+**Why:** MUT-141 made currency-conversion logging a local/offline-app-only feature (Dexie). Mobile (MUT-159) has no way to log one — conversions were the one kind with zero hosted API surface, while income/expenses already reach the hosted API from any client (device-session bearer, MUT-64).
+
+### Added
+- `POST /v1/conversions`, `GET /v1/conversions` (list), `GET /v1/conversions/{id}` — session/device-session only, create + read only (no PATCH/DELETE). Validates both legs' amounts (currency-aware precision), rejects future-dated `occurredOn` (ADR-038) and same-currency legs (422 `SAME_CURRENCY`, ported from the local app's `conversionFormSchema.ts`). `Idempotency-Key` support via the existing middleware.
+- New `Conversion` Prisma model (own table, not a kind column — ADR-070), new `conversions` writability-matrix domain, new `conversions:read`/`conversions:write` scopes.
+- New hosted portal UI: `/conversions` route, nav entry, `ConversionDrawer` (create-only, two amount/currency legs, implied rate), `ConversionsList`. Not a migration of the local app's `useConversionQueries.ts`/`ConversionDrawer.tsx` — those stay untouched (ADR-070).
+- `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated; `API_VERSION` `1.19.0-mal1118` → `1.20.0-mut161`.
+
+### Fixed
+- `src/hosted/components/ExpenseDrawer.tsx`: a dormant, unrelated `tsc` failure (JOD added to the server's `Currency` type since MUT-140, never caught because nothing had regenerated+typechecked the hosted schema since) — exposed by this ticket's required OpenAPI regen, patched with a type-only cast (TD-116).
+
+### Technical
+- TD-116, TD-117 recorded (hosted portal's pre-existing, un-extended JOD gap).
+- Regression test proves a conversion never appears in `/v1/summaries/organization` or `/v1/summaries/expenses`.
+
+**Run on this branch:** `npm run typecheck`, `npm run lint`, `npm run build` (root + `server/`) all clean; `npm run hosted:types:check` confirms no drift; server unit + Postgres contract suite (1763 tests) and hosted suite (170 tests) green mid-build. Full root `vitest run` was not re-run after the last two commits (API_VERSION bump, knowledge-file updates) — land only after confirming it.
+
+---
+
 ## [Unreleased] - 2026-10-13 — npm audit: 27 findings → 0 with in-major bumps only (chore/npm-audit-2026-10-13)
 
 **Why:** `npm ci` on main (9000d08) reported 27 vulnerabilities (1 low, 8 moderate, 17 high, 1 critical). All of them predate MUT-145. No major-version bump of a direct dependency was needed, so the release pipeline (`make`, `deploy.sh`, the Tauri build) absorbs nothing new.
