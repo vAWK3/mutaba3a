@@ -2453,6 +2453,14 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - Have the message's Show button use `useActiveProfile`'s `setActiveProfile` (rejected: its membership guard silently refuses an id the profiles query has not loaded, landing Show on the old profile with an empty list).
 - Build the full anchored strip (design review 5B) in this same build (rejected for scope: none of the ticket's five literal acceptance criteria name a presentation surface, and `Toast` already satisfies all five with a proven, accessible, tested component).
 
+**Amendment (2026-10-14, MUT-91), §8: the portal claims through the same store**
+- The hook moves to `src/lib/useSavedFlash.ts`, because the portal lint bans `hooks/`.
+- `kind` adds `expense` and `conversion`.
+- **The backstop no longer resolves "not claimed" while a registered list is still fetching** (eng review D3). The portal refetches over the network, and 1.2s is not enough. Once the backstop has fired, a list that settled before the save and never re-rendered stops holding resolution.
+- **The portal's presentation is its own `SavedNotice`, page-local, not a toast** (D5). It names no cause (D4).
+- **Show sets the server `anchor`** (ADR-074) and re-arms only once the page renders with that anchor. Re-arming on the click let the old filters' render resolve "not here" first.
+- `settleMessage` marks a notice shown when it times out, its page unmounts or Show is pressed.
+
 ---
 
 ## ADR-058: Brand v2: `--m-*` Primitives From the Token JSON and One Semantic Map in theme.css; Light Text Clears 7:1; Thmanyah Is Bundled Unmodified (Amends ADR-018)
@@ -2891,3 +2899,34 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - Copies of the icons in `src/hosted/public` with a byte-equality test: conventional, but duplicated and served `no-store` (rejected, D3).
 - Square `og-mark-1200.png` with `summary`: shipped briefly in the plan (D5), superseded when Claude Design delivered the wide card (D9); the square now lives in `docs/brand/`.
 - A static theme-color by OS scheme only: mismatched bars when the in-app theme overrides the OS (rejected, D6).
+
+---
+
+## ADR-074: Press Feedback Is the CSS `scale` Property on `.btn` and `.press`, App-Wide; a Ledger List Can Start AT a Record (`anchor`)
+
+**Status**: Active
+**Date**: 2026-10-14
+**Context**: MUT-91 (epic MUT-74), brief HP1: the portal inherits the shared decisions. L10 press feedback existed nowhere, though MUT-102's `--press-scale`/`--duration-press` tokens did. A portal save can land outside the first 50-row page, where no tint can reach it. Plan and eng review D1–D10: `.claude/designs/mut-91-portal-shared-motion.md`.
+
+**Decision**:
+1. **One press rule, app-wide** (D6). `:is(.btn, .press):active:not(:disabled) { scale: var(--press-scale) }` lives in `src/index.css`. Every `Button` in the app and the portal presses. Any other control opts in with `.press`; tabs don't.
+2. **The individual `scale` property, never `transform`** (D2). It composes with a control's own transform: the portal's show-password toggle sits on `translateY(-50%)` and would jump. `Button.css` lists `scale` in `.btn`'s own transition; `.press` declares only its own. Reduced motion zeroes the tokens in `theme.css`, not per rule. `pressFeedback.test.ts` fails on any `transform: scale(var(--press-scale))`.
+3. **`anchor=<id>` on `GET /v1/expenses` and `GET /v1/conversions`** (D10).
+   - The page starts at that record, inclusive, through an `inclusive` flag on the keyset cursor.
+   - Filters still apply, and `nextCursor` continues as usual.
+   - `anchor` plus `cursor` returns 422.
+   - The record is read through the tenant-scoped getter, so another organization's id is a plain 404.
+   - `ledgerPageStart` (`server/src/routes/shared.ts`) is the one place both routes use.
+   - API 1.21.0-mut91.
+
+**Consequences**:
+- **MUT-77** (landing, built in parallel on `transform: scale`) must move to `scale` or `.press` when it merges; the guard test will say so.
+- The portal's Show lands on a tinted row whatever the record's date. An anchored list shows "Showing from a saved entry · Show latest".
+- One extra indexed read per anchored request.
+
+**Alternatives considered**:
+- `transform: scale()` with per-control compose overrides: rejected (D2). Every positioned control is a regression waiting.
+- Portal-only press: rejected (D6). The app and the portal would diverge again.
+- Narrowing Show to the saved date with the existing `from`/`to` filters: recommended, but Basel chose the exact server lookup (D10).
+- Paging forward up to 5 pages: rejected. Up to 250 rows of reads, and it can still miss.
+

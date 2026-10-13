@@ -28,6 +28,42 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — The portal presses, tints and shows where a save landed (MUT-91)
+
+**Why:** HP1 of the Apple-design brief: the hosted portal is a separate build, so without this the app and the portal feel like two products. Spring drawers (R2) were already shared by MUT-80. Press feedback (L10) existed nowhere, though its MUT-102 tokens did. After-save feedback (R1) was app-only. Plan and eng review D1–D10: `.claude/designs/mut-91-portal-shared-motion.md`.
+
+### Added
+- **Press feedback, app-wide** (D6): every `Button` and any control given `.press` scales to `--press-scale` (0.96, 120ms on the brand spring) on pointer-down. This is a visible change across the whole local app as well as the portal. It uses the CSS `scale` property, never `transform`, so the portal's show-password toggle keeps its `translateY(-50%)` centring (D2). The portal's raw buttons and the shared drawer's close button take `.press`. Tabs don't press.
+- **Portal after-save** for expenses and conversions (D7). The drawer marks the save. The list tints the row for 1.5s and announces a polite "Saved". When the list doesn't show the row, a page-local "Expense saved · Show" / "Conversion saved · Show" notice appears; it names no cause (D4/D5). An anchored list says why it's short and offers "Show latest".
+- **Server `anchor` param** on `GET /v1/expenses` and `GET /v1/conversions` (D10). The page starts at that record, inclusive, and `nextCursor` continues older. `anchor` with `cursor` returns 422 on `anchor`. An unknown, deleted or other-organization id returns 404. Keyset cursors gain `inclusive` in both stores. `API_VERSION` is `1.21.0-mut91`; OpenAPI and `src/hosted/api/schema.d.ts` are regenerated.
+- **Bundle rules:** dist-hosted carries neither `mutaba3a-active-profile` nor the app's `/clients/$clientId` Show route; dist-web/desktop carry no `hp-toast`.
+
+### Changed
+- `src/hooks/useSavedFlash.ts` → `src/lib/useSavedFlash.ts`: the portal lint bans `hooks/`. Only the import paths change.
+- **The saved-flash backstop waits for lists still fetching** (D3). A portal refetch can outlast 1.2s, which used to raise a false message and drop the tint. After the backstop, a list that settled before the save and never re-rendered no longer holds resolution.
+- `SavedFlash.kind` adds `expense` and `conversion`. A new store action, `settleMessage`, marks a notice shown.
+- **Row tint:** `.data-table tr.row-flash td` becomes `tr.row-flash > td`, so the portal's `.table` is covered.
+
+### Fixed
+- **The tint's leading rail sat mid-row in Arabic** (D8). `inset 3px` is a physical left edge, so it is now mirrored under `[dir="rtl"]`. The comment that called it logical is corrected.
+- `.btn-primary:active` no longer nudges 1px down; the press scale replaces it.
+
+### Technical
+- **Tests:**
+  - `pressFeedback.test.ts` and `rowFlash.test.ts`: CSS contracts.
+  - `hosted/pages/__tests__/pressFeedback.test.tsx`: every portal button presses.
+  - `afterSave.test.tsx`, `SavedNotice.test.tsx`: portal flows.
+  - 5 store cases (backstop and `settleMessage`).
+  - Lint boundary, bundle rules and the drawer guard.
+  - Inclusive cursors in both store contracts; anchor route tests for both endpoints.
+- **Browser check** on preview builds:
+  - The sign-in toggle scales to 0.96 with its translate kept (centre moves 0.55px).
+  - An app Button scales to 0.96.
+  - In Arabic, a save hidden by a filter, with a 1.6s refetch, shows the notice. Show then anchors on the saved record, and the row tints with the rail on the right.
+- `test:db` (Postgres store contract) was not run locally (no test database); CI runs it.
+
+---
+
 ## [Unreleased] - 2026-10-14 — The Settings QA specs find Language and Theme as radiogroups (MUT-160)
 
 **Why:** Since MUT-139, Settings → Language and Theme are `SegmentedControl` radiogroups, each named by its row label. MUT-103 (`5bd1b09`) moved the Language clicks to `radio`, but `qa/specs/web/settings.spec.ts` still waited for a `Language` and a `Theme` heading, and still clicked Dark, Light and System as buttons. So `@web.settings.language` and `@web.settings.theme` timed out on every run.
