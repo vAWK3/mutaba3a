@@ -9,3 +9,10 @@ deletion_protection = true
 min_instances       = 1
 log_level           = "info"
 # alert_notification_channels = ["projects/your-gcp-project/notificationChannels/1234567890"]
+
+# App-association files (MUT-111): set all four together, or leave all four
+# commented out to disable. See server/DEPLOYMENT.md §4d.
+# apple_team_id               = "4LCWA596X7"
+# apple_bundle_id             = "com.barmajiyat.mutaba3a"
+# android_package_name        = "com.barmajiyat.mutaba3a"
+# android_sha256_fingerprints = "AA:BB:...,CC:DD:..."
