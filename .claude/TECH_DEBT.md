@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-105: Document/invoice currency narrow-casts are dead weight once MUT-145 lands
+**Status**: Open
+**Ticket**: MUT-140 (introduced); resolved by MUT-145
+**Added**: 2026-10-13
+**Priority**: Low
+**Impact**: MUT-140 widened the shared `Currency` type to include JOD. `DocumentDrawer.tsx`, `DocumentFormPage.tsx`, `ProfileDetailPage.tsx`, `BusinessProfileDrawer.tsx`, `RetainerDrawer.tsx`, and `PlanAssumptionDrawer.tsx` each needed `as 'USD' | 'ILS' | 'EUR'` casts at several "assign a wide Currency-typed source into a narrower form field" spots to keep compiling, since those surfaces deliberately don't support JOD. The document-related casts are pure dead weight once MUT-145 (full removal of document/invoice generation) lands — those files disappear entirely. The retainer/plan-assumption/profile-settings casts are not dead weight; they reflect a real, durable scope boundary (JOD stays out of those surfaces) and should stay even after MUT-145.
+**Fix**: no action needed before MUT-145 — the casts are correct and harmless in the meantime. When MUT-145 lands, no separate cleanup ticket is needed either, since deleting the files removes the casts along with them.
+
 ### TD-104: A payment allocation or reversal that loses a deadlock answers 500
 **Status**: Open
 **Ticket**: MUT-130
