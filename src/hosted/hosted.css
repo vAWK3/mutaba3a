@@ -127,6 +127,9 @@
   font-size: var(--text-body);
 }
 .hp-toast .hp-banner-icon { color: var(--error); }
+/* MUT-133 (3A): the quiet "Saved · …" status. Same slot, success tokens. */
+.hp-toast.hp-toast-info { border-color: var(--success-muted); border-inline-start-color: var(--success); }
+.hp-toast.hp-toast-info .hp-banner-icon { color: var(--success); }
 
 /* ---------- Sign-in ---------- */
 

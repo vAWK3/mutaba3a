@@ -1,42 +1,68 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertIcon } from './Icons';
+import { AlertIcon, InfoIcon } from './Icons';
 
 /**
- * One transient message at a time, announced with `role="alert"`. The portal's
- * only toasts are failures the person should act on (sign-out failed, a download
- * couldn't be prepared), so there is no queue and no success variant.
+ * One transient message at a time. Failures the person should act on are
+ * announced with `role="alert"`, as before. MUT-133 adds a quiet `info` tone for
+ * "Saved · …" after an income write, so a save whose row lands off screen is
+ * never silent (design review 3A). Its live region is rendered empty from the
+ * start and only filled: a `role="status"` region inserted on demand is often
+ * not announced (eng re-review A2). The second argument is an options object,
+ * the shape MUT-91 builds on (it adds an action), so callers that pass only a
+ * message keep the error tone.
  */
 
 const TOAST_MS = 6000;
 
-const ToastContext = createContext<(message: string) => void>(() => {});
+export type ToastTone = 'error' | 'info';
+export interface ToastOptions {
+  tone?: ToastTone;
+}
+export type ShowToast = (message: string, options?: ToastOptions) => void;
+
+const ToastContext = createContext<ShowToast>(() => {});
+
+interface ToastState {
+  message: string;
+  tone: ToastTone;
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const show = useCallback((text: string) => {
+  const show = useCallback<ShowToast>((message, options) => {
     clearTimeout(timer.current);
-    setMessage(text);
-    timer.current = setTimeout(() => setMessage(null), TOAST_MS);
+    setToast({ message, tone: options?.tone ?? 'error' });
+    timer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  const info = toast?.tone === 'info' ? toast.message : null;
+
   return (
     <ToastContext.Provider value={show}>
       {children}
-      {message && (
+      {toast?.tone === 'error' && (
         <div className="hp-toast" role="alert">
           <AlertIcon />
-          <span>{message}</span>
+          <span>{toast.message}</span>
         </div>
       )}
+      <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} role="status" aria-live="polite">
+        {info && (
+          <>
+            <InfoIcon />
+            <span>{info}</span>
+          </>
+        )}
+      </div>
     </ToastContext.Provider>
   );
 }
 
-export function useToast(): (message: string) => void {
+export function useToast(): ShowToast {
   return useContext(ToastContext);
 }
