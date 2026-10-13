@@ -1149,10 +1149,6 @@
   "time": {
     "today": "اليوم",
     "yesterday": "أمس",
-    "daysAgo": "منذ {days} يوم",
-    "weeksAgo": "منذ {weeks} أسبوع",
-    "monthsAgo": "منذ {months} شهر",
-    "yearsAgo": "منذ {years} سنة",
     "daysOverdue": "متأخر {days} يوم",
     "dueInDays": "مستحق خلال {days} يوم"
   },

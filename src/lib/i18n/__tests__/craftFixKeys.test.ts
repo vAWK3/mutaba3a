@@ -14,6 +14,11 @@ const REMOVED_KEYS = [
   // F5: provenance, not notes, so the Payments table stopped printing them
   'clients.profile.payments.recordedOnEntry',
   'transactions.partialPayment.migratedNote',
+  // F7: relative counts come from Intl.RelativeTimeFormat, with CLDR plurals
+  'time.daysAgo',
+  'time.weeksAgo',
+  'time.monthsAgo',
+  'time.yearsAgo',
 ] as const;
 
 function lookup(dict: unknown, path: string): unknown {
@@ -36,6 +41,12 @@ describe('craft-fix i18n keys (MUT-92)', () => {
   it('names the product in About in both languages (F9)', () => {
     expect(lookup(en, 'settings.about.name')).toBe('Mutaba3a');
     expect(lookup(ar, 'settings.about.name')).toBe('متابعة');
+  });
+
+  it.each(LOCALES)('%s keeps the Today and Yesterday labels (F7)', (_locale, dict) => {
+    for (const key of ['time.today', 'time.yesterday']) {
+      expect(String(lookup(dict, key)).trim().length, key).toBeGreaterThan(0);
+    }
   });
 
   it.each(LOCALES)('%s no longer carries the retired keys', (_locale, dict) => {

@@ -354,10 +354,6 @@ export interface Translations {
   time: {
     today: string;
     yesterday: string;
-    daysAgo: string;
-    weeksAgo: string;
-    monthsAgo: string;
-    yearsAgo: string;
     daysOverdue: string;
     dueInDays: string;
   };
