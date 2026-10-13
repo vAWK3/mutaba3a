@@ -74,6 +74,10 @@ export async function runSeedDemoAccount(argv: string[], deps: SeedDemoAccountDe
   }
 
   const baseUrl = values.url ?? deps.url;
+  if (!URL.canParse(baseUrl)) {
+    deps.err(`--url must be an absolute URL, got "${baseUrl}" (an unset shell variable?)\n${USAGE}`);
+    return 2;
+  }
   const email = values.email ?? DEFAULTS.email;
   const displayName = values.name ?? DEFAULTS.name;
   const currency = values.currency ?? DEFAULTS.currency;
