@@ -374,7 +374,7 @@ export class PrismaLedgerStore implements LedgerStore {
           },
         };
       }
-      return { kind: outcome === 'new' ? 'in_progress' : outcome }; // 'new' is unreachable here (the insert above already claimed it)
+      return { kind: outcome }; // 'new' is unreachable: `existing` is non-null here, and resolveClaim only returns 'new' when it isn't
     },
     complete: async ({ organizationId, key, responseStatus, responseBody, at }) => {
       await this.prisma.idempotencyKey.updateMany({
@@ -422,7 +422,7 @@ export class PrismaLedgerStore implements LedgerStore {
           },
         };
       }
-      return { kind: outcome === 'new' ? 'in_progress' : outcome }; // 'new' is unreachable here (the insert above already claimed it)
+      return { kind: outcome }; // 'new' is unreachable: `existing` is non-null here, and resolveClaim only returns 'new' when it isn't
     },
     complete: async ({ userId, key, responseStatus, responseBody, at }) => {
       await this.prisma.userIdempotencyKey.updateMany({
