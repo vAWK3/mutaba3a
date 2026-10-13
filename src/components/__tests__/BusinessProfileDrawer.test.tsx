@@ -200,8 +200,8 @@ describe('BusinessProfileDrawer', () => {
     expect(screen.getByText('Phone')).toBeInTheDocument();
     expect(screen.getByText('Business Type')).toBeInTheDocument();
     expect(screen.getByText('Tax ID')).toBeInTheDocument();
-    expect(screen.getByText('Default Currency')).toBeInTheDocument();
-    expect(screen.getByText('Default Language')).toBeInTheDocument();
+    expect(screen.getByText('Document Currency')).toBeInTheDocument();
+    expect(screen.getByText('Document Language')).toBeInTheDocument();
   });
 
   it('should render business type options', () => {

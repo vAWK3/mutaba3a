@@ -381,14 +381,14 @@ export function BusinessProfileDrawer() {
         {/* Defaults */}
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Default Currency</label>
+            <label className="form-label">Document Currency</label>
             <select className="select" {...form.register('defaultCurrency')}>
               <option value="USD">USD ($)</option>
               <option value="ILS">ILS (₪)</option>
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Default Language</label>
+            <label className="form-label">Document Language</label>
             <select className="select" {...form.register('defaultLanguage')}>
               <option value="en">English</option>
               <option value="ar">Arabic</option>
