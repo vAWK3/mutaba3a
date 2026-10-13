@@ -15,7 +15,7 @@ import type { TxKind, TxStatus, QueryFilters } from '../../types';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
-  const { openIncomeDrawer, openExpenseDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
+  const { openIncomeDrawer, openExpenseDrawer, openLegacyExpenseDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const expensesEnabled = useFeatureEnabled('expenses');
   const t = useT();
   const { language } = useLanguage();
@@ -48,7 +48,11 @@ export function ProjectDetailPage() {
 
   const handleRowClick = (id: string, kind: TxKind) => {
     if (kind === 'expense') {
-      openExpenseDrawer({ mode: 'edit', expenseId: id });
+      // This table reads db.transactions only (useTransactions), so any
+      // kind:'expense' row here is a legacy row, not a real db.expenses
+      // record — openExpenseDrawer would look it up in the wrong table
+      // (MUT-138). Real expenses are created and edited from /expenses.
+      openLegacyExpenseDrawer({ transactionId: id });
     } else {
       openIncomeDrawer({ mode: 'edit', transactionId: id });
     }

@@ -13,6 +13,7 @@ describe('useDrawerStore', () => {
         projectDrawer: { isOpen: false, mode: 'create' },
         businessProfileDrawer: { isOpen: false, mode: 'create' },
         expenseDrawer: { isOpen: false, mode: 'create' },
+        legacyExpenseDrawer: { isOpen: false },
         retainerDrawer: { isOpen: false, mode: 'create' },
         retainerMatchingDrawer: { isOpen: false, step: 'select-transaction' },
         partialPaymentDrawer: { isOpen: false },
@@ -290,6 +291,30 @@ describe('useDrawerStore', () => {
       });
 
       expect(useDrawerStore.getState().expenseDrawer.isOpen).toBe(false);
+    });
+  });
+
+  describe('legacyExpenseDrawer', () => {
+    it('should open with the given transaction id', () => {
+      act(() => {
+        useDrawerStore.getState().openLegacyExpenseDrawer({ transactionId: 'tx-1' });
+      });
+
+      const state = useDrawerStore.getState().legacyExpenseDrawer;
+      expect(state.isOpen).toBe(true);
+      expect(state.transactionId).toBe('tx-1');
+    });
+
+    it('should close', () => {
+      act(() => {
+        useDrawerStore.getState().openLegacyExpenseDrawer({ transactionId: 'tx-1' });
+      });
+
+      act(() => {
+        useDrawerStore.getState().closeLegacyExpenseDrawer();
+      });
+
+      expect(useDrawerStore.getState().legacyExpenseDrawer.isOpen).toBe(false);
     });
   });
 

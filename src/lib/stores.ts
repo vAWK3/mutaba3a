@@ -117,6 +117,16 @@ interface DrawerState {
   }) => void;
   closeConversionDrawer: () => void;
 
+  // Legacy expense-transaction drawer: edits a pre-existing kind:'expense'
+  // row in db.transactions (MUT-138) — not db.expenses, unlike expenseDrawer
+  // above. Only reachable for rows created before the CSV-import fix.
+  legacyExpenseDrawer: {
+    isOpen: boolean;
+    transactionId?: string;
+  };
+  openLegacyExpenseDrawer: (options: { transactionId: string }) => void;
+  closeLegacyExpenseDrawer: () => void;
+
   // Retainer drawer
   retainerDrawer: {
     isOpen: boolean;
@@ -366,6 +376,23 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       conversionDrawer: {
         isOpen: false,
         mode: 'create',
+      },
+    }),
+
+  legacyExpenseDrawer: {
+    isOpen: false,
+  },
+  openLegacyExpenseDrawer: (options) =>
+    set({
+      legacyExpenseDrawer: {
+        isOpen: true,
+        transactionId: options.transactionId,
+      },
+    }),
+  closeLegacyExpenseDrawer: () =>
+    set({
+      legacyExpenseDrawer: {
+        isOpen: false,
       },
     }),
 

@@ -1,6 +1,6 @@
-import { db } from '../db/database';
+import { businessProfileRepo } from '../db/repository';
 import { expenseRepo, expenseCategoryRepo } from '../db/expenseRepository';
-import type { BusinessProfile, Currency } from '../types';
+import type { Currency } from '../types';
 
 export interface ImportRowRefs {
   profileId: string;
@@ -79,18 +79,10 @@ export async function resolveImportProfileId(
 ): Promise<string> {
   if (selectedProfileId) return selectedProfileId;
 
-  const now = new Date().toISOString();
-  const profile: BusinessProfile = {
-    id: crypto.randomUUID(),
+  const profile = await businessProfileRepo.create({
     name: DEFAULT_PROFILE_NAME[language] ?? DEFAULT_PROFILE_NAME.en,
-    email: '',
-    businessType: 'none',
     defaultCurrency: 'USD',
-    defaultLanguage: language,
     isDefault: true,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await db.businessProfiles.add(profile);
+  });
   return profile.id;
 }

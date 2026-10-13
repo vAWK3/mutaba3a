@@ -1,8 +1,23 @@
 import type { ReactNode } from 'react';
-import { Controller, type Control, type FieldErrors } from 'react-hook-form';
-import { cn } from '../../lib/utils';
+import { Controller, useWatch, type Control, type FieldErrors } from 'react-hook-form';
+import { cn, currencyExponent } from '../../lib/utils';
 import { Select } from '../ui/Input';
+import type { Currency } from '../../types';
 import type { ExpenseFormFieldsValues } from './expenseFormSchema';
+
+/**
+ * The amount input's step, in the currency's own minor unit (0.01 for a
+ * 2-decimal currency, 0.001 for JOD's 3). A hardcoded "0.01" step silently
+ * blocks submitting a 3-decimal JOD amount: a step mismatch fails the native
+ * HTML5 constraint the browser checks before firing the form's submit event
+ * at all, so a user typing a precise fils amount (e.g. "45.678") could never
+ * save, with no visible error (found testing LegacyExpenseEditDrawer, MUT-138).
+ * Falls back to 2 decimals for an unset/unrecognized currency (initial render).
+ */
+function amountStep(currency: string): string {
+  const exponent = currencyExponent(currency as Currency) ?? 2;
+  return (10 ** -exponent).toString();
+}
 
 /**
  * Presentational fields shared between the local ExpenseDrawer and the hosted
@@ -93,6 +108,8 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
   showNotes = true,
   titleRequired = false,
 }: ExpenseFormFieldsProps<T>) {
+  const currentCurrency = useWatch({ control, name: 'currency' as never }) as unknown as string;
+
   return (
     <>
       <div className="form-row">
@@ -108,7 +125,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
                 <input
                   id="expense-amount"
                   type="number"
-                  step="0.01"
+                  step={amountStep(currentCurrency)}
                   min="0"
                   className={cn('input', errors.amount && 'input-error')}
                   placeholder={labels.amountPlaceholder}

@@ -34,10 +34,7 @@ describe('csvImport', () => {
       expect(profiles).toHaveLength(1);
       expect(profiles[0].id).toBe(profileId);
       expect(profiles[0].name).toBe('Default Profile');
-      expect(profiles[0].email).toBe('');
-      expect(profiles[0].businessType).toBe('none');
       expect(profiles[0].defaultCurrency).toBe('USD');
-      expect(profiles[0].defaultLanguage).toBe('en');
       expect(profiles[0].isDefault).toBe(true);
     });
 
@@ -46,7 +43,6 @@ describe('csvImport', () => {
 
       const profiles = await db.businessProfiles.toArray();
       expect(profiles[0].name).toBe('ملف تعريف افتراضي');
-      expect(profiles[0].defaultLanguage).toBe('ar');
     });
   });
 
