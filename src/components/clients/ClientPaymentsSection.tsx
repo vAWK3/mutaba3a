@@ -52,15 +52,11 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
     { label: t('clients.profile.payments.openEntry'), onClick: () => openEntry(payment) },
   ];
 
-  const notesFor = (payment: PaymentByClientRow) => {
-    if (payment.source === 'entry') {
-      return <span className="text-muted">{t('clients.profile.payments.recordedOnEntry')}</span>;
-    }
-    if (payment.notes === MIGRATED_PAYMENT_NOTE) {
-      return <span className="text-muted">{t('transactions.partialPayment.migratedNote')}</span>;
-    }
-    return payment.notes;
-  };
+  // Only what the user wrote (MUT-92): where a payment was saved and the note
+  // the migrations stored are provenance, not notes.
+  const notesFor = (payment: PaymentByClientRow) =>
+    payment.source === 'entry' || payment.notes === MIGRATED_PAYMENT_NOTE ? undefined : payment.notes;
+  const showNotes = payments.some((payment) => !!notesFor(payment));
 
   return (
     <section className="client-section" aria-labelledby="client-payments-title">
@@ -80,7 +76,7 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
                 <th>{t('transactions.columns.date')}</th>
                 <th style={{ textAlign: 'end' }}>{t('transactions.columns.amount')}</th>
                 <th>{t('clients.profile.payments.for')}</th>
-                <th>{t('transactions.partialPayment.notes')}</th>
+                {showNotes && <th>{t('transactions.partialPayment.notes')}</th>}
                 <RowActionsHeader />
               </tr>
             </thead>
@@ -100,7 +96,7 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
                       <span className="text-muted">{t('clients.profile.work.untitled')}</span>
                     )}
                   </td>
-                  <td className="client-payment-notes">{notesFor(payment)}</td>
+                  {showNotes && <td className="client-payment-notes">{notesFor(payment)}</td>}
                   <td>
                     <div className="row-actions-cell">
                       <RowActionsMenu actions={rowActions(payment)} />

@@ -1,22 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { transactionRepo, paymentRecordRepo, clientRepo, PaymentRecordError } from '../repository';
 import { todayLocalISO } from '../../lib/dates';
-
-/** Runs fn with the clock at instant, in timeZone (Node applies a TZ change at once). */
-async function atInstantIn(timeZone: string, instant: string, fn: () => Promise<void>) {
-  const savedTz = process.env.TZ;
-  process.env.TZ = timeZone;
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date(instant));
-  try {
-    await fn();
-  } finally {
-    vi.useRealTimers();
-    if (savedTz === undefined) delete process.env.TZ;
-    else process.env.TZ = savedTz;
-  }
-}
+import { atInstantIn } from '../../test/atInstantIn';
 
 describe('paymentRecordRepo', () => {
   let incomeId: string;

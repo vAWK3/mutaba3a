@@ -452,7 +452,6 @@ function ExpenseListView({
                   amountMinor={expense.amountMinor}
                   currency={expense.currency}
                   type="expense"
-                  showExpenseSign
                 />
               </td>
               <td onClick={(e) => e.stopPropagation()}>
@@ -561,7 +560,6 @@ function ExpenseGroupedView({
                         amountMinor={expense.amountMinor}
                         currency={expense.currency}
                         type="expense"
-                        showExpenseSign
                       />
                     </td>
                     <td style={{ width: 48 }} onClick={(e) => e.stopPropagation()}>

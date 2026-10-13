@@ -122,6 +122,21 @@ describe('DateRangeControl', () => {
     expect(screen.getByText(/31\/03\/2026/)).toBeInTheDocument();
   });
 
+  // MUT-92 F4: All Time's bounds are sentinels, not a range worth reading.
+  it('hides the sentinel range for All Time', () => {
+    const { container } = render(
+      <DateRangeControl
+        dateFrom="2000-01-01"
+        dateTo="2100-12-31"
+        onChange={mockOnChange}
+      />
+    );
+
+    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('all');
+    expect(container.querySelector('.date-range-display')).toBeNull();
+    expect(container.textContent).not.toMatch(/2000|2100/);
+  });
+
   it('should detect custom date range', () => {
     render(
       <DateRangeControl

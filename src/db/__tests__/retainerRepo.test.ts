@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { retainerRepo, projectedIncomeRepo, scheduleGenerator } from '../retainerRepository';
 import { getRepositories } from '../provider';
+import { atInstantIn } from '../../test/atInstantIn';
 
 describe('retainerRepo', () => {
   const profileId = 'test-profile-1';
@@ -539,6 +540,93 @@ describe('scheduleGenerator', () => {
 
       expect(secondRun.length).toBe(firstRun.length);
     });
+
+    // TD-120: the schedule used to step a Date with local setMonth from a
+    // UTC-midnight start, so "Feb 31" overflowed into March and, west of UTC,
+    // a start on the 1st read as the previous month.
+    describe('every month and quarter gets a row (TD-120)', () => {
+      async function scheduleFor(
+        id: string,
+        cadence: 'monthly' | 'quarterly',
+        startDate: string,
+        paymentDay: number
+      ) {
+        await db.retainerAgreements.add({
+          id,
+          profileId,
+          clientId,
+          title: 'Retainer',
+          amountMinor: 100000,
+          currency: 'USD',
+          cadence,
+          paymentDay,
+          startDate,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        await scheduleGenerator.generateSchedule(id);
+        const rows = await projectedIncomeRepo.getByRetainer(id);
+        return [...rows].sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+      }
+
+      /** First days of `count` consecutive months, from year/month (1-based). */
+      function monthStarts(year: number, month: number, count: number): string[] {
+        return Array.from({ length: count }, (_, i) => {
+          const index = year * 12 + month - 1 + i;
+          return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}-01`;
+        });
+      }
+
+      it('a monthly retainer starting on the 31st gets a February row, paid on Feb 28', async () => {
+        await atInstantIn('Asia/Jerusalem', '2026-01-20T10:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-31st', 'monthly', '2026-01-31', 31);
+
+          // Horizon is 2027-01-20, so January 2026 through January 2027.
+          expect(rows.map((r) => r.periodStart)).toEqual(monthStarts(2026, 1, 13));
+          const feb = rows.find((r) => r.periodStart === '2026-02-01');
+          expect(feb?.periodEnd).toBe('2026-02-28');
+          expect(feb?.expectedDate).toBe('2026-02-28');
+          expect(rows.find((r) => r.periodStart === '2026-04-01')?.expectedDate).toBe('2026-04-30');
+        });
+      });
+
+      it('a monthly retainer starting on the 31st is paid on Feb 29 in a leap year', async () => {
+        await atInstantIn('Asia/Jerusalem', '2028-01-20T10:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-31st-leap', 'monthly', '2028-01-31', 31);
+
+          expect(rows.map((r) => r.periodStart)).toEqual(monthStarts(2028, 1, 13));
+          const feb = rows.find((r) => r.periodStart === '2028-02-01');
+          expect(feb?.periodEnd).toBe('2028-02-29');
+          expect(feb?.expectedDate).toBe('2028-02-29');
+        });
+      });
+
+      it('a quarterly retainer starting on the 31st gets every quarter', async () => {
+        await atInstantIn('Asia/Jerusalem', '2026-03-20T10:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-31st-q', 'quarterly', '2026-03-31', 31);
+
+          // Horizon is 2027-03-20: Q1 2026 through Q1 2027.
+          expect(rows.map((r) => [r.periodStart, r.periodEnd, r.expectedDate])).toEqual([
+            ['2026-01-01', '2026-03-31', '2026-03-31'],
+            ['2026-04-01', '2026-06-30', '2026-06-30'],
+            ['2026-07-01', '2026-09-30', '2026-09-30'],
+            ['2026-10-01', '2026-12-31', '2026-12-31'],
+            ['2027-01-01', '2027-03-31', '2027-03-31'],
+          ]);
+        });
+      });
+
+      it('a monthly retainer starting on the 1st gets consecutive months west of UTC', async () => {
+        await atInstantIn('America/New_York', '2026-01-10T15:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-1st-ny', 'monthly', '2026-01-01', 15);
+
+          // Horizon is 2027-01-10: January 2026 through January 2027, no gap.
+          expect(rows.map((r) => r.periodStart)).toEqual(monthStarts(2026, 1, 13));
+          expect(rows[0].expectedDate).toBe('2026-01-15');
+        });
+      });
+    });
   });
 });
 
@@ -804,6 +892,13 @@ describe('retainerAgreements.getSummary', () => {
 // MUT-47 (T2): paths with no test before the helpers moved into the
 // repository contracts. Written against today's behaviour, kept across the move.
 describe('retainer state helpers (characterization, MUT-47)', () => {
+  // 01:30 on 2026-10-14 in Asia/Jerusalem (UTC+3) is still 2026-10-13 in UTC,
+  // so a UTC "today" is a day behind here (ADR-022, TD-014).
+  const LOCAL_TODAY = '2026-10-14';
+  const atJerusalemSmallHours = (fn: () => Promise<unknown>) =>
+    atInstantIn('Asia/Jerusalem', '2026-10-13T22:30:00.000Z', async () => {
+      await fn();
+    });
   const profileId = 'test-profile-1';
   const clientId = 'test-client-1';
   const now = () => new Date().toISOString();
@@ -844,19 +939,14 @@ describe('retainer state helpers (characterization, MUT-47)', () => {
   afterEach(clearAll);
 
   it('refreshes due states: only upcoming rows dated today or earlier become due', async () => {
-    const today = new Date();
-    const iso = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
     await db.projectedIncome.bulkAdd([
       projected('pi-past', 'upcoming', '2020-01-15'),
-      projected('pi-today', 'upcoming', iso(today)),
-      projected('pi-future', 'upcoming', iso(tomorrow)),
+      projected('pi-today', 'upcoming', LOCAL_TODAY),
+      projected('pi-future', 'upcoming', '2026-10-15'),
       projected('pi-received', 'received', '2020-01-15'),
     ]);
 
-    await getRepositories().base.projectedIncome.refreshDueStates();
+    await atJerusalemSmallHours(() => getRepositories().base.projectedIncome.refreshDueStates());
 
     expect((await db.projectedIncome.get('pi-past'))?.state).toBe('due');
     expect((await db.projectedIncome.get('pi-today'))?.state).toBe('due');
@@ -925,5 +1015,78 @@ describe('retainer state helpers (characterization, MUT-47)', () => {
     expect(after.find((pi) => pi.id === received.id)?.state).toBe('received');
     expect(after.some((pi) => upcomingIds.includes(pi.id))).toBe(false);
     expect(after.filter((pi) => pi.state === 'upcoming').every((pi) => pi.expectedAmountMinor === 120000)).toBe(true);
+  });
+
+  describe('"today" is the local calendar day, not the UTC one', () => {
+    const retainerInput = {
+      profileId,
+      clientId,
+      title: 'Monthly',
+      amountMinor: 100000,
+      currency: 'USD' as const,
+      cadence: 'monthly' as const,
+      paymentDay: 14,
+      startDate: '2026-10-01',
+    };
+
+    it('end() stamps the local date as the end date', async () => {
+      await atJerusalemSmallHours(async () => {
+        const retainer = await getRepositories().base.retainerAgreements.create({ ...retainerInput, status: 'active' });
+        await getRepositories().base.retainerAgreements.end(retainer.id);
+        expect((await db.retainerAgreements.get(retainer.id))?.endDate).toBe(LOCAL_TODAY);
+      });
+    });
+
+    it('a generated row expected today is born due', async () => {
+      await atJerusalemSmallHours(async () => {
+        const retainer = await getRepositories().base.retainerAgreements.create({ ...retainerInput, status: 'active' });
+        const rows = await db.projectedIncome.where('sourceId').equals(retainer.id).toArray();
+        expect(rows.find((pi) => pi.expectedDate === LOCAL_TODAY)?.state).toBe('due');
+      });
+    });
+
+    it('the schedule horizon is twelve months from the local date', async () => {
+      await atJerusalemSmallHours(async () => {
+        const retainer = await getRepositories().base.retainerAgreements.create({
+          ...retainerInput,
+          startDate: LOCAL_TODAY,
+          status: 'active',
+        });
+        const rows = await db.projectedIncome.where('sourceId').equals(retainer.id).toArray();
+        expect(rows.map((pi) => pi.periodStart)).toContain('2027-10-01');
+      });
+    });
+
+    it('unmatching the only payment of a row expected today puts it back to due', async () => {
+      await db.projectedIncome.add(projected('pi-today', 'upcoming', LOCAL_TODAY));
+      await db.transactions.add({
+        id: 'tx-1',
+        kind: 'income',
+        status: 'paid',
+        amountMinor: 100000,
+        currency: 'USD',
+        clientId,
+        occurredAt: '2026-10-13',
+        paidAt: '2026-10-13',
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      await getRepositories().base.projectedIncome.match('pi-today', 'tx-1');
+
+      await atJerusalemSmallHours(() => getRepositories().base.projectedIncome.unmatch('pi-today', 'tx-1'));
+
+      expect((await db.projectedIncome.get('pi-today'))?.state).toBe('due');
+    });
+
+    it('a due row expected yesterday is overdue by one day and counts as overdue', async () => {
+      await db.projectedIncome.add(projected('pi-yesterday', 'due', '2026-10-13'));
+
+      await atJerusalemSmallHours(async () => {
+        const [row] = await getRepositories().base.projectedIncome.list({ state: 'due' });
+        expect(row.daysOverdue).toBe(1);
+        const summary = await getRepositories().base.retainerAgreements.getSummary();
+        expect(summary.totalOverdueUsdMinor).toBe(100000);
+      });
+    });
   });
 });

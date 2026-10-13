@@ -303,6 +303,128 @@ describe('IncomeDrawer', () => {
     });
   });
 
+  // MUT-92 F1: a new entry for a client starts in the currency that client
+  // last paid in, not the profile's, until the user picks one.
+  describe('currency follows the client (MUT-92)', () => {
+    const prefix = () => screen.getByTestId('income-amount-group');
+
+    async function income(clientId: string, currency: 'USD' | 'ILS' | 'EUR', occurredAt: string, kind: 'income' | 'expense' = 'income') {
+      return transactionRepo.create({
+        kind,
+        status: 'paid',
+        profileId: testProfileId,
+        clientId,
+        amountMinor: 10000,
+        currency,
+        occurredAt,
+      });
+    }
+
+    function openFor(clientId: string) {
+      useDrawerStore.setState({
+        incomeDrawer: { isOpen: true, mode: 'create', defaultProfileId: testProfileId, defaultClientId: clientId },
+      });
+      renderDrawer();
+    }
+
+    async function pickClient(user: ReturnType<typeof userEvent.setup>, name: string) {
+      await user.click(await screen.findByPlaceholderText(CLIENT_PLACEHOLDER));
+      await user.click(await screen.findByRole('option', { name }));
+    }
+
+    it('opens in the currency of the client\'s newest income, and saves it', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Shekel Client' });
+      await income(client.id, 'USD', '2026-08-01');
+      await income(client.id, 'ILS', '2026-09-01');
+      openFor(client.id);
+
+      await waitFor(() => expect(prefix()).toHaveTextContent('ILS'));
+      await user.type(amountInput(), '500');
+      await user.click(saveButton());
+
+      await waitFor(async () => {
+        const created = (await transactionRepo.list({})).filter((tx) => tx.amountMinor === 50000);
+        expect(created).toHaveLength(1);
+        expect(created[0].currency).toBe('ILS');
+      });
+    });
+
+    it('keeps the profile currency for a client with no income yet', async () => {
+      const client = await clientRepo.create({ name: 'New Client' });
+      openFor(client.id);
+
+      await waitFor(() => expect(screen.getByPlaceholderText(CLIENT_PLACEHOLDER)).toHaveValue('New Client'));
+      expect(prefix()).toHaveTextContent('USD');
+    });
+
+    it('switches when the client is picked in the drawer', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Shekel Client' });
+      await income(client.id, 'ILS', '2026-09-01');
+      renderDrawer();
+      await waitFor(() => expect(prefix()).toHaveTextContent('USD'));
+
+      await pickClient(user, 'Shekel Client');
+
+      await waitFor(() => expect(prefix()).toHaveTextContent('ILS'));
+    });
+
+    it('never overrides a currency the user picked', async () => {
+      const user = userEvent.setup();
+      const client = await clientRepo.create({ name: 'Shekel Client' });
+      await income(client.id, 'ILS', '2026-09-01');
+      renderDrawer();
+      await openMoreDetails(user);
+
+      await user.selectOptions(screen.getByLabelText('Currency'), 'EUR');
+      await pickClient(user, 'Shekel Client');
+
+      // give the client's history time to arrive before asserting it changed nothing
+      await waitFor(() => expect(screen.getByPlaceholderText(CLIENT_PLACEHOLDER)).toHaveValue('Shekel Client'));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(prefix()).toHaveTextContent('EUR');
+    });
+
+    it('goes by date, skips deleted entries and expenses, and counts archived ones', async () => {
+      const client = await clientRepo.create({ name: 'Mixed Client' });
+      const archived = await income(client.id, 'ILS', '2026-09-01');
+      await transactionRepo.archive(archived.id);
+      // Recorded later, but dated earlier: the date decides
+      await income(client.id, 'USD', '2026-08-01');
+      const deleted = await income(client.id, 'EUR', '2026-09-20');
+      await transactionRepo.softDelete(deleted.id);
+      await income(client.id, 'EUR', '2026-09-25', 'expense');
+      openFor(client.id);
+
+      await waitFor(() => expect(prefix()).toHaveTextContent('ILS'));
+    });
+
+    it('leaves an edited entry in its own currency', async () => {
+      const client = await clientRepo.create({ name: 'Shekel Client' });
+      await income(client.id, 'ILS', '2026-09-01');
+      const older = await income(client.id, 'EUR', '2026-08-01');
+
+      await openEdit(older.id);
+
+      await waitFor(() => expect(amountInput().value).toBe('100'));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(prefix()).toHaveTextContent('EUR');
+    });
+
+    it('leaves a duplicate in its source\'s currency', async () => {
+      const client = await clientRepo.create({ name: 'Shekel Client' });
+      await income(client.id, 'ILS', '2026-09-01');
+      const source = await income(client.id, 'EUR', '2026-08-01');
+      useDrawerStore.setState({ incomeDrawer: { isOpen: true, mode: 'create', duplicateFromId: source.id } });
+      renderDrawer();
+
+      await waitFor(() => expect(amountInput().value).toBe('100'));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(prefix()).toHaveTextContent('EUR');
+    });
+  });
+
   describe('amount validation', () => {
     it('shows a field error, not an exception, for a title with no amount', async () => {
       const user = userEvent.setup();

@@ -419,74 +419,52 @@ describe('utils', () => {
     });
   });
 
+  // MUT-92 F7: counts go through Intl.RelativeTimeFormat, so they follow
+  // CLDR plural rules ("1 week ago"; all six Arabic forms), not one template.
   describe('formatRelativeDate', () => {
+    const NOW = new Date('2024-06-15T12:00:00Z');
+    const t = vi.fn((key: string) => `[${key}]`);
+    const daysBefore = (days: number) => new Date(NOW.getTime() - days * 86_400_000).toISOString();
+
     beforeEach(() => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2024-06-15T12:00:00Z'));
+      vi.setSystemTime(NOW);
     });
 
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it('should return Today for current date', () => {
-      expect(formatRelativeDate('2024-06-15T10:00:00Z')).toBe('Today');
+    it('uses the time.today and time.yesterday keys for 0 and 1 days', () => {
+      expect(formatRelativeDate('2024-06-15T10:00:00Z', t, 'en-US')).toBe('[time.today]');
+      expect(formatRelativeDate('2024-06-14T10:00:00Z', t, 'ar')).toBe('[time.yesterday]');
     });
 
-    it('should return Yesterday for yesterday', () => {
-      expect(formatRelativeDate('2024-06-14T10:00:00Z')).toBe('Yesterday');
+    it.each([
+      [3, '3 days ago'],
+      [7, '1 week ago'],
+      [14, '2 weeks ago'],
+      [45, '1 month ago'],
+      [92, '3 months ago'],
+      [400, '1 year ago'],
+      [731, '2 years ago'],
+    ])('EN: %i days → "%s"', (days, expected) => {
+      expect(formatRelativeDate(daysBefore(days), t, 'en-US')).toBe(expected);
     });
 
-    it('should return days ago for recent dates', () => {
-      expect(formatRelativeDate('2024-06-12T10:00:00Z')).toBe('3 days ago');
-    });
+    it('AR: picks the one, two, few and many forms', () => {
+      const relative = new Intl.RelativeTimeFormat('ar', { numeric: 'always' });
+      const cases = [
+        [7, relative.format(-1, 'week')], // one
+        [14, relative.format(-2, 'week')], // two
+        [21, relative.format(-3, 'week')], // few
+        [335, relative.format(-11, 'month')], // many
+      ] as const;
 
-    it('should return weeks ago for older dates', () => {
-      expect(formatRelativeDate('2024-06-01T10:00:00Z')).toBe('2 weeks ago');
-    });
+      const results = cases.map(([days]) => formatRelativeDate(daysBefore(days), t, 'ar'));
 
-    it('should return months ago for much older dates', () => {
-      expect(formatRelativeDate('2024-03-15T10:00:00Z')).toBe('3 months ago');
-    });
-
-    it('should return years ago for dates over a year old', () => {
-      expect(formatRelativeDate('2022-06-15T10:00:00Z')).toBe('2 years ago');
-    });
-
-    it('should use translation function if provided', () => {
-      const mockT = vi.fn().mockReturnValue('translated');
-      formatRelativeDate('2024-06-15T10:00:00Z', mockT);
-      expect(mockT).toHaveBeenCalledWith('time.today');
-    });
-
-    it('should call translation function for yesterday', () => {
-      const mockT = vi.fn().mockReturnValue('translated');
-      formatRelativeDate('2024-06-14T10:00:00Z', mockT);
-      expect(mockT).toHaveBeenCalledWith('time.yesterday');
-    });
-
-    it('should call translation function for days ago', () => {
-      const mockT = vi.fn().mockReturnValue('translated');
-      formatRelativeDate('2024-06-12T10:00:00Z', mockT);
-      expect(mockT).toHaveBeenCalledWith('time.daysAgo', { days: 3 });
-    });
-
-    it('should call translation function for weeks ago', () => {
-      const mockT = vi.fn().mockReturnValue('translated');
-      formatRelativeDate('2024-06-01T10:00:00Z', mockT);
-      expect(mockT).toHaveBeenCalledWith('time.weeksAgo', { weeks: 2 });
-    });
-
-    it('should call translation function for months ago', () => {
-      const mockT = vi.fn().mockReturnValue('translated');
-      formatRelativeDate('2024-03-15T10:00:00Z', mockT);
-      expect(mockT).toHaveBeenCalledWith('time.monthsAgo', { months: 3 });
-    });
-
-    it('should call translation function for years ago', () => {
-      const mockT = vi.fn().mockReturnValue('translated');
-      formatRelativeDate('2022-06-15T10:00:00Z', mockT);
-      expect(mockT).toHaveBeenCalledWith('time.yearsAgo', { years: 2 });
+      expect(results).toEqual(cases.map(([, expected]) => expected));
+      expect(new Set(results).size).toBe(cases.length);
     });
   });
 
