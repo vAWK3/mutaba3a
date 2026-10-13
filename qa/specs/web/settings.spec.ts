@@ -57,18 +57,18 @@ test(
   },
 );
 
-test('Data Management exports the default profile', { tag: '@web.settings.export' }, async ({ page, step }) => {
+test('Your data exports one business', { tag: '@web.settings.export' }, async ({ page, step }) => {
   await openFreshApp(page, '/settings');
   const main = page.getByRole('main');
-  await expect(main.getByRole('heading', { name: 'Data Management' })).toBeVisible();
+  await expect(main.getByRole('heading', { name: 'Your data' })).toBeVisible();
 
-  await step('Open the Export Data dialog', async () => {
-    await main.getByRole('button', { name: 'Export JSON' }).click();
-    await expect(page.getByRole('dialog', { name: 'Export Data' })).toBeVisible();
+  await step('Open Export a business', async () => {
+    await main.getByRole('button', { name: 'Export…' }).click();
+    await expect(page.getByRole('dialog', { name: 'Export a business' })).toBeVisible();
   });
 
   await step('Export the default profile', async () => {
-    const dialog = page.getByRole('dialog', { name: 'Export Data' });
+    const dialog = page.getByRole('dialog', { name: 'Export a business' });
     // CSV is the format the dialog picks first
     const download = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Export Default Profile' }).click();

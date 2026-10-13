@@ -118,7 +118,7 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
             <p>{t('settings.data.deleteModal.warning')}</p>
           </div>
 
-          {/* Step A: Export Backup */}
+          {/* Step A: Back up */}
           <div className="modal-step">
             <h3 className="modal-step-title">{t('settings.data.deleteModal.stepA.title')}</h3>
             <p className="modal-step-desc">{t('settings.data.deleteModal.stepA.desc')}</p>

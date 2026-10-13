@@ -259,20 +259,13 @@ export interface Translations {
       name: string;
       description: string;
     };
-    // Data Tools (DataToolsSection)
-    dataTools: string;
+    // Your data (YourDataSection, MUT-88)
     integrityCheck: string;
     integrityCheckDesc: string;
     integrityCheckRun: string;
     integrityCheckRunning: string;
-    backup: string;
-    backupDesc: string;
-    backupExport: string;
     backupDone: string;
     backupFailed: string;
-    importBackup: string;
-    importBackupDesc: string;
-    importBackupBtn: string;
     importBackupDoneSingular: string;
     importBackupDonePlural: string;
     exportReceipts: string;

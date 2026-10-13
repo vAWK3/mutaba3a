@@ -24,12 +24,13 @@ features:
     expect:
       - html's data-theme follows the choice, and System removes the attribute
   - id: export
-    title: Data Management exports the default profile
+    title: Your data exports one business
     tier: secondary
     paths:
-      - src/pages/settings/DataToolsSection.tsx
+      - src/pages/settings/YourDataSection.tsx
+      - src/components/modals/ExportDataModal.tsx
     steps:
-      - Open the Export Data dialog
+      - Open Export a business
       - Export the default profile
     expect:
       - A CSV download starts, named mutaba3a-Default-Profile-<date>.csv
