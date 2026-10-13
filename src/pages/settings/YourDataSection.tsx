@@ -69,7 +69,14 @@ export function YourDataSection() {
 
   const handleRestore = () =>
     pickFile('.json,.csv', async (file) => {
-      const text = await file.text();
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        // Moved, deleted or unreadable since it was picked.
+        showToast(t('settings.yourData.unknownFile'), { type: 'error' });
+        return;
+      }
       const kind = classifyDataFile(file.name, text);
       if (kind.kind === 'fullBackup') {
         setPendingRestore({ backupJson: text, summary: kind });

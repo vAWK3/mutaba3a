@@ -300,6 +300,20 @@ describe('YourDataSection', () => {
       expect(restoreFromBackup).not.toHaveBeenCalled();
     });
 
+    it('says the file could not be used when it cannot even be read', async () => {
+      renderWithProviders(<YourDataSection />);
+      let picker: HTMLInputElement | undefined;
+      vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (this: HTMLInputElement) {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- capture the detached <input> the handler creates
+        picker = this;
+      });
+      fireEvent.click(screen.getByRole('button', { name: yourData.restoreBtn }));
+      Object.defineProperty(picker, 'files', { value: [{ name: 'gone.json', text: async () => { throw new Error('NotReadableError'); } }] });
+      fireEvent.change(picker as HTMLInputElement);
+
+      expect(await nextToast()).toMatchObject({ type: 'error', message: yourData.unknownFile });
+    });
+
     it('opens the business export from Export a business', () => {
       renderWithProviders(<YourDataSection />);
 
