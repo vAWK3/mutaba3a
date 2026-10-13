@@ -323,3 +323,54 @@
     padding: 3rem 1.5rem;
   }
 }
+
+/* v2 profile import: create a new profile or merge into one (MUT-158) */
+.import-mode-select {
+  margin-top: var(--space-4);
+}
+
+.import-mode-select h4 {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.import-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.import-mode-option:hover {
+  background: var(--surface-hover);
+}
+
+.import-mode-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.import-mode-label {
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+
+.import-mode-desc {
+  margin-top: var(--space-1);
+}
+
+.import-profile-select {
+  margin-top: var(--space-3);
+  padding-inline-start: var(--space-6);
+}
+
+.import-profile-select .select {
+  width: 100%;
+}

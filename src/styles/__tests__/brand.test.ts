@@ -392,8 +392,8 @@ describe('names', () => {
  */
 const KNOWN_DEAD_REFERENCES = [
   '--bg-hover', '--bg-primary', '--bg-secondary', '--bg-tertiary', '--border-color',
-  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger', '--color-error',
-  '--color-expense', '--color-income', '--color-info', '--color-muted', '--color-primary', '--color-success',
+  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger',
+  '--color-expense', '--color-income', '--color-info', '--color-primary', '--color-success',
   '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--color-warning', '--danger', '--danger-subtle',
   '--error-bg', '--error-fg', '--font-serif', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
   '--positive', '--primary', '--primary-foreground', '--primary-subtle', '--shadow-lg', '--shadow-xl',

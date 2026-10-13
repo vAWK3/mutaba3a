@@ -625,6 +625,16 @@
       "downloadBtn": "Download",
       "downloadMac": "Download for macOS",
       "downloadWindows": "Download for Windows"
+    },
+    "import": {
+      "mode": {
+        "title": "Import as",
+        "create": "Create a new profile",
+        "createDesc": "Adds this business as a new profile with its own clients and income.",
+        "merge": "Merge into an existing profile",
+        "mergeDesc": "Adds the clients, projects and income to a profile you already have. The profile itself is not changed.",
+        "selectProfile": "Choose a profile…"
+      }
     }
   },
   "downloadBanner": {

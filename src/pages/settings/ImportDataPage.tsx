@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { db } from '../../db';
 import { clearDatabase } from '../../db/seed';
 import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
+import { findMatchingProfile, importProfileFile, type ProfileExportFile } from '../../db/profileImport';
 import { useT } from '../../lib/i18n';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
@@ -95,9 +96,7 @@ export function ImportDataPage() {
         setFileData(data);
 
         if (data.version === 2 && data.profile) {
-          const existingProfile = existingProfiles.find(
-            (p) => p.id === data.profileId || p.email === data.profile?.email
-          );
+          const existingProfile = findMatchingProfile(existingProfiles, data as ProfileExportFile);
           if (existingProfile) {
             setSelectedProfileId(existingProfile.id);
             setImportMode('merge');
@@ -284,6 +283,18 @@ export function ImportDataPage() {
           });
           stats.transactions++;
         }
+      } else if ((importMode === 'create' || importMode === 'merge') && fileData?.version === 2 && fileData.profile) {
+        // v2 per-profile export (MUT-158): fresh IDs, every link remapped.
+        const target =
+          importMode === 'create'
+            ? { mode: 'create' as const, makeDefault: existingProfiles.length === 0 }
+            : selectedProfileId
+              ? { mode: 'merge' as const, profileId: selectedProfileId }
+              : null;
+        if (!target) throw new Error('Choose a profile to merge into');
+        const imported = await importProfileFile(fileData as ProfileExportFile, target);
+        stats.profiles = imported.profiles;
+        stats.transactions = imported.transactions;
       } else if (importMode === 'legacy' && fileData) {
         await clearDatabase();
 
@@ -409,6 +420,54 @@ export function ImportDataPage() {
                 </div>
               </div>
             </div>
+
+            {isV2Format && (
+              <div className="import-mode-select" role="radiogroup" aria-label={t('settings.import.mode.title')}>
+                <h4>{t('settings.import.mode.title')}</h4>
+                <label className="import-mode-option">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    checked={importMode === 'create'}
+                    onChange={() => setImportMode('create')}
+                  />
+                  <div>
+                    <div className="import-mode-label">{t('settings.import.mode.create')}</div>
+                    <div className="import-mode-desc text-muted text-sm">{t('settings.import.mode.createDesc')}</div>
+                  </div>
+                </label>
+                {existingProfiles.length > 0 && (
+                  <label className="import-mode-option">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === 'merge'}
+                      onChange={() => setImportMode('merge')}
+                    />
+                    <div>
+                      <div className="import-mode-label">{t('settings.import.mode.merge')}</div>
+                      <div className="import-mode-desc text-muted text-sm">{t('settings.import.mode.mergeDesc')}</div>
+                    </div>
+                  </label>
+                )}
+                {importMode === 'merge' && (
+                  <div className="import-profile-select">
+                    <Select
+                      aria-label={t('settings.import.mode.selectProfile')}
+                      value={selectedProfileId || ''}
+                      onChange={(e) => setSelectedProfileId(e.target.value)}
+                    >
+                      <option value="">{t('settings.import.mode.selectProfile')}</option>
+                      {existingProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.nameEn && `(${p.nameEn})`}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
 
             {fileType === 'csv' && existingProfiles.length > 0 && (
               <div className="profile-select-section">

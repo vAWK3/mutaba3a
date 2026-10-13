@@ -15,6 +15,7 @@ const GONE = [
   'pages/documents',
   'pages/transactions',
   'pages/settings/ProfileDetailPage.tsx',
+  'components/modals/ImportDataModal.tsx',
   'components/drawers/DocumentDrawer.tsx',
   'components/modals/PdfDownloadChoiceModal.tsx',
   'components/modals/PdfDownloadChoiceModal.css',
