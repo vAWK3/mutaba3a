@@ -50,6 +50,7 @@ import type {
   PaymentByClientRow,
   RecentPaymentRow,
   ProfileScope,
+  FeatureKey,
   Plan,
   PlanAssumption,
   PlanScenario,
@@ -423,6 +424,41 @@ export interface IDatasetRepository {
 }
 
 // ============================================================================
+// Demo Data Repository Interface (?demo=1 and the visitor sample, MUT-47)
+// ============================================================================
+
+/** One generated sample, every id prefixed `demo_`. */
+export interface DemoSeedRows {
+  businessProfiles: BusinessProfile[];
+  clients: Client[];
+  projects: Project[];
+  categories: Category[];
+  expenseCategories: ExpenseCategory[];
+  retainers: RetainerAgreement[];
+  projectedIncome: ProjectedIncome[];
+  transactions: Transaction[];
+  recurringRules: RecurringRule[];
+  expenses: Expense[];
+}
+
+/** Storage for the sample data; sample rows are told apart by their `demo_` id. */
+export interface IDemoDataRepository {
+  hasDemoData(): Promise<boolean>;
+  /** Deletes every `demo_` row and nothing else. */
+  removeDemoData(): Promise<void>;
+  /** Whether a live, non-sample default business exists. */
+  hasUserDefaultProfile(): Promise<boolean>;
+  /** Writes the sample in one transaction; returns the optional areas it switched on. */
+  seed(rows: DemoSeedRows): Promise<FeatureKey[]>;
+  /** Any non-sample client, project, entry, expense or document. */
+  hasOwnData(): Promise<boolean>;
+  listUnpaidSampleIncome(): Promise<Transaction[]>;
+  /** Non-sample rows created at or after `startedAt` in the tables a visitor can edit. */
+  countSessionAdditions(startedAt: string): Promise<number>;
+  removeSessionAdditions(startedAt: string): Promise<void>;
+}
+
+// ============================================================================
 // Complete Repository Provider Interface
 // ============================================================================
 
@@ -453,4 +489,5 @@ export interface IRepositoryProvider {
   planAssumptions: IPlanAssumptionRepository;
   planScenarios: IPlanScenarioRepository;
   dataset: IDatasetRepository;
+  demoData: IDemoDataRepository;
 }

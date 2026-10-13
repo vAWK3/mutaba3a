@@ -1,16 +1,13 @@
 /**
  * Demo Seed Data Orchestrator
  *
- * Main entry point for seeding demo data. Coordinates all entity generators
- * and handles database transactions.
+ * Main entry point for seeding demo data. Coordinates all entity generators;
+ * the database side lives behind getRepositories().base.demoData (MUT-47).
  */
 
-import { db } from '../../db/database';
-import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
-import { settingsRepo } from '../../db/repository';
+import { getRepositories } from '../../db';
 import type { FeatureKey } from '../../types';
 import type { DemoDataStats } from '../types';
-import { DEMO_ID_PREFIX } from '../constants';
 
 // Import generators
 import { createDemoProfiles, getDemoProfileIds } from './profile';
@@ -25,57 +22,16 @@ import { createDemoExpenses, createDemoRecurringRules } from './expenses';
 /**
  * Check if any demo data exists in the database
  */
-export async function hasDemoData(): Promise<boolean> {
-  // Check a few tables for demo prefixed IDs
-  const [client, transaction, document] = await Promise.all([
-    db.clients.where('id').startsWith(DEMO_ID_PREFIX).first(),
-    db.transactions.where('id').startsWith(DEMO_ID_PREFIX).first(),
-    db.documents.where('id').startsWith(DEMO_ID_PREFIX).first(),
-  ]);
-
-  return !!(client || transaction || document);
+export function hasDemoData(): Promise<boolean> {
+  return getRepositories().base.demoData.hasDemoData();
 }
 
 /**
  * Remove all demo data from the database
  * Only removes records with IDs starting with 'demo_'
  */
-export async function removeDemoData(): Promise<void> {
-  await db.transaction(
-    'rw',
-    [
-      db.clients,
-      db.projects,
-      db.categories,
-      db.transactions,
-      db.businessProfiles,
-      // Retained (MUT-145): older demo seeds wrote demo_ documents; clear them too.
-      db.documents,
-      db.documentSequences,
-      db.retainerAgreements,
-      db.projectedIncome,
-      db.expenses,
-      db.expenseCategories,
-      db.recurringRules,
-    ],
-    async () => {
-      // Delete in reverse dependency order
-      await db.projectedIncome.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.retainerAgreements.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.documents.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.documentSequences.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.transactions.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.expenses.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.recurringRules.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.expenseCategories.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.categories.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.projects.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.clients.where('id').startsWith(DEMO_ID_PREFIX).delete();
-      await db.businessProfiles.where('id').startsWith(DEMO_ID_PREFIX).delete();
-    }
-  );
-
-  console.log('Demo data removed successfully');
+export function removeDemoData(): Promise<void> {
+  return getRepositories().base.demoData.removeDemoData();
 }
 
 export interface SeedDemoOptions {
@@ -89,6 +45,7 @@ export interface SeedDemoOptions {
 
 /** Drop `keys` from the pending auto-enable notice, keeping any others. */
 async function withdrawFeatureNotice(keys: FeatureKey[]): Promise<void> {
+  const { settings: settingsRepo } = getRepositories().base;
   const settings = await settingsRepo.get();
   const remaining = (settings.featureNotice ?? []).filter((key) => !keys.includes(key));
   await settingsRepo.update({ featureNotice: remaining.length > 0 ? remaining : undefined });
@@ -103,9 +60,7 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
   await removeDemoData();
 
   // Never add a second default next to one the person already has.
-  const existingDefault = !!(await db.businessProfiles
-    .filter((p) => !!p.isDefault && !p.archivedAt && !p.id.startsWith(DEMO_ID_PREFIX))
-    .first());
+  const existingDefault = await getRepositories().base.demoData.hasUserDefaultProfile();
 
   // Generate all demo data (order matters for dependencies)
   const profiles = createDemoProfiles({ existingDefault });
@@ -119,39 +74,21 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
   const recurringRules = createDemoRecurringRules();
   const expenses = createDemoExpenses();
 
-  // Insert all data in a transaction
-  await db.transaction(
-    'rw',
-    [
-      db.clients,
-      db.projects,
-      db.categories,
-      db.transactions,
-      db.businessProfiles,
-      db.retainerAgreements,
-      db.projectedIncome,
-      db.expenses,
-      db.expenseCategories,
-      db.recurringRules,
-    ],
-    async () => {
-      // Insert in dependency order
-      await db.businessProfiles.bulkPut(profiles);
-      await db.clients.bulkPut(clients);
-      await db.projects.bulkPut(projects);
-      await db.categories.bulkPut(categories);
-      await db.expenseCategories.bulkPut(expenseCategories);
-      await db.retainerAgreements.bulkPut(retainers);
-      await db.projectedIncome.bulkPut(projectedIncome);
-      await db.transactions.bulkPut(transactions);
-      await db.recurringRules.bulkPut(recurringRules);
-      await db.expenses.bulkPut(expenses);
-    }
-  );
-
-  // The demo exercises retainers, expenses and projects: switch
-  // those areas on so a fresh install does not show a mostly empty app (MUT-12).
-  const featuresEnabled = await reconcileFeaturesAfterDataLoad('demo', db);
+  // Insert all data in a transaction, then switch on the areas the demo
+  // exercises (retainers, expenses, projects) so a fresh install does not show
+  // a mostly empty app (MUT-12).
+  const featuresEnabled = await getRepositories().base.demoData.seed({
+    businessProfiles: profiles,
+    clients,
+    projects,
+    categories,
+    expenseCategories,
+    retainers,
+    projectedIncome,
+    transactions,
+    recurringRules,
+    expenses,
+  });
   if (!announceFeatures && featuresEnabled.length > 0) {
     await withdrawFeatureNotice(featuresEnabled);
   }
