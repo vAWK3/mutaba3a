@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — A retainer's schedule no longer skips months (TD-120)
+
+**Why:** `scheduleGenerator.generateSchedule` walked months with `new Date(retainer.startDate)` and a local `setMonth(+1)` (or `+3`). The date-only start parses as UTC midnight while `setMonth`/`getMonth`/`getFullYear` are local, so a start on the 31st jumped from January to "Feb 31" = 3 March in every timezone, and west of UTC a start on the 1st read as the previous month and then skipped one. A missing row is missing expected income and leaves a payment nothing to match.
+
+### Fixed
+- `src/db/retainerRepository.ts` `generateSchedule`: the cursor is an integer month index (`year * 12 + month`) read from the start date's string, stepped by 1 or 3. Each period comes from the existing `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate` helpers, so a payment day past the month's end is clamped (Feb 28, or 29 in a leap year). The loop stops when the period start is past `horizon`, compared as strings. The skip rules (period ends before the start date, period already exists, period starts after the end date) and idempotency are unchanged.
+
+### Changed
+- The horizon check is now on the period start, not on a cursor carrying the start date's day of month. For a start mid-month, the last month whose first day falls on or before the horizon now always gets its row; before, it was dropped when the horizon's day of month was earlier than the start's.
+
+### Technical
+- `src/db/__tests__/retainerRepo.test.ts`: four cases under "every month and quarter gets a row (TD-120)", each at a fixed instant via `atInstantIn`. All four failed on the old loop.
+- `.claude/TECH_DEBT.md`: TD-120 resolved.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Craft-fix bundle from the Apple-design pass (MUT-92)
 
 **Why:** small defects from the 2026-10-11 review that needed no decision. Plan: `.claude/designs/mut-92-craft-fix-bundle.md` (eng review D1: reuse `useTransactions`; D2: the other count strings get their own ticket). Two of the ticket's nine fixes were already on main: the demo seed's future dates (MUT-78) and the About name (MUT-88); the second now has a regression test.

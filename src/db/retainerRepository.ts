@@ -797,13 +797,20 @@ export const scheduleGenerator = {
 
     // Generate periods based on cadence
     const newItems: ProjectedIncome[] = [];
-    // A cursor parsed from a date-only string (UTC midnight), not a "today".
-    // Stepping it with local setMonth skips months (TD-120).
-    const currentDate = new Date(retainer.startDate);
+    // Step whole months as an integer (year * 12 + month), never a Date: a
+    // date-only start parses as UTC midnight, and stepping it with local
+    // setMonth overflowed "Feb 31" into March or, west of UTC, read the 1st as
+    // the previous month (TD-120).
+    const [startYear, startMonth] = retainer.startDate.split('-').map(Number);
+    const monthsPerPeriod = retainer.cadence === 'monthly' ? 1 : 3;
 
-    while (currentDate.toISOString().split('T')[0] <= horizon) {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
+    for (
+      let monthIndex = startYear * 12 + (startMonth - 1);
+      ;
+      monthIndex += monthsPerPeriod
+    ) {
+      const year = Math.floor(monthIndex / 12);
+      const month = monthIndex % 12;
 
       let periodStart: string;
       let periodEnd: string;
@@ -814,9 +821,6 @@ export const scheduleGenerator = {
         periodStart = period.periodStart;
         periodEnd = period.periodEnd;
         expectedDate = getPaymentDate(year, month, retainer.paymentDay);
-
-        // Move to next month
-        currentDate.setMonth(currentDate.getMonth() + 1);
       } else {
         // Quarterly
         const quarter = Math.floor(month / 3);
@@ -826,10 +830,10 @@ export const scheduleGenerator = {
         // Payment date is in the last month of the quarter
         const lastMonthOfQuarter = quarter * 3 + 2;
         expectedDate = getPaymentDate(year, lastMonthOfQuarter, retainer.paymentDay);
-
-        // Move to next quarter
-        currentDate.setMonth(currentDate.getMonth() + 3);
       }
+
+      // Stop once a period starts past the horizon
+      if (periodStart > horizon) break;
 
       // Skip if before start date
       if (periodEnd < retainer.startDate) continue;

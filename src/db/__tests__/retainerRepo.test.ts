@@ -540,6 +540,93 @@ describe('scheduleGenerator', () => {
 
       expect(secondRun.length).toBe(firstRun.length);
     });
+
+    // TD-120: the schedule used to step a Date with local setMonth from a
+    // UTC-midnight start, so "Feb 31" overflowed into March and, west of UTC,
+    // a start on the 1st read as the previous month.
+    describe('every month and quarter gets a row (TD-120)', () => {
+      async function scheduleFor(
+        id: string,
+        cadence: 'monthly' | 'quarterly',
+        startDate: string,
+        paymentDay: number
+      ) {
+        await db.retainerAgreements.add({
+          id,
+          profileId,
+          clientId,
+          title: 'Retainer',
+          amountMinor: 100000,
+          currency: 'USD',
+          cadence,
+          paymentDay,
+          startDate,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        await scheduleGenerator.generateSchedule(id);
+        const rows = await projectedIncomeRepo.getByRetainer(id);
+        return [...rows].sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+      }
+
+      /** First days of `count` consecutive months, from year/month (1-based). */
+      function monthStarts(year: number, month: number, count: number): string[] {
+        return Array.from({ length: count }, (_, i) => {
+          const index = year * 12 + month - 1 + i;
+          return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}-01`;
+        });
+      }
+
+      it('a monthly retainer starting on the 31st gets a February row, paid on Feb 28', async () => {
+        await atInstantIn('Asia/Jerusalem', '2026-01-20T10:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-31st', 'monthly', '2026-01-31', 31);
+
+          // Horizon is 2027-01-20, so January 2026 through January 2027.
+          expect(rows.map((r) => r.periodStart)).toEqual(monthStarts(2026, 1, 13));
+          const feb = rows.find((r) => r.periodStart === '2026-02-01');
+          expect(feb?.periodEnd).toBe('2026-02-28');
+          expect(feb?.expectedDate).toBe('2026-02-28');
+          expect(rows.find((r) => r.periodStart === '2026-04-01')?.expectedDate).toBe('2026-04-30');
+        });
+      });
+
+      it('a monthly retainer starting on the 31st is paid on Feb 29 in a leap year', async () => {
+        await atInstantIn('Asia/Jerusalem', '2028-01-20T10:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-31st-leap', 'monthly', '2028-01-31', 31);
+
+          expect(rows.map((r) => r.periodStart)).toEqual(monthStarts(2028, 1, 13));
+          const feb = rows.find((r) => r.periodStart === '2028-02-01');
+          expect(feb?.periodEnd).toBe('2028-02-29');
+          expect(feb?.expectedDate).toBe('2028-02-29');
+        });
+      });
+
+      it('a quarterly retainer starting on the 31st gets every quarter', async () => {
+        await atInstantIn('Asia/Jerusalem', '2026-03-20T10:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-31st-q', 'quarterly', '2026-03-31', 31);
+
+          // Horizon is 2027-03-20: Q1 2026 through Q1 2027.
+          expect(rows.map((r) => [r.periodStart, r.periodEnd, r.expectedDate])).toEqual([
+            ['2026-01-01', '2026-03-31', '2026-03-31'],
+            ['2026-04-01', '2026-06-30', '2026-06-30'],
+            ['2026-07-01', '2026-09-30', '2026-09-30'],
+            ['2026-10-01', '2026-12-31', '2026-12-31'],
+            ['2027-01-01', '2027-03-31', '2027-03-31'],
+          ]);
+        });
+      });
+
+      it('a monthly retainer starting on the 1st gets consecutive months west of UTC', async () => {
+        await atInstantIn('America/New_York', '2026-01-10T15:00:00.000Z', async () => {
+          const rows = await scheduleFor('r-1st-ny', 'monthly', '2026-01-01', 15);
+
+          // Horizon is 2027-01-10: January 2026 through January 2027, no gap.
+          expect(rows.map((r) => r.periodStart)).toEqual(monthStarts(2026, 1, 13));
+          expect(rows[0].expectedDate).toBe('2026-01-15');
+        });
+      });
+    });
   });
 });
 
