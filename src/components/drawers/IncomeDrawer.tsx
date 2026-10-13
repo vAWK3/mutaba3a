@@ -61,7 +61,6 @@ import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeForm
  * never writes those fields. Write rules live in lib/incomeEntry.ts.
  */
 
-
 /** Fields rendered inside "More details"; an error in one of them opens it. */
 const DETAIL_FIELDS = ['incomeStatus', 'dueDate', 'currency', 'occurredAt', 'projectId', 'notes'] as const;
 
