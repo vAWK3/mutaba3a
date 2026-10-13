@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { transactionRepo, clientRepo, projectRepo, TransactionLockedError } from '../repository';
+import { expenseRepo } from '../expenseRepository';
 import { formatLocalDate } from '../../lib/dates';
 import type { Transaction, Client, Project } from '../../types';
 
@@ -11,6 +12,7 @@ describe('transactionRepo', () => {
   beforeEach(async () => {
     // Clear all relevant tables before each test
     await db.transactions.clear();
+    await db.expenses.clear();
     await db.clients.clear();
     await db.projects.clear();
     await db.categories.clear();
@@ -22,6 +24,7 @@ describe('transactionRepo', () => {
 
   afterEach(async () => {
     await db.transactions.clear();
+    await db.expenses.clear();
     await db.clients.clear();
     await db.projects.clear();
     await db.categories.clear();
@@ -587,15 +590,12 @@ describe('transactionRepo', () => {
           occurredAt: '2024-01-20',
         })
       );
-      await transactionRepo.create(
-        createTestTransaction({
-          kind: 'expense',
-          status: 'paid',
-          amountMinor: 3000,
-          currency: 'USD',
-          occurredAt: '2024-01-25',
-        })
-      );
+      await expenseRepo.create({
+        profileId: 'profile-1',
+        amountMinor: 3000,
+        currency: 'USD',
+        occurredAt: '2024-01-25',
+      });
 
       const totals = await transactionRepo.getOverviewTotals({
         dateFrom: '2024-01-01',
@@ -658,15 +658,12 @@ describe('transactionRepo', () => {
           occurredAt: '2024-01-15',
         })
       );
-      await transactionRepo.create(
-        createTestTransaction({
-          kind: 'expense',
-          status: 'paid',
-          amountMinor: 5000,
-          currency: 'EUR',
-          occurredAt: '2024-01-15',
-        })
-      );
+      await expenseRepo.create({
+        profileId: 'profile-1',
+        amountMinor: 5000,
+        currency: 'EUR',
+        occurredAt: '2024-01-15',
+      });
 
       const totals = await transactionRepo.getOverviewTotalsByCurrency({
         dateFrom: '2024-01-01',

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { clientRepo, projectRepo, transactionRepo, projectSummaryRepo } from '../repository';
+import { expenseRepo } from '../expenseRepository';
 import type { Project, Client } from '../../types';
 
 describe('projectRepo', () => {
@@ -179,6 +180,7 @@ describe('projectSummaryRepo', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.transactions.clear();
+    await db.expenses.clear();
 
     testClient = await clientRepo.create({ name: 'Test Client' });
   });
@@ -187,6 +189,7 @@ describe('projectSummaryRepo', () => {
     await db.clients.clear();
     await db.projects.clear();
     await db.transactions.clear();
+    await db.expenses.clear();
   });
 
   describe('list', () => {
@@ -216,9 +219,8 @@ describe('projectSummaryRepo', () => {
         projectId: project.id,
         clientId: testClient.id,
       });
-      await transactionRepo.create({
-        kind: 'expense',
-        status: 'paid',
+      await expenseRepo.create({
+        profileId: 'profile-1',
         amountMinor: 2000,
         currency: 'USD',
         occurredAt: '2024-01-25',
@@ -317,9 +319,8 @@ describe('projectSummaryRepo', () => {
         occurredAt: '2024-01-15',
         projectId: project.id,
       });
-      await transactionRepo.create({
-        kind: 'expense',
-        status: 'paid',
+      await expenseRepo.create({
+        profileId: 'profile-1',
         amountMinor: 5000,
         currency: 'EUR',
         occurredAt: '2024-01-15',
@@ -451,6 +452,34 @@ describe('projectSummaryRepo', () => {
 
       expect(summary?.paidIncomeMinorUSD).toBe(10000);
       expect(summary?.unpaidIncomeMinorILS).toBe(20000);
+    });
+
+    it('should total expenses from the expenses table, not transactions (MUT-94)', async () => {
+      const project = await projectRepo.create({
+        name: 'Test Project',
+        clientId: testClient.id,
+      });
+
+      await transactionRepo.create({
+        kind: 'income',
+        status: 'paid',
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-01-15',
+        projectId: project.id,
+      });
+      await expenseRepo.create({
+        profileId: 'profile-1',
+        amountMinor: 4200,
+        currency: 'USD',
+        occurredAt: '2024-01-20',
+        projectId: project.id,
+      });
+
+      const summary = await projectSummaryRepo.get(project.id);
+
+      expect(summary?.expensesMinor).toBe(4200);
+      expect(summary?.netMinor).toBe(5800); // 10000 - 4200
     });
   });
 });
