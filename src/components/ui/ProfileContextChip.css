@@ -3,15 +3,15 @@
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--surface-alt);
-  border-radius: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
   margin-bottom: 12px;
 }
 
 .profile-context-chip-avatar {
   width: 20px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
   object-fit: cover;
 }
@@ -23,14 +23,14 @@
   /* Without a business colour: the filled pair; a colour comes inline (profileAvatarStyle) */
   background-color: var(--accent-solid);
   color: var(--on-accent);
-  font-size: 9px;
+  font-size: var(--text-micro);
   font-weight: 600;
 }
 
 .profile-context-chip-name {
-  font-size: 13px;
+  font-size: var(--text-label);
   font-weight: 500;
-  color: var(--foreground);
+  color: var(--text);
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -38,7 +38,7 @@
 }
 
 .profile-context-chip-change {
-  font-size: 12px;
+  font-size: var(--text-label);
   color: var(--accent-text);
   background: none;
   border: none;
@@ -55,5 +55,5 @@
 .profile-context-chip-change:focus {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }

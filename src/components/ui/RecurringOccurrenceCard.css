@@ -5,8 +5,8 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   transition: all 0.15s ease;
 }
@@ -18,15 +18,15 @@
 
 /* State-based border colors */
 .recurring-occurrence-card.state-overdue {
-  border-left: 3px solid var(--error-fg);
+  border-left: 3px solid var(--error);
 }
 
 .recurring-occurrence-card.state-due {
-  border-left: 3px solid var(--warning-fg);
+  border-left: 3px solid var(--warning);
 }
 
 .recurring-occurrence-card.state-snoozed {
-  border-left: 3px solid var(--info-fg);
+  border-left: 3px solid var(--info);
   opacity: 0.8;
 }
 
@@ -51,14 +51,14 @@
 
 .occurrence-title {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .occurrence-vendor {
-  font-size: 0.875rem;
+  font-size: var(--text-label);
   color: var(--text-secondary);
 }
 
@@ -66,16 +66,18 @@
   display: inline-block;
   padding: 0.125rem 0.375rem;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  font-size: var(--text-label);
   font-weight: 500;
-  color: white;
+  /* The category's own colour and its ink are set inline (user data); this is the uncoloured chip */
+  color: var(--text);
   width: fit-content;
 }
 
 .occurrence-amount {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -88,34 +90,34 @@
 }
 
 .occurrence-date {
-  font-size: 0.75rem;
+  font-size: var(--text-label);
   color: var(--text-secondary);
 }
 
 .occurrence-state {
-  font-size: 0.75rem;
+  font-size: var(--text-label);
   font-weight: 500;
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-sm);
 }
 
 .occurrence-state.state-overdue {
-  background: var(--error-bg);
-  color: var(--error-fg);
+  background: var(--error-subtle);
+  color: var(--error);
 }
 
 .occurrence-state.state-due {
-  background: var(--warning-bg);
-  color: var(--warning-fg);
+  background: var(--warning-subtle);
+  color: var(--warning);
 }
 
 .occurrence-state.state-snoozed {
-  background: var(--info-bg);
-  color: var(--info-fg);
+  background: var(--info-subtle);
+  color: var(--info);
 }
 
 .occurrence-state.state-projected {
-  background: var(--bg-secondary);
+  background: var(--surface-2);
   color: var(--text-secondary);
 }
 
@@ -134,18 +136,18 @@
   justify-content: center;
   padding: 2rem;
   text-align: center;
-  background: var(--bg-secondary);
+  background: var(--surface-2);
   border-radius: var(--radius-md);
 }
 
 .recurring-occurrence-empty .empty-message {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-label);
   color: var(--text-secondary);
 }
 
 .recurring-occurrence-empty .empty-hint {
   margin: 0.5rem 0 0;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: var(--text-label);
+  color: var(--muted);
 }

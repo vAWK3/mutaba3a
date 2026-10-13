@@ -1,0 +1,95 @@
+/* PlanAssumptionDrawer (moved out of an inline <style> block, MUT-103) */
+
+.confidence-options {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.confidence-option {
+  cursor: pointer;
+}
+
+.confidence-option input {
+  display: none;
+}
+
+.confidence-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-label);
+  font-weight: 500;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.confidence-badge.confirmed {
+  background: var(--success-subtle);
+  color: var(--success);
+  border-color: var(--success-muted);
+}
+
+.confidence-badge.likely {
+  background: var(--warning-subtle);
+  color: var(--warning);
+  border-color: var(--warning-muted);
+}
+
+.confidence-badge.rough_guess {
+  background: var(--error-subtle);
+  color: var(--error);
+  border-color: var(--error-muted);
+}
+
+.confidence-option.selected .confidence-badge.confirmed {
+  background: var(--success);
+  color: var(--on-status);
+  border-color: var(--success);
+}
+
+.confidence-option.selected .confidence-badge.likely {
+  background: var(--warning);
+  color: var(--on-status);
+  border-color: var(--warning);
+}
+
+.confidence-option.selected .confidence-badge.rough_guess {
+  background: var(--error);
+  color: var(--on-status);
+  border-color: var(--error);
+}
+
+.confidence-option:hover .confidence-badge {
+  transform: scale(1.02);
+}
+
+.segment-control {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--surface-2);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+
+.segment-button {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-label);
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.segment-button:hover {
+  background: var(--surface-3);
+}
+
+.segment-button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}

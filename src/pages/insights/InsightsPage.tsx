@@ -504,7 +504,7 @@ export function InsightsPage() {
                   </td>
                 )}
               </tr>
-              <tr style={{ fontWeight: 600, borderTop: '2px solid var(--color-border)' }}>
+              <tr style={{ fontWeight: 600, borderTop: '2px solid var(--border)' }}>
                 <td>{t('overview.kpi.net')}</td>
                 {(currencyMode === 'USD' || currencyMode === 'BOTH') && (
                   <td className={cn('amount-cell', netUSD >= 0 ? 'amount-positive' : 'amount-negative')}>
@@ -525,13 +525,13 @@ export function InsightsPage() {
         {monthlyTrend.length > 0 && (
           <div className="monthly-trend-section" style={{ marginTop: 24 }}>
             <h3 className="section-title">{t('insights.monthlyTrend.title')}</h3>
-            <div className="monthly-trend-legend" style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 'var(--font-size-sm)' }}>
+            <div className="monthly-trend-legend" style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 'var(--text-label)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 12, height: 12, backgroundColor: 'var(--color-income)', borderRadius: 2 }} />
+                <span style={{ width: 12, height: 12, backgroundColor: 'var(--success)', borderRadius: 'var(--radius-xs)' }} />
                 {t('insights.monthlyTrend.income')}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 12, height: 12, backgroundColor: 'var(--color-expense)', borderRadius: 2 }} />
+                <span style={{ width: 12, height: 12, backgroundColor: 'var(--error)', borderRadius: 'var(--radius-xs)' }} />
                 {t('insights.monthlyTrend.expenses')}
               </span>
             </div>
@@ -557,9 +557,9 @@ export function InsightsPage() {
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                       <div style={{
                         height: 8,
-                        backgroundColor: 'var(--color-income)',
+                        backgroundColor: 'var(--success)',
                         width: `${Math.max(incomePercent, 1)}%`,
-                        borderRadius: 4,
+                        borderRadius: 'var(--radius-xs)',
                         transition: 'width 0.3s ease',
                       }} title={`${t('insights.monthlyTrend.income')}: ${formatReportAmount(
                         currencyMode === 'ILS' ? 0 : m.incomeUSD,
@@ -567,9 +567,9 @@ export function InsightsPage() {
                       )}`} />
                       <div style={{
                         height: 8,
-                        backgroundColor: 'var(--color-expense)',
+                        backgroundColor: 'var(--error)',
                         width: `${Math.max(expensePercent, 1)}%`,
-                        borderRadius: 4,
+                        borderRadius: 'var(--radius-xs)',
                         transition: 'width 0.3s ease',
                       }} title={`${t('insights.monthlyTrend.expenses')}: ${formatReportAmount(
                         currencyMode === 'ILS' ? 0 : m.expensesUSD,

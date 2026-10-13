@@ -849,7 +849,18 @@ const message = name === 'PaymentRecordError' ? t('drawer.income.savePaymentsCha
 1. **Primitives** `--m-*` in `src/styles/brand/mutaba3a-theme.css`, from `mutaba3a.tokens.json`. Change a value in the JSON first, then the CSS (and the Dart in the Flutter repo); `brand.test.ts` › `drift` fails until they agree.
 2. **Semantic tokens** in `theme.css`, each mapped once onto `--m-*` (or a `color-mix(in oklch, …)` over them). No colour literal goes in `theme.css`, and components use semantic tokens, never `--m-*`.
 
-The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere: a reference to one is a dead style. `brand.test.ts` › `references` fails on any new undefined `var(--x)`; the ones left are allowlisted for MUT-103 (TD-079).
+The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere: a reference to one is a dead style. `brand.test.ts` › `references` fails on any new undefined `var(--x)`; MUT-103 emptied the dead-reference allowlist that used to sit here, and the test now simply fails on any new one.
+
+### Pattern: No Literal Colour, Radius or Font Size Outside `src/styles` (MUT-103)
+
+Every colour, px radius and px/rem font size outside `src/styles/` comes from a token — never a hex, `rgb()`/`hsl()`/`oklch()` function call, `white`/`black`, or a literal px/rem. `brand.test.ts` › `literals` (`cssLiterals`/`scriptLiterals` in `src/test/css/brandCss.ts`) enforces this on every `.css`/`.ts`/`.tsx` file; `KNOWN_LITERALS` is the shrink-only escape hatch while a surface is mid-sweep (empty since MUT-103 finished).
+
+- **The only allowed literals are user data**: a business's or expense category's own colour (`ALLOWED_LITERAL_FILES`, each with a reason — e.g. `src/components/ui/profileAvatarStyle.ts`'s `DEFAULT_BUSINESS_COLOR`). Nothing else is exempt.
+- **No `<style>` element in TSX.** An inline stylesheet is invisible to the CSS guard; move it to a co-located `.css` file (`PlanAssumptionDrawer.css`, `MonthlyTimeline.css`).
+- **A fluid `clamp()` still takes tokens for its floor and ceiling** — `font-size: clamp(var(--text-title), 4vw, var(--text-figure))`, never a raw rem on either end; only the `vw` middle term is a literal.
+- **A one-off formula with a dynamic input** (e.g. a per-item hue) is a primitive in `mutaba3a-theme.css` (`--m-*`, with a `var(--x, fallback)` for the part a component sets inline), mapped once onto a `theme.css` role — not a literal colour function in a component stylesheet. See `--m-avatar-mock-fill` / `--landing-mock-avatar-fill` (the landing business-switcher mock).
+- **A mono amount never carries `--weight-semibold`/`--weight-bold`.** Plex Mono ships only 400/500; `font-weight: var(--weight-medium)` is the heaviest a `--font-mono` rule may ask for in the same rule, or the browser synthesizes a fake bold. `brand.test.ts` checks this per-rule (same declaration block only — a child selector that bumps weight without redeclaring `font-family` isn't caught, so check by eye too).
+- **`tabular-nums` without `--font-mono` in the same rule does nothing** (Thmanyah has no `tnum`); `KNOWN_TABULAR_WITHOUT_MONO` is the shrink-only list (empty since MUT-103).
 
 **Quick Reference**:
 
@@ -870,23 +881,24 @@ The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere
 | Status | `color: var(--success)` (or `--warning`, `--error`, `--info`) on its `-subtle` ground | `--color-success` |
 | Border | `border-color: var(--border)` | `--color-border` |
 | Font size | `font-size: var(--text-body)` (or the role: label, headline, title, figure, display) | a px literal |
-| Radius | `var(--radius-sm)`, `-md`, `-lg`, `-card`, `-hero`, `-pill` | a px literal |
+| Radius | `var(--radius-xs)`, `-sm`, `-md`, `-lg`, `-card`, `-hero`, `-pill` | a px literal |
 | Spacing | `padding: var(--space-4)` | Hardcoded `16px` |
 | Shadow | `box-shadow: var(--shadow-2)` | `--shadow-md` |
 | Focus | `box-shadow: var(--focus-ring)` | `outline: 2px solid` |
 | Motion | `transition: transform var(--duration-press) var(--ease-spring)`; scale by `var(--press-scale)` | literal ms (off-brand timing; the tokens also zero under reduced motion, and `--press-scale` goes to 1) |
 | Amounts | `font-family: var(--font-mono); font-variant-numeric: tabular-nums` | the body face |
 
-**Type scale** (brand roles; body 16 everywhere, ADR-058):
+**Type scale** (brand roles; body 16 everywhere, ADR-058; `--text-micro`/`--radius-xs` added by MUT-103's D1):
 ```css
+--text-micro: 0.6875rem;   /* 11 — the smallest a figure or label ever goes */
 --text-label: 0.8125rem;   /* 13 */
 --text-body: 1rem;         /* 16 — body */
 --text-headline: 1.25rem;  /* 20 */
 --text-title: 2rem;        /* 32 */
 --text-figure: 2.5rem;     /* 40 */
 --text-display: 3.5rem;    /* 56 */
-/* Legacy aliases until MUT-103 (TD-079): xs, sm → label; base, md, lg → body; xl, 2xl → headline; 3xl, 4xl → title */
 ```
+No alias names remain (`--text-xs/sm/base/md/lg/xl/2xl/3xl/4xl`, `--radius-xl/2xl/full`): MUT-103 migrated every call site onto the roles above and deleted them from `theme.css` and `FROZEN_THEME_NAMES`.
 
 **Spacing Scale** (8px base):
 ```css

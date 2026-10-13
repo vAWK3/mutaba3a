@@ -321,9 +321,9 @@
 **Effort**: Small
 
 ### TD-079: Brand v2 leaves the legacy names and component literals for MUT-103's sweep
-**Status**: Open
+**Status**: Open — narrowed to two items (see 2026-10-13 update below); everything else in the original impact list is resolved
 **Added**: 2026-10-12 (MUT-102, ADR-058)
-**Priority**: Medium
+**Priority**: Low
 **Impact**: The foundation re-points tokens; components still carry the old system:
 - **Legacy size and radius names** alias the brand scale: `--text-xs/sm` → label 13, `--text-base/md/lg` → body 16, `--text-xl/2xl` → headline 20, `--text-3xl/4xl` → title 32; `--radius-xl/2xl/full` → card/hero/pill. Some label/value pairs that differed now match.
 - **Layout tokens** (`--sidebar-width`, `--topbar-height`, `--drawer-width`, `--table-row-height`) are defined in both `theme.css` and `index.css` (the later wins; values identical).
@@ -345,8 +345,20 @@
   - The field is free text with no format check (zod `z.string()`); `profileAvatarStyle` now ignores an unreadable value.
   - Fix: pick the ink by the colour's luminance, and validate the field.
 **Remediation**: MUT-103 migrates call sites to the brand role names, removes the aliases and the duplicate layout block, replaces literals with tokens, puts amounts on `--font-mono`, and empties the allowlist.
-**Effort**: Large
+**Effort**: Small (down from Large) — only the two items below remain
 **Update (2026-10-13)**: Dropdowns are no longer part of this debt. Every raw `<select className="select">` in the app (69 occurrences across 25 files) was migrated to the existing `Select` component (`src/components/ui/Input.tsx`), which was previously wired up only on the dev-only `/theme-demo` route and never reached production. The stale pre-brand `.select` rule in `index.css` and the dead-`var()` `.plan-select`/`.filter-select` rules in `PlanningPage.css`/`RetainersPage.css` were removed. `Select` gained an `invalid?: boolean` prop (style-only error border, no message) for call sites that render their own error text. See [[Pattern: Select Styling]] in PATTERNS.md.
+**Update (2026-10-13): MUT-103's sweep is done.** Commits 1–9 on `feature/mut-103-brand-sweep` closed every item above except two, which the owner chose to leave open rather than take on (eng review D2):
+- Legacy size/radius aliases: migrated (496 uses across 43 files, including landing and the portal) and deleted from `theme.css`/`FROZEN_THEME_NAMES`, along with the duplicate layout block.
+- Layout tokens: `index.css` already pointed at `theme.css`'s by the time this sweep started; no duplicate was left to remove. `--table-row-height` went 44 → 48 (D5), wired onto `.data-table td` as a floor; `brand.spec.ts` asserts a Clients row is ≥ 48px at 1280px.
+- Amounts outside the shared components: every `*-amount`/`*-total` class found (the payment drawer, `RecurringOccurrenceCard`, `RecordPaymentButton`, the expenses group/unified/currency-summary totals, and the landing mock's amounts) now carries `--font-mono`; `hp-amount` (portal) and `CurrencyAmounts` already did. A rule that gained mono and still asked for `--weight-semibold`/600+ in the same declaration block dropped to `--weight-medium` — Plex Mono ships no 600/700, so that weight was a faked bold.
+- Colour literals: `.btn-danger` and the CSV preview were already fixed before this sweep landed; the rest (index.css, the full `components/ui` kit, drawers, landing, `PrivacyPolicyPage.css`, `HeroSection.css`) are now on tokens. `KNOWN_LITERALS` is empty; the only literals left anywhere are the D4 user-data allowlist (`profileAvatarStyle.ts`'s `DEFAULT_BUSINESS_COLOR`, the demo seed data, the default expense categories).
+- The 48 dead `var()` references: the allowlist and the aliases it tracked are both gone; `references` now simply fails on a new one.
+- `tabular-nums` without mono: every rule found (all four were in the landing mock) now carries `--font-mono`; `KNOWN_TABULAR_WITHOUT_MONO` is empty.
+- Non-amount text inside a mono cell: `.client-work-subline bdi` (not the cell) already carried `--font-mono`, scoped correctly, before this sweep.
+
+**Left open, by decision (eng review D2 — not this sweep's scope):**
+- **Heading weights and roles.** `index.css`'s app headings still set `--weight-semibold` (Thmanyah renders its 700 file, so h1–h6 compute 600 but draw bold); `h1`/`h2` there intentionally use a smaller role (`--text-headline`) than the landing page's `theme.css` heading rule (`--text-title`), for a denser cockpit UI. Fixing the weight-vs-rendered mismatch and reconciling the two heading scales is follow-up work, not tracked under a separate ticket yet.
+- **User-chosen business colours.** The default `#3b82f6` ink (`USER_COLOR_INK = 'white'` in `profileAvatarStyle.ts`) stays a flat white regardless of the chosen colour's luminance (3.68:1 default; a light user colour could read worse), and the colour field still has no format validation beyond "the browser can paint it." Picking the ink by luminance and validating the hex are both still open.
 
 ### TD-068: "All businesses" leftovers from the MUT-89 pre-landing review
 **Status**: Open

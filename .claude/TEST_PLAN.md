@@ -1897,6 +1897,20 @@ Plan: `.claude/designs/mut-102-brand-v2-foundation-tests.md`. ADR-058. Each unit
 
 **Still not run:** `npm run tauri dev` with the network off. The AAA axe rule in the browser is TD-086.
 
+### MUT-103 — Brand v2 app sweep: no literal outside a token (epic MUT-101, 2026-10-13)
+
+Plan: `.claude/designs/mut-103-brand-sweep.md`. ADR-058 (amendment). TD-079 (narrowed). Nine commits on `feature/mut-103-brand-sweep`: the guard and baseline first (TDD — detector fixtures were red before the matching code), then the alias codemod, then one surface group per commit, then density, then knowledge files.
+
+| File | Covers |
+|---|---|
+| `src/test/css/brandCss.ts` › `cssLiterals`/`scriptLiterals`/`tabularWithoutMono` (new) | A colour (hex, `rgb/hsl/hwb/lab/lch/oklab/oklch/color()`, `white`/`black`), a px/rem font-size, or a px `*radius` in a CSS declaration; a whole-string colour or a numeric `fontSize`/`borderRadius` in TS/TSX; any `<style>` element in TSX; a `tabular-nums` rule with no `--font-mono` in the same rule. Each has `it.each` fixtures for what it catches and what it leaves alone (`transparent`, `currentColor`, `0`, `%`, `em`, `calc(var(--radius-*) - 1px)`, an href fragment, prose containing `rgb(`) |
+| `brand.test.ts` › `literals` › `the repo` | Every file outside `src/styles/` and the D4 user-data allowlist (`ALLOWED_LITERAL_FILES`) has zero literals; `KNOWN_LITERALS` (shrink-only, now `{}`) and `KNOWN_TABULAR_WITHOUT_MONO` (now `[]`) fail on a new file, a higher count, or a stale (too-low) count — so a fixed file must be removed from the list, not just left at a smaller number |
+| `brand.test.ts` › `tokens` | `--radius-xs`/`--text-micro` resolve and match the JSON (D1); `FROZEN_THEME_NAMES` no longer lists the deleted aliases; the mono-weight check (`asks Plex Mono only for the weights it ships`) fails a rule that sets `font-family: var(--font-mono)` and `font-weight: var(--weight-semibold|bold)` (or a literal 600+) in the same declaration block |
+| `brand.test.ts` › `references` | No new dead `var()` — the 48-name allowlist the foundation left is gone entirely, so this is now a plain "zero dead references" check, not a shrink-only one |
+| `qa/specs/web/brand.spec.ts` › `@web.brand.layout` | The Clients row is ≥ 48px tall at 1280px (D5, new); the existing 8-surface × 2 scheme × 2 viewport × 2 language matrix (Home, Clients, Income + both drawers, Settings, Import, Expenses, Planning) still fits, with `KNOWN_OVERFLOW` unchanged from its MUT-102 baseline |
+
+**What was run (Node 22, this session):** `npx vitest run src/styles/__tests__/brand.test.ts` 168/168 · `npx vitest run src/styles` and `src/pages/landing` (217 tests total) · `npm run lint` 0 errors (6 pre-existing warnings) · `npm run typecheck` clean · `npm run build` (web) succeeded · `npm run test:bundles` passed · `npx playwright test qa/specs/web/brand.spec.ts` against a local `vite dev` server (QA_CONTEXT override, no QA engine): 16/16, including the new row-height assertion at all 8 layout-matrix combinations. **Not run this session:** the full `npm run test:run` Vitest suite (explicitly skipped per instruction) and the desktop/hosted builds.
+
 ## MUT-111 — App-association files and the /capture web fallback (2026-10-13)
 
 Epic MUT-63. Serves `/.well-known/apple-app-site-association` and

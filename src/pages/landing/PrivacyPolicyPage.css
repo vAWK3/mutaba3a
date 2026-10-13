@@ -9,7 +9,7 @@
 
 .privacy-policy-title {
   font-family: var(--font-heading);
-  font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+  font-size: clamp(var(--text-title), 3.5vw, var(--text-figure));
   font-weight: var(--weight-semibold);
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -24,12 +24,12 @@
 
 .privacy-policy-updated {
   color: var(--muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   margin: 0 0 var(--space-8);
 }
 
 .privacy-policy-intro {
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   color: var(--text);
   margin: 0 0 var(--space-10);
 }
@@ -39,7 +39,7 @@
 }
 
 .privacy-policy-section h2 {
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   color: var(--text);
   margin: 0 0 var(--space-2);

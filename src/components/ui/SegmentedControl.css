@@ -29,7 +29,7 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   border-radius: var(--radius-pill);
   cursor: pointer;

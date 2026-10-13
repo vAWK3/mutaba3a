@@ -18,18 +18,18 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--surface-elevated);
+  background: var(--surface);
   border: 2px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--muted);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   transition: all 0.2s ease;
 }
 
 .step-circle.current {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-subtle);
+  border-color: var(--accent-solid);
+  color: var(--on-accent-subtle);
+  background: var(--accent-subtle);
 }
 
 .step-circle.completed {

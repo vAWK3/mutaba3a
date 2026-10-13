@@ -2,7 +2,7 @@
 
 .recurring-drawer-intro {
   margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--text-secondary);
 }
 
@@ -42,7 +42,7 @@
 }
 
 .recurring-drawer-date {
-  font-size: var(--text-xs);
+  font-size: var(--text-label);
   color: var(--muted);
 }
 
@@ -52,6 +52,7 @@
 }
 
 .recurring-drawer-amount .input {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

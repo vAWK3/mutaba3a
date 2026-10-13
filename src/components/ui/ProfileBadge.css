@@ -16,13 +16,13 @@
 .profile-badge-sm {
   width: 18px;
   height: 18px;
-  font-size: 10px;
+  font-size: var(--text-micro);
 }
 
 .profile-badge-md {
   width: 24px;
   height: 24px;
-  font-size: 12px;
+  font-size: var(--text-label);
 }
 
 /* ProfileBadge with name */
@@ -33,7 +33,7 @@
 }
 
 .profile-badge-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-label);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;

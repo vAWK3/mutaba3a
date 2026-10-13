@@ -28,6 +28,37 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — MUT-103: no hard-coded colour, size or radius anywhere outside the token file
+
+**Why:** MUT-102 (Brand v2) re-pointed `theme.css` at the new brand tokens, but left the rest of the app on the old system behind shrink-only allowlists: 131 colour literals, 33 px radii, 95 literal font sizes, 496 uses of the legacy `--text-xs…4xl`/`--radius-xl/2xl/full` aliases, 46 dead `var()` names, and amounts outside the shared components still in the body face instead of Plex Mono (TD-079). Nothing stopped a new one from landing. MUT-103 (epic MUT-101) closes that gap app-wide — landing and the hosted portal included (their layout and motion stay with MUT-77/MUT-91) — and turns each allowlist into a guard that fails on a new literal.
+
+### Added
+- `src/styles/__tests__/brand.test.ts` › `literals`: a guard (`cssLiterals`/`scriptLiterals`/`tabularWithoutMono` in `src/test/css/brandCss.ts`) that fails on a colour, a px/rem font-size, or a px radius anywhere outside `src/styles/`, on an inline `<style>` element in TSX, and on a `tabular-nums` rule with no `--font-mono` in the same rule. The only exemption is user data (a business's or expense category's own colour), in `ALLOWED_LITERAL_FILES` with a reason.
+- `--radius-xs` (4px) and `--text-micro` (11px) in `mutaba3a.tokens.json` → `--m-*` → `theme.css` role (D1), for sizes the original six-step scale had no room for.
+- `--m-avatar-mock-fill` (`mutaba3a-theme.css`) / `--landing-mock-avatar-fill` (`theme.css`): the landing business-switcher mock's per-item hue fill, factored out of `LandingPage.css` so the formula (and its `var(--avatar-hue)` dynamic input) lives with the other primitives instead of as a literal `hsl()` call in a component stylesheet.
+- `qa/specs/web/brand.spec.ts`: a Clients row is asserted ≥ 48px tall at 1280px (D5).
+
+### Changed
+- All 496 legacy alias uses (43 files, including landing and the portal) migrated onto the brand roles (`xs/sm` → label, `base/md/lg` → body, `xl/2xl` → headline, `3xl/4xl` → title; radius `xl/2xl/full` → card/hero/pill); the aliases are deleted from `theme.css` and `FROZEN_THEME_NAMES`.
+- Every `*-amount`/`*-total` class that wasn't already on Plex Mono now is: the payment drawer's amount field, `RecurringOccurrenceCard`, `RecordPaymentButton`, `RecurringAttentionList`, the expenses-group/unified/currency-summary totals, and the landing mock's amounts (`.landing-mock-amount/-money/-client-owed/-client-overdue/-input--amount`). Because Plex Mono ships only 400/500, every rule that gained `--font-mono` and asked for 600+ in the same declaration dropped to `--weight-medium` — otherwise the browser fakes a bold.
+- `BusinessProfileDrawer`'s three `#3b82f6` literals move into `DEFAULT_BUSINESS_COLOR` (`profileAvatarStyle.ts`), the one constant `ALLOWED_LITERAL_FILES` covers for user data.
+- Fluid landing headlines (`landing-section-headline`, `landing-chapter-title`, `landing-privacy-title`, `HeroSection`'s headline and subheadline, `PrivacyPolicyPage`'s title) take their `clamp()` floor and ceiling from `--text-title/figure/display/body/headline` instead of raw rem values.
+- `.landing-mock`'s card shadow is `var(--shadow-2)` instead of a literal `rgba()` pair.
+- `--table-row-height` goes 44px → 48px (D5); `.data-table td` wires `height: var(--table-row-height)` as a floor (padding unchanged).
+
+### Removed
+- `KNOWN_DEAD_REFERENCES` (46 names) and its "lists only dead references" test: `references` now simply fails on any new dead `var()`.
+- `KNOWN_LITERAL_PAIRS` (6 CSV-preview literals): `CSVValidationPreview.css` is on tokens.
+- The inline `<style>` blocks in `PlanAssumptionDrawer.tsx` and `MonthlyTimeline.tsx`, moved to co-located `.css` files.
+
+### Technical
+- `KNOWN_LITERALS` and `KNOWN_TABULAR_WITHOUT_MONO` are both now empty — every file that was in them is clean.
+- `.claude/TECH_DEBT.md` TD-079 narrowed to two items the owner chose to leave open (eng review D2): heading weights/roles (`index.css`'s app headings compute 600 but render Thmanyah's 700 file; the app's heading scale is deliberately smaller than the landing page's), and the user-chosen business colour's ink/hex validation (still a flat white ink, still no format check). Everything else in TD-079's original scope is resolved.
+- `.claude/DECISIONS.md` ADR-058 amended with the D1 token additions, the alias removal, and the literal/mono guards.
+- `.claude/PATTERNS.md`: new "No Literal Colour, Radius or Font Size Outside `src/styles`" pattern; the type-scale snippet gained `--text-micro` and dropped the now-false "legacy aliases" comment; the radius quick-reference row gained `-xs`.
+
+---
+
 ## [Unreleased] - 2026-10-13 — The storage seam is complete and linted (MUT-47, ADR-071)
 
 **Why:** CLAUDE.md's done-gate named a `test:integration` script that never existed, and TD-013 claimed only five objects sat outside the repository provider. In the code, plans, retainer matching, CSV import, export, delete-all, the migration wizard, demo seeding and five more helpers all reached Dexie around the seam, and nothing checked it.

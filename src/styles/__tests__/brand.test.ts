@@ -8,21 +8,26 @@ import { describe, expect, it } from 'vitest';
 import tokensJson from '../brand/mutaba3a.tokens.json';
 import thmanyahPins from '../../assets/fonts/thmanyah.sha256.json';
 import {
+  COLOR_LITERAL,
   THEME_STATES,
   Tokens,
   bareVarReferences,
+  cssLiterals,
   colorPairs,
   contrast,
   customPropertyDefinitions,
   fontFaces,
+  literalSourceFiles,
   loadStylesheet,
   parseCss,
   parseColor,
   parseOklch,
   repoPath,
   schemeOf,
+  scriptLiterals,
   sourceFiles,
   stylesheetFromCss,
+  tabularWithoutMono,
   toHex,
   type Rgba,
   type ThemeState,
@@ -349,7 +354,9 @@ describe('drift', () => {
  * Every custom property theme.css defined before the Brand v2 rewrite (eng
  * review D6). Components use these names; dropping one silently strips a
  * border, shadow or colour somewhere. Add names freely; remove one only with
- * the sweep that stops every use of it.
+ * the sweep that stops every use of it. MUT-103 removed the legacy size and
+ * radius aliases (--text-xs…4xl, --radius-xl/2xl/full) after moving every use
+ * onto the brand roles.
  */
 const FROZEN_THEME_NAMES = [
   '--accent', '--accent-2', '--accent-2-hover', '--accent-2-subtle', '--accent-active', '--accent-hover',
@@ -363,14 +370,14 @@ const FROZEN_THEME_NAMES = [
   '--input-border', '--input-border-focus', '--input-border-hover', '--input-placeholder', '--leading-normal',
   '--leading-relaxed', '--leading-snug', '--leading-tight', '--link', '--link-hover', '--link-visited', '--muted',
   '--muted-2', '--nav-item-active', '--nav-item-active-text', '--nav-item-hover', '--on-accent', '--overlay',
-  '--placeholder', '--radius-2xl', '--radius-full', '--radius-lg', '--radius-md', '--radius-sm', '--radius-xl',
+  '--placeholder', '--radius-lg', '--radius-md', '--radius-sm',
   '--selection-bg', '--selection-text', '--shadow-1', '--shadow-2', '--shadow-3', '--shadow-inset', '--sidebar-bg',
   '--sidebar-border', '--sidebar-width', '--space-0', '--space-0-5', '--space-1', '--space-1-5', '--space-10',
   '--space-12', '--space-16', '--space-2', '--space-2-5', '--space-3', '--space-4', '--space-5', '--space-6',
   '--space-8', '--space-px', '--success', '--success-hover', '--success-muted', '--success-subtle', '--surface',
   '--surface-2', '--surface-3', '--surface-hover', '--table-border', '--table-header-bg', '--table-row-height',
-  '--table-row-hover', '--table-row-selected', '--text', '--text-2xl', '--text-3xl', '--text-4xl', '--text-base',
-  '--text-lg', '--text-md', '--text-secondary', '--text-sm', '--text-xl', '--text-xs', '--topbar-height',
+  '--table-row-hover', '--table-row-selected', '--text',
+  '--text-secondary', '--topbar-height',
   '--tracking-normal', '--tracking-tight', '--tracking-wide', '--warning', '--warning-hover', '--warning-muted',
   '--warning-subtle', '--weight-bold', '--weight-medium', '--weight-normal', '--weight-semibold',
 ];
@@ -384,41 +391,19 @@ describe('names', () => {
   });
 });
 
-/**
- * Tokens referenced without a fallback that nothing defines: each one is a
- * style silently dropped today (eng review D6, counted 2026-10-12). Shrink-only:
- * MUT-103 replaces each with a real token and deletes it here. A new dead
- * reference, or an entry that stops being dead, fails the test.
- */
-const KNOWN_DEAD_REFERENCES = [
-  '--bg-hover', '--bg-primary', '--bg-secondary', '--bg-tertiary', '--border-color',
-  '--color-bg-base', '--color-bg-secondary', '--color-bg-subtle', '--color-border', '--color-danger',
-  '--color-expense', '--color-income', '--color-info', '--color-primary', '--color-success',
-  '--color-text-base', '--color-text-muted', '--color-text-tertiary', '--color-warning', '--danger', '--danger-subtle',
-  '--error-bg', '--error-fg', '--font-serif', '--font-size-sm', '--foreground', '--info-bg', '--info-fg', '--negative',
-  '--positive', '--primary', '--primary-foreground', '--primary-subtle', '--shadow-lg', '--shadow-xl',
-  '--surface-active', '--surface-alt', '--surface-elevated', '--surface-raised', '--surface-secondary',
-  '--surface-tertiary', '--text-muted', '--text-primary', '--text-tertiary', '--warning-bg', '--warning-fg',
-];
-
 describe('references', () => {
   const files = sourceFiles();
   const defined = customPropertyDefinitions(files);
   const references = bareVarReferences(files);
   const dead = [...references.keys()].filter((name) => !defined.has(name)).sort();
 
-  it('adds no new reference to an undefined token', () => {
-    const fresh = dead.filter((name) => !KNOWN_DEAD_REFERENCES.includes(name));
-    expect(Object.fromEntries(fresh.map((name) => [name, references.get(name)]))).toEqual({});
+  // Every var() without a fallback names a defined token: one that doesn't is a style
+  // the browser silently drops (eng review D6; MUT-103 fixed the 48 found by MUT-102).
+  it('references no undefined token', () => {
+    expect(Object.fromEntries(dead.map((name) => [name, references.get(name)]))).toEqual({});
   });
 
-  it('lists only references that are still dead (remove fixed ones from KNOWN_DEAD_REFERENCES)', () => {
-    expect(KNOWN_DEAD_REFERENCES.filter((name) => !dead.includes(name))).toEqual([]);
-  });
 });
-
-/** A colour literal anywhere in a declaration value: theme.css must take every colour from --m-*. */
-const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|\b(?:white|black)\b/i;
 
 const firstFamily = (value: string) => value.split(',')[0].replace(/["']/g, '').trim();
 
@@ -489,7 +474,6 @@ describe('tokens', () => {
   it('body text is 16px and the type roles equal the JSON scale', () => {
     const tokens = new Tokens(theme, LIGHT);
     expect(tokens.px('--text-body')).toBe(16);
-    expect(tokens.px('--text-base')).toBe(16);
     for (const [role, [size]] of Object.entries(tokensJson.type)) expect(tokens.px(`--text-${role}`), role).toBe(size);
   });
 
@@ -651,20 +635,6 @@ describe('contrast', () => {
  * (purple text on lavender, white on a status ink that turns light in dark).
  * Translucent grounds are skipped here: what they sit on is not in the rule.
  */
-/**
- * Rules whose text and background are both hard-coded literals, below 7:1 (counted 2026-10-12).
- * They don't move with the theme; MUT-103's literal sweep moves them onto tokens and deletes
- * them here. Shrink-only: a new failure, or an entry that passes, fails the test.
- */
-const KNOWN_LITERAL_PAIRS = [
-  'src/components/csv/CSVValidationPreview.css .status-icon.status-new',
-  'src/components/csv/CSVValidationPreview.css .status-icon.status-duplicate',
-  'src/components/csv/CSVValidationPreview.css .status-icon.status-error',
-  'src/components/csv/CSVValidationPreview.css .type-badge',
-  'src/components/csv/CSVValidationPreview.css .issue.error',
-  'src/components/csv/CSVValidationPreview.css .issue.warning',
-];
-
 describe('rendered pairs', () => {
   const theme = loadStylesheet(THEME_CSS);
   const files = sourceFiles().filter((file) => file.endsWith('.css') && !file.startsWith(repoPath('src/styles/')));
@@ -716,13 +686,9 @@ describe('rendered pairs', () => {
 
   it.each(STATES)('every rule’s text clears its floor on its own background: 7:1 light, 4.5:1 dark (%s)', (_name, state) => {
     const failing = failingRules(state);
-    expect([...failing].filter(([key]) => !KNOWN_LITERAL_PAIRS.includes(key)).map(([, detail]) => detail)).toEqual([]);
+    expect([...failing].map(([, detail]) => detail)).toEqual([]);
   });
 
-  it('lists only literal pairs that still fail (remove fixed ones from KNOWN_LITERAL_PAIRS)', () => {
-    const failing = failingRules(LIGHT);
-    expect(KNOWN_LITERAL_PAIRS.filter((key) => !failing.has(key))).toEqual([]);
-  });
 });
 
 describe('focus', () => {
@@ -812,5 +778,156 @@ describe('accent-text guard', () => {
       .filter((file) => /\.(css|tsx?)$/.test(file))
       .flatMap((file) => accentTextLines(readFileSync(file, 'utf8')).map((line) => `${file.replace(`${repoPath('.')}/`, '')}:${line}`));
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Literal guard (MUT-103): outside src/styles, a colour, radius or font size
+ * comes from a token. Allowed: user data (category and business colours),
+ * listed here with the reason.
+ */
+const ALLOWED_LITERAL_FILES: Record<string, string> = {
+  'src/db/defaultExpenseCategories.ts': 'user data: the default expense category colours a user can recolour',
+  'src/demo/seedData/categories.ts': 'user data: the sample session\'s category colours',
+  'src/demo/seedData/profile.ts': 'user data: the sample businesses\' chosen colours',
+  'src/components/ui/profileAvatarStyle.ts': 'user data: the default business colour and the ink on it (TD-079 picks the ink by luminance)',
+};
+
+/**
+ * Literals the sweep has not reached yet, per file (counted 2026-10-13 on main
+ * a48f72d). Shrink-only: each MUT-103 surface commit lowers or deletes its
+ * entries; a new file, a higher count, or a stale count fails.
+ */
+const KNOWN_LITERALS: Record<string, number> = {};
+
+/**
+ * Rules asking for tabular figures without Plex Mono (Thmanyah has no tnum,
+ * so the request does nothing). Shrink-only, as above.
+ */
+const KNOWN_TABULAR_WITHOUT_MONO: string[] = [];
+
+describe('literals', () => {
+  describe('in CSS', () => {
+    it.each([
+      ['a { color: #fff; }', 'colour'],
+      ['a { background: rgb(0 0 0 / 0.5); }', 'colour'],
+      ['a { border-color: hsl(0 0% 50%); }', 'colour'],
+      ['a { color: oklch(0.5 0.1 300); }', 'colour'],
+      ['a { color: white; }', 'colour'],
+      ['a { box-shadow: 0 1px 2px black; }', 'colour'],
+      ['a { --tint: #3b82f6; }', 'colour'],
+      ['a { color: var(--text, #111); }', 'colour'],
+      ['a { font-size: 12px; }', 'font-size'],
+      ['a { font-size: 0.875rem; }', 'font-size'],
+      ['a { font-size: var(--text-label, 13px); }', 'font-size'],
+      ['a { border-radius: 4px; }', 'radius'],
+      ['a { border-top-left-radius: 2px; }', 'radius'],
+      ['a { border-radius: var(--radius-lg, 12px); }', 'radius'],
+    ])('catches %s as %s', (css, kind) => {
+      expect(cssLiterals(css).map((literal) => literal.kind)).toEqual([kind]);
+    });
+
+    it.each([
+      'a { color: transparent; }',
+      'a { color: currentColor; }',
+      'a { color: inherit; }',
+      'a { color: var(--text); background: var(--white-wash); }',
+      'a { white-space: nowrap; }',
+      'a { font-size: 0.7em; }',
+      'a { font-size: 100%; }',
+      'a { font-size: var(--text-label); }',
+      'a { font: inherit; }',
+      'a { border-radius: 0; }',
+      'a { border-radius: 50%; }',
+      'a { border-radius: calc(var(--radius-lg) - 1px); }',
+      'a { padding: 12px; }',
+      '@media (max-width: 768px) { a { color: var(--text); } }',
+      '@media print { .table td { border: 1px solid #ccc; } }',
+    ])('leaves %s alone', (css) => {
+      expect(cssLiterals(css)).toEqual([]);
+    });
+
+    it('checks screen rules beside a print block', () => {
+      expect(cssLiterals('@media print { a { color: #333; } } @media screen { a { color: #333; } }').map((literal) => literal.kind)).toEqual(['colour']);
+    });
+
+    it('reports the line', () => {
+      expect(cssLiterals('a {\n  color: var(--text);\n  border-radius: 6px;\n}').map((literal) => literal.line)).toEqual([3]);
+    });
+  });
+
+  describe('in TS and TSX (eng review D3: exact strings, numeric style keys, no <style>)', () => {
+    it.each([
+      ["const tint = '#3b82f6';", 'colour'],
+      ['const tint = "#abc";', 'colour'],
+      ["const veil = 'rgba(0, 0, 0, 0.5)';", 'colour'],
+      ["style={{ color: 'white' }}", 'colour'],
+      ['style={{ fontSize: 12 }}', 'font-size'],
+      ["style={{ fontSize: '0.75rem' }}", 'font-size'],
+      ['style={{ borderRadius: 4 }}', 'radius'],
+      ["style={{ borderTopLeftRadius: '2px' }}", 'radius'],
+      ['return <style>{`.a { color: red; }`}</style>;', 'style-element'],
+    ])('catches %s as %s', (code, kind) => {
+      expect(scriptLiterals(code).map((literal) => literal.kind)).toEqual([kind]);
+    });
+
+    it.each([
+      '<a href="#add">Add</a>',
+      '<Link to="#face" />',
+      "const help = 'Paste rgb(0 0 0) or a hex';",
+      'const glyph = <span>&#9998;</span>;',
+      "style={{ fontSize: 'var(--text-label)', borderRadius: 'var(--radius-sm)' }}",
+      'style={{ borderRadius: 0 }}',
+      "const mode = 'whiteboard';",
+      "background: 'var(--surface)'",
+    ])('leaves %s alone', (code) => {
+      expect(scriptLiterals(code)).toEqual([]);
+    });
+  });
+
+  describe('tabular figures', () => {
+    it('catches tabular-nums without Plex Mono', () => {
+      expect(tabularWithoutMono('.total { font-variant-numeric: tabular-nums; }')).toEqual(['.total']);
+    });
+
+    it('leaves a rule that sets both alone', () => {
+      expect(tabularWithoutMono('.total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }')).toEqual([]);
+    });
+  });
+
+  describe('the repo', () => {
+    const relativeFile = (file: string) => file.replace(`${repoPath('.')}/`, '');
+    const found = literalSourceFiles().flatMap((file) =>
+      (file.endsWith('.css') ? cssLiterals(readFileSync(file, 'utf8')) : scriptLiterals(readFileSync(file, 'utf8'), file.endsWith('.tsx'))).map(
+        (literal) => ({ ...literal, file: relativeFile(file) }),
+      ),
+    );
+    const counted = found.filter((literal) => !(literal.file in ALLOWED_LITERAL_FILES));
+    const counts = counted.reduce<Record<string, number>>((all, { file }) => ({ ...all, [file]: (all[file] ?? 0) + 1 }), {});
+
+    it('adds no literal outside src/styles (move it onto a token)', () => {
+      const over = counted.filter(({ file }) => counts[file] > (KNOWN_LITERALS[file] ?? 0));
+      expect(over.map(({ file, line, kind, text }) => `${file}:${line} ${kind} ${text}`)).toEqual([]);
+    });
+
+    it('KNOWN_LITERALS matches what is left (lower or delete an entry as its file is swept)', () => {
+      expect(Object.entries(KNOWN_LITERALS).filter(([file, count]) => (counts[file] ?? 0) !== count)).toEqual([]);
+    });
+
+    it('every allowlisted file exists and still holds a literal', () => {
+      expect(Object.keys(ALLOWED_LITERAL_FILES).filter((file) => !found.some((literal) => literal.file === file))).toEqual([]);
+    });
+
+    const tabular = literalSourceFiles()
+      .filter((file) => file.endsWith('.css'))
+      .flatMap((file) => tabularWithoutMono(readFileSync(file, 'utf8')).map((selector) => `${relativeFile(file)} ${selector}`));
+
+    it('asks for tabular figures only on Plex Mono', () => {
+      expect(tabular.filter((rule) => !KNOWN_TABULAR_WITHOUT_MONO.includes(rule))).toEqual([]);
+    });
+
+    it('lists only rules that still lack mono (remove fixed ones from KNOWN_TABULAR_WITHOUT_MONO)', () => {
+      expect(KNOWN_TABULAR_WITHOUT_MONO.filter((rule) => !tabular.includes(rule))).toEqual([]);
+    });
   });
 });

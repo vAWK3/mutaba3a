@@ -553,3 +553,86 @@ export function colorPairs(file: string): ColorPair[] {
   });
   return pairs;
 }
+
+// ─── Literal guard (MUT-103) ───────────────────────────────────────────────
+
+/**
+ * A colour literal in a CSS value: hex (not an HTML entity `&#9998;`), a colour
+ * function, or white/black as a whole word (not `white-space`, not `--white-x`).
+ */
+export const COLOR_LITERAL = /(?<![\w&-])#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|(?<![\w-])(?:white|black)(?![\w-])/i;
+
+/** A non-zero px or rem length; `0`, `%` and `em` stay relative. */
+const PX_OR_REM = /(?<![\w.-])(?:\d*\.\d+|[1-9]\d*)(?:px|rem)\b/;
+const NON_ZERO_PX = /(?<![\w.-])(?:\d*\.\d+|[1-9]\d*)px\b/;
+/** Inner radius = outer token − a border width: the one px a radius may carry. */
+const INNER_RADIUS = /calc\(\s*var\(--radius-[\w-]+\)\s*-\s*\d+px\s*\)/g;
+
+export type LiteralKind = 'colour' | 'radius' | 'font-size' | 'style-element';
+
+export interface Literal {
+  line: number;
+  kind: LiteralKind;
+  text: string;
+}
+
+/** Inside `@media print`: paper, not the screen theme, so tokens (which follow the scheme) would be wrong there. */
+function inPrint(node: { parent?: unknown }): boolean {
+  for (let at = node.parent as { type?: string; name?: string; params?: string; parent?: unknown } | undefined; at; at = at.parent as typeof at) {
+    if (at.type === 'atrule' && at.name === 'media' && /\bprint\b/.test(at.params ?? '')) return true;
+  }
+  return false;
+}
+
+/** Every colour, px radius and px/rem font size written into a stylesheet's declarations, outside print rules. */
+export function cssLiterals(css: string): Literal[] {
+  const found: Literal[] = [];
+  postcss.parse(css).walkDecls((decl) => {
+    if (inPrint(decl)) return;
+    const line = decl.source?.start?.line ?? 0;
+    const text = `${decl.prop}: ${decl.value}`;
+    if (COLOR_LITERAL.test(decl.value)) found.push({ line, kind: 'colour', text });
+    if (/radius$/.test(decl.prop) && NON_ZERO_PX.test(decl.value.replace(INNER_RADIUS, ''))) found.push({ line, kind: 'radius', text });
+    if (decl.prop === 'font-size' && PX_OR_REM.test(decl.value)) found.push({ line, kind: 'font-size', text });
+  });
+  return found;
+}
+
+/** A string literal whose whole value is a colour, unless it is a link target (`href="#add"`). */
+const SCRIPT_COLOR = /(?<!\b(?:href|to)=)(['"`])(#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^'"`\n]*\)|white|black)\1/gi;
+/** A style-object size key given a number, or a px/rem string. */
+const SCRIPT_SIZE = /\b(fontSize|border(?:(?:Top|Bottom|Start|End)(?:Left|Right|Start|End))?Radius)\s*:\s*(?:(['"`])\s*(?:\d*\.)?\d+(?:px|rem)?\s*\2|(?:\d*\.\d+|[1-9]\d*)(?![\w.]))/g;
+const STYLE_ELEMENT = /<style[\s>]/g;
+
+/** Literals in TS/TSX source: whole-string colours, numeric size keys, and (in TSX) `<style>` elements. */
+export function scriptLiterals(code: string, tsx = true): Literal[] {
+  const lineAt = (index: number) => code.slice(0, index).split('\n').length;
+  const found: Literal[] = [];
+  for (const match of code.matchAll(SCRIPT_COLOR)) found.push({ line: lineAt(match.index), kind: 'colour', text: match[0] });
+  for (const match of code.matchAll(SCRIPT_SIZE)) {
+    found.push({ line: lineAt(match.index), kind: match[1] === 'fontSize' ? 'font-size' : 'radius', text: match[0] });
+  }
+  if (tsx) for (const match of code.matchAll(STYLE_ELEMENT)) found.push({ line: lineAt(match.index), kind: 'style-element', text: match[0] });
+  return found.sort((a, b) => a.line - b.line);
+}
+
+/** Selectors of rules that ask for tabular-nums without setting the Plex Mono role. */
+export function tabularWithoutMono(css: string): string[] {
+  const selectors: string[] = [];
+  postcss.parse(css).walkRules((rule) => {
+    let tabular = false;
+    let mono = false;
+    rule.each((node) => {
+      if (node.type !== 'decl') return;
+      if (node.prop === 'font-variant-numeric' && /tabular-nums/.test(node.value)) tabular = true;
+      if ((node.prop === 'font-family' || node.prop === 'font') && /var\(--font-mono\)/.test(node.value)) mono = true;
+    });
+    if (tabular && !mono) selectors.push(rule.selector.replace(/\s+/g, ' '));
+  });
+  return selectors;
+}
+
+/** `sourceFiles()` minus src/styles, where the tokens themselves live. */
+export function literalSourceFiles(): string[] {
+  return sourceFiles().filter((file) => !file.startsWith(repoPath('src/styles') + '/'));
+}

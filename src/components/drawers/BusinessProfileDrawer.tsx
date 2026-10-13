@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { Select } from '../ui';
+import { DEFAULT_BUSINESS_COLOR } from '../ui/profileAvatarStyle';
 import { useDrawerStore } from '../../lib/stores';
 import {
   useBusinessProfile,
@@ -48,7 +49,7 @@ export function BusinessProfileDrawer() {
       nameEn: '',
       email: '',
       phone: '',
-      primaryColor: '#3b82f6',
+      primaryColor: DEFAULT_BUSINESS_COLOR,
       defaultCurrency: 'USD',
       isDefault: false,
     },
@@ -62,7 +63,7 @@ export function BusinessProfileDrawer() {
         nameEn: existingProfile.nameEn || '',
         email: existingProfile.email || '',
         phone: existingProfile.phone || '',
-        primaryColor: existingProfile.primaryColor || '#3b82f6',
+        primaryColor: existingProfile.primaryColor || DEFAULT_BUSINESS_COLOR,
         // Stays USD/ILS/EUR-only (MUT-140 scope: JOD not added to profile-default currency).
         defaultCurrency: existingProfile.defaultCurrency as 'USD' | 'ILS' | 'EUR',
         isDefault: existingProfile.isDefault,
@@ -183,20 +184,20 @@ export function BusinessProfileDrawer() {
                 <img
                   src={logoPreview}
                   alt="Logo preview"
-                  style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 4 }}
+                  style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 'var(--radius-xs)' }}
                 />
               ) : (
                 <div
                   style={{
                     width: 64,
                     height: 64,
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    borderRadius: 4,
+                    backgroundColor: 'var(--surface-2)',
+                    borderRadius: 'var(--radius-xs)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'var(--color-text-tertiary)',
-                    fontSize: 12,
+                    color: 'var(--muted)',
+                    fontSize: 'var(--text-label)',
                   }}
                 >
                   No logo
@@ -260,7 +261,7 @@ export function BusinessProfileDrawer() {
                 type="text"
                 className="input"
                 style={{ width: 120 }}
-                placeholder="#3b82f6"
+                placeholder={DEFAULT_BUSINESS_COLOR}
                 aria-label="Brand Color hex"
                 {...form.register('primaryColor')}
               />

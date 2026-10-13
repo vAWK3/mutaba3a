@@ -41,7 +41,7 @@
   height: 32px;
   min-width: 32px;
   padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   border-radius: var(--radius-sm);
 }
 
@@ -49,14 +49,14 @@
   height: 40px;
   min-width: 40px;
   padding: 0 var(--space-4);
-  font-size: var(--text-base);
+  font-size: var(--text-body);
 }
 
 .btn-lg {
   height: 44px;
   min-width: 44px;
   padding: 0 var(--space-5);
-  font-size: var(--text-md);
+  font-size: var(--text-body);
 }
 
 /*
@@ -88,7 +88,7 @@
 
 .btn-primary:active:not(:disabled) {
   background-color: var(--accent-solid-active);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-1);
   transform: translateY(1px);
 }
 

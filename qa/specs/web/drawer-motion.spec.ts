@@ -76,7 +76,7 @@ test(
   async ({ page, step }) => {
     await step('Switch language to Arabic', async () => {
       await openFreshApp(page, '/settings');
-      await page.getByRole('button', { name: 'العربية' }).click();
+      await page.getByRole('radio', { name: 'العربية' }).click();
       await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     });
 

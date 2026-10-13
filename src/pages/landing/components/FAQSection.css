@@ -27,7 +27,7 @@
   background: none;
   border: none;
   color: var(--text);
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
   text-align: start;
   cursor: pointer;
@@ -60,7 +60,7 @@
 
 .landing-faq-answer p {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-body);
   color: var(--text-secondary);
   line-height: var(--leading-relaxed);
   max-width: 62ch;
@@ -68,7 +68,7 @@
 
 @media (max-width: 768px) {
   .landing-faq-question {
-    font-size: var(--text-md);
+    font-size: var(--text-body);
     padding: var(--space-4) 0;
   }
 }

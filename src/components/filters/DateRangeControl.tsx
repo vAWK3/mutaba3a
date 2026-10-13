@@ -103,8 +103,8 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
       {/* Show date range display for presets (not custom) */}
       {!isCustomActive && dateFrom && dateTo && (
         <span className="date-range-display" style={{
-          color: 'var(--color-text-muted)',
-          fontSize: 'var(--font-size-sm)',
+          color: 'var(--muted)',
+          fontSize: 'var(--text-label)',
           whiteSpace: 'nowrap'
         }}>
           {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
@@ -119,16 +119,16 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
             aria-label={t('filters.periodFrom')}
             value={customFrom}
             onChange={(e) => handleCustomDateChange('from', e.target.value)}
-            style={{ width: 'auto', padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--font-size-sm)' }}
+            style={{ width: 'auto', padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--text-label)' }}
           />
-          <span style={{ color: 'var(--color-text-muted)' }}>–</span>
+          <span style={{ color: 'var(--muted)' }}>–</span>
           <input
             type="date"
             className="input"
             aria-label={t('filters.periodTo')}
             value={customTo}
             onChange={(e) => handleCustomDateChange('to', e.target.value)}
-            style={{ width: 'auto', padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--font-size-sm)' }}
+            style={{ width: 'auto', padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--text-label)' }}
           />
         </div>
       )}

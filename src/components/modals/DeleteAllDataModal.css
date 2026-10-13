@@ -2,7 +2,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   z-index: 10000;
   animation: fadeIn 150ms ease;
 }
@@ -13,9 +13,9 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--surface, #FFFFFF);
+  background: var(--surface);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3, 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15));
+  box-shadow: var(--shadow-1);
   width: 90%;
   max-width: 480px;
   max-height: 90vh;
@@ -55,7 +55,7 @@
 }
 
 .modal-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   color: var(--text);
   margin: 0;
@@ -105,7 +105,7 @@
 
 .modal-warning p {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--error);
   line-height: 1.5;
 }
@@ -128,14 +128,14 @@
 }
 
 .modal-step-title {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   color: var(--text);
   margin: 0 0 var(--space-2) 0;
 }
 
 .modal-step-desc {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--muted);
   margin: 0 0 var(--space-3) 0;
 }
@@ -150,7 +150,7 @@
 /* Checkbox */
 .modal-confirm-label {
   display: block;
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--text);
   margin-bottom: var(--space-2);
 }
@@ -166,12 +166,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--success);
 }
 
 .status-error {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   color: var(--error);
 }
 

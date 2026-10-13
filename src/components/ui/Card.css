@@ -51,7 +51,7 @@
 
 .card-title {
   font-family: var(--font-heading);
-  font-size: var(--text-md);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   color: var(--text);
   margin: 0;

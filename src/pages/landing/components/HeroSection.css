@@ -21,7 +21,7 @@
 /* Headline */
 .landing-headline-large {
   font-family: var(--font-heading);
-  font-size: clamp(2.25rem, 4.6vw, 3.5rem);
+  font-size: clamp(var(--text-title), 4.6vw, var(--text-display));
   font-weight: var(--weight-bold);
   line-height: 1.04;
   letter-spacing: -0.03em;
@@ -41,7 +41,7 @@
 }
 
 .landing-subheadline-large {
-  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  font-size: clamp(var(--text-body), 1.6vw, var(--text-headline));
   color: var(--text-secondary);
   line-height: var(--leading-relaxed);
   margin: 0 0 var(--space-8);
@@ -61,7 +61,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-6) var(--space-3) var(--space-5);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-card);
   background: var(--text);
   color: var(--bg);
   text-decoration: none;
@@ -93,18 +93,18 @@
 }
 
 .hero-cta-label {
-  font-size: var(--text-lg);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
 
 .hero-cta-hint {
-  font-size: var(--text-sm);
+  font-size: var(--text-label);
   opacity: 0.72;
 }
 
 .hero-cta-alt {
   color: var(--accent-text);
-  font-size: var(--text-md);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
   text-decoration: none;
 }
