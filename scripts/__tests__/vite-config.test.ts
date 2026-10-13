@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
-import configFn, { PWA_WORKBOX } from '../../vite.config';
+import { existsSync } from 'node:fs';
+import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX } from '../../vite.config';
+import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
+import { repoPath } from '../../src/test/css/brandCss';
+import { pngSize } from '../../src/test/pngSize';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
@@ -50,6 +54,30 @@ describe('vite.config', () => {
       const fontRule = runtimeCaching?.find((rule) => isFont(rule, 'font'));
       expect(fontRule).toMatchObject({ handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 12 } } });
       expect(isFont(fontRule!, 'script')).toBe(false);
+    });
+  });
+
+  describe('PWA manifest (MUT-104)', () => {
+    it('paints the splash and title bar with the brand canvas from the token file', () => {
+      expect(PWA_MANIFEST.theme_color).toBe(tokens.color.canvas.hex);
+      expect(PWA_MANIFEST.background_color).toBe(tokens.color.canvas.hex);
+    });
+
+    it.each(PWA_MANIFEST.icons ?? [])('ships $src at its declared $sizes', ({ src, sizes }) => {
+      const file = repoPath(`public${src}`);
+      expect(existsSync(file), file).toBe(true);
+      expect(pngSize(file).join('x')).toBe(sizes);
+    });
+
+    it('keeps one maskable icon for Android launchers', () => {
+      expect((PWA_MANIFEST.icons ?? []).filter((icon) => icon.purpose === 'maskable')).toHaveLength(1);
+    });
+
+    it('includes the favicons and the apple-touch icon, and each exists in public/', () => {
+      expect(PWA_INCLUDE_ASSETS).toEqual(
+        expect.arrayContaining(['favicon.svg', 'favicon-32.png', 'favicon-16.png', 'apple-touch-icon.png']),
+      );
+      for (const asset of PWA_INCLUDE_ASSETS) expect(existsSync(repoPath(`public/${asset}`)), asset).toBe(true);
     });
   });
 

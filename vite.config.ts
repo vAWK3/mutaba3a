@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
+import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 
@@ -58,6 +58,36 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
     },
   ],
 };
+
+/** Files in `public/` the service worker precaches beside the build, so the tab and home-screen icons work offline (MUT-104). */
+export const PWA_INCLUDE_ASSETS = [
+  "favicon.svg",
+  "favicon-32.png",
+  "favicon-16.png",
+  "apple-touch-icon.png",
+  "icons/icon-192.png",
+  "icons/icon-512.png",
+  "icons/maskable-512.png",
+];
+
+/**
+ * The web app manifest. Splash and title bar use the Brand v2 light canvas,
+ * `color.canvas` in `mutaba3a.tokens.json` (MUT-104); the scope is set per
+ * build in the config below.
+ */
+export const PWA_MANIFEST = {
+  name: "متابعة",
+  short_name: "متابعة",
+  description: "Offline-first mini CRM and finance tracker for freelancers.",
+  theme_color: "#FCF6ED",
+  background_color: "#FCF6ED",
+  display: "standalone",
+  icons: [
+    { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+  ],
+} satisfies Partial<ManifestOptions>;
 
 /**
  * The hosted portal (MUT-43, hosted-portal.md §2, §7.5, §9): its own entry,
@@ -118,40 +148,11 @@ export default defineConfig(({ mode }) => {
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",
-      includeAssets: [
-        "favicon.svg",
-        "icons/icon-192.png",
-        "icons/icon-512.png",
-        "icons/maskable-512.png",
-      ],
+      includeAssets: PWA_INCLUDE_ASSETS,
       manifest: {
-        name: "متابعة",
-        short_name: "متابعة",
-        description:
-          "Offline-first mini CRM and finance tracker for freelancers.",
-        theme_color: "#070C16",
-        background_color: "#070C16",
-        display: "standalone",
+        ...PWA_MANIFEST,
         scope: isTauri ? "/" : "/app/",
         start_url: isTauri ? "/" : "/app/",
-        icons: [
-          {
-            src: "/icons/icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "/icons/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-          },
-          {
-            src: "/icons/maskable-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
-        ],
       },
       workbox: PWA_WORKBOX,
       devOptions: {
