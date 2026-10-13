@@ -131,7 +131,9 @@ ESLint enforces it (MUT-47, ADR-071).
 - **Overdue** = Receivable AND `dueDate < today`
 - **Mark Paid / Record Payment are the same flow (ADR-038)**: both open
   `PartialPaymentDrawer` (prefilled to the full remaining balance for Mark
-  Paid), the only place that writes a `PaymentRecord`. `receivedAmountMinor`,
+  Paid). `IncomeDrawer`'s fast-add-as-Received path writes a `PaymentRecord`
+  too (`transactionRepo.createReceivedIncome`, MUT-60) — every Received entry
+  is record-backed regardless of which flow created it. `receivedAmountMinor`,
   `status` and `paidAt` are recalculated from the records — `paidAt` is the
   *latest record's* date, defaulting to today but overridable to record a
   payment that happened earlier; `occurredAt` always stays the earned date.
@@ -155,8 +157,11 @@ ESLint enforces it (MUT-47, ADR-071).
   same entries (those recorded in the business), so their figures are equal
   (ADR-049)
 - **A client's payment history** = its `PaymentRecord`s plus one derived
-  `entry` row per income whose received amount no record covers (income saved
-  as Received writes none; ADR-033, TD-029)
+  `entry` row per income whose received amount no record covers (ADR-033).
+  Since MUT-60 (TD-029, resolved), every new Received create and every
+  CSV-imported paid row is record-backed from the start, and a Dexie v23
+  upgrade backfilled existing data — the `entry` row now exists only for
+  pre-v23 data a fresh install or an already-migrated database never produces
 
 ---
 

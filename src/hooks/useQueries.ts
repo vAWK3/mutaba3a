@@ -173,6 +173,23 @@ export function useUpdateTransaction() {
 }
 
 /**
+ * Create a new income entry already Received (MUT-60): record-backed from
+ * the start via transactionRepo.createReceivedIncome, instead of
+ * useCreateTransaction writing paid status straight onto the Transaction.
+ */
+export function useCreateReceivedIncome() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ data, paidAt }: {
+      data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'paidAt' | 'receivedAmountMinor'>;
+      paidAt: string;
+    }) => getRepositories().base.transactions.createReceivedIncome(data, paidAt),
+    onSuccess: () => invalidateTransactionQueries(queryClient),
+  });
+}
+
+/**
  * @deprecated Mark paid now routes through `PartialPaymentDrawer` and
  * `useCreatePaymentRecord` (MUT-18/ADR-038, MUT-86). This hook is kept for
  * backwards compatibility until the next release migration.

@@ -464,7 +464,7 @@
 **Added**: 2026-10-12 (MUT-82)
 **Priority**: Low to Medium (item 1 is Medium: it is the sample path visitors take)
 **Impact**: Held back to keep MUT-82 to H1:
-1. **Undo on an entry with an uncovered received amount** (sample data, TD-063; legacy data, MUT-60) restores the record-derived state, not the seeded number. The save already drops the uncovered part, because `recalculateReceivedAmount` sums records only; deleting the record then leaves `receivedAmountMinor` at what the records cover. Fixed for free once such entries get a record (TD-063's seed fix or MUT-60's backfill).
+1. **Undo on an entry with an uncovered received amount** (sample data, TD-063; legacy data, MUT-60) restores the record-derived state, not the seeded number. The save already drops the uncovered part, because `recalculateReceivedAmount` sums records only; deleting the record then leaves `receivedAmountMinor` at what the records cover. **Legacy-data half fixed 2026-10-13 (MUT-60):** the v23 backfill gives every uncovered real-user entry a record. The sample-data half is still open -- MUT-60's backfill runs as a Dexie version upgrade and never touches a freshly-seeded demo session (created straight at the latest schema version, nothing to upgrade from), so TD-063's own seed-side fix is still needed for the sample path.
 2. **`useAttentionReceivables` has no app consumer.** Home selects its list from `useReceivables` (ADR-055). Both copies (`useQueries.ts`, `useIncomeQueries.ts`) and their tests remain, and so does `transactionRepo.getAttentionReceivables` in the repository interface (it now calls the shared selector). Not deleted here: `useQueries.ts` was MUT-73's area while this lane was open.
 3. **Home's Recent payments rows** still open their client by mouse only (Needs attention's rows gained a link), and at 375 px the date and amount squeeze the client column to one letter.
 4. **Toasts and assistive technology.** `ToastContainer` mounts with its first toast, so its `role="status"` region is not in the page before the message and some screen readers won't announce it. Undo has no keyboard shortcut and sits at the end of the tab order; MUT-82 only pauses the timer once focus or the pointer reaches it.
@@ -1292,7 +1292,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ### TD-029: Income saved as "Received" writes no PaymentRecord
-**Status**: Open
+**Status**: Resolved (2026-10-13, MUT-60)
 **Priority**: Medium
 **Introduced**: pre-existing; surfaced by MUT-3, 2026-10-11
 **Impact**: `IncomeDrawer` (`:184-199`) saves a Received entry as `status: 'paid'`, `paidAt` and `receivedAmountMinor = amount` with no `PaymentRecord`, so anything that reads records alone misses those payments. ADR-033 works around it on read: `paymentRecordRepo.listByClient` adds an `entry` row for the uncovered amount. Other record readers (the payment drawer's history via `listByTransaction`, a future statement export) still see nothing for such an entry, and the drawer's received→invoiced edit path clears `receivedAmountMinor` directly.
@@ -1302,6 +1302,8 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 **Effort**: Medium
 
 **Update (2026-10-11, MUT-5):** the edit-path half is resolved by ADR-039. An entry with live records never has its payment fields rewritten by the drawer; its status is read-only; amount changes recalculate. An entry without records keeps its `paidAt` and received amount unless its status really changes. What remains (records on create-as-received, plus the backfill) is ticketed as **MUT-60**.
+
+**Resolved (2026-10-13, MUT-60):** `transactionRepo.createReceivedIncome` composes `create` + `markPaid` atomically, so every new Received entry is record-backed. Dexie v23 backfills existing data. Found in eng review and folded in: CSV import (`csvImport.ts`) had the identical gap through a third door and is fixed too. See `.claude/designs/mut-60-payment-record-backfill.md`.
 
 ---
 

@@ -35,7 +35,7 @@ export interface IncomeUpdateOptions {
 }
 
 export type IncomeWrite = Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>;
-type EntryFields = Omit<IncomeWrite, 'status' | 'paidAt' | 'receivedAmountMinor'>;
+export type EntryFields = Omit<IncomeWrite, 'status' | 'paidAt' | 'receivedAmountMinor'>;
 
 function entryFields(values: IncomeEntryValues): EntryFields {
   const fields: EntryFields = {
@@ -56,12 +56,23 @@ function entryFields(values: IncomeEntryValues): EntryFields {
   return fields;
 }
 
-/** The write for a new entry. Received means paid now, in full. */
-export function buildIncomeCreate(values: IncomeEntryValues, now: string): IncomeWrite {
-  if (values.incomeStatus !== 'received') {
-    return { ...entryFields(values), status: 'unpaid' };
-  }
-  return { ...entryFields(values), status: 'paid', paidAt: now, receivedAmountMinor: values.amountMinor };
+/**
+ * The write for a new unpaid/invoiced entry. A Received create doesn't go
+ * through this -- see buildReceivedIncomeEntry: it's record-backed (MUT-60),
+ * so status/paidAt/receivedAmountMinor are derived from the PaymentRecord
+ * transactionRepo.createReceivedIncome creates alongside it, not written here.
+ */
+export function buildIncomeCreate(values: IncomeEntryValues): IncomeWrite {
+  return { ...entryFields(values), status: 'unpaid' };
+}
+
+/**
+ * Entry fields for a Received create (MUT-60): payment state (status, paidAt,
+ * receivedAmountMinor) is derived from the PaymentRecord
+ * transactionRepo.createReceivedIncome creates alongside it, not written here.
+ */
+export function buildReceivedIncomeEntry(values: IncomeEntryValues): EntryFields {
+  return entryFields(values);
 }
 
 /**

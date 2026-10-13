@@ -9,7 +9,7 @@
 // base-100 (TD-112).
 
 import { db } from './database';
-import { businessProfileRepo } from './repository';
+import { businessProfileRepo, paymentRecordRepo } from './repository';
 import { expenseRepo, expenseCategoryRepo } from './expenseRepository';
 import { parseAmountToMinor } from '../lib/utils';
 import type { Currency } from '../types';
@@ -189,9 +189,11 @@ export async function importCsvRows(
 
     const amountMinor = Math.round(parseFloat(row.amount) * 100);
     const status = row.status === 'paid' ? 'paid' : 'unpaid';
+    const paidAt = row.paidAt || row.date;
+    const id = crypto.randomUUID();
 
     await db.transactions.add({
-      id: crypto.randomUUID(),
+      id,
       kind: 'income',
       status,
       title: row.name || 'Income',
@@ -201,12 +203,18 @@ export async function importCsvRows(
       currency: row.currency as 'USD' | 'ILS' | 'EUR',
       occurredAt: row.date,
       dueDate: row.dueDate || undefined,
-      paidAt: row.paidAt || (status === 'paid' ? row.date : undefined),
+      paidAt: status === 'paid' ? paidAt : undefined,
       notes: row.notes || undefined,
       profileId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
+    // MUT-60 (TD-029, found in eng review): this loop bypasses transactionRepo
+    // entirely, so a paid row needs its own PaymentRecord -- otherwise it has
+    // the same record-less "paid" gap a fast-added Received entry used to.
+    if (status === 'paid') {
+      await paymentRecordRepo.create({ transactionId: id, amountMinor, paidAt });
+    }
     transactions++;
   }
 

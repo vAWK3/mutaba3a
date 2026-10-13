@@ -57,7 +57,7 @@ describe('Migration v22: exactly one default business (MUT-88)', () => {
 
     const upgraded = await openCurrent(name);
 
-    expect(upgraded.verno).toBe(22);
+    expect(upgraded.verno).toBe(23);
     const defaults = (await upgraded.businessProfiles.toArray()).filter((p) => p.isDefault).map((p) => p.id);
     expect(defaults).toEqual(['mine']);
   });
@@ -82,7 +82,7 @@ describe('Migration v22: exactly one default business (MUT-88)', () => {
 
     const upgraded = await openCurrent(name);
 
-    expect(upgraded.verno).toBe(22);
+    expect(upgraded.verno).toBe(23);
     expect(errors).not.toHaveBeenCalled();
   });
 });

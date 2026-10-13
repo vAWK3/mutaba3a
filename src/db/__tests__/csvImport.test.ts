@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
 import { expenseRepo, expenseCategoryRepo } from '../expenseRepository';
-import { importExpenseRow, resolveImportProfileId } from '../csvImport';
+import { paymentRecordRepo } from '../repository';
+import { importExpenseRow, resolveImportProfileId, importCsvRows } from '../csvImport';
 
 describe('csvImport', () => {
   beforeEach(async () => {
@@ -9,6 +10,7 @@ describe('csvImport', () => {
     await db.expenses.clear();
     await db.expenseCategories.clear();
     await db.transactions.clear();
+    await db.paymentRecords.clear();
     await db.categories.clear();
   });
 
@@ -17,6 +19,7 @@ describe('csvImport', () => {
     await db.expenses.clear();
     await db.expenseCategories.clear();
     await db.transactions.clear();
+    await db.paymentRecords.clear();
     await db.categories.clear();
   });
 
@@ -136,6 +139,58 @@ describe('csvImport', () => {
 
       const [expense] = await expenseRepo.list({});
       expect(expense.title).toBe('Expense');
+    });
+  });
+
+  describe('importCsvRows — income', () => {
+    /**
+     * MUT-60 (TD-029, found in eng review): the income loop writes
+     * db.transactions.add() directly, bypassing transactionRepo entirely,
+     * so a paid row had no PaymentRecord -- the same gap as a fast-added
+     * Received entry, through a third door. Unlike the v23 backfill (which
+     * only fixes data that exists at migration time), this closes the gap
+     * for every future import.
+     */
+    it('creates a PaymentRecord covering the full amount for a paid income row', async () => {
+      await importCsvRows(
+        [
+          {
+            type: 'income', name: 'Design payment', amount: '500', currency: 'USD',
+            status: 'paid', date: '2026-01-10', paidAt: '2026-01-12',
+          },
+        ],
+        { selectedProfileId: 'profile-1', language: 'en' }
+      );
+
+      const [transaction] = await db.transactions.toArray();
+      expect(transaction.status).toBe('paid');
+
+      const records = await paymentRecordRepo.listByTransaction(transaction.id);
+      expect(records).toHaveLength(1);
+      expect(records[0].amountMinor).toBe(50000);
+      expect(records[0].paidAt).toBe('2026-01-12');
+    });
+
+    it('falls back to the row date when paidAt is blank', async () => {
+      await importCsvRows(
+        [{ type: 'income', name: 'Design payment', amount: '500', currency: 'USD', status: 'paid', date: '2026-01-10' }],
+        { selectedProfileId: 'profile-1', language: 'en' }
+      );
+
+      const [transaction] = await db.transactions.toArray();
+      const records = await paymentRecordRepo.listByTransaction(transaction.id);
+      expect(records[0].paidAt).toBe('2026-01-10');
+    });
+
+    it('creates no PaymentRecord for an unpaid income row', async () => {
+      await importCsvRows(
+        [{ type: 'income', name: 'Invoice', amount: '500', currency: 'USD', status: 'unpaid', date: '2026-01-10' }],
+        { selectedProfileId: 'profile-1', language: 'en' }
+      );
+
+      const [transaction] = await db.transactions.toArray();
+      expect(transaction.status).toBe('unpaid');
+      expect(await paymentRecordRepo.listByTransaction(transaction.id)).toHaveLength(0);
     });
   });
 });

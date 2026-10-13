@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildIncomeCreate,
+  buildReceivedIncomeEntry,
   buildIncomeUpdate,
   shouldExpandDetails,
   resolveDefaultCurrency,
@@ -29,22 +30,18 @@ function values(overrides: Partial<IncomeEntryValues> = {}): IncomeEntryValues {
 
 describe('buildIncomeCreate / buildIncomeUpdate', () => {
   describe('create', () => {
+    // MUT-60: a Received create no longer goes through buildIncomeCreate at
+    // all -- it's record-backed via transactionRepo.createReceivedIncome, so
+    // buildIncomeCreate only ever handles the unpaid/invoiced write now.
     it.each(['earned', 'invoiced'] as const)('%s is unpaid and carries no payment fields', (incomeStatus) => {
-      const write = buildIncomeCreate(values({ incomeStatus }), NOW);
+      const write = buildIncomeCreate(values({ incomeStatus }));
       expect(write.status).toBe('unpaid');
       expect('paidAt' in write).toBe(false);
       expect('receivedAmountMinor' in write).toBe(false);
     });
 
-    it('received is paid now, in full', () => {
-      const write = buildIncomeCreate(values({ incomeStatus: 'received' }), NOW);
-      expect(write.status).toBe('paid');
-      expect(write.paidAt).toBe(NOW);
-      expect(write.receivedAmountMinor).toBe(120000);
-    });
-
     it('maps the entry fields and leaves empty optionals unset', () => {
-      const write = buildIncomeCreate(values(), NOW);
+      const write = buildIncomeCreate(values());
       expect(write).toMatchObject({
         kind: 'income',
         profileId: 'p1',
@@ -59,23 +56,37 @@ describe('buildIncomeCreate / buildIncomeUpdate', () => {
       expect(write.dueDate).toBeUndefined();
     });
 
-    it('keeps the due date for unpaid income and drops it for received', () => {
-      expect(buildIncomeCreate(values({ dueDate: '2026-11-01' }), NOW).dueDate).toBe('2026-11-01');
-      expect(
-        buildIncomeCreate(values({ incomeStatus: 'received', dueDate: '2026-11-01' }), NOW).dueDate
-      ).toBeUndefined();
+    it('keeps the due date for unpaid income', () => {
+      expect(buildIncomeCreate(values({ dueDate: '2026-11-01' })).dueDate).toBe('2026-11-01');
     });
   });
 
-  // Review fix: a Received save used to write dueDate: undefined, which Dexie
-  // treats as a delete, so an entry reopened later (a payment deleted, or an
-  // amount raised above its payments) had no due date and never went overdue.
-  describe('due date on a Received save', () => {
-    it('is left out of a new Received entry', () => {
-      const write = buildIncomeCreate(values({ incomeStatus: 'received', dueDate: '2026-11-01' }), NOW);
-      expect('dueDate' in write).toBe(false);
+  describe('buildReceivedIncomeEntry', () => {
+    it('returns entry fields with no payment-state keys -- the repo derives those from the PaymentRecord it creates alongside', () => {
+      const fields = buildReceivedIncomeEntry(values({ incomeStatus: 'received' }));
+      expect('status' in fields).toBe(false);
+      expect('paidAt' in fields).toBe(false);
+      expect('receivedAmountMinor' in fields).toBe(false);
+      expect(fields).toMatchObject({
+        kind: 'income',
+        profileId: 'p1',
+        title: 'Logo redesign',
+        amountMinor: 120000,
+        currency: 'USD',
+      });
     });
 
+    // Review fix (MUT-5): a Received save used to write dueDate: undefined,
+    // which Dexie treats as a delete, so an entry reopened later (a payment
+    // deleted, or an amount raised above its payments) had no due date and
+    // never went overdue. Preserved here via the shared entryFields() rule.
+    it('drops the due date for a new Received entry', () => {
+      const fields = buildReceivedIncomeEntry(values({ incomeStatus: 'received', dueDate: '2026-11-01' }));
+      expect('dueDate' in fields).toBe(false);
+    });
+  });
+
+  describe('due date on a Received save', () => {
     it('is left untouched when a paid entry is saved as Received again', () => {
       const write = buildIncomeUpdate(values({ incomeStatus: 'received', dueDate: '' }), {
         now: NOW,

@@ -126,6 +126,11 @@ export interface ITransactionRepository
   getDisplay(id: string): Promise<TransactionDisplay | undefined>;
   markPaid(id: string, opts?: { paidAt?: string }): Promise<void>;
   recordPartialPayment(id: string, paymentAmountMinor: number, opts?: { paidAt?: string }): Promise<void>;
+  /** Create a new income transaction already Received (MUT-60): record-backed from the start, like markPaid. */
+  createReceivedIncome(
+    data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'paidAt' | 'receivedAmountMinor'>,
+    paidAt: string
+  ): Promise<Transaction>;
   softDelete(id: string): Promise<void>;
   archive(id: string): Promise<void>;
   unarchive(id: string): Promise<void>;

@@ -2146,3 +2146,19 @@ Regression contract (review D3): all 6 DataToolsSection cases are ported to `You
 QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a business". It was not run here; run it on a preview build. The language and theme specs are already broken by MUT-139's radios (MUT-160).
 
 **Merged onto MUT-47 (qa-reconcile, 2026-10-13):** `DataToolsSection.test.tsx` (the version MUT-47 updated, line above) is deleted along with the component; its cases are the ones ported into `YourDataSection.test.tsx`. `YourDataSection`, `RestoreBackupModal` and `demoData.seed` were adjusted to call `getRepositories().base.dataset.*` instead of the direct `db/*` imports MUT-88 was built against, per ADR-071's seam; `backUpNow`'s test moved to `src/utils/__tests__/backupDownload.test.ts` alongside its new home. Gate re-run post-merge (Node 22, per Basel no full suite): `lint` 0 errors, `typecheck` clean, targeted suite (profileDefault, migration-v22, businessProfileRepo, profileImport, backup, dataFiles, RestoreBackupModal, ImportDataPage, SettingsPage, DeleteAllDataModal, YourDataSection, seedDefault) 155/155 passed.
+
+## MUT-60 — Every Received income entry is record-backed (2026-10-13, TD-029)
+
+| AC | Tests |
+|---|---|
+| Saving a new income as Received creates exactly one PaymentRecord for the full amount, dated the payment date | `transactionRepo.test.ts` (`createReceivedIncome`: one record, full amount, dated `paidAt`; atomic rollback on a rejected date; the `hasRecords` edit branch applies afterward), `IncomeDrawer.test.tsx` (strengthened "creates a paid entry when Received is chosen" to also assert the record), `useQueries.test.tsx` (`useCreateReceivedIncome` wiring + invalidation) |
+| `listByTransaction` returns that record, and the client's Payments section shows it once | `paymentRecords.test.ts` ("adds no entry row for a fast-added Received entry -- it is record-backed from creation") |
+| The upgrade backfills every uncovered paid entry exactly once; running it twice creates no duplicates | `database.test.ts` (`uncoveredPaymentAmount`, every branch, pure), `migration-v23.test.ts` (fully-paid, part-paid, already-covered, top-up-partial-coverage, soft-deleted, archived, expense-skip, future-date clamp, empty DB, fresh install) |
+| Owed Now, Recent payments and Last payment unchanged before/after the backfill | `aggregations.test.ts` (`paymentRowsForIncome` reports identical amount/paidAt whether covered by the ADR-033 entry fallback or a backfilled record -- only `source` flips; `summarizeOwedByCurrency` needs no test, it reads only `Transaction[]`, which the backfill never writes to) |
+| A migration-safety test covers the new version | `migration-v23.test.ts` ("Migration safety after v22 → v23", mirroring v21's precedent) |
+
+**Found in eng review, folded into scope:** CSV import (`csvImport.ts`) wrote paid income rows the same record-less way, through a third door nothing else in this ticket touches -- `csvImport.test.ts` gained three cases (paid creates a record, blank paidAt falls back to the row date, unpaid creates none).
+
+**Regression sweep for the version bump (v22 → v23):** every test hardcoding the app's current top schema version was re-verified and bumped: `migration-v20/v21/v22.test.ts`, `retainedDocumentSchema.test.ts`, `retainedMonthCloseSchema.test.ts`, and one in `expensesGatingDataSafety.test.ts` that was already stale since MUT-88's v22 bump and had gone uncaught until this ticket's full-suite run.
+
+Full suite (Node 22): 3693/3697 pass (4 pre-existing skips), 262/262 files -- no regressions. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.

@@ -432,6 +432,25 @@ export const transactionRepo = {
   },
 
   /**
+   * Create a new income transaction already Received (MUT-60): composes
+   * `create` + `markPaid` atomically, so the entry is record-backed from the
+   * start like any Mark-paid entry, instead of writing paidAt/
+   * receivedAmountMinor straight onto the Transaction with no PaymentRecord
+   * (TD-029). Every subsequent edit then takes the existing hasRecords
+   * branch in `update` above -- no change needed there.
+   */
+  async createReceivedIncome(
+    data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'paidAt' | 'receivedAmountMinor'>,
+    paidAt: string
+  ): Promise<Transaction> {
+    return db.transaction('rw', [db.transactions, db.paymentRecords], async () => {
+      const tx = await this.create({ ...data, status: 'unpaid' });
+      await this.markPaid(tx.id, { paidAt });
+      return (await db.transactions.get(tx.id))!;
+    });
+  },
+
+  /**
    * Record a partial payment on an income transaction.
    * Creates a PaymentRecord and recalculates the transaction total.
    * Automatically marks as paid when full amount is received.
