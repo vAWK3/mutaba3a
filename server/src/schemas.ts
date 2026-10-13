@@ -626,6 +626,8 @@ export const VALIDATION_REASONS = [
   'NOT_CONTINGENCY',
   'OUTCOME_DATE_INVALID',
   'COMMISSION_LABEL_REQUIRED',
+  // MUT-107: contingency fee proposals
+  'SCHEDULE_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -1319,9 +1321,9 @@ export const ProjectSummaryStatusSchema = z.enum(['NONE', 'PENDING', 'OUTSTANDIN
 
 const bucketFields = { outstanding: AmountSchema, overdue: AmountSchema, dueToday: AmountSchema, notYetDue: AmountSchema };
 
-/** M8 (D17): a customer's open (PROPOSED) fee proposal as the overview lists it, in the block's currency. */
+/** M8 (D17): a customer's open (PROPOSED) fee proposal as the overview lists it, in the block's currency. MUT-107: `amount` is the upfront for a contingency proposal; `contingency` echoes its terms. */
 export const CustomerSummaryProposalSchema = z
-  .object({ proposalId: uuid, projectId: uuid, amount: AmountSchema, proposedOn: IsoDateSchema })
+  .object({ proposalId: uuid, projectId: uuid, amount: AmountSchema, proposedOn: IsoDateSchema, contingency: ContingencyTermsSchema.nullable() })
   .openapi('CustomerSummaryProposal');
 
 export const CustomerSummaryRowSchema = z
@@ -1370,6 +1372,8 @@ export const FeeProposalSchema = z
     withdrawnReason: z.string().nullable(),
     /** The agreement the approval created (APPROVED). */
     agreementId: uuid.nullable(),
+    /** MUT-107: the proposed terms when this is a contingency proposal; null for FIXED. */
+    contingency: ContingencyTermsSchema.nullable(),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -1378,18 +1382,20 @@ export const FeeProposalSchema = z
 
 /** The proposal block on a project summary: the open one, else the latest approved one. */
 export const FeeProposalSummarySchema = z
-  .object({ id: uuid, status: FeeProposalStatusSchema, pricingBasis: PricingBasisSchema, proposedAmount: AmountSchema, agreedAmount: AmountSchema.nullable(), proposedOn: IsoDateSchema, agreementId: uuid.nullable() })
+  .object({ id: uuid, status: FeeProposalStatusSchema, pricingBasis: PricingBasisSchema, proposedAmount: AmountSchema, agreedAmount: AmountSchema.nullable(), proposedOn: IsoDateSchema, agreementId: uuid.nullable(), contingency: ContingencyTermsSchema.nullable() })
   .openapi('FeeProposalSummary');
 
 export const CreateFeeProposalRequestSchema = z
   .object({
     projectId: uuid,
-    /** In the pricing basis, project currency. */
+    /** In the pricing basis, project currency. With `contingency`: the proposed upfront, which may be 0. */
     amount: AmountSchema,
     pricingBasis: PricingBasisSchema,
     /** Defaults to today in the organization timezone. */
     proposedOn: IsoDateSchema.optional(),
     note: proposalNote.optional(),
+    /** MUT-107: present = a contingency proposal (amount is the upfront); absent = FIXED. */
+    contingency: ContingencyTermsSchema.optional(),
   })
   .openapi('CreateFeeProposalRequest');
 
@@ -1403,12 +1409,15 @@ export const ApproveScheduleSchema = z
 
 export const ApproveFeeProposalRequestSchema = z
   .object({
-    /** The final amount, in the pricing basis and project currency; prefilled with the proposed one by clients. */
+    /** The final amount, in the pricing basis and project currency; prefilled with the proposed one by clients. The agreed upfront for a contingency proposal, which may be 0. */
     amount: AmountSchema,
     /** Defaults to today in the organization timezone; the agreement is dated the same, so the VAT rate in force on it applies (D18). */
     approvedOn: IsoDateSchema.optional(),
-    schedule: ApproveScheduleSchema,
+    /** MUT-107 (D10): required only when the agreed amount is greater than 0; omitting it otherwise is 422 SCHEDULE_REQUIRED. */
+    schedule: ApproveScheduleSchema.optional(),
     note: proposalNote.optional(),
+    /** MUT-107: overrides the proposed contingency terms for the created agreement; only valid when the proposal itself is a contingency one (422 NOT_CONTINGENCY otherwise). */
+    contingency: ContingencyTermsSchema.optional(),
   })
   .openapi('ApproveFeeProposalRequest');
 export const WithdrawFeeProposalRequestSchema = z.object({ reason: proposalNote.optional() }).openapi('WithdrawFeeProposalRequest');

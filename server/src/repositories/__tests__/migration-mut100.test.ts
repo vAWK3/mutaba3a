@@ -90,6 +90,8 @@ if (!url) {
       const commissions = await db.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*) AS n FROM installments WHERE "isCommission"`);
       expect(commissions[0]?.n).toBe(0n);
 
+      // The rest of the history (MUT-107 onwards), one transaction per file as `prisma migrate deploy` applies it, ends at the schema.
+      for (const dir of dirs.slice(dirs.indexOf(TERMS) + 1)) execute(dbUrl, `BEGIN;\n${sqlOf(dir)}\nCOMMIT;`);
       execFileSync(PRISMA, ['migrate', 'diff', '--from-url', dbUrl, '--to-schema-datamodel', join(SERVER, 'prisma/schema.prisma'), '--exit-code'], { cwd: SERVER, stdio: 'pipe' });
     });
   });

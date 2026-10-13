@@ -71,3 +71,17 @@
 **Context:** Deferred from MUT-100 by the CEO review on 2026-10-12 because MAL-1077, the only consumer, excludes it. Start at `server/src/routes/fee-proposals.ts` approve; `composePreview` derives the agreement type from the body's `contingency`, so approval builds the preview body with it.
 
 **Depends on / blocked by:** MUT-100 (the CONTINGENCY type) and the paired Malafat proposal-UI ticket MAL-1094.
+
+## 8. Audit event ordering can tie-break on a random id when two events land in the same millisecond
+
+**What:** `AuditRepository.append` stamps `createdAt` with real wall-clock time in both stores (`new Date()` in-memory, `CURRENT_TIMESTAMP` in Postgres) rather than the request's deterministic clock; listing then sorts by `(createdAt, id)` (`paginate`'s `compareByCreatedAtThenId`, `server/src/repositories/memory.ts:1460`), and `id` is a random UUID. Two audit events appended within the same millisecond — plausible any time a single request handler appends more than one (e.g. `agreement.created` immediately followed by `installment.posted`, or `fee_proposal.created` then `fee_proposal.approved` in a fast replay) — can come back in the wrong order.
+
+**Why it surfaced now:** MUT-107 added two more audit-heavy test files; running the full suite started intermittently failing `routes-m6.test.ts`'s audit-ordering assertion and, once, one of MUT-107's own (`fee_proposal.created`/`.approved` swapped). Both pass every time in isolation. Higher parallel CPU load makes same-millisecond timestamps more likely, which is what exposed a bug that was already there — not something introduced by MUT-107's logic.
+
+**Pros of fixing:** Removes a source of flaky tests and a real (if narrow) chance of audit events displaying out of order in Malafat for genuinely fast back-to-back writes.
+
+**Cons / cost / risk:** Touches `AuditRepository.append` in both stores — needs a design call on what the deterministic tiebreak should be (a monotonic sequence column? thread the request's `now` + an in-request counter?) rather than a quick patch.
+
+**Context:** Found during MUT-107's own verification pass (2026-10-13), not part of its acceptance criteria — contingency fee proposals don't touch audit ordering. Logged here rather than fixed inline to avoid unrelated scope creep on that ticket.
+
+**Depends on / blocked by:** Nothing; can be picked up any time.

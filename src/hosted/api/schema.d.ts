@@ -2138,7 +2138,7 @@ export interface paths {
         put?: never;
         /**
          * Approve: the client accepted the fee; creates the agreement and posts its first installment
-         * @description PROPOSED → APPROVED. Creates a fixed-fee agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change. ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
+         * @description PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change — FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them). schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
          */
         post: {
             parameters: {
@@ -8925,6 +8925,7 @@ export interface components {
             withdrawnReason: string | null;
             /** Format: uuid */
             agreementId: string | null;
+            contingency: components["schemas"]["ContingencyTerms"];
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -8935,6 +8936,13 @@ export interface components {
         FeeProposalStatus: "PROPOSED" | "APPROVED" | "WITHDRAWN";
         /** @enum {string} */
         PricingBasis: "VAT_EXCLUSIVE" | "VAT_INCLUSIVE";
+        ContingencyTerms: {
+            /** @description The commission on the award, 1..10000 (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID */
+            commissionRateBasisPoints: number;
+            upfrontTreatment: components["schemas"]["UpfrontTreatment"];
+        } | null;
+        /** @enum {string} */
+        UpfrontTreatment: "SEPARATE" | "CREDITED";
         CreateFeeProposalRequest: {
             /** Format: uuid */
             projectId: string;
@@ -8944,6 +8952,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn?: string;
             note?: string;
+            contingency?: components["schemas"]["ContingencyTerms"];
         };
         FeeProposalPage: {
             items: components["schemas"]["FeeProposal"][];
@@ -9023,8 +9032,6 @@ export interface components {
             /** Format: date-time */
             outcomeRecordedAt: string | null;
         } | null;
-        /** @enum {string} */
-        UpfrontTreatment: "SEPARATE" | "CREDITED";
         Installment: {
             /** Format: uuid */
             id: string;
@@ -9081,8 +9088,9 @@ export interface components {
             amount: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             approvedOn?: string;
-            schedule: components["schemas"]["ApproveSchedule"];
+            schedule?: components["schemas"]["ApproveSchedule"];
             note?: string;
+            contingency?: components["schemas"]["ContingencyTerms"];
         };
         ApproveSchedule: {
             /** @enum {string} */
@@ -9138,11 +9146,6 @@ export interface components {
             }[];
             previewToken: string;
         };
-        ContingencyTerms: {
-            /** @description The commission on the award, 1..10000 (2000 = 20 %); outside that range 422 COMMISSION_RATE_INVALID */
-            commissionRateBasisPoints: number;
-            upfrontTreatment: components["schemas"]["UpfrontTreatment"];
-        } | null;
         AgreementPreviewRequest: {
             /** Format: uuid */
             projectId: string;
@@ -9827,6 +9830,7 @@ export interface components {
             amount: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn: string;
+            contingency: components["schemas"]["ContingencyTerms"];
         };
         CustomerSummary: {
             /** Format: uuid */
@@ -9900,6 +9904,7 @@ export interface components {
             proposedOn: string;
             /** Format: uuid */
             agreementId: string | null;
+            contingency: components["schemas"]["ContingencyTerms"];
         } | null;
         ProjectContingency: {
             /** Format: uuid */

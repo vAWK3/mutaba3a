@@ -2,6 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, assertNotAbsurdDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { agreementDetail, composePreview, createAgreementFromPreview, type PreviewBody } from '../agreements/create.js';
+import { COMMISSION_RATE_RULE, isCommissionRate } from '../agreements/contingency.js';
 import { addMonths, clampDay, monthOf, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
@@ -59,7 +60,13 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (project.status === 'ARCHIVED') throw validationError('PROJECT_ARCHIVED', 'The project is archived', { field: 'projectId' });
       const currency = project.currency as Currency;
       const proposedAmountMinor = parseAmount(body.amount, currency);
-      if (proposedAmountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
+      const contingency = body.contingency ?? null;
+      if (contingency && !isCommissionRate(contingency.commissionRateBasisPoints)) {
+        throw validationError('COMMISSION_RATE_INVALID', `contingency.${COMMISSION_RATE_RULE}`, { field: 'contingency.commissionRateBasisPoints' });
+      }
+      if (contingency ? proposedAmountMinor < 0n : proposedAmountMinor <= 0n) {
+        throw validationError('AMOUNT_INVALID', contingency ? 'the upfront (amount) must not be negative' : 'amount must be positive', { field: 'amount' });
+      }
       const proposedOn = body.proposedOn ? assertIsoDate(body.proposedOn, 'proposedOn') : today;
       assertNotAbsurdDate(proposedOn, today, 'proposedOn');
 
@@ -69,7 +76,18 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let proposal: FeeProposalRecord;
       try {
         proposal = await store.feeProposals.create(
-          { organizationId: organization.id, projectId: project.id, customerId: project.customerId, currency, pricingBasis: body.pricingBasis, proposedAmountMinor, proposedOn, note: body.note ?? null, requestId: c.get('requestId') },
+          {
+            organizationId: organization.id,
+            projectId: project.id,
+            customerId: project.customerId,
+            currency,
+            pricingBasis: body.pricingBasis,
+            proposedAmountMinor,
+            proposedOn,
+            note: body.note ?? null,
+            requestId: c.get('requestId'),
+            ...(contingency ? { commissionRateBasisPoints: contingency.commissionRateBasisPoints, upfrontTreatment: contingency.upfrontTreatment } : {}),
+          },
           now,
         );
       } catch (err) {
@@ -86,7 +104,14 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         action: 'fee_proposal.created',
         entityType: 'fee_proposal',
         entityId: proposal.id,
-        metadata: { projectId: proposal.projectId, customerId: proposal.customerId, proposedAmount: formatMoney({ minor: proposal.proposedAmountMinor, currency }), pricingBasis: proposal.pricingBasis, proposedOn },
+        metadata: {
+          projectId: proposal.projectId,
+          customerId: proposal.customerId,
+          proposedAmount: formatMoney({ minor: proposal.proposedAmountMinor, currency }),
+          pricingBasis: proposal.pricingBasis,
+          proposedOn,
+          ...(contingency ? { contingency } : {}),
+        },
         requestId: c.get('requestId'),
       });
       return c.json(serializeFeeProposal(proposal), 201);
@@ -145,7 +170,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Fee proposals'],
       summary: 'Approve: the client accepted the fee; creates the agreement and posts its first installment',
       description:
-        'PROPOSED → APPROVED. Creates a fixed-fee agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change. ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.',
+        'PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change — FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them). schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:write'), idempotent(store, 'fee-proposals.approve')] as const,
       request: { params: FeeProposalIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ApproveFeeProposalRequestSchema) },
@@ -159,8 +184,20 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const current = await mustGet(store, organization.id, c.req.valid('param').proposalId);
       if (!allowedFrom('approve').includes(current.status)) throw proposalNotOpen(current.status, 'approve');
       const currency = current.currency as Currency;
+      const isContingency = current.commissionRateBasisPoints !== null;
       const agreedAmountMinor = parseAmount(body.amount, currency);
-      if (agreedAmountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
+      if (isContingency ? agreedAmountMinor < 0n : agreedAmountMinor <= 0n) {
+        throw validationError('AMOUNT_INVALID', isContingency ? 'the agreed upfront (amount) must not be negative' : 'amount must be positive', { field: 'amount' });
+      }
+      if (body.contingency && !isContingency) {
+        throw validationError('NOT_CONTINGENCY', 'contingency override given for a proposal that was not proposed as a contingency deal', { field: 'contingency' });
+      }
+      if (body.contingency && !isCommissionRate(body.contingency.commissionRateBasisPoints)) {
+        throw validationError('COMMISSION_RATE_INVALID', `contingency.${COMMISSION_RATE_RULE}`, { field: 'contingency.commissionRateBasisPoints' });
+      }
+      if (agreedAmountMinor > 0n && !body.schedule) {
+        throw validationError('SCHEDULE_REQUIRED', 'schedule is required when the agreed amount is greater than 0', { field: 'schedule' });
+      }
       const approvedOn = body.approvedOn ? assertIsoDate(body.approvedOn, 'approvedOn') : today;
       assertNotAbsurdDate(approvedOn, today, 'approvedOn');
 
@@ -170,7 +207,10 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         pricingBasis: current.pricingBasis,
         agreementDate: approvedOn,
         paymentTerms: 'EOM',
-        installments: approveInstallments(body.schedule, agreedAmountMinor, currency, today),
+        installments: body.schedule ? approveInstallments(body.schedule, agreedAmountMinor, currency, today) : [],
+        ...(isContingency
+          ? { contingency: { commissionRateBasisPoints: body.contingency?.commissionRateBasisPoints ?? current.commissionRateBasisPoints!, upfrontTreatment: body.contingency?.upfrontTreatment ?? current.upfrontTreatment! } }
+          : {}),
       };
       const preview = await composePreview(store, organization, previewBody, today);
       const created = await createAgreementFromPreview(store, organization, { actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') }, previewBody, preview, today, now, {
@@ -187,7 +227,15 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         action: 'fee_proposal.approved',
         entityType: 'fee_proposal',
         entityId: proposal.id,
-        metadata: { projectId: proposal.projectId, proposedAmount: amountOf(proposal, proposal.proposedAmountMinor), agreedAmount: amountOf(proposal, proposal.agreedAmountMinor), approvedOn, agreementId: created.agreement.id, schedule: body.schedule.kind },
+        metadata: {
+          projectId: proposal.projectId,
+          proposedAmount: amountOf(proposal, proposal.proposedAmountMinor),
+          agreedAmount: amountOf(proposal, proposal.agreedAmountMinor),
+          approvedOn,
+          agreementId: created.agreement.id,
+          schedule: body.schedule?.kind ?? null,
+          ...(previewBody.contingency ? { contingency: previewBody.contingency } : {}),
+        },
         requestId: c.get('requestId'),
       });
       return c.json({ proposal: serializeFeeProposal(proposal), agreement: await agreementDetail(store, organization, created.agreement, today) }, 200);

@@ -20,6 +20,8 @@ function proposal(over: Partial<FeeProposalRecord> = {}): FeeProposalRecord {
     withdrawnAt: null,
     withdrawnReason: null,
     agreementId: null,
+    commissionRateBasisPoints: null,
+    upfrontTreatment: null,
     requestId: null,
     version: 1,
     createdAt: new Date('2026-10-09T10:00:00Z'),

@@ -52,7 +52,9 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           const b = bucketize(recs.filter((r) => r.customerId === customerId), today);
           const own = pays.filter((p) => p.customerId === customerId);
           const u = unallocatedOf(own);
-          const ownProposals = props.filter((p) => p.customerId === customerId).map((p) => ({ proposalId: p.id, projectId: p.projectId, amount: fmt(p.proposedAmountMinor), proposedOn: p.proposedOn }));
+          const ownProposals = props
+            .filter((p) => p.customerId === customerId)
+            .map((p) => ({ proposalId: p.id, projectId: p.projectId, amount: fmt(p.proposedAmountMinor), proposedOn: p.proposedOn, contingency: p.commissionRateBasisPoints === null ? null : { commissionRateBasisPoints: p.commissionRateBasisPoints, upfrontTreatment: p.upfrontTreatment } }));
           return { customerId, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), lastPaymentOn: lastPaymentOn(own), status: customerStatus(b), proposals: ownProposals };
         });
         const total = bucketize(recs, today);

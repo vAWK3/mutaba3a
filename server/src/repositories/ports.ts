@@ -1150,6 +1150,9 @@ export interface FeeProposalRecord {
   withdrawnReason: string | null;
   /** The agreement the approval created (APPROVED). */
   agreementId: string | null;
+  /** MUT-107: both set on a contingency proposal, both null on a FIXED one. */
+  commissionRateBasisPoints: number | null;
+  upfrontTreatment: UpfrontTreatment | null;
   requestId: string | null;
   version: number;
   createdAt: Date;
@@ -1165,6 +1168,9 @@ export interface CreateFeeProposalInput {
   proposedAmountMinor: bigint;
   proposedOn: IsoDate;
   note: string | null;
+  /** MUT-107: present together = a contingency proposal (the upfront is proposedAmountMinor); absent = FIXED. */
+  commissionRateBasisPoints?: number;
+  upfrontTreatment?: UpfrontTreatment;
   requestId: string | null;
 }
 

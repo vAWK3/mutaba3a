@@ -398,6 +398,11 @@ export function serializeAttachment(a: AttachmentRecord) {
   };
 }
 
+/** MUT-107: null for a FIXED proposal; the proposed terms for a contingency one. */
+function proposalContingency(p: FeeProposalRecord) {
+  return p.commissionRateBasisPoints === null ? null : { commissionRateBasisPoints: p.commissionRateBasisPoints, upfrontTreatment: p.upfrontTreatment! };
+}
+
 /** M7: minor units → canonical decimals in the proposal's currency. */
 export function serializeFeeProposal(p: FeeProposalRecord) {
   return {
@@ -416,6 +421,7 @@ export function serializeFeeProposal(p: FeeProposalRecord) {
     withdrawnAt: iso(p.withdrawnAt),
     withdrawnReason: p.withdrawnReason,
     agreementId: p.agreementId,
+    contingency: proposalContingency(p),
     version: p.version,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -424,7 +430,7 @@ export function serializeFeeProposal(p: FeeProposalRecord) {
 
 export function serializeFeeProposalSummary(p: FeeProposalRecord | null) {
   if (!p) return null;
-  return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId };
+  return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId, contingency: proposalContingency(p) };
 }
 
 /** MUT-42: the original amount, formatted in its own currency — never converted. */
