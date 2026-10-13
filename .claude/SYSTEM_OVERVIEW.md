@@ -212,6 +212,7 @@ tables.
 | i18n | ✅ Complete | English, Arabic, RTL |
 | Dark Theme | ✅ Complete | CSS variables theming |
 | Brand v2 (MUT-102, ADR-058) | ✅ Complete | Two-layer tokens (`--m-*` from the brand JSON → one semantic map in `theme.css`); AAA light text (7:1), dark 4.5:1, checked in Node and by axe; Thmanyah Sans / Serif Display bundled unmodified from `src/assets/fonts` in web, desktop and portal (no preload: it cost ~700 ms of LCP; runtime-cached in the PWA); Plex Mono figures; body 16, brand radii and motion tokens |
+| Brand v2 app-wide sweep (MUT-103) | ✅ Complete | Every colour, px radius and px/rem font size outside `src/styles/` comes from a token, enforced by a guard (`brand.test.ts` › `literals`) with one allowlist for user-chosen colours; the 496 legacy `--text-*`/`--radius-*` aliases and the 48-name dead-reference allowlist are gone; every ad-hoc `*-amount`/`*-total` class is on Plex Mono; table rows have a 48px floor. Two items stay open under TD-079 by decision: heading weight/role reconciliation, and luminance-based ink + hex validation for a user-chosen business colour |
 | Desktop App | ✅ Complete | Tauri macOS/Windows |
 | PWA | ✅ Complete | Offline-capable web app |
 | Device sync | ❌ Retired (MUT-73, ADR-053) | LAN pairing, `.msync` bundles, op-log and its tables deleted |
