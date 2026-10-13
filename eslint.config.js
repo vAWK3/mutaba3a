@@ -33,6 +33,65 @@ export default defineConfig([
     },
   },
   {
+    // The storage seam (MUT-47). Outside src/db, the app reaches storage only
+    // through getRepositories(): never `db`, a Dexie repository object, or a
+    // module whose exports read or write the database. Pure helpers, constants
+    // and types beside them stay importable. The one exception is
+    // initDatabase() in src/main.tsx (it opens Dexie before React mounts),
+    // which carries its own disable comment.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/db/**', 'src/hosted/**', 'src/**/__tests__/**', 'src/test/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '(^|/)db/(repository|expenseRepository|retainerRepository|planRepository|dataset|demoData|seed|backup|profileImport|csvImport|integrityCheck|crossProfileStats|migration-safety)$',
+              allowTypeImports: true,
+              message: 'Storage modules are reached through getRepositories() (MUT-47).',
+            },
+            {
+              regex: '(^|/)db(/index|/database)?$',
+              importNames: [
+                'db',
+                'initDatabase',
+                'deleteAllData',
+                'clearDatabase',
+                'repairDatabase',
+                'createBackup',
+                'getLatestBackup',
+                'getAllBackups',
+                'restoreFromBackup',
+                'validateMigration',
+                'autoFixMigrationIssues',
+                'downloadBackup',
+                'exportCompleteBackup',
+                'importBackupFromFile',
+                'clientRepo',
+                'projectRepo',
+                'categoryRepo',
+                'transactionRepo',
+                'projectSummaryRepo',
+                'clientSummaryRepo',
+                'fxRateRepo',
+                'settingsRepo',
+                'businessProfileRepo',
+                'paymentRecordRepo',
+              ],
+              message: 'Use getRepositories() instead of the database or a repository object (MUT-47).',
+            },
+            {
+              regex: '(^|/)db/orphanedRecords$',
+              importNames: ['findOrphanedRecords'],
+              message: 'Use getRepositories().base.dataset.findOrphanedRecords() (MUT-47).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The hosted portal (MUT-43, hosted-portal.md §8). It shows server figures
     // only: nothing from the local data layer, sync, local hooks, shell,
     // drawers or stores, and not the app's i18n provider (it carries the app's
