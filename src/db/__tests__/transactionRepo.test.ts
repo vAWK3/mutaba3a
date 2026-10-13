@@ -567,6 +567,41 @@ describe('transactionRepo', () => {
     });
   });
 
+  // MUT-169: an unpaid entry edited to Received gets its payment record, like
+  // a Received create (MUT-60). Before, the edit wrote status/paidAt/received
+  // straight onto the entry, which left Edit Payment with no record to edit.
+  describe('update to Received with no payment records', () => {
+    const unpaid = () =>
+      transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        amountMinor: 40000,
+        currency: 'USD',
+        occurredAt: '2026-10-01',
+      });
+
+    it('records one payment for the full amount, dated the paidAt given', async () => {
+      const tx = await unpaid();
+
+      await transactionRepo.update(tx.id, { title: 'Logo', status: 'paid', paidAt: '2026-10-09', receivedAmountMinor: 40000 });
+
+      const updated = await transactionRepo.get(tx.id);
+      expect(updated).toMatchObject({ title: 'Logo', status: 'paid', paidAt: '2026-10-09', receivedAmountMinor: 40000 });
+      const records = await paymentRecordRepo.listByTransaction(tx.id);
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({ amountMinor: 40000, paidAt: '2026-10-09' });
+    });
+
+    it('leaves an edit that stays unpaid without a record', async () => {
+      const tx = await unpaid();
+
+      await transactionRepo.update(tx.id, { title: 'Still owed', status: 'unpaid' });
+
+      expect(await paymentRecordRepo.listByTransaction(tx.id)).toHaveLength(0);
+      expect((await transactionRepo.get(tx.id))?.status).toBe('unpaid');
+    });
+  });
+
   describe('softDelete', () => {
     it('should soft delete a transaction', async () => {
       const transaction = await transactionRepo.create(createTestTransaction());
