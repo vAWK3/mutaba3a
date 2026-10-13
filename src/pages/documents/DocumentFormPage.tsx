@@ -72,7 +72,7 @@ const itemSchema = z.object({
 const paymentSchema = z.object({
   id: z.string(),
   amountMinor: z.number().min(0),
-  currency: z.enum(['USD', 'ILS', 'EUR']),
+  currency: z.enum(['USD', 'ILS', 'EUR', 'JOD']),
   method: z.enum(['cash', 'bank_transfer', 'cheque', 'credit_card', 'other']),
   notes: z.string().optional(),
   paidAt: z.string(),
@@ -96,7 +96,7 @@ const schema = z.object({
   subject: z.string().optional(),
   brief: z.string().optional(),
   notes: z.string().optional(),
-  currency: z.enum(['USD', 'ILS', 'EUR']),
+  currency: z.enum(['USD', 'ILS', 'EUR', 'JOD']),
   language: z.enum(['ar', 'en']),
   templateId: z.string(),
   issueDate: z.string().min(1, 'Issue date is required'),

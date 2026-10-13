@@ -15,7 +15,7 @@ export interface CSVValidationResult {
 }
 
 const VALID_TYPES = ['client', 'project', 'income', 'expense'];
-const VALID_CURRENCIES = ['USD', 'ILS', 'EUR'];
+export const VALID_CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'];
 const VALID_FIELDS = ['design', 'development', 'consulting', 'marketing', 'legal', 'maintenance', 'other'];
 const VALID_INCOME_STATUSES = ['paid', 'unpaid'];
 

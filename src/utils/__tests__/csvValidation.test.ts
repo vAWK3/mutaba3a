@@ -151,7 +151,23 @@ describe('CSV Validation', () => {
         const result = validateCSVRow(row, 0, []);
 
         expect(result.status).toBe(ValidationStatus.ERROR);
-        expect(result.errors).toContain('Invalid currency. Must be one of: USD, ILS, EUR');
+        expect(result.errors).toContain('Invalid currency. Must be one of: USD, ILS, EUR, JOD');
+      });
+
+      it('accepts JOD as a valid currency (MUT-140)', () => {
+        const row = {
+          type: 'income',
+          name: 'Payment',
+          amount: '1000.123',
+          currency: 'JOD',
+          status: 'paid',
+          date: '2024-01-15',
+        };
+
+        const result = validateCSVRow(row, 0, []);
+
+        expect(result.status).toBe(ValidationStatus.NEW);
+        expect(result.errors).toHaveLength(0);
       });
 
       it('should error if status is invalid', () => {

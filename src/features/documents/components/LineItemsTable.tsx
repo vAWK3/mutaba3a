@@ -22,6 +22,7 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: '$',
   ILS: '₪',
   EUR: '€',
+  JOD: 'JOD', // no conventional narrow symbol; show the ISO code
 };
 
 // Calculate item total in minor units

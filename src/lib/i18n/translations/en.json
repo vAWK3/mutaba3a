@@ -1211,7 +1211,8 @@
     "currency": {
       "USD": "US dollars",
       "ILS": "shekels",
-      "EUR": "euros"
+      "EUR": "euros",
+      "JOD": "Jordanian dinars"
     },
     "footer": {
       "copyright": "Mutaba3a",

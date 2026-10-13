@@ -167,7 +167,9 @@ export function ProfileDetailPage() {
         countryEn: profile.countryEn || '',
         postalCode: profile.postalCode || '',
         primaryColor: profile.primaryColor || '#3b82f6',
-        defaultCurrency: profile.defaultCurrency,
+        // Document defaults stay USD/ILS/EUR-only (MUT-140 scope: JOD is not
+        // added to document/profile-default currency selection).
+        defaultCurrency: profile.defaultCurrency as 'USD' | 'ILS' | 'EUR',
         defaultLanguage: profile.defaultLanguage,
         isDefault: profile.isDefault,
         // Document defaults
@@ -735,7 +737,7 @@ export function ProfileDetailPage() {
                     onChange={(e) => {
                       const current = form.getValues('allowedCurrencies') || ['USD', 'ILS'];
                       if (e.target.checked) {
-                        form.setValue('allowedCurrencies', [...new Set([...current, 'USD' as Currency])]);
+                        form.setValue('allowedCurrencies', [...new Set([...current, 'USD' as const])]);
                       } else {
                         form.setValue('allowedCurrencies', current.filter((c) => c !== 'USD'));
                       }
@@ -750,7 +752,7 @@ export function ProfileDetailPage() {
                     onChange={(e) => {
                       const current = form.getValues('allowedCurrencies') || ['USD', 'ILS'];
                       if (e.target.checked) {
-                        form.setValue('allowedCurrencies', [...new Set([...current, 'ILS' as Currency])]);
+                        form.setValue('allowedCurrencies', [...new Set([...current, 'ILS' as const])]);
                       } else {
                         form.setValue('allowedCurrencies', current.filter((c) => c !== 'ILS'));
                       }

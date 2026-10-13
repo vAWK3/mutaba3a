@@ -31,6 +31,7 @@ export interface TransactionTotalsByCurrency {
   USD: TransactionTotals;
   ILS: TransactionTotals;
   EUR: TransactionTotals;
+  JOD: TransactionTotals;
 }
 
 export interface TransactionTotalsWithActivity extends TransactionTotals {
@@ -326,6 +327,7 @@ export function aggregateTransactionTotalsByCurrency(
     USD: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
     ILS: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
     EUR: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    JOD: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
   };
 
   for (const tx of transactions) {

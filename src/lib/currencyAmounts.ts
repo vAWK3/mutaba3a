@@ -13,7 +13,7 @@ export interface CurrencyAmount {
  * Display position of each currency. A `Record` over `Currency`, so adding a
  * currency without placing it fails to compile. Same order as Owed now.
  */
-const DISPLAY_POSITION = { USD: 0, ILS: 1, EUR: 2 } satisfies Record<Currency, number>;
+const DISPLAY_POSITION = { USD: 0, ILS: 1, EUR: 2, JOD: 3 } satisfies Record<Currency, number>;
 
 const CURRENCIES_IN_ORDER = (Object.keys(DISPLAY_POSITION) as Currency[]).sort(
   (a, b) => DISPLAY_POSITION[a] - DISPLAY_POSITION[b]

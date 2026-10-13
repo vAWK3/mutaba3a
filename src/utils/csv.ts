@@ -1,6 +1,17 @@
 /**
  * CSV generation and download utilities
  */
+import { currencyExponent } from '../lib/utils';
+import type { Currency } from '../types';
+import { VALID_CURRENCIES } from './csvValidation';
+
+/** Minor-to-major conversion at the row's own currency exponent (2 places, or 3 for JOD); falls back to 2 for an unrecognized currency string rather than producing NaN. */
+function amountMinorToMajorString(amountMinor: number, currency: string): string {
+  const exponent = (VALID_CURRENCIES as readonly string[]).includes(currency)
+    ? currencyExponent(currency as Currency)
+    : 2;
+  return (amountMinor / 10 ** exponent).toFixed(exponent);
+}
 
 /**
  * Convert array of objects to CSV string with proper escaping.
@@ -495,7 +506,7 @@ export function exportDataToCSV(data: {
       client: tx.clientId ? clientMap.get(tx.clientId) || '' : '',
       project: tx.projectId ? projectMap.get(tx.projectId) || '' : '',
       field: '',
-      amount: (tx.amountMinor / 100).toFixed(2), // Convert minor units to major
+      amount: amountMinorToMajorString(tx.amountMinor, tx.currency), // Convert minor units to major, at the currency's own exponent
       currency: tx.currency,
       status: tx.status || '',
       date: formatDate(tx.occurredAt),
