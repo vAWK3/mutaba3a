@@ -310,7 +310,7 @@ function PaymentForm({
   // remaining balance already in the field -- one confirm, still editable down
   // to a partial amount (MUT-6 AC #3).
   const [amountText, setAmountText] = useState(() =>
-    minorToAmountInput(editingRecord ? editingRecord.amountMinor : allowedMinor)
+    minorToAmountInput(editingRecord ? editingRecord.amountMinor : allowedMinor, currency)
   );
   // todayISO() is the local calendar date (ADR-022). new Date().toISOString()
   // is the UTC one, which hands a user west of UTC tomorrow's date in the

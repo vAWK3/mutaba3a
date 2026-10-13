@@ -92,7 +92,7 @@ export function RetainerDrawer() {
 
   // Generate live schedule preview
   const schedulePreview = useMemo(() => {
-    const amountMinor = parseAmountToMinor(selectedAmount);
+    const amountMinor = parseAmountToMinor(selectedAmount, selectedCurrency);
     if (!selectedStartDate || !amountMinor) return [];
 
     const preview: Array<{ date: string; periodLabel: string }> = [];
@@ -127,7 +127,7 @@ export function RetainerDrawer() {
     }
 
     return preview;
-  }, [selectedStartDate, selectedEndDate, selectedCadence, selectedPaymentDay, selectedAmount, locale]);
+  }, [selectedStartDate, selectedEndDate, selectedCadence, selectedPaymentDay, selectedAmount, selectedCurrency, locale]);
 
   const createMutation = useCreateRetainer();
   const updateMutation = useUpdateRetainer();
@@ -141,7 +141,7 @@ export function RetainerDrawer() {
         clientId: existingRetainer.clientId,
         title: existingRetainer.title,
         amount: (existingRetainer.amountMinor / 100).toString(),
-        currency: existingRetainer.currency,
+        currency: existingRetainer.currency as 'USD' | 'ILS' | 'EUR',
         cadence: existingRetainer.cadence,
         paymentDay: existingRetainer.paymentDay,
         startDate: existingRetainer.startDate,
@@ -176,7 +176,7 @@ export function RetainerDrawer() {
         profileId: data.profileId,
         clientId: data.clientId,
         title: data.title,
-        amountMinor: parseAmountToMinor(data.amount),
+        amountMinor: parseAmountToMinor(data.amount, data.currency),
         currency: data.currency as Currency,
         cadence: data.cadence as RetainerCadence,
         paymentDay: data.paymentDay,
@@ -474,7 +474,7 @@ export function RetainerDrawer() {
                 <div key={index} className="preview-schedule-item">
                   <span className="preview-schedule-date">{item.periodLabel}</span>
                   <span className="preview-schedule-amount">
-                    {formatAmount(parseAmountToMinor(selectedAmount), selectedCurrency, locale)}
+                    {formatAmount(parseAmountToMinor(selectedAmount, selectedCurrency), selectedCurrency, locale)}
                   </span>
                 </div>
               ))}

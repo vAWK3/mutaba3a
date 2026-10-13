@@ -415,6 +415,7 @@ export function calculateMonthActuals(
     USD: received.USD - expenseTotal.USD,
     ILS: received.ILS - expenseTotal.ILS,
     EUR: received.EUR - expenseTotal.EUR,
+    JOD: received.JOD - expenseTotal.JOD,
   };
 
   return {

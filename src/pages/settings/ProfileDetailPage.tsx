@@ -176,7 +176,7 @@ export function ProfileDetailPage() {
         website: profile.website || '',
         defaultTemplateId: profile.defaultTemplateId || 'template1',
         defaultTaxRate: profile.defaultTaxRate ?? 0.17,
-        allowedCurrencies: profile.allowedCurrencies || ['USD', 'ILS'],
+        allowedCurrencies: (profile.allowedCurrencies as ('USD' | 'ILS' | 'EUR')[] | undefined) || ['USD', 'ILS'],
         // Payment/Bank details
         bankName: profile.bankName || '',
         bankBranch: profile.bankBranch || '',
