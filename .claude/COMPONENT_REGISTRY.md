@@ -214,10 +214,10 @@ Tests: `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx`.
 
 ### AdvancedFeaturesSection
 **Location**: `src/pages/settings/AdvancedFeaturesSection.tsx`
-**Purpose**: Settings › Advanced features — one `Switch` per `FEATURE_KEYS` entry, labels and descriptions from `settings.features.items.*`. Reads `useFeatureFlags()`, writes `useSetFeatureEnabled()`; never touches the settings row.
+**Purpose**: Settings › Advanced features — one `Switch` per `FEATURE_KEYS` entry, labels and descriptions from `settings.features.items.*`. Reads `useFeatureFlags()`, writes `useSetFeatureEnabled()`; never touches the settings row. A small grid-of-squares icon sits beside the title (MUT-139 visual pass) — it signals "this reshapes your nav," not a warning colour, since the toggle isn't destructive.
 
 ```tsx
-<AdvancedFeaturesSection />   // rendered by SettingsPage between Currency and AboutSection (MUT-139 order)
+<AdvancedFeaturesSection />   // rendered by SettingsPage between Preferences and AboutSection
 ```
 
 Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
@@ -226,10 +226,10 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ### AboutSection
 **Location**: `src/pages/settings/AboutSection.tsx`
-**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, unlike `DataToolsSection`, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, and the mac/Windows download links.
+**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, unlike `DataToolsSection`, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, and the mac/Windows download links. Uses `.settings-section-quiet` (MUT-139 visual pass): no card chrome, smaller title — the least load-bearing content on the page gets the least visual weight.
 
 ```tsx
-<AboutSection />   // rendered by SettingsPage between AdvancedFeaturesSection and Data (last two: Data, DataToolsSection)
+<AboutSection />   // rendered by SettingsPage between AdvancedFeaturesSection and the Data+DataToolsSection family
 ```
 
 Tests: `src/pages/settings/__tests__/AboutSection.test.tsx`.
@@ -238,10 +238,13 @@ Tests: `src/pages/settings/__tests__/AboutSection.test.tsx`.
 
 ### DataToolsSection
 **Location**: `src/pages/settings/DataToolsSection.tsx`
-**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch. Deliberately kept as its own component/heading rather than merged into "Data" (MUT-139) — it has its own standalone heading test; proximity to Data is achieved by page order (both are now the last two sections) rather than a header merge.
+**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch. Deliberately kept as its own component/heading rather than merged into "Data" (MUT-139 IA pass) — it has its own standalone heading test. Uses `.settings-section-nested` (MUT-139 visual pass) and is wrapped together with the Data section in a `.settings-family` div in `SettingsPage.tsx`, which collapses both cards' margins to one tight gap so the pair reads as one unit — verified against a real screenshot; a tint alone didn't read as "nested."
 
 ```tsx
-<DataToolsSection />   // rendered by SettingsPage last, directly after Data
+<div className="settings-family">
+  <div className="settings-section">{/* Data */}</div>
+  <DataToolsSection />
+</div>
 ```
 
 Tests: `src/pages/settings/__tests__/DataToolsSection.test.tsx`.
@@ -743,6 +746,24 @@ Tests: `src/components/drawers/__tests__/OrphanedRecordsDrawer.test.tsx`, `src/d
 
 Props: `checked`, `onChange(next)`, `labelledBy?`, `ariaLabel?`, `disabled?`, `id?`, `className?`.
 Tests: `src/components/ui/__tests__/Switch.test.tsx`. First consumer: `AdvancedFeaturesSection` (MUT-12).
+
+---
+
+### SegmentedControl
+**Location**: `src/components/ui/SegmentedControl.tsx` (+ `SegmentedControl.css`)
+**Purpose**: Single-select radiogroup for a small fixed set of mutually exclusive choices, with a sliding highlight. `role="radiogroup"` + `role="radio"` per option, roving tabindex, arrow-key navigation (wraps at the ends). The thumb is positioned in `useLayoutEffect` by mutating a ref's inline style directly — never `setState` in the effect (`react-hooks/set-state-in-effect` is a hard lint error; see `TruncatedTitle.tsx` for the same ref-mutation pattern). Animates on `--ease-spring`/`--duration-toggle` (zeroed under `prefers-reduced-motion`), critically damped — no overshoot, since this is a flat state switch, not a flick gesture. For a *multi*-select toggle (more than one option can be on at once), this isn't the right component — it's a radiogroup by design; use independent toggle buttons instead (Settings → Preferences' "Enabled currencies" row).
+
+```tsx
+<SegmentedControl
+  value={language}
+  onChange={setLanguage}
+  options={[{ value: 'en', label: 'English' }, { value: 'ar', label: 'العربية' }]}
+  labelledBy={languageLabelId}
+/>
+```
+
+Props: `options` (`{value, label}[]`), `value`, `onChange(next)`, `ariaLabel?`, `labelledBy?`, `className?`.
+Tests: `src/components/ui/__tests__/SegmentedControl.test.tsx`. First consumer: Settings → Preferences, language and theme (MUT-139).
 
 ---
 

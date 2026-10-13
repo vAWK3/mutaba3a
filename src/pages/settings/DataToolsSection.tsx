@@ -102,7 +102,7 @@ export function DataToolsSection() {
   };
 
   return (
-    <div className="settings-section">
+    <div className="settings-section settings-section-nested">
       <h2 className="settings-section-title">{t('settings.dataTools')}</h2>
 
       <div className="settings-row">

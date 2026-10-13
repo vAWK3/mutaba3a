@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-139 — Settings visual redesign: wireframe</title>
+<style>
+/* Tokens copied verbatim from src/styles/brand/mutaba3a-theme.css + src/styles/theme.css
+   (Brand v2 / ADR-058) so this reads as the real app, not an approximation. Hex comments
+   match the ones in the source file. */
+:root{
+  --m-canvas:oklch(0.975 0.014 80); --m-surface:oklch(0.993 0.008 80); --m-line:oklch(0.92 0.015 300);
+  --m-field-bg:oklch(0.965 0.012 300); --m-ink:oklch(0.33 0.05 300); --m-ink2:oklch(0.442 0.043 298.7);
+  --m-primary:oklch(0.55 0.14 295); --m-primary-hover:oklch(0.46 0.142 293.8); --m-on-primary:oklch(0.98 0.012 80);
+  --m-focus:oklch(0.6 0.13 295); --m-lavender:oklch(0.9 0.06 295); --m-lavender-ink:oklch(0.401 0.114 294.5);
+  --m-mint:oklch(0.9 0.06 165); --m-mint-ink:oklch(0.387 0.076 170.2);
+  --m-rose:oklch(0.9 0.06 10); --m-rose-ink:oklch(0.398 0.103 14.8);
+  --m-butter:oklch(0.93 0.07 95); --m-butter-ink:oklch(0.419 0.083 74.8);
+  --m-shadow-tint:oklch(0.45 0.08 300);
+
+  --font-body:"Thmanyah Sans",system-ui,-apple-system,sans-serif;
+  --font-heading:"Thmanyah Serif Display",Georgia,serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Consolas,monospace;
+
+  /* Brand type scale: label 13, body 16, headline 20, title 32 */
+  --text-label:0.8125rem; --text-body:1rem; --text-headline:1.25rem; --text-title:2rem;
+  --weight-normal:400; --weight-medium:500; --weight-semibold:600; --weight-bold:700;
+
+  --space-1:.25rem; --space-1-5:.375rem; --space-2:.5rem; --space-3:.75rem; --space-4:1rem;
+  --space-5:1.25rem; --space-6:1.5rem; --space-8:2rem; --space-10:2.5rem; --space-12:3rem;
+
+  --radius-sm:12px; --radius-md:14px; --radius-lg:18px; --radius-card:24px; --radius-pill:999px;
+
+  --ease-spring:cubic-bezier(.32,.72,0,1);
+  --duration-toggle:350ms;
+
+  --bg:var(--m-canvas);
+  --surface:var(--m-surface);
+  --surface-2:var(--m-field-bg);
+  --surface-hover:color-mix(in oklab, var(--m-field-bg) 60%, var(--m-surface));
+  --text:var(--m-ink); --text-secondary:var(--m-ink2); --muted:var(--m-ink2);
+  --border:var(--m-line); --border-subtle:color-mix(in oklab, var(--m-line) 60%, transparent);
+  --border-strong:color-mix(in oklab, var(--m-line) 70%, var(--m-ink2));
+  --accent:var(--m-primary); --accent-text:var(--m-primary-hover); --accent-hover:var(--m-primary-hover);
+  --accent-subtle:var(--m-lavender); --on-accent-subtle:var(--m-lavender-ink);
+  --on-accent:var(--m-on-primary); --accent-solid:var(--m-primary-hover);
+  --success-subtle:var(--m-mint); --success-ink:var(--m-mint-ink);
+  --warning-subtle:var(--m-butter); --warning-ink:var(--m-butter-ink);
+  --error-subtle:var(--m-rose); --error-ink:var(--m-rose-ink);
+  --focus:var(--m-focus);
+  --shadow-1: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 6%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 8%, transparent);
+  --shadow-2: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 6%, transparent), 0 12px 40px color-mix(in oklab, var(--m-shadow-tint) 7%, transparent);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --m-canvas:oklch(0.24 0.035 300); --m-surface:oklch(0.29 0.04 300); --m-line:oklch(0.4 0.04 300);
+    --m-field-bg:oklch(0.34 0.045 300); --m-ink:oklch(0.95 0.015 80); --m-ink2:oklch(0.78 0.03 300);
+    --m-primary:oklch(0.78 0.11 295); --m-primary-hover:oklch(0.82 0.1 295); --m-on-primary:oklch(0.27 0.06 300);
+    --m-focus:oklch(0.75 0.12 295); --m-lavender:oklch(0.38 0.07 295); --m-lavender-ink:oklch(0.88 0.08 295);
+    --m-mint:oklch(0.38 0.07 165); --m-mint-ink:oklch(0.88 0.08 165);
+    --m-rose:oklch(0.38 0.07 10); --m-rose-ink:oklch(0.88 0.08 10);
+    --m-butter:oklch(0.4 0.06 85); --m-butter-ink:oklch(0.9 0.09 95);
+    --m-shadow-tint:oklch(0.15 0.03 300);
+    --shadow-1: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 30%, transparent);
+    --shadow-2: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklab, var(--m-shadow-tint) 35%, transparent);
+  }
+}
+:root[data-theme="dark"]{
+  --m-canvas:oklch(0.24 0.035 300); --m-surface:oklch(0.29 0.04 300); --m-line:oklch(0.4 0.04 300);
+  --m-field-bg:oklch(0.34 0.045 300); --m-ink:oklch(0.95 0.015 80); --m-ink2:oklch(0.78 0.03 300);
+  --m-primary:oklch(0.78 0.11 295); --m-primary-hover:oklch(0.82 0.1 295); --m-on-primary:oklch(0.27 0.06 300);
+  --m-focus:oklch(0.75 0.12 295); --m-lavender:oklch(0.38 0.07 295); --m-lavender-ink:oklch(0.88 0.08 295);
+  --m-mint:oklch(0.38 0.07 165); --m-mint-ink:oklch(0.88 0.08 165);
+  --m-rose:oklch(0.38 0.07 10); --m-rose-ink:oklch(0.88 0.08 10);
+  --m-butter:oklch(0.4 0.06 85); --m-butter-ink:oklch(0.9 0.09 95);
+  --m-shadow-tint:oklch(0.15 0.03 300);
+  --shadow-1: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 30%, transparent);
+  --shadow-2: 0 1px 2px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklab, var(--m-shadow-tint) 35%, transparent);
+}
+@media (prefers-reduced-motion: reduce){ :root{ --duration-toggle:0ms; } }
+body[data-rm="on"]{ --duration-toggle:0ms !important; }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-body);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:var(--space-8) var(--space-5) var(--space-12)}
+
+/* ---- meta header (not part of the app; explains the proposal) ---- */
+.meta{max-width:860px;margin:0 auto;padding:var(--space-6) var(--space-5) 0}
+.meta h1{font-family:var(--font-heading);font-size:1.5rem;margin:0 0 var(--space-2);letter-spacing:-0.01em}
+.meta p{color:var(--muted);max-width:72ch;margin:0 0 var(--space-3);font-size:0.9375rem}
+.controls{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-5)}
+.ctl{font:inherit;font-size:var(--text-label);padding:var(--space-2) var(--space-3);border:1px solid var(--border);
+  background:var(--surface);color:var(--text);border-radius:var(--radius-sm);cursor:pointer}
+.ctl[aria-pressed="true"]{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent)}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--space-3);margin-bottom:var(--space-8);
+  padding:var(--space-4);background:var(--surface);border:1px solid var(--border-subtle);border-radius:var(--radius-lg)}
+.legend-item{font-size:var(--text-label);color:var(--muted)}
+.legend-item b{display:block;color:var(--text);font-weight:var(--weight-semibold);margin-bottom:2px;font-size:0.875rem}
+
+/* ---- the actual proposal: Settings page ---- */
+.page-title{font-family:var(--font-heading);font-size:1.375rem;letter-spacing:-0.01em;margin-bottom:var(--space-6)}
+
+.card{background:var(--surface);border:1px solid var(--border-subtle);border-radius:var(--radius-card);
+  box-shadow:var(--shadow-1);padding:var(--space-5);margin-bottom:var(--space-5)}
+.card.quiet{box-shadow:none;background:transparent;border-color:transparent;padding:var(--space-4) var(--space-1)}
+.card.nested{background:var(--surface-2);box-shadow:none;border-radius:var(--radius-lg);margin-top:var(--space-3);margin-bottom:0;padding:var(--space-4)}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)}
+.card-title-group{display:flex;align-items:center;gap:var(--space-2)}
+.card-title{font-size:var(--text-headline);font-weight:var(--weight-semibold);letter-spacing:-0.005em}
+.card-title.small{font-size:0.9375rem;font-weight:var(--weight-semibold)}
+.card-desc{font-size:var(--text-label);color:var(--muted);margin-top:2px;max-width:50ch}
+.icon{width:18px;height:18px;flex:none;color:var(--accent-text)}
+
+.row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-3) 0}
+.row + .row{border-top:1px solid var(--border-subtle)}
+.subdivider{font-size:0.6875rem;font-weight:var(--weight-semibold);text-transform:uppercase;letter-spacing:0.05em;
+  color:var(--muted);margin-top:var(--space-4);padding-top:var(--space-3);border-top:1px solid var(--border-subtle)}
+.subdivider + .row{border-top:none;padding-top:var(--space-2)}
+.row-label{font-weight:var(--weight-medium);font-size:0.9375rem}
+.row-desc{font-size:var(--text-label);color:var(--muted);margin-top:2px}
+
+/* Segmented control: sliding highlight on a spring curve, critically damped (no bounce —
+   this is a flat state switch, not a flick/gesture; see apple-design §4 defaults) */
+.seg{position:relative;display:inline-flex;background:var(--surface-2);border-radius:var(--radius-pill);padding:3px;gap:2px}
+.seg button{position:relative;z-index:1;font:inherit;font-size:var(--text-label);font-weight:var(--weight-medium);
+  padding:var(--space-1-5) var(--space-3);border-radius:var(--radius-pill);background:transparent;color:var(--muted);
+  cursor:pointer;transition:color var(--duration-toggle) var(--ease-spring)}
+.seg button[aria-pressed="true"]{color:var(--text)}
+.seg .thumb{position:absolute;top:3px;bottom:3px;border-radius:var(--radius-pill);background:var(--surface);
+  box-shadow:var(--shadow-1);transition:transform var(--duration-toggle) var(--ease-spring), width var(--duration-toggle) var(--ease-spring)}
+
+.switch{position:relative;display:inline-block;width:40px;height:24px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch .track{position:absolute;inset:0;background:var(--border-strong);border-radius:var(--radius-pill);transition:background var(--duration-toggle) var(--ease-spring);cursor:pointer}
+.switch input:checked + .track{background:var(--accent-solid)}
+.switch .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface);
+  box-shadow:var(--shadow-1);transition:transform var(--duration-toggle) var(--ease-spring)}
+.switch input:checked + .track .knob{transform:translateX(16px)}
+
+.btn{font:inherit;font-size:var(--text-label);font-weight:var(--weight-medium);padding:var(--space-2) var(--space-3);
+  border-radius:var(--radius-sm);cursor:pointer;border:1px solid transparent}
+.btn-primary{background:var(--accent-solid);color:var(--on-accent)}
+.btn-secondary{background:var(--surface);border-color:var(--border);color:var(--text)}
+.btn-ghost{background:transparent;color:var(--text-secondary)}
+.btn-danger{background:transparent;border-color:var(--error-ink);color:var(--error-ink)}
+
+.select{font:inherit;font-size:var(--text-label);padding:var(--space-2) var(--space-3);border:1px solid var(--border);
+  border-radius:var(--radius-sm);background:var(--surface);color:var(--text)}
+
+.avatar{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--accent-subtle);color:var(--on-accent-subtle);
+  display:flex;align-items:center;justify-content:center;font-weight:var(--weight-semibold);font-size:0.9375rem;flex:none}
+.profile-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) 0}
+.profile-row + .profile-row{border-top:1px solid var(--border-subtle)}
+.profile-info{display:flex;align-items:center;gap:var(--space-3)}
+.profile-name{font-weight:var(--weight-semibold);font-size:0.9375rem}
+.profile-meta{font-size:var(--text-label);color:var(--muted)}
+.badge{display:inline-flex;align-items:center;font-size:0.6875rem;font-weight:var(--weight-semibold);
+  padding:1px var(--space-2);border-radius:var(--radius-pill);background:var(--success-subtle);color:var(--success-ink);margin-inline-start:var(--space-2)}
+
+.danger-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);
+  background:var(--error-subtle);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);margin-top:var(--space-3)}
+.danger-row .row-label{color:var(--error-ink)}
+
+.update-card{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+  background:var(--accent-subtle);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);margin-bottom:var(--space-3)}
+.update-card .row-label{color:var(--on-accent-subtle)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.about-links{display:flex;gap:var(--space-2);flex-wrap:wrap}
+.quiet .row-label{font-weight:var(--weight-normal);color:var(--muted);font-size:var(--text-label)}
+</style>
+</head>
+<body>
+
+<div class="meta">
+  <h1>Settings — visual redesign proposal</h1>
+  <p>Same IA already shipped in MUT-139 (order, merges, restored toggle). This layer is purely look-and-feel: materials, hierarchy, grouping and motion, judged against the Apple-design principles — Grouping &amp; Mapping, Simplicity (common path first), Materials/depth, and critically-damped motion for state switches. Nothing here is implemented in the app yet; this is the thing to approve before it is.</p>
+  <div class="controls">
+    <button class="ctl" aria-pressed="false" onclick="setTheme('light',this)">Light</button>
+    <button class="ctl" aria-pressed="false" onclick="setTheme('dark',this)">Dark</button>
+    <button class="ctl" aria-pressed="true" onclick="setTheme('system',this)">System</button>
+    <button class="ctl" aria-pressed="false" onclick="toggleRM(this)">Reduced motion: off</button>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><b>Profiles — promoted</b>Larger title, avatar chips. It's the identity anchor; nothing else on the page means anything without one.</div>
+    <div class="legend-item"><b>Preferences — one card, not two</b>Language, Theme and Currency are all quick, low-stakes defaults. One header and one card instead of three — the "Currency" label inside is plain text, not a heading (the real a11y test forbids h3s).</div>
+    <div class="legend-item"><b>Advanced Features — marked, not alarmed</b>An icon signals "this changes your nav," not a danger color — it's structural, not destructive.</div>
+    <div class="legend-item"><b>Data + Data Tools — nested</b>Data Tools becomes a quieter sub-card inside Data's card, reading as one family instead of two siblings.</div>
+    <div class="legend-item"><b>About — de-emphasized</b>Smallest type, no card chrome, bottom of the page. The least load-bearing content gets the least visual weight.</div>
+    <div class="legend-item"><b>Segmented controls</b>Language/Theme/Currency toggles get a sliding-thumb segmented control instead of discrete buttons — one control, not N buttons that happen to look related.</div>
+    <div class="legend-item"><b>No FX rates yet</b>Manual FX rate entry (CLAUDE.md spec, "All converted" reports) stays unbuilt — ADR-063 scope note, not shown in the card copy itself.</div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="page-title">Settings</div>
+
+  <!-- Business Profiles: promoted, hero-weight -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Business Profiles</div>
+        <div class="card-desc">Manage who you're billing as.</div>
+      </div>
+      <button class="btn btn-secondary">+ Add Profile</button>
+    </div>
+    <div class="profile-row">
+      <div class="profile-info">
+        <div class="avatar">AS</div>
+        <div>
+          <div class="profile-name">Acme Studio<span class="badge">Default</span></div>
+          <div class="profile-meta">hello@acmestudio.com</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost">Edit</button>
+    </div>
+    <div class="profile-row">
+      <div class="profile-info">
+        <div class="avatar" style="background:var(--surface-2);color:var(--muted)">SG</div>
+        <div>
+          <div class="profile-name">Side Gig</div>
+          <div class="profile-meta">me@sidegig.dev</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost">Edit</button>
+    </div>
+  </div>
+
+  <!-- Preferences: Language + Theme + Currency, one compact card. These are all the same
+       category — quick, low-stakes, personal-ish defaults — so one header earns its keep
+       instead of three. The "Currency" label below is plain text, not a heading: the real
+       SettingsPage.a11y.test.tsx forbids h3s, so a semantic subsection isn't implementation-
+       feasible here — this reads as a quiet divider, the same trick iOS Settings uses inside
+       one grouped list. -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Preferences</div>
+        <div class="card-desc">Interface, appearance and currency.</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-label">Language</div>
+      <div class="seg" data-seg data-count="2">
+        <button aria-pressed="true" onclick="selectSeg(this)">English</button>
+        <button aria-pressed="false" onclick="selectSeg(this)">العربية</button>
+        <div class="thumb"></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-label">Theme</div>
+      <div class="seg" data-seg data-count="3">
+        <button aria-pressed="true" onclick="selectSeg(this)">Light</button>
+        <button aria-pressed="false" onclick="selectSeg(this)">Dark</button>
+        <button aria-pressed="false" onclick="selectSeg(this)">System</button>
+        <div class="thumb"></div>
+      </div>
+    </div>
+    <div class="subdivider">Currency</div>
+    <div class="row">
+      <div class="row-label">Enabled</div>
+      <div class="seg" data-seg data-count="2">
+        <button aria-pressed="true" onclick="selectSeg(this,true)">USD</button>
+        <button aria-pressed="true" onclick="selectSeg(this,true)">ILS</button>
+        <div class="thumb" style="display:none"></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-label">Default</div>
+      <select class="select"><option>USD</option><option>ILS</option></select>
+    </div>
+  </div>
+
+  <!-- Advanced Features: icon signals weight, not danger -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title-group">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <div>
+          <div class="card-title">Advanced Features</div>
+          <div class="card-desc">Turns nav sections on or off.</div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div><div class="row-label">Expenses</div><div class="row-desc">By category</div></div>
+      <label class="switch"><input type="checkbox"><span class="track"><span class="knob"></span></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-label">Projects</div><div class="row-desc">By project</div></div>
+      <label class="switch"><input type="checkbox" checked><span class="track"><span class="knob"></span></span></label>
+    </div>
+  </div>
+
+  <!-- About: quietest card on the page, no chrome -->
+  <div class="card quiet">
+    <div class="card-title small">About</div>
+    <div class="row-desc" style="margin:var(--space-2) 0 var(--space-3)">Mutaba3a — client accounting for freelancers.</div>
+    <div class="update-card">
+      <div>
+        <div class="row-label">Up to date</div>
+        <div class="row-desc">Current version: <span class="mono">0.0.65</span></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-label">Support</div>
+      <div class="about-links">
+        <button class="btn btn-secondary">Buy Me a Coffee</button>
+        <button class="btn btn-secondary">Ko-fi</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-label">Desktop app</div>
+      <div class="about-links">
+        <button class="btn btn-secondary">macOS</button>
+        <button class="btn btn-secondary">Windows</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data + Data Tools: nested, read as one family -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Data</div>
+        <div class="card-desc">Export, import and back up.</div>
+      </div>
+    </div>
+    <div class="row">
+      <div><div class="row-label">Export data</div><div class="row-desc">JSON or CSV</div></div>
+      <button class="btn btn-secondary">Export</button>
+    </div>
+    <div class="row">
+      <div><div class="row-label">Import data</div><div class="row-desc">From a backup or CSV</div></div>
+      <button class="btn btn-secondary">Import</button>
+    </div>
+
+    <div class="card nested">
+      <div class="card-title small" style="margin-bottom:var(--space-3)">Data Tools</div>
+      <div class="row">
+        <div><div class="row-label">Integrity check</div><div class="row-desc">Orphaned or broken records</div></div>
+        <button class="btn btn-secondary">Run check</button>
+      </div>
+      <div class="row">
+        <div><div class="row-label">Backup</div><div class="row-desc">Full JSON snapshot</div></div>
+        <button class="btn btn-secondary">Export backup</button>
+      </div>
+    </div>
+
+    <div class="danger-row">
+      <div>
+        <div class="row-label">Delete all data</div>
+        <div class="row-desc">This cannot be undone</div>
+      </div>
+      <button class="btn btn-danger">Delete All</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function setTheme(mode, el){
+  document.querySelectorAll('.controls .ctl').forEach(b=>b.setAttribute('aria-pressed','false'));
+  el.setAttribute('aria-pressed','true');
+  if(mode==='system'){ document.documentElement.removeAttribute('data-theme'); }
+  else { document.documentElement.setAttribute('data-theme', mode); }
+}
+function toggleRM(el){
+  const on = el.getAttribute('aria-pressed') === 'true';
+  el.setAttribute('aria-pressed', String(!on));
+  el.textContent = 'Reduced motion: ' + (!on ? 'on' : 'off');
+  document.body.setAttribute('data-rm', !on ? 'on' : 'off');
+}
+function selectSeg(btn, noExclusive){
+  const seg = btn.closest('.seg');
+  if(!noExclusive){
+    seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));
+    btn.setAttribute('aria-pressed','true');
+    positionThumb(seg);
+  } else {
+    // Currency row: independent toggles, no sliding thumb
+    btn.setAttribute('aria-pressed', btn.getAttribute('aria-pressed')==='true' ? 'false' : 'true');
+  }
+}
+function positionThumb(seg){
+  const thumb = seg.querySelector('.thumb');
+  if(!thumb || thumb.style.display==='none') return;
+  const active = seg.querySelector('button[aria-pressed="true"]');
+  if(!active) return;
+  thumb.style.width = active.offsetWidth + 'px';
+  thumb.style.transform = 'translateX(' + (active.offsetLeft - seg.offsetLeft - 3) + 'px)';
+}
+document.querySelectorAll('[data-seg]').forEach(seg=>{
+  if(seg.querySelector('.thumb').style.display !== 'none') positionThumb(seg);
+});
+</script>
+</body>
+</html>

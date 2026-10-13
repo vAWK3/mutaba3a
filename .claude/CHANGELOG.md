@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Settings visual redesign (MUT-139 follow-up, ADR-064)
+
+**Why:** After the IA reorg below, every section was still a flat bordered-title block with no material hierarchy. Basel asked for a visual pass applying the app's existing Brand v2 tokens, then asked to tighten it twice (merge Preferences+Currency into one card; cut every new subtitle to a fragment). Verified against a real Playwright screenshot in both themes, which caught two defects the wireframe alone couldn't show.
+
+**Run on this branch (Node 22):** `npm run lint` 0 errors, `npm run typecheck` clean, `npm run test` settings-scoped suites green (full suite was last run clean at 3470/3474 before this commit's final two CSS/JSX tweaks, which only touched class names and a margin rule). Verified live in a browser (light + dark) via Playwright.
+
+### Added
+- `SegmentedControl` (`src/components/ui/SegmentedControl.tsx`) — single-select radiogroup with a sliding thumb, used for Language and Theme. First real consumer of the `--ease-spring`/`--duration-toggle` brand tokens.
+- `settings.preferences.title`/`description` i18n keys (en + ar); `settings.profile.description`, `settings.data.description`.
+
+### Changed
+- Every `.settings-section` now has real card chrome (surface/border/shadow/radius) instead of a bare bottom-border title.
+- Language + Theme + Currency merged into one "Preferences" card (further than the IA pass's reorder) — the "Currency" group inside is a plain-text divider, never a heading.
+- `DataToolsSection` moves inside the `page-content` width cap and is wrapped with Data in a new `.settings-family` div — reverses one ADR-063 decision (confirmed with Basel first) after a real screenshot showed the tint alone didn't read as nested.
+- Enabled-currencies toggle pills use a soft `accent-subtle` fill instead of solid `btn-primary` — a screenshot showed the solid fill read as too loud next to the segmented controls in the same card.
+- Business Profiles list reuses `ProfileBadge` (already used by `ProfileSwitcher`) as the no-logo avatar fallback.
+
 ## [Unreleased] - 2026-10-13 — Settings IA reorg (MUT-139)
 
 **Why:** `/settings` grew section-by-section with no IA pass: Theme was briefly suspected to be a duplicate control (investigation found it's an intentional shared-state pattern, MUT-79 — no change made), "Enabled currencies" was commented-out dead code since the initial commit, Data/Data Tools and About/Updates/Desktop App read as fragmented, and "Default Currency"/"Default Language" collided between the global Settings page and two per-profile forms. Design brief: `.claude/designs/settings-ia-reorg.md`.

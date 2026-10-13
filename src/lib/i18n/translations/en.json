@@ -476,12 +476,17 @@
     "title": "Settings",
     "profile": {
       "title": "Business Profiles",
+      "description": "Manage who you're billing as.",
       "addProfile": "+ Add Profile",
       "setDefault": "Set as Default",
       "default": "Default",
       "confirmArchive": "Are you sure you want to archive this business profile?",
       "actionsFor": "Actions for {name}",
       "empty": "No business profiles yet. Create one to start issuing invoices."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "description": "Interface, appearance and currency."
     },
     "language": {
       "title": "Language",
@@ -536,6 +541,7 @@
     },
     "data": {
       "title": "Data Management",
+      "description": "Export, import and back up.",
       "export": "Export Data",
       "exportDesc": "Download a backup of all your data",
       "exportBtn": "Export JSON",

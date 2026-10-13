@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { DEFAULT_SETTINGS } from '../../../db/defaultSettings';
@@ -16,9 +16,10 @@ const profiles = [
   createMockBusinessProfile({ id: 'p-2', name: 'Side Gig', isDefault: false }),
 ];
 
-const { useSettingsMock, updateSettingsMutate } = vi.hoisted(() => ({
+const { useSettingsMock, updateSettingsMutate, setThemeMock } = vi.hoisted(() => ({
   useSettingsMock: vi.fn(),
   updateSettingsMutate: vi.fn(),
+  setThemeMock: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -39,7 +40,7 @@ vi.mock('../../../hooks/useQueries', () => ({
 }));
 
 vi.mock('../../../lib/theme', () => ({
-  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
+  useTheme: () => ({ theme: 'light', setTheme: setThemeMock }),
   THEME_MODES: ['light', 'dark', 'system'],
 }));
 
@@ -68,7 +69,11 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  // The language test below exercises the real LanguageProvider (it persists
+  // to localStorage), so every test starts from a clean, English default.
+  localStorage.removeItem('mutaba3a-language');
   updateSettingsMutate.mockClear();
+  setThemeMock.mockClear();
   useSettingsMock.mockReset();
   useSettingsMock.mockReturnValue({
     data: { ...DEFAULT_SETTINGS, enabledCurrencies: ['USD', 'ILS'], defaultCurrency: 'USD' },
@@ -111,9 +116,7 @@ describe('SettingsPage accessibility', () => {
     expect(screen.getByRole('heading', { level: 1, name: en.settings.title })).toBeInTheDocument();
     for (const title of [
       en.settings.profile.title,
-      en.settings.language.title,
-      en.settings.theme.title,
-      en.settings.currency.title,
+      en.settings.preferences.title,
       en.settings.data.title,
     ]) {
       expect(screen.getByRole('heading', { level: 2, name: title })).toBeInTheDocument();
@@ -126,18 +129,50 @@ describe('SettingsPage accessibility', () => {
 
   it('puts Business Profiles first and Data last, among the sections rendered inline', () => {
     // Advanced Features, About and Data Tools are mocked to null here (they
-    // have their own placement/heading tests) so only these five sections'
-    // h2s are observable in this render.
+    // have their own placement/heading tests) so only these three sections'
+    // h2s are observable in this render. Language, Theme and Currency merged
+    // into one "Preferences" heading (MUT-139).
     const { container } = renderPage();
 
     const titles = Array.from(container.querySelectorAll('.settings-section-title')).map((el) => el.textContent);
     expect(titles).toEqual([
       en.settings.profile.title,
-      en.settings.language.title,
-      en.settings.theme.title,
-      en.settings.currency.title,
+      en.settings.preferences.title,
       en.settings.data.title,
     ]);
+  });
+
+  it('keeps Language, Theme and Currency as plain text inside the merged Preferences card', () => {
+    renderPage();
+
+    expect(screen.getByText(en.settings.preferences.description)).toBeInTheDocument();
+    expect(screen.getByText(en.settings.language.title)).toBeInTheDocument();
+    expect(screen.getByText(en.settings.theme.title)).toBeInTheDocument();
+    // The "Currency" subdivider is plain text, not a heading (no h3 allowed).
+    const subdivider = screen.getByText(en.settings.currency.title);
+    expect(subdivider.tagName).not.toBe('H2');
+    expect(subdivider.tagName).not.toBe('H3');
+  });
+
+  it('switches theme through its segmented control', () => {
+    renderPage();
+
+    const themeGroup = screen.getByRole('radiogroup', { name: en.settings.theme.title });
+    fireEvent.click(within(themeGroup).getByRole('radio', { name: en.settings.theme.dark }));
+
+    expect(setThemeMock).toHaveBeenCalledWith('dark');
+  });
+
+  it('switches language through its segmented control (real LanguageProvider)', () => {
+    renderPage();
+
+    const languageGroup = screen.getByRole('radiogroup', { name: en.settings.language.title });
+    expect(within(languageGroup).getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(within(languageGroup).getByRole('radio', { name: 'العربية' }));
+
+    expect(within(languageGroup).getByRole('radio', { name: 'العربية' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(languageGroup).getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'false');
   });
 
   describe('enabled currencies', () => {

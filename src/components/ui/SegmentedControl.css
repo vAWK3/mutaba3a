@@ -1,0 +1,53 @@
+/* SegmentedControl — single-select radiogroup with a sliding highlight (MUT-139). */
+
+.segmented-control {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+}
+
+.segmented-control-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 0; /* useLayoutEffect sets the real width/position before paint */
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--duration-toggle) var(--ease-spring), width var(--duration-toggle) var(--ease-spring);
+}
+
+.segmented-control-option {
+  position: relative;
+  z-index: 1;
+  padding: var(--space-1-5) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: color var(--duration-toggle) var(--ease-spring);
+}
+
+.segmented-control-option[aria-checked='true'] {
+  color: var(--text);
+}
+
+.segmented-control-option:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmented-control-thumb,
+  .segmented-control-option {
+    transition: none;
+  }
+}

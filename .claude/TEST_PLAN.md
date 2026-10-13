@@ -1951,3 +1951,14 @@ Plan: `.claude/designs/settings-ia-reorg.md`. IA/placement only, no visual redes
 
 **Logged, not fixed here:** TD-107 (enabled-currencies toggle has no control for a currency outside USD/ILS, e.g. one that reached `enabledCurrencies` via JSON import — never shipped live before this ticket restored the toggle, so not a regression); TD-108 (`/settings/import`'s custom header vs. the shared `TopBar` breadcrumb pattern used everywhere else in Settings).
 
+### MUT-139 follow-up — Settings visual redesign (2026-10-13, ADR-064)
+Wireframe: `.claude/designs/mut-139-settings-visual-redesign-wireframe.html`, built from real Brand v2 tokens, reviewed and refined twice before implementation.
+
+| File | Covers |
+|---|---|
+| `src/components/ui/__tests__/SegmentedControl.test.tsx` (new) | Radiogroup renders one radio per option with the current value checked; click calls `onChange` with the new value and does nothing when clicking the already-selected option; arrow keys move selection and wrap at the ends; roving tabindex (only the selected option is tab-reachable); accepts `labelledBy` |
+| `src/pages/settings/__tests__/SettingsPage.a11y.test.tsx` | Heading list updated: Language/Theme/Currency titles replaced by one `preferences.title`; DOM-order assertion updated to 3 inline headings (Profile, Preferences, Data); new test confirms Language/Theme/Currency render as plain text inside the merged card, not headings; new tests exercise the segmented controls end to end — Theme via the mocked `setTheme`, Language via the real `LanguageProvider` (with a `beforeEach` `localStorage.removeItem` so the real provider's persistence can't leak state into later tests) |
+| `src/components/ui/__tests__/ProfileBadge.test.tsx`, `BusinessProfileDrawer.test.tsx` | Unchanged — `ProfileBadge` reused as-is for the Business Profiles no-logo fallback, no new test needed since its existing contract already covers this use |
+
+**What was run (Node 22):** `npm run lint` 0 errors; `npm run typecheck` clean; `npx vitest run` on the settings + SegmentedControl suites green throughout; full-suite run (3,470/3,474) was clean immediately before the final two CSS/JSX tweaks (family-wrapper margins, currency-pill colour), which touched only class names and a CSS rule, not test-observable behavior. Verified live via Playwright against the dev server, light and dark themes — this caught two defects the wireframe couldn't show: Data Tools still read as a separate full-width section (tint alone wasn't enough; fixed by moving it inside the width cap, confirmed with Basel first) and the enabled-currencies pills' solid fill read as visually loud next to the new segmented controls (fixed with a softer tint).
+

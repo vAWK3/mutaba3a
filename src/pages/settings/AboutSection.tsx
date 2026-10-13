@@ -21,7 +21,7 @@ export function AboutSection() {
   const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
 
   return (
-    <div className="settings-section">
+    <div className="settings-section settings-section-quiet">
       <h2 className="settings-section-title">{t('settings.about.title')}</h2>
       <div className="text-muted">
         <p>{t('settings.about.name')}</p>
