@@ -9,8 +9,9 @@
 # if any check FAILs, 0 if the worst is a WARN. It changes nothing on disk and
 # touches the network only to `git fetch` and to ask gcloud who you are.
 #
-# Escape hatches (set to 1 to downgrade a FAIL to a WARN), for the cases where
-# you know better than the check:
+# Escape hatches (set to 1 to downgrade a FAIL to a WARN without asking), for
+# the cases where you know better than the check. Left unset, each of these
+# asks interactively whether to continue or stop instead of hard-failing:
 #   ALLOW_DIRTY        uncommitted changes in the working tree
 #   ALLOW_UNMERGED     local branches not merged into the release branch
 #   ALLOW_WORKTREES    extra git worktrees still checked out
@@ -55,6 +56,20 @@ fail_or_warn() {
     warn "$msg ${DIM}($var=1)${NC}"
   else
     bad "$msg"
+  fi
+}
+
+# fail_or_confirm <override-var-name> <question> <warn-msg> <fail-msg> — WARN
+# if the override is set; otherwise ask interactively whether to continue,
+# and FAIL if the answer is no (or there is no terminal to ask).
+fail_or_confirm() {
+  local var="$1" question="$2" warn_msg="$3" fail_msg="$4"
+  if [[ "$(eval "echo \${$var:-0}")" == "1" ]]; then
+    warn "$warn_msg ${DIM}($var=1)${NC}"
+  elif "$REPO_ROOT/scripts/confirm.sh" "$question"; then
+    warn "$warn_msg (confirmed to continue)"
+  else
+    bad "$fail_msg"
   fi
 }
 
@@ -146,10 +161,14 @@ else
   if [[ -z "$DIRTY" ]]; then
     ok "working tree clean"
   else
-    fail_or_warn ALLOW_DIRTY "working tree has $(printf '%s\n' "$DIRTY" | wc -l | tr -d ' ') uncommitted change(s)"
+    DIRTY_COUNT="$(printf '%s\n' "$DIRTY" | wc -l | tr -d ' ')"
     printf '%s\n' "$DIRTY" | sed 's/^/        /' | head -10
     [[ "$(printf '%s\n' "$DIRTY" | wc -l)" -gt 10 ]] && hint "… and more; run: git status --short"
     hint "the image tag / release commit must name exactly what you deploy"
+    fail_or_confirm ALLOW_DIRTY \
+      "Continue the release with $DIRTY_COUNT uncommitted change(s) in the working tree?" \
+      "working tree has $DIRTY_COUNT uncommitted change(s)" \
+      "working tree has $DIRTY_COUNT uncommitted change(s)"
   fi
 
   # Unmerged work: branches whose commits are not in the release branch.
@@ -157,9 +176,13 @@ else
   if [[ -z "$UNMERGED" ]]; then
     ok "every local branch is merged into $RELEASE_BRANCH"
   else
-    fail_or_warn ALLOW_UNMERGED "local branch(es) not merged into $RELEASE_BRANCH:"
+    printf '  %s!%s %s\n' "$YELLOW" "$NC" "local branch(es) not merged into $RELEASE_BRANCH:"
     printf '%s\n' "$UNMERGED" | sed 's/^/        /'
     hint "land them, or delete them, or set ALLOW_UNMERGED=1 if they are deliberately parked"
+    fail_or_confirm ALLOW_UNMERGED \
+      "Continue the release with these branch(es) unmerged?" \
+      "local branch(es) not merged into $RELEASE_BRANCH" \
+      "local branch(es) not merged into $RELEASE_BRANCH"
   fi
 
   # Extra worktrees usually mean an epic is mid-flight (one worktree per epic).
@@ -167,9 +190,13 @@ else
   if [[ "$WT_COUNT" -le 1 ]]; then
     ok "no extra worktrees"
   else
-    fail_or_warn ALLOW_WORKTREES "$((WT_COUNT - 1)) extra worktree(s) still checked out"
+    printf '  %s!%s %s\n' "$YELLOW" "$NC" "$((WT_COUNT - 1)) extra worktree(s) still checked out:"
     git worktree list | tail -n +2 | sed 's/^/        /'
     hint "git worktree remove <path>   (work parked there is not in this release)"
+    fail_or_confirm ALLOW_WORKTREES \
+      "Continue the release with these worktree(s) still checked out?" \
+      "$((WT_COUNT - 1)) extra worktree(s) still checked out" \
+      "$((WT_COUNT - 1)) extra worktree(s) still checked out"
   fi
 
   # origin: the release commit has to be reachable by everyone else.
