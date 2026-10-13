@@ -10,7 +10,7 @@ import { adminClient } from './users.js';
  * income, expenses and payments (MUT-136) — so the iOS app has something to
  * screenshot for the App Store (MUT-137) instead of an empty first run.
  *
- *   npm run seed:demo-account -- --url http://localhost:8787 [--email qa@mutaba3a.test] [--name "Mutaba3a QA"] [--currency ILS] [--timezone Asia/Jerusalem]
+ *   npm run seed:demo-account -- --url http://localhost:8787 [--email qa@mutaba3a.test] [--name "Mutaba3a QA"] [--currency ILS] [--timezone Asia/Jerusalem] [--locale en|ar]
  *
  * MUTABA3A_ADMIN_TOKEN is read from the environment, never from a flag, same
  * as users.ts. Re-running is safe: the account is reused (its password is
@@ -42,10 +42,11 @@ const DEFAULTS = {
   name: 'Mutaba3a QA',
   currency: 'ILS',
   timezone: 'Asia/Jerusalem',
+  locale: 'en',
 };
 
 const USAGE = [
-  'usage: tsx src/scripts/seed-demo-account.ts [--url <base url>] [--email <email>] [--name <display name>] [--currency ILS|USD|EUR] [--timezone <IANA>]',
+  'usage: tsx src/scripts/seed-demo-account.ts [--url <base url>] [--email <email>] [--name <display name>] [--currency ILS|USD|EUR] [--timezone <IANA>] [--locale en|ar]',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
   'Set MUTABA3A_SEED_PASSWORD to an existing account\'s current password to keep it instead of rotating.',
 ].join('\n');
@@ -61,6 +62,7 @@ export async function runSeedDemoAccount(argv: string[], deps: SeedDemoAccountDe
         name: { type: 'string' },
         currency: { type: 'string' },
         timezone: { type: 'string' },
+        locale: { type: 'string' },
       },
     }).values;
   } catch (e) {
@@ -82,10 +84,16 @@ export async function runSeedDemoAccount(argv: string[], deps: SeedDemoAccountDe
   const displayName = values.name ?? DEFAULTS.name;
   const currency = values.currency ?? DEFAULTS.currency;
   const timezone = values.timezone ?? DEFAULTS.timezone;
+  const localeValue = values.locale ?? DEFAULTS.locale;
+  if (localeValue !== 'en' && localeValue !== 'ar') {
+    deps.err(`--locale must be "en" or "ar", got "${localeValue}"\n${USAGE}`);
+    return 2;
+  }
+  const locale = localeValue;
 
   try {
     const admin = adminClient(deps.fetch, baseUrl, deps.adminToken);
-    const credentials = await ensureSeedAccount(admin, { email, displayName, currency, timezone, keepPassword: deps.seedPassword });
+    const credentials = await ensureSeedAccount(admin, { email, displayName, currency, timezone, locale, keepPassword: deps.seedPassword });
     deps.out(`account ${credentials.userId} ${credentials.email}`);
     if (deps.seedPassword && credentials.rotated) deps.err('MUTABA3A_SEED_PASSWORD ignored: the account is new, so it was issued a password (below)');
 

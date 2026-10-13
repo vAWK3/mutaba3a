@@ -16,6 +16,8 @@ export interface EnsureSeedAccountOptions {
   /** Required when the account doesn't exist yet (no organization-id → a personal-only profile, MUT-120). */
   currency: string;
   timezone: string;
+  /** Drives the personal profile's own name and the expense-category preset's language (MUT-143) — both are fixed at account creation, not the in-app language picker. Ignored when the account already exists. */
+  locale: 'en' | 'ar';
   /**
    * An existing account's current password, to use instead of rotating. For an
    * account whose credentials were handed to someone else (App Store / Play
@@ -53,6 +55,7 @@ async function findOrCreate(admin: AdminClient, options: EnsureSeedAccountOption
     displayName: options.displayName,
     defaultCurrency: options.currency,
     timezone: options.timezone,
+    locale: options.locale,
   });
   return { userId: created.user.id, created: true };
 }

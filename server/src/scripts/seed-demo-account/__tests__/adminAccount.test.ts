@@ -10,7 +10,7 @@ import { ensureSeedAccount } from '../adminAccount.js';
 
 const ADMIN_TOKEN = 'admin-token-with-at-least-32-characters-long';
 const URL_BASE = 'http://mutaba3a.test';
-const OPTIONS = { email: 'qa@mutaba3a.test', displayName: 'Seed QA', currency: 'ILS', timezone: 'Asia/Jerusalem' };
+const OPTIONS = { email: 'qa@mutaba3a.test', displayName: 'Seed QA', currency: 'ILS', timezone: 'Asia/Jerusalem', locale: 'en' as const };
 
 function harness() {
   const store = new MemoryLedgerStore();
