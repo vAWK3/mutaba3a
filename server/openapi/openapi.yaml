@@ -6279,7 +6279,7 @@ paths:
       tags:
         - Fee proposals
       summary: "Approve: the client accepted the fee; creates the agreement and posts its first installment"
-      description: PROPOSED → APPROVED. Creates a fixed-fee agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change. ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
+      description: PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change — FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them). schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
       security:
         - apiKey: []
       parameters:
