@@ -70,5 +70,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       `Invalid configuration:\n  app association (${APP_ASSOCIATION_KEYS.join(', ')}): all four or none must be set; missing ${missing.join(', ')}`,
     );
   }
+  // A string like "," passes the schema's min(1), but every entry is blank
+  // once well-known.ts trims and filters it — refuse at boot rather than
+  // silently serving assetlinks.json with an empty fingerprint list.
+  if (config.ANDROID_SHA256_FINGERPRINTS && !config.ANDROID_SHA256_FINGERPRINTS.split(',').some((fp) => fp.trim().length > 0)) {
+    throw new ConfigError('Invalid configuration:\n  ANDROID_SHA256_FINGERPRINTS: must contain at least one non-blank fingerprint');
+  }
   return config;
 }

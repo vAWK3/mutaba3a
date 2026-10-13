@@ -127,4 +127,18 @@ describe('loadConfig — app association files (MUT-111)', () => {
   it('refuses an empty string for any one of them', () => {
     expect(() => loadConfig({ ...base, ...appAssociation, APPLE_TEAM_ID: '' })).toThrow(ConfigError);
   });
+
+  it.each([[','], [' , '], [',,']])(
+    'refuses ANDROID_SHA256_FINGERPRINTS=%j — passes schema validation but trims/filters to zero fingerprints',
+    (fingerprints) => {
+      // A typo'd list like "," is a non-empty string (passes min(1)) but every
+      // entry is blank once well-known.ts trims and filters it — the server
+      // would otherwise boot fine and silently serve assetlinks.json with an
+      // empty sha256_cert_fingerprints array, which Android's verifier rejects
+      // with no error surfaced anywhere.
+      expect(() => loadConfig({ ...base, ...appAssociation, ANDROID_SHA256_FINGERPRINTS: fingerprints })).toThrow(
+        'ANDROID_SHA256_FINGERPRINTS',
+      );
+    },
+  );
 });
