@@ -33,9 +33,13 @@ export function useCreateIncome(profileId: string) {
   });
 }
 
+/** The settle mutation's key, so the drawer's footer can tell a save is in flight. */
+export const settleMutationKey = (profileId: string) => profileKey(profileId, 'settle');
+
 export function useSettleReceivable(profileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: settleMutationKey(profileId),
     mutationFn: ({ receivableId, body, idempotencyKey }: { receivableId: string; body: SettleReceivableRequest; idempotencyKey: string }) =>
       api.settleReceivable(profileId, receivableId, body, idempotencyKey),
     onSuccess: () => invalidateIncome(queryClient, profileId),
