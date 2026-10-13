@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — npm audit: 27 findings → 0 with in-major bumps only (chore/npm-audit-2026-10-13)
+
+**Why:** `npm ci` on main (9000d08) reported 27 vulnerabilities (1 low, 8 moderate, 17 high, 1 critical). All of them predate MUT-145. No major-version bump of a direct dependency was needed, so the release pipeline (`make`, `deploy.sh`, the Tauri build) absorbs nothing new.
+
+### Technical
+- Direct devDependencies, each bumped to the lowest patched version in its major: `vite` 7.3.0 → 7.3.6, `postcss` 8.5.6 → 8.5.23 (still an exact pin, per MUT-102), `nanoid` 5.1.6 → 5.1.16, `vitest` and `@vitest/coverage-v8` 4.1.0 → 4.1.11, `vite-plugin-pwa` 1.2.0 → 1.3.0.
+- `vite-plugin-pwa` 1.3.0 pulls `workbox-build` 7.4.1, which moves its own tree to `@rollup/plugin-terser` 1.0 and `serialize-javascript` 7.1.2, and drops `lodash` and its private `rollup` 2. These are the only major moves in the lockfile, and all of them sit inside workbox's own dependencies. The service worker builds the same: 69 precache entries, the same `dist-web`/`dist-hosted` file sets as main.
+- Critical `seroval` (via `@tanstack/react-router-devtools` → `router-core` and `solid-js`): refreshed to 1.6.8 inside the declared ranges, and `solid-js` 1.9.10 → 1.9.16 (the first line on `seroval ~1.6.8`). `@tanstack/react-router` stays at 1.144.0. Neither package reaches shipped JS, since the devtools are dropped from production builds, so the exposure was dev and build time only.
+- Transitive refreshes, all within declared ranges: `rollup` 4.63.5, `ws` 8.22.0, `fast-uri` 3.1.8, `@babel/core` 7.29.7, `browserslist` 4.29.3, `ajv` 6.15.0, `flatted` 3.4.4, `picomatch` 4.0.7, `minimatch` 3.1.5, `brace-expansion` 1.1.21, `source-map-js` 1.2.2. The lockfile has 749 → 716 entries.
+- No `overrides` were added.
+- Resolution used `npm@11.6.2 … --before=2026-10-01`, so every resolved version is at least 12 days old. The one exception is `solid-js` 1.9.16 (2026-10-06): no older `solid-js` clears the critical. Reason for the cutoff: the unconstrained latest `rollup` (4.64.6) had been published only hours earlier.
+- npm 11 was needed because `npm audit fix` and `npm install` crash on the repo's npm 10.9.8 (TD-114). The lockfile is still v3, and a clean `npm ci` on npm 10.9.8 installs from it and audits at 0.
+- `rollup` ≥ 4.63.0 adds an optional, Linux-x64-only `@napi-rs/lzma-linux-x64-gnu` (upstream since 2026-08-25). It is in the lockfile, but nothing installs it on macOS or Windows.
+- Deferred: `server/` (its own lockfile) has 3 highs from `deepmerge-ts` via Prisma's `@prisma/config`; the only offered fix is a forced Prisma downgrade (TD-115).
+
+**Run on this branch (Node 22.23.1):**
+- `npm audit` 0 vulnerabilities (was 27);
+- `npm run typecheck` clean; `npm run lint` 0 errors, 5 warnings (the known 5);
+- `npx vitest run`: 233 files passed, 3,424 tests passed, 4 skipped;
+- `npm run build` and `npm run build:hosted` built. Both print the `Unexpected "@media"` CSS warning and the chunk-size warning, and so does main.
+- **Not run:** `npm run build:desktop` / the Tauri bundle, `npm run test:bundles`, QA specs, `npm --prefix server test` (server untouched).
+
+---
+
 ## [Unreleased] - 2026-10-13 — Retire document/invoice generation; a ledger-shaped profile; profile import works again (MUT-145, MUT-158)
 
 **Why:** Mutaba3a records what happened (income, expenses, who owes what) and does not issue documents. MUT-2 had gated invoices behind the `invoices` area; MUT-145 removes the feature (ADR-067). Filed receipts and the hosted portal's attachments are a different feature and are untouched.
