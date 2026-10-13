@@ -2105,6 +2105,7 @@ div.input-with-prefix {
 }
 
 .data-table td {
+  height: var(--table-row-height);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-body);

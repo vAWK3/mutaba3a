@@ -294,6 +294,12 @@ for (const scheme of SCHEMES) {
             await page.goto('/app/clients');
             await expect(clientLink(page, 'Acme Studio')).toBeVisible();
             await expectFits(page, 'Clients', viewport.width);
+            if (viewport.width === 1280) {
+              // D5: --table-row-height went 44 -> 48 for a roomier touch target; `height` is a
+              // floor on `.data-table td`, so padding alone can't shrink a row back under it.
+              const row = page.getByRole('main').getByRole('row').filter({ hasText: 'Acme Studio' });
+              expect((await row.boundingBox())!.height, 'Clients row height').toBeGreaterThanOrEqual(48);
+            }
             await clientLink(page, 'Acme Studio').click();
             await expect(page.getByRole('heading', { level: 1, name: 'Acme Studio' })).toBeVisible();
             await expectFits(page, 'Client', viewport.width);
