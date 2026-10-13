@@ -1872,3 +1872,29 @@ Plan: `.claude/designs/mut-102-brand-v2-foundation-tests.md`. ADR-058. Each unit
 
 **Still not run:** `npm run tauri dev` with the network off. The AAA axe rule in the browser is TD-086.
 
+## MUT-111 — App-association files and the /capture web fallback (2026-10-13)
+
+Epic MUT-63. Serves `/.well-known/apple-app-site-association` and
+`/.well-known/assetlinks.json` from the API origin, generated from config
+(all-or-nothing: `config.ts` fails fast at boot on a partial set, a
+Terraform `lifecycle.precondition` catches it earlier at `plan` time), plus
+a `/capture` route on the hosted portal that redirects to the first
+profile's expenses page (signed-in) or through sign-in first (signed-out),
+never a 404. Unblocks MUT-113 (iOS) and MUT-114 (Android, already partially
+built against this ticket's config shape).
+
+| Area | File | What is pinned |
+|---|---|---|
+| Config | `server/src/__tests__/config.test.ts` | all four app-association vars default absent; all four set parses; each of the four set alone throws `ConfigError` naming the missing ones; an empty string on any one is refused by the existing schema validation |
+| Routes | `server/src/__tests__/well-known-routes.test.ts` (new) | both routes 200 + `application/json`, no redirect; AASA carries exactly `['/p/*/expenses*', '/p/*/payments*', '/capture*']` and the `teamId.bundleId` appID; assetlinks grants `handle_all_urls` + `get_login_creds` for the Android package with every fingerprint; a blank entry from a trailing/doubled comma is dropped |
+| App wiring | `server/src/__tests__/portal.test.ts` (rows added) | `appAssociation` absent → both well-known paths still get the JSON 404, not the SPA shell, even with the portal build mounted; `appAssociation` present → answers directly with no portal build; both mounted → well-known paths win over the SPA shell, `/health`/`/ready`/CSP unaffected |
+| Route security | `server/src/__tests__/route-security.test.ts` | unchanged — confirms the new routes (outside `/v1/*`) need no `security` declaration |
+| Hosted portal | `src/hosted/session/__tests__/auth-states.test.tsx` (new "MUT-111" block) | signed-out `/capture` → `/sign-in?next=%2Fcapture`; signed-in with a profile → lands on `/p/<id>/expenses` and it actually renders ("No expenses recorded…"); signed-in with zero profiles → S11's existing "no profiles" screen |
+
+**What was run (Node 22):**
+- `server/`: `npm run lint` clean; `npm run typecheck` clean; `npm test` 1,538 passed / 18 skipped; `npm run build` clean; `openapi:check` up to date (the two new routes are behind the same off-by-default `appAssociation` dependency as the portal routes, so the committed spec — generated with every optional dependency disabled — is unaffected, matching precedent).
+- root: `npm run lint` 0 errors (12 pre-existing warnings, none in touched files); `npm run typecheck` clean; `npm run test:run` 3,432 passed / 4 skipped, one unrelated flake (`ExpenseDrawer.oneTimeFields.test.tsx`, times out only under full-suite parallel load, passes in isolation — not touched by this ticket); `build:web`, `build:hosted`, `build:desktop` all clean.
+- Terraform: `terraform fmt` clean; `terraform validate` not run (no cached provider plugins in this environment) — the `dynamic "env"` block and `lifecycle.precondition` are standard HCL already used elsewhere in GCP modules, but a real `terraform plan` against a scratch project is the first opportunity to catch anything this review missed.
+
+**Still not run (inherently manual, see `server/DEPLOYMENT.md` §4d):** Apple's AASA validator and Google's Digital Asset Links tester against a live deploy — no test harness in this repo calls either service's live infrastructure.
+
