@@ -13,15 +13,16 @@ function Trigger({ tone }: { tone?: 'error' | 'info' }) {
 }
 
 describe('Toast (MUT-133)', () => {
-  it('renders the polite live region before any message, so a later status is announced (A2)', () => {
+  it('renders the polite live region before any message, so a later status is announced (A2), without a status role while empty', () => {
     render(
       <ToastProvider>
         <Trigger tone="info" />
       </ToastProvider>,
     );
-    const region = screen.getByRole('status');
+    const region = screen.getByTestId('toast-live');
     expect(region).toHaveAttribute('aria-live', 'polite');
     expect(region).toBeEmptyDOMElement();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('fills the existing status region for an info message, with no alert', async () => {
@@ -30,9 +31,9 @@ describe('Toast (MUT-133)', () => {
         <Trigger tone="info" />
       </ToastProvider>,
     );
-    const region = screen.getByRole('status');
+    const region = screen.getByTestId('toast-live');
     await userEvent.click(screen.getByRole('button', { name: 'go' }));
-    expect(screen.getByRole('status')).toBe(region);
+    expect(screen.getByTestId('toast-live')).toBe(region);
     expect(region).toHaveTextContent('Saved · ₪500.00 owed by Nour Studio');
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -45,6 +46,6 @@ describe('Toast (MUT-133)', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'go' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Could not sign out');
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByTestId('toast-live')).toBeEmptyDOMElement();
   });
 });

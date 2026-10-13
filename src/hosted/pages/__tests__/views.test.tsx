@@ -7,12 +7,17 @@ import {
   C1,
   C2,
   CUSTOMERS,
+  P1,
+  P2,
   PROJECTS,
+  R1,
+  R2,
   RECEIVABLES,
   attachment,
   organizationSummary,
   page,
   payment,
+  receivable,
 } from './fixtures';
 
 /** hosted-portal.md §7.3–§7.5 and the MUT-43 test plan §6–§7. */
@@ -204,15 +209,13 @@ describe('Receivables', () => {
     expect(await screen.findByRole('note')).toHaveTextContent("Income isn't recorded on hosted profiles yet. This profile is for expenses.");
   });
 
-  it('says income comes from the phone app on the signed-in user\'s own personal profile (MUT-93)', async () => {
+  it('keeps the phone-app sentence, reworded, for a personal profile whose rules offer no income writes (MUT-93 fallback)', async () => {
     portal(`/p/${ORG_A}/receivables`, {}, [
       profile({ writerOfRecord: null, isPersonalDefault: true, access: { payments: 'read-write', expenses: 'read-write' } }),
     ]);
-    // access.payments is read-write post-MUT-65, which would otherwise hide
-    // the notice entirely (the portal still has no Record payment button)
-    expect(await screen.findByRole('note')).toHaveTextContent('Income on this profile is recorded from the phone app. This view is read-only.');
-    const actionable = screen.getAllByRole('button').map((b) => b.textContent ?? '');
-    expect(actionable.filter((label) => /\b(record|edit|add|new|mark|delete|pay)\b|payment/i.test(label))).toEqual([]);
+    // No capture access, so MUT-133 offers nothing here and the fallback copy stays.
+    expect(await screen.findByRole('note')).toHaveTextContent('Income on this profile is recorded from the phone app.');
+    expect(screen.getByRole('note')).not.toHaveTextContent('read-only');
   });
 
   it('keeps one filters object in the URL, replaces history, and refetches with the matching params', async () => {
@@ -326,3 +329,172 @@ describe('Profile switcher', () => {
     expect(api.calls.some((c) => c.url.pathname === '/v1/receivables' && c.headers.get('x-mutaba3a-profile') === ORG_B)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------- MUT-133
+
+const PERSONAL = profile({
+  writerOfRecord: null,
+  isPersonalDefault: true,
+  access: { payments: 'read-write', capture: 'read-write', expenses: 'read-write' },
+  income: { received: true, owed: true, customer: 'optional' },
+});
+const WRITER_NULL_FIRM = { ...PERSONAL, isPersonalDefault: false };
+const adjustment = (id: string, customerId: string, projectId: string, outstanding: string, status: string) => ({
+  ...receivable(id, customerId, projectId, outstanding, status),
+  origin: 'ADJUSTMENT' as const,
+});
+const OPEN_OWED = [adjustment(R1, C1, P1, '1170.00', 'OVERDUE'), adjustment(R2, C2, P2, '585.00', 'PARTIALLY_PAID')];
+const strip = (text: string | null) => (text ?? '').replace(/[\u2066-\u2069]/g, '');
+const politeStatus = () => screen.getByTestId('toast-live');
+
+describe('Income writes on a personal profile (MUT-133)', () => {
+  it('drops the lock notice and offers Add income plus Record payment on open Owed rows only', async () => {
+    const rows = [...OPEN_OWED, receivable('b3333333-3333-4333-8333-333333333333', C1, P1, '200.00', 'DUE')];
+    portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(rows)) }, [PERSONAL]);
+    const table = await screen.findByRole('table', { name: 'Receivables' });
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(screen.getByRole('button', { name: '+ Add income' })).toBeInTheDocument();
+    const buttons = within(table).getAllByRole('button', { name: /Record payment/ });
+    // The INSTALLMENT row (Malafat-posted) offers nothing: the settle route would answer 404.
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleName('Record payment, remaining: ₪1,170.00');
+    expect(within(table).getByRole('columnheader', { name: 'Actions' })).toHaveClass('hp-sticky-end');
+  });
+
+  it('opens Record payment through the URL without refetching the list, and closes the same way (R1)', async () => {
+    const { user, router, api } = portal(`/p/${ORG_A}/receivables`, {
+      'GET /v1/receivables': () => ok(page(OPEN_OWED)),
+      [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
+    }, [PERSONAL]);
+    const table = await screen.findByRole('table', { name: 'Receivables' });
+    await user.click(within(table).getAllByRole('button', { name: /Record payment/ })[0]);
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/receivables?settle=${R1}`));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/receivables`);
+    expect(api.count('GET /v1/receivables')).toBe(1);
+  });
+
+  it('settles in full: the list re-reads without the row, the status says so, and focus moves to the next row (AC, A1)', async () => {
+    let settled = false;
+    const { user } = portal(`/p/${ORG_A}/receivables`, {
+      'GET /v1/receivables': () => ok(page(settled ? [OPEN_OWED[1]] : OPEN_OWED)),
+      [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
+      [`POST /v1/receivables/${R1}/settle`]: () => {
+        settled = true;
+        return ok({ receivable: { ...OPEN_OWED[0], status: 'PAID', outstanding: '0.00' }, payment: {} }, 201);
+      },
+    }, [PERSONAL]);
+    const table = await screen.findByRole('table', { name: 'Receivables' });
+    await user.click(within(table).getAllByRole('button', { name: /Record payment/ })[0]);
+    await screen.findByLabelText('Amount (ILS)');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Record payment' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(within(screen.getByRole('table', { name: 'Receivables' })).queryByText('Al-Quds Bakery')).toBeNull());
+    expect(strip(politeStatus().textContent)).toBe('Payment recorded · ₪1,170.00 from Al-Quds Bakery');
+    expect(document.activeElement).toHaveAccessibleName('Record payment, remaining: ₪585.00');
+  });
+
+  it('settles in part: the row re-reads as partly paid and focus returns to its button', async () => {
+    let paid = false;
+    const partly = { ...OPEN_OWED[0], status: 'PARTIALLY_PAID', outstanding: '670.00', paid: '500.00' };
+    const { user } = portal(`/p/${ORG_A}/receivables`, {
+      'GET /v1/receivables': () => ok(page(paid ? [partly, OPEN_OWED[1]] : OPEN_OWED)),
+      [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
+      [`POST /v1/receivables/${R1}/settle`]: () => {
+        paid = true;
+        return ok({ receivable: partly, payment: {} }, 201);
+      },
+    }, [PERSONAL]);
+    const table = await screen.findByRole('table', { name: 'Receivables' });
+    await user.click(within(table).getAllByRole('button', { name: /Record payment/ })[0]);
+    const amount = await screen.findByLabelText('Amount (ILS)');
+    await user.clear(amount);
+    await user.type(amount, '500');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Record payment' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(within(rowsOf(screen.getByRole('table', { name: 'Receivables' }))[0]).getByText('Partly paid')).toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Record payment, remaining: ₪670.00'));
+  });
+
+  it('adds Owed from Receivables: the list re-reads and the new entry is announced', async () => {
+    let added = false;
+    const newRow = adjustment('b4444444-4444-4444-8444-444444444444', C1, P1, '300.00', 'PENDING');
+    const { user, api } = portal(`/p/${ORG_A}/receivables`, {
+      'GET /v1/receivables': () => ok(page(added ? [...OPEN_OWED, newRow] : OPEN_OWED)),
+      'POST /v1/income': () => {
+        added = true;
+        return ok({ id: newRow.id, kind: 'owed' }, 201);
+      },
+    }, [PERSONAL]);
+    await screen.findByRole('table', { name: 'Receivables' });
+    await user.click(screen.getByRole('button', { name: '+ Add income' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Amount'), '300');
+    await user.click(within(dialog).getByLabelText('Client'));
+    await user.click(await screen.findByText('Al-Quds Bakery', { selector: '[role="option"] *, [role="option"]' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(rowsOf(screen.getByRole('table', { name: 'Receivables' }))).toHaveLength(3));
+    expect(api.calls.find((c) => c.method === 'POST')!.body).toMatchObject({ kind: 'owed', amount: '300.00', customerId: C1 });
+    expect(strip(politeStatus().textContent)).toBe('Saved · ₪300.00 owed by Al-Quds Bakery');
+  });
+
+  it('defaults Add income to Received on Payments, and offers it from the empty state too', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/payments`, {}, [PERSONAL]);
+    expect(await screen.findByText('No payments recorded on this profile yet')).toBeInTheDocument();
+    const buttons = screen.getAllByRole('button', { name: '+ Add income' });
+    expect(buttons).toHaveLength(2);
+    await user.click(buttons[1]);
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/payments?newIncome=received`));
+    expect(await screen.findByLabelText('Client (optional)')).toBeInTheDocument();
+  });
+
+  it('prefills the client on Client detail and records a payment from its Receivables tab', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/clients/${C1}`, {
+      [`GET /v1/customers/${C1}`]: () => ok(CUSTOMERS[0]),
+      [`GET /v1/summaries/customers/${C1}`]: () => ok({ customerId: C1, lastPaymentOn: null, currencies: [] }),
+      'GET /v1/receivables': () => ok(page([OPEN_OWED[0]])),
+      [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
+    }, [PERSONAL]);
+    await user.click(await screen.findByRole('button', { name: '+ Add income' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Client')).toHaveValue('Al-Quds Bakery');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await user.click(screen.getByRole('tab', { name: 'Receivables' }));
+    const table = await screen.findByRole('table', { name: 'Receivables' });
+    await user.click(within(table).getByRole('button', { name: /Record payment/ }));
+    await waitFor(() => expect(locationOf(router)).toContain(`settle=${R1}`));
+    expect(await screen.findByLabelText('Amount (ILS)')).toHaveValue('1170.00');
+  });
+});
+
+describe('Income writes stay off everywhere else (MUT-133 regression contract)', () => {
+  for (const [label, who] of [
+    ['a Malafat-fed profile', profile()],
+    ['a writable profile that is not the user\'s personal one', WRITER_NULL_FIRM],
+  ] as const) {
+    it(`offers no button and no actions column on ${label}`, async () => {
+      portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(OPEN_OWED)) }, [who]);
+      const table = await screen.findByRole('table', { name: 'Receivables' });
+      expect(screen.queryByRole('button', { name: '+ Add income' })).toBeNull();
+      expect(within(table).queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+      expect(within(table).queryByRole('button', { name: /Record payment/ })).toBeNull();
+    });
+
+    it(`ignores ?newIncome= and ?settle= deep links on ${label}`, async () => {
+      portal(`/p/${ORG_A}/receivables?newIncome=owed&settle=${R1}`, { 'GET /v1/receivables': () => ok(page(OPEN_OWED)) }, [who]);
+      await screen.findByRole('table', { name: 'Receivables' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  }
+
+  it('keeps the Malafat notice byte for byte', async () => {
+    portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(OPEN_OWED)) }, [profile()]);
+    expect(await screen.findByRole('note')).toHaveTextContent('Malafat records income and payments for this profile. To change them, use Malafat.');
+  });
+});
+

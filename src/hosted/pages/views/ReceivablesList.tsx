@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
+import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
 import type { Currency, Customer, Project, Receivable } from '../../api/client';
@@ -6,16 +7,21 @@ import { ClientFilter, CurrencyFilter, DateFilter, FilterBar, MatterFilter } fro
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
-import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, type ReceivableFilters, type ReceivableStatusFilter } from '../../data/filters';
+import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type ReceivableFilters, type ReceivablesPageSearch, type ReceivableStatusFilter } from '../../data/filters';
+import { incomeAffordancesFor, isSettleable } from '../../data/incomeAffordances';
+import { IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
-import { DecimalAmount } from '../../format/DecimalAmount';
+import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
 
 /**
- * Receivables (hosted-portal.md §7.3): what each client owes, read-only. Open
- * by default. Also the client-detail Receivables tab, with the client fixed.
+ * Receivables (hosted-portal.md §7.3): what each client owes. Open by default.
+ * Also the client-detail Receivables tab, with the client fixed. On the
+ * signed-in user's personal profile (MUT-133) an open Owed row offers Record
+ * payment in a sticky end column; the page that mounts the list owns the
+ * drawer, so the list only reports which row was picked (eng review R1).
  */
 
 interface ReceivableRow {
@@ -28,6 +34,7 @@ interface ReceivableRow {
   paid: string;
   outstanding: string;
   status: string;
+  settleable: boolean;
 }
 
 function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar'): ReceivableRow[] {
@@ -41,6 +48,7 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     paid: r.paid,
     outstanding: r.outstanding,
     status: r.status,
+    settleable: isSettleable(r),
   }));
 }
 
@@ -48,9 +56,13 @@ interface ReceivablesListProps {
   filters: ReceivableFilters;
   setFilters: (next: ReceivableFilters) => void;
   fixedCustomerId?: string;
+  /** Present only where the gate offers settling: adds the Record payment column. */
+  onRecordPayment?: (receivableId: string) => void;
+  /** The page's Add income button, repeated as the empty state's action. */
+  addAction?: ReactNode;
 }
 
-export function ReceivablesList({ filters, setFilters, fixedCustomerId }: ReceivablesListProps) {
+export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecordPayment, addAction }: ReceivablesListProps) {
   const profile = useProfile();
   const { t, language } = useLanguage();
   const effective = fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters;
@@ -72,8 +84,30 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId }: Receiv
       { key: 'paid', header: t('hosted.receivables.columns.paid'), numeric: true, cell: (r) => <DecimalAmount value={r.paid} currency={r.currency} /> },
       { key: 'outstanding', header: t('hosted.receivables.columns.outstanding'), numeric: true, cell: (r) => <DecimalAmount value={r.outstanding} currency={r.currency} /> },
       { key: 'status', header: t('hosted.receivables.columns.status'), cell: (r) => <StatusBadge family="item" status={r.status} /> },
+      ...(onRecordPayment
+        ? [
+            {
+              key: 'actions',
+              header: t('hosted.settle.actions'),
+              stickyEnd: true,
+              cell: (r: ReceivableRow) =>
+                r.settleable ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="hp-row-action"
+                    {...{ [SETTLE_BUTTON_ATTR]: r.id }}
+                    aria-label={t('hosted.settle.rowLabel', { amount: formatDecimal(r.outstanding, r.currency, language) })}
+                    onClick={() => onRecordPayment(r.id)}
+                  >
+                    {t('hosted.settle.record')}
+                  </Button>
+                ) : null,
+            },
+          ]
+        : []),
     ],
-    [t, fixedCustomerId],
+    [t, fixedCustomerId, onRecordPayment, language],
   );
 
   const status = filters.status ?? DEFAULT_RECEIVABLE_STATUS;
@@ -111,7 +145,7 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId }: Receiv
           isNarrowed(filters) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.receivables.empty.title')} body={t('hosted.receivables.empty.body')} />
+            <Empty title={t('hosted.receivables.empty.title')} body={t('hosted.receivables.empty.body')} action={addAction} />
           )
         }
       >
@@ -126,12 +160,27 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId }: Receiv
   );
 }
 
-export function ReceivablesPage(props: Omit<ReceivablesListProps, 'fixedCustomerId'>) {
+export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPageSearch; setSearch: (next: ReceivablesPageSearch) => void }) {
+  const profile = useProfile();
   const { t } = useLanguage();
+  const { filters, drawer } = splitIncomeDrawer(search);
+  const { kinds, canSettle } = incomeAffordancesFor(profile);
+  const addButton =
+    kinds.length > 0 ? (
+      <Button variant="primary" size="sm" onClick={() => setSearch({ ...filters, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] })}>
+        {t('hosted.income.add')}
+      </Button>
+    ) : undefined;
   return (
     <>
-      <PageHeader title={t('hosted.receivables.title')} />
-      <ReceivablesList {...props} />
+      <PageHeader title={t('hosted.receivables.title')}>{addButton}</PageHeader>
+      <ReceivablesList
+        filters={filters}
+        setFilters={setSearch}
+        addAction={addButton}
+        onRecordPayment={canSettle ? (receivableId) => setSearch({ ...filters, settle: receivableId }) : undefined}
+      />
+      <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} />
     </>
   );
 }

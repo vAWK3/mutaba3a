@@ -93,7 +93,7 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(posts[0].headers.get('X-Mutaba3a-Profile')).toBe(PERSONAL.id);
     expect(posts[0].headers.get('Idempotency-Key')).toBeTruthy();
     expect(posts[0].body).toEqual({ kind: 'owed', amount: '1200.00', currency: 'ILS', occurredOn: '2026-10-14', customerId: C1, title: 'Logo redesign' });
-    expect(strip(screen.getByRole('status').textContent)).toBe('Saved · ₪1,200.00 owed by Nour Studio');
+    expect(strip(screen.getByTestId('toast-live').textContent)).toBe('Saved · ₪1,200.00 owed by Nour Studio');
   });
 
   it('needs a client for Owed before anything is sent', async () => {
@@ -116,7 +116,7 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     await user.click(screen.getByRole('button', { name: 'Save income' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(posts[0].body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: '2026-10-14', method: 'BANK' });
-    expect(strip(screen.getByRole('status').textContent)).toBe('Saved · ₪500.00 received');
+    expect(strip(screen.getByTestId('toast-live').textContent)).toBe('Saved · ₪500.00 received');
   });
 
   it('summarises the hidden defaults, and opens More details when the server faults a hidden field (1A)', async () => {

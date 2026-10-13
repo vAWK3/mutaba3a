@@ -111,7 +111,7 @@ describe('RecordPaymentDrawer (MUT-133)', () => {
     expect(post.body).toEqual({ amount: '5000.00', paidAt: '2026-10-14', method: 'CASH' });
     expect(post.headers.get('Idempotency-Key')).toBeTruthy();
     expect(onSettled.mock.calls[0][0].receivable.status).toBe('PAID');
-    const toast = screen.getAllByRole('status').find((el) => el.getAttribute('aria-live') === 'polite')!;
+    const toast = screen.getByTestId('toast-live');
     expect(strip(toast.textContent)).toBe('Payment recorded · ₪5,000.00 from Al-Quds Bakery');
   });
 

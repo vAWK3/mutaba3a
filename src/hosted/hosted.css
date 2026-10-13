@@ -432,3 +432,10 @@
 .hp-settle-line-owed { color: var(--muted); }
 .hp-settle-line-over { color: var(--error); }
 .hp-settle-note { color: var(--muted); font-size: var(--text-label); margin: var(--space-4) 0 0; }
+
+/* Design 8A: the row action column stays pinned at the inline end (left in RTL) while the table scrolls. */
+.hp-table-wrapper .hp-sticky-end { position: sticky; inset-inline-end: 0; background: var(--surface); border-inline-start: 1px solid var(--border); }
+/* Design 10A: a 44px row action on touch screens; desktop rows keep the compact 32px button. */
+@media (pointer: coarse) {
+  .hp-row-action.btn-sm { height: 44px; padding-inline: var(--space-4); }
+}

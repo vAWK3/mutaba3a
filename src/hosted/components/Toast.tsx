@@ -7,8 +7,10 @@ import { AlertIcon, InfoIcon } from './Icons';
  * announced with `role="alert"`, as before. MUT-133 adds a quiet `info` tone for
  * "Saved · …" after an income write, so a save whose row lands off screen is
  * never silent (design review 3A). Its live region is rendered empty from the
- * start and only filled: a `role="status"` region inserted on demand is often
- * not announced (eng re-review A2). The second argument is an options object,
+ * start and only filled: a live region inserted on demand is often not
+ * announced (eng re-review A2). It carries `aria-live="polite"` rather than
+ * `role="status"`, so an empty region is not a status landmark (the MUT-43
+ * auth-state tests assert none is present while a session is checked). The second argument is an options object,
  * the shape MUT-91 builds on (it adds an action), so callers that pass only a
  * message keep the error tone.
  */
@@ -51,7 +53,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <span>{toast.message}</span>
         </div>
       )}
-      <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} role="status" aria-live="polite">
+      <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live">
         {info && (
           <>
             <InfoIcon />

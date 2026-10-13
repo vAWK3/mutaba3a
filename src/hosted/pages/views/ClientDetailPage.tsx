@@ -1,12 +1,15 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
+import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
 import type { CustomerSummary, Project, ProjectSummary } from '../../api/client';
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
-import type { ClientDetailSearch, ClientTab } from '../../data/filters';
+import { splitIncomeDrawer, type ClientDetailSearch, type ClientTab } from '../../data/filters';
+import { incomeAffordancesFor } from '../../data/incomeAffordances';
+import { IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -34,6 +37,15 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
   const { t } = useLanguage();
   const customer = useCustomer(profile.id, customerId);
   const tab: ClientTab = search.tab ?? 'summary';
+  // MUT-133: drawer state lives beside the tab's filters, never in them (eng review R1).
+  const { filters: rest, drawer } = splitIncomeDrawer(search);
+  const { kinds, canSettle } = incomeAffordancesFor(profile);
+  const addButton =
+    kinds.length > 0 ? (
+      <Button variant="primary" size="sm" onClick={() => setSearch({ ...rest, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] })}>
+        {t('hosted.income.add')}
+      </Button>
+    ) : undefined;
 
   const notFound = (
     <Empty
@@ -52,6 +64,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               {t('hosted.client.back')}
             </Link>
             <h1>{client.name}</h1>
+            {addButton}
           </header>
           <SegmentedTabs<ClientTab>
             className="hp-tabs"
@@ -65,6 +78,8 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               fixedCustomerId={customerId}
               filters={{ projectId: search.projectId, currency: search.currency, status: search.status, dueFrom: search.dueFrom, dueTo: search.dueTo }}
               setFilters={(f) => setSearch({ tab, projectId: f.projectId, currency: f.currency, status: f.status, dueFrom: f.dueFrom, dueTo: f.dueTo })}
+              addAction={addButton}
+              onRecordPayment={canSettle ? (receivableId) => setSearch({ ...rest, settle: receivableId }) : undefined}
             />
           )}
           {tab === 'payments' && (
@@ -72,11 +87,13 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               fixedCustomerId={customerId}
               filters={{ status: search.paymentStatus, receivedFrom: search.receivedFrom, receivedTo: search.receivedTo }}
               setFilters={(f) => setSearch({ tab, paymentStatus: f.status, receivedFrom: f.receivedFrom, receivedTo: f.receivedTo })}
+              addAction={addButton}
             />
           )}
           {tab === 'documents' && (
             <DocumentsList fixedCustomerId={customerId} filters={{ kind: search.kind }} setFilters={(f) => setSearch({ tab, kind: f.kind })} />
           )}
+          <IncomeDrawerHost profile={profile} drawer={drawer} defaultCustomerId={customerId} onClose={() => setSearch(rest)} />
         </>
       )}
     </QueryView>
