@@ -6796,7 +6796,7 @@ export interface paths {
         };
         /**
          * The profile’s expense categories, in creation order
-         * @description The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the general one otherwise. Archived categories only with includeArchived=true.
+         * @description The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on the user’s own personal profile, the general one on any other organization. Archived categories only with includeArchived=true.
          */
         get: {
             parameters: {

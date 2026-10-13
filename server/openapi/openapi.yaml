@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.18.0-mut131
+  version: 1.19.0-mal1118
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9641,7 +9641,7 @@ paths:
       tags:
         - Expenses
       summary: The profile’s expense categories, in creation order
-      description: "The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the general one otherwise. Archived categories only with includeArchived=true."
+      description: "The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on the user’s own personal profile, the general one on any other organization. Archived categories only with includeArchived=true."
       security:
         - session: []
         - deviceSession: []
