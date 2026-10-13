@@ -43,6 +43,8 @@ import type {
   ProjectedIncome,
   ProjectedIncomeDisplay,
   ProjectedIncomeFilters,
+  RetainerSummary,
+  RetainerMatchSuggestion,
   PaymentRecord,
   PaymentByClientFilters,
   PaymentByClientRow,
@@ -253,7 +255,14 @@ export interface IRecurringOccurrenceRepository extends BaseRepository<Recurring
 // Retainer Agreement Repository Interface
 // ============================================================================
 
-/** Retainers are archived or ended, never hard-deleted, so `delete` is omitted. */
+/**
+ * Retainers are archived or ended, never hard-deleted, so `delete` is omitted.
+ *
+ * `create`, `update`, `activate` and `resume` also maintain the retainer's
+ * projected income schedule (generate, or regenerate keeping received and
+ * partial rows); `end` cancels upcoming rows. Any implementation must do the
+ * same in the same call.
+ */
 export interface IRetainerAgreementRepository
   extends Omit<BaseRepository<RetainerAgreement, Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>>, 'delete'> {
   list(filters?: { profileId?: string; clientId?: string; projectId?: string; status?: string }): Promise<RetainerAgreementDisplay[]>;
@@ -263,6 +272,8 @@ export interface IRetainerAgreementRepository
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
   end(id: string): Promise<void>;
+  /** Totals for the Retainers page; `currency` narrows both counts and amounts. */
+  getSummary(profileId?: string, currency?: Currency): Promise<RetainerSummary>;
 }
 
 // ============================================================================
@@ -271,7 +282,8 @@ export interface IRetainerAgreementRepository
 
 /**
  * Projected income rows are generated from a retainer's schedule, so this
- * repository has no `create` and no `delete` — it extends nothing.
+ * repository has no `create` and no `delete` — it extends nothing. Matching
+ * writes both the item and the transaction's `linkedProjectedIncomeId`.
  */
 export interface IProjectedIncomeRepository {
   get(id: string): Promise<ProjectedIncome | undefined>;
@@ -280,6 +292,16 @@ export interface IProjectedIncomeRepository {
   getByRetainer(retainerId: string): Promise<ProjectedIncome[]>;
   getDueItems(currency?: Currency): Promise<ProjectedIncomeDisplay[]>;
   getForForecast(dateFrom: string, dateTo: string, currency?: Currency): Promise<ProjectedIncome[]>;
+  /** Upcoming items whose expected date has arrived become due (run on app load). */
+  refreshDueStates(): Promise<void>;
+  markMissed(id: string): Promise<void>;
+  /** Up to ten scored suggestions for a paid income transaction, best first. */
+  getMatchSuggestions(transactionId: string): Promise<RetainerMatchSuggestion[]>;
+  /** Suggestions for every paid, unlinked, live income transaction that has any. */
+  getAllMatchSuggestions(): Promise<Array<{ transaction: TransactionDisplay; suggestions: RetainerMatchSuggestion[] }>>;
+  /** Links the transaction to the item and recomputes the item's received amount and state. */
+  match(projectedIncomeId: string, transactionId: string): Promise<void>;
+  unmatch(projectedIncomeId: string, transactionId: string): Promise<void>;
 }
 
 // ============================================================================

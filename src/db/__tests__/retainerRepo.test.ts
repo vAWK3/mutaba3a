@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../database';
-import { retainerRepo, projectedIncomeRepo, scheduleGenerator, retainerMatching, getRetainerSummary } from '../retainerRepository';
+import { retainerRepo, projectedIncomeRepo, scheduleGenerator } from '../retainerRepository';
+import { getRepositories } from '../provider';
 
 describe('retainerRepo', () => {
   const profileId = 'test-profile-1';
@@ -541,7 +542,7 @@ describe('scheduleGenerator', () => {
   });
 });
 
-describe('retainerMatching', () => {
+describe('projectedIncome matching', () => {
   const profileId = 'test-profile-1';
   const clientId = 'test-client-1';
 
@@ -580,7 +581,7 @@ describe('retainerMatching', () => {
     await db.businessProfiles.clear();
   });
 
-  describe('getSuggestionsForTransaction', () => {
+  describe('getMatchSuggestions', () => {
     it('should return suggestions for matching income transactions', async () => {
       // Create a retainer with due items
       await retainerRepo.create({
@@ -610,7 +611,7 @@ describe('retainerMatching', () => {
         updatedAt: new Date().toISOString(),
       });
 
-      const suggestions = await retainerMatching.getSuggestionsForTransaction(txId);
+      const suggestions = await getRepositories().base.projectedIncome.getMatchSuggestions(txId);
       expect(suggestions.length).toBeGreaterThan(0);
       expect(suggestions[0].confidence).toBeDefined();
       expect(suggestions[0].scoreBreakdown).toBeDefined();
@@ -629,7 +630,7 @@ describe('retainerMatching', () => {
         updatedAt: new Date().toISOString(),
       });
 
-      const suggestions = await retainerMatching.getSuggestionsForTransaction(txId);
+      const suggestions = await getRepositories().base.projectedIncome.getMatchSuggestions(txId);
       expect(suggestions).toHaveLength(0);
     });
   });
@@ -668,7 +669,7 @@ describe('retainerMatching', () => {
         updatedAt: new Date().toISOString(),
       });
 
-      await retainerMatching.matchTransaction(dueItem!.id, txId);
+      await getRepositories().base.projectedIncome.match(dueItem!.id, txId);
 
       // Check projected income was updated
       const updatedPi = await projectedIncomeRepo.get(dueItem!.id);
@@ -714,8 +715,8 @@ describe('retainerMatching', () => {
         updatedAt: new Date().toISOString(),
       });
 
-      await retainerMatching.matchTransaction(dueItem!.id, txId);
-      await retainerMatching.unmatchTransaction(dueItem!.id, txId);
+      await getRepositories().base.projectedIncome.match(dueItem!.id, txId);
+      await getRepositories().base.projectedIncome.unmatch(dueItem!.id, txId);
 
       const updatedPi = await projectedIncomeRepo.get(dueItem!.id);
       expect(updatedPi?.matchedTransactionIds).not.toContain(txId);
@@ -728,7 +729,7 @@ describe('retainerMatching', () => {
   });
 });
 
-describe('getRetainerSummary', () => {
+describe('retainerAgreements.getSummary', () => {
   const profileId = 'test-profile-1';
   const clientId = 'test-client-1';
 
@@ -790,12 +791,139 @@ describe('getRetainerSummary', () => {
       status: 'active',
     });
 
-    const summary = await getRetainerSummary(profileId);
+    const summary = await getRepositories().base.retainerAgreements.getSummary(profileId);
 
     expect(summary.activeCount).toBe(2);
     expect(summary.totalExpectedMonthlyUsdMinor).toBe(100000);
     expect(summary.totalExpectedMonthlyIlsMinor).toBe(100000); // 300000/3
     expect(summary.totalDueUsdMinor).toBeGreaterThan(0);
     expect(summary.totalDueIlsMinor).toBeGreaterThan(0);
+  });
+});
+
+// MUT-47 (T2): paths with no test before the helpers moved into the
+// repository contracts. Written against today's behaviour, kept across the move.
+describe('retainer state helpers (characterization, MUT-47)', () => {
+  const profileId = 'test-profile-1';
+  const clientId = 'test-client-1';
+  const now = () => new Date().toISOString();
+
+  async function clearAll() {
+    await db.retainerAgreements.clear();
+    await db.projectedIncome.clear();
+    await db.transactions.clear();
+    await db.clients.clear();
+    await db.businessProfiles.clear();
+  }
+
+  function projected(id: string, state: 'upcoming' | 'due' | 'received', expectedDate: string) {
+    return {
+      id,
+      profileId,
+      sourceType: 'retainer' as const,
+      sourceId: 'ret-x',
+      clientId,
+      currency: 'USD' as const,
+      expectedAmountMinor: 100000,
+      expectedDate,
+      periodStart: expectedDate,
+      periodEnd: expectedDate,
+      state,
+      receivedAmountMinor: 0,
+      matchedTransactionIds: [],
+      createdAt: '2020-01-01T00:00:00.000Z',
+      updatedAt: '2020-01-01T00:00:00.000Z',
+    };
+  }
+
+  beforeEach(async () => {
+    await clearAll();
+    await db.clients.add({ id: clientId, name: 'Test Client', createdAt: now(), updatedAt: now() });
+  });
+
+  afterEach(clearAll);
+
+  it('refreshes due states: only upcoming rows dated today or earlier become due', async () => {
+    const today = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    await db.projectedIncome.bulkAdd([
+      projected('pi-past', 'upcoming', '2020-01-15'),
+      projected('pi-today', 'upcoming', iso(today)),
+      projected('pi-future', 'upcoming', iso(tomorrow)),
+      projected('pi-received', 'received', '2020-01-15'),
+    ]);
+
+    await getRepositories().base.projectedIncome.refreshDueStates();
+
+    expect((await db.projectedIncome.get('pi-past'))?.state).toBe('due');
+    expect((await db.projectedIncome.get('pi-today'))?.state).toBe('due');
+    expect((await db.projectedIncome.get('pi-future'))?.state).toBe('upcoming');
+    expect((await db.projectedIncome.get('pi-received'))?.state).toBe('received');
+    expect((await db.projectedIncome.get('pi-past'))?.updatedAt).not.toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  it('marks a projected row missed and stamps updatedAt', async () => {
+    await db.projectedIncome.add(projected('pi-1', 'due', '2020-01-15'));
+
+    await getRepositories().base.projectedIncome.markMissed('pi-1');
+
+    const row = await db.projectedIncome.get('pi-1');
+    expect(row?.state).toBe('missed');
+    expect(row?.updatedAt).not.toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  it('suggests matches only for paid, unlinked, live income', async () => {
+    await getRepositories().base.retainerAgreements.create({
+      profileId,
+      clientId,
+      title: 'Monthly',
+      amountMinor: 100000,
+      currency: 'USD',
+      cadence: 'monthly',
+      paymentDay: 15,
+      startDate: '2020-01-01',
+      status: 'active',
+    });
+    const base = { kind: 'income' as const, amountMinor: 100000, currency: 'USD' as const, clientId, occurredAt: '2024-03-15', createdAt: now(), updatedAt: now() };
+    await db.transactions.bulkAdd([
+      { ...base, id: 'tx-paid', status: 'paid', paidAt: '2024-03-15' },
+      { ...base, id: 'tx-unpaid', status: 'unpaid' },
+      { ...base, id: 'tx-linked', status: 'paid', paidAt: '2024-03-15', linkedProjectedIncomeId: 'pi-somewhere' },
+      { ...base, id: 'tx-deleted', status: 'paid', paidAt: '2024-03-15', deletedAt: now() },
+    ]);
+
+    const results = await getRepositories().base.projectedIncome.getAllMatchSuggestions();
+
+    expect(results.map((r) => r.transaction.id)).toEqual(['tx-paid']);
+    expect(results[0].transaction.clientName).toBe('Test Client');
+    expect(results[0].suggestions.length).toBeGreaterThan(0);
+  });
+
+  it('regenerating a schedule keeps received rows and drops upcoming ones', async () => {
+    const retainer = await getRepositories().base.retainerAgreements.create({
+      profileId,
+      clientId,
+      title: 'Monthly',
+      amountMinor: 100000,
+      currency: 'USD',
+      cadence: 'monthly',
+      paymentDay: 15,
+      startDate: '2020-01-01',
+      status: 'active',
+    });
+    const before = await db.projectedIncome.where('sourceId').equals(retainer.id).toArray();
+    const received = before.find((pi) => pi.state === 'due')!;
+    await db.projectedIncome.update(received.id, { state: 'received', receivedAmountMinor: 100000 });
+    const upcomingIds = before.filter((pi) => pi.state === 'upcoming').map((pi) => pi.id);
+
+    await getRepositories().base.retainerAgreements.update(retainer.id, { amountMinor: 120000 });
+
+    const after = await db.projectedIncome.where('sourceId').equals(retainer.id).toArray();
+    expect(after.find((pi) => pi.id === received.id)?.state).toBe('received');
+    expect(after.some((pi) => upcomingIds.includes(pi.id))).toBe(false);
+    expect(after.filter((pi) => pi.state === 'upcoming').every((pi) => pi.expectedAmountMinor === 120000)).toBe(true);
   });
 });

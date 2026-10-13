@@ -9,6 +9,7 @@ import type {
   ProjectedIncomeFilters,
   RetainerMatchSuggestion,
   MatchScoreBreakdown,
+  RetainerSummary,
   Currency,
   Transaction,
   TransactionDisplay,
@@ -358,6 +359,77 @@ export const retainerRepo = {
       }
     }
   },
+
+  /**
+   * Retainer totals with amounts broken down by currency
+   */
+  async getSummary(profileId?: string, currency?: Currency): Promise<RetainerSummary> {
+    const retainers = await db.retainerAgreements
+      .filter((r) => r.status === 'active' && !r.archivedAt)
+      .toArray();
+
+    // Get due items without currency filter to get both currencies
+    const allDueItems = await projectedIncomeRepo.list({
+      profileId,
+      state: 'due',
+    });
+    const today = todayISO();
+
+    let activeCount = 0;
+    let totalExpectedMonthlyUsdMinor = 0;
+    let totalExpectedMonthlyIlsMinor = 0;
+
+    for (const r of retainers) {
+      if (profileId && r.profileId !== profileId) continue;
+      // When currency filter is applied, only count matching retainers
+      if (currency && r.currency !== currency) continue;
+      activeCount++;
+
+      // Convert to monthly equivalent
+      const monthlyAmount =
+        r.cadence === 'quarterly' ? r.amountMinor / 3 : r.amountMinor;
+
+      if (r.currency === 'USD') {
+        totalExpectedMonthlyUsdMinor += monthlyAmount;
+      } else {
+        totalExpectedMonthlyIlsMinor += monthlyAmount;
+      }
+    }
+
+    let totalDueUsdMinor = 0;
+    let totalDueIlsMinor = 0;
+    let totalOverdueUsdMinor = 0;
+    let totalOverdueIlsMinor = 0;
+
+    for (const item of allDueItems) {
+      // When currency filter is applied, only count matching items
+      if (currency && item.currency !== currency) continue;
+
+      const remaining = item.expectedAmountMinor - item.receivedAmountMinor;
+
+      if (item.currency === 'USD') {
+        totalDueUsdMinor += remaining;
+        if (item.expectedDate < today) {
+          totalOverdueUsdMinor += remaining;
+        }
+      } else {
+        totalDueIlsMinor += remaining;
+        if (item.expectedDate < today) {
+          totalOverdueIlsMinor += remaining;
+        }
+      }
+    }
+
+    return {
+      activeCount,
+      totalExpectedMonthlyUsdMinor,
+      totalExpectedMonthlyIlsMinor,
+      totalDueUsdMinor,
+      totalDueIlsMinor,
+      totalOverdueUsdMinor,
+      totalOverdueIlsMinor,
+    };
+  },
 };
 
 // ============================================================================
@@ -461,12 +533,247 @@ export const projectedIncomeRepo = {
   async update(id: string, data: Partial<ProjectedIncome>): Promise<void> {
     await db.projectedIncome.update(id, { ...data, updatedAt: nowISO() });
   },
+  /**
+   * Flip upcoming items whose expected date has arrived to due. Called on app
+   * load (useUpdateDueStates).
+   */
+  async refreshDueStates(): Promise<void> {
+    const today = todayISO();
+    const upcomingItems = await db.projectedIncome
+      .where('state')
+      .equals('upcoming')
+      .toArray();
+
+    for (const item of upcomingItems) {
+      if (item.expectedDate <= today) {
+        await db.projectedIncome.update(item.id, {
+          state: 'due',
+          updatedAt: nowISO(),
+        });
+      }
+    }
+  },
+
+  /**
+   * Mark a projected income item as missed (manual action)
+   */
+  async markMissed(id: string): Promise<void> {
+    await db.projectedIncome.update(id, {
+      state: 'missed',
+      updatedAt: nowISO(),
+    });
+  },
+
+  /**
+   * Match suggestions for a transaction (paid income only), best first, top 10
+   */
+  async getMatchSuggestions(
+    transactionId: string
+  ): Promise<RetainerMatchSuggestion[]> {
+    const transaction = await db.transactions.get(transactionId);
+    if (!transaction) return [];
+
+    // Only match income transactions that are paid
+    if (transaction.kind !== 'income' || transaction.status !== 'paid') return [];
+
+    // Get unmatched projected income items
+    const items = await this.list({
+      state: ['due', 'partial'],
+      currency: transaction.currency,
+    });
+
+    // Filter out items that are already fully matched
+    const unmatchedItems = items.filter(
+      (pi) =>
+        pi.receivedAmountMinor < pi.expectedAmountMinor &&
+        !pi.matchedTransactionIds.includes(transactionId)
+    );
+
+    // Calculate scores
+    const suggestions: RetainerMatchSuggestion[] = [];
+
+    for (const item of unmatchedItems) {
+      const scoreBreakdown = calculateMatchScore(transaction, item);
+      const score = scoreBreakdown.total;
+
+      if (score >= 40) {
+        let confidence: 'high' | 'medium' | 'low';
+        if (score >= 80) {
+          confidence = 'high';
+        } else if (score >= 60) {
+          confidence = 'medium';
+        } else {
+          confidence = 'low';
+        }
+
+        suggestions.push({
+          projectedIncomeId: item.id,
+          score,
+          confidence,
+          projectedIncome: item,
+          scoreBreakdown,
+        });
+      }
+    }
+
+    // Sort by score descending
+    return suggestions.sort((a, b) => b.score - a.score).slice(0, 10);
+  },
+
+  /**
+   * Match a transaction to a projected income item
+   */
+  async match(
+    projectedIncomeId: string,
+    transactionId: string
+  ): Promise<void> {
+    const projectedIncome = await this.get(projectedIncomeId);
+    const transaction = await db.transactions.get(transactionId);
+
+    if (!projectedIncome || !transaction) return;
+
+    // Add transaction to matched list
+    const matchedTransactionIds = [
+      ...projectedIncome.matchedTransactionIds,
+      transactionId,
+    ];
+
+    // Calculate new received amount
+    const receivedAmountMinor =
+      projectedIncome.receivedAmountMinor + transaction.amountMinor;
+
+    // Determine new state
+    let state = projectedIncome.state;
+    if (receivedAmountMinor >= projectedIncome.expectedAmountMinor) {
+      state = 'received';
+    } else if (receivedAmountMinor > 0) {
+      state = 'partial';
+    }
+
+    // Update projected income
+    await db.projectedIncome.update(projectedIncomeId, {
+      matchedTransactionIds,
+      receivedAmountMinor,
+      receivedAt: state === 'received' ? nowISO() : projectedIncome.receivedAt,
+      state,
+      updatedAt: nowISO(),
+    });
+
+    // Update transaction with link
+    await db.transactions.update(transactionId, {
+      linkedProjectedIncomeId: projectedIncomeId,
+      updatedAt: nowISO(),
+    });
+  },
+
+  /**
+   * Unmatch a transaction from a projected income item
+   */
+  async unmatch(
+    projectedIncomeId: string,
+    transactionId: string
+  ): Promise<void> {
+    const projectedIncome = await this.get(projectedIncomeId);
+    const transaction = await db.transactions.get(transactionId);
+
+    if (!projectedIncome || !transaction) return;
+
+    // Remove transaction from matched list
+    const matchedTransactionIds = projectedIncome.matchedTransactionIds.filter(
+      (id) => id !== transactionId
+    );
+
+    // Calculate new received amount
+    const receivedAmountMinor = Math.max(
+      0,
+      projectedIncome.receivedAmountMinor - transaction.amountMinor
+    );
+
+    // Determine new state
+    let state = projectedIncome.state;
+    const today = todayISO();
+    if (receivedAmountMinor === 0) {
+      state = projectedIncome.expectedDate <= today ? 'due' : 'upcoming';
+    } else {
+      state = 'partial';
+    }
+
+    // Update projected income
+    await db.projectedIncome.update(projectedIncomeId, {
+      matchedTransactionIds,
+      receivedAmountMinor,
+      receivedAt: matchedTransactionIds.length > 0 ? projectedIncome.receivedAt : undefined,
+      state,
+      updatedAt: nowISO(),
+    });
+
+    // Remove link from transaction
+    await db.transactions.update(transactionId, {
+      linkedProjectedIncomeId: undefined,
+      updatedAt: nowISO(),
+    });
+  },
+
+  /**
+   * Suggestions for every paid, unlinked, live income transaction
+   */
+  async getAllMatchSuggestions(): Promise<
+    Array<{ transaction: TransactionDisplay; suggestions: RetainerMatchSuggestion[] }>
+  > {
+    // Get all paid income transactions without a projected income link
+    const transactions = await db.transactions
+      .filter(
+        (t) =>
+          t.kind === 'income' &&
+          t.status === 'paid' &&
+          excludeDeleted(t) &&
+          !t.linkedProjectedIncomeId
+      )
+      .toArray();
+
+    const clients = await db.clients.toArray();
+    const projects = await db.projects.toArray();
+    const categories = await db.categories.toArray();
+
+    const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+    const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+    const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
+
+    const results = [];
+
+    for (const tx of transactions) {
+      const suggestions = await this.getMatchSuggestions(tx.id);
+
+      if (suggestions.length > 0) {
+        const transactionDisplay: TransactionDisplay = {
+          ...tx,
+          clientName: tx.clientId ? clientMap.get(tx.clientId) : undefined,
+          projectName: tx.projectId ? projectMap.get(tx.projectId) : undefined,
+          categoryName: tx.categoryId ? categoryMap.get(tx.categoryId) : undefined,
+        };
+
+        results.push({
+          transaction: transactionDisplay,
+          suggestions,
+        });
+      }
+    }
+
+    return results;
+  },
 };
 
 // ============================================================================
 // Schedule Generator
 // ============================================================================
 
+/**
+ * Part of the Dexie retainer implementation, not a provider slot: `retainerRepo`
+ * calls it from create, update, activate and resume to keep the projected
+ * schedule in step (IRetainerAgreementRepository documents that duty). It must
+ * never resolve storage through getRepositories(), or a Dexie write would land
+ * schedule rows in whatever source is injected (MUT-47 D3). Exported for tests.
+ */
 export const scheduleGenerator = {
   /**
    * Generate schedule for a retainer (up to 12 months ahead)
@@ -590,391 +897,73 @@ export const scheduleGenerator = {
       await this.generateSchedule(retainerId);
     }
   },
-
-  /**
-   * Update due states based on today's date
-   * Should be called periodically (e.g., on app load)
-   */
-  async updateDueStates(): Promise<void> {
-    const today = todayISO();
-    const upcomingItems = await db.projectedIncome
-      .where('state')
-      .equals('upcoming')
-      .toArray();
-
-    for (const item of upcomingItems) {
-      if (item.expectedDate <= today) {
-        await db.projectedIncome.update(item.id, {
-          state: 'due',
-          updatedAt: nowISO(),
-        });
-      }
-    }
-  },
 };
 
 // ============================================================================
-// Transaction Matching
+// Match scoring
 // ============================================================================
 
-export const retainerMatching = {
-  /**
-   * Get match suggestions for a transaction
-   */
-  async getSuggestionsForTransaction(
-    transactionId: string
-  ): Promise<RetainerMatchSuggestion[]> {
-    const transaction = await db.transactions.get(transactionId);
-    if (!transaction) return [];
-
-    // Only match income transactions that are paid
-    if (transaction.kind !== 'income' || transaction.status !== 'paid') return [];
-
-    // Get unmatched projected income items
-    const items = await projectedIncomeRepo.list({
-      state: ['due', 'partial'],
-      currency: transaction.currency,
-    });
-
-    // Filter out items that are already fully matched
-    const unmatchedItems = items.filter(
-      (pi) =>
-        pi.receivedAmountMinor < pi.expectedAmountMinor &&
-        !pi.matchedTransactionIds.includes(transactionId)
-    );
-
-    // Calculate scores
-    const suggestions: RetainerMatchSuggestion[] = [];
-
-    for (const item of unmatchedItems) {
-      const scoreBreakdown = this.calculateMatchScore(transaction, item);
-      const score = scoreBreakdown.total;
-
-      if (score >= 40) {
-        let confidence: 'high' | 'medium' | 'low';
-        if (score >= 80) {
-          confidence = 'high';
-        } else if (score >= 60) {
-          confidence = 'medium';
-        } else {
-          confidence = 'low';
-        }
-
-        suggestions.push({
-          projectedIncomeId: item.id,
-          score,
-          confidence,
-          projectedIncome: item,
-          scoreBreakdown,
-        });
-      }
-    }
-
-    // Sort by score descending
-    return suggestions.sort((a, b) => b.score - a.score).slice(0, 10);
-  },
-
-  /**
-   * Calculate match score between a transaction and projected income
-   * Score (0-100):
-   * - Currency match: 30 points (required)
-   * - Client match: 30 points
-   * - Amount proximity: 25 points
-   * - Date proximity: 15 points
-   */
-  calculateMatchScore(
-    transaction: Transaction,
-    projectedIncome: ProjectedIncomeDisplay
-  ): MatchScoreBreakdown {
-    const breakdown: MatchScoreBreakdown = {
-      total: 0,
-      currency: 0,
-      client: 0,
-      amount: 0,
-      date: 0,
-    };
-
-    // Currency match (required)
-    if (transaction.currency !== projectedIncome.currency) {
-      return breakdown;
-    }
-    breakdown.currency = 30;
-
-    // Client match
-    if (transaction.clientId && transaction.clientId === projectedIncome.clientId) {
-      breakdown.client = 30;
-    }
-
-    // Amount proximity
-    const remainingAmount =
-      projectedIncome.expectedAmountMinor - projectedIncome.receivedAmountMinor;
-    const diff = Math.abs(transaction.amountMinor - remainingAmount);
-    const percentDiff = remainingAmount > 0 ? diff / remainingAmount : 1;
-
-    if (percentDiff <= 0.01) {
-      breakdown.amount = 25; // Exact or within 1%
-    } else if (percentDiff <= 0.05) {
-      breakdown.amount = 20; // Within 5%
-    } else if (percentDiff <= 0.1) {
-      breakdown.amount = 15; // Within 10%
-    } else if (percentDiff <= 0.2) {
-      breakdown.amount = 10; // Within 20%
-    }
-
-    // Date proximity
-    const transactionDate = transaction.occurredAt.split('T')[0];
-    const daysDiff = Math.abs(daysBetween(transactionDate, projectedIncome.expectedDate));
-
-    if (daysDiff <= 3) {
-      breakdown.date = 15;
-    } else if (daysDiff <= 7) {
-      breakdown.date = 12;
-    } else if (daysDiff <= 14) {
-      breakdown.date = 8;
-    } else if (daysDiff <= 30) {
-      breakdown.date = 4;
-    }
-
-    breakdown.total = breakdown.currency + breakdown.client + breakdown.amount + breakdown.date;
-    return breakdown;
-  },
-
-  /**
-   * Match a transaction to a projected income item
-   */
-  async matchTransaction(
-    projectedIncomeId: string,
-    transactionId: string
-  ): Promise<void> {
-    const projectedIncome = await projectedIncomeRepo.get(projectedIncomeId);
-    const transaction = await db.transactions.get(transactionId);
-
-    if (!projectedIncome || !transaction) return;
-
-    // Add transaction to matched list
-    const matchedTransactionIds = [
-      ...projectedIncome.matchedTransactionIds,
-      transactionId,
-    ];
-
-    // Calculate new received amount
-    const receivedAmountMinor =
-      projectedIncome.receivedAmountMinor + transaction.amountMinor;
-
-    // Determine new state
-    let state = projectedIncome.state;
-    if (receivedAmountMinor >= projectedIncome.expectedAmountMinor) {
-      state = 'received';
-    } else if (receivedAmountMinor > 0) {
-      state = 'partial';
-    }
-
-    // Update projected income
-    await db.projectedIncome.update(projectedIncomeId, {
-      matchedTransactionIds,
-      receivedAmountMinor,
-      receivedAt: state === 'received' ? nowISO() : projectedIncome.receivedAt,
-      state,
-      updatedAt: nowISO(),
-    });
-
-    // Update transaction with link
-    await db.transactions.update(transactionId, {
-      linkedProjectedIncomeId: projectedIncomeId,
-      updatedAt: nowISO(),
-    });
-  },
-
-  /**
-   * Unmatch a transaction from a projected income item
-   */
-  async unmatchTransaction(
-    projectedIncomeId: string,
-    transactionId: string
-  ): Promise<void> {
-    const projectedIncome = await projectedIncomeRepo.get(projectedIncomeId);
-    const transaction = await db.transactions.get(transactionId);
-
-    if (!projectedIncome || !transaction) return;
-
-    // Remove transaction from matched list
-    const matchedTransactionIds = projectedIncome.matchedTransactionIds.filter(
-      (id) => id !== transactionId
-    );
-
-    // Calculate new received amount
-    const receivedAmountMinor = Math.max(
-      0,
-      projectedIncome.receivedAmountMinor - transaction.amountMinor
-    );
-
-    // Determine new state
-    let state = projectedIncome.state;
-    const today = todayISO();
-    if (receivedAmountMinor === 0) {
-      state = projectedIncome.expectedDate <= today ? 'due' : 'upcoming';
-    } else {
-      state = 'partial';
-    }
-
-    // Update projected income
-    await db.projectedIncome.update(projectedIncomeId, {
-      matchedTransactionIds,
-      receivedAmountMinor,
-      receivedAt: matchedTransactionIds.length > 0 ? projectedIncome.receivedAt : undefined,
-      state,
-      updatedAt: nowISO(),
-    });
-
-    // Remove link from transaction
-    await db.transactions.update(transactionId, {
-      linkedProjectedIncomeId: undefined,
-      updatedAt: nowISO(),
-    });
-  },
-
-  /**
-   * Get all suggestions for unlinked income transactions
-   */
-  async getAllSuggestionsForUnlinkedTransactions(): Promise<
-    Array<{ transaction: TransactionDisplay; suggestions: RetainerMatchSuggestion[] }>
-  > {
-    // Get all paid income transactions without a projected income link
-    const transactions = await db.transactions
-      .filter(
-        (t) =>
-          t.kind === 'income' &&
-          t.status === 'paid' &&
-          excludeDeleted(t) &&
-          !t.linkedProjectedIncomeId
-      )
-      .toArray();
-
-    const clients = await db.clients.toArray();
-    const projects = await db.projects.toArray();
-    const categories = await db.categories.toArray();
-
-    const clientMap = new Map(clients.map((c) => [c.id, c.name]));
-    const projectMap = new Map(projects.map((p) => [p.id, p.name]));
-    const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
-
-    const results = [];
-
-    for (const tx of transactions) {
-      const suggestions = await this.getSuggestionsForTransaction(tx.id);
-
-      if (suggestions.length > 0) {
-        const transactionDisplay: TransactionDisplay = {
-          ...tx,
-          clientName: tx.clientId ? clientMap.get(tx.clientId) : undefined,
-          projectName: tx.projectId ? projectMap.get(tx.projectId) : undefined,
-          categoryName: tx.categoryId ? categoryMap.get(tx.categoryId) : undefined,
-        };
-
-        results.push({
-          transaction: transactionDisplay,
-          suggestions,
-        });
-      }
-    }
-
-    return results;
-  },
-};
-
 /**
- * Mark projected income as missed (manual action)
+ * Calculate match score between a transaction and projected income
+ * Score (0-100):
+ * - Currency match: 30 points (required)
+ * - Client match: 30 points
+ * - Amount proximity: 25 points
+ * - Date proximity: 15 points
  */
-export async function markProjectedIncomeMissed(id: string): Promise<void> {
-  await db.projectedIncome.update(id, {
-    state: 'missed',
-    updatedAt: nowISO(),
-  });
-}
-
-/**
- * Retainer summary with amounts broken down by currency
- */
-export interface RetainerSummary {
-  activeCount: number;
-  // Monthly expected by currency
-  totalExpectedMonthlyUsdMinor: number;
-  totalExpectedMonthlyIlsMinor: number;
-  // Due by currency
-  totalDueUsdMinor: number;
-  totalDueIlsMinor: number;
-  // Overdue by currency
-  totalOverdueUsdMinor: number;
-  totalOverdueIlsMinor: number;
-}
-
-/**
- * Get retainer totals summary with amounts broken down by currency
- */
-export async function getRetainerSummary(profileId?: string, currency?: Currency): Promise<RetainerSummary> {
-  const retainers = await db.retainerAgreements
-    .filter((r) => r.status === 'active' && !r.archivedAt)
-    .toArray();
-
-  // Get due items without currency filter to get both currencies
-  const allDueItems = await projectedIncomeRepo.list({
-    profileId,
-    state: 'due',
-  });
-  const today = todayISO();
-
-  let activeCount = 0;
-  let totalExpectedMonthlyUsdMinor = 0;
-  let totalExpectedMonthlyIlsMinor = 0;
-
-  for (const r of retainers) {
-    if (profileId && r.profileId !== profileId) continue;
-    // When currency filter is applied, only count matching retainers
-    if (currency && r.currency !== currency) continue;
-    activeCount++;
-
-    // Convert to monthly equivalent
-    const monthlyAmount =
-      r.cadence === 'quarterly' ? r.amountMinor / 3 : r.amountMinor;
-
-    if (r.currency === 'USD') {
-      totalExpectedMonthlyUsdMinor += monthlyAmount;
-    } else {
-      totalExpectedMonthlyIlsMinor += monthlyAmount;
-    }
-  }
-
-  let totalDueUsdMinor = 0;
-  let totalDueIlsMinor = 0;
-  let totalOverdueUsdMinor = 0;
-  let totalOverdueIlsMinor = 0;
-
-  for (const item of allDueItems) {
-    // When currency filter is applied, only count matching items
-    if (currency && item.currency !== currency) continue;
-
-    const remaining = item.expectedAmountMinor - item.receivedAmountMinor;
-
-    if (item.currency === 'USD') {
-      totalDueUsdMinor += remaining;
-      if (item.expectedDate < today) {
-        totalOverdueUsdMinor += remaining;
-      }
-    } else {
-      totalDueIlsMinor += remaining;
-      if (item.expectedDate < today) {
-        totalOverdueIlsMinor += remaining;
-      }
-    }
-  }
-
-  return {
-    activeCount,
-    totalExpectedMonthlyUsdMinor,
-    totalExpectedMonthlyIlsMinor,
-    totalDueUsdMinor,
-    totalDueIlsMinor,
-    totalOverdueUsdMinor,
-    totalOverdueIlsMinor,
+export function calculateMatchScore(
+  transaction: Transaction,
+  projectedIncome: ProjectedIncomeDisplay
+): MatchScoreBreakdown {
+  const breakdown: MatchScoreBreakdown = {
+    total: 0,
+    currency: 0,
+    client: 0,
+    amount: 0,
+    date: 0,
   };
+
+  // Currency match (required)
+  if (transaction.currency !== projectedIncome.currency) {
+    return breakdown;
+  }
+  breakdown.currency = 30;
+
+  // Client match
+  if (transaction.clientId && transaction.clientId === projectedIncome.clientId) {
+    breakdown.client = 30;
+  }
+
+  // Amount proximity
+  const remainingAmount =
+    projectedIncome.expectedAmountMinor - projectedIncome.receivedAmountMinor;
+  const diff = Math.abs(transaction.amountMinor - remainingAmount);
+  const percentDiff = remainingAmount > 0 ? diff / remainingAmount : 1;
+
+  if (percentDiff <= 0.01) {
+    breakdown.amount = 25; // Exact or within 1%
+  } else if (percentDiff <= 0.05) {
+    breakdown.amount = 20; // Within 5%
+  } else if (percentDiff <= 0.1) {
+    breakdown.amount = 15; // Within 10%
+  } else if (percentDiff <= 0.2) {
+    breakdown.amount = 10; // Within 20%
+  }
+
+  // Date proximity
+  const transactionDate = transaction.occurredAt.split('T')[0];
+  const daysDiff = Math.abs(daysBetween(transactionDate, projectedIncome.expectedDate));
+
+  if (daysDiff <= 3) {
+    breakdown.date = 15;
+  } else if (daysDiff <= 7) {
+    breakdown.date = 12;
+  } else if (daysDiff <= 14) {
+    breakdown.date = 8;
+  } else if (daysDiff <= 30) {
+    breakdown.date = 4;
+  }
+
+  breakdown.total = breakdown.currency + breakdown.client + breakdown.amount + breakdown.date;
+  return breakdown;
 }

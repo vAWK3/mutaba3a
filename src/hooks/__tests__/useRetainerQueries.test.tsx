@@ -2,19 +2,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { useRetainer } from '../useRetainerQueries';
+import {
+  useRetainer,
+  useRetainerSummary,
+  useMarkProjectedIncomeMissed,
+  useUpdateDueStates,
+  useRetainerMatchSuggestions,
+  useAllRetainerMatchSuggestions,
+  useMatchTransaction,
+  useUnmatchTransaction,
+} from '../useRetainerQueries';
 import { getRepositories } from '../../db';
 
-// The hook resolves its repository through getRepositories(); only `get` is
-// exercised here.
+// The hooks resolve their repositories through getRepositories(), so the db
+// barrel is mocked. Only the methods exercised below are faked.
 vi.mock('../../db', () => {
   const base = {
-    retainerAgreements: { get: vi.fn() },
+    retainerAgreements: { get: vi.fn(), getSummary: vi.fn() },
+    projectedIncome: {
+      markMissed: vi.fn(),
+      refreshDueStates: vi.fn(),
+      getMatchSuggestions: vi.fn(),
+      getAllMatchSuggestions: vi.fn(),
+      match: vi.fn(),
+      unmatch: vi.fn(),
+    },
   };
   return { getRepositories: () => ({ base, synced: {} }) };
 });
 
 const retainerRepo = getRepositories().base.retainerAgreements;
+const projectedIncome = getRepositories().base.projectedIncome;
+type Mocked = ReturnType<typeof vi.fn>;
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -70,5 +89,58 @@ describe('useRetainer', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+});
+
+// MUT-47 (D3): retainer matching, due states, mark missed and the summary
+// are repository methods now; no hook imports retainerRepository directly.
+describe('retainer hooks resolve through the provider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('useRetainerSummary reads retainerAgreements.getSummary', async () => {
+    const summary = { activeCount: 1 };
+    (retainerRepo.getSummary as Mocked).mockResolvedValue(summary);
+
+    const { result } = renderHook(() => useRetainerSummary('p-1', 'USD'), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(summary);
+    expect(retainerRepo.getSummary).toHaveBeenCalledWith('p-1', 'USD');
+  });
+
+  it('useRetainerMatchSuggestions and useAllRetainerMatchSuggestions read projectedIncome', async () => {
+    (projectedIncome.getMatchSuggestions as Mocked).mockResolvedValue([]);
+    (projectedIncome.getAllMatchSuggestions as Mocked).mockResolvedValue([]);
+
+    const one = renderHook(() => useRetainerMatchSuggestions('tx-1'), { wrapper: createWrapper() });
+    const all = renderHook(() => useAllRetainerMatchSuggestions(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(one.result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(all.result.current.isSuccess).toBe(true));
+    expect(projectedIncome.getMatchSuggestions).toHaveBeenCalledWith('tx-1');
+    expect(projectedIncome.getAllMatchSuggestions).toHaveBeenCalled();
+  });
+
+  it('the mutations call markMissed, refreshDueStates, match and unmatch', async () => {
+    for (const fn of ['markMissed', 'refreshDueStates', 'match', 'unmatch'] as const) {
+      (projectedIncome[fn] as Mocked).mockResolvedValue(undefined);
+    }
+    const wrapper = createWrapper();
+    const missed = renderHook(() => useMarkProjectedIncomeMissed(), { wrapper });
+    const due = renderHook(() => useUpdateDueStates(), { wrapper });
+    const match = renderHook(() => useMatchTransaction(), { wrapper });
+    const unmatch = renderHook(() => useUnmatchTransaction(), { wrapper });
+
+    await missed.result.current.mutateAsync('pi-1');
+    await due.result.current.mutateAsync();
+    await match.result.current.mutateAsync({ projectedIncomeId: 'pi-1', transactionId: 'tx-1' });
+    await unmatch.result.current.mutateAsync({ projectedIncomeId: 'pi-1', transactionId: 'tx-1' });
+
+    expect(projectedIncome.markMissed).toHaveBeenCalledWith('pi-1');
+    expect(projectedIncome.refreshDueStates).toHaveBeenCalled();
+    expect(projectedIncome.match).toHaveBeenCalledWith('pi-1', 'tx-1');
+    expect(projectedIncome.unmatch).toHaveBeenCalledWith('pi-1', 'tx-1');
   });
 });
