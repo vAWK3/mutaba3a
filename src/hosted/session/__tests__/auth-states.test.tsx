@@ -350,6 +350,34 @@ describe('E3 on the sign-in page', () => {
   });
 });
 
+describe('MUT-111 /capture web fallback', () => {
+  it('signed-out: redirected to /sign-in with next, same as any other authed route', async () => {
+    stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
+    const { router } = renderPortal('/capture');
+    await screen.findByLabelText('Email');
+    expect(locationOf(router)).toBe('/sign-in?next=%2Fcapture');
+  });
+
+  it('signed-in with a profile: lands on that profile\'s expenses page, never a 404', async () => {
+    stubApi({
+      'GET /v1/me': () => ok(me()),
+      ...emptyProfileRoutes(),
+      'GET /v1/expense-categories': () => ok({ items: [] }),
+      'GET /v1/expenses': () => ok({ items: [], nextCursor: null }),
+    });
+    const { router } = renderPortal('/capture');
+    expect(await screen.findByText('No expenses recorded on this profile yet')).toBeInTheDocument();
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/expenses`);
+  });
+
+  it('signed-in with no profiles: offers only Sign out, same as S11, not a crash or 404', async () => {
+    stubApi({ 'GET /v1/me': () => ok(me([])) });
+    renderPortal('/capture');
+    expect(await screen.findByText("Your account isn't connected to a profile yet")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
+});
+
 describe('E4 account locale', () => {
   it('applies the account locale after /v1/me when the browser has no stored choice', async () => {
     localStorage.clear();

@@ -2,7 +2,7 @@
 import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNavigate, type RouterHistory } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
-import { AuthGate, HomeRedirect, ProfileLayout } from './session/AuthGate';
+import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
 import { parseClientDetail, parseClients, parseDocuments, parseExpensesPage, parseOverview, parsePayments, parseReceivables } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
@@ -60,6 +60,9 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
   const homeRoute = createRoute({ getParentRoute: () => authedRoute, path: '/', component: HomeRedirect });
+
+  /** Web fallback for the iOS/Android universal link when the app isn't installed (MUT-111). */
+  const captureRoute = createRoute({ getParentRoute: () => authedRoute, path: '/capture', component: CaptureRedirect });
 
   const profileRoute = createRoute({
     getParentRoute: () => authedRoute,
@@ -138,6 +141,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     signInRoute,
     authedRoute.addChildren([
       homeRoute,
+      captureRoute,
       profileRoute.addChildren([overviewRoute, clientsRoute, clientRoute, receivablesRoute, paymentsRoute, documentsRoute, expensesRoute]),
     ]),
   ]);
