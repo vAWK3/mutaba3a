@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Hosted portal: correct the read-only income copy for personal profiles after MUT-65 (MUT-93)
+
+**Why:** `hosted-portal.md` §7.4 and `hosted.readOnly.none` hard-coded "Income isn't recorded on hosted profiles yet" for any profile Malafat doesn't feed. MUT-65 shipped income capture for the signed-in user's own personal profile via the phone app, making that sentence false for exactly that profile. Flagged (not built) in MUT-65's design doc §9, filed as this ticket. **Copy only** (Basel, 2026-10-13): the portal stays read-only-by-design; unsuppressing "Record payment"/edit affordances for a personal profile is a separate follow-up (MUT-133).
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, `npm run lint` clean, `npm test` (vitest run) 3,434 passed / 4 skipped.
+
+### Added
+- `hosted.readOnly.personal` (en/ar): shown on a personal profile instead of the old "isn't recorded yet" copy.
+
+### Fixed
+- `ReadOnlyNotice` now checks `profile.isPersonalDefault` **before** its `access.payments === 'read-write'` early return. Without this, a personal profile's notice would have silently vanished once MUT-65 made its session access read-write -- with no replacement guidance, since the portal still has no "Record payment" affordance built. A non-personal, non-Malafat profile (genuinely no income capture) keeps the original "none" copy unchanged.
+
+### Technical
+- `src/hosted/pages/__tests__/views.test.tsx`: new case for a personal profile with `access.payments: 'read-write'`, asserting the new copy and that no record/edit affordance appears.
+- `hosted-portal.md` §7.4 updated to document the three-way branch and checking order.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Arabic amounts inside a sentence read right-to-left (MUT-110)
 
 **Why:** `formatAmount(…, 'ar')` prepends a U+200F RLM (a strong RTL character); the shared `isolate()` (FSI) takes its direction from the first strong character inside it, so an Arabic-formatted amount wrapped in `isolate()` renders right-to-left -- `$US 7,550` instead of `7,550 US$`. MUT-81 moved `OwedNowSummary` from LRI to the shared FSI `isolate()`, reasoning an amount "has no strong character," which doesn't hold once `Intl.NumberFormat('ar', ...)` is in the picture. FSI is right for names (MUT-81's actual case); wrong for amounts.

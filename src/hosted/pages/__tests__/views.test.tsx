@@ -204,6 +204,17 @@ describe('Receivables', () => {
     expect(await screen.findByRole('note')).toHaveTextContent("Income isn't recorded on hosted profiles yet. This profile is for expenses.");
   });
 
+  it('says income comes from the phone app on the signed-in user\'s own personal profile (MUT-93)', async () => {
+    portal(`/p/${ORG_A}/receivables`, {}, [
+      profile({ writerOfRecord: null, isPersonalDefault: true, access: { payments: 'read-write', expenses: 'read-write' } }),
+    ]);
+    // access.payments is read-write post-MUT-65, which would otherwise hide
+    // the notice entirely (the portal still has no Record payment button)
+    expect(await screen.findByRole('note')).toHaveTextContent('Income on this profile is recorded from the phone app. This view is read-only.');
+    const actionable = screen.getAllByRole('button').map((b) => b.textContent ?? '');
+    expect(actionable.filter((label) => /\b(record|edit|add|new|mark|delete|pay)\b|payment/i.test(label))).toEqual([]);
+  });
+
   it('keeps one filters object in the URL, replaces history, and refetches with the matching params', async () => {
     const { user, router, api } = portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(RECEIVABLES)) });
     await screen.findByRole('table', { name: 'Receivables' });

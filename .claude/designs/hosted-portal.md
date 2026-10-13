@@ -285,12 +285,14 @@ Tests generated from the table (MUT-39):
 
 ### 7.4 Read-only surfaces explain themselves
 
-Income views (Receivables, Payments, Documents, Client-detail tabs) render **no** edit affordances: no row actions, no record-payment button, no drawer. A persistent inline notice in the `IncomeDrawer` locked-notice pattern (reason + next step, `role="note"`) says why:
+Income views (Receivables, Payments, Documents, Client-detail tabs) render **no** edit affordances: no row actions, no record-payment button, no drawer -- unconditionally, regardless of `access.payments` (MUT-93: deferred unsuppressing these for a personal profile to a follow-up ticket). A persistent inline notice in the `IncomeDrawer` locked-notice pattern (reason + next step, `role="note"`) says why. Checked in this order:
 
+- `profile.isPersonalDefault`: "Income on this profile is recorded from the phone app. This view is read-only." (MUT-93, post-MUT-65) -- checked **before** the `access.payments === 'read-write'` gate below, because a personal profile's session access is read-write once MUT-65 ships; without this branch the notice would just vanish with no replacement guidance, since there is still no portal affordance to act on that access.
+- `access.payments === 'read-write'` (any other profile): no notice.
 - `writerOfRecord: 'MALAFAT'`: "Malafat records income and payments for this profile. To change them, use Malafat."
-- `null`: "Income isn't recorded on hosted profiles yet. This profile is for expenses."
+- `null` (not personal, no Malafat): "Income isn't recorded on hosted profiles yet. This profile is for expenses."
 
-The notice reads `profile.access`, not a hard-coded list. If the server ever answers `READ_ONLY_PROFILE` (a stale UI), the toast uses the same sentence from `details.writerOfRecord`.
+If the server ever answers `READ_ONLY_PROFILE` (a stale UI), the toast uses the same sentence from `details.writerOfRecord`.
 
 ### 7.5 States (M8 wireframe, four per view)
 

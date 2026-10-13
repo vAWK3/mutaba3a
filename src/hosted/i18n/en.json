@@ -82,6 +82,7 @@
     },
     "readOnly": {
       "malafat": "Malafat records income and payments for this profile. To change them, use Malafat.",
+      "personal": "Income on this profile is recorded from the phone app. This view is read-only.",
       "none": "Income isn't recorded on hosted profiles yet. This profile is for expenses."
     },
     "filters": {
