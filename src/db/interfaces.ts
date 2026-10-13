@@ -9,6 +9,14 @@
  * - Web/PWA: Uses Dexie implementation (IndexedDB)
  * - Tauri Desktop (future): Uses SQLite implementation via Tauri SQL plugin
  *
+ * The seam rule (MUT-47, ADR-071): outside src/db nothing reads or writes
+ * storage except through `getRepositories()` — no `db`, no repository object,
+ * no storage helper module. ESLint enforces it (eslint.config.js). The single
+ * exception is `initDatabase()` in src/main.tsx, which opens Dexie and runs
+ * its migrations before React mounts. Inside src/db, Dexie implementation
+ * code may call other Dexie code directly (e.g. retainerRepo →
+ * scheduleGenerator) and must never call back out through the provider.
+ *
  * @see CLAUDE.md for architecture decisions
  * @see .claude/TECH_DEBT.md TD-013 for migration tracking
  */
@@ -421,7 +429,7 @@ export interface IDatasetRepository {
   csvValidationContext(): Promise<{ clientNames: string[]; projectNames: string[] }>;
   importCsvRows(rows: CsvImportRow[], options: CsvImportOptions): Promise<{ transactions: number }>;
   exportCoreTables(): Promise<{ clients: Client[]; projects: Project[]; transactions: Transaction[] }>;
-  /** Clears transactions, projects, clients, categories and FX rates; everything else is kept. */
+  /** Clears transactions, projects, clients, categories and FX rates; everything else is kept (TODOS #10). */
   wipeCoreData(): Promise<void>;
   integrityCheck(): Promise<IntegrityResult>;
   findOrphanedRecords(): Promise<OrphanedRecordSet>;

@@ -5,7 +5,7 @@ import { getRepositories } from '../provider';
 // MUT-47 (T6): the migration wizard's reads and writes, moved from the
 // component into the transactions repository. The write is pinned exactly as
 // it was: profileId set, needsReview cleared, nothing else (no updatedAt —
-// TODOS #9).
+// TODOS #11).
 
 const stamp = '2024-01-01T00:00:00.000Z';
 const base = { kind: 'income' as const, status: 'unpaid' as const, amountMinor: 1, currency: 'USD' as const, occurredAt: '2024-01-01', createdAt: stamp, updatedAt: stamp };

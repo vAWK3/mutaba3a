@@ -543,7 +543,7 @@ export const transactionRepo = {
 
   /**
    * File each reviewed row under its chosen business and clear its flag. The
-   * write is exactly what the wizard wrote before MUT-47 (no updatedAt).
+   * write is exactly what the wizard wrote before MUT-47 (no updatedAt, TODOS #11).
    */
   async resolveNeedsReview(assignments: Record<string, string>): Promise<void> {
     for (const [txId, profileId] of Object.entries(assignments)) {

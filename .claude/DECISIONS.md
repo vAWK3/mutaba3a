@@ -2788,3 +2788,28 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - A generic kind column on a shared table, per the ticket's literal text: rejected once reading the schema showed no such table exists; would have meant retrofitting every other kind onto a new shared model instead, a far larger and riskier change than this ticket's scope.
 - Migrating the local app's `useConversionQueries.ts`/`ConversionDrawer.tsx` to call the hosted API: not possible as stated — those files are the local/offline app's own Dexie-backed surface, structurally separate from `src/hosted/**`, and must stay Dexie-only per the project's local-first architecture.
 - Full CRUD (matching `/v1/expenses`): offered as an explicit choice before planning further; create+read-only chosen since the ticket's AC never asked for edit/undo and a smaller, schema-minimal surface serves MUT-159 better.
+
+## ADR-071: Every Storage Call Outside src/db Goes Through the Provider; Dexie Code Never Calls Back Out; ESLint Enforces It
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-47 set out to fix two documented-but-unchecked claims: CLAUDE.md's Phase 4 named a `test:integration` script that never existed, and TD-013 listed five objects outside `IRepositoryProvider`. Reading the code showed the seam was much leakier than recorded: the retainer "helpers" wrote Dexie directly, and CSV import, per-business export, "Delete all data", the migration wizard, demo seeding and five more `src/db` helpers (integrity check, orphan finder, backup/restore, cross-business stats, category seeding) were all called around the provider. Nothing enforced ADR-002's "UI never touches Dexie directly", so every new feature could drift it again. Decisions D1–D9 are in `.claude/designs/mut-47-data-layer-reconcile.md`.
+
+**Decision**:
+1. **Outside `src/db`, storage is reached only through `getRepositories()`.** No `db`, no repository object, no module whose exports read or write the database. Pure helpers, constants and types beside them stay importable. The single exception is `initDatabase()` in `src/main.tsx`, which opens Dexie and runs migrations before React mounts.
+2. **A storage concern that is not one entity gets its own slot.** `dataset` (backup/restore, export/import, legacy and CSV import, wipe, integrity and orphan checks, post-load feature reconcile) and `demoData` (the `?demo=1` seed and the visitor sample). Operations on one entity become methods on that entity's slot (`projectedIncome.match/unmatch/refreshDueStates/markMissed`, `retainerAgreements.getSummary`, `transactions.listNeedsReview/resolveNeedsReview`, `clientSummaries.getCrossProfileStats`, `expenseCategories.seedDefaults`). The provider grows from 18 to 23 slots.
+3. **Dexie implementation code may call other Dexie code directly and must never resolve storage through the provider.** `retainerRepo` calls `scheduleGenerator` from create/update/activate/resume; if the generator asked `getRepositories()`, a Dexie write would land schedule rows in whatever source a test or future SQLite build injected. Duties like this are written on the interface ("create/update/activate/resume maintain the projected schedule") so a second implementation knows to do them.
+4. **Moves are byte-identical, pinned by characterization tests written against the old call path first.** One deliberate change: `dataset.importLegacyV1` runs its clear and six writes in one transaction (all or nothing; the test is red without it). Rough edges found on the way are TODOS #10–#12, not silent fixes.
+5. **ESLint enforces it.** An app-scope `@typescript-eslint/no-restricted-imports` block (`eslint.config.js`) rejects the storage modules and the `db`/repository names outside `src/db` (tests and the hosted portal excluded); `src/__tests__/seamLint.test.ts` proves the rule's shape.
+
+**Consequences**:
+- "Every storage call is behind the seam" is now checked by `npm run lint`, not asserted in a comment (the failure mode MUT-35 and MUT-47 each found).
+- A new storage module must be added to the lint pattern list, or the rule quietly misses it; the list sits beside the rule with the reason.
+- Components lose some direct Dexie conveniences (raw `toArray()` scans); they ask for a named method instead, which a future SQLite source must implement.
+- The MigrationWizard's business picker now lists businesses sorted by name (`businessProfiles.list()`), the one visible difference of the move.
+
+**Alternatives considered**:
+- *A note in `interfaces.ts` listing what sits outside the seam*: rejected at D2/D4/D5; it would document accidents as decisions and stay unchecked.
+- *Rewrite the retainer helpers as services over primitive repository methods*: rejected at D3; `retainerRepo` itself calls the schedule generator, so a service resolving storage through the provider would invert the layering.
+- *A guard test grepping for imports* (the repo's `no*Modules` style): rejected at D6 in favour of lint, which flags a bypass in the editor before commit.
+- *A `test:integration` script*: rejected at D1; integration tests live beside unit tests, so an alias would be a check that checks nothing new.

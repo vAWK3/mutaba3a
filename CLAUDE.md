@@ -299,13 +299,16 @@ Before writing implementation code:
 - Verify zero regressions
 
 ### Phase 4: Verification
-Run locally:
+Run locally, under Node 22 (Node 25+ breaks every localStorage test, TD-054):
 ```bash
 npm run lint
-npm run test
-npm run test:integration
 npm run typecheck
+npm run test:run
 npm run build
+```
+
+`test:run` is the whole Vitest suite once (unit and Dexie integration tests live side by side; `npm run test` is watch mode).
+Changes under `server/` also run what server CI runs: `npm --prefix server run typecheck`, `npm --prefix server run lint`, `npm --prefix server run openapi:check` and `npm --prefix server test`. CI additionally runs `test:db` against Postgres (see `.github/workflows/server-ci.yml`); TODOS #8 is a known audit-ordering flake there.
 
 No task is “done” until all pass.
 

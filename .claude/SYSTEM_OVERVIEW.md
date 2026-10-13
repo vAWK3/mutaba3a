@@ -65,6 +65,11 @@ The sync layer (HLC, op-log, conflict resolver, bundles, LAN server) that sat
 below this diagram was deleted in MUT-73 (ADR-053); Dexie v21 dropped its eight
 tables.
 
+The repository layer is one registry, `getRepositories()` (`src/db/provider.ts`,
+23 slots including the whole-database `dataset` and the sample `demoData`).
+Outside `src/db` nothing touches Dexie except `initDatabase()` at startup;
+ESLint enforces it (MUT-47, ADR-071).
+
 ### Layer Responsibilities
 
 | Layer | Responsibility | Key Technologies |

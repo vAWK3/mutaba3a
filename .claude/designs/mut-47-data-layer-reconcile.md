@@ -154,6 +154,18 @@ Download/UI stays in the components (`downloadTextFile` etc.); only storage move
 src/db: interfaces.ts, provider.ts, retainerRepository.ts, dataset.ts (new), demoData.ts (new), backup.ts, profileImport.ts, seed.ts, integrityCheck.ts, orphanedRecords.ts, crossProfileStats.ts, defaultExpenseCategories.ts, repository.ts, index.ts · callers: usePlanQueries.ts, useRetainerQueries.ts, useExpenseQueries.ts, useOrphanedRecords.ts, ClientsPage.tsx, DataToolsSection.tsx, OrphanedRecordsBanner.tsx, ExportDataModal.tsx, DeleteAllDataModal.tsx, MigrationWizard.tsx, ImportDataPage.tsx, utils/csvImport.ts, demo/seedData/index.ts, demo/visitorSample.ts, main.tsx · config/docs: eslint.config.js, CLAUDE.md, TODOS.md + 5 knowledge files · tests: see Test review. ≈ 37 source/doc files + ~15 test files.
 
 
+## Build notes (eng-build, 2026-10-13)
+
+Corrections and deviations found while building, each a small change to the plan above:
+- **`needsReview` index**: booleans are not valid IndexedDB keys, so `listNeedsReview` keeps the `.filter()` scan; the Performance note's "fewer reads" claim was wrong.
+- **T8 seeding**: `seedExpenseCategories` was never idempotent. Moved as is, and the test pins "no de-duplication" rather than the planned idempotence (which would have changed behaviour).
+- **Legacy import reconcile**: `importLegacyV1` wraps clear + bulkAdds in the transaction; the feature reconcile stays after it on the page, as `restoreBackup` does. Reconcile logs and swallows its own errors, so it cannot undo or fail the import, and keeping it outside avoids locking every table.
+- **CSV import**: moved wholly into `src/db/csvImport.ts` (page loop + `utils/csvImport`), not routed through the provider from inside `src/db`; that would have repeated the D3 layering problem. Diffed byte-identical apart from a variable name.
+- **MigrationWizard**: its business picker now comes from `businessProfiles.list()`, so options are sorted by name. This is the one visible difference of the move (ADR-071).
+- **ExportDataModal**: once the storage code left the component, the React compiler analysed it and flagged its existing set-state-in-effect. The single-profile default is now derived at render.
+- **Lint**: `@typescript-eslint/no-restricted-imports` with `allowTypeImports`, banning names rather than whole modules where a module also exports pure helpers (`orphanedRecords.startingProfileId`, `database.MIGRATED_PAYMENT_NOTE`).
+- **D9**: no component race; the failure was contention (TD-073, updated). The branch's full suite was green.
+
 ---
 
 # Eng review — /plan-eng-review, 2026-10-13
