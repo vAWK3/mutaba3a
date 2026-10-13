@@ -32,7 +32,7 @@
 
 **Why:** Freelancers holding multiple currencies periodically convert money between them; until now that movement either went unrecorded or got miscategorized as a fake expense/income, corrupting P&L. Blocked by MUT-140 (per-currency decimal precision, merged). Two findings reshaped the ticket's own premise mid-build: the "excluded from P&L by construction" claim was false until the aggregation branches were tightened, and the "Transactions ledger" the ticket assumed exists is dead code — see ADR-067.
 
-**Run (Node 22):** `npm run lint` 0 errors (13 pre-existing warnings, unrelated), `npm run typecheck` clean, `npm run build` succeeded, full `npm run test:run` 3,535 passed / 4 skipped.
+**Run (Node 22):** `npm run lint` 0 errors (13 pre-existing warnings, unrelated), `npm run typecheck` clean, `npm run build` succeeded, full `npm run test:run` 3,536 passed / 4 skipped (after the qa-reconcile fix below).
 
 ### Added
 - New Transaction `kind: 'conversion'`, with `toCurrency`/`toAmountMinor` for the destination leg (`currency`/`amountMinor` stay the source leg). No Dexie migration — both are additive, unindexed.
@@ -43,6 +43,7 @@
 
 ### Changed
 - `src/db/aggregations.ts` (3 functions) and `src/lib/aggregations.ts` (2 functions): tightened bare `else { expensesMinor += ... }` branches to `else if (kind === 'expense')`, so a conversion row contributes to neither income nor expense totals anywhere in the app. Additive — no existing income/expense call site's behavior changes.
+- `src/pages/insights/InsightsPage.tsx`: same tightening applied to its own independent `summaryTotals` calculation, found by `/qa-reconcile` re-sweeping every `kind === 'income'` call site in the repo — this page doesn't route through the shared `aggregations.ts` module, so the first pass missed it. Without this fix a logged conversion inflated the Insights page's Expenses KPI by its full amount (`/reports` has the identical duplicate logic but is unreachable dead code — `/reports` redirects to `/insights` — and was left untouched).
 
 ### Technical
 - ADR-067 records both architecture decisions above (the aggregation fix's shape, and the new-page-plus-feature-flag UI choice) and the alternatives considered.
