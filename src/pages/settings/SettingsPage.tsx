@@ -11,20 +11,10 @@ import {
 import { useT, useLanguage } from '../../lib/i18n';
 import { useTheme, THEME_MODES } from '../../lib/theme';
 import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
-import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
+import { AboutSection } from './AboutSection';
 import { DataToolsSection } from './DataToolsSection';
 import { useDrawerStore } from '../../lib/stores';
-
-// Stable download URLs (redirected by Netlify to GitHub Releases latest)
-const DOWNLOAD_URLS = {
-  mac: '/download/mac',
-  windows: '/download/windows',
-} as const;
-
-// App version injected by Vite at build time
-declare const __APP_VERSION__: string | undefined;
-const APP_VERSION = __APP_VERSION__ || '0.0.0';
 import type { Currency, BusinessProfile } from '../../types';
 import type { Language } from '../../lib/i18n/types';
 
@@ -153,7 +143,6 @@ export function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
-  const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
 
   // Business profiles
   const { data: businessProfiles = [] } = useBusinessProfiles();
@@ -163,21 +152,21 @@ export function SettingsPage() {
   const defaultCurrencyId = useId();
   const defaultCurrencyDescId = useId();
 
-  // const handleCurrencyToggle = (currency: Currency) => {
-  //   if (!settings) return;
+  const handleCurrencyToggle = (currency: Currency) => {
+    if (!settings) return;
 
-  //   const current = settings.enabledCurrencies;
-  //   const isEnabled = current.includes(currency);
+    const current = settings.enabledCurrencies;
+    const isEnabled = current.includes(currency);
 
-  //   // Don't allow disabling if only one currency is enabled
-  //   if (isEnabled && current.length === 1) return;
+    // Don't allow disabling if only one currency is enabled
+    if (isEnabled && current.length === 1) return;
 
-  //   const updated = isEnabled
-  //     ? current.filter((c) => c !== currency)
-  //     : [...current, currency];
+    const updated = isEnabled
+      ? current.filter((c) => c !== currency)
+      : [...current, currency];
 
-  //   updateMutation.mutate({ enabledCurrencies: updated });
-  // };
+    updateMutation.mutate({ enabledCurrencies: updated });
+  };
 
   const handleDefaultCurrencyChange = (currency: Currency) => {
     updateMutation.mutate({ defaultCurrency: currency });
@@ -209,50 +198,6 @@ export function SettingsPage() {
     <>
       <TopBar title={t('settings.title')} hideAddMenu />
       <div className="page-content" style={{ maxWidth: 600 }}>
-        {/* Language Settings */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.language.title')}</h2>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.language.description')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {(['en', 'ar'] as Language[]).map((lang) => (
-                <button
-                  key={lang}
-                  className={`btn btn-sm ${language === lang ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setLanguage(lang)}
-                >
-                  {lang === 'en' ? 'English' : 'العربية'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Theme Settings */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.theme.title')}</h2>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.theme.description')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {THEME_MODES.map((mode) => (
-                <button
-                  key={mode}
-                  className={`btn btn-sm ${theme === mode ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setTheme(mode)}
-                >
-                  {t(`settings.theme.${mode}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* Business Profiles */}
         <div className="settings-section">
           <div className="settings-section-header">
@@ -315,11 +260,55 @@ export function SettingsPage() {
           )}
         </div>
 
+        {/* Language Settings */}
+        <div className="settings-section">
+          <h2 className="settings-section-title">{t('settings.language.title')}</h2>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">{t('settings.language.description')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['en', 'ar'] as Language[]).map((lang) => (
+                <button
+                  key={lang}
+                  className={`btn btn-sm ${language === lang ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setLanguage(lang)}
+                >
+                  {lang === 'en' ? 'English' : 'العربية'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Theme Settings */}
+        <div className="settings-section">
+          <h2 className="settings-section-title">{t('settings.theme.title')}</h2>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">{t('settings.theme.description')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {THEME_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  className={`btn btn-sm ${theme === mode ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setTheme(mode)}
+                >
+                  {t(`settings.theme.${mode}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Currency Settings */}
         <div className="settings-section">
           <h2 className="settings-section-title">{t('settings.currency.title')}</h2>
 
-          {/* <div className="settings-row">
+          <div className="settings-row">
             <div>
               <div className="settings-label">{t('settings.currency.enabled')}</div>
               <div className="settings-description">{t('settings.currency.enabledDesc')}</div>
@@ -335,7 +324,7 @@ export function SettingsPage() {
                 </button>
               ))}
             </div>
-          </div> */}
+          </div>
 
           <div className="settings-row">
             <div>
@@ -362,6 +351,9 @@ export function SettingsPage() {
 
         {/* Advanced features (MUT-12) */}
         <AdvancedFeaturesSection />
+
+        {/* About, Updates, Desktop App (MUT-139: merged, one topic) */}
+        <AboutSection />
 
         {/* Data Management */}
         <div className="settings-section">
@@ -400,116 +392,6 @@ export function SettingsPage() {
                 {t('settings.data.deleteAllBtn')}
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* About */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.about.title')}</h2>
-          <div className="text-muted">
-            <p>{t('settings.about.name')}</p>
-            <p className="text-sm" style={{ marginTop: 8 }}>
-              {t('settings.about.description')}
-            </p>
-            <p className="text-sm" style={{ marginTop: 12 }}>
-              {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{APP_VERSION}</span>
-            </p>
-          </div>
-
-          <div className="settings-row" style={{ marginTop: 16 }}>
-            <div>
-              <div className="settings-label">{t('settings.about.support')}</div>
-              <div className="settings-description">{t('settings.about.supportDesc')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <a
-                href="https://buymeacoffee.com/elmokhtbr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary"
-              >
-                {t('settings.about.buyMeCoffee')}
-              </a>
-              <a
-                href="https://ko-fi.com/elmokhtbr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary"
-              >
-                {t('settings.about.kofi')}
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Updates */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.updates.title')}</h2>
-
-          {isCheckingUpdate ? (
-            <div className="text-muted">{t('settings.updates.checking')}</div>
-          ) : updateError ? (
-            <div className="text-muted">{t('settings.updates.checkFailed')}</div>
-          ) : hasUpdate ? (
-            <div className="settings-update-card">
-              <div className="settings-update-card-content">
-                <div className="settings-update-card-title">{t('settings.updates.updateAvailable')}</div>
-                <div className="settings-update-card-versions">
-                  {t('settings.updates.currentVersion')}: <span className="settings-update-card-version">{APP_VERSION}</span>
-                  {' → '}
-                  {t('settings.updates.latestVersion')}: <span className="settings-update-card-version">{latestVersion}</span>
-                </div>
-              </div>
-              <a href="/download" className="btn btn-primary">
-                {t('settings.updates.updateNow')}
-              </a>
-            </div>
-          ) : (
-            <div className="settings-row">
-              <div>
-                <div className="settings-label">{t('settings.updates.upToDate')}</div>
-                <div className="settings-description">
-                  {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{APP_VERSION}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop App */}
-        <div className="settings-section">
-          <h2 className="settings-section-title">{t('settings.desktopApp.title')}</h2>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('settings.desktopApp.download')}</div>
-              <div className="settings-description">{t('settings.desktopApp.downloadDesc')}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <a
-                href={DOWNLOAD_URLS.mac}
-                className="btn btn-secondary"
-                rel="noopener"
-              >
-                {t('settings.desktopApp.downloadMac')}
-              </a>
-              <a
-                href={DOWNLOAD_URLS.windows}
-                className="btn btn-secondary"
-                rel="noopener"
-              >
-                {t('settings.desktopApp.downloadWindows')}
-              </a>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-label" style={{ color: 'var(--color-text-muted)' }}>{t('download.allVersions')}</div>
-            </div>
-            <a href="/download" className="btn btn-ghost">
-              {t('settings.desktopApp.downloadBtn')}
-            </a>
           </div>
         </div>
       </div>
