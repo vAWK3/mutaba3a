@@ -138,6 +138,20 @@ describe('RecordPaymentButton', () => {
     expect(screen.getByRole('button')).toHaveTextContent('₪70.5');
   });
 
+  // MUT-92 F3: label and amount are separate text, so copied text and
+  // page-text readers get "Record Payment ₪3,550", not "Record Payment₪3,550".
+  it('separates the label from the amount in its text, keeping the name', () => {
+    render(
+      <RecordPaymentButton
+        transaction={makeTransaction({ currency: 'ILS', remainingAmountMinor: 355000 })}
+        onRecordPayment={vi.fn()}
+      />
+    );
+
+    const button = screen.getByRole('button', { name: 'Record Payment — Remaining: ₪3,550' });
+    expect(button.textContent).toBe('Record Payment ₪3,550');
+  });
+
   // MUT-82 (D1): on Home the amount sits in the cell beside the button, so the
   // button shows its label alone; a screen reader still hears the amount.
   it('compact: shows the label alone and keeps the remaining amount in its name', () => {
