@@ -130,6 +130,20 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(screen.getByLabelText('Date')).toBeInTheDocument();
   });
 
+  it('reopens More details for an error there even after the person collapsed it (review #2)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '100');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.clear(screen.getByLabelText('Date'));
+    await user.click(screen.getByRole('button', { name: /Fewer details/ }));
+    expect(screen.queryByLabelText('Date')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    expect(await screen.findByText('Choose a date')).toBeInTheDocument();
+    expect(screen.getByLabelText('Date')).toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
   it('caps the date at today in the profile\'s zone, not the browser\'s (R3)', async () => {
     // 22:30Z on the 13th is already the 14th in Jerusalem.
     vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
@@ -168,7 +182,9 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     await user.type(screen.getByLabelText('Amount'), '100');
     const save = screen.getByRole('button', { name: 'Save income' });
     await user.click(save);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled());
+    // aria-disabled, not disabled: a focused button that becomes disabled is blurred in Chromium (review #3).
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving...' })).toHaveAttribute('aria-disabled', 'true'));
+    expect(screen.getByRole('button', { name: 'Saving...' })).not.toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Saving...' }));
     expect(posts).toHaveLength(1);
     release(json({ id: 'i1' }, 201));

@@ -28,6 +28,8 @@ const ToastContext = createContext<ShowToast>(() => {});
 interface ToastState {
   message: string;
   tone: ToastTone;
+  /** Bumped on every show, so an identical second message re-renders and is announced again. */
+  id: number;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -36,13 +38,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback<ShowToast>((message, options) => {
     clearTimeout(timer.current);
-    setToast({ message, tone: options?.tone ?? 'error' });
+    setToast((current) => ({ message, tone: options?.tone ?? 'error', id: (current?.id ?? 0) + 1 }));
     timer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const info = toast?.tone === 'info' ? toast.message : null;
+  const info = toast?.tone === 'info' ? toast : null;
 
   return (
     <ToastContext.Provider value={show}>
@@ -57,7 +59,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {info && (
           <>
             <InfoIcon />
-            <span>{info}</span>
+            <span key={info.id}>{info.message}</span>
           </>
         )}
       </div>

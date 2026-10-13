@@ -156,13 +156,46 @@ describe('RecordPaymentDrawer (MUT-133)', () => {
     expect(onSettled).not.toHaveBeenCalled();
   });
 
-  it('keeps the inline error from the race visible until the amount changes', async () => {
-    stub({ settle: () => fail(422, 'VALIDATION_FAILED', { reason: 'ALLOCATION_EXCEEDS_OUTSTANDING', outstanding: '3000.00' }) });
+  it('keeps what was typed, the race error and the block when the re-read brings a new version (review #1, R2)', async () => {
+    let reads = 0;
+    stub({
+      get: () => json(++reads === 1 ? owed({ outstanding: '1000.00' }) : owed({ outstanding: '700.00', status: 'PARTIALLY_PAID', version: 2 })),
+      settle: () => fail(422, 'VALIDATION_FAILED', { reason: 'ALLOCATION_EXCEEDS_OUTSTANDING', outstanding: '700.00' }),
+    });
+    const { user } = renderDrawer();
+    const amount = await screen.findByLabelText('Amount (ILS)');
+    await user.clear(amount);
+    await user.type(amount, '800');
+    await user.click(save());
+    await screen.findByRole('heading', { name: /700/ });
+    const error = await screen.findByText(/more than what's left now/);
+    expect(strip(error.textContent)).toBe("That's more than what's left now (₪700.00)");
+    expect(screen.getByLabelText('Amount (ILS)')).toHaveValue('800');
+    expect(strip(amountLine()!.textContent)).toBe("Exceeds what's left (₪700.00)");
+    expect(save()).toBeDisabled();
+  });
+
+  it('keeps the amount it sent, not the new outstanding, when an untouched full payment races (review #1)', async () => {
+    let reads = 0;
+    stub({
+      get: () => json(++reads === 1 ? owed() : owed({ outstanding: '3000.00', status: 'PARTIALLY_PAID', version: 2 })),
+      settle: () => fail(422, 'VALIDATION_FAILED', { reason: 'ALLOCATION_EXCEEDS_OUTSTANDING', outstanding: '3000.00' }),
+    });
     const { user } = renderDrawer();
     await screen.findByLabelText('Amount (ILS)');
     await user.click(save());
-    const error = await screen.findByText(/more than what's left now/);
-    expect(strip(error.textContent)).toBe("That's more than what's left now (₪3,000.00)");
+    await screen.findByRole('heading', { name: /3,000/ });
+    expect(screen.getByLabelText('Amount (ILS)')).toHaveValue('5000.00');
+    expect(save()).toBeDisabled();
+  });
+
+  it('says a date is required, not that it is in the future, when Paid on is cleared (review #5)', async () => {
+    const api = stub();
+    const { user } = renderDrawer();
+    await user.clear(await screen.findByLabelText('Paid on'));
+    await user.click(save());
+    expect(await screen.findByText('Choose a date')).toBeInTheDocument();
+    expect(api.count('POST', `/v1/receivables/${R}/settle`)).toBe(0);
   });
 
   it('says there is nothing left to pay when the entry was paid, voided or removed', async () => {

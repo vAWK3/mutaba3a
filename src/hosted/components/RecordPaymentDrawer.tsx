@@ -45,11 +45,12 @@ export function RecordPaymentDrawer({ profile, receivableId, onClose, onSettled 
   const query = useReceivable(profile.id, receivableId);
   const receivable = query.data;
   const saving = useIsMutating({ mutationKey: settleMutationKey(profile.id) }) > 0;
-  // The form reports "exceeds what's left" from its own change handler, tagged with the version it
-  // was typed against, so a re-read (new version, fresh outstanding) never inherits a stale block.
-  const [over, setOver] = useState<{ formKey: string; over: boolean } | null>(null);
-  const formKey = receivable ? `${receivable.id}:${receivable.version}` : '';
-  const blocked = over?.formKey === formKey && over.over;
+  // The amount lives here, not in the form, so a re-read (a new version after a race or a focus
+  // refetch) keeps what was typed and re-judges it against the fresh outstanding (review #1, R2).
+  // null = untouched: the field shows the outstanding read on open.
+  const [typedAmount, setTypedAmount] = useState<string | null>(null);
+  const amount = typedAmount ?? receivable?.outstanding ?? '';
+  const blocked = receivable ? settleLine(parseIncomeAmount(amount, receivable.currency), receivable.outstanding, receivable.currency)?.tone === 'over' : false;
   const title =
     receivable && isSettleable(receivable)
       ? t('hosted.settle.titleLeft', { amount: isolateAmount(formatDecimal(receivable.outstanding, receivable.currency, language)) })
@@ -67,7 +68,7 @@ export function RecordPaymentDrawer({ profile, receivableId, onClose, onSettled 
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" form={FORM_ID} disabled={!receivable || !isSettleable(receivable) || query.isFetching || saving || blocked}>
+          <Button type="submit" form={FORM_ID} disabled={!receivable || !isSettleable(receivable) || blocked} aria-disabled={saving || undefined}>
             {saving ? t('common.saving') : t('hosted.settle.record')}
           </Button>
         </div>
@@ -83,11 +84,12 @@ export function RecordPaymentDrawer({ profile, receivableId, onClose, onSettled 
       >
         {(r) => (
           <SettleForm
-            key={formKey}
+            key={r.id}
             profile={profile}
             receivable={r}
+            amount={amount}
+            onAmountChange={setTypedAmount}
             onSettled={onSettled}
-            onOverChange={(isOver) => setOver({ formKey, over: isOver })}
             reread={() => void query.refetch()}
           />
         )}
@@ -99,13 +101,15 @@ export function RecordPaymentDrawer({ profile, receivableId, onClose, onSettled 
 interface SettleFormProps {
   profile: HostedProfile;
   receivable: Receivable;
+  /** Owned by the drawer so a re-read never resets it. */
+  amount: string;
+  onAmountChange: (amount: string) => void;
   onSettled: (result: SettleReceivableResponse) => void;
-  onOverChange: (over: boolean) => void;
   reread: () => void;
 }
 
-/** Remounted per receivable version, so a re-read after a race starts from the fresh outstanding. */
-function SettleForm({ profile, receivable, onSettled, onOverChange, reread }: SettleFormProps) {
+/** One mount per receivable; a re-read updates its outstanding in place and keeps the typed amount and errors. */
+function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, reread }: SettleFormProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const attempt = useAttemptKey();
@@ -115,7 +119,6 @@ function SettleForm({ profile, receivable, onSettled, onOverChange, reread }: Se
   const today = todayInZone(profile.timezone);
   const currency = receivable.currency;
 
-  const [amount, setAmount] = useState(receivable.outstanding);
   const [paidAt, setPaidAt] = useState(today);
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [submitted, setSubmitted] = useState(false);
@@ -129,12 +132,17 @@ function SettleForm({ profile, receivable, onSettled, onOverChange, reread }: Se
   const money = (value: string) => isolateAmount(formatDecimal(value, currency, language));
 
   const amountMessage = serverErrors.amount ?? (submitted && invalid ? t(invalid.key, invalid.params) : null);
-  const dateMessage = serverErrors.paidAt ?? (submitted && (!paidAt || paidAt > today) ? t('hosted.income.errors.dateFuture') : null);
+  const dateMessage =
+    serverErrors.paidAt ?? (submitted && !paidAt ? t('hosted.income.errors.dateRequired') : submitted && paidAt > today ? t('hosted.income.errors.dateFuture') : null);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (settle.isPending) return;
     setSubmitted(true);
     setServerErrors({});
+    // Pin what is being sent: if a race re-reads a smaller outstanding, the field keeps this
+    // figure (now flagged as over) instead of silently showing the new outstanding.
+    onAmountChange(amount);
     if (parsed.kind !== 'ok' || line?.tone === 'over' || !paidAt || paidAt > today) return;
     const body = { amount: parsed.canonical, paidAt, method };
     try {
@@ -158,7 +166,6 @@ function SettleForm({ profile, receivable, onSettled, onOverChange, reread }: Se
       <p className="hp-settle-context">
         {[client ?? '—', matter ?? '—', t('hosted.settle.due', { date: formatDay(receivable.dueDate, language) })].join(' · ')}
       </p>
-      <fieldset className="hp-form-fieldset" disabled={settle.isPending}>
         <div className="form-group">
           <label className="form-label" htmlFor="hosted-settle-amount">
             {t('hosted.settle.amount', { currency })}
@@ -173,9 +180,7 @@ function SettleForm({ profile, receivable, onSettled, onOverChange, reread }: Se
             value={amount}
             aria-invalid={Boolean(amountMessage)}
             onChange={(event) => {
-              const next = event.target.value;
-              setAmount(next);
-              onOverChange(settleLine(parseIncomeAmount(next, currency), receivable.outstanding, currency)?.tone === 'over');
+              onAmountChange(event.target.value);
               setServerErrors((current) => Object.fromEntries(Object.entries(current).filter(([field]) => field !== 'amount')));
             }}
           />
@@ -206,7 +211,6 @@ function SettleForm({ profile, receivable, onSettled, onOverChange, reread }: Se
             options={PAYMENT_METHODS.map((value) => ({ value, label: t(`hosted.payments.method.${value}`) }))}
           />
         </div>
-      </fieldset>
       <p className="hp-settle-note">{t('hosted.settle.honest')}</p>
     </form>
   );

@@ -48,6 +48,8 @@ export interface IncomeCaptureDrawerProps {
   /** Prefilled from Client detail. */
   defaultCustomerId?: string;
   onClose: () => void;
+  /** Called after a successful save, before the drawer closes; the page decides where focus goes (review #4). */
+  onSaved?: () => void;
 }
 
 const FORM_ID = 'hosted-income-form';
@@ -56,7 +58,7 @@ function defaultCurrency(profile: HostedProfile): Currency {
   return (INCOME_CURRENCIES as readonly string[]).includes(profile.defaultCurrency) ? profile.defaultCurrency : 'USD';
 }
 
-export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, onClose }: IncomeCaptureDrawerProps) {
+export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, onClose, onSaved }: IncomeCaptureDrawerProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const attempt = useAttemptKey();
@@ -88,7 +90,8 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
   });
 
   const hiddenError = DETAIL_FIELDS.some((field) => formState.errors[field]);
-  const detailsOpen = detailsToggled ?? hiddenError;
+  // An error in a hidden field always opens it, even after the person collapsed it (review #2).
+  const detailsOpen = hiddenError || (detailsToggled ?? false);
   const clientRequired = kind === 'owed' || customerRule === 'linked-required';
 
   const errorText = (field: keyof IncomeFormValues): string | null => {
@@ -119,11 +122,15 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
   };
 
   const onSubmit = async (values: IncomeFormValues) => {
+    // A pending save keeps Save focusable (aria-disabled): disabling a focused button blurs it in
+    // Chromium, and the drawer could then not hand focus back (review #3).
+    if (create.isPending) return;
     const body = toCreateIncomeRequest(values);
     try {
       await create.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
       attempt.succeeded();
       showToast(savedMessage(values, body.amount), { tone: 'info' });
+      onSaved?.();
       onClose();
     } catch (error) {
       const mapped = mapIncomeError(error);
@@ -147,14 +154,13 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" form={FORM_ID} disabled={create.isPending}>
+          <Button type="submit" form={FORM_ID} aria-disabled={create.isPending || undefined}>
             {create.isPending ? t('common.saving') : t('hosted.income.save')}
           </Button>
         </div>
       }
     >
       <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate>
-        <fieldset className="hp-form-fieldset" disabled={create.isPending}>
           {kinds.length > 1 && (
             <div className="form-group">
               <span className="form-label" id="hosted-income-kind-label">
@@ -348,7 +354,6 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
               </div>
             </div>
           )}
-        </fieldset>
       </form>
     </Drawer>
   );

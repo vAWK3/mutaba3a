@@ -14,6 +14,17 @@ import { RecordPaymentDrawer } from './RecordPaymentDrawer';
  */
 
 export const SETTLE_BUTTON_ATTR = 'data-settle-id';
+/** Marks the page header's Add income button, the one that never unmounts. */
+export const ADD_BUTTON_ATTR = 'data-income-add';
+
+/**
+ * After Add income, focus goes to the header's Add button, which always stays mounted. The drawer
+ * would otherwise restore its trigger, and an empty state's Add button is replaced by the first row
+ * as soon as the list re-reads (review #4).
+ */
+export function focusAfterAdd(): void {
+  document.querySelector<HTMLElement>(`[${ADD_BUTTON_ATTR}]`)?.focus();
+}
 
 /**
  * Where focus goes after a payment, decided before the drawer closes
@@ -65,7 +76,9 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId }
     );
   }
   if (drawer.newIncome && kinds.length > 0) {
-    return <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} />;
+    return (
+      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} />
+    );
   }
   return null;
 }

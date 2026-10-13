@@ -9,7 +9,7 @@ import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type ReceivableFilters, type ReceivablesPageSearch, type ReceivableStatusFilter } from '../../data/filters';
 import { incomeAffordancesFor, isSettleable } from '../../data/incomeAffordances';
-import { IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
+import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -97,7 +97,7 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
                     size="sm"
                     className="hp-row-action"
                     {...{ [SETTLE_BUTTON_ATTR]: r.id }}
-                    aria-label={t('hosted.settle.rowLabel', { amount: formatDecimal(r.outstanding, r.currency, language) })}
+                    aria-label={t('hosted.settle.rowLabel', { client: r.client, amount: formatDecimal(r.outstanding, r.currency, language) })}
                     onClick={() => onRecordPayment(r.id)}
                   >
                     {t('hosted.settle.record')}
@@ -165,19 +165,21 @@ export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPage
   const { t } = useLanguage();
   const { filters, drawer } = splitIncomeDrawer(search);
   const { kinds, canSettle } = incomeAffordancesFor(profile);
-  const addButton =
+  // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
+  const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
+  const addButton = (header: boolean) =>
     kinds.length > 0 ? (
-      <Button variant="primary" size="sm" onClick={() => setSearch({ ...filters, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] })}>
+      <Button variant="primary" size="sm" onClick={openAdd} {...(header ? { [ADD_BUTTON_ATTR]: '' } : {})}>
         {t('hosted.income.add')}
       </Button>
     ) : undefined;
   return (
     <>
-      <PageHeader title={t('hosted.receivables.title')}>{addButton}</PageHeader>
+      <PageHeader title={t('hosted.receivables.title')}>{addButton(true)}</PageHeader>
       <ReceivablesList
         filters={filters}
         setFilters={setSearch}
-        addAction={addButton}
+        addAction={addButton(false)}
         onRecordPayment={canSettle ? (receivableId) => setSearch({ ...filters, settle: receivableId }) : undefined}
       />
       <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} />

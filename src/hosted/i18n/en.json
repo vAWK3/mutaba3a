@@ -418,7 +418,7 @@
     "settle": {
       "record": "Record payment",
       "titleLeft": "Record payment · {amount} left",
-      "rowLabel": "Record payment, remaining: {amount}",
+      "rowLabel": "Record payment for {client}, remaining: {amount}",
       "actions": "Actions",
       "due": "due {date}",
       "amount": "Amount ({currency})",

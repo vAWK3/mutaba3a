@@ -48,4 +48,17 @@ describe('Toast (MUT-133)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Could not sign out');
     expect(screen.getByTestId('toast-live')).toBeEmptyDOMElement();
   });
+
+  it('re-renders an identical second info message so it is announced again (review #6)', async () => {
+    render(
+      <ToastProvider>
+        <Trigger tone="info" />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'go' }));
+    const first = screen.getByText('Saved · ₪500.00 owed by Nour Studio');
+    await userEvent.click(screen.getByRole('button', { name: 'go' }));
+    const second = screen.getByText('Saved · ₪500.00 owed by Nour Studio');
+    expect(second).not.toBe(first);
+  });
 });

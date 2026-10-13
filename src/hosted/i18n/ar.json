@@ -422,7 +422,7 @@
     "settle": {
       "record": "تسجيل دفعة",
       "titleLeft": "تسجيل دفعة · {amount} متبقٍ",
-      "rowLabel": "تسجيل دفعة، المتبقي: {amount}",
+      "rowLabel": "تسجيل دفعة من {client}، المتبقي: {amount}",
       "actions": "إجراءات",
       "due": "الاستحقاق {date}",
       "amount": "المبلغ ({currency})",

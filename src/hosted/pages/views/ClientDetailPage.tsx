@@ -9,7 +9,7 @@ import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { splitIncomeDrawer, type ClientDetailSearch, type ClientTab } from '../../data/filters';
 import { incomeAffordancesFor } from '../../data/incomeAffordances';
-import { IncomeDrawerHost } from '../../components/IncomeDrawerHost';
+import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -40,9 +40,11 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
   // MUT-133: drawer state lives beside the tab's filters, never in them (eng review R1).
   const { filters: rest, drawer } = splitIncomeDrawer(search);
   const { kinds, canSettle } = incomeAffordancesFor(profile);
-  const addButton =
+  // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
+  const openAdd = () => setSearch({ ...rest, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
+  const addButton = (header: boolean) =>
     kinds.length > 0 ? (
-      <Button variant="primary" size="sm" onClick={() => setSearch({ ...rest, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] })}>
+      <Button variant="primary" size="sm" onClick={openAdd} {...(header ? { [ADD_BUTTON_ATTR]: '' } : {})}>
         {t('hosted.income.add')}
       </Button>
     ) : undefined;
@@ -64,7 +66,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               {t('hosted.client.back')}
             </Link>
             <h1>{client.name}</h1>
-            {addButton}
+            {addButton(true)}
           </header>
           <SegmentedTabs<ClientTab>
             className="hp-tabs"
@@ -78,7 +80,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               fixedCustomerId={customerId}
               filters={{ projectId: search.projectId, currency: search.currency, status: search.status, dueFrom: search.dueFrom, dueTo: search.dueTo }}
               setFilters={(f) => setSearch({ tab, projectId: f.projectId, currency: f.currency, status: f.status, dueFrom: f.dueFrom, dueTo: f.dueTo })}
-              addAction={addButton}
+              addAction={addButton(false)}
               onRecordPayment={canSettle ? (receivableId) => setSearch({ ...rest, settle: receivableId }) : undefined}
             />
           )}
@@ -87,7 +89,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               fixedCustomerId={customerId}
               filters={{ status: search.paymentStatus, receivedFrom: search.receivedFrom, receivedTo: search.receivedTo }}
               setFilters={(f) => setSearch({ tab, paymentStatus: f.status, receivedFrom: f.receivedFrom, receivedTo: f.receivedTo })}
-              addAction={addButton}
+              addAction={addButton(false)}
             />
           )}
           {tab === 'documents' && (

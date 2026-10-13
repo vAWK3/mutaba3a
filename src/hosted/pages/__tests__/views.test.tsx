@@ -357,7 +357,7 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     const buttons = within(table).getAllByRole('button', { name: /Record payment/ });
     // The INSTALLMENT row (Malafat-posted) offers nothing: the settle route would answer 404.
     expect(buttons).toHaveLength(2);
-    expect(buttons[0]).toHaveAccessibleName('Record payment, remaining: ₪1,170.00');
+    expect(buttons[0]).toHaveAccessibleName('Record payment for Al-Quds Bakery, remaining: ₪1,170.00');
     expect(within(table).getByRole('columnheader', { name: 'Actions' })).toHaveClass('hp-sticky-end');
   });
 
@@ -393,7 +393,7 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(within(screen.getByRole('table', { name: 'Receivables' })).queryByText('Al-Quds Bakery')).toBeNull());
     expect(strip(politeStatus().textContent)).toBe('Payment recorded · ₪1,170.00 from Al-Quds Bakery');
-    expect(document.activeElement).toHaveAccessibleName('Record payment, remaining: ₪585.00');
+    expect(document.activeElement).toHaveAccessibleName('Record payment for Nablus Trading, remaining: ₪585.00');
   });
 
   it('settles in part: the row re-reads as partly paid and focus returns to its button', async () => {
@@ -415,7 +415,7 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Record payment' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(within(rowsOf(screen.getByRole('table', { name: 'Receivables' }))[0]).getByText('Partly paid')).toBeInTheDocument());
-    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Record payment, remaining: ₪670.00'));
+    await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Record payment for Al-Quds Bakery, remaining: ₪670.00'));
   });
 
   it('adds Owed from Receivables: the list re-reads and the new entry is announced', async () => {
@@ -449,6 +449,25 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     await user.click(buttons[1]);
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/payments?newIncome=received`));
     expect(await screen.findByLabelText('Client (optional)')).toBeInTheDocument();
+  });
+
+  it('returns focus to the header Add button after a save started from the empty state (review #4)', async () => {
+    let added = false;
+    const { user } = portal(`/p/${ORG_A}/payments`, {
+      'GET /v1/payments': () => ok(page(added ? [payment('p1', 'PAY-2026-0001')] : [])),
+      'POST /v1/income': () => {
+        added = true;
+        return ok({ id: 'i1', kind: 'received' }, 201);
+      },
+    }, [PERSONAL]);
+    await screen.findByText('No payments recorded on this profile yet');
+    await user.click(screen.getAllByRole('button', { name: '+ Add income' })[1]);
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Amount'), '250');
+    await user.click(within(dialog).getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('No payments recorded on this profile yet')).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '+ Add income' }));
   });
 
   it('prefills the client on Client detail and records a payment from its Receivables tab', async () => {
