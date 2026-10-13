@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Drawer } from './Drawer';
@@ -25,6 +25,7 @@ import {
   currencyExponent,
   formatAmount,
   formatDate,
+  formatPaymentDate,
   getLocaleFromLanguage,
   isolateAmount,
   nowISO,
@@ -48,6 +49,7 @@ import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import type { TxStatus } from '../../types';
 import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeFormSchema';
+import { paymentLocalDay } from '../../lib/dates';
 
 /**
  * IncomeDrawer
@@ -60,6 +62,10 @@ import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeForm
  * Payment state (status, paidAt, received) belongs to payment records when an
  * entry has them (ADR-030): the drawer then shows the status read-only and
  * never writes those fields. Write rules live in lib/incomeEntry.ts.
+ *
+ * An entry with payments names the last one up front, with Edit Payment
+ * (MUT-169): it hands over to the payment drawer, once unsaved changes here
+ * are saved, since switching drawers would drop them.
  */
 
 /** Fields rendered inside "More details"; an error in one of them opens it. */
@@ -89,7 +95,7 @@ function getIncomeStatusFromTx(status: TxStatus): IncomeStatus {
 }
 
 export function IncomeDrawer() {
-  const { incomeDrawer, closeIncomeDrawer } = useDrawerStore();
+  const { incomeDrawer, closeIncomeDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const { mode, transactionId, defaultStatus, defaultClientId, defaultProjectId, defaultProfileId, duplicateFromId } = incomeDrawer;
   const t = useT();
   const { language } = useLanguage();
@@ -125,6 +131,12 @@ export function IncomeDrawer() {
   const hasRecords = mode === 'edit' && paymentRecords.length > 0;
   const paymentStateLocked = hasRecords || recordsPending;
   const recordedMinor = recordedTotalMinor(paymentRecords);
+  // The latest payment by the user's own day (a fast-add's paidAt is a UTC instant)
+  const lastPaidAt = paymentRecords.reduce<string | undefined>(
+    (latest, r) => (!latest || paymentLocalDay(r.paidAt) >= paymentLocalDay(latest) ? r.paidAt : latest),
+    undefined
+  );
+  const paymentHintId = useId();
 
   // Determine initial profile
   const initialProfileId = useMemo(() => {
@@ -539,6 +551,34 @@ export function IncomeDrawer() {
             businessStillAsked && <p className="form-hint">{t('drawer.income.chooseBusinessFirst')}</p>
           )}
         </div>
+
+        {/* Fix a payment's date from the entry (MUT-169), not only the client page */}
+        {hasRecords && lastPaidAt && (
+          <div className="form-group">
+            <div className="drawer-notice">
+              <div className="drawer-notice-body">
+                {t('drawer.income.lastPayment', { date: formatPaymentDate(lastPaidAt, locale) })}
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                disabled={form.formState.isDirty}
+                aria-describedby={form.formState.isDirty ? paymentHintId : undefined}
+                onClick={() => {
+                  closeIncomeDrawer();
+                  openPartialPaymentDrawer({ transactionId: transactionId!, intent: 'editPayment' });
+                }}
+              >
+                {t('transactions.partialPayment.editPayment')}
+              </button>
+            </div>
+            {form.formState.isDirty && (
+              <p id={paymentHintId} className="form-hint">
+                {t('drawer.income.saveBeforePayment')}
+              </p>
+            )}
+          </div>
+        )}
 
         <button
           type="button"
