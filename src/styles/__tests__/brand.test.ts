@@ -798,22 +798,13 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
  * a48f72d). Shrink-only: each MUT-103 surface commit lowers or deletes its
  * entries; a new file, a higher count, or a stale count fails.
  */
-const KNOWN_LITERALS: Record<string, number> = {
-  'src/pages/landing/LandingPage.css': 8,
-  'src/pages/landing/PrivacyPolicyPage.css': 1,
-  'src/pages/landing/components/HeroSection.css': 2,
-};
+const KNOWN_LITERALS: Record<string, number> = {};
 
 /**
  * Rules asking for tabular figures without Plex Mono (Thmanyah has no tnum,
  * so the request does nothing). Shrink-only, as above.
  */
-const KNOWN_TABULAR_WITHOUT_MONO: string[] = [
-  'src/pages/landing/LandingPage.css .landing-mock-amount',
-  'src/pages/landing/LandingPage.css .landing-mock-client-owed, .landing-mock-client-overdue',
-  'src/pages/landing/LandingPage.css .landing-mock-input--amount',
-  'src/pages/landing/LandingPage.css .landing-mock-money',
-];
+const KNOWN_TABULAR_WITHOUT_MONO: string[] = [];
 
 describe('literals', () => {
   describe('in CSS', () => {

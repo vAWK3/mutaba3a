@@ -48,6 +48,10 @@
   --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 6%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 7%, transparent);
   --m-shadow-primary: 0 6px 16px oklch(0.55 0.14 295 / .28);
   --m-focus-ring: inset 0 0 0 2px var(--m-focus), 0 0 0 5px oklch(0.6 0.13 295 / .14);
+
+  /* Landing's business-switcher mock (MUT-103): a fixed saturation/lightness pair, hue set
+     per item by the component (--avatar-hue), scheme-invariant like the business's own colour. */
+  --m-avatar-mock-fill: hsl(var(--avatar-hue, 0deg) 55% 46%);
 }
 
 /* Dark mode — follows OS, or force with <html data-theme="dark"> */

@@ -86,7 +86,7 @@
 
 .landing-section-headline {
   font-family: var(--font-heading);
-  font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+  font-size: clamp(var(--text-title), 3.5vw, var(--text-figure));
   font-weight: var(--weight-semibold);
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -121,7 +121,7 @@
 
 .landing-chapter-title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 4.2vw, 3.25rem);
+  font-size: clamp(var(--text-title), 4.2vw, var(--text-display));
   font-weight: var(--weight-semibold);
   line-height: 1.06;
   letter-spacing: -0.025em;
@@ -160,9 +160,7 @@
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-hero);
-  box-shadow:
-    0 1px 2px rgba(11, 18, 32, 0.06),
-    0 24px 64px rgba(11, 18, 32, 0.12);
+  box-shadow: var(--shadow-2);
   color: var(--text);
   font-size: var(--text-body);
   text-align: start;
@@ -203,8 +201,9 @@
 
 .landing-mock-amount {
   display: block;
-  font-size: 2rem;
-  font-weight: var(--weight-bold);
+  font-family: var(--font-mono);
+  font-size: var(--text-title);
+  font-weight: var(--weight-medium);
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -264,6 +263,7 @@
 }
 
 .landing-mock-money {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -355,6 +355,7 @@
 .landing-mock-client-overdue {
   display: flex;
   flex-direction: column;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -382,8 +383,9 @@
 }
 
 .landing-mock-input--amount {
+  font-family: var(--font-mono);
   font-size: var(--text-headline);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
 }
 
@@ -432,8 +434,8 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-lg);
-  background: hsl(var(--avatar-hue) 55% 46%);
-  color: #fff;
+  background: var(--landing-mock-avatar-fill);
+  color: var(--on-accent);
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
@@ -452,7 +454,7 @@
 }
 
 .landing-mock-totals .landing-mock-amount {
-  font-size: 1.5rem;
+  font-size: var(--text-headline);
 }
 
 /* ============================================
@@ -466,7 +468,7 @@
 
 .landing-privacy-title {
   font-family: var(--font-heading);
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-size: clamp(var(--text-title), 4vw, var(--text-figure));
   font-weight: var(--weight-semibold);
   line-height: 1.15;
   letter-spacing: -0.02em;

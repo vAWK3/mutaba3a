@@ -254,6 +254,7 @@
   --btn-primary-shadow-hover: var(--m-shadow-primary);
   --overlay: color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
   --drawer-shadow: -4px 0 24px color-mix(in oklab, var(--m-shadow-tint) 12%, transparent);
+  --landing-mock-avatar-fill: var(--m-avatar-mock-fill);
 }
 
 @media (prefers-color-scheme: dark) {

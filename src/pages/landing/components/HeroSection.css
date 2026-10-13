@@ -21,7 +21,7 @@
 /* Headline */
 .landing-headline-large {
   font-family: var(--font-heading);
-  font-size: clamp(2.25rem, 4.6vw, 3.5rem);
+  font-size: clamp(var(--text-title), 4.6vw, var(--text-display));
   font-weight: var(--weight-bold);
   line-height: 1.04;
   letter-spacing: -0.03em;
@@ -41,7 +41,7 @@
 }
 
 .landing-subheadline-large {
-  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  font-size: clamp(var(--text-body), 1.6vw, var(--text-headline));
   color: var(--text-secondary);
   line-height: var(--leading-relaxed);
   margin: 0 0 var(--space-8);
