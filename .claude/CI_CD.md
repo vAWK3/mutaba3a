@@ -340,6 +340,7 @@ Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
 - [ ] Push tag: `git push origin v0.0.X`
 - [ ] Trigger desktop release workflow
 - [ ] Verify GitHub release artifacts
+- [ ] Confirm src-tauri/capabilities/default.json grants `updater:default` and `process:allow-restart` (MUT-99)
 - [ ] Test auto-update on existing install
 - [ ] Update landing page if needed
 ```

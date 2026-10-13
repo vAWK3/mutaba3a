@@ -222,6 +222,7 @@ Still manual: a real navigation to `/projects` while off in the browser (redirec
 | `src/components/__tests__/UpdateBanner.test.tsx` | Component | 11 | **Full** - Update banner states |
 | `src/hooks/__tests__/useTauriUpdater.test.ts` | Unit | 8 | **Full** - Tauri updater hook |
 | `src/lib/__tests__/updater-config.test.ts` | Contract | 2 | **Full** - compiled-in updater pubkey equals the canonical BEDF931CA1D6C777 key, asserted from the key bytes (MUT-49, ADR-031) |
+| `src/lib/__tests__/updater-capabilities.test.ts` | Contract | 2 | **Full** - `capabilities/default.json` grants `updater:default` and `process:allow-restart` (MUT-99) |
 
 #### Page Component Tests (Added 2026-03-14)
 | File | Type | Tests | Coverage |
@@ -1613,7 +1614,7 @@ Plan: `.claude/designs/mut-73-retire-sync-tests.md`. ADR-053.
 
 **Desktop smoke, as run.** The method is in PATTERNS, "Smoke a desktop debug build without touching the owner's data".
 - **Isolation:** the identifier was overridden, the binary was copied under a unique name, and the owner's `~/Library/WebKit/app` and `~/Library/WebKit/com.elmokhtbr.mutaba3a` mtimes were unchanged afterwards. The isolated directories were deleted.
-- **Updater, with the shipped capabilities:** `plugin:updater|check` was rejected with "not allowed". `capabilities/default.json` grants no updater permission, so the in-app update check cannot run in any shipped build. This predates MUT-73 and is unrelated to it; it was reported for a ticket.
+- **Updater, with the shipped capabilities:** `plugin:updater|check` was rejected with "not allowed". `capabilities/default.json` grants no updater permission, so the in-app update check cannot run in any shipped build. This predates MUT-73 and is unrelated to it; it was reported for a ticket. **Fixed 2026-10-13 (MUT-99):** `updater:default` and `process:allow-restart` are now granted; see `updater-capabilities.test.ts`.
 - **Updater, with the permission added inline for the smoke only:** the check reached GitHub over TLS and resolved "no newer version". There was nothing on stderr. This is the `ring`-only `rustls` path; `tauri-plugin-updater` installs that provider itself when none is set.
 
 **Browser note.** While files were being deleted under a running dev server, Vite's hot reload logged `removeChild` and `createRoot` errors. That was a dev-only artefact; clean page loads afterwards logged nothing.

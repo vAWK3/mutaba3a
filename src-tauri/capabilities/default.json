@@ -8,6 +8,8 @@
   "permissions": [
     "core:default",
     "fs:default",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "fs:allow-mkdir",
       "allow": [{ "path": "$DOCUMENT/Mutaba3a/**" }]
