@@ -87,7 +87,7 @@ describe('session-only scopes (MUT-42 D4)', () => {
   });
 
   it('grants both expense scopes to a session, from the matrix', () => {
-    expect(SESSION_ONLY_SCOPES).toEqual(['expenses:read', 'expenses:write', 'capture:write']);
+    expect(SESSION_ONLY_SCOPES).toEqual(['expenses:read', 'expenses:write', 'capture:write', 'conversions:read', 'conversions:write']);
     expect(sessionScopes()).toEqual(expect.arrayContaining(['expenses:read', 'expenses:write']));
   });
 

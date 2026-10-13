@@ -169,8 +169,8 @@ function send(h: Harness, op: Operation, headers: Record<string, string>, ids: R
 describe('every route sits inside the matrix', () => {
   it('reads a non-trivial inventory', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
-    // The portal's 20 ledger reads (MUT-38) and 5 expense reads (MUT-42).
-    expect(SESSION_READS.length).toBe(25);
+    // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42) and 2 conversion reads (MUT-161).
+    expect(SESSION_READS.length).toBe(27);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {

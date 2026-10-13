@@ -160,7 +160,7 @@ describe('the inbox (MUT-66)', () => {
   it('mints no new matrix domain for the inbox', () => {
     expect(WRITABILITY_MATRIX.map((r) => r.domain)).not.toContain('inbox');
     // MUT-61 minted `capture` on purpose; anything else appearing here is a new row nobody decided on.
-    expect(WRITABILITY_MATRIX.map((r) => r.domain)).toEqual(['integration', 'customers', 'projects', 'agreements', 'payments', 'attachments', 'summaries', 'audit', 'expenses', 'capture', 'identity']);
+    expect(WRITABILITY_MATRIX.map((r) => r.domain)).toEqual(['integration', 'customers', 'projects', 'agreements', 'payments', 'attachments', 'summaries', 'audit', 'expenses', 'capture', 'identity', 'conversions']);
   });
 });
 

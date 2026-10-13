@@ -1655,6 +1655,48 @@ export const ListExpensesQuerySchema = z.object({
 export const ExpenseIdParamSchema = z.object({ expenseId: uuid });
 export const ExpenseReceiptParamSchema = z.object({ expenseId: uuid, receiptId: uuid });
 
+const conversionNotes = z.string().max(4000);
+
+/** MUT-161: a logged currency conversion. Create + read only — no `version`, unlike Expense. */
+export const ConversionSchema = z
+  .object({
+    id: uuid,
+    occurredOn: IsoDateSchema,
+    /** The source leg. */
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    /** The destination leg. Never equal to `currency`. */
+    toAmount: AmountSchema,
+    toCurrency: CurrencySchema,
+    notes: z.string().nullable(),
+    createdByUserId: uuid,
+    createdAt: z.string().datetime(),
+  })
+  .openapi('Conversion');
+
+export const ConversionPageSchema = z.object({ items: z.array(ConversionSchema), nextCursor: z.string().nullable() }).openapi('ConversionPage');
+
+export const CreateConversionRequestSchema = z
+  .object({
+    occurredOn: IsoDateSchema,
+    amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
+    currency: CurrencySchema,
+    toAmount: AmountSchema.openapi({ description: 'Greater than zero, in toCurrency\'s fractional digits' }),
+    toCurrency: CurrencySchema,
+    notes: conversionNotes.optional(),
+  })
+  .strict()
+  .openapi('CreateConversionRequest');
+
+export const ListConversionsQuerySchema = z.object({
+  ...pageQuery,
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
+  to: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
+  currency: CurrencySchema.optional().openapi({ description: 'Matches either leg' }),
+});
+
+export const ConversionIdParamSchema = z.object({ conversionId: uuid });
+
 export const CreateReceiptUploadRequestSchema = z
   .object({ filename: z.string().min(1).max(200), mimeType: AttachmentMimeTypeSchema, sizeBytes: z.number().int().min(1).max(10 * 1024 * 1024) })
   .strict()

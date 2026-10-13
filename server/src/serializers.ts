@@ -6,6 +6,7 @@ import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
 import { allocationStateOf } from './payments/allocation-state.js';
 import type {
+  ConversionRecord,
   ExpenseCategoryRecord,
   ExpenseReceiptRecord,
   ExpenseRecord,
@@ -434,6 +435,20 @@ export function serializeFeeProposalSummary(p: FeeProposalRecord | null) {
 }
 
 /** MUT-42: the original amount, formatted in its own currency — never converted. */
+export function serializeConversion(c: ConversionRecord) {
+  return {
+    id: c.id,
+    occurredOn: c.occurredOn,
+    amount: formatMoney({ minor: c.amountMinor, currency: c.currency as Currency }),
+    currency: c.currency as Currency,
+    toAmount: formatMoney({ minor: c.toAmountMinor, currency: c.toCurrency as Currency }),
+    toCurrency: c.toCurrency as Currency,
+    notes: c.notes,
+    createdByUserId: c.createdByUserId,
+    createdAt: c.createdAt.toISOString(),
+  };
+}
+
 export function serializeExpense(e: ExpenseRecord) {
   return {
     id: e.id,

@@ -21,6 +21,7 @@ import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
 import { expenseCategoryRoutes } from './routes/expense-categories.js';
+import { conversionRoutes } from './routes/conversions.js';
 import { expenseRoutes } from './routes/expenses.js';
 import { incomeRoutes } from './routes/income.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
@@ -229,6 +230,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', expenseCategoryRoutes(store));
   app.route('/', incomeRoutes(store));
+  app.route('/', conversionRoutes(store));
   app.route('/', inboxRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
