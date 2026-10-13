@@ -421,3 +421,8 @@
   .hp-filter { min-width: calc(50% - var(--space-3)); }
   .hp-toast { inset-inline: var(--hp-gutter); max-width: none; }
 }
+
+/* ---------- Income drawers (MUT-133) ---------- */
+
+/* Disables the whole form while a save is in flight; no fieldset chrome. */
+.hp-form-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
