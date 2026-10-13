@@ -42,7 +42,17 @@ export function LandingHeader({ showCta = true }: LandingHeaderProps) {
       <header className="landing-header" data-scrolled={scrolled}>
         <div className="landing-container landing-header-bar">
           <a href="#top" className="landing-header-brand">
-            <Wordmark name={t('landing.header.wordmark')} markSize={BAR_MARK_SIZE} className="landing-wordmark" />
+            <Wordmark
+              name={
+                <>
+                  {/* Both names on wide screens; a phone has room for the active language's only (MUT-77, 375 AC) */}
+                  <span className="landing-wordmark-full">{t('landing.header.wordmark')}</span>
+                  <span className="landing-wordmark-short">{t('landing.header.wordmarkShort')}</span>
+                </>
+              }
+              markSize={BAR_MARK_SIZE}
+              className="landing-wordmark"
+            />
           </a>
           <div className="landing-header-actions">
             <button type="button" className="landing-lang-toggle" onClick={toggleLanguage}>

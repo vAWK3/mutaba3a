@@ -71,7 +71,12 @@
     opacity 0.15s ease;
 }
 
+/* A classed link is a control: hold its own colours over the global a:hover link
+   colour and underline (which out-rank a single class), or the label turns purple
+   on the purple-ink fill (the ticket's hover bug, MUT-77) */
 .hero-cta-primary:hover {
+  color: var(--bg);
+  text-decoration: none;
   opacity: 0.88;
 }
 

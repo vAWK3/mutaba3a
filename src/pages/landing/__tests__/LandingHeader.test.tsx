@@ -81,10 +81,12 @@ describe('LandingHeader', () => {
   it('names the product with the mark + name lockup, linking back to the top', () => {
     renderHeader();
     const banner = screen.getByRole('banner');
-    const home = screen.getByRole('link', { name: 'Mutaba3a · متابعة' });
-    expect(banner).toContainElement(home);
+    const home = banner.querySelector<HTMLAnchorElement>('.landing-header-brand')!;
     expect(home).toHaveAttribute('href', '#top');
     expect(home.querySelector('img')).toHaveAttribute('alt', '');
+    // Both names on wide screens, the active language's alone on a phone; CSS picks one (qa landing.spec @375)
+    expect(home.querySelector('.landing-wordmark-full')).toHaveTextContent('Mutaba3a · متابعة');
+    expect(home.querySelector('.landing-wordmark-short')).toHaveTextContent('Mutaba3a');
   });
 
   it.each([
@@ -146,9 +148,10 @@ describe('LandingHeader', () => {
     expect(banner).toHaveAttribute('data-scrolled', 'false');
   });
 
-  it('labels its button in Arabic too', () => {
+  it('labels its button, and names the product for phones, in Arabic too', () => {
     asDevice('mac');
     renderHeader({ language: 'ar' });
+    expect(document.querySelector('.landing-wordmark-short')).toHaveTextContent('متابعة');
     expect(headerCta()).toHaveTextContent('تحميل');
     expect(headerCta()).toHaveAccessibleName('تحميل لـ Mac');
   });

@@ -112,6 +112,11 @@
   border-radius: var(--radius-md);
 }
 
+.landing-header-brand:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
 .landing-header-brand:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -129,6 +134,21 @@
 
 .landing-wordmark .wordmark-mark {
   flex: none;
+}
+
+.landing-wordmark-short {
+  display: none;
+}
+
+/* A phone has room for the mark and one name beside the switch and the button */
+@media (max-width: 480px) {
+  .landing-wordmark-full {
+    display: none;
+  }
+
+  .landing-wordmark-short {
+    display: inline;
+  }
 }
 
 .landing-header-actions {
@@ -204,6 +224,8 @@
 }
 
 .landing-header-cta:hover {
+  color: var(--bg);
+  text-decoration: none;
   opacity: 0.88;
 }
 
@@ -692,6 +714,8 @@
 a.landing-get-it-option:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
+  color: var(--text);
+  text-decoration: none;
 }
 
 a.landing-get-it-option:active {

@@ -106,6 +106,11 @@ for (const scheme of SCHEMES) {
     await step('Check accessibility', async () => {
       await expectOnlyKnownAxeViolations(page, 'landing');
     });
+    await step('Scroll so the frosted bar and its button sit over a chapter (MUT-77), and check again', async () => {
+      await page.locator('[data-part="chapter-payment"]').scrollIntoViewIfNeeded();
+      await expect(page.locator('[data-part="header-cta"]')).toBeVisible();
+      await expectOnlyKnownAxeViolations(page, 'landing');
+    });
   });
 }
 

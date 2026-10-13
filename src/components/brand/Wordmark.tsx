@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { BrandMark } from './BrandMark';
 
 /** The mark's default size, about the cap height of a title-sized name beside it. */
@@ -5,7 +6,7 @@ const DEFAULT_MARK_SIZE = 28;
 
 interface WordmarkProps {
   /** The product name as this surface writes it (each surface has its own copy key). */
-  name: string;
+  name: ReactNode;
   /** The mark's width and height in CSS pixels. */
   markSize?: number;
   className?: string;
