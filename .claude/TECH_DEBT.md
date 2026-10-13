@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-105: Expenses have two sources of truth — `db.expenses` and legacy `kind:'expense'` transactions
+**Status**: Open
+**Ticket**: MUT-138
+**Added**: 2026-10-13 (MUT-94 review)
+**Priority**: Medium
+**Impact**: since MUT-14, real expense creation writes `db.expenses` only. But `ImportDataModal.tsx`/`ImportDataPage.tsx` still import expenses as `kind:'expense'` transactions into `db.transactions`, and demo seed data (`src/demo/seedData/transactions.ts`) does the same. Anything imported that way never appears on `/expenses` (which reads `db.expenses` exclusively), and `TransactionsPage.tsx`'s row-click handler for such a row opens the expense drawer with the transaction's id as `expenseId`, looking up the wrong table. MUT-94 made every totals reader (`transactionRepo.getOverviewTotals(ByCurrency)`, `projectSummaryRepo`, `InsightsPage`'s monthly trend) sum both sources additively so totals stay correct either way, but that's a totals-level patch, not a fix for the underlying two-table split.
+**Fix**: MUT-138 — Import should write `db.expenses` via `expenseRepo.create`, not `kind:'expense'` transactions; fix or confirm the TransactionsPage edit-routing for any pre-existing legacy rows.
+
 ### TD-104: A payment allocation or reversal that loses a deadlock answers 500
 **Status**: Open
 **Ticket**: MUT-130

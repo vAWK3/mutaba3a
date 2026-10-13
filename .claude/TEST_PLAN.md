@@ -1898,3 +1898,40 @@ built against this ticket's config shape).
 
 **Still not run (inherently manual, see `server/DEPLOYMENT.md` §4d):** Apple's AASA validator and Google's Digital Asset Links tester against a live deploy — no test harness in this repo calls either service's live infrastructure.
 
+## MUT-94 — Expenses "Total expenses" strip stale-source fix (2026-10-13)
+
+Root cause: since MUT-14, real expenses live in `db.expenses`, but
+`aggregateTransactionTotals*` only ever summed `expensesMinor` from
+`db.transactions`, which has held no real expense rows since. Fixed at the
+repository layer (`transactionRepo.getOverviewTotals(ByCurrency)`,
+`projectSummaryRepo.list`/`get`) and in `InsightsPage`'s monthly trend chart
+(a 4th reader with its own independent copy of the same bug), additively —
+`db.expenses` is summed alongside the legacy `db.transactions` `kind:'expense'`
+path (ADR-062), not instead of it, since demo seed data and CSV import still
+write that legacy shape (TD-105, follow-up MUT-138).
+
+| Area | File | What is pinned |
+|---|---|---|
+| New helpers | `src/db/__tests__/aggregations.test.ts` | `filterExpensesByDateAndCurrency`/`filterExpensesByEntity`/`filterExpensesByEntityAndDate`/`sumExpensesMinor`/`sumExpensesByCurrency` — empty input, date-range filter, currency filter, project/client entity filter, `deletedAt` exclusion |
+| Repository | `src/db/__tests__/transactionRepo.test.ts`, `src/db/__tests__/projectRepo.test.ts` | 5 existing tests that seeded `kind:'expense'` **transactions** (impossible via real app usage since MUT-14) switched to seed real `db.expenses` rows via `expenseRepo.create` — this is exactly the gap that let the bug ship; new `projectSummaryRepo.get` case covers the same for the single-project read path |
+| Expenses ledger | `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` | strip sums the `mockExpenses` fixture ($900, all USD), not a stale ₪0; a dedicated $42 case matches the ticket's literal acceptance criterion |
+| Insights | `src/pages/insights/__tests__/InsightsPage.test.tsx` | monthly trend's expense figure includes a `db.expenses`-sourced row on top of the legacy transaction-side one ($1,000 + $500 = $1,500) |
+
+**Scope note:** `clientSummaryRepo`/clients pages were checked and confirmed to
+never read `expensesMinor` (receivables/owed only) — not affected, no fix
+needed. `IncomePage` reads `useOverviewTotalsByCurrency` but only destructures
+`paidIncomeMinor`/`unpaidIncomeMinor` — unaffected visually, though the
+underlying totals it reads are now also correct. `getOverviewTotals`
+(singular-currency variant) has zero current UI callers; fixed anyway for
+consistency since it shares the same code path as `getOverviewTotalsByCurrency`.
+
+**What was run (Node 22):** `npx vitest run`: 228 files, 3,449 passed, 4
+skipped; `npm run lint` 0 errors (12 pre-existing warnings, none in touched
+files); `npm run typecheck` clean; `npm run build` (web) clean.
+
+**Out of scope, filed separately:** MUT-138 — Import Data writes expense rows
+as `kind:'expense'` transactions instead of `db.expenses`, so imported
+expenses never appear on `/expenses`; `TransactionsPage`'s row-click handler
+for such a legacy row also looks up the wrong table for editing. Found while
+tracing this bug's full reader graph, not built here.
+
