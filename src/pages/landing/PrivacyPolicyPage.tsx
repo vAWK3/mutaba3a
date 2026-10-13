@@ -6,16 +6,23 @@ import { LandingHeader, LandingFooter } from './components';
 const SECTION_KEYS = [
   'scope',
   'dataStorage',
+  'mobile',
   'whatYouEnter',
   'network',
+  'sharing',
+  'security',
   'noTracking',
   'yourControl',
+  'mobileDeletion',
   'children',
   'changes',
   'contact',
 ] as const;
 
-/** The policy for the apps this landing page actually offers (Mac, Windows, browser) — no hosted product. */
+/**
+ * The policy for every Mutaba3a app: the local-only Mac, Windows, and browser apps, and the
+ * account-based iPhone and Android apps that store data on the hosted API (Google Cloud).
+ */
 export function PrivacyPolicyPage() {
   const t = useT();
 

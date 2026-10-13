@@ -1244,31 +1244,47 @@
     "privacyPolicy": {
       "title": "Privacy Policy",
       "updated": "Last updated October 13, 2026",
-      "intro": "This policy covers Mutaba3a's free apps for Mac, Windows, and the browser — the ones linked from this page. It does not cover any other product.",
+      "intro": "This policy covers Mutaba3a's apps for Mac, Windows, the browser, iPhone, and Android. They handle your data in two different ways, so we explain each one. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
         "title": "The short version",
-        "body": "Mutaba3a keeps your business data on your own device. We don't run a server that stores it, we don't ask you to create an account, and we don't track you."
+        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter is sent to us. The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use analytics, ads, or tracking, and we never sell your data."
       },
       "dataStorage": {
-        "title": "Where your data lives",
+        "title": "Mac, Windows, and the browser: your data stays on your device",
         "body": "Everything you enter — clients, projects, income, expenses, and receipts — is stored locally: in your browser's storage when you use the web app, or in a local database file when you use the Mac or Windows app. We never see it, and it never leaves your device unless you choose to export it."
+      },
+      "mobile": {
+        "title": "iPhone and Android: your account and our servers",
+        "body": "The mobile apps need an account, which your organization or we set up for you. There's no public sign-up. When you sign in, we keep your email address, display name, language, and which business profiles you can use. What you enter is stored on Mutaba3a's servers, and a copy is kept on your phone so the app works offline. Entries you make while offline are saved on your phone and uploaded once you're back online. Signing out ends your session on our servers. Entries that haven't uploaded yet stay on the phone and upload after you sign in again."
       },
       "whatYouEnter": {
         "title": "What you enter",
-        "body": "You control what goes into Mutaba3a: client names and contact details, project and income records, optional expenses, and any receipts you attach. None of this is sent to us."
+        "body": "You control what goes into Mutaba3a: client names and contact details, projects, income records, optional expenses, notes, and any receipts you attach. On Mac, Windows, and in the browser, none of this is sent to us. In the mobile apps, it's sent to our servers so it can be stored with your account. On iPhone, you can share a photo or PDF of a receipt into Mutaba3a. It's uploaded to private cloud storage and attached to the expense."
       },
       "network": {
-        "title": "The few things that reach the network",
-        "body": "The app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Both are plain, unauthenticated requests — no account, no personal data attached."
+        "title": "What reaches the network",
+        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
+      },
+      "sharing": {
+        "title": "Who else handles your data",
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+      },
+      "security": {
+        "title": "Keeping the mobile apps secure",
+        "body": "Your password is stored on our servers only as a secure hash, and never on your phone. Your sign-in session is kept in the iPhone Keychain or in Android's encrypted storage. You can turn on App Lock so opening the app needs Face ID, Touch ID, your fingerprint, or your device passcode. That check happens on your device, and Mutaba3a never receives your biometric data. The mobile apps don't use your camera, contacts, or location, and they only see a photo or file when you choose to share it into the app."
       },
       "noTracking": {
-        "title": "No accounts, no analytics, no ads",
-        "body": "Mutaba3a doesn't use analytics, advertising, or tracking scripts of any kind, and there's no sign-up or login for the apps linked from this page."
+        "title": "No analytics, no ads, no tracking",
+        "body": "None of Mutaba3a's apps use analytics, advertising, crash reporting, or tracking of any kind. The Mac, Windows, and browser apps have no sign-up or login at all. Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
       },
       "yourControl": {
-        "title": "Exporting, importing, and deleting your data",
+        "title": "Mac, Windows, and the browser: exporting and deleting your data",
         "body": "You can export a full backup of your data as a file at any time, and import it back in. Deleting your data is just as direct: clearing the app's storage (or uninstalling the desktop app) removes it completely, because there's no copy anywhere else."
+      },
+      "mobileDeletion": {
+        "title": "Deleting your account and mobile data",
+        "body": "You can delete individual entries in the mobile apps. To delete your whole account and everything stored with it, email info@malafat.app from your account's email address, and we'll do it within 30 days. Records in a business profile that belongs to your organization are your organization's, so we handle those together with them. Copies in our backups expire within 14 days of deletion. Signing out and uninstalling the app removes Mutaba3a's data from your phone."
       },
       "children": {
         "title": "Children's privacy",

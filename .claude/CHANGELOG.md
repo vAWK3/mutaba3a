@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Privacy policy covers the iPhone and Android apps
+
+**Why:** `/privacy` covered only the local-only Mac, Windows and browser apps, and said there was no account, no server and that data never leaves the device. None of that holds for the Flutter iPhone/Android apps (`mutaba3a-flutter`). They sign in with email and password against the hosted API (device sessions, MUT-64), store entries on Cloud Run/Cloud SQL (`me-west1`), upload receipts to a private GCS bucket, and keep a Drift cache plus an offline outbox on the phone. Facts were taken from that app's code and `server/infrastructure/terraform`. The apps have no analytics or crash SDKs, and no push or exchange-rate calls.
+
+### Changed
+- `landing.privacyPolicy.*` (en + ar): rewritten around the two ways the apps handle data. New sections: `mobile` (account, server storage, offline cache, sign-out behaviour), `sharing` (Google Cloud as the only processor, Malafat-linked profiles, no selling), `security` (argon2 hash, Keychain/EncryptedSharedPreferences, App Lock with on-device biometrics, no camera/contacts/location), and `mobileDeletion` (in-app per-entry delete; full account deletion by emailing info@malafat.app within 30 days; backups expire within 14 days). `scope`, `whatYouEnter`, `network` and `noTracking` now separate desktop/web from mobile and mention server request logs. The desktop/web `dataStorage` and `yourControl` sections now name their platforms.
+- `PrivacyPolicyPage.tsx`: four new section keys, and the doc comment no longer says "no hosted product".
+
+### Technical
+- `PrivacyPolicyPage.test.tsx`: the "names no hosted product" assertion is replaced by tests for: the intro names all five platforms; a mobile section names the account and Google Cloud; the deletion section gives the contact address.
+- Arabic keeps "Malafat" in Latin script, because "ملفات" already means business profiles in this UI.
+
+---
+
 ## [Unreleased] - 2026-10-13 — fix flaky test timeouts that broke `make release full`'s web leg (TD-073)
 
 **Why:** `make release full` deployed the API (commit `12492d5`, api v0.3.4) but `release-web`'s `npm run test:run` gate failed with 9 tests timing out at the 5 s default across `ConversionDrawer.test.tsx`, `ExpenseDrawer.oneTimeFields.test.tsx`, `visitorSample.test.ts`, `ProfileSwitcher.test.tsx` and `SavedFlashAnnouncer.test.tsx`. All 9 passed immediately in isolation — this is TD-073 (full-suite CPU contention on an 11-core machine against the 5 s default, logged 2026-10-12), not a product regression, and it blocked the web deploy before any version bump, commit or push (nothing shipped on the web side).

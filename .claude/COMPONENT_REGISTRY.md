@@ -360,7 +360,7 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 ### PrivacyPolicyPage
 **Location**: `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`
-**Purpose**: The full privacy policy at `/privacy`, scoped to exactly what the landing page offers (Mac, Windows, browser — never the hosted product). Reuses `LandingHeader`/`LandingFooter` and `LandingPage.css`'s container/section tokens; copy is `landing.privacyPolicy.*` in `en.json`/`ar.json`. Routed client-side only (`src/main.tsx`, same pattern as `/download`) — no server/router change.
+**Purpose**: The full privacy policy at `/privacy`, covering the local-only Mac, Windows and browser apps and the account-based iPhone/Android apps (hosted API on Google Cloud), each described separately. Reuses `LandingHeader`/`LandingFooter` and `LandingPage.css`'s container/section tokens; copy is `landing.privacyPolicy.*` in `en.json`/`ar.json`. Routed client-side only (`src/main.tsx`, same pattern as `/download`) — no server/router change.
 
 Tests: `src/pages/landing/__tests__/`.
 
