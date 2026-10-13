@@ -18,7 +18,12 @@ export type Access = 'read-write' | 'read' | 'none';
 export type WriterOfRecord = 'MALAFAT' | 'USER' | null;
 /** The two columns of the matrix that are enforced on the server. */
 export type Principal = 'apiKey' | 'session';
-/** Whose ledger a hosted profile is: Malafat's when its integration is CONNECTED, otherwise null (a personal profile). */
+/**
+ * Whose ledger a hosted profile is: Malafat's when its integration is CONNECTED,
+ * otherwise null (a personal profile in MUT-65's sense). Null also covers a firm
+ * with no Malafat link; a person's own profile (MUT-120) is
+ * `organization.personalOwnerUserId`, not this.
+ */
 export type ProfileWriter = 'MALAFAT' | null;
 
 export interface MatrixRow {

@@ -2,13 +2,15 @@ import type { ExpenseCategoryInput } from '../repositories/ports.js';
 import type { ProfileWriter } from '../auth/writability.js';
 
 /**
- * Expense category presets (MUT-42 D2), copied from the offline app's
- * `src/db/defaultExpenseCategories.ts` because the server is a separate
- * package. `presets.test.ts` reads that file and fails if the two drift.
+ * Expense category presets (MUT-42 D2). The general and law-firm ones are
+ * copied from the offline app's `src/db/defaultExpenseCategories.ts` because
+ * the server is a separate package; `presets.test.ts` reads that file and
+ * fails if the two drift. The personal one (MAL-1118) is server-only: the
+ * offline app has no personal profile to give it to.
  *
  * A hosted profile's first category list seeds one of them in the signed-in
- * user's language: the law-firm preset where Malafat is the writer of record,
- * the general one on a personal profile.
+ * user's language: law-firm where Malafat is the writer of record, personal on
+ * a person's own profile (MUT-120), general on any other firm.
  */
 export interface CategoryTemplate {
   name: string;
@@ -54,10 +56,29 @@ export const LAW_FIRM_PRESET: readonly CategoryTemplate[] = [
   { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
-export type PresetName = 'lawFirm' | 'general';
+/** MAL-1118: a person's day-to-day spending, not a business ledger. */
+export const PERSONAL_PRESET: readonly CategoryTemplate[] = [
+  { name: 'Transportation', nameAr: 'المواصلات', color: '#0ea5e9' },
+  { name: 'Car', nameAr: 'السيارة', color: '#ef4444' },
+  { name: 'Rent', nameAr: 'الإيجار', color: '#6366f1' },
+  { name: 'Groceries', nameAr: 'البقالة', color: '#22c55e' },
+  { name: 'Supplies', nameAr: 'المستلزمات', color: '#14b8a6' },
+  { name: 'Gifts', nameAr: 'الهدايا', color: '#ec4899' },
+  { name: 'Investments', nameAr: 'الاستثمارات', color: '#a855f7' },
+  { name: 'Projects', nameAr: 'المشاريع', color: '#3b82f6' },
+  { name: 'Leisure', nameAr: 'الترفيه', color: '#f59e0b' },
+  { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
+];
 
-export function presetFor(writer: ProfileWriter, locale: 'en' | 'ar'): { preset: PresetName; categories: ExpenseCategoryInput[] } {
-  const preset: PresetName = writer === 'MALAFAT' ? 'lawFirm' : 'general';
-  const templates = preset === 'lawFirm' ? LAW_FIRM_PRESET : GENERAL_PRESET;
-  return { preset, categories: templates.map((t) => ({ name: locale === 'ar' ? t.nameAr : t.name, color: t.color })) };
+export type PresetName = 'lawFirm' | 'personal' | 'general';
+
+const PRESETS: Record<PresetName, readonly CategoryTemplate[]> = { lawFirm: LAW_FIRM_PRESET, personal: PERSONAL_PRESET, general: GENERAL_PRESET };
+
+/**
+ * `personal` is the organization's MUT-120 mark (`personalOwnerUserId` set),
+ * not "no Malafat link": a firm without one keeps the general preset.
+ */
+export function presetFor(profile: { writerOfRecord: ProfileWriter; personal: boolean }, locale: 'en' | 'ar'): { preset: PresetName; categories: ExpenseCategoryInput[] } {
+  const preset: PresetName = profile.writerOfRecord === 'MALAFAT' ? 'lawFirm' : profile.personal ? 'personal' : 'general';
+  return { preset, categories: PRESETS[preset].map((t) => ({ name: locale === 'ar' ? t.nameAr : t.name, color: t.color })) };
 }

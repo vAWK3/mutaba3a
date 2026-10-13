@@ -3,7 +3,7 @@ import pino from 'pino';
 import { createApp } from '../app.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { SCOPES } from '../auth/scopes.js';
-import { GENERAL_PRESET, LAW_FIRM_PRESET } from '../expenses/presets.js';
+import { GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET } from '../expenses/presets.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
@@ -70,7 +70,7 @@ async function partner(h: Harness, organizationIds: string[], locale: 'en' | 'ar
   // MUT-64: the same person's device-session bearer token, for the "a device session can write expenses too" check.
   const deviceRes = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.initialPassword })));
   const asDevice = (profile: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${deviceRes.token}`, 'x-mutaba3a-profile': profile, ...extra });
-  return { as, asDevice, userId: created.user.id as string };
+  return { as, asDevice, userId: created.user.id as string, personalProfileId: created.personalProfile.id as string };
 }
 
 async function setup(opts: { bucket?: boolean; locale?: 'en' | 'ar' } = {}) {
@@ -363,11 +363,27 @@ describe('expense categories', () => {
     expect(seeded[0]).toMatchObject({ actorType: 'SYSTEM', actorId: null, metadata: { preset: 'lawFirm', count: LAW_FIRM_PRESET.length } });
   });
 
-  it('seeds the general preset on a personal profile', async () => {
+  it('keeps the general preset on a firm with no Malafat link', async () => {
     const { h, b, p } = await setup();
     const items = (await read(await h.app.request('/v1/expense-categories', { headers: p.as(b.org.id) }))).items;
     expect(items.map((c: Loose) => c.name)).toEqual(GENERAL_PRESET.map((c) => c.name));
+    const seeded = (await h.store.audit.list(b.org.id, { action: 'expense_category.seeded' }, { limit: 10, cursor: null })).items;
+    expect(seeded[0]).toMatchObject({ metadata: { preset: 'general', count: GENERAL_PRESET.length } });
   });
+
+  // MAL-1118: a person's own profile (MUT-120) seeds the personal preset, in their language.
+  for (const locale of ['en', 'ar'] as const) {
+    it(`seeds the personal preset on a personal profile, in ${locale === 'en' ? 'English' : 'Arabic'}, once, as SYSTEM`, async () => {
+      const { h, p } = await setup({ locale });
+      const list = () => h.app.request('/v1/expense-categories', { headers: p.as(p.personalProfileId) });
+      const first = await read(await list());
+      expect(first.items.map((c: Loose) => ({ name: c.name, color: c.color }))).toEqual(PERSONAL_PRESET.map((c) => ({ name: locale === 'ar' ? c.nameAr : c.name, color: c.color })));
+      await list();
+      const seeded = (await h.store.audit.list(p.personalProfileId, { action: 'expense_category.seeded' }, { limit: 10, cursor: null })).items;
+      expect(seeded).toHaveLength(1);
+      expect(seeded[0]).toMatchObject({ actorType: 'SYSTEM', actorId: null, metadata: { preset: 'personal', count: PERSONAL_PRESET.length, locale } });
+    });
+  }
 
   it('creates, refuses a duplicate in any case, renames, recolours and archives', async () => {
     const { h, a, p } = await setup();
