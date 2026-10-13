@@ -369,22 +369,6 @@ export const transactionRepo = {
     const existing = await db.transactions.get(id);
     if (!existing) return;
 
-    // If transaction is locked, only allow archivedAt updates
-    if (existing.lockedAt) {
-      const allowedFields = ['archivedAt'];
-      const attemptedFields = Object.keys(data).filter(
-        (key) => key !== 'updatedAt' && !allowedFields.includes(key)
-      );
-
-      if (attemptedFields.length > 0) {
-        throw new TransactionLockedError(
-          `Transaction is locked by document ${existing.lockedByDocumentId}. Only archive/unarchive is allowed.`,
-          id,
-          existing.lockedByDocumentId
-        );
-      }
-    }
-
     const paymentStateSent = PAYMENT_STATE_KEYS.some((key) => key in data);
     const amountChanged = data.amountMinor !== undefined && data.amountMinor !== existing.amountMinor;
     const currencyChanged = data.currency !== undefined && data.currency !== existing.currency;
@@ -481,16 +465,6 @@ export const transactionRepo = {
   },
 
   async softDelete(id: string): Promise<void> {
-    // A transaction locked by an exported document cannot be deleted either
-    // (MUT-13): the lock would otherwise hold for edits but not for removal.
-    const existing = await db.transactions.get(id);
-    if (existing?.lockedAt) {
-      throw new TransactionLockedError(
-        `Transaction is locked by document ${existing.lockedByDocumentId}. Only archive/unarchive is allowed.`,
-        id,
-        existing.lockedByDocumentId
-      );
-    }
     await db.transactions.update(id, { deletedAt: nowISO(), updatedAt: nowISO() });
   },
 
@@ -507,14 +481,6 @@ export const transactionRepo = {
    */
   async unarchive(id: string): Promise<void> {
     await db.transactions.update(id, { archivedAt: undefined, updatedAt: nowISO() });
-  },
-
-  /**
-   * Check if a transaction is locked.
-   */
-  async isLocked(id: string): Promise<boolean> {
-    const tx = await db.transactions.get(id);
-    return !!tx?.lockedAt;
   },
 
   async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals> {
@@ -1135,18 +1101,6 @@ export class DuplicateDocumentNumberError extends Error {
   }
 }
 
-// Custom error for transaction lock violations
-export class TransactionLockedError extends Error {
-  transactionId: string;
-  lockedByDocumentId?: string;
-  constructor(message: string, transactionId: string, lockedByDocumentId?: string) {
-    super(message);
-    this.name = 'TransactionLockedError';
-    this.transactionId = transactionId;
-    this.lockedByDocumentId = lockedByDocumentId;
-  }
-}
-
 // Custom error for partial payment violations
 export class PartialPaymentError extends Error {
   transactionId: string;
@@ -1518,15 +1472,10 @@ export const documentRepo = {
 /**
  * Recalculate a transaction's receivedAmountMinor from its payment records.
  *
- * This is the sanctioned payment-side writer. It uses db.transactions.update()
- * directly and therefore does not pass through transactionRepo.update()'s
- * lockedAt guard, by design (ADR-030): lockedAt exists for ADR-014 document
- * immutability and protects the *invoice facts* -- amount, currency, client,
- * date. receivedAmountMinor / status / paidAt are payment tracking, and paying
- * an invoiced receivable is the normal flow. Do not "fix" this by routing it
- * through transactionRepo.update(); that would block payments on every
- * invoiced receivable. The behaviour is pinned by a test in
- * __tests__/paymentRecords.test.ts ("locked transactions").
+ * This is the sanctioned payment-side writer: receivedAmountMinor / status /
+ * paidAt are payment tracking owned by the payment records (ADR-039), so it
+ * writes db.transactions.update() directly. (The document lock this comment
+ * once explained was removed with documents in MUT-145.)
  */
 async function recalculateReceivedAmount(transactionId: string): Promise<void> {
   const tx = await db.transactions.get(transactionId);

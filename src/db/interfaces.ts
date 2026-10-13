@@ -110,7 +110,6 @@ export interface ITransactionRepository
   softDelete(id: string): Promise<void>;
   archive(id: string): Promise<void>;
   unarchive(id: string): Promise<void>;
-  isLocked(id: string): Promise<boolean>;
   getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals>;
   getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency>;
   getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]>;

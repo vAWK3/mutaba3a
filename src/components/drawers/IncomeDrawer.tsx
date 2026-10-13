@@ -10,13 +10,11 @@ import {
   useDeleteTransaction,
   useProjects,
   useBusinessProfiles,
-  useDocument,
   usePaymentRecords,
   useSettings,
   useClients,
 } from '../../hooks/useQueries';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
-import { useNavigate } from '@tanstack/react-router';
 import { Select } from '../ui';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useActiveProfile } from '../../hooks/useActiveProfile';
@@ -115,20 +113,7 @@ export function IncomeDrawer() {
   const deleteMutation = useDeleteTransaction();
   const markSaved = useSavedFlashStore((s) => s.markSaved);
 
-  // Document lock (MUT-13): an entry exported on a document is immutable in
-  // the repository regardless of the Invoices switch; the drawer says so up
-  // front instead of letting the save fail.
-  const isLocked = mode === 'edit' && !!existingTx?.lockedAt;
-  const invoicesEnabled = useFeatureEnabled('invoices');
   const projectsEnabled = useFeatureEnabled('projects');
-  const navigate = useNavigate();
-  const { data: lockingDocument } = useDocument(existingTx?.lockedByDocumentId || '');
-  const openLockingDocument = () => {
-    const documentId = existingTx?.lockedByDocumentId;
-    if (!documentId) return;
-    closeIncomeDrawer();
-    navigate({ to: '/documents/$documentId', params: { documentId } });
-  };
 
   // Payment records own this entry's payment state (ADR-030, ADR-039). Until
   // they have loaded the drawer can't know, so status, currency and Save wait.
@@ -264,7 +249,7 @@ export function IncomeDrawer() {
   };
 
   const onSubmit = async (data: FormData) => {
-    if (isLocked || recordsPending) return; // the notice explains / the records are still loading
+    if (recordsPending) return; // the records are still loading
     const amountMinor = parseAmountInput(data.amount, { currency: data.currency });
     if (amountMinor === null) return; // the schema already reported it
 
@@ -338,9 +323,7 @@ export function IncomeDrawer() {
       const message =
         name === 'PaymentRecordError'
           ? t('drawer.income.savePaymentsChanged')
-          : name === 'TransactionLockedError'
-            ? t('drawer.income.locked.titleNoNumber')
-            : t('drawer.income.saveFailed');
+          : t('drawer.income.saveFailed');
       showToast(message, { type: 'error' });
     }
   };
@@ -454,7 +437,7 @@ export function IncomeDrawer() {
                 type="button"
                 className="btn btn-danger"
                 onClick={handleDelete}
-                disabled={deleteMutation.isPending || isLocked}
+                disabled={deleteMutation.isPending}
               >
                 {t('common.delete')}
               </button>
@@ -468,7 +451,7 @@ export function IncomeDrawer() {
               type="submit"
               form="income-form"
               className="btn btn-primary"
-              disabled={isSubmitting || isLocked || recordsPending}
+              disabled={isSubmitting || recordsPending}
             >
               {isSubmitting ? t('common.saving') : t('common.save')}
             </button>
@@ -477,24 +460,6 @@ export function IncomeDrawer() {
       }
     >
       <form id="income-form" onSubmit={handleFormSubmit} noValidate>
-        {isLocked && (
-          <div className="drawer-notice drawer-notice-locked" role="status" data-testid="income-locked-notice">
-            <div className="drawer-notice-title">
-              {lockingDocument?.number
-                ? t('drawer.income.locked.title', { number: lockingDocument.number })
-                : t('drawer.income.locked.titleNoNumber')}
-            </div>
-            <div className="drawer-notice-body">{t('drawer.income.locked.body')}</div>
-            {invoicesEnabled ? (
-              <button type="button" className="btn btn-sm btn-secondary" onClick={openLockingDocument}>
-                {t('drawer.income.locked.viewDocument')}
-              </button>
-            ) : (
-              <div className="drawer-notice-body text-muted">{t('drawer.income.locked.turnOnInvoices')}</div>
-            )}
-          </div>
-        )}
-
         {recordsFailed && (
           <div className="drawer-notice" role="alert" data-testid="income-records-failed">
             <div className="drawer-notice-body">{t('drawer.income.paymentsLoadFailed')}</div>
