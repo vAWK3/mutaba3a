@@ -169,7 +169,7 @@ describe('Migration v21 — device sync tables are dropped (MUT-73, ADR-053)', (
 
     const upgraded = await openCurrent(name);
 
-    expect(upgraded.verno).toBe(21);
+    expect(upgraded.verno).toBe(22);
     expect(errors).not.toHaveBeenCalled();
   });
 
@@ -198,13 +198,13 @@ describe('Migration v21 — device sync tables are dropped (MUT-73, ADR-053)', (
   it('a fresh install is created at v21 and never has the sync tables', async () => {
     const fresh = await openCurrent(uniqueName());
 
-    expect(fresh.verno).toBe(21);
+    expect(fresh.verno).toBe(22);
     expect(SYNC_TABLES.filter((table) => storeNames(fresh).includes(table))).toEqual([]);
     expect(storeNames(fresh)).toEqual(expect.arrayContaining(USER_TABLES));
   });
 
-  it('the app database is at v21', () => {
-    expect(db.verno).toBe(21);
+  it('the app database is past v21 (now v22, MUT-88)', () => {
+    expect(db.verno).toBe(22);
   });
 });
 
@@ -241,7 +241,7 @@ describe('Migration safety after v20 → v21 (MUT-73)', () => {
 
     expect(result?.success).toBe(true);
     const backup = await getLatestBackup();
-    expect(backup?.version).toBe(21);
+    expect(backup?.version).toBe(22);
     expect(SYNC_TABLES.filter((table) => table in (backup?.tables ?? {}))).toEqual([]);
   });
 });

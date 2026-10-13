@@ -16,6 +16,7 @@
 // Merge adds data; it never rewrites the chosen profile's own fields.
 
 import { db } from './database';
+import { enforceSingleDefaultProfile } from './profileDefault';
 import type { BusinessProfile, Client, FxRate, Project, Transaction } from '../types';
 import type { Document, DocumentSequence } from './retained/documentSchema';
 
@@ -83,6 +84,7 @@ export async function importProfileFile(file: ProfileExportFile, target: Profile
         createdAt: now,
         updatedAt: now,
       });
+      await enforceSingleDefaultProfile(db.businessProfiles, target.makeDefault ? profileId : undefined);
       result.profiles = 1;
     } else {
       profileId = target.profileId;

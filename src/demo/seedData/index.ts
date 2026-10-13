@@ -6,6 +6,7 @@
  */
 
 import { db } from '../../db/database';
+import { enforceSingleDefaultProfile } from '../../db/profileDefault';
 import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
 import { settingsRepo } from '../../db/repository';
 import type { FeatureKey } from '../../types';
@@ -137,6 +138,9 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
     async () => {
       // Insert in dependency order
       await db.businessProfiles.bulkPut(profiles);
+      // The existingDefault read above ran outside this transaction; settle the
+      // default here so a profile created meanwhile keeps it (MUT-88, ADR-071).
+      await enforceSingleDefaultProfile(db.businessProfiles);
       await db.clients.bulkPut(clients);
       await db.projects.bulkPut(projects);
       await db.categories.bulkPut(categories);

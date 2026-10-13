@@ -128,12 +128,15 @@ describe('businessProfileRepo', () => {
       expect(fetched?.isDefault).toBe(true);
     });
 
-    it('should return undefined if no default exists', async () => {
-      await businessProfileRepo.create(createTestProfile({ isDefault: false }));
+    // MUT-88 (ADR-071): while any active profile exists, one of them is the
+    // default; a list with no default can no longer be written.
+    it('makes the only active profile the default even when created as non-default', async () => {
+      const only = await businessProfileRepo.create(createTestProfile({ isDefault: false }));
 
       const fetched = await businessProfileRepo.getDefault();
 
-      expect(fetched).toBeUndefined();
+      expect(fetched?.id).toBe(only.id);
+      expect(only.isDefault).toBe(true);
     });
 
     it('should not return archived default profiles', async () => {
@@ -211,6 +214,53 @@ describe('businessProfileRepo', () => {
       expect(archivedFirst?.archivedAt).toBeDefined();
       expect(archivedFirst?.isDefault).toBe(false);
       expect(updatedSecond?.isDefault).toBe(true);
+    });
+  });
+
+  // MUT-88 (ADR-071): exactly one default, decided by one rule for every writer.
+  describe('exactly one default', () => {
+    const at = (iso: string) => ({ createdAt: iso, updatedAt: iso });
+    const countDefaults = async () => (await db.businessProfiles.toArray()).filter((p) => p.isDefault).length;
+
+    it('never leaves two defaults after two default creates', async () => {
+      await businessProfileRepo.create(createTestProfile({ isDefault: true }));
+      await businessProfileRepo.create(createTestProfile({ name: 'Second', isDefault: true }));
+      expect(await countDefaults()).toBe(1);
+    });
+
+    it('archiving the default hands it to the earliest real profile, not a sample one', async () => {
+      await db.businessProfiles.bulkAdd([
+        { ...createTestProfile({ isDefault: true }), id: 'old-default', ...at('2026-01-01T00:00:00.000Z') },
+        { ...createTestProfile({ name: 'Sample' }), id: 'demo_business_profile_1', ...at('2026-02-01T00:00:00.000Z') },
+        { ...createTestProfile({ name: 'Later' }), id: 'later', ...at('2026-04-01T00:00:00.000Z') },
+        { ...createTestProfile({ name: 'Earlier' }), id: 'earlier', ...at('2026-03-01T00:00:00.000Z') },
+      ]);
+
+      await businessProfileRepo.archive('old-default');
+
+      expect((await businessProfileRepo.getDefault())?.id).toBe('earlier');
+      expect(await countDefaults()).toBe(1);
+    });
+
+    it('turning the only default off moves the flag to another active profile', async () => {
+      const first = await businessProfileRepo.create(createTestProfile({ isDefault: true }));
+      const second = await businessProfileRepo.create(createTestProfile({ name: 'Second' }));
+
+      await businessProfileRepo.update(first.id, { isDefault: false });
+
+      expect((await businessProfileRepo.getDefault())?.id).toBe(second.id);
+    });
+
+    it('repairs a table that already had two defaults on the next profile write', async () => {
+      await db.businessProfiles.bulkAdd([
+        { ...createTestProfile({ isDefault: true }), id: 'demo_business_profile_1', ...at('2026-01-01T00:00:00.000Z') },
+        { ...createTestProfile({ isDefault: true, name: 'Mine' }), id: 'mine', ...at('2026-05-01T00:00:00.000Z') },
+      ]);
+
+      await businessProfileRepo.update('mine', { name: 'Mine, renamed' });
+
+      expect((await businessProfileRepo.getDefault())?.id).toBe('mine');
+      expect(await countDefaults()).toBe(1);
     });
   });
 

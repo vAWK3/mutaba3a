@@ -89,9 +89,21 @@ describe('importProfileFile — create', () => {
     expect(result).toEqual({ profiles: 1, clients: 1, projects: 1, transactions: 1 });
   });
 
-  it('keeps a new profile non-default when told to', async () => {
+  it('keeps a new profile non-default when told to, next to an existing default', async () => {
+    await db.businessProfiles.add({ id: 'mine', name: 'Mine', defaultCurrency: 'USD', isDefault: true, createdAt: T, updatedAt: T } as BusinessProfile);
     await importProfileFile(exportFile(), { mode: 'create', makeDefault: false });
-    expect((await db.businessProfiles.toArray())[0].isDefault).toBe(false);
+    const imported = (await db.businessProfiles.toArray()).find((p) => p.id !== 'mine');
+    expect(imported?.isDefault).toBe(false);
+    expect((await db.businessProfiles.get('mine'))?.isDefault).toBe(true);
+  });
+
+  // MUT-88 (ADR-071): making the imported profile the default clears the old one.
+  it('makes the new profile the only default when told to', async () => {
+    await db.businessProfiles.add({ id: 'mine', name: 'Mine', defaultCurrency: 'USD', isDefault: true, createdAt: T, updatedAt: T } as BusinessProfile);
+    await importProfileFile(exportFile(), { mode: 'create', makeDefault: true });
+    const defaults = (await db.businessProfiles.toArray()).filter((p) => p.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].id).not.toBe('mine');
   });
 
   it('never links a new business to another business\'s client, even with the same email', async () => {

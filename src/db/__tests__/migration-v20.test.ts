@@ -50,7 +50,7 @@ afterEach(async () => {
 describe('Migration v20 — auto-enable optional areas that have data', () => {
   it('bumps the singleton past v20 without changing the settings index', () => {
     // v21 (MUT-73) only drops the sync tables, so the settings index is v20's.
-    expect(db.verno).toBe(21);
+    expect(db.verno).toBe(22);
     expect(db.settings.schema.primKey.name).toBe('id');
     expect(db.settings.schema.indexes).toHaveLength(0);
   });
@@ -73,7 +73,7 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
     });
 
     const upgraded = await openAtV20(name);
-    expect(upgraded.verno).toBe(21); // the v20 upgrade runs on the way to v21
+    expect(upgraded.verno).toBe(22); // the v20 upgrade runs on the way to the current version
 
     const row = (await upgraded.settings.get('default')) as Settings;
     // MUT-145: the document row no longer switches anything on (invoices is
@@ -117,7 +117,7 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
 
   it('starts a fresh database at v20 with everything off and no notice', async () => {
     const fresh = await openAtV20(uniqueName());
-    expect(fresh.verno).toBe(21);
+    expect(fresh.verno).toBe(22);
     expect(await fresh.settings.get('default')).toBeUndefined();
     expect(await fresh.settings.count()).toBe(0);
   });

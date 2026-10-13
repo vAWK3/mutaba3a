@@ -4,6 +4,7 @@
  */
 
 import { db } from './database';
+import { enforceSingleDefaultProfile } from './profileDefault';
 import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 
 export interface BackupData {
@@ -90,6 +91,9 @@ export async function restoreFromBackup(backupJson: string): Promise<{ recordsRe
         }
       }
     }
+
+    // An older backup can carry two defaults (MUT-88, ADR-071).
+    await enforceSingleDefaultProfile(db.businessProfiles);
   });
 
   // A backup from an older build carries a settings row without `features`;
