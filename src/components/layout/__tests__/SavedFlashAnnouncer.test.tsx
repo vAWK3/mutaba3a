@@ -6,6 +6,10 @@ import { useSavedFlashStore, type SavedFlash } from '../../../lib/savedFlashStor
 import { useProfileStore } from '../../../lib/profileStore';
 import { useToastStore } from '../../../lib/toastStore';
 
+// Rendering + waitFor under full-suite CPU contention take longer than alone;
+// the 5 s default turns that load into failures (TD-073).
+vi.setConfig({ testTimeout: 15_000 });
+
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,

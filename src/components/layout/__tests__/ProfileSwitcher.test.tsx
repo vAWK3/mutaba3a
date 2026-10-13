@@ -14,6 +14,10 @@ import * as useQueries from '../../../hooks/useQueries';
 import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 import type { BusinessProfile } from '../../../types';
 
+// Rendering under full-suite CPU contention takes longer than alone; the 5 s
+// default turns that load into failures (TD-073).
+vi.setConfig({ testTimeout: 15_000 });
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
     <a href={to} className={className}>

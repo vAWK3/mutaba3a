@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — fix flaky test timeouts that broke `make release full`'s web leg (TD-073)
+
+**Why:** `make release full` deployed the API (commit `12492d5`, api v0.3.4) but `release-web`'s `npm run test:run` gate failed with 9 tests timing out at the 5 s default across `ConversionDrawer.test.tsx`, `ExpenseDrawer.oneTimeFields.test.tsx`, `visitorSample.test.ts`, `ProfileSwitcher.test.tsx` and `SavedFlashAnnouncer.test.tsx`. All 9 passed immediately in isolation — this is TD-073 (full-suite CPU contention on an 11-core machine against the 5 s default, logged 2026-10-12), not a product regression, and it blocked the web deploy before any version bump, commit or push (nothing shipped on the web side).
+
+### Fixed
+- Added `vi.setConfig({ testTimeout: 15_000 })` to the 5 affected test files, matching the existing `migration-mut*.test.ts` precedent (those use 60 s for DB `createdb`/`dropdb` round-trips; 15 s is proportionate for a Dexie round-trip + userEvent render).
+- Verified with a clean, uncontended `npm run test:run`: 238 files, 3479 passed, 4 skipped, 0 failed (149 s). An earlier rerun showed 18 files / 50 tests failing, but that run had `npm run lint` running concurrently in the background — self-inflicted contention, not a real regression; discarded.
+- `npm run typecheck` clean.
+
+### Technical
+- TD-073 updated with today's instance and partial fix; still open for `IncomeDrawer.test.tsx`, the `routes-m6` ordering race, and the general ceiling (a vitest `projects` config with a higher default timeout for component/demo tests would close this for good instead of patching file by file).
+
+---
+
 ## [Unreleased] - 2026-10-13 — npm audit: 27 findings → 0 with in-major bumps only (chore/npm-audit-2026-10-13)
 
 **Why:** `npm ci` on main (9000d08) reported 27 vulnerabilities (1 low, 8 moderate, 17 high, 1 critical). All of them predate MUT-145. No major-version bump of a direct dependency was needed, so the release pipeline (`make`, `deploy.sh`, the Tauri build) absorbs nothing new.

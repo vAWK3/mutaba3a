@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +9,10 @@ import { expenseRepo, expenseCategoryRepo } from '../../db/expenseRepository';
 import { useDrawerStore } from '../../lib/stores';
 import { ExpenseDrawer } from '../drawers/ExpenseDrawer';
 import { LanguageProvider } from '../../lib/i18n';
+
+// userEvent + a real Dexie db round-trip take longer under full-suite CPU
+// contention than alone; the 5 s default turns that load into failures (TD-073).
+vi.setConfig({ testTimeout: 15_000 });
 
 /**
  * MUT-44: regression coverage for the one-time-expense fields now rendered by

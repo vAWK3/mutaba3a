@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { db } from '../../db/database';
 import { settingsRepo } from '../../db/repository';
 import { DEMO_ID_PREFIX } from '../constants';
@@ -8,6 +8,10 @@ import {
   leaveVisitorSample,
   readSampleSession,
 } from '../visitorSample';
+
+// Clearing/counting every Dexie table takes longer under full-suite CPU
+// contention than alone; the 5 s default turns that load into failures (TD-073).
+vi.setConfig({ testTimeout: 15_000 });
 
 async function clearDatabase() {
   await Promise.all(db.tables.map((table) => table.clear()));
