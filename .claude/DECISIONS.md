@@ -2482,6 +2482,7 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
      - A hovered primary button keeps that ring.
      - Focus rules never use a literal colour.
    - **Visited links.** `a:not([class]):visited` styles only unclassed links, so a link styled as a button never turns lavender-ink.
+   - **Hovered links (amendment 2026-10-14, TD-122).** The global hover is scoped the same way. `theme.css` sets `a:not([class]):hover { color: var(--link-hover) }` and `index.css` sets `a:not([class]):hover { text-decoration: underline }`. A classed link owns its hover. A control (a button, card, pill, nav or menu item, or row action) keeps its label colour and is never underlined. A classed inline text link declares `color` and `text-decoration: underline` on its own `:hover`. `brand.test.ts` guards both rules.
    - **The one exemption is the placeholder:** 85% ink2 toward field-bg, 5.02:1 light / 4.66:1 dark, floor 4.5:1 (tested). At full ink2 a hint reads as a typed value; axe does not check `::placeholder`.
 3. **Faces.** Thmanyah Sans for body text in both scripts, Thmanyah Serif Display for headings at 700, and IBM Plex Mono for figures.
    - **Weights.** Thmanyah ships 400/500/700, so a `--weight-semibold` (600) renders with the Bold file. Plex Mono ships 400/500 here, so a figure is 500. `html` sets `font-synthesis-weight: none`, so a figure that inherits 600 renders the 500 file rather than a faked bold.

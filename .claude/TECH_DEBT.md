@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-122: The global `a:hover` rule out-ranks every single-class link styled as a control
+**Status**: Resolved 2026-10-14 on `fix/td-122-classed-link-hover`. Both global rules read `a:not([class]):hover`. The audit of every classed `<a>` (`.claude/designs/td-122-classed-link-hover.md`) found 8 inline text links that relied on the global hover; each now declares its own colour and underline. The proofs are `brand.test.ts` and `qa/specs/web/link-hover.spec.ts` (`@web.brand.link-hover`). The entry was first filed on the MUT-77 branch; when that branch merges, keep this resolved copy.
+**Ticket**: MUT-77 (found by `@web.landing.hover-light`)
+**Added**: 2026-10-14
+**Priority**: Medium
+**Impact**: `theme.css` `a:hover { color: var(--link-hover) }` and `index.css` `a:hover { text-decoration: underline }` are (0,1,1), so they beat a single-class link's base rule. A link styled as a control turned link-coloured and underlined on hover unless it set its own `:hover`. That put a purple label on a purple fill: the hero button, Settings › About's `.btn` links, and /download's buttons. The sidebar mark and Home's Needs attention client link also turned purple and underlined.
+**Fix**: Done as described in Status.
+
 ### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
 **Status**: Resolved 2026-10-14. `generateSchedule` steps an integer month index (`year * 12 + month`) from the start date's own year and month, builds each period with `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate`, and stops when the period start is past `horizon` (string compare). Four `retainerRepo.test.ts` cases pin it (31st monthly, leap February, 31st quarterly, 1st in New York).
 **Added**: 2026-10-14 (found while fixing the retainer "today", TD-014)

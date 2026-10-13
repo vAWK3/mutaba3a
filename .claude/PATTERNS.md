@@ -2151,3 +2151,14 @@ Export → Import round trip in `ImportDataPage.test.tsx`).
 
 **Never**: put file contents in the URL or history state, or ask the person to pick the same file twice.
 
+### Pattern: A classed link owns its hover (TD-122)
+
+**When**: you write an `<a>` or `<Link>` with a `className`.
+
+**How**: the global link hover (`--link-hover` plus an underline) applies only to `a:not([class])`, like `:visited`. A class makes the link one of two kinds:
+- **Control** (a button, card, pill, nav or menu item, or row action): set `text-decoration: none`. Its label keeps its colour on hover unless its own `:hover` sets one (`.btn-ghost` goes to `--text`).
+- **Inline text link** (a breadcrumb, a name in a table, a back link, a footer or download link): declare `color: var(--link-hover)` (or the colour it wants) and `text-decoration: underline` on its own `:hover`. Add it to `TEXT_LINKS` in `brand.test.ts`.
+
+**Never**: write a bare `a:hover` or `a:visited`. At (0,1,1) it beats every single-class colour, and `brand.test.ts` fails on it.
+
+**Instances**: `theme.css`, `index.css`. Text links: `.breadcrumb-link`, `.client-index-name`, `.feature-notice-banner-action`, `.hp-back`, `.hero-cta-alt`, `.privacy-policy-back`, `.download-link`, `.download-alt-link`.

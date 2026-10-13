@@ -87,6 +87,13 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ## Current Test Coverage
 
+### Classed-link hover (TD-122, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/styles/__tests__/brand.test.ts` › tokens | Unit (node, CSS) | No stylesheet in `src/` has a bare `a:hover`; `theme.css` and `index.css` each have exactly `a:not([class]):hover` |
+| `src/styles/__tests__/brand.test.ts` › classed text links | Unit (node, CSS) | Each audited text link's `:hover` declares a `var(--…)` colour and `text-decoration: underline` (8 classes, portal `.hp-back` included) |
+| `qa/specs/web/link-hover.spec.ts` (`@web.brand.link-hover`) | E2E (Playwright, preview build), light + dark | Controls keep their label colour with no underline: hero button, Get it card, sidebar mark, Needs attention client link, About `.btn-secondary`, and `.btn-ghost` (goes to its own `--text`). Text links underline: hero alt, privacy back, Clients name, breadcrumb. An injected unclassed link still takes `--link-hover` and an underline. The /download test is `fixme` until that page stops crashing (no QueryClient) |
+
 ### Craft-fix bundle (MUT-92, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|
