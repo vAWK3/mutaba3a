@@ -590,6 +590,42 @@ describe('useDrawerStore', () => {
         expect(useDrawerStore.getState().partialPaymentDrawer.onRecorded).toBeUndefined();
       });
     });
+
+    // MUT-169: the ledger and the income drawer open it to edit a payment.
+    describe('intent', () => {
+      it('travels with the open options and is cleared on close', () => {
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1', intent: 'editPayment' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.intent).toBe('editPayment');
+
+        act(() => {
+          useDrawerStore.getState().closePartialPaymentDrawer();
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.intent).toBeUndefined();
+
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.intent).toBeUndefined();
+      });
+
+      it('stays while a record of the same entry is edited, and goes for another entry', () => {
+        act(() => {
+          useDrawerStore.getState().openPartialPaymentDrawer({ transactionId: 'tx-1', intent: 'editPayment' });
+          useDrawerStore.getState().editPaymentRecord({ transactionId: 'tx-1', paymentRecordId: 'pr-1' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer).toMatchObject({
+          editingPaymentRecordId: 'pr-1',
+          intent: 'editPayment',
+        });
+
+        act(() => {
+          useDrawerStore.getState().editPaymentRecord({ transactionId: 'tx-2', paymentRecordId: 'pr-2' });
+        });
+        expect(useDrawerStore.getState().partialPaymentDrawer.intent).toBeUndefined();
+      });
+    });
   });
 });
 
