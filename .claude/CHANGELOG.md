@@ -164,6 +164,39 @@
 - Document/invoice generation (`DocumentFormPage.tsx`, `DocumentDrawer.tsx`) was briefly widened to accept JOD, then reverted: the feature is being removed entirely (MUT-145, product direction is digital-ledger-only), so investing JOD support there was pointless. The narrow-cast fixes needed to keep those files type-safe under the now-wider global `Currency` stayed, since that's unavoidable regardless of documents' fate.
 - See `.claude/designs/mut-140-jod-currency.md` for the full engineering plan and plan-review findings.
 
+---
+
+## [Unreleased] - 2026-10-13 — CSV-imported expenses land in db.expenses, not db.transactions (MUT-138)
+
+**Why:** Since MUT-14, real expenses live in `db.expenses` only, but `ImportDataModal.tsx`/`ImportDataPage.tsx` still wrote CSV-imported expense rows as `kind:'expense'` transactions into `db.transactions`, so they never appeared on `/expenses`. Separately, `ProjectDetailPage.tsx`'s row-click handler for a legacy `kind:'expense'` row opened `ExpenseDrawer` with the transaction's id, which `ExpenseDrawer` then looked up in `db.expenses` and found nothing. Found during MUT-94's review, tracked as TD-106.
+
+**Run (Node 22, on the merged tree):** `npm run typecheck` clean (both `tsconfig.app.json` and `tsconfig.hosted.json`), `npm run lint` clean, `npm run build`/`build:hosted` clean, `npx vitest run` green — see this merge's own verification note below.
+
+### Added
+- `src/utils/csvImport.ts`: `importExpenseRow()` (writes via `expenseRepo.create`, resolves categories against `db.expenseCategories`) and `resolveImportProfileId()` (auto-creates a default profile, mirroring `WelcomeModal`'s "Skip" shape, only when none exists).
+- `src/components/drawers/LegacyExpenseEditDrawer.tsx` + `legacyExpenseDrawer` store slot (`openLegacyExpenseDrawer`/`closeLegacyExpenseDrawer`): edits a pre-existing `kind:'expense'` transaction row without risking `IncomeDrawer`'s hardcoded `kind:'income'` save path.
+
+### Changed
+- `ImportDataPage.tsx`: CSV import resolves one `profileId` per run and threads it through every entity created (clients, projects, income, expenses) — the profile selector already required a choice, but no entity type had used the selection, so an imported expense could end up visible while its sibling client/project/income from the same import silently dropped out of any profile-scoped view.
+- `ProjectDetailPage.tsx`: a `kind:'expense'` row click now opens `LegacyExpenseEditDrawer`, not `ExpenseDrawer`.
+
+### Fixed
+- Imported CSV expenses now appear on `/expenses` immediately, with category/client/project wiring.
+- A pre-existing legacy expense row opened from a project's transactions tab now loads and saves correctly instead of opening blank.
+- (merge with MUT-145/MUT-141) `LegacyExpenseEditDrawer`'s amount-to-input prefill hardcoded `/100`, wrong for a 3-decimal JOD row; now uses `currencyExponent(currency)`. `ExpenseFormFields.tsx` (shared with the hosted portal) hardcoded the amount input's `step="0.01"`, which silently blocked saving any 3-decimal JOD amount in both this drawer and the real `ExpenseDrawer` — a step mismatch fails the browser's native HTML5 constraint check before the submit event fires at all. Step is now computed from the current currency.
+
+### Not changed (intentionally)
+- `TransactionsPage.tsx` had the identical row-click bug but was dead code (`/transactions` redirected to `/income`) — left unfixed; MUT-145 (merged the same day, see above) deleted it along with the also-dead `ImportDataModal.tsx` outright.
+- `src/demo/seedData/transactions.ts` still writes `kind:'expense'` transactions — explicitly out of scope per the ticket (dev/demo-only).
+- `ImportDataPage.tsx`'s own income/expense CSV loops still hardcode base-100 amount parsing, wrong for JOD — pre-existing, tracked separately as TD-112 (filed during MUT-141's build); not fixed here.
+
+### Tests
+- `src/utils/__tests__/csvImport.test.ts`: `importExpenseRow`/`resolveImportProfileId` unit coverage.
+- `src/pages/settings/__tests__/ImportDataPage.test.tsx`: end-to-end CSV expense import (merged into MUT-145's ported suite for the one live import page).
+- `src/components/drawers/__tests__/LegacyExpenseEditDrawer.test.tsx`: load/save/delete, kind preserved, no-category save, deleted-client/project reference doesn't crash, JOD load/save at 3-decimal precision.
+- `src/pages/projects/__tests__/ProjectDetailPage.test.tsx`: row click and title click route to the legacy drawer, not `ExpenseDrawer`.
+
+---
 ## [Unreleased] - 2026-10-13 — Seed script can keep a store-review account's password
 
 **Why:** Basel needs a populated hosted account for App Store / Play reviewers. `seed:demo-account` already builds one, but it rotated the password on every run — which also revokes every session — so re-seeding the reviewer account would break the credentials entered in App Store Connect and Play Console and fail a review in progress.

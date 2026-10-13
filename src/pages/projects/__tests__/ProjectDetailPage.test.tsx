@@ -64,12 +64,14 @@ vi.mock('../../../lib/i18n', () => ({
 // Mock drawer store
 const mockOpenIncomeDrawer = vi.fn();
 const mockOpenExpenseDrawer = vi.fn();
+const mockOpenLegacyExpenseDrawer = vi.fn();
 const mockOpenProjectDrawer = vi.fn();
 const mockOpenPartialPaymentDrawer = vi.fn();
 vi.mock('../../../lib/stores', () => ({
   useDrawerStore: () => ({
     openIncomeDrawer: mockOpenIncomeDrawer,
     openExpenseDrawer: mockOpenExpenseDrawer,
+    openLegacyExpenseDrawer: mockOpenLegacyExpenseDrawer,
     openProjectDrawer: mockOpenProjectDrawer,
     openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
   }),
@@ -623,7 +625,10 @@ describe('ProjectDetailPage', () => {
       });
     });
 
-    it('should open expense drawer when clicking expense transaction row', async () => {
+    it('opens the legacy expense drawer when clicking an expense transaction row (MUT-138)', async () => {
+      // This table reads db.transactions only, so a kind:'expense' row here
+      // is always a legacy row, not a real db.expenses record — routing it
+      // to openExpenseDrawer would look it up in the wrong table.
       const user = userEvent.setup();
       const useQueries = await import('../../../hooks/useQueries');
       vi.spyOn(useQueries, 'useProject').mockReturnValue({
@@ -651,10 +656,8 @@ describe('ProjectDetailPage', () => {
         await user.click(row);
       }
 
-      expect(mockOpenExpenseDrawer).toHaveBeenCalledWith({
-        mode: 'edit',
-        expenseId: 'tx-3',
-      });
+      expect(mockOpenLegacyExpenseDrawer).toHaveBeenCalledWith({ transactionId: 'tx-3' });
+      expect(mockOpenExpenseDrawer).not.toHaveBeenCalled();
     });
   });
   // MUT-6: "Record payment" is a primary row button here too, so the project
@@ -762,13 +765,14 @@ describe('ProjectDetailPage', () => {
       expect(mockOpenIncomeDrawer).toHaveBeenCalledWith({ mode: 'edit', transactionId: 'tx-1' });
     });
 
-    it('opens the expense drawer from an expense title, once', async () => {
+    it('opens the legacy expense drawer from an expense title, once (MUT-138)', async () => {
       const user = await openTransactionsTab();
 
       await user.click(screen.getByRole('button', { name: 'Server for the staging site' }));
 
-      expect(mockOpenExpenseDrawer).toHaveBeenCalledTimes(1);
-      expect(mockOpenExpenseDrawer).toHaveBeenCalledWith({ mode: 'edit', expenseId: 'tx-3' });
+      expect(mockOpenLegacyExpenseDrawer).toHaveBeenCalledTimes(1);
+      expect(mockOpenLegacyExpenseDrawer).toHaveBeenCalledWith({ transactionId: 'tx-3' });
+      expect(mockOpenExpenseDrawer).not.toHaveBeenCalled();
     });
   });
 });
