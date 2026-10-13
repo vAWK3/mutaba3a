@@ -8,6 +8,7 @@ import {
   useProjectSummaries,
   useClientSummaries,
 } from '../../hooks/useQueries';
+import { useExpenses } from '../../hooks/useExpenseQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { formatAmount, getDateRangePreset, cn } from '../../lib/utils';
@@ -129,8 +130,16 @@ export function InsightsPage() {
 
   const { data: projectSummaries = [], isLoading: projLoading } = useProjectSummaries(profileId, currencyFilter);
   const { data: clientSummaries = [], isLoading: clientLoading } = useClientSummaries(profileId, currencyFilter);
+  // MUT-94: real expenses live in db.expenses since MUT-14, not db.transactions
+  // -- monthlyTrend below needs both sources to total expenses correctly.
+  const { data: expenses = [], isLoading: expLoading } = useExpenses({
+    profileId,
+    dateFrom: dateRange.dateFrom,
+    dateTo: dateRange.dateTo,
+    currency: currencyFilter,
+  });
 
-  const isLoading = txLoading || projLoading || clientLoading;
+  const isLoading = txLoading || projLoading || clientLoading || expLoading;
 
   // Calculate summary totals
   const summaryTotals = useMemo(() => {
@@ -179,35 +188,44 @@ export function InsightsPage() {
       expensesILS: number;
     }>();
 
-    for (const tx of transactions) {
-      const date = new Date(tx.occurredAt);
+    const monthEntry = (occurredAt: string) => {
+      const date = new Date(occurredAt);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const monthLabel = date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
-
       if (!monthMap.has(monthKey)) {
         monthMap.set(monthKey, {
           month: monthKey,
-          label: monthLabel,
+          label: date.toLocaleDateString(locale, { month: 'short', year: 'numeric' }),
           incomeUSD: 0,
           incomeILS: 0,
           expensesUSD: 0,
           expensesILS: 0,
         });
       }
+      return monthMap.get(monthKey)!;
+    };
 
-      const entry = monthMap.get(monthKey)!;
+    for (const tx of transactions) {
+      const entry = monthEntry(tx.occurredAt);
       if (tx.kind === 'income' && tx.status === 'paid') {
         if (tx.currency === 'USD') entry.incomeUSD += tx.amountMinor;
         else if (tx.currency === 'ILS') entry.incomeILS += tx.amountMinor;
       } else if (tx.kind === 'expense') {
+        // Legacy transaction-table expenses (demo seed data, CSV import) --
+        // real expenses live in db.expenses since MUT-14, summed below.
         if (tx.currency === 'USD') entry.expensesUSD += tx.amountMinor;
         else if (tx.currency === 'ILS') entry.expensesILS += tx.amountMinor;
       }
     }
 
+    for (const expense of expenses) {
+      const entry = monthEntry(expense.occurredAt);
+      if (expense.currency === 'USD') entry.expensesUSD += expense.amountMinor;
+      else if (expense.currency === 'ILS') entry.expensesILS += expense.amountMinor;
+    }
+
     // Sort by month and return array
     return Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
-  }, [transactions, locale]);
+  }, [transactions, expenses, locale]);
 
   // Filter project summaries for expenses tab
   const projectsWithExpenses = useMemo(() => {

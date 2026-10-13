@@ -5,6 +5,7 @@
 
 import type {
   Transaction,
+  Expense,
   Currency,
   Client,
   Project,
@@ -431,6 +432,78 @@ export function filterTransactionsByEntityAndDate(
     if (filters.dateTo && tx.occurredAt > filters.dateTo + 'T23:59:59') return false;
     return true;
   });
+}
+
+/**
+ * Expense-table equivalents of the transaction filter/sum helpers above
+ * (MUT-94). Real expenses live in db.expenses since MUT-14, not
+ * db.transactions -- any total that mixes the two sources without these
+ * reads db.transactions alone and silently drops every real expense.
+ */
+export function filterExpensesByDateAndCurrency(
+  expenses: Expense[],
+  filters: { dateFrom?: string; dateTo?: string; currency?: Currency }
+): Expense[] {
+  return expenses.filter((e) => {
+    if (e.deletedAt) return false;
+    if (filters.dateFrom && e.occurredAt < filters.dateFrom) return false;
+    if (filters.dateTo && e.occurredAt > filters.dateTo + 'T23:59:59') return false;
+    if (filters.currency && e.currency !== filters.currency) return false;
+    return true;
+  });
+}
+
+/**
+ * Filter expenses by entity ID (project or client).
+ */
+export function filterExpensesByEntity(
+  expenses: Expense[],
+  entityType: 'project' | 'client',
+  entityId: string,
+  currency?: Currency
+): Expense[] {
+  return expenses.filter((e) => {
+    if (e.deletedAt) return false;
+    if (entityType === 'project' && e.projectId !== entityId) return false;
+    if (entityType === 'client' && e.clientId !== entityId) return false;
+    if (currency && e.currency !== currency) return false;
+    return true;
+  });
+}
+
+/**
+ * Filter expenses by entity with additional date filters.
+ */
+export function filterExpensesByEntityAndDate(
+  expenses: Expense[],
+  entityType: 'project' | 'client',
+  entityId: string,
+  filters: { dateFrom?: string; dateTo?: string; currency?: Currency }
+): Expense[] {
+  return expenses.filter((e) => {
+    if (e.deletedAt) return false;
+    if (entityType === 'project' && e.projectId !== entityId) return false;
+    if (entityType === 'client' && e.clientId !== entityId) return false;
+    if (filters.currency && e.currency !== filters.currency) return false;
+    if (filters.dateFrom && e.occurredAt < filters.dateFrom) return false;
+    if (filters.dateTo && e.occurredAt > filters.dateTo + 'T23:59:59') return false;
+    return true;
+  });
+}
+
+/** Sum expense amounts, mixing currencies -- callers must pre-filter to one currency. */
+export function sumExpensesMinor(expenses: Expense[]): number {
+  return expenses.reduce((sum, e) => sum + e.amountMinor, 0);
+}
+
+/** Sum expense amounts per currency. Currencies are never combined (ADR-004). */
+export function sumExpensesByCurrency(expenses: Expense[]): Record<Currency, number> {
+  const result: Record<Currency, number> = { USD: 0, ILS: 0, EUR: 0 };
+  for (const e of expenses) {
+    if (result[e.currency] === undefined) continue;
+    result[e.currency] += e.amountMinor;
+  }
+  return result;
 }
 
 /**

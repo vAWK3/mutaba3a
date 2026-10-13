@@ -6,6 +6,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { InsightsPage } from '../InsightsPage';
 import * as useQueries from '../../../hooks/useQueries';
+import * as useExpenseQueries from '../../../hooks/useExpenseQueries';
 
 vi.mock('../../../hooks/useActiveProfile', () => ({
   useProfileFilter: () => 'profile-1',
@@ -155,6 +156,10 @@ describe('InsightsPage', () => {
       data: mockProjectSummaries,
       isLoading: false,
     } as unknown as ReturnType<typeof useQueries.useProjectSummaries>);
+    vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useExpenseQueries.useExpenses>);
   });
 
   describe('Page structure', () => {
@@ -269,6 +274,29 @@ describe('InsightsPage', () => {
     it('shows net calculation', () => {
       renderWithProviders(<InsightsPage />);
       expect(screen.getByText('Net (Paid - Expenses)')).toBeInTheDocument();
+    });
+
+    it('monthly trend includes expenses from the expenses table, not just transactions (MUT-94)', () => {
+      vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
+        data: [
+          {
+            id: 'exp-1',
+            profileId: 'profile-1',
+            amountMinor: 50000, // $500, same month/currency as mockTransactions' tx-3 ($1000 expense)
+            currency: 'USD',
+            occurredAt: '2026-03-10',
+            createdAt: '2026-03-10T00:00:00.000Z',
+            updatedAt: '2026-03-10T00:00:00.000Z',
+          },
+        ],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useExpenseQueries.useExpenses>);
+
+      renderWithProviders(<InsightsPage />);
+
+      // tx-3 ($1000 expense) + the new db.expenses row ($500) = $1,500 for March
+      const monthlyExpenseFigure = document.querySelector('.monthly-trend-row .amount-negative');
+      expect(monthlyExpenseFigure?.textContent).toBe('-$1,500');
     });
   });
 

@@ -2589,3 +2589,20 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 **Alternatives considered**:
 - Relax `IdempotencyKey.organizationId` to nullable, add a polymorphic `ownerType`/`ownerId` pair: rejected — Postgres composite primary keys can't contain a nullable column, so this would have meant restructuring the primary key every one of the 28 existing callers depends on, to serve a single new caller. No precedent for a polymorphic owner column anywhere in `schema.prisma`; every existing `entityType`/`entityId` pair discriminates which table a row *references*, always alongside a still-required `organizationId`, never as a replacement for it.
 - Give `POST /v1/inbox` a dedicated, non-shared dedup mechanism (e.g. a unique constraint on the request body itself): rejected as a second, divergent idempotency implementation instead of reusing the established claim/replay/mismatch contract every other create route already has tests and client expectations built around.
+
+## ADR-062: Expense Totals Sum `db.expenses` and Legacy `kind:'expense'` Transactions Additively, Not as a Replacement
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-94 (Expenses "Total expenses" strip always ₪0). Since MUT-14, real expense creation writes `db.expenses` only (via `expenseRepo`), but `aggregateTransactionTotals`/`aggregateTransactionTotalsByCurrency`/`aggregateTransactionTotalsWithActivity` (`src/db/aggregations.ts`) still summed `expensesMinor` from `db.transactions`' `kind !== 'income'` rows — always zero for real data, since nothing writes that shape anymore from normal app usage. Reading the full call graph before fixing it turned up that the branch is not actually dead: `src/demo/seedData/transactions.ts` (demo mode) and `ImportDataModal.tsx`/`ImportDataPage.tsx` (CSV/backup import) both still create `kind:'expense'` transactions directly, bypassing `db.expenses` entirely (tracked as TD-105, MUT-138).
+
+**Decision**: every expense-totals reader (`transactionRepo.getOverviewTotals`/`getOverviewTotalsByCurrency`, `projectSummaryRepo.list`/`get`, `InsightsPage`'s monthly trend) now sums `db.expenses` *in addition to* the existing `db.transactions` `kind:'expense'` sum, rather than replacing the transaction-side sum outright. New expense-table filter/sum helpers (`filterExpensesByDateAndCurrency`, `filterExpensesByEntity`, `filterExpensesByEntityAndDate`, `sumExpensesMinor`, `sumExpensesByCurrency` in `src/db/aggregations.ts`) mirror the existing transaction-side ones exactly, operating on `Expense[]`.
+
+**Consequences**:
+- Demo seed data and any already-imported legacy expense still counts correctly in totals — no silent data loss for existing users who imported expenses before MUT-138 lands.
+- The two sources are table-disjoint (nothing writes both for the same logical expense), so the additive merge cannot double-count.
+- This is a totals-level correctness fix, not a fix for the underlying two-table split (TD-105) — imported expenses are still invisible on the `/expenses` ledger page itself, just no longer silently dropped from financial totals. MUT-138 is the follow-up that fixes the write path.
+
+**Alternatives considered**:
+- Delete the `kind !== 'income'` branch entirely (it "looks dead" from the UI's normal create flow): rejected after finding Import and demo seed data still depend on it — would have been a regression, not a cleanup.
+- Fix only `ExpensesLedgerPage`'s strip (the literal ticket title) and leave `projectSummaryRepo`/`InsightsPage` broken: rejected — same root cause feeds Projects, Project detail, Insights, and Reports; a UI-only patch would have left three more readers silently wrong.

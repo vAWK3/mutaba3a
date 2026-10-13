@@ -40,6 +40,11 @@ import {
   filterTransactionsByDateAndCurrency,
   filterTransactionsByEntity,
   filterTransactionsByEntityAndDate,
+  filterExpensesByDateAndCurrency,
+  filterExpensesByEntity,
+  filterExpensesByEntityAndDate,
+  sumExpensesMinor,
+  sumExpensesByCurrency,
   createNameMap,
   sortByLastActivity,
   paymentRowsForIncome,
@@ -513,27 +518,46 @@ export const transactionRepo = {
   },
 
   async getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals> {
-    const transactions = await db.transactions.toArray();
+    const [transactions, expenses] = await Promise.all([db.transactions.toArray(), db.expenses.toArray()]);
     // Apply profile filter first
     const profileFiltered = filters.profileId
       ? transactions.filter((tx) => tx.profileId === filters.profileId)
       : transactions;
+    const profileFilteredExpenses = filters.profileId
+      ? expenses.filter((e) => e.profileId === filters.profileId)
+      : expenses;
     const filtered = filterTransactionsByDateAndCurrency(profileFiltered, filters);
-    return aggregateTransactionTotals(filtered);
+    const filteredExpenses = filterExpensesByDateAndCurrency(profileFilteredExpenses, filters);
+    const totals = aggregateTransactionTotals(filtered);
+    // Real expenses live in db.expenses since MUT-14; db.transactions' kind='expense'
+    // rows are legacy (demo seed data, CSV import) and summed additively, not replaced.
+    return { ...totals, expensesMinor: totals.expensesMinor + sumExpensesMinor(filteredExpenses) };
   },
 
   async getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency> {
-    const transactions = await db.transactions.toArray();
+    const [transactions, expenses] = await Promise.all([db.transactions.toArray(), db.expenses.toArray()]);
     // Apply profile filter first
     const profileFiltered = filters.profileId
       ? transactions.filter((tx) => tx.profileId === filters.profileId)
       : transactions;
+    const profileFilteredExpenses = filters.profileId
+      ? expenses.filter((e) => e.profileId === filters.profileId)
+      : expenses;
     // Filter by date only, not currency - we want all currencies
     const filtered = filterTransactionsByDateAndCurrency(profileFiltered, {
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
     });
-    return aggregateTransactionTotalsByCurrency(filtered);
+    const filteredExpenses = filterExpensesByDateAndCurrency(profileFilteredExpenses, {
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+    });
+    const totals = aggregateTransactionTotalsByCurrency(filtered);
+    const expenseTotals = sumExpensesByCurrency(filteredExpenses);
+    for (const currency of Object.keys(totals) as Currency[]) {
+      totals[currency].expensesMinor += expenseTotals[currency];
+    }
+    return totals;
   },
 
   async getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]> {
@@ -555,8 +579,11 @@ export const transactionRepo = {
 export const projectSummaryRepo = {
   async list(filters?: { profileId?: string; currency?: Currency; search?: string; field?: string }): Promise<ProjectSummary[]> {
     const projects = await projectRepo.list({ profileId: filters?.profileId });
-    const clients = await db.clients.toArray();
-    const transactions = await db.transactions.toArray();
+    const [clients, transactions, expenses] = await Promise.all([
+      db.clients.toArray(),
+      db.transactions.toArray(),
+      db.expenses.toArray(),
+    ]);
 
     const clientMap = createNameMap(clients);
 
@@ -578,12 +605,18 @@ export const projectSummaryRepo = {
       .map((p) => {
         const projectTxs = filterTransactionsByEntity(transactions, 'project', p.id, filters?.currency);
         const totals = aggregateTransactionTotalsWithActivity(projectTxs);
+        // Real expenses live in db.expenses since MUT-14; db.transactions'
+        // kind='expense' rows are legacy and summed additively, not replaced.
+        const projectExpenses = filterExpensesByEntity(expenses, 'project', p.id, filters?.currency);
+        const expensesMinor = totals.expensesMinor + sumExpensesMinor(projectExpenses);
 
         // When no currency filter, also compute per-currency breakdowns
         let perCurrencyData = {};
         if (!filters?.currency) {
           const allProjectTxs = filterTransactionsByEntity(transactions, 'project', p.id);
           const byCurrency = aggregateTransactionTotalsByCurrency(allProjectTxs);
+          const allProjectExpenses = filterExpensesByEntity(expenses, 'project', p.id);
+          const expensesByCurrency = sumExpensesByCurrency(allProjectExpenses);
           perCurrencyData = {
             paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
             paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
@@ -591,9 +624,9 @@ export const projectSummaryRepo = {
             unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
             unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
             unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
-            expensesMinorUSD: byCurrency.USD.expensesMinor,
-            expensesMinorILS: byCurrency.ILS.expensesMinor,
-            expensesMinorEUR: byCurrency.EUR.expensesMinor,
+            expensesMinorUSD: byCurrency.USD.expensesMinor + expensesByCurrency.USD,
+            expensesMinorILS: byCurrency.ILS.expensesMinor + expensesByCurrency.ILS,
+            expensesMinorEUR: byCurrency.EUR.expensesMinor + expensesByCurrency.EUR,
           };
         }
 
@@ -604,7 +637,8 @@ export const projectSummaryRepo = {
           clientName: p.clientId ? clientMap.get(p.clientId) : undefined,
           field: p.field,
           ...totals,
-          netMinor: totals.paidIncomeMinor - totals.expensesMinor,
+          expensesMinor,
+          netMinor: totals.paidIncomeMinor - expensesMinor,
           ...perCurrencyData,
         };
       });
@@ -617,16 +651,22 @@ export const projectSummaryRepo = {
     if (!project) return undefined;
 
     const client = project.clientId ? await clientRepo.get(project.clientId) : undefined;
-    const transactions = await db.transactions.toArray();
+    const [transactions, expenses] = await Promise.all([db.transactions.toArray(), db.expenses.toArray()]);
 
     const projectTxs = filterTransactionsByEntityAndDate(transactions, 'project', projectId, filters || {});
     const totals = aggregateTransactionTotalsWithActivity(projectTxs);
+    // Real expenses live in db.expenses since MUT-14; db.transactions'
+    // kind='expense' rows are legacy and summed additively, not replaced.
+    const projectExpenses = filterExpensesByEntityAndDate(expenses, 'project', projectId, filters || {});
+    const expensesMinor = totals.expensesMinor + sumExpensesMinor(projectExpenses);
 
     // When no currency filter, also compute per-currency breakdowns
     let perCurrencyData = {};
     if (!filters?.currency) {
       const allProjectTxs = filterTransactionsByEntityAndDate(transactions, 'project', projectId, { dateFrom: filters?.dateFrom, dateTo: filters?.dateTo });
       const byCurrency = aggregateTransactionTotalsByCurrency(allProjectTxs);
+      const allProjectExpenses = filterExpensesByEntityAndDate(expenses, 'project', projectId, { dateFrom: filters?.dateFrom, dateTo: filters?.dateTo });
+      const expensesByCurrency = sumExpensesByCurrency(allProjectExpenses);
       perCurrencyData = {
         paidIncomeMinorUSD: byCurrency.USD.paidIncomeMinor,
         paidIncomeMinorILS: byCurrency.ILS.paidIncomeMinor,
@@ -634,9 +674,9 @@ export const projectSummaryRepo = {
         unpaidIncomeMinorUSD: byCurrency.USD.unpaidIncomeMinor,
         unpaidIncomeMinorILS: byCurrency.ILS.unpaidIncomeMinor,
         unpaidIncomeMinorEUR: byCurrency.EUR.unpaidIncomeMinor,
-        expensesMinorUSD: byCurrency.USD.expensesMinor,
-        expensesMinorILS: byCurrency.ILS.expensesMinor,
-        expensesMinorEUR: byCurrency.EUR.expensesMinor,
+        expensesMinorUSD: byCurrency.USD.expensesMinor + expensesByCurrency.USD,
+        expensesMinorILS: byCurrency.ILS.expensesMinor + expensesByCurrency.ILS,
+        expensesMinorEUR: byCurrency.EUR.expensesMinor + expensesByCurrency.EUR,
       };
     }
 
@@ -647,7 +687,8 @@ export const projectSummaryRepo = {
       clientName: client?.name,
       field: project.field,
       ...totals,
-      netMinor: totals.paidIncomeMinor - totals.expensesMinor,
+      expensesMinor,
+      netMinor: totals.paidIncomeMinor - expensesMinor,
       ...perCurrencyData,
     };
   },

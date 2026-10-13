@@ -15,9 +15,6 @@ import { RecurringAttentionList } from '../../components/expenses/RecurringAtten
 import { groupOccurrencesByRule, formatMonthList, type RecurringAttentionGroup } from '../../components/expenses/recurringAttention';
 import { RecurringMarkPaidDrawer, type RecurringDrawerView } from '../../components/drawers/RecurringMarkPaidDrawer';
 import { CopyIcon, TrashIcon } from '../../components/icons';
-import {
-  useOverviewTotalsByCurrency,
-} from '../../hooks/useQueries';
 import { useExpenses, useDeleteExpense } from '../../hooks/useExpenseQueries';
 import {
   useDueOccurrences,
@@ -34,10 +31,11 @@ import {
   getDateRangePreset,
   cn,
 } from '../../lib/utils';
-import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
+import { CurrencyAmounts } from '../../components/ui/CurrencyAmounts';
+import { orderCurrencyAmounts } from '../../lib/currencyAmounts';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
-import type { ExpenseFilters, ExpenseDisplay } from '../../types';
+import type { ExpenseFilters, ExpenseDisplay, Currency } from '../../types';
 
 type ExpenseView = 'list' | 'byCategory';
 
@@ -97,9 +95,6 @@ export function ExpensesLedgerPage() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [openExpenseDrawer]);
 
-  // Fetch totals for summary strip
-  const { data: totals } = useOverviewTotalsByCurrency(dateRange.dateFrom, dateRange.dateTo, profileId ?? '');
-
   // Recurring expense occurrences for active profile
   const { data: dueOccurrences = [] } = useDueOccurrences(profileId ?? '');
   const { data: allOccurrences = [] } = useVirtualOccurrences(
@@ -134,6 +129,17 @@ export function ExpensesLedgerPage() {
   }, [dateRange, profileId, search]);
 
   const { data: expenses = [], isLoading } = useExpenses(queryFilters);
+
+  // Summary strip totals (MUT-94): the same rows the ledger table shows, per
+  // currency -- never converted or combined (ADR-004), so this is exactly
+  // the sum of the ledger's rows, by construction, not by coincidence.
+  const stripTotalsByCurrency = useMemo(() => {
+    const totals: Record<Currency, number> = { USD: 0, ILS: 0, EUR: 0 };
+    for (const expense of expenses) {
+      totals[expense.currency] += expense.amountMinor;
+    }
+    return totals;
+  }, [expenses]);
 
   // Group expenses by category
   const expensesByCategory = useMemo((): GroupedExpenses[] => {
@@ -260,19 +266,12 @@ export function ExpensesLedgerPage() {
       />
       <div className="page-content">
         {/* Summary Strip */}
-        {totals && (
-          <div className="expenses-summary-strip">
-            <div className="expenses-summary-item">
-              <span className="expenses-summary-label">{t('expenses.summary.total')}</span>
-              <CurrencySummaryPopup
-                usdAmountMinor={totals.USD.expensesMinor}
-                ilsAmountMinor={totals.ILS.expensesMinor}
-                eurAmountMinor={totals.EUR?.expensesMinor ?? 0}
-                type="expense"
-              />
-            </div>
+        <div className="expenses-summary-strip">
+          <div className="expenses-summary-item">
+            <span className="expenses-summary-label">{t('expenses.summary.total')}</span>
+            <CurrencyAmounts amounts={orderCurrencyAmounts(stripTotalsByCurrency)} />
           </div>
-        )}
+        </div>
 
         {/* View Toggle Tabs */}
         <div className="expenses-view-tabs" role="tablist">
