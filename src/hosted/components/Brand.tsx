@@ -1,17 +1,15 @@
 import { useLanguage, useT } from '../../lib/i18n/core';
 import type { Language } from '../../lib/i18n/types';
-import { BrandMark } from '../../components/brand/BrandMark';
+import { Wordmark as BrandWordmark } from '../../components/brand/Wordmark';
 
-/** The mark's size in the lockup, about the cap height of the 2xl name beside it. */
-const WORDMARK_MARK_SIZE = 28;
-
-/** The Brand v2 mark beside the product name (heading face in English, the Arabic face in Arabic; MUT-104). */
+/** The portal's lockup: the shared Brand v2 Wordmark with the portal's name and styles (MUT-104). */
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
-    <span className={`hp-wordmark ${className}`}>
-      <BrandMark size={WORDMARK_MARK_SIZE} className="hp-wordmark-mark" />
-      {useT()('hosted.brand')}
-    </span>
+    <BrandWordmark
+      name={useT()('hosted.brand')}
+      className={`hp-wordmark ${className}`.trim()}
+      markClassName="hp-wordmark-mark"
+    />
   );
 }
 

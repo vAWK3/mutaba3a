@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
+import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
 
 function renderPage(language: 'en' | 'ar') {
   localStorage.setItem('mutaba3a-language', language);
   return render(
-    <LanguageProvider>
-      <PrivacyPolicyPage />
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <PrivacyPolicyPage />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 
@@ -55,5 +58,13 @@ describe('PrivacyPolicyPage', () => {
     expect(document.documentElement.dir).toBe('rtl');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('سياسة الخصوصية');
     expect(document.body.textContent).not.toMatch(/\blanding\.[a-zA-Z]/);
+  });
+
+  it.each([
+    ['en', 'Mutaba3a — Privacy Policy'],
+    ['ar', 'متابعة — سياسة الخصوصية'],
+  ] as const)('names the tab in the active language (%s, MUT-77)', (language, title) => {
+    renderPage(language);
+    expect(document.title).toBe(title);
   });
 });

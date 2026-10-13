@@ -23,6 +23,9 @@
 
 /* Page */
 .landing-page {
+  /* Press and hover dims for the landing page's controls and text links (MUT-77) */
+  --landing-press-dim: 0.6;
+  --landing-hover-dim: 0.88;
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
@@ -42,13 +45,151 @@
   padding: 0 var(--space-6);
 }
 
-/* Header with language toggle (replaced by the frosted bar in MUT-77) */
+/* ============================================
+   Header: the slim sticky frosted bar (MUT-77, brief L9)
+   ============================================ */
+
+/* A 1px sentinel at the very top (net zero layout through the negative margin): the
+   bar watches it to know the page has scrolled. It needs a height for the observer. */
+.landing-top-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+}
+
 .landing-header {
-  position: fixed;
+  position: sticky;
   top: 0;
-  inset-inline-end: 0;
   z-index: 100;
-  padding: var(--space-4) var(--space-6);
+  /* 85% keeps text readable over any content even where reduced transparency
+     isn't reported (Safari, MUT-77 D3) */
+  background: color-mix(in oklab, var(--bg) 85%, transparent);
+  /* A light blur: the base is already 85% opaque, and a smaller radius is cheaper to redo every scroll frame */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .landing-header {
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .landing-header {
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* A soft edge once content scrolls under the bar, instead of a hard border */
+.landing-header::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: var(--space-3);
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--text) 8%, transparent), transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-toggle) ease;
+}
+
+.landing-header[data-scrolled="true"]::after {
+  opacity: 1;
+}
+
+/* Two classes: the phone rule for .landing-container resets padding, and must not take the bar's */
+.landing-header .landing-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+
+.landing-header-brand {
+  display: inline-flex;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+}
+
+.landing-header-brand:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.landing-header-brand:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.landing-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+}
+
+.landing-wordmark .wordmark-mark {
+  flex: none;
+}
+
+.landing-wordmark-short {
+  display: none;
+}
+
+/* Phones: 44px tap targets in the bar (Apple HIG) */
+@media (max-width: 640px) {
+  .landing-lang-toggle,
+  .landing-header-cta {
+    min-height: 44px;
+  }
+}
+
+/* The narrowest phones (320–360): the bar's button keeps its icon; its full name stays as the accessible name */
+@media (max-width: 360px) {
+  .landing-header-cta-label {
+    display: none;
+  }
+}
+
+/* In-page jumps and focused elements land below the sticky bar, not under it (WCAG 2.4.11) */
+html:has(.landing-header) {
+  scroll-padding-top: var(--space-16);
+}
+
+/* Printing or saving before scrolling: never print a chapter visual still waiting to rise in */
+@media print {
+  .landing-chapter-visual[data-reveal] {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+/* A phone has room for the mark and one name beside the switch and the button */
+@media (max-width: 480px) {
+  .landing-wordmark-full {
+    display: none;
+  }
+
+  .landing-wordmark-short {
+    display: inline;
+  }
+}
+
+.landing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
 }
 
 .landing-lang-toggle {
@@ -62,12 +203,19 @@
   color: var(--muted);
   font-size: var(--text-label);
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform var(--duration-press) var(--ease-spring);
 }
 
 .landing-lang-toggle:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
+}
+
+.landing-lang-toggle:active {
+  transform: scale(var(--press-scale));
 }
 
 .landing-lang-toggle span.active {
@@ -77,6 +225,55 @@
 
 .landing-lang-divider {
   opacity: 0.4;
+}
+
+/* The hero's button, once the hero's own has scrolled away. Hidden with
+   visibility (after the fade) so it also leaves the tab order. */
+.landing-header-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity var(--duration-toggle) ease,
+    visibility 0s linear 0s,
+    transform var(--duration-press) var(--ease-spring);
+}
+
+.landing-header-cta[data-visible="false"] {
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity var(--duration-toggle) ease,
+    visibility 0s linear var(--duration-toggle);
+}
+
+.landing-header-cta[data-visible="true"]:hover {
+  color: var(--bg);
+  text-decoration: none;
+  opacity: var(--landing-hover-dim);
+  /* The hover dim is quick like the hero's; the show/hide fade above keeps its own length */
+  transition:
+    opacity 0.15s ease,
+    transform var(--duration-press) var(--ease-spring);
+}
+
+.landing-header-cta[data-visible="true"]:active {
+  transform: scale(var(--press-scale));
+}
+
+.landing-header-cta:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* Sections */
@@ -148,6 +345,22 @@
   margin: 0;
   display: flex;
   justify-content: center;
+}
+
+/* Rise and fade in once on entry (MUT-77, L10). Only set by JS for a figure
+   below the fold, with motion allowed and an IntersectionObserver to bring it
+   back, so it can never strand content invisible. */
+.landing-chapter-visual[data-reveal="pending"] {
+  opacity: 0;
+  translate: 0 var(--stagger-rise);
+}
+
+.landing-chapter-visual[data-reveal="done"] {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity var(--duration-nav) var(--ease-spring),
+    translate var(--duration-nav) var(--ease-spring);
 }
 
 /* ============================================
@@ -530,16 +743,21 @@
   border-radius: var(--radius-hero);
   color: var(--text);
   text-decoration: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease-out;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform var(--duration-press) var(--ease-spring);
 }
 
 a.landing-get-it-option:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
+  color: var(--text);
+  text-decoration: none;
 }
 
 a.landing-get-it-option:active {
-  transform: scale(0.98);
+  transform: scale(var(--press-scale));
 }
 
 a.landing-get-it-option:focus-visible {
@@ -585,6 +803,11 @@ a.landing-get-it-option:focus-visible {
   text-decoration-thickness: 2px;
 }
 
+/* Text links dim on press; scaling a line of text reads as a glitch */
+.landing-get-it-meta a:active {
+  opacity: var(--landing-press-dim);
+}
+
 /* ============================================
    Footer
    ============================================ */
@@ -621,6 +844,10 @@ a.landing-get-it-option:focus-visible {
   color: var(--text);
 }
 
+.landing-footer-links a:active {
+  opacity: var(--landing-press-dim);
+}
+
 /* ============================================
    Responsive
    ============================================ */
@@ -648,10 +875,6 @@ a.landing-get-it-option:focus-visible {
     padding: 0 var(--space-4);
   }
 
-  .landing-header {
-    padding: var(--space-3) var(--space-4);
-  }
-
   .landing-chapter-body,
   .landing-privacy-body {
     font-size: var(--text-body);
@@ -677,17 +900,5 @@ a.landing-get-it-option:focus-visible {
     flex-direction: column;
     gap: var(--space-4);
     text-align: center;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-lang-toggle,
-  .landing-get-it-option,
-  .landing-footer-links a {
-    transition: none;
-  }
-
-  a.landing-get-it-option:active {
-    transform: none;
   }
 }

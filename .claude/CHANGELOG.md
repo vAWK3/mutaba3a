@@ -129,6 +129,49 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — MUT-77: the landing page's frosted sticky header and restrained motion
+
+**Why:** The landing page had only a floating language toggle: no product name above the fold, an overlap with the hero at 375 in Arabic, no press feedback on most buttons, and an Arabic tab title in English. On top of that, hovering the hero button in OS light mode turned its label purple on its purple fill. MUT-77 (epic MUT-74, Brand v2 re-cut) carries out brief L9/L10 with the MUT-102 tokens. Plan and eng review: `.claude/designs/mut-77-landing-header-motion.md` (D1–D10).
+
+### Added
+- **The header bar** (`LandingHeader`):
+  - A slim sticky frosted bar with the Brand v2 wordmark, the language switch, and the hero's device-matched button.
+  - The button shows only once the hero's own has scrolled out of view, which `useInView` (IntersectionObserver) reports.
+  - The background is an 85% `--bg` frost with `backdrop-filter`. It turns solid under `prefers-reduced-transparency` and without `backdrop-filter` support (D3).
+  - A top sentinel drives a scroll-edge fade instead of a border.
+  - There are no section links.
+- `useInView` (`src/hooks`), `useDocumentTitle` (`src/hooks`), `useHeroCta` (`src/pages/landing`), `FakeIntersectionObserver` (`src/test/intersectionObserver.ts`).
+- **Chapter visuals rise and fade in once** (`--stagger-rise` over `--duration-nav` on `--ease-spring`):
+  - Only below the fold, with motion allowed, and with an observer present to bring them back.
+  - **Deviation from L10's "cross-fades only":** under reduced motion the visuals are simply there, with no animation (D4). `theme.css` forces every transition to be instant under reduced motion, so a cross-fade would need an `!important` override.
+- **Tab titles follow the language** on `/` (D6), and on `/privacy` and `/download` (D8). The `/privacy` and `/download` titles are Basel's call and go beyond the ticket's AC.
+- `qa/specs/web/landing.spec.ts`, covering 375 and 320 in EN and AR, and the privacy bar. `brand.spec.ts` also runs axe with the bar over a chapter.
+- i18n keys in EN and AR: `landing.meta.title`, `common.pageTitle`, `landing.header.{wordmark,wordmarkShort,cta.*}` and `landing.langToggle.label`. The web short label is "Web app" / "تطبيق الويب", which keeps it part of the accessible name (WCAG 2.5.3).
+- **Pre-landing review fixes** (/review: 5 specialists, red team and an adversarial pass):
+  - **The bar on phones:** it keeps its padding. Its rule is now two classes, because the phone `.landing-container` rule out-ranked it. Phones get 44px tap targets, and at 360px and below the bar's button shows only its icon.
+  - **Button placement:** the bar's button sits before the language switch, so the switch holds the end edge while the button is hidden.
+  - **No dead zone:** the hero button is watched below the bar (`rootMargin` -72px). Without that there was a stretch of scroll where the hero button sat under the bar and neither button was usable.
+  - **`/privacy`:** the bar has no button and makes no GitHub call, and the wordmark links home (`homeHref`).
+  - **Hover:** only the shown button dims on hover, so hovering never blocks its fade-out.
+  - **FAQ rows** dim on press rather than scaling.
+  - **Release fetch:** it times out after 10s, so the shared request always settles, and a failed cache write keeps the release.
+  - **Smaller items:** the dims come from `--landing-press-dim` / `--landing-hover-dim`; the blur is lighter (12px); unrevealed visuals still print; `scroll-padding-top` keeps jumps below the bar.
+
+### Changed
+- **Press feedback:** every landing button presses in with `--press-scale` / `--duration-press`, zeroed under reduced motion. That covers the hero and bar buttons, the language switch, the Get it cards and the FAQ questions; the literal 0.97/0.98 values are gone. Text links dim on press instead.
+- **Release fetch:** `fetchLatestRelease` shares one GitHub call between concurrent callers and clears it on settle (D2). A first visit now makes one call instead of two. The contract is pinned first in `useLatestRelease.test.ts` (D7).
+- **`Wordmark`** moves from the portal to `src/components/brand`, with the name and classes as props. The portal's `Wordmark` keeps its API.
+- **Hero top padding** drops to `--space-16` / `--space-10`, because the bar now sits in the flow.
+
+### Fixed
+- **Hover:** `theme.css` `a:hover` (0,1,1) out-ranks a single-class link. The hero button, the bar's button, the wordmark link and the Get it cards now hold their own hover colour and no underline. The app-wide rule is TD-122.
+- **The 375 overlap:** the bar is in the flow. Below 480px the wordmark shows only the active language's name, so it never runs under the switch.
+
+### Removed
+- The unused `.transition-all` utility (`transition: all`) from `theme.css`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — The Settings QA specs find Language and Theme as radiogroups (MUT-160)
 
 **Why:** Since MUT-139, Settings → Language and Theme are `SegmentedControl` radiogroups, each named by its row label. MUT-103 (`5bd1b09`) moved the Language clicks to `radio`, but `qa/specs/web/settings.spec.ts` still waited for a `Language` and a `Theme` heading, and still clicked Dark, Light and System as buttons. So `@web.settings.language` and `@web.settings.theme` timed out on every run.

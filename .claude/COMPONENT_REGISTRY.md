@@ -74,9 +74,20 @@
 
 ### BrandMark
 **Location**: `src/components/brand/BrandMark.tsx`
-**Purpose**: The Brand v2 mark (MUT-104, ADR-073): `mark.svg` on the light canvas, `mark-dark.svg` (butter dot) on the dark one, chosen from `useTheme().resolvedTheme`, so Light, Dark and System (live OS changes included) all follow ThemeToggle. Decorative (`alt=""`): the link or heading around it carries the name. Props: `size` (px), `className`. Used by `SidebarNav`'s brand link and the portal `Wordmark` (`src/hosted/components/Brand.tsx`, imported by direct path).
+**Purpose**: The Brand v2 mark (MUT-104, ADR-073): `mark.svg` on the light canvas, `mark-dark.svg` (butter dot) on the dark one, chosen from `useTheme().resolvedTheme`, so Light, Dark and System (live OS changes included) all follow ThemeToggle. Decorative (`alt=""`): the link or heading around it carries the name. Props: `size` (px), `className`. Used by `SidebarNav`'s brand link and the shared `Wordmark` (`src/components/brand/Wordmark.tsx`), which the portal and the landing header use.
 
 Tests: `src/components/brand/__tests__/BrandMark.test.tsx`, `SidebarNav.brand.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
+
+### Wordmark
+**Location**: `src/components/brand/Wordmark.tsx`
+**Purpose**: The Brand v2 lockup: `BrandMark` beside the product name. It was moved from the portal for MUT-77. Props:
+- `name` (ReactNode: each surface passes its own copy key, or spans for a responsive name);
+- `markSize` (default 28);
+- `className` and `markClassName` (added to `wordmark` / `wordmark-mark`).
+
+Used by the portal's `Wordmark` (`src/hosted/components/Brand.tsx`, same API as before) and the landing header. `SidebarNav` keeps its own inline lockup, because it collapses to the mark.
+
+Tests: `src/components/brand/__tests__/Wordmark.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
 
 ### ThemeToggle
 **Location**: `src/components/layout/ThemeToggle.tsx`
@@ -153,6 +164,29 @@ const reduced = usePrefersReducedMotion();
 ```
 
 Tests: `src/hooks/__tests__/usePrefersReducedMotion.test.ts`.
+
+### useInView
+**Location**: `src/hooks/useInView.ts`
+**Purpose**: Whether a ref's element is in the viewport, from an IntersectionObserver. Never use scroll listeners for this (MUT-77, L10: nothing scroll-linked).
+- `null` means not known yet: before the first report, or for good when there is no IntersectionObserver. The caller picks the safe reading.
+- Options: `once` (stop after the first sighting and stay true), `rootMargin`, `threshold`.
+- The observer disconnects on unmount.
+
+```ts
+const shown = useInView(ref, { once: true, threshold: 0.15 });
+```
+
+Tests: `src/hooks/__tests__/useInView.test.ts`. For tests, use `installFakeIntersectionObserver()` / `FakeIntersectionObserver.reportFor(el, bool)` from `src/test/intersectionObserver.ts`.
+
+### useDocumentTitle
+**Location**: `src/hooks/useDocumentTitle.ts`
+**Purpose**: Keeps `document.title` in step with a translated string, so the tab follows the language (MUT-77: `/`, `/privacy`, `/download`). `index.html`'s `متابعة` stays as the no-JS default.
+Tests: `src/hooks/__tests__/useDocumentTitle.test.ts`.
+
+### useHeroCta
+**Location**: `src/pages/landing/useHeroCta.ts`
+**Purpose**: The landing page's one device-matched button (L4): `{ href, Icon, label, hint, shortLabel, alternative }`. Each `shortLabel` must be part of its `label`, because the bar's button uses the label as its accessible name (WCAG 2.5.3, tested). It is shared by `HeroSection` and `LandingHeader`, so both always go to the same place. Both read the release through `useLatestRelease`, which shares one GitHub call.
+Tests: `LandingHeader.test.tsx`, `HeroSection.test.tsx`.
 
 ### detectDevice / currentDevice
 **Location**: `src/lib/platform.ts`

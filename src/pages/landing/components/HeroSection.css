@@ -1,6 +1,7 @@
 /* Hero: the two-beat line, one button matched to the device, and the Clients list. */
 .landing-hero {
-  padding-top: 128px;
+  /* The sticky bar now sits in the flow above the hero (MUT-77), so less top room */
+  padding-top: var(--space-16);
   padding-bottom: 96px;
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%);
   overflow: hidden;
@@ -65,15 +66,22 @@
   background: var(--text);
   color: var(--bg);
   text-decoration: none;
-  transition: transform 0.1s ease-out, opacity 0.15s ease;
+  transition:
+    transform var(--duration-press) var(--ease-spring),
+    opacity 0.15s ease;
 }
 
+/* A classed link is a control: hold its own colours over the global a:hover link
+   colour and underline (which out-rank a single class), or the label turns purple
+   on the purple-ink fill (the ticket's hover bug, MUT-77) */
 .hero-cta-primary:hover {
-  opacity: 0.88;
+  color: var(--bg);
+  text-decoration: none;
+  opacity: var(--landing-hover-dim);
 }
 
 .hero-cta-primary:active {
-  transform: scale(0.97);
+  transform: scale(var(--press-scale));
 }
 
 .hero-cta-primary:focus-visible {
@@ -117,6 +125,10 @@
   text-decoration: underline;
 }
 
+.hero-cta-alt:active {
+  opacity: var(--landing-press-dim);
+}
+
 /* The Clients list */
 .hero-visual {
   display: flex;
@@ -149,7 +161,7 @@
 
 @media (max-width: 640px) {
   .landing-hero {
-    padding-top: 96px;
+    padding-top: var(--space-10);
     padding-bottom: 64px;
   }
 
@@ -157,15 +169,5 @@
     width: 100%;
     max-width: 320px;
     justify-content: center;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-cta-primary {
-    transition: opacity 0.15s ease;
-  }
-
-  .hero-cta-primary:active {
-    transform: none;
   }
 }

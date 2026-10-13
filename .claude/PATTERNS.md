@@ -2151,3 +2151,30 @@ Export → Import round trip in `ImportDataPage.test.tsx`).
 
 **Never**: put file contents in the URL or history state, or ask the person to pick the same file twice.
 
+### Pattern: Visibility from IntersectionObserver, never from scroll listeners (MUT-77)
+
+**When**: UI reacts to whether something is on screen. Examples: a header button that appears once the hero's has scrolled away, a scroll-edge fade, a reveal on entry.
+
+**How**:
+- Use `useInView(ref)` and decide what `null` (unknown) means for your case.
+  - Where showing something is optional, unknown means "don't show".
+  - Where hiding content is the risky side, unknown means "show".
+- For "has the page scrolled", observe a 1px sentinel at the very top of the page.
+- When a sticky bar covers the top of the viewport, give the observer a negative top `rootMargin` of at least the bar's height. Otherwise an element under the bar still counts as on screen.
+- For a reveal, set the hidden state only when all of these hold: the element starts below the fold, motion is allowed, and an observer exists to bring it back. Set it as a DOM attribute in a layout effect, not React state, because it needs layout and must never re-hide.
+
+**Never**: attach `scroll` listeners, or hide content before you know something will un-hide it.
+
+**Instances**: `LandingHeader` (sentinel + `showCta`), `LandingPage` (hero button), `ChapterSection` (reveal).
+
+### Pattern: Press feedback comes from the motion tokens; text links dim instead (MUT-77)
+
+**How**:
+- Buttons and button-like links add `transform var(--duration-press) var(--ease-spring)` to their own `transition` list and `:active { transform: scale(var(--press-scale)) }`.
+- The tokens zero under reduced motion, so a rule needs no reduced-motion override.
+- Text links and full-width rows (the FAQ questions) use `:active { opacity: var(--landing-press-dim) }`. Scaling a line of text, or a row whose text is start-aligned, reads as a glitch.
+- On iOS, `:active` needs a touch listener on the page: a passive no-op `touchstart` on `document`.
+- A classed link that looks like a control must also set its own `:hover` colour and `text-decoration`, because the global `a:hover` out-ranks one class (TD-122).
+
+**Instances**: the landing page (`HeroSection.css`, `LandingPage.css`, `FAQSection.css`), guarded by `landingCss.test.ts` and `@web.landing.press`.
+

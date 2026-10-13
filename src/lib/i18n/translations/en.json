@@ -40,7 +40,8 @@
       "activityOldest": "Oldest Activity",
       "netHigh": "Net (High to Low)",
       "netLow": "Net (Low to High)"
-    }
+    },
+    "pageTitle": "Mutaba3a — {page}"
   },
   "currency": {
     "USD": "USD",
@@ -1162,9 +1163,22 @@
   },
   "landing": {
     "skipToContent": "Skip to main content",
+    "meta": {
+      "title": "Mutaba3a — Track your finances, securely"
+    },
+    "header": {
+      "wordmark": "Mutaba3a · متابعة",
+      "wordmarkShort": "Mutaba3a",
+      "cta": {
+        "mac": "Download",
+        "windows": "Download",
+        "web": "Web app"
+      }
+    },
     "langToggle": {
       "en": "EN",
-      "ar": "AR"
+      "ar": "AR",
+      "label": "Switch language"
     },
     "hero": {
       "headlineLine1": "Track your finances,",

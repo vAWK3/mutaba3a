@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-122: The global `a:hover` rule out-ranks every single-class link styled as a control
+**Status**: Open (task chip offered 2026-10-14)
+**Ticket**: MUT-77 (found by `@web.landing.hover-light`)
+**Added**: 2026-10-14
+**Priority**: Medium
+**Impact**: `theme.css` `a:hover { color: var(--link-hover) }` and `index.css` `a:hover { text-decoration: underline }` are (0,1,1), so a link styled by one class, such as a CTA, turns link-coloured and underlined on hover unless it sets its own `:hover`. On the landing page that made the hero button's label purple on its purple fill. MUT-77 fixed the landing controls only.
+**Fix**: Scope both rules to `a:not([class]):hover`, as `theme.css` already does for `:visited`. Then audit every classed `<a>` in the app, the portal and the landing page for the hover each one actually wants, and prove it in Playwright.
+
+### TD-121: Safari ignores `prefers-reduced-transparency`, so the landing bar stays frosted there
+**Status**: Accepted (MUT-77 D3), re-check when Safari ships the query
+**Ticket**: MUT-77
+**Added**: 2026-10-14
+**Priority**: Low
+**Impact**: The landing header is an 85% `--bg` frost with `backdrop-filter`, made solid under `@media (prefers-reduced-transparency: reduce)`. Chromium reports the setting; Safari reportedly doesn't. So a Mac or iPhone Safari visitor who turned on Reduce Transparency still sees the frost. The 85% base keeps text readable.
+**Fix**: When Safari supports the media feature, open the landing page in Safari with Reduce Transparency on and confirm the bar is solid. The CSS needs no change. The Chromium proof is `@web.landing.transparency`, through CDP emulation.
+
 ### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
 **Status**: Resolved 2026-10-14. `generateSchedule` steps an integer month index (`year * 12 + month`) from the start date's own year and month, builds each period with `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate`, and stops when the period start is past `horizon` (string compare). Four `retainerRepo.test.ts` cases pin it (31st monthly, leap February, 31st quarterly, 1st in New York).
 **Added**: 2026-10-14 (found while fixing the retainer "today", TD-014)
