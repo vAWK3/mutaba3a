@@ -704,6 +704,20 @@ td {
   align-self: flex-start;
 }
 
+/* An informational line with its action, not a warning: an entry's last
+   payment and Edit Payment (MUT-169) */
+.drawer-notice--info {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.drawer-notice--info .btn {
+  align-self: center;
+}
+
 /* Feature notice banner (MUT-12): shown once after areas were auto-enabled */
 .feature-notice-banner {
   display: flex;

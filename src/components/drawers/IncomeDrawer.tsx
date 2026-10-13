@@ -555,7 +555,7 @@ export function IncomeDrawer() {
         {/* Fix a payment's date from the entry (MUT-169), not only the client page */}
         {hasRecords && lastPaidAt && (
           <div className="form-group">
-            <div className="drawer-notice">
+            <div className="drawer-notice drawer-notice--info">
               <div className="drawer-notice-body">
                 {t('drawer.income.lastPayment', { date: formatPaymentDate(lastPaidAt, locale) })}
               </div>
