@@ -43,9 +43,19 @@ const app = createApp({
   signInThrottle,
   signInIpLimiter,
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
+  appAssociation:
+    config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
+      ? {
+          appleTeamId: config.APPLE_TEAM_ID,
+          appleBundleId: config.APPLE_BUNDLE_ID,
+          androidPackageName: config.ANDROID_PACKAGE_NAME,
+          androidSha256Fingerprints: config.ANDROID_SHA256_FINGERPRINTS.split(','),
+        }
+      : null,
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
+if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
   logger.info({ port: info.port, env: config.NODE_ENV, keyEnvironment: config.API_KEY_ENVIRONMENT }, 'mutaba3a-api listening');
