@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { categoryNameKey } from '../names.js';
 import { GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET, presetFor } from '../presets.js';
 
 /**
@@ -30,24 +31,35 @@ describe('expense category presets', () => {
     expect(presetFor({ writerOfRecord: null, personal: true }, 'en')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
     expect(presetFor({ writerOfRecord: null, personal: true }, 'ar')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
     expect(presetFor({ writerOfRecord: null, personal: false }, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+    // ADR-065: Malafat as writer of record wins, even over the personal mark.
+    expect(presetFor({ writerOfRecord: 'MALAFAT', personal: true }, 'en').preset).toBe('lawFirm');
   });
 
   /**
    * MAL-1118: the personal preset is server-only — a person's own profile
    * (MUT-120) has no offline counterpart — so instead of a parity check these
-   * invariants guard it. Names must also be distinct in any letter case: a
-   * profile's category names are unique that way, so a collision would fail
-   * the seed on every new personal profile's first list.
+   * invariants guard it.
    */
-  it('seeds the ten personal categories in order, Other last, translated, with no name colliding in either language', () => {
+  it('seeds the ten personal categories in order, Other last, translated', () => {
     expect(PERSONAL_PRESET.map((c) => c.name)).toEqual(['Transportation', 'Car', 'Rent', 'Groceries', 'Supplies', 'Gifts', 'Investments', 'Projects', 'Leisure', 'Other']);
     expect(PERSONAL_PRESET.at(-1)).toMatchObject({ name: 'Other', nameAr: 'أخرى' });
     for (const c of PERSONAL_PRESET) {
       expect(c.nameAr.trim()).not.toBe('');
       expect(c.color).toMatch(/^#[0-9a-f]{6}$/);
     }
-    for (const key of ['name', 'nameAr'] as const) {
-      expect(new Set(PERSONAL_PRESET.map((c) => c[key].toLocaleLowerCase())).size).toBe(PERSONAL_PRESET.length);
+  });
+
+  /**
+   * A profile's category names are unique by `categoryNameKey`, and the
+   * Postgres seed inserts with `skipDuplicates`, so two preset names sharing a
+   * key would silently seed one category short — no error, and the memory
+   * store would not notice. Check every preset with the production key.
+   */
+  it('gives every preset name its own name key in both languages', () => {
+    for (const preset of [PERSONAL_PRESET, GENERAL_PRESET, LAW_FIRM_PRESET]) {
+      for (const key of ['name', 'nameAr'] as const) {
+        expect(new Set(preset.map((c) => categoryNameKey(c[key]))).size).toBe(preset.length);
+      }
     }
   });
 });

@@ -266,7 +266,7 @@ describe('DELETE /v1/expenses/{id}', () => {
 });
 
 describe('GET /v1/expenses', () => {
-  it('pages newest first and filters, on a personal profile the same as a firm’s', async () => {
+  it('pages newest first and filters, on a firm with no Malafat link the same as a Malafat-fed one', async () => {
     const { h, b, p, create } = await setup();
     for (const d of ['2026-10-01', '2026-10-09', '2026-10-04']) await create({ occurredOn: d }, b.org.id);
     await create({ occurredOn: '2026-10-06', currency: 'USD', customerId: b.customer.id }, b.org.id);

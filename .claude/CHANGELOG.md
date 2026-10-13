@@ -32,7 +32,7 @@
 
 **Why:** MUT-143 adds expense categories to personal profiles in the iPhone app, and a person's own profile was being seeded the general business list (Office Rent, Bank Fees, Salaries). Since MUT-120 "no Malafat writer" covers both a person's own profile and a firm with no Malafat link, so the new preset keys on `personalOwnerUserId` (ADR-065).
 
-**Run (Node 22):** server `npm run lint` clean, `npm run typecheck` clean, `npm test` 1,574 passed / 18 skipped (DB-only suites; no local `DATABASE_URL`), `openapi:check` up to date; root `npm run typecheck` clean, `npm run test:run` 3,477 passed / 4 skipped, `hosted:types:check` in sync.
+**Run (Node 22):** server `npm run lint` clean, `npm run typecheck` clean, `npm test` 1,575 passed / 18 skipped (DB-only suites; no local `DATABASE_URL`), `openapi:check` up to date; root `npm run typecheck` clean, `npm run test:run` 3,477 passed / 4 skipped, `hosted:types:check` in sync.
 
 ### Added
 - `server/src/expenses/presets.ts`: `PERSONAL_PRESET` — Transportation, Car, Rent, Groceries, Supplies, Gifts, Investments, Projects, Leisure, Other, in en/ar. Server-only; the offline app has no personal profile.
@@ -43,8 +43,8 @@
 - API 1.19.0-mal1118: route description only; `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
 
 ### Tests
-- `presets.test.ts`: `presetFor` for all three profile kinds; the personal preset's order, Other last, translations, hex colours, and no case-insensitive name collision in either language.
-- `routes-expenses.test.ts`: the old "general preset on a personal profile" test ran on an unconnected firm — renamed to say so and now checks the audit row; new English and Arabic tests seed a real personal profile (via `/admin/v1/users`' `personalProfile.id`) once, as SYSTEM, with `{ preset: 'personal', count: 10, locale }`.
+- `presets.test.ts`: `presetFor` for all three profile kinds, including Malafat winning over the personal mark; the personal preset's order, Other last, translations and hex colours; every preset's names distinct under `categoryNameKey` (Postgres seeds with `skipDuplicates`, so a clash would drop a category silently). Mutation-checked: a `'rent '` entry and a swapped selector each turn the suite red.
+- `routes-expenses.test.ts`: the old "general preset on a personal profile" test ran on an unconnected firm — renamed to say so and now checks the audit row (the paging test's title had the same mislabel and is renamed too); new English and Arabic tests seed a real personal profile (via `/admin/v1/users`' `personalProfile.id`) once, as SYSTEM, with `{ preset: 'personal', count: 10, locale }`.
 
 ---
 
