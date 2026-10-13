@@ -22,7 +22,10 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: '$',
   ILS: '₪',
   EUR: '€',
-  JOD: 'JOD', // no conventional narrow symbol; show the ISO code
+  // Required for type-completeness now that Currency includes JOD (MUT-140)
+  // even though documents can't actually be created in JOD (DocumentFormPage's
+  // currency enum stays 3-value) — this feature is slated for removal (MUT-14X).
+  JOD: 'JOD',
 };
 
 // Calculate item total in minor units

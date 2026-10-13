@@ -72,7 +72,7 @@ const itemSchema = z.object({
 const paymentSchema = z.object({
   id: z.string(),
   amountMinor: z.number().min(0),
-  currency: z.enum(['USD', 'ILS', 'EUR', 'JOD']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   method: z.enum(['cash', 'bank_transfer', 'cheque', 'credit_card', 'other']),
   notes: z.string().optional(),
   paidAt: z.string(),
@@ -96,7 +96,7 @@ const schema = z.object({
   subject: z.string().optional(),
   brief: z.string().optional(),
   notes: z.string().optional(),
-  currency: z.enum(['USD', 'ILS', 'EUR', 'JOD']),
+  currency: z.enum(['USD', 'ILS', 'EUR']),
   language: z.enum(['ar', 'en']),
   templateId: z.string(),
   issueDate: z.string().min(1, 'Issue date is required'),
@@ -244,7 +244,8 @@ export function DocumentFormPage() {
         subject: existingDoc.subject || '',
         brief: existingDoc.brief || '',
         notes: existingDoc.notes || '',
-        currency: existingDoc.currency,
+        // Documents stay USD/ILS/EUR-only (feature slated for removal, MUT-14X)
+        currency: existingDoc.currency as 'USD' | 'ILS' | 'EUR',
         language: existingDoc.language,
         templateId: existingDoc.templateId,
         issueDate: existingDoc.issueDate.split('T')[0],
@@ -261,7 +262,7 @@ export function DocumentFormPage() {
         payments: existingDoc.payments.map((p) => ({
           id: p.id,
           amountMinor: p.amountMinor,
-          currency: p.currency,
+          currency: p.currency as 'USD' | 'ILS' | 'EUR',
           method: p.method,
           notes: p.notes || '',
           paidAt: p.paidAt.split('T')[0],
@@ -282,7 +283,7 @@ export function DocumentFormPage() {
         subject: sourceDoc.subject || '',
         brief: sourceDoc.brief || '',
         notes: sourceDoc.notes || '',
-        currency: sourceDoc.currency,
+        currency: sourceDoc.currency as 'USD' | 'ILS' | 'EUR',
         language: sourceDoc.language,
         templateId: sourceDoc.templateId,
         issueDate: todayISO(), // Reset to today for new document
@@ -307,7 +308,7 @@ export function DocumentFormPage() {
     const profileId = form.getValues('businessProfileId');
     const profile = businessProfiles.find((p) => p.id === profileId);
     if (profile && !isEditMode && !existingDoc) {
-      setValue('currency', profile.defaultCurrency);
+      setValue('currency', profile.defaultCurrency as 'USD' | 'ILS' | 'EUR');
       setValue('language', profile.defaultLanguage);
     }
   }, [watchedBusinessProfileId, businessProfiles, isEditMode, existingDoc, setValue]);
