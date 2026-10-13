@@ -1,7 +1,7 @@
 {
   "name": "@mutaba3a/api",
   "private": true,
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Mutaba3a hosted financial API — organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
   "type": "module",
   "engines": {
