@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Drawer } from './Drawer';
 import { useDrawerStore, type IncomeStatus } from '../../lib/stores';
 import {
@@ -47,6 +46,7 @@ import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import type { TxStatus } from '../../types';
+import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeFormSchema';
 
 /**
  * IncomeDrawer
@@ -61,42 +61,6 @@ import type { TxStatus } from '../../types';
  * never writes those fields. Write rules live in lib/incomeEntry.ts.
  */
 
-const INCOME_STATUSES = ['earned', 'invoiced', 'received'] as const satisfies readonly IncomeStatus[];
-const CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'] as const;
-
-// Exported for direct schema-level testing (cheaper and more precise than a
-// full component render): amount's decimal-precision validity depends on the
-// sibling currency field (JOD = 3 decimals, others = 2), which a chained
-// z.string().refine() on the field alone can't see -- hence superRefine.
-export const schema = z.object({
-  incomeStatus: z.enum(INCOME_STATUSES),
-  profileId: z.string().min(1, 'validation.profileRequired'),
-  amount: z.string().trim().min(1, 'validation.amountRequired'),
-  currency: z.enum(CURRENCIES),
-  occurredAt: z.string().min(1, 'validation.dateRequired'),
-  clientId: z.string().optional(),
-  /** Text left in the client box without picking a client (MUT-5) */
-  clientDraft: z
-    .string()
-    .optional()
-    .refine((value) => !value, 'validation.clientNotPicked'),
-  projectId: z.string().optional(),
-  dueDate: z.string().optional(),
-  title: z.string().optional(),
-  notes: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (!data.amount) return; // 'validation.amountRequired' already reported
-  const parsed = parseAmountInput(data.amount, { currency: data.currency });
-  if (parsed === null) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'validation.amountInvalid', path: ['amount'] });
-    return;
-  }
-  if (parsed <= 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'validation.amountPositive', path: ['amount'] });
-  }
-});
-
-type FormData = z.infer<typeof schema>;
 
 /** Fields rendered inside "More details"; an error in one of them opens it. */
 const DETAIL_FIELDS = ['incomeStatus', 'dueDate', 'currency', 'occurredAt', 'projectId', 'notes'] as const;

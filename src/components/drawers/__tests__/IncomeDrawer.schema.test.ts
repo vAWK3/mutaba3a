@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { schema } from '../IncomeDrawer';
+import { schema } from '../incomeFormSchema';
 
 /**
  * Schema-level tests for the amount/currency cross-field validation
