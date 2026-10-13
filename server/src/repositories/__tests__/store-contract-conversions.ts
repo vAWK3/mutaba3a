@@ -73,5 +73,27 @@ export function describeLedgerStoreConversionsContract(name: string, makeStore: 
       expect(await ids({ currency: 'JOD' })).toEqual([made[2]!.id]);
       expect(await ids({ currency: 'USD' })).toEqual([made[0]!.id, made[1]!.id, made[3]!.id, made[4]!.id, made[5]!.id].sort());
     });
+
+    it('an inclusive cursor starts the page at that conversion, including it, and continues exclusively (MUT-91 anchor)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const dates = ['2026-10-07', '2026-10-03', '2026-10-03', '2026-10-03', '2026-10-01'];
+      const made = [];
+      for (const [i, d] of dates.entries()) made.push(await store.conversions.create(w.conversion({ occurredOn: d }), at(i)));
+      const order = [...made].sort((x, y) => (x.occurredOn === y.occurredOn ? (x.id < y.id ? 1 : -1) : x.occurredOn < y.occurredOn ? 1 : -1));
+      // A same-day tie: the anchor sits in the middle of the three 2026-10-03 rows.
+      const target = order[2]!;
+
+      const page = await store.conversions.list(w.a.id, {}, { limit: 2, cursor: { occurredOn: target.occurredOn, id: target.id, inclusive: true } });
+      expect(page.items.map((x) => x.id)).toEqual([order[2]!.id, order[3]!.id]);
+      expect(page.nextCursor).toEqual({ occurredOn: order[3]!.occurredOn, id: order[3]!.id });
+
+      const rest = await store.conversions.list(w.a.id, {}, { limit: 50, cursor: page.nextCursor });
+      expect(rest.items.map((x) => x.id)).toEqual([order[4]!.id]);
+
+      // Filters still apply: the anchor's own day only.
+      const sameDay = await store.conversions.list(w.a.id, { from: '2026-10-03', to: '2026-10-03' }, { limit: 50, cursor: { occurredOn: target.occurredOn, id: target.id, inclusive: true } });
+      expect(sameDay.items.map((x) => x.id)).toEqual([order[2]!.id, order[3]!.id]);
+    });
   });
 }

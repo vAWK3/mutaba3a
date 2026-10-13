@@ -31,7 +31,7 @@ import {
   UpdateExpenseRequestSchema,
 } from '../schemas.js';
 import { serializeExpense, serializeExpenseReceipt } from '../serializers.js';
-import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 export interface ExpenseRouteOptions {
   /** The M6 attachments bucket; receipts use it under their own prefix (MUT-42 D1). Null: receipt routes answer 503. */
@@ -84,7 +84,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListExpensesQuerySchema },
-      responses: { 200: { description: 'A page', content: { 'application/json': { schema: ExpensePageSchema } } }, ...validationResponse, ...errorResponses },
+      responses: { 200: { description: 'A page', content: { 'application/json': { schema: ExpensePageSchema } } }, ...validationResponse, ...notFoundResponse, ...errorResponses },
     }),
     async (c) => {
       const { organization } = sessionAuth(c);
@@ -98,7 +98,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         ...(q.projectId ? { projectId: q.projectId } : {}),
         ...(q.linked === 'none' ? { unlinked: true } : {}),
       };
-      const page = await store.expenses.list(organization.id, filter, { limit: q.limit, cursor: q.cursor ? decodeExpenseCursor(q.cursor) : null });
+      const cursor = await ledgerPageStart(q, decodeExpenseCursor, (id) => store.expenses.getById(organization.id, id), 'No such expense');
+      const page = await store.expenses.list(organization.id, filter, { limit: q.limit, cursor });
       return c.json({ items: page.items.map(serializeExpense), nextCursor: page.nextCursor ? encodeExpenseCursor(page.nextCursor) : null }, 200);
     },
   );

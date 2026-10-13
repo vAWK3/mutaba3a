@@ -1487,8 +1487,10 @@ function newestFirst(a: ExpenseRecord, b: ExpenseRecord): number {
   return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
+/** Strictly after the cursor, or at it too when the cursor is inclusive (MUT-91 anchor). */
 function isBeforeExpenseCursor(e: ExpenseRecord, cursor: ExpenseCursor): boolean {
-  return e.occurredOn < cursor.occurredOn || (e.occurredOn === cursor.occurredOn && e.id < cursor.id);
+  const sameDay = cursor.inclusive ? e.id <= cursor.id : e.id < cursor.id;
+  return e.occurredOn < cursor.occurredOn || (e.occurredOn === cursor.occurredOn && sameDay);
 }
 
 function matchesConversion(c: ConversionRecord, f: ConversionFilter): boolean {
@@ -1505,8 +1507,10 @@ function newestConversionFirst(a: ConversionRecord, b: ConversionRecord): number
   return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
+/** Strictly after the cursor, or at it too when the cursor is inclusive (MUT-91 anchor). */
 function isBeforeConversionCursor(c: ConversionRecord, cursor: ConversionCursor): boolean {
-  return c.occurredOn < cursor.occurredOn || (c.occurredOn === cursor.occurredOn && c.id < cursor.id);
+  const sameDay = cursor.inclusive ? c.id <= cursor.id : c.id < cursor.id;
+  return c.occurredOn < cursor.occurredOn || (c.occurredOn === cursor.occurredOn && sameDay);
 }
 
 /** The inbox's own newest-first order: (createdAt, id) descending, so entries captured in the same millisecond still page without gaps or repeats. */
