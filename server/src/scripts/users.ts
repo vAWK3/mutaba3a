@@ -47,14 +47,14 @@ const USAGE = [
 
 const SHOWN_ONCE = 'Password — shown once; deliver it to the person over a secure channel:';
 
-interface UserSummary {
+export interface UserSummary {
   id: string;
   email: string;
   locale: string;
   status: string;
 }
 
-class CliError extends Error {}
+export class CliError extends Error {}
 
 export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promise<number> {
   const [command, ...rest] = argv;
@@ -98,12 +98,13 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
   }
 }
 
-interface AdminClient {
+export interface AdminClient {
   call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T>;
   userByEmail(email: string): Promise<UserSummary>;
 }
 
-function adminClient(fetchFn: typeof fetch, baseUrl: string, token: string): AdminClient {
+/** Exported for seed-demo-account.ts (MUT-136), the admin-API half of seeding a local test account. */
+export function adminClient(fetchFn: typeof fetch, baseUrl: string, token: string): AdminClient {
   const call = async <T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> => {
     const res = await fetchFn(`${baseUrl}${path}`, {
       method,
