@@ -34,7 +34,8 @@ function invalidateConversions(queryClient: ReturnType<typeof useQueryClient>, p
 export function useCreateConversion(profileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateConversionRequest) => api.createConversion(profileId, body, crypto.randomUUID()),
+    // MUT-133 D5: attempt-scoped key, as in useCreateExpense.
+    mutationFn: ({ body, idempotencyKey }: { body: CreateConversionRequest; idempotencyKey: string }) => api.createConversion(profileId, body, idempotencyKey),
     onSuccess: () => invalidateConversions(queryClient, profileId),
   });
 }

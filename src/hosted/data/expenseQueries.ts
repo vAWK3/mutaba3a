@@ -64,7 +64,9 @@ function invalidateExpenses(queryClient: ReturnType<typeof useQueryClient>, prof
 export function useCreateExpense(profileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateExpenseRequest) => api.createExpense(profileId, body, crypto.randomUUID()),
+    // MUT-133 D5: the key comes from the drawer's attempt (data/attemptKey.ts), so a retry after a
+    // timeout that actually landed replays instead of recording the expense twice.
+    mutationFn: ({ body, idempotencyKey }: { body: CreateExpenseRequest; idempotencyKey: string }) => api.createExpense(profileId, body, idempotencyKey),
     onSuccess: () => invalidateExpenses(queryClient, profileId),
   });
 }

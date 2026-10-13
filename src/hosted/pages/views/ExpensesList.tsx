@@ -122,6 +122,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
       {(filters.newExpense || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}
+          timezone={profile.timezone}
           mode={filters.expense ? 'edit' : 'create'}
           expenseId={filters.expense}
           onClose={closeDrawer}

@@ -101,7 +101,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
           </>
         )}
       </QueryView>
-      {filters.newConversion && <ConversionDrawer profileId={profile.id} onClose={closeDrawer} />}
+      {filters.newConversion && <ConversionDrawer profileId={profile.id} timezone={profile.timezone} onClose={closeDrawer} />}
     </>
   );
 }
