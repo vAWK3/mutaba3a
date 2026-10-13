@@ -23,10 +23,26 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
   });
 
-  it('names no hosted product, only the apps this page links to', () => {
+  it('covers the iPhone and Android apps alongside Mac, Windows, and the browser', () => {
     renderPage('en');
+    const intro = document.querySelector('.privacy-policy-intro')?.textContent ?? '';
+    for (const platform of ['Mac', 'Windows', 'browser', 'iPhone', 'Android']) {
+      expect(intro).toContain(platform);
+    }
+  });
+
+  it('says the mobile apps use an account and store data on a server, and names the processor', () => {
+    renderPage('en');
+    expect(screen.getByRole('heading', { level: 2, name: /iPhone and Android/ })).toBeInTheDocument();
     const text = document.querySelector('main')?.textContent ?? '';
-    expect(text).not.toMatch(/\bhosted\b/i);
+    expect(text).toMatch(/account/i);
+    expect(text).toContain('Google Cloud');
+  });
+
+  it('tells mobile users how to have their account and data deleted', () => {
+    renderPage('en');
+    const heading = screen.getByRole('heading', { level: 2, name: /Deleting your account/ });
+    expect(heading.parentElement?.textContent).toContain('info@malafat.app');
   });
 
   it('gives a contact address', () => {
