@@ -47,6 +47,7 @@
 
 ### Fixed
 - Three real "amount 10x too large" bugs found auditing every hardcoded `/100` conversion in the codebase: `IncomeDrawer`/`ExpenseDrawer`'s edit/duplicate reset handlers, `csv.ts`'s CSV export, and `DocumentDrawer.tsx`'s own independent `formatMinorAmount` — all bypassed the (now currency-aware) shared formatter.
+- (qa-reconcile gap) `ExpenseDrawer`'s amount field never validated decimal precision for any currency — only checked non-empty. A USD expense typed with a 3rd decimal silently rounded via `parseAmountToMinor`'s lenient path instead of being rejected. Added the same amount/currency `superRefine` cross-field check `IncomeDrawer` already has; schema extracted to `expenseDrawerFormSchema.ts` (same fast-refresh/testability reasoning as `incomeFormSchema.ts`). `ExpenseDrawer.schema.test.ts` is this drawer's first test file.
 
 ### Technical
 - Document/invoice generation (`DocumentFormPage.tsx`, `DocumentDrawer.tsx`) was briefly widened to accept JOD, then reverted: the feature is being removed entirely (MUT-145, product direction is digital-ledger-only), so investing JOD support there was pointless. The narrow-cast fixes needed to keep those files type-safe under the now-wider global `Currency` stayed, since that's unavoidable regardless of documents' fate.
