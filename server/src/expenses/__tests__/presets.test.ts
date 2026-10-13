@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { GENERAL_PRESET, LAW_FIRM_PRESET, presetFor } from '../presets.js';
+import { categoryNameKey } from '../names.js';
+import { GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET, presetFor } from '../presets.js';
 
 /**
  * MUT-42 D2: the hosted seed mirrors the offline app's presets. The server is a
@@ -25,8 +26,40 @@ describe('expense category presets', () => {
     expect(LAW_FIRM_PRESET.length).toBeGreaterThan(10);
   });
 
-  it('picks the law-firm preset for a Malafat-fed profile and the general one otherwise, in the user’s language', () => {
-    expect(presetFor('MALAFAT', 'ar')).toEqual({ preset: 'lawFirm', categories: LAW_FIRM_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
-    expect(presetFor(null, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+  it('picks law-firm for a Malafat-fed profile, personal for a personal profile and general for any other firm, in the user’s language', () => {
+    expect(presetFor({ writerOfRecord: 'MALAFAT', personal: false }, 'ar')).toEqual({ preset: 'lawFirm', categories: LAW_FIRM_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
+    expect(presetFor({ writerOfRecord: null, personal: true }, 'en')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+    expect(presetFor({ writerOfRecord: null, personal: true }, 'ar')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
+    expect(presetFor({ writerOfRecord: null, personal: false }, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+    // ADR-066: Malafat as writer of record wins, even over the personal mark.
+    expect(presetFor({ writerOfRecord: 'MALAFAT', personal: true }, 'en').preset).toBe('lawFirm');
+  });
+
+  /**
+   * MAL-1118: the personal preset is server-only — a person's own profile
+   * (MUT-120) has no offline counterpart — so instead of a parity check these
+   * invariants guard it.
+   */
+  it('seeds the ten personal categories in order, Other last, translated', () => {
+    expect(PERSONAL_PRESET.map((c) => c.name)).toEqual(['Transportation', 'Car', 'Rent', 'Groceries', 'Supplies', 'Gifts', 'Investments', 'Projects', 'Leisure', 'Other']);
+    expect(PERSONAL_PRESET.at(-1)).toMatchObject({ name: 'Other', nameAr: 'أخرى' });
+    for (const c of PERSONAL_PRESET) {
+      expect(c.nameAr.trim()).not.toBe('');
+      expect(c.color).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  /**
+   * A profile's category names are unique by `categoryNameKey`, and the
+   * Postgres seed inserts with `skipDuplicates`, so two preset names sharing a
+   * key would silently seed one category short — no error, and the memory
+   * store would not notice. Check every preset with the production key.
+   */
+  it('gives every preset name its own name key in both languages', () => {
+    for (const preset of [PERSONAL_PRESET, GENERAL_PRESET, LAW_FIRM_PRESET]) {
+      for (const key of ['name', 'nameAr'] as const) {
+        expect(new Set(preset.map((c) => categoryNameKey(c[key]))).size).toBe(preset.length);
+      }
+    }
   });
 });

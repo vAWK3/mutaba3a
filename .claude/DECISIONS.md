@@ -2670,3 +2670,24 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 - Default `currency` to `'USD'` to minimize the diff: rejected — this is the exact failure mode ADR exists to prevent. A future JOD (or 5th-currency) call site added without passing currency would compile cleanly and silently round wrong, discovered only in production, mirroring the Flutter app's MUT-72→MUT-119 path.
 - Keep a global `MINOR_DIGITS = 2` constant and special-case JOD inline at each call site: rejected — reintroduces the global-assumption shape this decision exists to remove, just with more scattered special-casing instead of one per-currency source of truth (`CURRENCY_EXPONENT`/`currencyExponent()`).
 
+---
+
+## ADR-066: A Person's Own Profile Seeds a Personal Expense Preset, Keyed on `personalOwnerUserId`, Not on "No Writer of Record" (Amends MUT-42 D2)
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MAL-1118 (blocks MUT-143, categories on personal profiles in the iPhone app). MUT-42 D2 seeded the general business preset "on a personal profile", meaning any profile whose writer of record is null. MUT-120 later gave every user one personal organization, marked by `personalOwnerUserId`, and since then writer-null covers two different things: that person's own profile and a firm with no Malafat link. The ticket asked for a household preset for "personal (non-Malafat)" profiles. Seeding runs once, on a profile's first category list, so a wrong selector mis-seeds permanently.
+
+**Decision**:
+1. `presetFor({ writerOfRecord, personal }, locale)` picks law-firm when the writer of record is `MALAFAT`, the new **personal** preset when the organization has `personalOwnerUserId`, and general otherwise. A firm without a Malafat link keeps the general preset. A personal organization can never be Malafat-connected (no key can be issued for one, MUT-120), so the order only matters defensively.
+2. `PERSONAL_PRESET` (Transportation, Car, Rent, Groceries, Supplies, Gifts, Investments, Projects, Leisure, Other; en/ar) is **server-only**. D2's rule that server presets copy the offline app's does not apply to it: the offline app has no personal profile to give it to, and an unused export there would sit beside `ALL_CATEGORIES`, the offline fallback picker. In place of the parity check, `presets.test.ts` pins its order and translations, and checks every preset's names are distinct under `categoryNameKey` — the production unique key; the Postgres seed uses `skipDuplicates`, so a clash would silently seed one category short rather than fail.
+3. No backfill. Personal profiles whose first list ran before this change keep the general list; MUT-143 gives users rename and archive.
+
+**Consequences**:
+- The seed audit row's `metadata.preset` gains a third value, `personal`.
+- "Personal" now has two meanings in the server and they must not be swapped: MUT-65's writability ("no CONNECTED integration", `ProfileWriter === null`) and MUT-120's own profile (`personalOwnerUserId`). `writability.ts`'s `ProfileWriter` doc comment says so.
+- API 1.19.0-mal1118 (route description only).
+
+**Alternatives considered**:
+- Key on writer-null, the ticket's literal wording: rejected — a firm with no Malafat link would get Groceries and Gifts instead of Office Rent and Bank Fees, permanently.
+- Mirror the personal preset into `src/db/defaultExpenseCategories.ts` to keep D2's parity rule universal: rejected — dead code in the desktop bundle, one careless edit away from the fallback picker.

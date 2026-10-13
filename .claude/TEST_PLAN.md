@@ -1001,6 +1001,15 @@ Plan: `.claude/designs/mut-42-hosted-expenses-tests.md`. The tests were written 
 | Invisible to Malafat | `expenses-invisible.test.ts` | canary sweep over every key-readable operation × every canary id; `/v1/audit` excludes expense types; idempotency namespaced (lookup 404, no collision, digest ≤ 128) |
 | Inventory | `route-security.test.ts`, `writability-routes.test.ts` | 13 expense operations session-only; 25 session GETs; the category list is the one read that writes (seed) |
 
+### MAL-1118 — personal expense-category preset (`server/`)
+
+Tests written red first (ADR-066).
+
+| Area | File | What is pinned |
+|---|---|---|
+| Pure unit | `expenses/__tests__/presets.test.ts` | `presetFor` for Malafat-fed (law-firm), personal (personal, en and ar) and other firms (general); Malafat beats the personal mark; `PERSONAL_PRESET` order, Other last, every Arabic name present, hex colours; every preset's names distinct under `categoryNameKey` in both languages (a clash would be dropped silently by the Postgres seed's `skipDuplicates`). Parity with the offline source still covers general and law-firm only |
+| Routes | `routes-expenses.test.ts` | a real personal profile (`/admin/v1/users` → `personalProfile.id`) seeds the personal preset in English and in Arabic, once, as SYSTEM, audit `{ preset: 'personal', count: 10, locale }`; a firm with no Malafat link keeps general (renamed from the mislabeled "personal profile" test) |
+
 ### MUT-59 — repair of a database that applied the original M7 (`server/`)
 
 `src/repositories/__tests__/migration-mut59.test.ts`, Postgres only (`npm run test:db`), on scratch databases built with `prisma db execute` from every migration, with M7 replaced by its original (`fixtures/m7_fee_proposals.acb1144.sql`):
