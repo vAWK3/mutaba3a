@@ -1061,7 +1061,7 @@ due-tomorrow boundary case needed new code/tests.
 | Repository | `src/db/__tests__/transactionRepo.test.ts` (`markPaid`) | backdated `paidAt` stored verbatim; defaults to today when omitted; a payment near a month boundary buckets under the month it was received; a future-dated `paidAt` is rejected |
 | Repository | `src/db/__tests__/partialPayment.test.ts` (`recordPartialPayment`) | same four cases for partial payments, plus: a transaction's `paidAt` after two payment records reflects the *later* record's date, not the instant the recalculation ran |
 | Repository | `src/db/__tests__/paymentRecords.test.ts` | `paymentRecordRepo.create`/`.update` reject a future `paidAt`; a same-day timestamp with a time component is accepted (date-only comparison, not a full-timestamp one) |
-| Hook | `src/hooks/__tests__/useIncomeQueries.test.tsx` (`useMarkIncomePaid`) | `{ id, paidAt }` forwards both fields to the repository; omitting `paidAt` forwards `undefined` (repository default applies) |
+| Hook | ~~`src/hooks/__tests__/useIncomeQueries.test.tsx` (`useMarkIncomePaid`)~~ | ~~`{ id, paidAt }` forwards both fields to the repository; omitting `paidAt` forwards `undefined` (repository default applies)~~ (hook and test deleted, MUT-98 — no app caller outside tests; `transactionRepo.markPaid` itself stays covered by the Repository row above) |
 | Drawer | `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` | ~~"Mark fully paid" records under today by default and under a backdated date when the field was changed first~~ (button removed by MUT-86, ADR-047; the backdated-date case now runs through Record Payment); a future-dated "Record Payment" is rejected inline with no mutation call |
 | Client profile | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | the work-section "Mark Paid" row action opens the payment drawer and does **not** call the mark-paid mutation directly |
 | Income page | `src/pages/income/__tests__/IncomePage.test.tsx` | due-tomorrow is asserted not-overdue (the boundary case MUT-21's acceptance criteria named but the existing fix had not added) |
@@ -1404,7 +1404,7 @@ Plan: `.claude/designs/mut-58-prune-money-events-tests.md`. A deletion with zero
 |---|---|
 | `src/__tests__/noDeadMoneyEventModules.test.ts` (new, 6) | `useMoneyEventQueries.ts`, `moneyEventRepository.ts` and `lib/monthDetection.ts` stay gone; no file under `src/` (tests included, since they are outside `tsc`) names them or `invalidateMoneyEventQueries`; `src/types/index.ts` declares none of the twelve money-event and guidance types; `moneyEventVersions` is still a Dexie table (ADR-029) |
 | `src/hooks/__tests__/useQueries.test.tsx` | `useCreatePaymentRecord` still invalidates the income, receivable, payment and transaction keys, and no `money*` key (was: asserted three money-event keys) |
-| `src/hooks/__tests__/useIncomeQueries.test.tsx` | `useMarkIncomePaid` invalidates `income` and `transactions`, and no `money*` key (was: "should invalidate the derived money-event views") |
+| `src/hooks/__tests__/useIncomeQueries.test.tsx` | ~~`useMarkIncomePaid` invalidates `income` and `transactions`, and no `money*` key (was: "should invalidate the derived money-event views")~~ (hook and test deleted, MUT-98 2026-10-13 — see the Hook row earlier in this file) |
 
 Removed with their subjects: `src/db/__tests__/moneyEvent.test.ts` (5), `src/hooks/__tests__/invalidateMoneyEventQueries.test.ts` (10) and `src/lib/__tests__/monthDetection.test.ts` (23), 38 tests in all.
 
