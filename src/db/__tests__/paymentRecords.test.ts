@@ -233,6 +233,35 @@ describe('paymentRecordRepo', () => {
       expect(updated?.amountMinor).toBe(3000);
     });
 
+    // MUT-169: fixing a payment's date from the ledger re-dates the entry
+    it("re-dates a fully paid entry when its payment's date moves, and keeps it paid", async () => {
+      // A Received fast-add: one record for the full amount, dated "now"
+      const record = await paymentRecordRepo.create({
+        transactionId: incomeId,
+        amountMinor: 10000,
+        paidAt: '2024-01-20T21:30:00.000Z',
+      });
+
+      await paymentRecordRepo.update(record.id, { paidAt: '2024-01-17' });
+
+      const entry = await transactionRepo.get(incomeId);
+      expect(entry?.paidAt).toBe('2024-01-17');
+      expect(entry?.status).toBe('paid');
+      expect(entry?.receivedAmountMinor).toBe(10000);
+    });
+
+    it("leaves a part-paid entry part-paid when one payment's date moves", async () => {
+      const first = await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 3000, paidAt: '2024-01-20' });
+      await paymentRecordRepo.create({ transactionId: incomeId, amountMinor: 2000, paidAt: '2024-01-25' });
+
+      await paymentRecordRepo.update(first.id, { paidAt: '2024-01-18' });
+
+      const entry = await transactionRepo.get(incomeId);
+      expect(entry?.status).toBe('unpaid');
+      expect(entry?.receivedAmountMinor).toBe(5000);
+      expect(entry?.paidAt).toBeUndefined();
+    });
+
     it('should reject updating a payment to a future date', async () => {
       const record = await paymentRecordRepo.create({
         transactionId: incomeId,
