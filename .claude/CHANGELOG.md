@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — MAL-1118: personal profiles seed a household expense-category preset
+
+**Why:** MUT-143 adds expense categories to personal profiles in the iPhone app, and a person's own profile was being seeded the general business list (Office Rent, Bank Fees, Salaries). Since MUT-120 "no Malafat writer" covers both a person's own profile and a firm with no Malafat link, so the new preset keys on `personalOwnerUserId` (ADR-065).
+
+**Run (Node 22):** server `npm run lint` clean, `npm run typecheck` clean, `npm test` 1,574 passed / 18 skipped (DB-only suites; no local `DATABASE_URL`), `openapi:check` up to date; root `npm run typecheck` clean, `npm run test:run` 3,477 passed / 4 skipped, `hosted:types:check` in sync.
+
+### Added
+- `server/src/expenses/presets.ts`: `PERSONAL_PRESET` — Transportation, Car, Rent, Groceries, Supplies, Gifts, Investments, Projects, Leisure, Other, in en/ar. Server-only; the offline app has no personal profile.
+
+### Changed
+- `presetFor` takes `{ writerOfRecord, personal }`: law-firm for a Malafat-fed profile, personal for a person's own profile, general for any other firm (unchanged for firms). The first `GET /v1/expense-categories` passes `organization.personalOwnerUserId !== null`; the seed audit row can now say `preset: 'personal'`.
+- `ProfileWriter` doc comment (`server/src/auth/writability.ts`) separates MUT-65's "personal" (no Malafat writer) from MUT-120's own profile.
+- API 1.19.0-mal1118: route description only; `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
+### Tests
+- `presets.test.ts`: `presetFor` for all three profile kinds; the personal preset's order, Other last, translations, hex colours, and no case-insensitive name collision in either language.
+- `routes-expenses.test.ts`: the old "general preset on a personal profile" test ran on an unconnected firm — renamed to say so and now checks the audit row; new English and Arabic tests seed a real personal profile (via `/admin/v1/users`' `personalProfile.id`) once, as SYSTEM, with `{ preset: 'personal', count: 10, locale }`.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Seed script can keep a store-review account's password
 
 **Why:** Basel needs a populated hosted account for App Store / Play reviewers. `seed:demo-account` already builds one, but it rotated the password on every run — which also revokes every session — so re-seeding the reviewer account would break the credentials entered in App Store Connect and Play Console and fail a review in progress.
