@@ -245,6 +245,28 @@ describe('ExpensesLedgerPage', () => {
       });
     });
 
+    it('strip equals the sum of the ledger rows, not a stale ₪0 (MUT-94)', async () => {
+      renderWithProviders();
+      await waitFor(() => {
+        // mockExpenses: $150 + $500 + $250 = $900, all USD
+        expect(screen.getByText('$900')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('₪0')).toBeNull();
+    });
+
+    it('recording a $42 expense shows $42 in the strip without a reload (MUT-94 AC)', async () => {
+      vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
+        data: [createMockExpense({ id: 'exp-42', title: 'Parking', amountMinor: 4200 })],
+        isLoading: false,
+      } as ReturnType<typeof useExpenseQueries.useExpenses>);
+
+      renderWithProviders();
+
+      await waitFor(() => {
+        expect(screen.getByText('$42')).toBeInTheDocument();
+      });
+    });
+
     it('renders view toggle buttons', async () => {
       renderWithProviders();
       await waitFor(() => {
