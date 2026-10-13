@@ -284,11 +284,16 @@ Tests generated from the table (MUT-39):
 
 **Money.** Wire amounts are canonical decimal strings with a currency. They are formatted with `Intl.NumberFormat(locale, { style: 'currency', currency }).format(decimalString)`, which formats the string exactly (Intl.NumberFormat v3; Chrome 106+, Safari 15.4+, Firefox 116+). **No `Number()` or `parseFloat` ever touches an amount.** `Numeric` (`parseFloat`) and `CellAmount`/`formatAmount` (minor-unit `number`, `/100`) are therefore not reused. A new `DecimalAmount` component is added and registered. Totals are never summed client-side across currencies; the server returns one block per currency.
 
-### 7.4 Read-only surfaces explain themselves
+### 7.4 Read-only surfaces explain themselves; a personal profile writes income (MUT-133)
 
-Income views (Receivables, Payments, Documents, Client-detail tabs) render **no** edit affordances: no row actions, no record-payment button, no drawer -- unconditionally, regardless of `access.payments` (MUT-93: deferred unsuppressing these for a personal profile to a follow-up ticket). A persistent inline notice in the `IncomeDrawer` locked-notice pattern (reason + next step, `role="note"`) says why. Checked in this order:
+**On the signed-in user's own personal profile** (`incomeAffordancesFor(profile)`, ADR-037 MUT-133 amendment), income views offer two writes and no notice:
+- **+ Add income** in the page header (and as the empty state's action) on Receivables (default Owed), Payments (default Received) and Client detail (client prefilled). It opens `?newIncome=received|owed` → `IncomeCaptureDrawer` → `POST /v1/income`.
+- **Record payment**, a secondary small button in a sticky end column of the Receivables lists, only on `origin: ADJUSTMENT` rows that are not PAID/VOID. It opens `?settle=<id>` → `RecordPaymentDrawer` → `POST /v1/receivables/{id}/settle`.
+- The gate is `isPersonalDefault`, then Add on `access.capture` and settle on `access.payments` + `income.owed`; `profile.income` shapes the kinds. Drawer params are inert anywhere else. No edit, delete or Undo; each save is confirmed by a polite "Saved · …" status.
 
-- `profile.isPersonalDefault`: "Income on this profile is recorded from the phone app. This view is read-only." (MUT-93, post-MUT-65) -- checked **before** the `access.payments === 'read-write'` gate below, because a personal profile's session access is read-write once MUT-65 ships; without this branch the notice would just vanish with no replacement guidance, since there is still no portal affordance to act on that access.
+**Everywhere else**, income views (Receivables, Payments, Documents, Client-detail tabs) render **no** edit affordances: no row actions, no record-payment button, no drawer. A persistent inline notice in the `IncomeDrawer` locked-notice pattern (reason + next step, `role="note"`) says why. Checked in this order:
+
+- `profile.isPersonalDefault` with income writes available: no notice (MUT-133). Without them (rules offering nothing): "Income on this profile is recorded from the phone app."
 - `access.payments === 'read-write'` (any other profile): no notice.
 - `writerOfRecord: 'MALAFAT'`: "Malafat records income and payments for this profile. To change them, use Malafat."
 - `null` (not personal, no Malafat): "Income isn't recorded on hosted profiles yet. This profile is for expenses."

@@ -1731,6 +1731,24 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `data/expenseQueries.ts` (MUT-44) | `useExpenses`, `useExpense`, `useExpenseCategories`, `useCreateExpense`/`useUpdateExpense`/`useDeleteExpense`, `useAddReceipt`/`useDeleteReceipt` — the portal's only mutations | `ExpensesList`, `ExpenseDrawer`, `ReceiptUploader` |
 | `pages/views/` | `OverviewPage`, `ClientsPage`, `ClientDetailPage`, `ReceivablesList`/`Page`, `PaymentsList`/`Page`, `DocumentsList`/`Page` (lists take `fixedCustomerId` for client tabs), `ExpensesList`/`Page` (MUT-44), `StatusBadge`, `ShowMore`, `PageHeader`, `NoMatch` | router |
 
+### Portal income writes (MUT-133)
+
+| Unit | Purpose |
+|---|---|
+| `data/incomeAffordances.ts` `incomeAffordancesFor(profile)`, `isSettleable(receivable)` | The one gate for portal income writes (personal profile only; `kinds`, `customer`, `canSettle`) and which rows the settle route accepts. Views never branch on `isPersonalDefault` themselves. |
+| `data/attemptKey.ts` `useAttemptKey()` / `createAttemptKey()` | Idempotency-Key per save attempt (see PATTERNS). Used by income, settle, expense and conversion creates. |
+| `data/incomeQueries.ts` `useReceivable`, `useCreateIncome`, `useSettleReceivable`, `settleMutationKey` | Fresh receivable read; income/settle writes that invalidate receivables, payments, the receivable and summaries. |
+| `data/filters.ts` `parseIncomeDrawer`, `splitIncomeDrawer`, `parseReceivablesPage`, `parsePaymentsPage` | `?newIncome=` / `?settle=` URL state, parsed beside list filters. |
+| `components/incomeForm.ts` `parseIncomeAmount`, `minorToDecimal`, `incomeFormSchema`, `toCreateIncomeRequest`, `settleLine`, `INCOME_CURRENCIES`, `PAYMENT_METHODS` | Income form logic; messages are i18n keys. |
+| `components/incomeApiErrors.ts` `mapIncomeError`, `mapSettleError` | Server reasons → inline field errors or a toast (+ re-read hint for settle). |
+| `components/IncomeCaptureDrawer.tsx` | Add income (fast path + More details, SegmentedControl kinds/method, Saved status). |
+| `components/RecordPaymentDrawer.tsx` | Record payment (title with what's left, live line, honest note, skeleton, race handling). |
+| `components/IncomeDrawerHost.tsx` `IncomeDrawerHost`, `focusAfterSettle`, `SETTLE_BUTTON_ATTR` | The drawers a page mounts; focus rule after a full payment. |
+| `components/Toast.tsx` `show(message, { tone: 'info' })` | Info tone in a persistent polite live region; message-only calls keep the error alert. MUT-91 extends the same options object. |
+| `components/HostedTable.tsx` `Column.stickyEnd` | Pins a column to the inline end (row actions on narrow windows). |
+| `components/ClientPicker.tsx`, `ProjectPicker.tsx`, `components/ui/EntityTypeahead.tsx` `id` prop | Lets a `<label htmlFor>` name the typeahead input. |
+| `format/dates.ts` `todayInZone(timeZone, now?)` | Today's calendar date in an IANA zone; browser-calendar fallback for an unknown zone. |
+
 ## Hosted API modules (`server/src`) — reusable across milestones
 
 | Module | Purpose | Reuse |

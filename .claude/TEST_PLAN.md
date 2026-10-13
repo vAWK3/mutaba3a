@@ -2241,3 +2241,22 @@ Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 
 | Monthly, starts 2026-01-01 | 2026-01-10, America/New_York | 13 consecutive months, first paid 2026-01-15 |
 
 `retainerRepo.test.ts` (39) passes with host `TZ` = Asia/Jerusalem, America/New_York, UTC, Pacific/Kiritimati and Pacific/Honolulu. Related suites (RetainerDrawer, useRetainerQueries, gating/reconcile/probes, provider, migration-safety): 55/55. Full suite not run at the user's request; `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `openapi:check` up to date.
+
+## MUT-133 — portal income writes on a personal profile (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `src/hosted/format/__tests__/format.test.tsx` › todayInZone | zone ahead of UTC, behind UTC, exact local midnight, unknown zone → browser calendar |
+| `src/hosted/data/__tests__/attemptKey.test.ts` | same body → same key; changed body → new key; after success → new key; stable across renders |
+| `src/hosted/data/__tests__/incomeAffordances.test.ts` | personal → both kinds + settle; **Malafat-fed (received: true) → nothing**; writer-null non-personal → nothing; capture vs payments access; rules without Owed; `isSettleable` origin × status |
+| `src/hosted/data/__tests__/filters.test.ts` | `newIncome` received/owed only; `settle` uuid only; page parsers; `splitIncomeDrawer` keeps drawer state out of filters |
+| `src/hosted/components/__tests__/incomeForm.test.ts` | lenient amounts (commas, ₪, Arabic-Indic, JOD 3 decimals) → canonical; currency mismatch; invalid/zero/negative/blank; schema (Owed needs client, Received rules, future date); request builder isolates kind fields; live line |
+| `src/hosted/components/__tests__/incomeApiErrors.test.ts` | every reason → field or toast; READ_ONLY_PROFILE uses the §7.4 sentence; settle race → inline + re-read; NOT_FOUND / RECEIVABLE_NOT_OPEN / VERSION_MISMATCH → toast + re-read |
+| `src/hosted/components/__tests__/Toast.test.tsx` | empty polite region exists with no status role; info fills it; message-only keeps the alert |
+| `src/hosted/components/__tests__/IncomeCaptureDrawer.test.tsx` | Owed POST with profile header, key and canonical body + Saved status; Owed needs client; Received with method, no Owed fields; defaults summary and auto-open on server DATE_INVALID; profile-zone date cap; retry reuses key, edit mints new; double-click → one POST; kinds follow rules; currency mismatch; Arabic |
+| `src/hosted/components/__tests__/RecordPaymentDrawer.test.tsx` | skeleton + disabled Save then title with what's left and context line; full settle sends amount + zone date; partial line + body; over blocks Save; race → new figure + re-read; inline race error; PAID / 404 → nothing left; 500 → unreachable; 409 → toast + re-read; Method radiogroup |
+| `src/hosted/pages/__tests__/views.test.tsx` › MUT-133 | personal: no notice, Add, Record payment only on open ADJUSTMENT rows, sticky Actions column; opening/closing the drawer doesn't refetch the list; full settle → row gone, status, focus on next row's button; partial → Partly paid, focus kept; Add Owed → list re-reads, status; Payments defaults to Received + empty-state action; Client detail prefill + tab settle. **Regression**: Malafat-fed and writer-null non-personal → no button, no column, deep links inert, Malafat notice unchanged |
+| `ExpenseDrawer.test.tsx`, `ConversionDrawer.test.tsx` (D5) | retry after a network failure resends the same key; default date in the profile's zone |
+
+Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 700+ tests green. Full suite not run at the user's request; `lint`, `typecheck` and `openapi:check` run.
+

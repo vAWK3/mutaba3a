@@ -1,6 +1,8 @@
 # MUT-133 — Hosted portal: record income and payments on a personal profile (plan)
 
-Status: **Planned, pending eng review + owner approval** (2026-10-14)
+Status: **Built 2026-10-14** on `feature/mut-133-portal-personal-income` (reviews below approved by the owner)
+
+**As-built deviations (mechanics only, no behaviour change):** the Toast tone is named `info` with an options object, `show(message, { tone: 'info' })`, matching the API MUT-91 is building; its persistent region carries `aria-live="polite"` without `role="status"`, so the MUT-43 auth-state tests (which assert no status landmark while a session is checked) pass unchanged. Form logic lives in `components/incomeForm.ts` (react-refresh lint forbids non-component exports from a `.tsx`), and a shared `components/IncomeDrawerHost.tsx` mounts the drawers for the three pages. `EntityTypeahead` and the portal pickers gained an optional `id` so the drawers' labels name their inputs.
 Ticket: MUT-133 (Story, Backlog, no epic). Relates to MUT-93 (Done). Depends on MUT-65 (Done).
 Neighbours: MUT-91 (portal after-save feedback, Backlog) owns Undo/success toasts; MUT-85 (local lump-sum payment) is unrelated surface; MUT-175 (portal reports) untouched.
 

@@ -18,6 +18,33 @@
 
 ## Open Debt
 
+### TD-126: A recorded payment can't be corrected or reversed from any session
+**Status**: Open — follow-up ticket to be filed (MUT-133 design 6A)
+**Added**: 2026-10-14 (MUT-133)
+**Priority**: Medium — a typo on the most frequent money action is permanent
+**Impact**: A payment created by `POST /v1/receivables/{id}/settle` carries an allocation, so `DELETE /v1/income/{id}` refuses it (409), and personal profiles refuse API keys (409 `PERSONAL_PROFILE`), so the Malafat reverse route can't reach it either. The portal's Record payment drawer says "Check the amount: a recorded payment can't be changed yet." and the live line blocks amounts over what's left; smaller mistakes still stick.
+**Fix**: a session-side reversal (or correction) for a person's own captured payments on a personal profile — server route + phone + portal — then remove the drawer note (`hosted.settle.honest`).
+
+### TD-125: Portal money-input helpers exist in several local copies
+**Status**: Open
+**Added**: 2026-10-14 (MUT-133, eng review D1 chose not to extract)
+**Priority**: Low
+**Impact**: four portal currency lists (`FilterControls` and `conversionFormSchema` lack JOD; `ExpenseDrawer` and `incomeForm` include it), two amount validators (ExpenseDrawer's strict currency-aware regex vs `incomeForm.parseIncomeAmount`'s lenient parse, R5), and three copies of `reasonOf`/`fieldOf` (`expenseApiErrors`, `conversionApiErrors`, `incomeApiErrors`). The expense and conversion drawers also pass English zod messages straight to Arabic users (income uses i18n keys), and `ExpenseDrawer`'s client/matter `<label htmlFor>` still names nothing (the pickers accept an `id` since MUT-133; ExpenseDrawer doesn't pass it).
+**Fix**: one `src/hosted/format/currencies.ts` (the wire enum), move expense/conversion to `parseIncomeAmount`'s lenient-in/canonical-out helper and i18n-key messages, share `reasonOf`/`fieldOf`, and pass `id` to the pickers in ExpenseDrawer. Overlaps TD-117 (conversion JOD).
+
+### TD-124: Only the portal's row action grows to 44px on touch screens
+**Status**: Open
+**Added**: 2026-10-14 (MUT-133, design 10A)
+**Priority**: Low
+**Impact**: `Button` `btn-sm` is 32px tall everywhere. MUT-133 scoped a `@media (pointer: coarse)` rule to the portal's Record payment row button (`.hp-row-action`); the local app's `RecordPaymentButton` and every other small button stay under the 44px touch minimum on tablets.
+**Fix**: an app-wide coarse-pointer pass in `Button.css` (and an axe/visual check on tablet width), then drop `.hp-row-action`'s override.
+
+### TD-123: A personal-profile receivable 404 invalidates `/v1/me`
+**Status**: Accepted
+**Added**: 2026-10-14 (MUT-133)
+**Priority**: Low
+**Impact**: `RecordPaymentDrawer` renders through `QueryView`, which treats any 404 as a possibly lost profile and invalidates `ME_KEY`. A receivable that was removed since the page loaded therefore refetches `/v1/me` once. Harmless (one extra GET, same profile), but not what the 404 means here.
+**Fix**: if it ever matters, let `QueryView` take a `notFoundMeansProfile={false}` flag for entity reads.
 ### TD-122: The global `a:hover` rule out-ranks every single-class link styled as a control
 **Status**: Open (task chip offered 2026-10-14)
 **Ticket**: MUT-77 (found by `@web.landing.hover-light`)
@@ -626,7 +653,7 @@ guard so the four fixes stayed reviewable:
 that file. Nothing here blocks MUT-65 shipping.
 
 ### TD-056: The hosted portal's "income isn't recorded" copy is now false for personal profiles
-**Status**: Open — follow-up filed, MUT-93
+**Status**: Resolved 2026-10-14. MUT-93 fixed the copy; MUT-133 gave a personal profile its write affordances (Add income, Record payment) and removed its notice.
 **Added**: 2026-10-12 (MUT-65)
 **Priority**: Medium — a false statement in the product's own UI
 **Impact**: `hosted-portal.md` §7.4 and `src/hosted/i18n/en.json:85` hard-code
