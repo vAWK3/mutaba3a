@@ -2171,3 +2171,20 @@ Full suite (Node 22): 3693/3697 pass (4 pre-existing skips), 262/262 files -- no
 | No QA spec targets the Language/Theme controls as buttons | `settings.spec.ts` `@web.settings.language` and `@web.settings.theme` now wait for the named `radiogroup`, click `radio`s and assert `aria-checked`. Both failed on main and pass here. `grep` for `getByRole('button'` with العربية/English/Dark/Light/System in `qa/specs` and `qa/support` finds nothing |
 
 Test-only change: no app code, so no unit run. Full `web` suite against the branch (dev server on :5173, `--retries 0`): 42 passed, 3 failed. All 3 fail the same way on main, and this change can't touch them: `@web.brand.type` ×2 (Home loads no IBM Plex Mono face) and `@web.clients.owed-now-parity` (Home's Owed now amount is empty).
+
+## TD-014 (partial) — retainer projections use the local "today" (2026-10-14)
+
+Every case runs at 01:30 on 2026-10-14 in Asia/Jerusalem (`2026-10-13T22:30:00.000Z`, `atInstantIn` from `src/test/atInstantIn.ts`), where the UTC date is a day behind. All six failed on the old UTC helper.
+
+| Path | Test (`src/db/__tests__/retainerRepo.test.ts`) |
+|---|---|
+| `refreshDueStates` flips a row due today | "refreshes due states: only upcoming rows dated today or earlier become due" (was flaky between 00:00 and 03:00; now deterministic) |
+| `end` stamps the local date | "end() stamps the local date as the end date" |
+| `generateSchedule` initial state | "a generated row expected today is born due" |
+| `generateSchedule` 12-month horizon | "the schedule horizon is twelve months from the local date" |
+| `unmatch` restores due | "unmatching the only payment of a row expected today puts it back to due" |
+| `list` `daysOverdue` and `getSummary` overdue totals | "a due row expected yesterday is overdue by one day and counts as overdue" |
+
+`paymentRecords.test.ts` now imports the shared `atInstantIn` instead of its own copy. Both files pass with host `TZ` = Asia/Jerusalem, America/New_York, UTC and Pacific/Kiritimati.
+
+Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.

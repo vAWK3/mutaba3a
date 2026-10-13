@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Retainer projections use the local "today", not the UTC one (TD-014)
+
+**Why:** `src/db/retainerRepository.ts` kept a private `todayISO()` built from `toISOString()`, the UTC date that ADR-022 forbids. Between 00:00 and ~03:00 in Asia/Jerusalem it returned yesterday, so a projected retainer payment due today stayed `upcoming` for the first hours of each local day. It surfaced on 2026-10-14 at 02:00 as a failure in `retainerRepo.test.ts` ("refreshes due states…"), which built its "today" from local fields while the code compared against UTC.
+
+### Fixed
+- `retainerRepository.ts`: the private UTC helper is deleted; `refreshDueStates`, `end` (the end date), `getSummary` (overdue totals), `projectedIncomeRepo.list` (`daysOverdue`), `unmatch` (back to due/upcoming) and `generateSchedule` (a new row's initial state) all call `todayLocalISO()`. The schedule's 12-month horizon is `formatLocalDate` of the local date, not its UTC date.
+
+### Technical
+- `src/test/atInstantIn.ts`: the `atInstantIn(timeZone, instant, fn)` helper moves out of `paymentRecords.test.ts` so both tests share it.
+- `retainerRepo.test.ts`: the refresh-due-states test is deterministic (01:30 on 2026-10-14 in Jerusalem), and five new cases pin the other paths at the same instant. All six fail on the old code and pass in Jerusalem, New York, UTC and UTC+14 host timezones.
+- `.claude/TECH_DEBT.md`: TD-014 updated (the retainer copy is gone; `recurringExpenseService.ts` keeps its copy). New TD-120: the schedule's month cursor (`new Date(startDate)` + local `setMonth`) skips February for a start on the 29th–31st, and skips a month west of UTC for a start on the 1st. Found here, not fixed here.
+- `.claude/PATTERNS.md`: the date pattern's Testing note points at `atInstantIn` for "today" bugs.
+
+---
+
 ## [Unreleased] - 2026-10-14 — The Settings QA specs find Language and Theme as radiogroups (MUT-160)
 
 **Why:** Since MUT-139, Settings → Language and Theme are `SegmentedControl` radiogroups, each named by its row label. MUT-103 (`5bd1b09`) moved the Language clicks to `radio`, but `qa/specs/web/settings.spec.ts` still waited for a `Language` and a `Theme` heading, and still clicked Dark, Light and System as buttons. So `@web.settings.language` and `@web.settings.theme` timed out on every run.

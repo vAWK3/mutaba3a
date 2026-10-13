@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
+**Status**: Open
+**Added**: 2026-10-14 (found while fixing the retainer "today", TD-014)
+**Priority**: Medium
+**Impact**: `scheduleGenerator.generateSchedule` (`src/db/retainerRepository.ts`) walks months with `currentDate = new Date(retainer.startDate)` and `currentDate.setMonth(+1)` (or +3). A date-only string parses as UTC midnight, but `setMonth`, `getMonth` and `getFullYear` are local. Starting on 2026-01-31, `setMonth(1)` lands on "Feb 31" = 3 March, so February never gets a projected row, in every timezone. West of UTC a start on the 1st reads as the last day of the previous month locally, so the month after the first is skipped the same way (New York, 2026-01-01: Dec, Jan, Mar, Apr). Missing rows mean missing expected income and nothing to match a payment to.
+**Fix**: Step a `{ year, month }` pair (or `dayIndex`-style integer months) instead of a `Date`, and build each period from it with the existing `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate` helpers; compare the period start to `horizon` as strings. Test a 31st start (Feb present, and Feb 28/29 payment date clamped) and a 1st start under `atInstantIn('America/New_York', …)`.
+
 ### TD-119: Desktop icon art isn't machine-checked, and Claude Design's SVG export drops `<style>`
 **Status**: Open
 **Ticket**: MUT-104
@@ -1592,6 +1599,16 @@ affects receivable overdue, but both are the same class of defect:
   comparison at `:406`, keyed on `expectedDate`
 - `src/services/recurringExpenseService.ts:32` — recurring-expense occurrence
   states
+
+> **Update (2026-10-14):** the `retainerRepository.ts` copy is gone. It was a
+> live bug, not only a latent one: between 00:00 and ~03:00 in Asia/Jerusalem a
+> projected row due today stayed `upcoming` (`refreshDueStates`), was born
+> `upcoming`, went back to `upcoming` on unmatch, a retainer ended "yesterday",
+> and overdue counts and `daysOverdue` ran a day short. Every use now calls
+> `todayLocalISO()`, and the 12-month schedule horizon uses `formatLocalDate`.
+> `retainerRepo.test.ts` pins each path at 01:30 Jerusalem (`atInstantIn`, now
+> shared in `src/test/atInstantIn.ts`). The schedule's month cursor is a
+> separate bug, TD-120. `recurringExpenseService.ts` still has its copy.
 
 For the record, MUT-17 found **six** `todayISO`/`getTodayISO` definitions in
 total, not the three its description listed. Four now delegate to
