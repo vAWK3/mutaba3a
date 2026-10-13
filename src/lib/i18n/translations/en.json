@@ -465,7 +465,7 @@
   "settings": {
     "title": "Settings",
     "profile": {
-      "title": "Business Profiles",
+      "title": "Businesses",
       "description": "Manage who you're billing as.",
       "addProfile": "+ Add Profile",
       "setDefault": "Set as Default",
@@ -475,8 +475,8 @@
       "empty": "No business profiles yet. Create one to start recording income."
     },
     "preferences": {
-      "title": "Preferences",
-      "description": "Interface, appearance and currency."
+      "title": "General",
+      "description": "Language, appearance and currency."
     },
     "language": {
       "title": "Language",
@@ -497,7 +497,7 @@
       "defaultDesc": "Default selection in filters"
     },
     "features": {
-      "title": "Advanced features",
+      "title": "Features",
       "description": "Optional areas. Off by default; turning one off hides it but never deletes its data.",
       "autoEnabled": "Switched on for your existing data: {features}.",
       "openSettings": "Open settings",
@@ -559,7 +559,7 @@
       "downloadTemplateBtn": "Download CSV Template",
       "deleteAll": "Delete All Data",
       "deleteAllDesc": "Permanently delete all local data",
-      "deleteAllBtn": "Delete All Data",
+      "deleteAllBtn": "Delete all data…",
       "reset": "Reset Data",
       "resetDesc": "Reset to sample data for testing",
       "resetBtn": "Reset Data",
@@ -568,18 +568,19 @@
         "title": "Delete All Data",
         "warning": "This will permanently delete all your local data including clients, projects, and transactions. This action cannot be undone.",
         "stepA": {
-          "title": "Step 1: Export Backup",
-          "desc": "You must export a backup of your data before deletion.",
-          "btn": "Export Backup (CSV)",
-          "exporting": "Exporting...",
-          "done": "Backup exported!",
-          "error": "Export failed"
+          "title": "Step 1: Back up",
+          "desc": "Save a full backup first. Restore can bring everything back from it.",
+          "btn": "Back up",
+          "exporting": "Backing up…",
+          "done": "Backed up",
+          "error": "Backup failed"
         },
         "stepB": {
-          "title": "Step 2: Confirm Deletion",
-          "checkbox": "I have saved my backup files",
-          "btn": "Delete Permanently",
-          "deleting": "Deleting...",
+          "title": "Step 2: Confirm",
+          "confirmLabel": "Type {word} to confirm",
+          "confirmWord": "DELETE",
+          "btn": "Delete permanently",
+          "deleting": "Deleting…",
           "error": "Deletion failed"
         },
         "success": "All data deleted successfully"
@@ -587,7 +588,7 @@
     },
     "about": {
       "title": "About",
-      "name": "Mutaba3a - Mini CRM",
+      "name": "Mutaba3a",
       "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB.",
       "support": "Support this project",
       "supportDesc": "If you find this tool useful, consider supporting its development",
@@ -642,8 +643,36 @@
         "mergeDesc": "Adds the clients, projects and income to a profile you already have. The profile itself is not changed.",
         "selectProfile": "Choose a profile…"
       },
-      "fullBackup": "This is a full backup. Restore it from Settings → Data tools → Restore; importing it here would replace your data with nothing.",
+      "fullBackup": "This is a full backup. Restore it from Settings → Your data → Restore; importing it here would replace your data with nothing.",
       "nothingToImport": "This file has nothing to import. Choose a profile export, a legacy backup or a CSV file."
+    },
+    "yourData": {
+      "title": "Your data",
+      "description": "Back up, restore and export.",
+      "backUp": "Back up",
+      "backUpBtn": "Back up now",
+      "backingUp": "Backing up…",
+      "lastBackup": "Last backed up: {date}",
+      "never": "Not backed up yet. A backup is one file holding everything on this device.",
+      "restore": "Restore",
+      "restoreDesc": "Open a backup, a business export or a CSV file.",
+      "restoreBtn": "Restore…",
+      "exportBusiness": "Export a business",
+      "exportBusinessDesc": "One business as CSV for spreadsheets, or as JSON to move it to another device.",
+      "exportBusinessBtn": "Export…",
+      "unknownFile": "This file isn't a Mutaba3a backup, a business export or a CSV file.",
+      "deleteZoneLabel": "Danger zone"
+    },
+    "restore": {
+      "title": "Replace everything with this backup?",
+      "records": {
+        "one": "{count} record",
+        "other": "{count} records"
+      },
+      "summary": "The backup from {date} holds {records}. Everything on this device now will be replaced by it.",
+      "unknownDate": "an unknown date",
+      "replace": "Replace everything",
+      "replacing": "Restoring…"
     }
   },
   "downloadBanner": {
