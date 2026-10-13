@@ -96,6 +96,9 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const openNew = () => setFilters({ ...filters, newExpense: true, expense: undefined });
   const openEdit = (row: ExpenseRow) => setFilters({ ...filters, expense: row.id, newExpense: undefined });
   const closeDrawer = () => setFilters({ ...filters, expense: undefined, newExpense: undefined });
+  // An anchored list can't start at a record that no longer exists (the server would 404): drop the anchor with it.
+  const afterDelete = (id: string) =>
+    setFilters({ ...filters, expense: undefined, newExpense: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
 
   const recordButton = (
     <Button variant="primary" size="sm" onClick={openNew}>
@@ -146,6 +149,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           mode={filters.expense ? 'edit' : 'create'}
           expenseId={filters.expense}
           onClose={closeDrawer}
+          onDeleted={afterDelete}
         />
       )}
     </>

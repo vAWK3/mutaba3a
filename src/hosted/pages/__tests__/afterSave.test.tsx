@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
+import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { CUSTOMERS, page } from './fixtures';
@@ -147,6 +147,31 @@ describe('portal expenses: after save', () => {
     await new Promise((resolve) => setTimeout(resolve, 1300)); // past the backstop
     expect(useSavedFlashStore.getState().pending).toBeNull();
     expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
+  });
+});
+
+describe('portal expenses: an anchored list', () => {
+  it('deleting the record the list is anchored on drops the anchor instead of a 404 dead end', async () => {
+    vi.stubGlobal('confirm', () => true);
+    let deleted = false;
+    const { user, router } = portal(`/p/${ORG_A}/expenses?anchor=${E2}`, {
+      'GET /v1/expenses': (req) => {
+        if (req.url.searchParams.get('anchor') === E2) {
+          return deleted ? fail(404, 'NOT_FOUND') : ok(page([expense({ id: E2, title: 'Printer ink' }), expense()]));
+        }
+        return ok(page([expense()]));
+      },
+      [`GET /v1/expenses/${E2}`]: () => ok(expense({ id: E2, title: 'Printer ink', receipts: [] })),
+      [`DELETE /v1/expenses/${E2}`]: () => {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    await user.click(await rowWith('Printer ink'));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(locationOf(router)).not.toContain('anchor'));
+    expect(await screen.findByText('Office supplies')).toBeInTheDocument();
+    expect(screen.queryByText('Showing from a saved entry')).not.toBeInTheDocument();
   });
 });
 
