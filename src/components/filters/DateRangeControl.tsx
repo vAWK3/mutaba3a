@@ -100,8 +100,9 @@ export function DateRangeControl({ dateFrom, dateTo, onChange }: DateRangeContro
         <option value="custom">{t('filters.custom')}</option>
       </Select>
 
-      {/* Show date range display for presets (not custom) */}
-      {!isCustomActive && dateFrom && dateTo && (
+      {/* Show date range display for presets (not custom). All Time's bounds
+          are sentinels, so it shows none (MUT-92). */}
+      {!isCustomActive && currentPreset !== 'all' && dateFrom && dateTo && (
         <span className="date-range-display" style={{
           color: 'var(--muted)',
           fontSize: 'var(--text-label)',

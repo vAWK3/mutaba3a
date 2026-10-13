@@ -30,9 +30,9 @@ import type {
 } from './retained/engagementSchema';
 
 /**
- * Note the v18 upgrade wrote on the payment records it created from
- * accumulated totals. Stored as data, so the UI matches it and shows the
- * translated `transactions.partialPayment.migratedNote` instead.
+ * Note the v18 upgrade (and the v23 backfill) wrote on the payment records it
+ * created from accumulated totals. Stored as data; it is provenance, not a
+ * user note, so the client Payments table matches it and hides it (MUT-92).
  */
 export const MIGRATED_PAYMENT_NOTE = 'Migrated from accumulated total';
 

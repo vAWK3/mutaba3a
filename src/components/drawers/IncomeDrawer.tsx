@@ -14,6 +14,7 @@ import {
   usePaymentRecords,
   useSettings,
   useClients,
+  useTransactions,
 } from '../../hooks/useQueries';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { Select } from '../ui';
@@ -174,14 +175,23 @@ export function IncomeDrawer() {
     }
   }, [initialProfileId, watchedProfileId, setValue]);
 
-  // A new entry starts in its profile's currency, and follows a profile change
-  // until the user picks a currency themselves.
+  // A new entry starts in the currency its client last used, else its
+  // profile's, and follows a client or profile change until the user picks a
+  // currency themselves (MUT-92). The client's newest income, archived or
+  // not, is one list read (eng review D1).
   const selectedProfile = businessProfiles.find((p) => p.id === watchedProfileId);
   const profileCurrency = resolveDefaultCurrency(selectedProfile, settings);
+  const followsDefaults = mode === 'create' && !duplicateFromId;
+  const { data: clientLastIncome } = useTransactions(
+    { clientId: selectedClientId, kind: 'income', includeArchived: true, limit: 1 },
+    { enabled: followsDefaults && !!selectedClientId }
+  );
+  const clientCurrency = selectedClientId ? clientLastIncome?.[0]?.currency : undefined;
+  const defaultCurrency = clientCurrency ?? profileCurrency;
   useEffect(() => {
-    if (mode !== 'create' || duplicateFromId || currencyChosen) return;
-    setValue('currency', profileCurrency);
-  }, [mode, duplicateFromId, currencyChosen, profileCurrency, setValue]);
+    if (!followsDefaults || currencyChosen) return;
+    setValue('currency', defaultCurrency);
+  }, [followsDefaults, currencyChosen, defaultCurrency, setValue]);
 
   // Reset form when existing transaction loads
   useEffect(() => {

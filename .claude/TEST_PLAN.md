@@ -87,6 +87,18 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ## Current Test Coverage
 
+### Craft-fix bundle (MUT-92, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/__tests__/IncomeDrawer.test.tsx` › currency follows the client (MUT-92) | Integration (real Dexie) | Opens in the client's newest income currency and saves it; profile currency for a client with no income; switches on a typeahead pick; a user-picked currency sticks; newest by `occurredAt`, deleted + expense ignored, archived counts; edit and duplicate keep their own currency |
+| `src/styles/__tests__/layering.test.ts` | Unit (node, CSS) | Drawer above its overlay; `.demo-banner` above content (100) and below `.drawer-overlay` |
+| `src/components/ui/__tests__/RecordPaymentButton.test.tsx` | Component | Text is "Record Payment ₪3,550" with the accessible name unchanged |
+| `src/components/filters/__tests__/DateRangeControl.test.tsx` | Component | All Time shows no range (no 2000/2100); This month keeps its range |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` › Payments | Component | Entry-saved row has empty notes and opens the entry; migration note hidden; user note shown under Notes; no Notes column without notes |
+| `src/pages/expenses/__tests__/ExpensesLedgerPage.test.tsx` | Component | Row amounts have no minus sign, flat and by-category |
+| `src/lib/__tests__/utils.test.ts` › formatRelativeDate | Unit | Today/Yesterday keys; EN one/other across day/week/month/year; AR one/two/few/many forms match `Intl.RelativeTimeFormat('ar')` and differ |
+| `src/lib/i18n/__tests__/craftFixKeys.test.ts` | Unit | EN + AR: no "Mini CRM", About name, Today/Yesterday kept, retired keys gone |
+
 ### Brand chrome (MUT-104, added 2026-10-13)
 | File | Type | Covers |
 |------|------|--------|
@@ -2187,3 +2199,33 @@ Full suite (Node 22): 3693/3697 pass (4 pre-existing skips), 262/262 files -- no
 | No QA spec targets the Language/Theme controls as buttons | `settings.spec.ts` `@web.settings.language` and `@web.settings.theme` now wait for the named `radiogroup`, click `radio`s and assert `aria-checked`. Both failed on main and pass here. `grep` for `getByRole('button'` with العربية/English/Dark/Light/System in `qa/specs` and `qa/support` finds nothing |
 
 Test-only change: no app code, so no unit run. Full `web` suite against the branch (dev server on :5173, `--retries 0`): 42 passed, 3 failed. All 3 fail the same way on main, and this change can't touch them: `@web.brand.type` ×2 (Home loads no IBM Plex Mono face) and `@web.clients.owed-now-parity` (Home's Owed now amount is empty).
+
+## TD-014 (partial) — retainer projections use the local "today" (2026-10-14)
+
+Every case runs at 01:30 on 2026-10-14 in Asia/Jerusalem (`2026-10-13T22:30:00.000Z`, `atInstantIn` from `src/test/atInstantIn.ts`), where the UTC date is a day behind. All six failed on the old UTC helper.
+
+| Path | Test (`src/db/__tests__/retainerRepo.test.ts`) |
+|---|---|
+| `refreshDueStates` flips a row due today | "refreshes due states: only upcoming rows dated today or earlier become due" (was flaky between 00:00 and 03:00; now deterministic) |
+| `end` stamps the local date | "end() stamps the local date as the end date" |
+| `generateSchedule` initial state | "a generated row expected today is born due" |
+| `generateSchedule` 12-month horizon | "the schedule horizon is twelve months from the local date" |
+| `unmatch` restores due | "unmatching the only payment of a row expected today puts it back to due" |
+| `list` `daysOverdue` and `getSummary` overdue totals | "a due row expected yesterday is overdue by one day and counts as overdue" |
+
+`paymentRecords.test.ts` now imports the shared `atInstantIn` instead of its own copy. Both files pass with host `TZ` = Asia/Jerusalem, America/New_York, UTC and Pacific/Kiritimati.
+
+Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.
+
+## TD-120 — a retainer's schedule gets every month and quarter (2026-10-14)
+
+`src/db/__tests__/retainerRepo.test.ts` › `scheduleGenerator` › `generateSchedule` › "every month and quarter gets a row (TD-120)". Each case runs at a fixed instant with `atInstantIn`, so the 12-month horizon is fixed and the full list of period starts can be asserted. All four failed on the old `Date` cursor.
+
+| Case | Instant / zone | Asserts |
+|---|---|---|
+| Monthly, starts 2026-01-31, pays on the 31st | 2026-01-20, Asia/Jerusalem | 13 consecutive months Jan 2026 – Jan 2027; February ends and is paid 2026-02-28; April paid 2026-04-30 |
+| Monthly, starts 2028-01-31 (leap year) | 2028-01-20, Asia/Jerusalem | 13 consecutive months; February ends and is paid 2028-02-29 |
+| Quarterly, starts 2026-03-31, pays on the 31st | 2026-03-20, Asia/Jerusalem | Q1 2026 – Q1 2027, five rows, each paid on the last day of the quarter's last month (Jun 30, Sep 30, …) |
+| Monthly, starts 2026-01-01 | 2026-01-10, America/New_York | 13 consecutive months, first paid 2026-01-15 |
+
+`retainerRepo.test.ts` (39) passes with host `TZ` = Asia/Jerusalem, America/New_York, UTC, Pacific/Kiritimati and Pacific/Honolulu. Related suites (RetainerDrawer, useRetainerQueries, gating/reconcile/probes, provider, migration-safety): 55/55. Full suite not run at the user's request; `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `openapi:check` up to date.

@@ -60,7 +60,6 @@ vi.mock('../../../lib/i18n', () => {
     'clients.profile.work.clearFilters': 'Clear filters',
     'clients.profile.payments.title': 'Payments',
     'clients.profile.payments.for': 'For',
-    'clients.profile.payments.recordedOnEntry': 'Recorded on the entry',
     'clients.profile.payments.openEntry': 'Open income entry',
     'projects.addProject': 'Add Project',
     'transactions.columns.date': 'Date',
@@ -77,7 +76,6 @@ vi.mock('../../../lib/i18n', () => {
     'transactions.partialPayment.noPayments': 'No payments recorded yet',
     'transactions.partialPayment.editPayment': 'Edit Payment',
     'transactions.partialPayment.notes': 'Notes',
-    'transactions.partialPayment.migratedNote': 'Carried over from the old total',
     'filters.status.all': 'All',
     'filters.status.paid': 'Paid',
     'filters.status.unpaid': 'Unpaid',
@@ -546,11 +544,13 @@ describe('ClientDetailPage', () => {
       expect(mockEditPaymentRecord).toHaveBeenCalledWith({ transactionId: 'tx-partial', paymentRecordId: 'pay-1' });
     });
 
-    it('marks a payment saved on the entry itself and opens that entry', () => {
+    // MUT-92 F5: where a payment was saved is provenance, not a note, so the
+    // notes cell stays empty instead of repeating it on every row.
+    it('leaves the notes of a payment saved on the entry empty, and opens that entry', () => {
       renderPage();
 
-      const row = rowOf(paymentsSection(), 'Recorded on the entry');
-      expect(row).toHaveTextContent('Logo');
+      const row = rowOf(paymentsSection(), 'Logo');
+      expect(row.querySelector('.client-payment-notes')).toBeEmptyDOMElement();
       fireEvent.click(row);
 
       expect(mockOpenIncomeDrawer).toHaveBeenCalledWith({ mode: 'edit', transactionId: 'tx-paid' });
@@ -566,11 +566,29 @@ describe('ClientDetailPage', () => {
       expect(mockOpenIncomeDrawer).toHaveBeenCalledWith({ mode: 'edit', transactionId: 'tx-partial' });
     });
 
-    it('translates the note the v18 migration wrote', () => {
+    it('hides the note the migrations wrote (v18, v23 backfill)', () => {
       mockPayments([{ ...payments[0], notes: MIGRATED_PAYMENT_NOTE }]);
       renderPage();
 
-      expect(within(paymentsSection()).getByText('Carried over from the old total')).toBeInTheDocument();
+      const row = rowOf(paymentsSection(), 'Homepage');
+      expect(row).not.toHaveTextContent(MIGRATED_PAYMENT_NOTE);
+      expect(within(paymentsSection()).queryByRole('columnheader', { name: 'Notes' })).toBeNull();
+    });
+
+    it('shows a note the user wrote, under a Notes column', () => {
+      renderPage();
+
+      expect(within(paymentsSection()).getByRole('columnheader', { name: 'Notes' })).toBeInTheDocument();
+      expect(rowOf(paymentsSection(), 'Homepage').querySelector('.client-payment-notes')).toHaveTextContent('wire');
+    });
+
+    it('drops the Notes column when no payment has a note', () => {
+      mockPayments([{ ...payments[0], notes: undefined }, payments[1]]);
+      renderPage();
+
+      expect(within(paymentsSection()).queryByRole('columnheader', { name: 'Notes' })).toBeNull();
+      expect(paymentsSection().querySelector('.client-payment-notes')).toBeNull();
+      expect(rowOf(paymentsSection(), 'Homepage')).toHaveTextContent('$200');
     });
 
     it('says so when no payment has been recorded', () => {

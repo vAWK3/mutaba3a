@@ -12,7 +12,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-4);
-  z-index: 1000;
+  /* Top bars sit above content (100 and below) and under drawers (200/201)
+     and modals; layering.test.ts holds this order (MUT-92). */
+  z-index: 150;
   font-size: var(--text-label);
   box-shadow: var(--shadow-1);
 }
