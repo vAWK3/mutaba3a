@@ -28,7 +28,7 @@ export function UserMenu() {
       <button
         ref={buttonRef}
         type="button"
-        className={`hp-usermenu-button ${open ? 'hp-open' : ''}`}
+        className={`hp-usermenu-button press ${open ? 'hp-open' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${t('hosted.shell.account')}: ${user.displayName}`}
@@ -49,7 +49,7 @@ export function UserMenu() {
             <LanguageSwitch />
           </div>
           <div className="hp-menu-sep" role="separator" />
-          <button type="button" role="menuitem" className="hp-menu-item" disabled={signingOut} onClick={() => void signOut()}>
+          <button type="button" role="menuitem" className="hp-menu-item press" disabled={signingOut} onClick={() => void signOut()}>
             {t('hosted.auth.signOut')}
           </button>
         </div>

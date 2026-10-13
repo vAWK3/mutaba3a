@@ -86,7 +86,7 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId }: PaymentsL
           <span className="hp-expander">
             <button
               type="button"
-              className="hp-expand"
+              className="hp-expand press"
               aria-expanded={open.has(r.id)}
               aria-label={t(open.has(r.id) ? 'hosted.payments.hideAllocations' : 'hosted.payments.showAllocations')}
               onClick={() => toggle(r.id)}

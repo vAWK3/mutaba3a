@@ -97,6 +97,19 @@ button:disabled {
   opacity: 0.5;
 }
 
+/* Press feedback (L10, MUT-91): every Button, and any other control given
+   `.press`, presses in on pointer-down from the brand tokens; reduced motion
+   zeroes them in theme.css. The individual `scale` property, never transform,
+   so a control already positioned by a transform doesn't move when pressed.
+   Button.css lists `scale` in .btn's own transition. */
+.press {
+  transition: scale var(--duration-press) var(--ease-spring);
+}
+
+:is(.btn, .press):active:not(:disabled) {
+  scale: var(--press-scale);
+}
+
 /* Inputs */
 input,
 select,

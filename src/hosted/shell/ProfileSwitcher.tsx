@@ -35,7 +35,7 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
       <button
         ref={buttonRef}
         type="button"
-        className="hp-switcher-button"
+        className="hp-switcher-button press"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={active ? `${t('hosted.shell.switcher.label')}: ${active.name}` : t('hosted.shell.switcher.label')}
@@ -57,7 +57,7 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
                 type="button"
                 role="menuitemradio"
                 aria-checked={current}
-                className={`hp-option ${current ? 'hp-option-on' : ''}`}
+                className={`hp-option press ${current ? 'hp-option-on' : ''}`}
                 onClick={() => choose(profile)}
               >
                 <span className="hp-check" aria-hidden="true">
