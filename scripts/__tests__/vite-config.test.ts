@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
 import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX, socialMetaTags } from '../../vite.config';
@@ -126,6 +126,41 @@ describe('vite.config', () => {
 
     it('keeps the share cards out of the service worker precache', () => {
       expect(PWA_WORKBOX?.globIgnores).toContain('og-*.png');
+    });
+
+    it('hands Vite structured meta attrs (never raw HTML), so <, " and & in the copy get escaped at serialization, not double-escaped here', async () => {
+      vi.resetModules();
+      vi.doMock('../../src/lib/i18n/translations/ar.json', () => ({
+        default: {
+          landing: {
+            hero: {
+              headlineLine1: '<script>alert(1)</script>',
+              headlineLine2: '"quoted" & ampersand',
+              subheadline: 'sub & "quoted" <b>bold</b>',
+            },
+          },
+        },
+      }));
+      try {
+        const { socialMetaTags: mockedSocialMetaTags } = await import('../../vite.config');
+        const dangerousTags = mockedSocialMetaTags('https://mutaba3a.app');
+        // Every tag is a plain {tag, attrs} descriptor: Vite's serializeTags() HTML-escapes
+        // each attrs value (escape-html) when it renders the tag, so the raw string here is correct.
+        for (const tag of dangerousTags) {
+          expect(tag.tag).toBe('meta');
+          expect(tag.attrs).toBeTypeOf('object');
+          expect(tag).not.toHaveProperty('html');
+          expect(tag).not.toHaveProperty('children');
+        }
+        const byKey = Object.fromEntries(
+          dangerousTags.map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]),
+        );
+        expect(byKey['og:title']).toBe('<script>alert(1)</script> "quoted" & ampersand');
+        expect(byKey['og:description']).toBe('sub & "quoted" <b>bold</b>');
+      } finally {
+        vi.doUnmock('../../src/lib/i18n/translations/ar.json');
+        vi.resetModules();
+      }
     });
   });
 
