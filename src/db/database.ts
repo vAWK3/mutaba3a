@@ -951,7 +951,62 @@ export class MiniCrmDatabase extends Dexie {
         console.error('[db] v22: could not repair the default business:', error);
       }
     });
+
+    // V23 (MUT-60, TD-029): no schema change. A Received create used to write
+    // status/paidAt/receivedAmountMinor straight onto the Transaction with no
+    // PaymentRecord, so backfill one per uncovered amount. Generalizes v18's
+    // backfill (which assumed zero existing records) to subtract whatever
+    // records already exist -- from v18's own migration, or from
+    // markPaid/recordPartialPayment usage since. Like v20/v22, a failure is
+    // logged, never thrown: it must not leave the app unable to open.
+    this.version(23).upgrade(async (tx) => {
+      try {
+        const now = new Date().toISOString();
+        const transactions = await tx.table('transactions').toArray();
+        const records = await tx.table('paymentRecords').toArray();
+        const recordedByTx = new Map<string, number>();
+        for (const r of records) {
+          if (r.deletedAt) continue;
+          recordedByTx.set(r.transactionId, (recordedByTx.get(r.transactionId) ?? 0) + r.amountMinor);
+        }
+
+        for (const t of transactions) {
+          const uncovered = uncoveredPaymentAmount(t, recordedByTx.get(t.id) ?? 0);
+          if (uncovered <= 0) continue;
+          // A payment can't have arrived before it was received (MUT-18) --
+          // a day-one migration shouldn't manufacture data that would be
+          // rejected if entered by hand today.
+          const rawPaidAt = t.paidAt ?? t.occurredAt;
+          const paidAt = rawPaidAt > now ? now : rawPaidAt;
+          await tx.table('paymentRecords').add({
+            id: crypto.randomUUID(),
+            transactionId: t.id,
+            amountMinor: uncovered,
+            paidAt,
+            notes: MIGRATED_PAYMENT_NOTE,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      } catch (error) {
+        console.error('[db] v23: could not backfill payment records:', error);
+      }
+    });
   }
 }
 
 export const db = new MiniCrmDatabase();
+
+/**
+ * The v23 backfill's per-transaction rule (MUT-60): how much of a paid or
+ * part-paid income transaction's amount isn't yet covered by a PaymentRecord.
+ * Exported as a pure function so every branch is unit-tested without Dexie.
+ */
+export function uncoveredPaymentAmount(
+  t: Pick<Transaction, 'kind' | 'status' | 'amountMinor' | 'receivedAmountMinor' | 'deletedAt' | 'archivedAt'>,
+  existingRecordedMinor: number
+): number {
+  if (t.kind !== 'income' || t.deletedAt || t.archivedAt) return 0;
+  const target = t.status === 'paid' ? t.amountMinor : (t.receivedAmountMinor ?? 0);
+  return Math.max(0, target - existingRecordedMinor);
+}

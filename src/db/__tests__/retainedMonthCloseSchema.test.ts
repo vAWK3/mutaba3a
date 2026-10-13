@@ -26,9 +26,9 @@ describe('retained month-close schema', () => {
     await db.monthCloseStatuses.clear();
   });
 
-  it('keeps the monthCloseStatuses table in the Dexie schema at v22', () => {
+  it('keeps the monthCloseStatuses table in the Dexie schema at v23', () => {
     expect(db.tables.map((t) => t.name)).toContain('monthCloseStatuses');
-    expect(db.verno).toBe(22);
+    expect(db.verno).toBe(23);
   });
 
   it('stores and reads back a pre-existing row unchanged', async () => {

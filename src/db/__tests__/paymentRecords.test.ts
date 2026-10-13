@@ -881,6 +881,25 @@ describe('paymentRecordRepo', () => {
         expect(rows[0]).toMatchObject({ source: 'record', amountMinor: 100000 });
       });
 
+      /**
+       * MUT-60: a Received create now goes through transactionRepo.createReceivedIncome,
+       * which is record-backed from the start -- unlike the tests above (a raw
+       * write with no PaymentRecord), this path should never need the 'entry'
+       * row fallback at all.
+       */
+      it('adds no entry row for a fast-added Received entry -- it is record-backed from creation', async () => {
+        const client = await clientRepo.create({ name: 'Acme' });
+        const tx = await transactionRepo.createReceivedIncome(
+          { kind: 'income', clientId: client.id, title: 'Design payment', amountMinor: 50000, currency: 'USD', occurredAt: '2024-01-10' },
+          '2024-01-09'
+        );
+
+        const rows = await paymentRecordRepo.listByClient(client.id);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ source: 'record', amountMinor: 50000, transactionId: tx.id });
+      });
+
       it('adds an entry row only for the part the records do not cover', async () => {
         const client = await clientRepo.create({ name: 'Acme' });
         const tx = await createClientTx(client.id, {
