@@ -43,6 +43,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — The Settings QA specs find Language and Theme as radiogroups (MUT-160)
+
+**Why:** Since MUT-139, Settings → Language and Theme are `SegmentedControl` radiogroups, each named by its row label. MUT-103 (`5bd1b09`) moved the Language clicks to `radio`, but `qa/specs/web/settings.spec.ts` still waited for a `Language` and a `Theme` heading, and still clicked Dark, Light and System as buttons. So `@web.settings.language` and `@web.settings.theme` timed out on every run.
+
+### Fixed
+- `qa/specs/web/settings.spec.ts`: both tests now wait for `radiogroup` named `Language` or `Theme` instead of a heading. The Theme clicks are `radio`s scoped to that group, so the sidebar's `Theme: …` toggle button can never match. After each click, the test also checks that the option is `aria-checked`. The Language radios are still found through `main`, because the group's own name turns Arabic once the page does.
+
+---
+
 ## [Unreleased] - 2026-10-13 — MUT-103: no hard-coded colour, size or radius anywhere outside the token file
 
 **Why:** MUT-102 (Brand v2) re-pointed `theme.css` at the new brand tokens, but left the rest of the app on the old system behind shrink-only allowlists: 131 colour literals, 33 px radii, 95 literal font sizes, 496 uses of the legacy `--text-xs…4xl`/`--radius-xl/2xl/full` aliases, 46 dead `var()` names, and amounts outside the shared components still in the body face instead of Plex Mono (TD-079). Nothing stopped a new one from landing. MUT-103 (epic MUT-101) closes that gap app-wide — landing and the hosted portal included (their layout and motion stay with MUT-77/MUT-91) — and turns each allowlist into a guard that fails on a new literal.

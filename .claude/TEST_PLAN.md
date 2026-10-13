@@ -2143,7 +2143,7 @@ Regression net kept unchanged and green: `ImportDataPage.test`, `ImportExportMod
 | Restore routing | `dataFiles.test.ts`, `RestoreBackupModal.test.tsx` (date, count, plural, cancel, failure inline), `YourDataSection.test.tsx` (full → confirm → restore; CSV / business export → import page; unknown → toast), `ImportDataPage.test.tsx` (hand-off preview, profile match after load, taken once) |
 
 Regression contract (review D3): all 6 DataToolsSection cases are ported to `YourDataSection.test.tsx`, and all 9 SettingsPage.a11y cases are kept (the order case is rewritten on purpose).
-QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a business". It was not run here; run it on a preview build. The language and theme specs are already broken by MUT-139's radios (MUT-160).
+QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a business". It was not run here; run it on a preview build. The language and theme specs are already broken by MUT-139's radios (MUT-160). Fixed in MUT-160 (below).
 
 **Merged onto MUT-47 (qa-reconcile, 2026-10-13):** `DataToolsSection.test.tsx` (the version MUT-47 updated, line above) is deleted along with the component; its cases are the ones ported into `YourDataSection.test.tsx`. `YourDataSection`, `RestoreBackupModal` and `demoData.seed` were adjusted to call `getRepositories().base.dataset.*` instead of the direct `db/*` imports MUT-88 was built against, per ADR-071's seam; `backUpNow`'s test moved to `src/utils/__tests__/backupDownload.test.ts` alongside its new home. Gate re-run post-merge (Node 22, per Basel no full suite): `lint` 0 errors, `typecheck` clean, targeted suite (profileDefault, migration-v22, businessProfileRepo, profileImport, backup, dataFiles, RestoreBackupModal, ImportDataPage, SettingsPage, DeleteAllDataModal, YourDataSection, seedDefault) 155/155 passed.
 
@@ -2162,6 +2162,15 @@ QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a bus
 **Regression sweep for the version bump (v22 → v23):** every test hardcoding the app's current top schema version was re-verified and bumped: `migration-v20/v21/v22.test.ts`, `retainedDocumentSchema.test.ts`, `retainedMonthCloseSchema.test.ts`, and one in `expensesGatingDataSafety.test.ts` that was already stale since MUT-88's v22 bump and had gone uncaught until this ticket's full-suite run.
 
 Full suite (Node 22): 3693/3697 pass (4 pre-existing skips), 262/262 files -- no regressions. `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `build` clean.
+
+## MUT-160 — The Settings QA specs find Language and Theme as radiogroups (2026-10-14)
+
+| AC | Tests |
+|---|---|
+| `@web.income.rtl-amount` passes | Already fixed in MUT-103 (`5bd1b09`); passes again in this run |
+| No QA spec targets the Language/Theme controls as buttons | `settings.spec.ts` `@web.settings.language` and `@web.settings.theme` now wait for the named `radiogroup`, click `radio`s and assert `aria-checked`. Both failed on main and pass here. `grep` for `getByRole('button'` with العربية/English/Dark/Light/System in `qa/specs` and `qa/support` finds nothing |
+
+Test-only change: no app code, so no unit run. Full `web` suite against the branch (dev server on :5173, `--retries 0`): 42 passed, 3 failed. All 3 fail the same way on main, and this change can't touch them: `@web.brand.type` ×2 (Home loads no IBM Plex Mono face) and `@web.clients.owed-now-parity` (Home's Owed now amount is empty).
 
 ## TD-014 (partial) — retainer projections use the local "today" (2026-10-14)
 
