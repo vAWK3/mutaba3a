@@ -115,7 +115,15 @@ async function request(deps: ApiClientDeps, method: string, path: string, body: 
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    // A non-JSON body (an HTML error page from a misconfigured URL/proxy, a plain-text
+    // 502) shouldn't surface as a raw SyntaxError — the request's own method/path/status
+    // is more actionable than a parse failure.
+    throw new ApiClientError(method, path, res.status, { raw: text.slice(0, 200) });
+  }
   if (!res.ok) throw new ApiClientError(method, path, res.status, parsed);
   return { status: res.status, body: parsed };
 }

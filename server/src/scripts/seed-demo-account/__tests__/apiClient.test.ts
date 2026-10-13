@@ -147,4 +147,13 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
 
     await expect(client.createCustomer({ name: '' }, 'seed-bad-customer')).rejects.toThrow(ApiClientError);
   });
+
+  it('throws a readable ApiClientError (not a raw SyntaxError) when the server answers with a non-JSON body', async () => {
+    const htmlErrorFetch = (async () => new Response('<html><body>502 Bad Gateway</body></html>', { status: 502 })) as typeof fetch;
+    const deps: ApiClientDeps = { fetch: htmlErrorFetch, baseUrl: URL_BASE };
+    const session = { token: 'mds_fake', organizationId: 'org-id' };
+    const client = clientFor(deps, session);
+
+    await expect(client.createCustomer({ name: 'Al-Quds Bakery' }, 'seed-customer')).rejects.toThrow(ApiClientError);
+  });
 });
