@@ -11,7 +11,7 @@ import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../../db/provider';
 import type { FeatureKey } from '../../types';
-import { resolveFeatures, withFeature, type FeatureFlags } from './features';
+import { FEATURE_KEYS, resolveFeatures, withFeature, type FeatureFlags } from './features';
 
 /**
  * Same key as `queryKeys.settings()` in `hooks/useQueries.ts`, declared here
@@ -92,7 +92,9 @@ export function useFeatureNotice(): { notice: FeatureKey[]; isLoaded: boolean; d
   }, [queryClient]);
 
   return {
-    notice: data?.featureNotice ?? [],
+    // A notice stored before an area was retired (invoices, MUT-145) keeps
+    // only live areas, so the banner never renders a raw i18n key.
+    notice: (data?.featureNotice ?? []).filter((key) => (FEATURE_KEYS as readonly string[]).includes(key)),
     isLoaded: isSuccess,
     dismiss,
   };

@@ -83,4 +83,29 @@ describe('FeatureNoticeBanner', () => {
     expect(screen.queryByTestId('feature-notice-banner')).toBeNull();
     expect(fake.settings.update).not.toHaveBeenCalled();
   });
+
+  // A notice stored before an area was retired (e.g. invoices, MUT-145) must
+  // never render a raw i18n key; the read side keeps only live areas.
+  it('drops retired areas from a stored notice and names only live ones', async () => {
+    installFakeSettings({ featureNotice: ['engagements', 'expenses'] as never });
+
+    render(<FeatureNoticeBanner />, { wrapper: Wrapper });
+
+    const banner = await screen.findByTestId('feature-notice-banner');
+    expect(banner).toHaveTextContent('Expenses');
+    expect(banner).not.toHaveTextContent('settings.features.items');
+    expect(banner).not.toHaveTextContent('engagements');
+  });
+
+  it('renders nothing when every area in the stored notice is retired', async () => {
+    const fake = installFakeSettings({ featureNotice: ['engagements'] as never });
+
+    render(<FeatureNoticeBanner />, { wrapper: Wrapper });
+
+    await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(screen.queryByTestId('feature-notice-banner')).toBeNull();
+  });
 });
