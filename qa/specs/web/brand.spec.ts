@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { openFreshApp, logIncome, openNewIncomeDrawer, localDateFromToday, switchToArabic } from '../../support/app';
+import { openFreshApp, logIncome, openNewIncomeDrawer, localDateFromToday, switchToArabic, enableOptionalArea } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar } from '../../support/i18n';
 import {
@@ -90,7 +90,8 @@ for (const scheme of SCHEMES) {
 
       await step('Check Settings', async () => {
         await page.goto('/app/settings');
-        await expect(page.getByRole('main').getByRole('heading', { name: 'Theme' })).toBeVisible();
+        // Theme is a radio group inside Preferences since MUT-139, not a section heading
+        await expect(page.getByRole('main').getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
         await expectOnlyKnownAxeViolations(page, 'settings');
       });
     },
@@ -235,6 +236,8 @@ const KNOWN_OVERFLOW: Record<string, { note: string; maxContentWidth: number }> 
   'Income@375': { note: 'TD-083: the Income top bar, status tabs and table are wider than a phone', maxContentWidth: 726 },
   // --drawer-width is 480px: the drawer is 105px wider than the window, same on main
   'Payment drawer@375': { note: 'TD-083: drawers are a fixed 480px (--drawer-width), wider than a phone', maxContentWidth: 480 },
+  // MUT-103 baseline, measured on main a48f72d (2026-10-13) before the sweep: opened over Income, so Income's width shows through
+  'Income drawer@375': { note: 'TD-083: opens over Income, which is wider than a phone; drawers are a fixed 480px', maxContentWidth: 726 },
 };
 
 /** The widest thing sticking out: the page's content width, or a dialog's width. */
@@ -251,64 +254,95 @@ async function expectFits(page: Page, surface: string, width: number) {
   const known = KNOWN_OVERFLOW[`${surface}@${width}`];
   if (!known) return expectNoHorizontalOverflow(page, surface);
   const problems = await fitProblems(page);
-  expect(await contentWidth(page), `${surface} at ${width}px got wider than its known overflow`).toBeLessThanOrEqual(known.maxContentWidth);
+  const measured = await contentWidth(page);
+  expect(measured, `${surface} at ${width}px got wider than its known overflow`).toBeLessThanOrEqual(known.maxContentWidth);
   test.info().annotations.push({
     type: problems.length > 0 ? 'known-overflow' : 'known-overflow-gone',
-    description: `${surface} at ${width}px: ${known.note}${problems.length > 0 ? ` (${problems.join('; ')})` : ' — fits now; remove from KNOWN_OVERFLOW'}`,
+    description: `${surface} at ${width}px (${measured}px wide): ${known.note}${problems.length > 0 ? ` (${problems.join('; ')})` : ' — fits now; remove from KNOWN_OVERFLOW'}`,
   });
 }
 
-for (const viewport of VIEWPORTS) {
-  for (const language of ['en', 'ar'] as const) {
-    test(
-      `at ${viewport.width}px in ${language === 'en' ? 'English' : 'Arabic'}, Home, Clients, Income, a drawer and Settings fit the window`,
-      { tag: '@web.brand.layout' },
-      async ({ page, step }) => {
-        // Drawers settle at once, so their box is measured where it rests
-        await page.emulateMedia({ reducedMotion: 'reduce' });
-        await logTwoClients(page);
-        if (language === 'ar') await switchToArabic(page);
-        await page.setViewportSize(viewport);
-        const shot = (name: string) => attachScreenshot(page, `${viewport.width}-${language}-${name}`);
+/**
+ * MUT-103's screen matrix (eng review D4): every core screen in both schemes,
+ * both languages, at phone and desktop width. Screenshots are attached per cell
+ * for the before/after review; the optional areas are switched on first.
+ */
+for (const scheme of SCHEMES) {
+  for (const viewport of VIEWPORTS) {
+    for (const language of ['en', 'ar'] as const) {
+      test(
+        `${scheme} mode at ${viewport.width}px in ${language === 'en' ? 'English' : 'Arabic'}: Home, Clients, Income, both drawers, Settings, Import, Expenses and Planning fit the window`,
+        { tag: '@web.brand.layout' },
+        async ({ page, step }) => {
+          // Drawers settle at once, so their box is measured where it rests
+          await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+          await logTwoClients(page);
+          await enableOptionalArea(page, 'Expenses');
+          await enableOptionalArea(page, 'Planning');
+          if (language === 'ar') await switchToArabic(page);
+          await page.setViewportSize(viewport);
+          const shot = (name: string) => attachScreenshot(page, `${scheme}-${viewport.width}-${language}-${name}`);
 
-        await step('Home', async () => {
-          await page.goto('/app/');
-          await expect(page.getByTestId('owed-now-amount').first()).toBeVisible();
-          await expectNoHorizontalOverflow(page, 'Home');
-          await shot('home');
-        });
+          await step('Home', async () => {
+            await page.goto('/app/');
+            await expect(page.getByTestId('owed-now-amount').first()).toBeVisible();
+            await expectFits(page, 'Home', viewport.width);
+            await shot('home');
+          });
 
-        await step('Clients, then a client', async () => {
-          await page.goto('/app/clients');
-          await expect(clientLink(page, 'Acme Studio')).toBeVisible();
-          await expectNoHorizontalOverflow(page, 'Clients');
-          await clientLink(page, 'Acme Studio').click();
-          await expect(page.getByRole('heading', { level: 1, name: 'Acme Studio' })).toBeVisible();
-          await expectNoHorizontalOverflow(page, 'Client');
-          await shot('clients');
-        });
+          await step('Clients, then a client beside the list', async () => {
+            await page.goto('/app/clients');
+            await expect(clientLink(page, 'Acme Studio')).toBeVisible();
+            await expectFits(page, 'Clients', viewport.width);
+            await clientLink(page, 'Acme Studio').click();
+            await expect(page.getByRole('heading', { level: 1, name: 'Acme Studio' })).toBeVisible();
+            await expectFits(page, 'Client', viewport.width);
+            await shot('clients');
+          });
 
-        await step('Income and the payment drawer', async () => {
-          await page.goto('/app/income');
-          await expect(page.getByRole('main').getByText('Logo redesign')).toBeVisible();
-          await expectFits(page, 'Income', viewport.width);
-          await shot('income');
-          await page.goto('/app/');
-          // The client cell is a link, so the row's one button is Record Payment
-          await attentionRow(page, 'Acme Studio', language).getByRole('button').click();
-          await expect(page.getByRole('dialog')).toBeVisible();
-          await expectFits(page, 'Payment drawer', viewport.width);
-          await shot('drawer');
-          await page.keyboard.press('Escape');
-        });
+          await step('Income, the payment drawer and the income drawer', async () => {
+            await page.goto('/app/income');
+            await expect(page.getByRole('main').getByText('Logo redesign')).toBeVisible();
+            await expectFits(page, 'Income', viewport.width);
+            await shot('income');
+            await page.getByRole('main').getByText('Logo redesign').click();
+            await expect(page.getByRole('dialog')).toBeVisible();
+            await expectFits(page, 'Income drawer', viewport.width);
+            await shot('income-drawer');
+            await page.keyboard.press('Escape');
+            await expect(page.getByRole('dialog')).toBeHidden();
+            await page.goto('/app/');
+            // The client cell is a link, so the row's one button is Record Payment
+            await attentionRow(page, 'Acme Studio', language).getByRole('button').click();
+            await expect(page.getByRole('dialog')).toBeVisible();
+            await expectFits(page, 'Payment drawer', viewport.width);
+            await shot('drawer');
+            await page.keyboard.press('Escape');
+          });
 
-        await step('Settings', async () => {
-          await page.goto('/app/settings');
-          await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
-          await expectNoHorizontalOverflow(page, 'Settings');
-          await shot('settings');
-        });
-      },
-    );
+          await step('Settings and Import', async () => {
+            await page.goto('/app/settings');
+            await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
+            await expectFits(page, 'Settings', viewport.width);
+            await shot('settings');
+            await page.goto('/app/settings/import');
+            await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
+            await expectFits(page, 'Import', viewport.width);
+            await shot('import');
+          });
+
+          await step('Expenses and Planning', async () => {
+            await page.goto('/app/expenses');
+            await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
+            await expectFits(page, 'Expenses', viewport.width);
+            await shot('expenses');
+            await page.goto('/app/planning');
+            await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
+            await expectFits(page, 'Planning', viewport.width);
+            await shot('planning');
+          });
+        },
+      );
+    }
   }
 }

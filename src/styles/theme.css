@@ -30,7 +30,9 @@
   --font-heading-ar: var(--m-font-display);
   --font-mono: var(--m-font-num);
 
-  /* Brand type scale (label 13, body 16, headline 20, title 32, figure 40, display 56) */
+  /* Brand type scale (micro 11, label 13, body 16, headline 20, title 32, figure 40, display 56).
+     micro is MUT-103's extension for counters and step dots; it is not body copy. */
+  --text-micro: 0.6875rem;
   --text-label: 0.8125rem;
   --text-body: 1rem;
   --text-headline: 1.25rem;
@@ -86,7 +88,8 @@
   --space-12: 3rem;       /* 48px */
   --space-16: 4rem;       /* 64px */
 
-  /* Brand radii (sm 12, md 14, lg 18, card 24, hero 28, pill) */
+  /* Brand radii (xs 4, sm 12, md 14, lg 18, card 24, hero 28, pill) */
+  --radius-xs: var(--m-radius-xs);
   --radius-sm: var(--m-radius-sm);
   --radius-md: var(--m-radius-md);
   --radius-lg: var(--m-radius-lg);

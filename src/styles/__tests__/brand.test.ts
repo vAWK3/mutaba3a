@@ -8,21 +8,26 @@ import { describe, expect, it } from 'vitest';
 import tokensJson from '../brand/mutaba3a.tokens.json';
 import thmanyahPins from '../../assets/fonts/thmanyah.sha256.json';
 import {
+  COLOR_LITERAL,
   THEME_STATES,
   Tokens,
   bareVarReferences,
+  cssLiterals,
   colorPairs,
   contrast,
   customPropertyDefinitions,
   fontFaces,
+  literalSourceFiles,
   loadStylesheet,
   parseCss,
   parseColor,
   parseOklch,
   repoPath,
   schemeOf,
+  scriptLiterals,
   sourceFiles,
   stylesheetFromCss,
+  tabularWithoutMono,
   toHex,
   type Rgba,
   type ThemeState,
@@ -417,9 +422,6 @@ describe('references', () => {
   });
 });
 
-/** A colour literal anywhere in a declaration value: theme.css must take every colour from --m-*. */
-const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|\b(?:white|black)\b/i;
-
 const firstFamily = (value: string) => value.split(',')[0].replace(/["']/g, '').trim();
 
 describe('tokens', () => {
@@ -812,5 +814,197 @@ describe('accent-text guard', () => {
       .filter((file) => /\.(css|tsx?)$/.test(file))
       .flatMap((file) => accentTextLines(readFileSync(file, 'utf8')).map((line) => `${file.replace(`${repoPath('.')}/`, '')}:${line}`));
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Literal guard (MUT-103): outside src/styles, a colour, radius or font size
+ * comes from a token. Allowed: user data (category and business colours),
+ * listed here with the reason.
+ */
+const ALLOWED_LITERAL_FILES: Record<string, string> = {
+  'src/db/defaultExpenseCategories.ts': 'user data: the default expense category colours a user can recolour',
+  'src/demo/seedData/categories.ts': 'user data: the sample session\'s category colours',
+  'src/demo/seedData/profile.ts': 'user data: the sample businesses\' chosen colours',
+  'src/components/ui/profileAvatarStyle.ts': 'user data: the default business colour and the ink on it (TD-079 picks the ink by luminance)',
+};
+
+/**
+ * Literals the sweep has not reached yet, per file (counted 2026-10-13 on main
+ * a48f72d). Shrink-only: each MUT-103 surface commit lowers or deletes its
+ * entries; a new file, a higher count, or a stale count fails.
+ */
+const KNOWN_LITERALS: Record<string, number> = {
+  'src/components/csv/CSVValidationPreview.css': 45,
+  'src/components/drawers/BusinessProfileDrawer.tsx': 6,
+  'src/components/drawers/PlanAssumptionDrawer.tsx': 1,
+  'src/components/modals/DeleteAllDataModal.css': 3,
+  'src/components/modals/DemoSeedModal.css': 6,
+  'src/components/modals/MigrationWizard.css': 1,
+  'src/components/modals/ProfilePickerModal.css': 1,
+  'src/components/modals/WelcomeModal.css': 6,
+  'src/components/ui/Button.css': 1,
+  'src/components/ui/DemoBanner.css': 10,
+  'src/components/ui/EntityTypeahead.css': 2,
+  'src/components/ui/ProfileBadge.css': 2,
+  'src/components/ui/ProfileContextChip.css': 6,
+  'src/components/ui/ProfileQuickPicker.css': 8,
+  'src/components/ui/RecurringOccurrenceCard.css': 8,
+  'src/components/ui/Switch.css': 1,
+  'src/index.css': 35,
+  'src/pages/expenses/ExpensesLedgerPage.tsx': 1,
+  'src/pages/income/IncomePage.tsx': 2,
+  'src/pages/insights/InsightsPage.tsx': 4,
+  'src/pages/landing/LandingPage.css': 8,
+  'src/pages/landing/PrivacyPolicyPage.css': 1,
+  'src/pages/landing/components/HeroSection.css': 2,
+  'src/pages/planning/PlanningPage.css': 33,
+  'src/pages/planning/components/MonthlyTimeline.tsx': 1,
+  'src/pages/projects/ProjectDetailPage.tsx': 2,
+  'src/pages/retainers/RetainersPage.css': 21,
+  'src/pages/settings/ImportDataPage.css': 52,
+};
+
+/**
+ * Rules asking for tabular figures without Plex Mono (Thmanyah has no tnum,
+ * so the request does nothing). Shrink-only, as above.
+ */
+const KNOWN_TABULAR_WITHOUT_MONO: string[] = [
+  'src/components/drawers/PartialPaymentDrawer.css .pay-drawer-amount-field .input',
+  'src/components/drawers/PartialPaymentDrawer.css .pay-drawer-record-amount',
+  'src/components/drawers/RecurringMarkPaidDrawer.css .recurring-drawer-amount .input',
+  'src/components/expenses/RecurringAttentionList.css .recurring-attention-amount',
+  'src/components/layout/FxRateReadout.css .fx-popover-rate dt',
+  'src/components/layout/FxRateReadout.css .fx-readout-button',
+  'src/components/ui/RecordPaymentButton.css .record-payment-remaining',
+  'src/components/ui/Table.css .table',
+  'src/index.css .client-index-amount',
+  'src/pages/landing/LandingPage.css .landing-mock-amount',
+  'src/pages/landing/LandingPage.css .landing-mock-client-owed, .landing-mock-client-overdue',
+  'src/pages/landing/LandingPage.css .landing-mock-input--amount',
+  'src/pages/landing/LandingPage.css .landing-mock-money',
+  'src/pages/planning/PlanningPage.css .assumption-amount',
+  'src/pages/planning/PlanningPage.css .category-total',
+  'src/pages/planning/PlanningPage.css .summary-card-value',
+];
+
+describe('literals', () => {
+  describe('in CSS', () => {
+    it.each([
+      ['a { color: #fff; }', 'colour'],
+      ['a { background: rgb(0 0 0 / 0.5); }', 'colour'],
+      ['a { border-color: hsl(0 0% 50%); }', 'colour'],
+      ['a { color: oklch(0.5 0.1 300); }', 'colour'],
+      ['a { color: white; }', 'colour'],
+      ['a { box-shadow: 0 1px 2px black; }', 'colour'],
+      ['a { --tint: #3b82f6; }', 'colour'],
+      ['a { color: var(--text, #111); }', 'colour'],
+      ['a { font-size: 12px; }', 'font-size'],
+      ['a { font-size: 0.875rem; }', 'font-size'],
+      ['a { font-size: var(--text-label, 13px); }', 'font-size'],
+      ['a { border-radius: 4px; }', 'radius'],
+      ['a { border-top-left-radius: 2px; }', 'radius'],
+      ['a { border-radius: var(--radius-lg, 12px); }', 'radius'],
+    ])('catches %s as %s', (css, kind) => {
+      expect(cssLiterals(css).map((literal) => literal.kind)).toEqual([kind]);
+    });
+
+    it.each([
+      'a { color: transparent; }',
+      'a { color: currentColor; }',
+      'a { color: inherit; }',
+      'a { color: var(--text); background: var(--white-wash); }',
+      'a { white-space: nowrap; }',
+      'a { font-size: 0.7em; }',
+      'a { font-size: 100%; }',
+      'a { font-size: var(--text-label); }',
+      'a { font: inherit; }',
+      'a { border-radius: 0; }',
+      'a { border-radius: 50%; }',
+      'a { border-radius: calc(var(--radius-lg) - 1px); }',
+      'a { padding: 12px; }',
+      '@media (max-width: 768px) { a { color: var(--text); } }',
+    ])('leaves %s alone', (css) => {
+      expect(cssLiterals(css)).toEqual([]);
+    });
+
+    it('reports the line', () => {
+      expect(cssLiterals('a {\n  color: var(--text);\n  border-radius: 6px;\n}').map((literal) => literal.line)).toEqual([3]);
+    });
+  });
+
+  describe('in TS and TSX (eng review D3: exact strings, numeric style keys, no <style>)', () => {
+    it.each([
+      ["const tint = '#3b82f6';", 'colour'],
+      ['const tint = "#abc";', 'colour'],
+      ["const veil = 'rgba(0, 0, 0, 0.5)';", 'colour'],
+      ["style={{ color: 'white' }}", 'colour'],
+      ['style={{ fontSize: 12 }}', 'font-size'],
+      ["style={{ fontSize: '0.75rem' }}", 'font-size'],
+      ['style={{ borderRadius: 4 }}', 'radius'],
+      ["style={{ borderTopLeftRadius: '2px' }}", 'radius'],
+      ['return <style>{`.a { color: red; }`}</style>;', 'style-element'],
+    ])('catches %s as %s', (code, kind) => {
+      expect(scriptLiterals(code).map((literal) => literal.kind)).toEqual([kind]);
+    });
+
+    it.each([
+      '<a href="#add">Add</a>',
+      '<Link to="#face" />',
+      "const help = 'Paste rgb(0 0 0) or a hex';",
+      'const glyph = <span>&#9998;</span>;',
+      "style={{ fontSize: 'var(--text-label)', borderRadius: 'var(--radius-sm)' }}",
+      'style={{ borderRadius: 0 }}',
+      "const mode = 'whiteboard';",
+      "background: 'var(--surface)'",
+    ])('leaves %s alone', (code) => {
+      expect(scriptLiterals(code)).toEqual([]);
+    });
+  });
+
+  describe('tabular figures', () => {
+    it('catches tabular-nums without Plex Mono', () => {
+      expect(tabularWithoutMono('.total { font-variant-numeric: tabular-nums; }')).toEqual(['.total']);
+    });
+
+    it('leaves a rule that sets both alone', () => {
+      expect(tabularWithoutMono('.total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }')).toEqual([]);
+    });
+  });
+
+  describe('the repo', () => {
+    const relativeFile = (file: string) => file.replace(`${repoPath('.')}/`, '');
+    const found = literalSourceFiles().flatMap((file) =>
+      (file.endsWith('.css') ? cssLiterals(readFileSync(file, 'utf8')) : scriptLiterals(readFileSync(file, 'utf8'), file.endsWith('.tsx'))).map(
+        (literal) => ({ ...literal, file: relativeFile(file) }),
+      ),
+    );
+    const counted = found.filter((literal) => !(literal.file in ALLOWED_LITERAL_FILES));
+    const counts = counted.reduce<Record<string, number>>((all, { file }) => ({ ...all, [file]: (all[file] ?? 0) + 1 }), {});
+
+    it('adds no literal outside src/styles (move it onto a token)', () => {
+      const over = counted.filter(({ file }) => counts[file] > (KNOWN_LITERALS[file] ?? 0));
+      expect(over.map(({ file, line, kind, text }) => `${file}:${line} ${kind} ${text}`)).toEqual([]);
+    });
+
+    it('KNOWN_LITERALS matches what is left (lower or delete an entry as its file is swept)', () => {
+      expect(Object.entries(KNOWN_LITERALS).filter(([file, count]) => (counts[file] ?? 0) !== count)).toEqual([]);
+    });
+
+    it('every allowlisted file exists and still holds a literal', () => {
+      expect(Object.keys(ALLOWED_LITERAL_FILES).filter((file) => !found.some((literal) => literal.file === file))).toEqual([]);
+    });
+
+    const tabular = literalSourceFiles()
+      .filter((file) => file.endsWith('.css'))
+      .flatMap((file) => tabularWithoutMono(readFileSync(file, 'utf8')).map((selector) => `${relativeFile(file)} ${selector}`));
+
+    it('asks for tabular figures only on Plex Mono', () => {
+      expect(tabular.filter((rule) => !KNOWN_TABULAR_WITHOUT_MONO.includes(rule))).toEqual([]);
+    });
+
+    it('lists only rules that still lack mono (remove fixed ones from KNOWN_TABULAR_WITHOUT_MONO)', () => {
+      expect(KNOWN_TABULAR_WITHOUT_MONO.filter((rule) => !tabular.includes(rule))).toEqual([]);
+    });
   });
 });

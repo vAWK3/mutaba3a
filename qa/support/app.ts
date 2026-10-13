@@ -64,9 +64,20 @@ export function localDateFromToday(days: number): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** Switches the app to Arabic from Settings, as a user would, and waits for the page to turn right-to-left. */
+/** Switches the app to Arabic from Settings' language control (a radio group since MUT-139), as a user would, and waits for the page to turn right-to-left. */
 export async function switchToArabic(page: Page): Promise<void> {
   await page.goto('/app/settings');
-  await page.getByRole('button', { name: 'العربية' }).click();
+  await page.getByRole('radio', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+}
+
+/**
+ * Turns on an optional area (ADR-032: all off on a fresh install) from Settings,
+ * by its English switch label. Call it before switching to Arabic.
+ */
+export async function enableOptionalArea(page: Page, label: 'Expenses' | 'Planning' | 'Retainers' | 'Insights' | 'Projects'): Promise<void> {
+  await page.goto('/app/settings');
+  const toggle = page.getByRole('switch', { name: label, exact: true });
+  if ((await toggle.getAttribute('aria-checked')) !== 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
 }

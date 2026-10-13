@@ -33,6 +33,7 @@
   --m-font-body: "Thmanyah Sans", system-ui, sans-serif;
   --m-font-num: "IBM Plex Mono", "Thmanyah Sans", ui-monospace, monospace; /* Thmanyah before the system mono: Arabic inside a figure cell keeps the brand face */
 
+  --m-radius-xs: 4px; /* MUT-103: bars, swatches and chips below the 12px card scale */
   --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px;
   --m-radius-card: 24px; --m-radius-hero: 28px; --m-radius-pill: 999px;
 

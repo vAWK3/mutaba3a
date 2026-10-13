@@ -12,13 +12,13 @@ test(
     await expect(main.getByRole('heading', { name: 'Language' })).toBeVisible();
 
     await step('Click العربية', async () => {
-      await main.getByRole('button', { name: 'العربية' }).click();
+      await main.getByRole('radio', { name: 'العربية' }).click();
       await expect(html).toHaveAttribute('lang', 'ar');
       await expect(html).toHaveAttribute('dir', 'rtl');
     });
 
     await step('Click English', async () => {
-      await main.getByRole('button', { name: 'English' }).click();
+      await main.getByRole('radio', { name: 'English' }).click();
       await expect(html).toHaveAttribute('lang', 'en');
       await expect(html).toHaveAttribute('dir', 'ltr');
     });
