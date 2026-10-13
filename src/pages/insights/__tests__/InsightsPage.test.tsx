@@ -276,6 +276,40 @@ describe('InsightsPage', () => {
       expect(screen.getByText('Net (Paid - Expenses)')).toBeInTheDocument();
     });
 
+    // MUT-141: this page computes its own summary totals independently of
+    // src/lib/aggregations.ts (the module whose kind==='income'-else pattern
+    // was fixed for conversions) -- it has the identical bug, just duplicated
+    // inline, and was missed until qa-reconcile re-swept every kind==='income'
+    // call site in the repo.
+    it('excludes a conversion transaction from the expenses total', () => {
+      vi.spyOn(useQueries, 'useTransactions').mockReturnValue({
+        data: [
+          ...mockTransactions,
+          {
+            id: 'tx-conversion',
+            kind: 'conversion',
+            status: 'paid',
+            amountMinor: 50000,
+            currency: 'USD',
+            toAmountMinor: 45000,
+            toCurrency: 'EUR',
+            occurredAt: '2026-03-03',
+          },
+        ],
+        isLoading: false,
+      } as unknown as ReturnType<typeof useQueries.useTransactions>);
+
+      renderWithProviders(<InsightsPage />);
+
+      // mockTransactions' tx-3 is the only real expense ($1,000) -- the
+      // conversion must not add to it.
+      const table = document.querySelector('.data-table table');
+      const rows = table!.querySelectorAll('tbody tr');
+      const expensesRow = Array.from(rows).find(row => row.textContent?.includes('Expenses'));
+      const expensesCell = expensesRow!.querySelector('.amount-negative');
+      expect(expensesCell?.textContent).toBe('-$1,000');
+    });
+
     it('monthly trend includes expenses from the expenses table, not just transactions (MUT-94)', () => {
       vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
         data: [
