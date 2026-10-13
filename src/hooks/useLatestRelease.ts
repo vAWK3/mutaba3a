@@ -52,7 +52,23 @@ function setCachedRelease(release: ReleaseInfo): void {
   sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached));
 }
 
-export async function fetchLatestRelease(): Promise<ReleaseInfo> {
+/** The GitHub call already on its way, shared by every caller that asks before it settles. */
+let inFlight: Promise<ReleaseInfo> | null = null;
+
+/**
+ * The latest release, one GitHub call per burst of callers: the landing hero,
+ * its header button and Get it all ask on first paint, and GitHub allows 60
+ * unauthenticated calls an hour per IP (MUT-77). Cleared once it settles, so a
+ * failure can be retried and a later check asks again.
+ */
+export function fetchLatestRelease(): Promise<ReleaseInfo> {
+  inFlight ??= requestLatestRelease().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function requestLatestRelease(): Promise<ReleaseInfo> {
   const response = await fetch(GITHUB_API_URL, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
