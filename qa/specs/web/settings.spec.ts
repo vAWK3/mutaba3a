@@ -9,16 +9,22 @@ test(
     await openFreshApp(page, '/settings');
     const main = page.getByRole('main');
     const html = page.locator('html');
-    await expect(main.getByRole('heading', { name: 'Language' })).toBeVisible();
+    // Language is a radiogroup named by its row label since MUT-139, not a heading
+    await expect(main.getByRole('radiogroup', { name: 'Language' })).toBeVisible();
 
+    // Found through main, not the group: the group's name turns Arabic with the page
     await step('Click العربية', async () => {
-      await main.getByRole('radio', { name: 'العربية' }).click();
+      const arabic = main.getByRole('radio', { name: 'العربية' });
+      await arabic.click();
+      await expect(arabic).toHaveAttribute('aria-checked', 'true');
       await expect(html).toHaveAttribute('lang', 'ar');
       await expect(html).toHaveAttribute('dir', 'rtl');
     });
 
     await step('Click English', async () => {
-      await main.getByRole('radio', { name: 'English' }).click();
+      const english = main.getByRole('radio', { name: 'English' });
+      await english.click();
+      await expect(english).toHaveAttribute('aria-checked', 'true');
       await expect(html).toHaveAttribute('lang', 'en');
       await expect(html).toHaveAttribute('dir', 'ltr');
     });
@@ -34,24 +40,31 @@ test(
   { tag: '@web.settings.theme' },
   async ({ page, step }) => {
     await openFreshApp(page, '/settings');
-    // Scoped to main: the sidebar's theme toggle ("Theme: System") sits outside it
-    const main = page.getByRole('main');
+    // Theme is a radiogroup since MUT-139. Scoped to it, so the sidebar's theme
+    // toggle button ("Theme: System") is never the one clicked.
+    const theme = page.getByRole('main').getByRole('radiogroup', { name: 'Theme' });
     const html = page.locator('html');
-    await expect(main.getByRole('heading', { name: 'Theme' })).toBeVisible();
+    await expect(theme).toBeVisible();
 
     await step('Click Dark', async () => {
-      await main.getByRole('button', { name: 'Dark', exact: true }).click();
+      const dark = theme.getByRole('radio', { name: 'Dark', exact: true });
+      await dark.click();
+      await expect(dark).toHaveAttribute('aria-checked', 'true');
       await expect(html).toHaveAttribute('data-theme', 'dark');
     });
 
     await step('Click Light', async () => {
-      await main.getByRole('button', { name: 'Light', exact: true }).click();
+      const light = theme.getByRole('radio', { name: 'Light', exact: true });
+      await light.click();
+      await expect(light).toHaveAttribute('aria-checked', 'true');
       await expect(html).toHaveAttribute('data-theme', 'light');
     });
 
     await step('Click System', async () => {
       // System drops the attribute and lets prefers-color-scheme decide
-      await main.getByRole('button', { name: 'System', exact: true }).click();
+      const system = theme.getByRole('radio', { name: 'System', exact: true });
+      await system.click();
+      await expect(system).toHaveAttribute('aria-checked', 'true');
       await expect(html).not.toHaveAttribute('data-theme');
     });
   },
