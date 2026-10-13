@@ -137,6 +137,32 @@ export const parseConversionDrawer = (raw: Raw): ConversionDrawerSearch =>
 export type ConversionsPageSearch = ConversionFilters & ConversionDrawerSearch;
 export const parseConversionsPage = (raw: Raw): ConversionsPageSearch => ({ ...parseConversions(raw), ...parseConversionDrawer(raw) });
 
+export const INCOME_KINDS = ['received', 'owed'] as const;
+
+/**
+ * The income drawers' own URL state (MUT-133): `?newIncome=received|owed` opens
+ * Add income, `?settle=<receivableId>` opens Record payment. Pages own it,
+ * beside (never inside) a list's filters, so it can never enter a list's query
+ * key (eng review R1). Ignored where the gate offers no income writes.
+ */
+export interface IncomeDrawerSearch {
+  newIncome?: (typeof INCOME_KINDS)[number];
+  settle?: string;
+}
+export const parseIncomeDrawer = (raw: Raw): IncomeDrawerSearch => compact({ newIncome: oneOf(raw.newIncome, INCOME_KINDS), settle: id(raw.settle) });
+
+export type ReceivablesPageSearch = ReceivableFilters & IncomeDrawerSearch;
+export const parseReceivablesPage = (raw: Raw): ReceivablesPageSearch => ({ ...parseReceivables(raw), ...parseIncomeDrawer(raw) });
+
+export type PaymentsPageSearch = PaymentFilters & IncomeDrawerSearch;
+export const parsePaymentsPage = (raw: Raw): PaymentsPageSearch => ({ ...parsePayments(raw), ...parseIncomeDrawer(raw) });
+
+/** Splits a page's search into the list's filters and the drawer state, so the list never sees the latter. */
+export function splitIncomeDrawer<T extends IncomeDrawerSearch>(search: T): { filters: Omit<T, keyof IncomeDrawerSearch>; drawer: IncomeDrawerSearch } {
+  const { newIncome, settle, ...filters } = search;
+  return { filters, drawer: compact({ newIncome, settle }) };
+}
+
 export const DOCUMENT_KINDS = ['INVOICE', 'RECEIPT', 'OTHER'] as const;
 
 export interface DocumentFilters {
@@ -152,7 +178,7 @@ export type ClientTab = (typeof CLIENT_TABS)[number];
 export type ClientDetailSearch = { tab?: ClientTab } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
     paymentStatus?: PaymentStatusFilter;
     kind?: DocumentFilters['kind'];
-  };
+  } & IncomeDrawerSearch;
 export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
   compact({
     tab: oneOf(raw.tab, CLIENT_TABS),
@@ -165,6 +191,7 @@ export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
     receivedTo: day(raw.receivedTo),
     paymentStatus: oneOf(raw.paymentStatus, PAYMENT_STATUSES),
     kind: oneOf(raw.kind, DOCUMENT_KINDS),
+    ...parseIncomeDrawer(raw),
   });
 
 /** Whether any filter narrows the list (so an empty result means "nothing matches", not "nothing yet"). */

@@ -35,6 +35,11 @@ export type CreateReceiptUploadRequest = Schemas['CreateReceiptUploadRequest'];
 export type CreateReceiptUploadResponse = Schemas['CreateReceiptUploadResponse'];
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
+export type CreateIncomeRequest = Schemas['CreateIncomeRequest'];
+export type IncomeResponse = Schemas['IncomeResponse'];
+export type PaymentMethod = Schemas['PaymentMethod'];
+export type SettleReceivableRequest = Schemas['SettleReceivableRequest'];
+export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
 export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
@@ -188,6 +193,8 @@ export const api = {
     request<Get<'/v1/projects'>>('GET', '/v1/projects', { profileId, query }),
   receivables: (profileId: string, query: Query<'/v1/receivables'> = {}) =>
     request<Get<'/v1/receivables'>>('GET', '/v1/receivables', { profileId, query }),
+  receivable: (profileId: string, receivableId: string) =>
+    request<Get<'/v1/receivables/{receivableId}'>>('GET', `/v1/receivables/${encodeURIComponent(receivableId)}`, { profileId }),
   payments: (profileId: string, query: Query<'/v1/payments'> = {}) =>
     request<Get<'/v1/payments'>>('GET', '/v1/payments', { profileId, query }),
   attachments: (profileId: string, query: Query<'/v1/attachments'> = {}) =>
@@ -239,6 +246,13 @@ export const api = {
       `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
       { profileId },
     ),
+
+  // Income (MUT-133) — personal profiles only (data/incomeAffordances.ts). Both writes carry an
+  // attempt-scoped Idempotency-Key (data/attemptKey.ts), never one minted per click.
+  createIncome: (profileId: string, body: CreateIncomeRequest, idempotencyKey: string) =>
+    request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
+  settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
+    request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
 
   // Conversions (MUT-161) — create + read only, no update/delete.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>
