@@ -103,6 +103,18 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 | `qa/specs/web/brand.spec.ts` › contrast-landing | E2E | Axe light/dark also with the bar and its button over a chapter |
 | Manual (TD-121) | — | Safari with Reduce Transparency |
 
+### Edit a payment from the ledger (MUT-169, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` › edit intent | Component | One payment opens on its edit (date focused, local-day prefill of a UTC instant); Update closes; Cancel closes; future date refused; several → picker, pencil edits, Update returns to the list with the intent; none → empty state; loading → nothing; failed read → notice + Retry |
+| `src/lib/__tests__/stores.test.ts` › intent | Unit | Intent travels with open, kept for the same entry's record edit, dropped for another entry, cleared on close |
+| `src/pages/income/__tests__/incomeRows.test.ts`, `IncomePage.test.tsx` › Edit Payment | Unit + Component | `canEditPayment` on paid/part-paid only; the row menu opens the drawer with the intent on paid and part-paid rows, not unpaid |
+| `src/components/__tests__/IncomeDrawer.test.tsx` › Edit payment | Component (Dexie) | "Last payment {date}" + Edit Payment up front; hand-over closes the income drawer and opens the payment drawer with the intent; disabled with the hint while dirty; absent on new/unpaid entries; status hint copy |
+| `src/lib/__tests__/dates.test.ts` › paymentLocalDay, `utils.test.ts` › formatPaymentDate | Unit | Local day of a UTC instant (Jerusalem, New York); date-only passthrough; date-only shown on its own day west of UTC |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Component | Client Payments row on its own day west of UTC |
+| `src/db/__tests__/paymentRecords.test.ts` › update | Integration (Dexie) | Moving a payment's date re-dates a fully paid entry (stays paid, same received); a part-paid entry stays part-paid |
+| `qa/specs/web/record-payment.spec.ts` | E2E (release-qa) | `@web.record-payment.edit-payment-date` (row menu → date focused → Enter updates, never a second payment) and `-rtl` |
+
 ### Craft-fix bundle (MUT-92, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|

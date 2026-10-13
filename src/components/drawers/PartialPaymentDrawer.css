@@ -120,6 +120,13 @@
   border-top: 1px solid var(--border);
 }
 
+/* Nothing above it when the drawer only lists payments to pick (MUT-169) */
+.pay-drawer-history:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .pay-drawer-history-title {
   margin-bottom: var(--space-2);
   font-size: var(--text-label);

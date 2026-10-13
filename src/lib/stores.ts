@@ -4,6 +4,9 @@ import type { Currency, TxKind, Currency as CurrencyType, PaymentRecord } from '
 // Income status for the income drawer (Earned/Invoiced/Received)
 export type IncomeStatus = 'earned' | 'invoiced' | 'received';
 
+/** Why the payment drawer was opened, when it isn't to record a payment (MUT-169). */
+export type PartialPaymentIntent = 'editPayment';
+
 // Expense drawer prefill data type
 export interface ExpensePrefillData {
   vendor?: string;
@@ -182,8 +185,18 @@ interface DrawerState {
      * Home's Undo). Kept while a record of the same entry is edited.
      */
     onRecorded?: (record: PaymentRecord) => void;
+    /**
+     * Opened to edit a payment (MUT-169: the ledger and the income drawer).
+     * The drawer then edits the entry's one record, or lists several to pick
+     * from, and never offers to record a new one. Kept like onRecorded.
+     */
+    intent?: PartialPaymentIntent;
   };
-  openPartialPaymentDrawer: (options: { transactionId: string; onRecorded?: (record: PaymentRecord) => void }) => void;
+  openPartialPaymentDrawer: (options: {
+    transactionId: string;
+    onRecorded?: (record: PaymentRecord) => void;
+    intent?: PartialPaymentIntent;
+  }) => void;
   editPaymentRecord: (options: { transactionId: string; paymentRecordId: string }) => void;
   closePartialPaymentDrawer: () => void;
 
@@ -505,20 +518,22 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         transactionId: options.transactionId,
         editingPaymentRecordId: undefined,
         onRecorded: options.onRecorded,
+        intent: options.intent,
       },
     }),
   editPaymentRecord: (options) =>
-    set((state) => ({
-      partialPaymentDrawer: {
-        isOpen: true,
-        transactionId: options.transactionId,
-        editingPaymentRecordId: options.paymentRecordId,
-        onRecorded:
-          state.partialPaymentDrawer.transactionId === options.transactionId
-            ? state.partialPaymentDrawer.onRecorded
-            : undefined,
-      },
-    })),
+    set((state) => {
+      const sameEntry = state.partialPaymentDrawer.transactionId === options.transactionId;
+      return {
+        partialPaymentDrawer: {
+          isOpen: true,
+          transactionId: options.transactionId,
+          editingPaymentRecordId: options.paymentRecordId,
+          onRecorded: sameEntry ? state.partialPaymentDrawer.onRecorded : undefined,
+          intent: sameEntry ? state.partialPaymentDrawer.intent : undefined,
+        },
+      };
+    }),
   closePartialPaymentDrawer: () =>
     set({
       partialPaymentDrawer: {

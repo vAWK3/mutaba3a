@@ -540,6 +540,7 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
 openPartialPaymentDrawer({ transactionId, onRecorded });        // also hear the PaymentRecord a save created (MUT-82)
 editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
+openPartialPaymentDrawer({ transactionId, intent: 'editPayment' }); // edit a payment: the only one, or pick (MUT-169)
 // Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
 ```
 
@@ -557,6 +558,8 @@ editPaymentRecord({ transactionId, paymentRecordId });          // edit one reco
 - Dates go through `isFuturePaymentDate` (`lib/dates.ts`), the same helper the repository uses.
 
 **Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
+
+**Edit intent** (MUT-169; opened by the /income row menu and the income drawer's "Edit Payment"): the drawer never offers to record a payment. With one record, it opens on that record's edit, with the date open and focused (`PaymentForm` `focusDate`). With several, the history alone is the picker. With none, it shows "No payments recorded yet". A failed records read shows `drawer.income.paymentsLoadFailed` with Try again. Update or Cancel closes the drawer (one record) or brings the list back (several), all through one `leaveEdit()`. The edit prefill and the history dates use the payment's local day (`paymentLocalDay`, `formatPaymentDate`).
 
 **Props**: `transactionId`, `onClose`, and `onRecorded?: (record: PaymentRecord) => void` (MUT-82, ADR-055). `onRecorded` hears the record a save created, just before the drawer closes; an update or a delete is never reported. The store carries it in `partialPaymentDrawer.onRecorded` and `AppShell` passes it on. Editing a record of the same entry, and returning to the entry, keep it.
 

@@ -28,6 +28,53 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Edit a payment's date from the ledger and the entry (MUT-169)
+
+**Why:** Fast-added Received income is dated *now* (`nowISO()`), and users fix the date hours or days later from `/income`. A fully paid row there had no way to reach its payment (its Record Payment button hides and its menu had only Duplicate). The income drawer told people to manage payments from the client page. Plan and eng-review decisions D1–D7: `.claude/designs/mut-169-edit-payment-from-ledger.md`.
+
+### Added
+- **The payment drawer's `editPayment` intent** (`partialPaymentDrawer.intent`, `PartialPaymentIntent` in `lib/stores.ts`). An entry with one payment opens straight into its edit, with the date open and focused (D3). Several payments are listed to pick from, with no create form. With none, it says so. Saving one payment closes the drawer; with several, the list comes back. `editPaymentRecord` keeps the intent for the same entry, as it does `onRecorded`.
+- **/income row menu → Edit Payment** on any row with money received (`IncomeRow.canEditPayment`), paid or part-paid.
+- **Income drawer: "Last payment {date} · Edit Payment"** up front on an entry with payments. It hands over to the payment drawer with the intent. While the form has unsaved changes, the button is disabled and a hint says to save first (D2). New `drawer-notice--info` variant (neutral, one row).
+- `paymentLocalDay` (`lib/dates.ts`) and `formatPaymentDate` (`lib/utils.ts`).
+
+### Fixed
+- **The edit form prefilled a payment's UTC day.** A fast-add saved between local midnight and ~03:00 in Israel opened a day early, and any save moved it back a day. It now prefills the local day (D1).
+- **A date-only payment showed a day early west of UTC** in the payment drawer's history and the client's Payments list (`new Date('YYYY-MM-DD')` is UTC midnight). Both now use `formatPaymentDate` (D5).
+- Under the intent, a failed payment-records read shows the load-failed notice with Try again, never "No payments recorded yet" (D7).
+
+### Changed
+- `drawer.income.paymentsRecordedHint` no longer says "Manage payments from the client page" (en, ar). New keys: `drawer.income.lastPayment`, `drawer.income.saveBeforePayment`.
+
+### Technical
+- Tests: drawer intent (1/several/none/loading/failed, save/cancel paths, focus, local-day prefill, future date), store intent, `canEditPayment`, the ledger menu, the income-drawer link and its dirty guard, `paymentLocalDay`/`formatPaymentDate` in UTC+ and UTC− zones, the client Payments list west of UTC, and entry recalculation after a date move (`paymentRecords.test.ts`, D4). QA: `@web.record-payment.edit-payment-date` and `-rtl`.
+- Files: `src/lib/{stores,dates,utils}.ts`, `src/components/drawers/{PartialPaymentDrawer.tsx,PartialPaymentDrawer.css,IncomeDrawer.tsx}`, `src/pages/income/{incomeRows.ts,IncomePage.tsx}`, `src/components/clients/ClientPaymentsSection.tsx`, `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`, `qa/specs/web/record-payment.spec.ts`, `qa/features/web/record-payment.yaml`.
+
+### Fixed in pre-landing review (2026-10-14)
+- **Editing an unpaid entry to Received now records a payment** (`transactionRepo.update`, no-records branch → `markPaid`), like a Received create (MUT-60). Before this, the edit wrote status/paidAt/received straight onto the entry, so Edit Payment opened on an entry with nothing to edit (TD-029 on the edit path).
+- **An edit saves only what changed.** An untouched date keeps its stored instant: a no-op save no longer turns a fast-add's UTC timestamp into a day, which could move it across a month boundary for readers that use the UTC day. A legacy entry recorded over its total (ADR-030) can have its date fixed without tripping the overpayment check.
+- **Payment dates show the user's own day everywhere:** Home's Recent payments, the Clients index's Last payment and the CSV export's `paidAt` now go through `formatPaymentDate`/`paymentLocalDay`. `paymentLocalDay` also reads non-ISO stored dates (a CSV import's `1/15/2024`) instead of producing "Invalid Date".
+- **Edit Payment from the income drawer:**
+  - The guard also waits for a client name typed but not picked.
+  - The button uses `aria-disabled`, so it stays focusable and its hint is read.
+  - The hand-over opens the payment drawer a tick later, so closing it returns focus to the row that opened the income drawer.
+  - "Last payment" breaks a same-day tie by the stored value, so list order never decides.
+- **Payment drawer:**
+  - A failed records read has its own copy (`transactions.partialPayment.loadFailed`; the income drawer's said "can't be saved yet").
+  - Retry shows that it is loading and can't be clicked twice.
+  - A failed background refetch keeps the records already loaded.
+  - The picker says "Choose the payment to edit."
+  - The record row's edit/delete buttons have accessible names.
+  - The ledger's Edit Payment has a pencil icon (new `PencilIcon`).
+- **Tests are stable under `npm run test:tz`:** the Jerusalem-specific cases pin their zone, and two expectations that encoded the old UTC-midnight output now name the day.
+
+### Known, not fixed here
+- The repository orders a transaction's records by raw string (`recalculateReceivedAmount`, `listByTransaction`). West of UTC, a timestamp record and a date-only record on adjacent days can sort against their local days.
+- The single-record edit is derived on each render: if another window adds or removes a payment while the form is open, it switches to the picker.
+- `OrphanedRecordsDrawer.test.tsx` fails under `npm run test:tz` on main too (unrelated).
+
+---
+
 ## [Unreleased] - 2026-10-14 — A retainer's schedule no longer skips months (TD-120)
 
 **Why:** `scheduleGenerator.generateSchedule` walked months with `new Date(retainer.startDate)` and a local `setMonth(+1)` (or `+3`). The date-only start parses as UTC midnight while `setMonth`/`getMonth`/`getFullYear` are local, so a start on the 31st jumped from January to "Feb 31" = 3 March in every timezone, and west of UTC a start on the 1st read as the previous month and then skipped one. A missing row is missing expected income and leaves a payment nothing to match.

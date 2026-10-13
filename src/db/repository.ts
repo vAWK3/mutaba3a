@@ -385,6 +385,17 @@ export const transactionRepo = {
         .filter((r) => !r.deletedAt)
         .toArray();
       if (records.length === 0) {
+        // An unpaid entry edited to Received becomes record-backed, as a
+        // Received create does (MUT-60): markPaid records the payment and
+        // derives status/paidAt/received from it. Writing them straight onto
+        // the entry left a "paid" entry with no record to edit (TD-029, MUT-169).
+        if (existing.kind === 'income' && existing.status !== 'paid' && data.status === 'paid') {
+          const changes: Partial<Transaction> = { ...data };
+          for (const key of PAYMENT_STATE_KEYS) delete changes[key];
+          await db.transactions.update(id, { ...changes, updatedAt: nowISO() });
+          await this.markPaid(id, { paidAt: data.paidAt });
+          return;
+        }
         await db.transactions.update(id, { ...data, updatedAt: nowISO() });
         return;
       }

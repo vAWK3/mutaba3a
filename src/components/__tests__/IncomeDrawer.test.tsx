@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -976,6 +976,26 @@ describe('IncomeDrawer', () => {
   });
 
   describe('payment data on edit (MUT-5)', () => {
+    it('offers no Edit Payment on a new entry, or on one with no payments', async () => {
+      renderDrawer();
+      await screen.findByText('New Income');
+      expect(screen.queryByRole('button', { name: 'Edit Payment' })).not.toBeInTheDocument();
+      cleanup();
+
+      const tx = await transactionRepo.create({
+        kind: 'income',
+        status: 'unpaid',
+        profileId: testProfileId,
+        amountMinor: 10000,
+        currency: 'USD',
+        occurredAt: '2024-03-15',
+        title: 'Unpaid job',
+      });
+      await openEdit(tx.id);
+      await waitFor(() => expect(titleInput().value).toBe('Unpaid job'));
+      expect(screen.queryByRole('button', { name: 'Edit Payment' })).not.toBeInTheDocument();
+    });
+
     it('keeps the payment date when a paid entry is retitled', async () => {
       const user = userEvent.setup();
       const tx = await transactionRepo.create({
@@ -1045,11 +1065,64 @@ describe('IncomeDrawer', () => {
         await waitFor(() => expect(statusButton('Received')).toBeDisabled());
         expect(statusButton('Earned')).toBeDisabled();
         expect(statusButton('Invoiced')).toBeDisabled();
-        expect(
-          screen.getByText(
-            'Payments are recorded for this entry, so its status follows them. Manage payments from the client page.'
-          )
-        ).toBeInTheDocument();
+        // MUT-169: payments are managed from this drawer now, not the client page
+        expect(screen.getByText('Payments are recorded for this entry, so its status follows them.')).toBeInTheDocument();
+      });
+
+      // MUT-169: fix a payment's date from the entry, without the client page
+      describe('Edit payment', () => {
+        const editPaymentButton = () => screen.getByRole('button', { name: 'Edit Payment' });
+
+        it('names the last payment and offers Edit Payment up front', async () => {
+          await paymentRecordRepo.create({ transactionId: txId, amountMinor: 2000, paidAt: '2024-03-25' });
+          await openEdit(txId);
+
+          expect(await screen.findByText('Last payment Mar 25, 2024')).toBeInTheDocument();
+          expect(moreDetailsToggle()).toHaveAttribute('aria-expanded', 'false');
+          expect(editPaymentButton()).toBeEnabled();
+        });
+
+        it('hands over to the payment drawer, to edit a payment', async () => {
+          const user = userEvent.setup();
+          await openEdit(txId);
+
+          await user.click(await screen.findByRole('button', { name: 'Edit Payment' }));
+
+          expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
+          // A tick later, once this drawer has handed focus back to its trigger
+          await waitFor(() =>
+            expect(useDrawerStore.getState().partialPaymentDrawer).toMatchObject({
+              isOpen: true,
+              transactionId: txId,
+              intent: 'editPayment',
+            })
+          );
+        });
+
+        it('waits for unsaved changes to be saved, and says so, staying focusable', async () => {
+          const user = userEvent.setup();
+          await openEdit(txId);
+          await waitFor(() => expect(titleInput().value).toBe('Part-paid job'));
+
+          await user.type(titleInput(), ' (phase 1)');
+
+          expect(editPaymentButton()).toHaveAttribute('aria-disabled', 'true');
+          expect(editPaymentButton()).not.toBeDisabled();
+          expect(editPaymentButton()).toHaveAccessibleDescription('Save your changes to edit the payment');
+          await user.click(editPaymentButton());
+          expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(true);
+        });
+
+        it('also waits for a client name typed but not picked', async () => {
+          const user = userEvent.setup();
+          await openEdit(txId);
+          await waitFor(() => expect(editPaymentButton()).toHaveAttribute('aria-disabled', 'false'));
+
+          await user.type(screen.getByPlaceholderText(CLIENT_PLACEHOLDER), 'Acme');
+
+          await waitFor(() => expect(editPaymentButton()).toHaveAttribute('aria-disabled', 'true'));
+        });
+
       });
 
       it('refuses an amount below what is recorded, and writes nothing', async () => {

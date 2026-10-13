@@ -29,6 +29,10 @@ let mockTransaction: TransactionDisplay;
 let mockPaymentRecords: unknown[] = [];
 let mockRecordsLoading = false;
 let mockEditingPaymentRecordId: string | undefined;
+let mockIntent: 'editPayment' | undefined;
+let mockRecordsError = false;
+let mockRecordsFetching = false;
+const mockRefetch = vi.fn();
 
 const TRANSLATIONS: Record<string, string> = {
   'transactions.partialPayment.title': 'Record Payment',
@@ -59,6 +63,10 @@ const TRANSLATIONS: Record<string, string> = {
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.saving': 'Saving...',
+  'transactions.partialPayment.loadFailed': "Couldn't load this entry's payments.",
+  'transactions.partialPayment.choosePayment': 'Choose the payment to edit.',
+  'drawer.income.paymentsRetry': 'Try again',
+  'common.loading': 'Loading...',
 };
 
 vi.mock('../../../lib/i18n', () => ({
@@ -76,7 +84,7 @@ vi.mock('../../../lib/i18n', () => ({
 vi.mock('../../../lib/stores', () => ({
   useDrawerStore: Object.assign(
     () => ({
-      partialPaymentDrawer: { editingPaymentRecordId: mockEditingPaymentRecordId },
+      partialPaymentDrawer: { editingPaymentRecordId: mockEditingPaymentRecordId, intent: mockIntent },
       editPaymentRecord: mockEditPaymentRecord,
     }),
     {
@@ -87,7 +95,13 @@ vi.mock('../../../lib/stores', () => ({
 
 vi.mock('../../../hooks/useQueries', () => ({
   useTransactionDisplay: () => ({ data: mockTransaction, isLoading: false }),
-  usePaymentRecords: () => ({ data: mockRecordsLoading ? undefined : mockPaymentRecords, isLoading: mockRecordsLoading }),
+  usePaymentRecords: () => ({
+    data: mockRecordsLoading || mockRecordsError ? undefined : mockPaymentRecords,
+    isLoading: mockRecordsLoading,
+    isError: mockRecordsError,
+    isFetching: mockRecordsFetching,
+    refetch: mockRefetch,
+  }),
   useCreatePaymentRecord: () => ({ mutateAsync: mockCreate, isPending: false }),
   useUpdatePaymentRecord: () => ({ mutateAsync: mockUpdate, isPending: false }),
   useDeletePaymentRecord: () => ({ mutateAsync: mockDelete, isPending: false }),
@@ -131,6 +145,9 @@ describe('PartialPaymentDrawer', () => {
     mockPaymentRecords = [];
     mockRecordsLoading = false;
     mockEditingPaymentRecordId = undefined;
+    mockIntent = undefined;
+    mockRecordsError = false;
+    mockRecordsFetching = false;
     mockTransaction = {
       id: 'tx-1',
       kind: 'income',
@@ -571,7 +588,8 @@ describe('PartialPaymentDrawer', () => {
         expect(mockUpdate).toHaveBeenCalledWith({
           id: 'pr-1',
           transactionId: 'tx-1',
-          data: { amountMinor: 30000, paidAt: '2026-02-10', notes: 'Wire' },
+          // Only what changed (MUT-169): the date and note stay as stored
+          data: { amountMinor: 30000 },
         });
       });
       expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-1' });
@@ -605,6 +623,8 @@ describe('PartialPaymentDrawer', () => {
       const user = userEvent.setup();
       renderDrawer(vi.fn(), onRecorded);
 
+      await user.clear(amountInput());
+      await user.type(amountInput(), '300');
       await user.click(screen.getByRole('button', { name: 'Update Payment' }));
 
       await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
@@ -619,6 +639,206 @@ describe('PartialPaymentDrawer', () => {
       expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Update Payment' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
+    });
+  });
+
+  // MUT-169: opened from the ledger or the income drawer to edit a payment.
+  // One record opens straight into its edit; several are listed to pick from;
+  // a new payment is never offered.
+  describe('edit intent', () => {
+    const record = (id: string, paidAt: string, amountMinor = 25000) => ({
+      id,
+      transactionId: 'tx-1',
+      amountMinor,
+      paidAt,
+      createdAt: '2026-02-10T00:00:00Z',
+      updatedAt: '2026-02-10T00:00:00Z',
+    });
+
+    beforeEach(() => {
+      mockIntent = 'editPayment';
+      mockTransaction = { ...mockTransaction, clientId: 'client-1', clientName: 'Furniture Co.', profileId: 'profile-1' };
+    });
+
+    describe('with one payment', () => {
+      // A Received fast-add stores nowISO(): 01:30 on Oct 14 in Jerusalem.
+      // Pinned here, so `npm run test:tz` (New York) runs it the same way.
+      let savedTz: string | undefined;
+      beforeEach(() => {
+        savedTz = process.env.TZ;
+        process.env.TZ = 'Asia/Jerusalem';
+        mockPaymentRecords = [record('pr-1', '2026-10-13T22:30:00.000Z')];
+      });
+      afterEach(() => {
+        if (savedTz === undefined) delete process.env.TZ;
+        else process.env.TZ = savedTz;
+      });
+
+      it("opens on that payment, with the date open, focused and on the user's own day", () => {
+        renderDrawer();
+
+        expect(title()).toBe('Edit Payment');
+        expect(amountInput().value).toBe('250');
+        const date = screen.getByLabelText('Payment date') as HTMLInputElement;
+        expect(date.value).toBe('2026-10-14');
+        expect(date).toHaveFocus();
+        expect(screen.getByRole('button', { name: 'Update Payment' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
+      });
+
+      it('saves the new date and closes, since the job is done', async () => {
+        const user = userEvent.setup();
+        useSavedFlashStore.getState().clear();
+        const { onClose } = renderDrawer();
+
+        fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2026-10-11' } });
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        await waitFor(() => {
+          expect(mockUpdate).toHaveBeenCalledWith({
+            id: 'pr-1',
+            transactionId: 'tx-1',
+            data: { paidAt: '2026-10-11' },
+          });
+        });
+        expect(onClose).toHaveBeenCalled();
+        expect(mockOpenPartialPaymentDrawer).not.toHaveBeenCalled();
+        expect(useSavedFlashStore.getState().pending).toMatchObject({ kind: 'payment', ids: ['pr-1', 'tx-1'] });
+      });
+
+      it('saves nothing when nothing changed, keeping the stored instant', async () => {
+        const user = userEvent.setup();
+        const { onClose } = renderDrawer();
+
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(mockUpdate).not.toHaveBeenCalled();
+      });
+
+      // ADR-030 legacy rows can be recorded over their total; the amount was
+      // never touched, so fixing the date must not trip the overpayment check
+      it('saves a date fix on an entry recorded over its total', async () => {
+        mockTransaction = { ...mockTransaction, amountMinor: 20000, receivedAmountMinor: 25000 } as TransactionDisplay;
+        const user = userEvent.setup();
+        renderDrawer();
+
+        fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2026-10-11' } });
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        await waitFor(() => {
+          expect(mockUpdate).toHaveBeenCalledWith({ id: 'pr-1', transactionId: 'tx-1', data: { paidAt: '2026-10-11' } });
+        });
+      });
+
+      it('falls back to the empty state, never a Record form, when its payment is deleted', () => {
+        const { rerender, onClose } = renderDrawer();
+        mockPaymentRecords = [];
+        rerender(<PartialPaymentDrawer transactionId="tx-1" onClose={onClose} />);
+
+        expect(screen.getByText('No payments recorded yet')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
+      });
+
+      it('closes on Cancel instead of turning into Record payment', async () => {
+        const user = userEvent.setup();
+        const { container, onClose } = renderDrawer();
+
+        const footer = container.querySelector('.drawer-footer') as HTMLElement;
+        await user.click(within(footer).getByRole('button', { name: 'Cancel' }));
+
+        expect(onClose).toHaveBeenCalled();
+        expect(mockOpenPartialPaymentDrawer).not.toHaveBeenCalled();
+      });
+
+      it('still refuses a future date (MUT-18)', async () => {
+        const user = userEvent.setup();
+        renderDrawer();
+
+        fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2099-01-01' } });
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        expect(await screen.findByText('Payment date cannot be in the future')).toBeInTheDocument();
+        expect(mockUpdate).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('with several payments', () => {
+      beforeEach(() => {
+        mockPaymentRecords = [record('pr-1', '2026-02-10'), record('pr-2', '2026-02-20', 10000)];
+      });
+
+      it('lists them to pick from, with nothing to record', async () => {
+        const user = userEvent.setup();
+        const { container, onClose } = renderDrawer();
+
+        expect(title()).toBe('Edit Payment');
+        expect(screen.getByText('Choose the payment to edit.')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
+        const edits = screen.getAllByRole('button', { name: 'Edit Payment' });
+        expect(edits).toHaveLength(2);
+
+        await user.click(edits[1]);
+        expect(mockEditPaymentRecord).toHaveBeenCalledWith({ transactionId: 'tx-1', paymentRecordId: 'pr-2' });
+
+        const footer = container.querySelector('.drawer-footer') as HTMLElement;
+        await user.click(within(footer).getByRole('button', { name: 'Close' }));
+        expect(onClose).toHaveBeenCalled();
+      });
+
+      it('returns to the list after saving one, keeping the intent', async () => {
+        mockEditingPaymentRecordId = 'pr-2';
+        const user = userEvent.setup();
+        const { onClose } = renderDrawer();
+
+        fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2026-02-18' } });
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+        expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({
+          transactionId: 'tx-1',
+          onRecorded: undefined,
+          intent: 'editPayment',
+        });
+        expect(onClose).not.toHaveBeenCalled();
+      });
+    });
+
+    it('says there are no payments, and offers no form, when there are none', () => {
+      renderDrawer();
+
+      expect(screen.getByText('No payments recorded yet')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
+    });
+
+    it('waits for the payments instead of showing a form or the empty state', () => {
+      mockRecordsLoading = true;
+      renderDrawer();
+
+      expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
+      expect(screen.queryByText('No payments recorded yet')).not.toBeInTheDocument();
+    });
+
+    it('says the payments failed to load, never that there are none, and retries', async () => {
+      mockRecordsError = true;
+      const user = userEvent.setup();
+      renderDrawer();
+
+      expect(screen.getByText("Couldn't load this entry's payments.")).toBeInTheDocument();
+      expect(screen.queryByText('No payments recorded yet')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(mockRefetch).toHaveBeenCalled();
+    });
+
+    it('shows the retry is under way, and takes no second click meanwhile', () => {
+      mockRecordsError = true;
+      mockRecordsFetching = true;
+      renderDrawer();
+
+      expect(screen.getByRole('button', { name: 'Loading...' })).toBeDisabled();
     });
   });
 
