@@ -190,7 +190,6 @@ export interface Translations {
       payments: {
         title: string;
         for: string;
-        recordedOnEntry: string;
         openEntry: string;
       };
     };

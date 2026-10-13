@@ -131,7 +131,6 @@
       "date": "Payment date",
       "notes": "Notes",
       "addNote": "Add note",
-      "migratedNote": "Migrated from accumulated total",
       "amountMustBePositive": "Payment amount must be greater than 0",
       "overpayment": "Payment amount exceeds the remaining balance of {amount}",
       "futureDate": "Payment date cannot be in the future"
@@ -319,7 +318,6 @@
       "payments": {
         "title": "Payments",
         "for": "For",
-        "recordedOnEntry": "Recorded on the entry",
         "openEntry": "Open income entry"
       }
     },
