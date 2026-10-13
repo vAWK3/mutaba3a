@@ -654,20 +654,6 @@ describe('contrast', () => {
  * (purple text on lavender, white on a status ink that turns light in dark).
  * Translucent grounds are skipped here: what they sit on is not in the rule.
  */
-/**
- * Rules whose text and background are both hard-coded literals, below 7:1 (counted 2026-10-12).
- * They don't move with the theme; MUT-103's literal sweep moves them onto tokens and deletes
- * them here. Shrink-only: a new failure, or an entry that passes, fails the test.
- */
-const KNOWN_LITERAL_PAIRS = [
-  'src/components/csv/CSVValidationPreview.css .status-icon.status-new',
-  'src/components/csv/CSVValidationPreview.css .status-icon.status-duplicate',
-  'src/components/csv/CSVValidationPreview.css .status-icon.status-error',
-  'src/components/csv/CSVValidationPreview.css .type-badge',
-  'src/components/csv/CSVValidationPreview.css .issue.error',
-  'src/components/csv/CSVValidationPreview.css .issue.warning',
-];
-
 describe('rendered pairs', () => {
   const theme = loadStylesheet(THEME_CSS);
   const files = sourceFiles().filter((file) => file.endsWith('.css') && !file.startsWith(repoPath('src/styles/')));
@@ -719,13 +705,9 @@ describe('rendered pairs', () => {
 
   it.each(STATES)('every rule’s text clears its floor on its own background: 7:1 light, 4.5:1 dark (%s)', (_name, state) => {
     const failing = failingRules(state);
-    expect([...failing].filter(([key]) => !KNOWN_LITERAL_PAIRS.includes(key)).map(([, detail]) => detail)).toEqual([]);
+    expect([...failing].map(([, detail]) => detail)).toEqual([]);
   });
 
-  it('lists only literal pairs that still fail (remove fixed ones from KNOWN_LITERAL_PAIRS)', () => {
-    const failing = failingRules(LIGHT);
-    expect(KNOWN_LITERAL_PAIRS.filter((key) => !failing.has(key))).toEqual([]);
-  });
 });
 
 describe('focus', () => {
@@ -836,7 +818,6 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
  * entries; a new file, a higher count, or a stale count fails.
  */
 const KNOWN_LITERALS: Record<string, number> = {
-  'src/components/csv/CSVValidationPreview.css': 45,
   'src/components/drawers/BusinessProfileDrawer.tsx': 6,
   'src/components/drawers/PlanAssumptionDrawer.tsx': 1,
   'src/components/modals/DeleteAllDataModal.css': 3,
@@ -863,7 +844,6 @@ const KNOWN_LITERALS: Record<string, number> = {
   'src/pages/planning/components/MonthlyTimeline.tsx': 1,
   'src/pages/projects/ProjectDetailPage.tsx': 2,
   'src/pages/retainers/RetainersPage.css': 21,
-  'src/pages/settings/ImportDataPage.css': 52,
 };
 
 /**

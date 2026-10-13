@@ -1,6 +1,6 @@
 .import-data-page {
   min-height: 100vh;
-  background: #f8fafc;
+  background: var(--bg);
   padding: 2rem;
 }
 
@@ -10,18 +10,18 @@
 }
 
 .import-data-page .page-header h1 {
-  font-size: 2rem;
+  font-size: var(--text-title);
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text);
   margin: 1rem 0 0;
 }
 
 .import-content {
   max-width: 1200px;
   margin: 0 auto;
-  background: white;
+  background: var(--surface);
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  box-shadow: var(--shadow-1);
   padding: 2rem;
 }
 
@@ -33,34 +33,34 @@
 }
 
 .import-dropzone {
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--border-strong);
   border-radius: 0.75rem;
   padding: 4rem 2rem;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: #f8fafc;
+  background: var(--surface-2);
 }
 
 .import-dropzone:hover {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--accent-solid);
+  background: var(--accent-subtle);
 }
 
 .import-dropzone svg {
   margin: 0 auto 1rem;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .import-dropzone h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-headline);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0 0 0.5rem;
 }
 
 .import-dropzone p {
-  color: #64748b;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -78,22 +78,22 @@
 }
 
 .import-help {
-  background: #f1f5f9;
+  background: var(--surface-2);
   border-radius: 0.5rem;
   padding: 1.5rem;
 }
 
 .import-help h4 {
-  font-size: 1rem;
+  font-size: var(--text-body);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0 0 0.75rem;
 }
 
 .import-help ul {
   margin: 0;
   padding-left: 1.5rem;
-  color: #475569;
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 
@@ -113,38 +113,38 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1.5rem;
-  background: #f8fafc;
+  background: var(--surface-2);
   border-radius: 0.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
 }
 
 .import-file-info svg {
   flex-shrink: 0;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .import-file-info .file-name {
-  font-size: 1.125rem;
+  font-size: var(--text-body);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin-bottom: 0.25rem;
 }
 
 .import-file-info .file-meta {
-  font-size: 0.875rem;
-  color: #64748b;
+  font-size: var(--text-label);
+  color: var(--muted);
 }
 
 .profile-select-section {
   padding: 1.5rem;
-  background: #f8fafc;
+  background: var(--surface-2);
   border-radius: 0.5rem;
 }
 
 .profile-select-section h4 {
-  font-size: 1rem;
+  font-size: var(--text-body);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0 0 1rem;
 }
 
@@ -154,8 +154,8 @@
 }
 
 .profile-select-section .help-text {
-  font-size: 0.875rem;
-  color: #64748b;
+  font-size: var(--text-label);
+  color: var(--muted);
   margin: 0;
 }
 
@@ -164,10 +164,10 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-subtle);
+  border: 1px solid var(--error-muted);
   border-radius: 0.5rem;
-  color: #991b1b;
+  color: var(--error);
 }
 
 .import-warning svg {
@@ -176,7 +176,7 @@
 
 .import-warning p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-label);
 }
 
 .import-info {
@@ -184,10 +184,10 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--info-subtle);
+  border: 1px solid var(--info-muted);
   border-radius: 0.5rem;
-  color: #1e40af;
+  color: var(--info);
 }
 
 .import-info svg {
@@ -196,7 +196,7 @@
 
 .import-info p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-label);
 }
 
 /* Step: Validate */
@@ -207,9 +207,9 @@
 }
 
 .import-step-validate h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-headline);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0;
 }
 
@@ -226,8 +226,8 @@
 .import-step-importing .spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top-color: #3b82f6;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent-solid);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1.5rem;
@@ -240,14 +240,14 @@
 }
 
 .import-step-importing h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-headline);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0 0 0.5rem;
 }
 
 .import-step-importing p {
-  color: #64748b;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -262,19 +262,19 @@
 }
 
 .import-step-done .success-icon {
-  color: #10b981;
+  color: var(--success);
   margin-bottom: 1.5rem;
 }
 
 .import-step-done h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-headline);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0 0 0.75rem;
 }
 
 .import-step-done p {
-  color: #64748b;
+  color: var(--muted);
   margin: 0 0 2rem;
 }
 
@@ -289,14 +289,14 @@
 }
 
 .import-step-error .error-icon {
-  color: #ef4444;
+  color: var(--error);
   margin-bottom: 1.5rem;
 }
 
 .import-step-error h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-headline);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0 0 0.75rem;
 }
 
@@ -306,7 +306,7 @@
 
 /* Text utilities */
 .text-danger {
-  color: #dc2626;
+  color: var(--error);
 }
 
 /* Responsive */
