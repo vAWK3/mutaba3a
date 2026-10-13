@@ -21,7 +21,7 @@ import { useMemo, type ReactNode } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
 import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle } from '../../components/ui';
-import { CheckIcon, CopyIcon } from '../../components/icons';
+import { CheckIcon, CopyIcon, PencilIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
 import { useSavedFlashRows } from '../../hooks/useSavedFlash';
@@ -140,6 +140,7 @@ export function IncomePage() {
       ? [
           {
             label: t('transactions.partialPayment.editPayment'),
+            icon: <PencilIcon size={16} />,
             // Fix a payment's date from the ledger (MUT-169): the drawer opens
             // on the entry's payment, or lists them when there are several
             onClick: () => openPartialPaymentDrawer({ transactionId: row.id, intent: 'editPayment' }),

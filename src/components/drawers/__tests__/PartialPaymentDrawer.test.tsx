@@ -31,6 +31,7 @@ let mockRecordsLoading = false;
 let mockEditingPaymentRecordId: string | undefined;
 let mockIntent: 'editPayment' | undefined;
 let mockRecordsError = false;
+let mockRecordsFetching = false;
 const mockRefetch = vi.fn();
 
 const TRANSLATIONS: Record<string, string> = {
@@ -62,8 +63,10 @@ const TRANSLATIONS: Record<string, string> = {
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.saving': 'Saving...',
-  'drawer.income.paymentsLoadFailed': "Couldn't load this entry's payments, so it can't be saved yet.",
+  'transactions.partialPayment.loadFailed': "Couldn't load this entry's payments.",
+  'transactions.partialPayment.choosePayment': 'Choose the payment to edit.',
   'drawer.income.paymentsRetry': 'Try again',
+  'common.loading': 'Loading...',
 };
 
 vi.mock('../../../lib/i18n', () => ({
@@ -96,6 +99,7 @@ vi.mock('../../../hooks/useQueries', () => ({
     data: mockRecordsLoading || mockRecordsError ? undefined : mockPaymentRecords,
     isLoading: mockRecordsLoading,
     isError: mockRecordsError,
+    isFetching: mockRecordsFetching,
     refetch: mockRefetch,
   }),
   useCreatePaymentRecord: () => ({ mutateAsync: mockCreate, isPending: false }),
@@ -143,6 +147,7 @@ describe('PartialPaymentDrawer', () => {
     mockEditingPaymentRecordId = undefined;
     mockIntent = undefined;
     mockRecordsError = false;
+    mockRecordsFetching = false;
     mockTransaction = {
       id: 'tx-1',
       kind: 'income',
@@ -583,7 +588,8 @@ describe('PartialPaymentDrawer', () => {
         expect(mockUpdate).toHaveBeenCalledWith({
           id: 'pr-1',
           transactionId: 'tx-1',
-          data: { amountMinor: 30000, paidAt: '2026-02-10', notes: 'Wire' },
+          // Only what changed (MUT-169): the date and note stay as stored
+          data: { amountMinor: 30000 },
         });
       });
       expect(mockOpenPartialPaymentDrawer).toHaveBeenCalledWith({ transactionId: 'tx-1' });
@@ -617,6 +623,8 @@ describe('PartialPaymentDrawer', () => {
       const user = userEvent.setup();
       renderDrawer(vi.fn(), onRecorded);
 
+      await user.clear(amountInput());
+      await user.type(amountInput(), '300');
       await user.click(screen.getByRole('button', { name: 'Update Payment' }));
 
       await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
@@ -653,9 +661,17 @@ describe('PartialPaymentDrawer', () => {
     });
 
     describe('with one payment', () => {
-      // A Received fast-add stores nowISO(): 01:30 on Oct 14 in Jerusalem
+      // A Received fast-add stores nowISO(): 01:30 on Oct 14 in Jerusalem.
+      // Pinned here, so `npm run test:tz` (New York) runs it the same way.
+      let savedTz: string | undefined;
       beforeEach(() => {
+        savedTz = process.env.TZ;
+        process.env.TZ = 'Asia/Jerusalem';
         mockPaymentRecords = [record('pr-1', '2026-10-13T22:30:00.000Z')];
+      });
+      afterEach(() => {
+        if (savedTz === undefined) delete process.env.TZ;
+        else process.env.TZ = savedTz;
       });
 
       it("opens on that payment, with the date open, focused and on the user's own day", () => {
@@ -682,12 +698,46 @@ describe('PartialPaymentDrawer', () => {
           expect(mockUpdate).toHaveBeenCalledWith({
             id: 'pr-1',
             transactionId: 'tx-1',
-            data: { amountMinor: 25000, paidAt: '2026-10-11', notes: undefined },
+            data: { paidAt: '2026-10-11' },
           });
         });
         expect(onClose).toHaveBeenCalled();
         expect(mockOpenPartialPaymentDrawer).not.toHaveBeenCalled();
         expect(useSavedFlashStore.getState().pending).toMatchObject({ kind: 'payment', ids: ['pr-1', 'tx-1'] });
+      });
+
+      it('saves nothing when nothing changed, keeping the stored instant', async () => {
+        const user = userEvent.setup();
+        const { onClose } = renderDrawer();
+
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(mockUpdate).not.toHaveBeenCalled();
+      });
+
+      // ADR-030 legacy rows can be recorded over their total; the amount was
+      // never touched, so fixing the date must not trip the overpayment check
+      it('saves a date fix on an entry recorded over its total', async () => {
+        mockTransaction = { ...mockTransaction, amountMinor: 20000, receivedAmountMinor: 25000 } as TransactionDisplay;
+        const user = userEvent.setup();
+        renderDrawer();
+
+        fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2026-10-11' } });
+        await user.click(screen.getByRole('button', { name: 'Update Payment' }));
+
+        await waitFor(() => {
+          expect(mockUpdate).toHaveBeenCalledWith({ id: 'pr-1', transactionId: 'tx-1', data: { paidAt: '2026-10-11' } });
+        });
+      });
+
+      it('falls back to the empty state, never a Record form, when its payment is deleted', () => {
+        const { rerender, onClose } = renderDrawer();
+        mockPaymentRecords = [];
+        rerender(<PartialPaymentDrawer transactionId="tx-1" onClose={onClose} />);
+
+        expect(screen.getByText('No payments recorded yet')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
       });
 
       it('closes on Cancel instead of turning into Record payment', async () => {
@@ -723,9 +773,10 @@ describe('PartialPaymentDrawer', () => {
         const { container, onClose } = renderDrawer();
 
         expect(title()).toBe('Edit Payment');
+        expect(screen.getByText('Choose the payment to edit.')).toBeInTheDocument();
         expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Record Payment' })).not.toBeInTheDocument();
-        const edits = screen.getAllByTitle('Edit Payment');
+        const edits = screen.getAllByRole('button', { name: 'Edit Payment' });
         expect(edits).toHaveLength(2);
 
         await user.click(edits[1]);
@@ -741,6 +792,7 @@ describe('PartialPaymentDrawer', () => {
         const user = userEvent.setup();
         const { onClose } = renderDrawer();
 
+        fireEvent.change(screen.getByLabelText('Payment date'), { target: { value: '2026-02-18' } });
         await user.click(screen.getByRole('button', { name: 'Update Payment' }));
 
         await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
@@ -773,12 +825,20 @@ describe('PartialPaymentDrawer', () => {
       const user = userEvent.setup();
       renderDrawer();
 
-      expect(screen.getByText("Couldn't load this entry's payments, so it can't be saved yet.")).toBeInTheDocument();
+      expect(screen.getByText("Couldn't load this entry's payments.")).toBeInTheDocument();
       expect(screen.queryByText('No payments recorded yet')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Payment amount')).not.toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Try again' }));
       expect(mockRefetch).toHaveBeenCalled();
+    });
+
+    it('shows the retry is under way, and takes no second click meanwhile', () => {
+      mockRecordsError = true;
+      mockRecordsFetching = true;
+      renderDrawer();
+
+      expect(screen.getByRole('button', { name: 'Loading...' })).toBeDisabled();
     });
   });
 

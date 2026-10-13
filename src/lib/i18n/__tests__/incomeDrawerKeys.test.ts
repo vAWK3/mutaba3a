@@ -16,6 +16,10 @@ const KEYS = [
   'drawer.income.paymentsLoadFailed',
   'drawer.income.paymentsRetry',
   'drawer.income.chooseBusinessFirst',
+  'drawer.income.lastPayment',
+  'drawer.income.saveBeforePayment',
+  'transactions.partialPayment.loadFailed',
+  'transactions.partialPayment.choosePayment',
   'validation.amountInvalid',
   'validation.amountPositive',
   'validation.amountBelowRecorded',
@@ -37,6 +41,11 @@ describe('income drawer i18n keys', () => {
       expect(typeof value, key).toBe('string');
       expect(String(value).trim().length, key).toBeGreaterThan(0);
     }
+  });
+
+  // MUT-169: the last-payment line names its date
+  it('keeps the {date} placeholder in both locales', () => {
+    for (const dict of [en, ar]) expect(lookup(dict, 'drawer.income.lastPayment')).toContain('{date}');
   });
 
   it('keeps the {amount} placeholder in both locales', () => {

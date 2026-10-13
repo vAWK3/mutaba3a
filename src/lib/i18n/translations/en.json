@@ -123,6 +123,8 @@
       "history": "Payment History",
       "noPayments": "No payments recorded yet",
       "editPayment": "Edit Payment",
+      "loadFailed": "Couldn't load this entry's payments.",
+      "choosePayment": "Choose the payment to edit.",
       "updatePayment": "Update Payment",
       "deletePayment": "Delete Payment",
       "deleteConfirm": "Are you sure you want to delete this payment?",

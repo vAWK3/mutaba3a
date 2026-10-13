@@ -123,6 +123,8 @@
       "history": "سجل الدفعات",
       "noPayments": "لا توجد دفعات مسجلة بعد",
       "editPayment": "تعديل الدفعة",
+      "loadFailed": "تعذّر تحميل دفعات هذا البند.",
+      "choosePayment": "اختر الدفعة التي تريد تعديلها.",
       "updatePayment": "تحديث الدفعة",
       "deletePayment": "حذف الدفعة",
       "deleteConfirm": "هل أنت متأكد من حذف هذه الدفعة؟",

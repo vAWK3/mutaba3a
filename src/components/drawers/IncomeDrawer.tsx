@@ -132,11 +132,13 @@ export function IncomeDrawer() {
   const hasRecords = mode === 'edit' && paymentRecords.length > 0;
   const paymentStateLocked = hasRecords || recordsPending;
   const recordedMinor = recordedTotalMinor(paymentRecords);
-  // The latest payment by the user's own day (a fast-add's paidAt is a UTC instant)
-  const lastPaidAt = paymentRecords.reduce<string | undefined>(
-    (latest, r) => (!latest || paymentLocalDay(r.paidAt) >= paymentLocalDay(latest) ? r.paidAt : latest),
-    undefined
-  );
+  // The latest payment by the user's own day (a fast-add's paidAt is a UTC
+  // instant), then by the stored value, so the pick never depends on list order
+  const lastPaidAt = paymentRecords.reduce<string | undefined>((latest, r) => {
+    if (!latest) return r.paidAt;
+    const byDay = paymentLocalDay(r.paidAt).localeCompare(paymentLocalDay(latest));
+    return byDay > 0 || (byDay === 0 && r.paidAt > latest) ? r.paidAt : latest;
+  }, undefined);
   const paymentHintId = useId();
 
   // Determine initial profile
@@ -169,6 +171,10 @@ export function IncomeDrawer() {
   });
 
   const { watch, setValue, reset } = form;
+  // Switching to the payment drawer unmounts this form: anything typed and not
+  // saved, including a client name typed but not picked, would be lost (MUT-169)
+  const clientDraftText = watch('clientDraft');
+  const hasUnsavedChanges = form.formState.isDirty || !!clientDraftText?.trim();
   const selectedStatus = watch('incomeStatus');
   const selectedClientId = watch('clientId');
   const watchedProfileId = watch('profileId');
@@ -569,20 +575,25 @@ export function IncomeDrawer() {
               <div className="drawer-notice-body">
                 {t('drawer.income.lastPayment', { date: formatPaymentDate(lastPaidAt, locale) })}
               </div>
+              {/* aria-disabled, not disabled: it stays focusable, so the hint is read */}
               <button
                 type="button"
                 className="btn btn-sm btn-secondary"
-                disabled={form.formState.isDirty}
-                aria-describedby={form.formState.isDirty ? paymentHintId : undefined}
+                aria-disabled={hasUnsavedChanges}
+                aria-describedby={hasUnsavedChanges ? paymentHintId : undefined}
                 onClick={() => {
+                  if (hasUnsavedChanges) return;
                   closeIncomeDrawer();
-                  openPartialPaymentDrawer({ transactionId: transactionId!, intent: 'editPayment' });
+                  // A tick later: this drawer's unmount first hands focus back to
+                  // its own trigger, which the payment drawer then returns it to
+                  const id = transactionId!;
+                  setTimeout(() => openPartialPaymentDrawer({ transactionId: id, intent: 'editPayment' }), 0);
                 }}
               >
                 {t('transactions.partialPayment.editPayment')}
               </button>
             </div>
-            {form.formState.isDirty && (
+            {hasUnsavedChanges && (
               <p id={paymentHintId} className="form-hint">
                 {t('drawer.income.saveBeforePayment')}
               </p>

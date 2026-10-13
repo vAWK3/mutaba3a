@@ -49,6 +49,7 @@ interface PartialPaymentDrawerProps {
 }
 
 const FORM_ID = 'partial-payment-form';
+const NO_RECORDS: PaymentRecord[] = [];
 
 export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: PartialPaymentDrawerProps) {
   const t = useT();
@@ -62,11 +63,15 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
 
   const { data: transaction, isLoading: txLoading } = useTransactionDisplay(transactionId);
   const {
-    data: paymentRecords = [],
+    data: loadedRecords,
     isLoading: recordsLoading,
-    isError: recordsFailed,
+    isError: recordsError,
+    isFetching: recordsFetching,
     refetch: refetchRecords,
   } = usePaymentRecords(transactionId);
+  const paymentRecords = loadedRecords ?? NO_RECORDS;
+  // Nothing to show: a failed background refetch keeps the records already loaded
+  const recordsFailed = recordsError && !loadedRecords;
   const createMutation = useCreatePaymentRecord();
   const updateMutation = useUpdatePaymentRecord();
   const deleteMutation = useDeletePaymentRecord();
@@ -110,9 +115,15 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
         }
       >
         <div className="drawer-notice" role="alert">
-          <div className="drawer-notice-body">{t('drawer.income.paymentsLoadFailed')}</div>
-          <button type="button" className="btn btn-sm btn-secondary" onClick={() => void refetchRecords()}>
-            {t('drawer.income.paymentsRetry')}
+          <div className="drawer-notice-body">{t('transactions.partialPayment.loadFailed')}</div>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => void refetchRecords()}
+            disabled={recordsFetching}
+            aria-busy={recordsFetching}
+          >
+            {recordsFetching ? t('common.loading') : t('drawer.income.paymentsRetry')}
           </button>
         </div>
       </Drawer>
@@ -229,7 +240,11 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
   return (
     <Drawer title={title} onClose={onClose} footer={footer}>
       {pickerMode ? (
-        paymentRecords.length === 0 && <p className="card-empty">{t('transactions.partialPayment.noPayments')}</p>
+        <p className={paymentRecords.length === 0 ? 'card-empty' : 'form-hint'}>
+          {paymentRecords.length === 0
+            ? t('transactions.partialPayment.noPayments')
+            : t('transactions.partialPayment.choosePayment')}
+        </p>
       ) : settled ? (
         <p className="pay-drawer-status pay-drawer-status--done">
           <CheckIcon />
@@ -405,7 +420,10 @@ function PaymentForm({
   }, [focusTarget]);
 
   const amountState = describePaymentAmount(amountText, currency, allowedMinor);
-  const line = amountLine(amountState, showAmountErrors, currency, locale, t);
+  // An edit that leaves the amount as it was never trips the amount checks: a
+  // legacy entry recorded over its total (ADR-030) can still have its date fixed
+  const amountUnchanged = !!editingRecord && amountText === minorToAmountInput(editingRecord.amountMinor, currency);
+  const line = amountUnchanged && amountState.kind === 'over' ? null : amountLine(amountState, showAmountErrors, currency, locale, t);
   const today = todayISO();
   const dateLabel = paidAt === today ? t('time.today') : formatDate(`${paidAt}T00:00:00`, locale);
 
@@ -413,7 +431,9 @@ function PaymentForm({
     e.preventDefault();
     setError(null);
 
-    if (amountState.kind !== 'paidInFull' && amountState.kind !== 'stillOwed') {
+    const amountMinor =
+      amountState.kind === 'paidInFull' || amountState.kind === 'stillOwed' ? amountState.amountMinor : undefined;
+    if (amountMinor === undefined && !amountUnchanged) {
       setShowAmountErrors(true);
       amountRef.current?.focus();
       return;
@@ -428,13 +448,21 @@ function PaymentForm({
       return;
     }
 
-    const payment = { amountMinor: amountState.amountMinor, paidAt, notes: notes.trim() || undefined };
+    const trimmedNotes = notes.trim() || undefined;
     try {
       if (editingRecord) {
-        await updateMutation.mutateAsync({ id: editingRecord.id, transactionId, data: payment });
+        // Only what changed: an untouched date keeps its stored instant (a
+        // fast-add's UTC timestamp) instead of being rewritten as a day (MUT-169)
+        const changes: { amountMinor?: number; paidAt?: string; notes?: string } = {};
+        if (!amountUnchanged && amountMinor !== undefined) changes.amountMinor = amountMinor;
+        if (paidAt !== paymentLocalDay(editingRecord.paidAt)) changes.paidAt = paidAt;
+        if (trimmedNotes !== (editingRecord.notes || undefined)) changes.notes = trimmedNotes;
+        if (Object.keys(changes).length > 0) {
+          await updateMutation.mutateAsync({ id: editingRecord.id, transactionId, data: changes });
+        }
         onUpdated();
       } else {
-        const record = await createMutation.mutateAsync({ transactionId, ...payment });
+        const record = await createMutation.mutateAsync({ transactionId, amountMinor: amountMinor!, paidAt, notes: trimmedNotes });
         onRecorded(record);
       }
     } catch (err) {
@@ -648,6 +676,7 @@ function PaymentRecordRow({
           onClick={onEdit}
           disabled={disabled}
           title={t('transactions.partialPayment.editPayment')}
+          aria-label={t('transactions.partialPayment.editPayment')}
         >
           &#9998;
         </button>
@@ -657,6 +686,7 @@ function PaymentRecordRow({
           onClick={onDelete}
           disabled={disabled}
           title={t('transactions.partialPayment.deletePayment')}
+          aria-label={t('transactions.partialPayment.deletePayment')}
         >
           &#128465;
         </button>

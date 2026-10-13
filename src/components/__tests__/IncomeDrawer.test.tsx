@@ -1088,22 +1088,41 @@ describe('IncomeDrawer', () => {
 
           await user.click(await screen.findByRole('button', { name: 'Edit Payment' }));
 
-          const { incomeDrawer, partialPaymentDrawer } = useDrawerStore.getState();
-          expect(incomeDrawer.isOpen).toBe(false);
-          expect(partialPaymentDrawer).toMatchObject({ isOpen: true, transactionId: txId, intent: 'editPayment' });
+          expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(false);
+          // A tick later, once this drawer has handed focus back to its trigger
+          await waitFor(() =>
+            expect(useDrawerStore.getState().partialPaymentDrawer).toMatchObject({
+              isOpen: true,
+              transactionId: txId,
+              intent: 'editPayment',
+            })
+          );
         });
 
-        it('waits for unsaved changes to be saved, and says so', async () => {
+        it('waits for unsaved changes to be saved, and says so, staying focusable', async () => {
           const user = userEvent.setup();
           await openEdit(txId);
           await waitFor(() => expect(titleInput().value).toBe('Part-paid job'));
 
           await user.type(titleInput(), ' (phase 1)');
 
-          expect(editPaymentButton()).toBeDisabled();
+          expect(editPaymentButton()).toHaveAttribute('aria-disabled', 'true');
+          expect(editPaymentButton()).not.toBeDisabled();
           expect(editPaymentButton()).toHaveAccessibleDescription('Save your changes to edit the payment');
+          await user.click(editPaymentButton());
           expect(useDrawerStore.getState().incomeDrawer.isOpen).toBe(true);
         });
+
+        it('also waits for a client name typed but not picked', async () => {
+          const user = userEvent.setup();
+          await openEdit(txId);
+          await waitFor(() => expect(editPaymentButton()).toHaveAttribute('aria-disabled', 'false'));
+
+          await user.type(screen.getByPlaceholderText(CLIENT_PLACEHOLDER), 'Acme');
+
+          await waitFor(() => expect(editPaymentButton()).toHaveAttribute('aria-disabled', 'true'));
+        });
+
       });
 
       it('refuses an amount below what is recorded, and writes nothing', async () => {

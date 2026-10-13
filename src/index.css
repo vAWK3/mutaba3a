@@ -92,7 +92,8 @@ button {
   background: none;
 }
 
-button:disabled {
+button:disabled,
+button[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -708,6 +709,7 @@ td {
    payment and Edit Payment (MUT-169) */
 .drawer-notice--info {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   border-color: var(--border);
@@ -716,6 +718,11 @@ td {
 
 .drawer-notice--info .btn {
   align-self: center;
+}
+
+.drawer-notice--info .drawer-notice-body {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Feature notice banner (MUT-12): shown once after areas were auto-enabled */
