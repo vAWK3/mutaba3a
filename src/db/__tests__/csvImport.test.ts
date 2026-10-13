@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { db } from '../../db/database';
-import { expenseRepo, expenseCategoryRepo } from '../../db/expenseRepository';
+import { db } from '../database';
+import { expenseRepo, expenseCategoryRepo } from '../expenseRepository';
 import { importExpenseRow, resolveImportProfileId } from '../csvImport';
 
 describe('csvImport', () => {

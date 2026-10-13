@@ -1,19 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { db } from '../../db';
-import { clearDatabase } from '../../db/seed';
-import { reconcileFeaturesAfterDataLoad } from '../../lib/features/features';
-import { findMatchingProfile, importProfileFile, type ProfileExportFile } from '../../db/profileImport';
+import { getRepositories, findMatchingProfile, type ProfileExportFile } from '../../db';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
-import { importExpenseRow, resolveImportProfileId } from '../../utils/csvImport';
 import { CSVValidationPreview } from '../../components/csv/CSVValidationPreview';
 import { Select } from '../../components/ui';
-import { parseAmountToMinor } from '../../lib/utils';
-import type { BusinessProfile, Currency } from '../../types';
+import type { BusinessProfile } from '../../types';
 import './ImportDataPage.css';
 
 type ImportStep = 'select' | 'preview' | 'validate' | 'importing' | 'done' | 'error';
@@ -157,11 +152,7 @@ export function ImportDataPage() {
   }, []);
 
   const handleValidateCSV = useCallback(async () => {
-    const existingClients = await db.clients.toArray();
-    const existingProjects = await db.projects.toArray();
-
-    const clientNames = existingClients.map(c => c.name);
-    const projectNames = existingProjects.map(p => p.name);
+    const { clientNames, projectNames } = await getRepositories().base.dataset.csvValidationContext();
 
     const results = validateCSVImport(csvRows, clientNames, projectNames);
     setCsvValidationResults(results);
@@ -183,133 +174,12 @@ export function ImportDataPage() {
     try {
       const stats = { profiles: 0, transactions: 0 };
 
+      const { dataset } = getRepositories().base;
+
       if (fileType === 'csv') {
         const selectedRows = csvRows.filter((_, index) => selectedRowIndices.includes(index));
-
-        // One profile for every entity this CSV import creates: the profile
-        // selector above already requires a choice when any profile exists
-        // (see the "Next: Validate" button's disabled condition), so this
-        // only auto-creates a default profile in the zero-profile case.
-        const profileId = await resolveImportProfileId(selectedProfileId, language);
-
-        const clientNameToId = new Map<string, string>();
-        const projectNameToId = new Map<string, string>();
-
-        const clientRows = selectedRows.filter(r => r.type === 'client');
-        const projectRows = selectedRows.filter(r => r.type === 'project');
-        const incomeRows = selectedRows.filter(r => r.type === 'income');
-        const expenseRows = selectedRows.filter(r => r.type === 'expense');
-        const conversionRows = selectedRows.filter(r => r.type === 'conversion');
-
-        for (const row of clientRows) {
-          if (!row.name) continue;
-
-          const existing = await db.clients.where('name').equals(row.name).first();
-
-          if (existing) {
-            clientNameToId.set(row.name, existing.id);
-          } else {
-            const clientId = crypto.randomUUID();
-            await db.clients.add({
-              id: clientId,
-              name: row.name,
-              email: row.email || undefined,
-              phone: row.phone || undefined,
-              notes: row.notes || undefined,
-              profileId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
-            clientNameToId.set(row.name, clientId);
-          }
-        }
-
-        for (const row of projectRows) {
-          if (!row.name) continue;
-
-          const clientId = row.client ? clientNameToId.get(row.client) : undefined;
-
-          const existing = await db.projects.where('name').equals(row.name).first();
-
-          if (existing) {
-            projectNameToId.set(row.name, existing.id);
-          } else {
-            const projectId = crypto.randomUUID();
-            await db.projects.add({
-              id: projectId,
-              name: row.name,
-              clientId,
-              field: row.field || undefined,
-              notes: row.notes || undefined,
-              profileId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
-            projectNameToId.set(row.name, projectId);
-          }
-        }
-
-        for (const row of incomeRows) {
-          if (!row.amount || !row.currency || !row.date) continue;
-
-          const clientId = row.client ? clientNameToId.get(row.client) : undefined;
-          const projectId = row.project ? projectNameToId.get(row.project) : undefined;
-
-          const amountMinor = Math.round(parseFloat(row.amount) * 100);
-          const status = row.status === 'paid' ? 'paid' : 'unpaid';
-
-          await db.transactions.add({
-            id: crypto.randomUUID(),
-            kind: 'income',
-            status,
-            title: row.name || 'Income',
-            clientId,
-            projectId,
-            amountMinor,
-            currency: row.currency as 'USD' | 'ILS' | 'EUR',
-            occurredAt: row.date,
-            dueDate: row.dueDate || undefined,
-            paidAt: row.paidAt || (status === 'paid' ? row.date : undefined),
-            notes: row.notes || undefined,
-            profileId,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          stats.transactions++;
-        }
-
-        // Import expenses into db.expenses (MUT-138 — previously written as
-        // kind:'expense' transactions, invisible on /expenses since MUT-14)
-        for (const row of expenseRows) {
-          const created = await importExpenseRow(row, { profileId, clientNameToId, projectNameToId });
-          if (created) stats.transactions++;
-        }
-
-        // MUT-141: conversions always use currency-aware parsing (parseAmountToMinor)
-        // for both legs -- unlike the income/expense loops above, which predate
-        // MUT-140's per-currency-exponent work and still assume base-100 (TD-112).
-        for (const row of conversionRows) {
-          if (!row.amount || !row.currency || !row.toAmount || !row.toCurrency || !row.date) continue;
-          if (row.currency === row.toCurrency) continue;
-
-          const currency = row.currency as Currency;
-          const toCurrency = row.toCurrency as Currency;
-
-          await db.transactions.add({
-            id: crypto.randomUUID(),
-            kind: 'conversion',
-            status: 'paid',
-            amountMinor: parseAmountToMinor(row.amount, currency),
-            currency,
-            toAmountMinor: parseAmountToMinor(row.toAmount, toCurrency),
-            toCurrency,
-            occurredAt: row.date,
-            notes: row.notes || undefined,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          stats.transactions++;
-        }
+        const imported = await dataset.importCsvRows(selectedRows, { selectedProfileId, language });
+        stats.transactions = imported.transactions;
       } else if ((importMode === 'create' || importMode === 'merge') && fileData?.version === 2 && fileData.profile) {
         // v2 per-profile export (MUT-158): fresh IDs, every link remapped.
         const target =
@@ -319,37 +189,18 @@ export function ImportDataPage() {
               ? { mode: 'merge' as const, profileId: selectedProfileId }
               : null;
         if (!target) throw new Error('Choose a profile to merge into');
-        const imported = await importProfileFile(fileData as ProfileExportFile, target);
+        const imported = await dataset.importProfile(fileData as ProfileExportFile, target);
         stats.profiles = imported.profiles;
         stats.transactions = imported.transactions;
       } else if (importMode === 'legacy' && fileData) {
         // Never clear the database for a file that brings nothing back.
         if (!hasLegacyRows(fileData)) throw new Error(t('settings.import.nothingToImport'));
-        await clearDatabase();
-
-        if (fileData.clients?.length) {
-          await db.clients.bulkAdd(fileData.clients as Parameters<typeof db.clients.bulkAdd>[0]);
-        }
-        if (fileData.projects?.length) {
-          await db.projects.bulkAdd(fileData.projects as Parameters<typeof db.projects.bulkAdd>[0]);
-        }
-        if (fileData.categories?.length) {
-          await db.categories.bulkAdd(fileData.categories as Parameters<typeof db.categories.bulkAdd>[0]);
-        }
-        if (fileData.transactions?.length) {
-          await db.transactions.bulkAdd(fileData.transactions as Parameters<typeof db.transactions.bulkAdd>[0]);
-          stats.transactions = fileData.transactions.length;
-        }
-        if (fileData.fxRates?.length) {
-          await db.fxRates.bulkAdd(fileData.fxRates as Parameters<typeof db.fxRates.bulkAdd>[0]);
-        }
-        if (fileData.settings?.length) {
-          await db.settings.bulkAdd(fileData.settings as Parameters<typeof db.settings.bulkAdd>[0]);
-        }
+        const imported = await dataset.importLegacyV1(fileData);
+        stats.transactions = imported.transactions;
       }
 
       // Switch on the optional areas the imported data belongs to (MUT-12)
-      await reconcileFeaturesAfterDataLoad('import', db);
+      await dataset.reconcileFeaturesAfterLoad('import');
 
       setImportStats(stats);
       await queryClient.invalidateQueries();

@@ -238,7 +238,7 @@ Tests: `src/pages/settings/__tests__/AboutSection.test.tsx`.
 
 ### DataToolsSection
 **Location**: `src/pages/settings/DataToolsSection.tsx`
-**Purpose**: Settings › Data Tools: integrity check (`runIntegrityCheck`), JSON backup export/import (`exportBackup` / `restoreFromBackup`) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch. Deliberately kept as its own component/heading rather than merged into "Data" (MUT-139 IA pass) — it has its own standalone heading test. Uses `.settings-section-nested` (MUT-139 visual pass) and is wrapped together with the Data section in a `.settings-family` div in `SettingsPage.tsx`, which collapses both cards' margins to one tight gap so the pair reads as one unit — verified against a real screenshot; a tint alone didn't read as "nested."
+**Purpose**: Settings › Data Tools: integrity check, JSON backup export/import (`getRepositories().base.dataset.integrityCheck` / `serializeBackup` + `downloadBackup` / `restoreBackup`, MUT-47) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch. Deliberately kept as its own component/heading rather than merged into "Data" (MUT-139 IA pass) — it has its own standalone heading test. Uses `.settings-section-nested` (MUT-139 visual pass) and is wrapped together with the Data section in a `.settings-family` div in `SettingsPage.tsx`, which collapses both cards' margins to one tight gap so the pair reads as one unit — verified against a real screenshot; a tint alone didn't read as "nested."
 
 ```tsx
 <div className="settings-family">
@@ -1733,7 +1733,8 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 ### getRepositories() — `src/db/provider.ts`
 
 **What**: The single entry point to the data layer. Returns a frozen
-`{ base }` registry covering 21 repositories. Re-exported from the `src/db`
+`{ base }` registry of 23 slots (MUT-47 added `plans`, `planAssumptions`,
+`planScenarios`, `dataset` and `demoData`). Re-exported from the `src/db`
 barrel. (Until MUT-73 it also had a `synced` family of 8 op-capturing
 decorators; they were deleted with device sync, ADR-053.)
 
@@ -1764,11 +1765,15 @@ interface in `src/db/interfaces.ts`. Rename or delete a repository method and
 interception point. `src/__tests__/noSyncModules.test.ts` asserts the registry
 has only `base`.
 
-**Not covered**: `planRepo`, `planAssumptionRepo`, `planScenarioRepo`,
-`scheduleGenerator` and `retainerMatching`. `engagementRepo` is gone with the
-module (MUT-10). `moneyEventRepo` survived MUT-11 only because the old Overview
-read it; once MUT-8 deleted those components it had no reader, and MUT-58
-deleted it with `useMoneyEventQueries` (ADR-036 §3). See TODOS.md item 2.
+**Coverage (MUT-47, ADR-071)**: complete. Nothing outside `src/db` imports
+`db`, a repository object or a storage helper; ESLint rejects it
+(`src/__tests__/seamLint.test.ts`). The one exception is `initDatabase()` in
+`main.tsx`. Whole-database work is on `dataset` (`serializeBackup`,
+`restoreBackup`, `exportProfile`, `importProfile`, `importLegacyV1`,
+`csvValidationContext`, `importCsvRows`, `exportCoreTables`, `wipeCoreData`,
+`integrityCheck`, `findOrphanedRecords`, `reconcileFeaturesAfterLoad`); sample
+data on `demoData`. Retainer matching, due states, mark missed and the summary
+are `projectedIncome.*` / `retainerAgreements.getSummary`.
 
 ### Malafat OAuth client — `src/services/oauth/` and `src-tauri/src/oauth/`
 
@@ -1789,8 +1794,16 @@ Tokens go through `TokenStore` (`src/services/tokenStore.ts`, in memory only, TD
 
 ---
 
+### downloadBackup (MUT-47)
+**Location**: `src/utils/backupDownload.ts`
+**Purpose**: The browser half of a backup: saves what `dataset.serializeBackup()` returns as `mutaba3a-backup-v{schema}-{date}.json`. Used by Data Tools and the migration wizard.
+
+```ts
+downloadBackup(await getRepositories().base.dataset.serializeBackup());
+```
+
 ### importProfileFile / findMatchingProfile (MUT-158, inside MUT-145)
-**Location**: `src/db/profileImport.ts`
+**Location**: `src/db/profileImport.ts` (reached as `getRepositories().base.dataset.importProfile`; `findMatchingProfile` and the file types are re-exported from the `src/db` barrel, MUT-47)
 **Purpose**: The single importer for v2 per-profile exports (Settings → Import). It creates a new profile or merges into one, re-mints every ID in one Dexie transaction, and remaps every reference: client, project and profile on transactions, plus `businessProfileId`, `clientId` and `linkedTransactionIds` on retained documents. Duplicates are found inside the target profile only. `findMatchingProfile` picks the existing profile a file belongs to (by id, or by a non-empty email on both sides).
 
 ```ts

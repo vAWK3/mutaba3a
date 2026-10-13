@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { runIntegrityCheck } from '../../db/integrityCheck';
+import { getRepositories } from '../../db';
 import { useDrawerStore } from '../../lib/stores';
 import { useT } from '../../lib/i18n';
 
@@ -15,7 +15,7 @@ export function OrphanedRecordsBanner() {
 
   const { data: result } = useQuery({
     queryKey: ['integrity-check-banner'],
-    queryFn: () => runIntegrityCheck(),
+    queryFn: () => getRepositories().base.dataset.integrityCheck(),
     staleTime: 60_000, // Re-check every 60 seconds at most
     enabled: !dismissed,
   });

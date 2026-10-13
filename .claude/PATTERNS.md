@@ -1164,6 +1164,30 @@ data layer mocks `'../../db'` and returns `getRepositories`; it never mocks a
 repository module directly. Share one set of fakes across mocks with
 `vi.hoisted()` when a test asserts through both paths.
 
+**The seam is complete and linted (MUT-47, ADR-071).** Outside `src/db`
+nothing imports `db`, a repository object or a storage helper module;
+`eslint.config.js` rejects it, and `initDatabase()` in `main.tsx` is the one
+commented exception. When a feature needs a new kind of read or write:
+- one entity → a method on that entity's slot (`projectedIncome.match`,
+  `transactions.listNeedsReview`), declared in `interfaces.ts`;
+- the whole database → a method on `dataset`; sample data → `demoData`;
+- a new storage module in `src/db` → add it to the lint pattern list in
+  `eslint.config.js` (the rule only knows the modules it names).
+Browser-only halves stay outside (`utils/backupDownload.ts` downloads what
+`dataset.serializeBackup()` returns).
+
+**Inside `src/db`, never call back out.** Dexie implementation code calls other
+Dexie code directly (`retainerRepo` → `scheduleGenerator`). Resolving storage
+through `getRepositories()` from inside an implementation would send a Dexie
+write to whatever source is injected. Write such duties on the interface
+instead ("`create` also maintains the projected schedule").
+
+**Moving storage code: characterize first.** Write the test against the old
+call path, see it pass, then move the code and keep it green. When a mock in an
+existing test targets a moved module (`vi.mock('../../db/integrityCheck')`),
+have the slot method delegate to that module's function (call it through the
+module binding, not a captured reference) so the mock still applies.
+
 ### Optional areas are read through one hook and written through one map (MUT-12)
 `src/lib/features/features.ts` owns the vocabulary (`FEATURE_KEYS`), the
 tolerant resolver and the data probes; `src/lib/features/useFeatures.ts` owns

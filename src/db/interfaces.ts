@@ -9,6 +9,14 @@
  * - Web/PWA: Uses Dexie implementation (IndexedDB)
  * - Tauri Desktop (future): Uses SQLite implementation via Tauri SQL plugin
  *
+ * The seam rule (MUT-47, ADR-071): outside src/db nothing reads or writes
+ * storage except through `getRepositories()` — no `db`, no repository object,
+ * no storage helper module. ESLint enforces it (eslint.config.js). The single
+ * exception is `initDatabase()` in src/main.tsx, which opens Dexie and runs
+ * its migrations before React mounts. Inside src/db, Dexie implementation
+ * code may call other Dexie code directly (e.g. retainerRepo →
+ * scheduleGenerator) and must never call back out through the provider.
+ *
  * @see CLAUDE.md for architecture decisions
  * @see .claude/TECH_DEBT.md TD-013 for migration tracking
  */
@@ -43,13 +51,29 @@ import type {
   ProjectedIncome,
   ProjectedIncomeDisplay,
   ProjectedIncomeFilters,
+  RetainerSummary,
+  RetainerMatchSuggestion,
   PaymentRecord,
   PaymentByClientFilters,
   PaymentByClientRow,
   RecentPaymentRow,
   ProfileScope,
+  FeatureKey,
+  Plan,
+  PlanAssumption,
+  PlanScenario,
+  PlanFilters,
+  AssumptionCategory,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
+import type { BackupData } from './backup';
+import type { ProfileExportFile, ProfileImportTarget, ProfileImportResult } from './profileImport';
+import type { CsvImportRow, CsvImportOptions } from './csvImport';
+import type { IntegrityResult } from './integrityCheck';
+import type { OrphanedRecordSet } from './orphanedRecords';
+import type { Document, DocumentSequence } from './retained/documentSchema';
+import type { ProfileStat } from './crossProfileStats';
+import type { CategoryPreset } from './defaultExpenseCategories';
 
 // ============================================================================
 // Base Repository Interface
@@ -108,6 +132,10 @@ export interface ITransactionRepository
   getOverviewTotals(filters: { dateFrom: string; dateTo: string; currency?: Currency; profileId?: string }): Promise<OverviewTotals>;
   getOverviewTotalsByCurrency(filters: { dateFrom: string; dateTo: string; profileId?: string }): Promise<TransactionTotalsByCurrency>;
   getAttentionReceivables(filters: { currency?: Currency; profileId?: string }): Promise<TransactionDisplay[]>;
+  /** Rows the v17 migration flagged for review (MigrationWizard). */
+  listNeedsReview(): Promise<Transaction[]>;
+  /** Sets each transaction's profileId and clears its needsReview flag. */
+  resolveNeedsReview(assignments: Record<string, string>): Promise<void>;
 }
 
 // ============================================================================
@@ -124,6 +152,8 @@ export interface IProjectSummaryRepository {
 // ============================================================================
 
 export interface IClientSummaryRepository {
+  /** Per-business entry counts and totals, only for clients with entries in two or more businesses. */
+  getCrossProfileStats(): Promise<Map<string, ProfileStat[]>>;
   list(filters?: { profileId?: string; currency?: Currency; search?: string }): Promise<ClientSummary[]>;
   /** The clients index: rows, No client, Archived clients and a total equal to Home's (MUT-83) */
   listOwedIndex(filters?: { profileId?: ProfileScope; search?: string }): Promise<ClientOwedIndex>;
@@ -178,6 +208,8 @@ export interface IExpenseRepository extends BaseRepository<Expense, Omit<Expense
 
 export interface IExpenseCategoryRepository extends BaseRepository<ExpenseCategory, Omit<ExpenseCategory, 'id'>> {
   list(profileId?: string): Promise<ExpenseCategory[]>;
+  /** Creates a preset's default categories in `language`; not de-duplicated. */
+  seedDefaults(profileId: string, preset?: CategoryPreset, language?: 'en' | 'ar'): Promise<void>;
 }
 
 // ============================================================================
@@ -248,7 +280,14 @@ export interface IRecurringOccurrenceRepository extends BaseRepository<Recurring
 // Retainer Agreement Repository Interface
 // ============================================================================
 
-/** Retainers are archived or ended, never hard-deleted, so `delete` is omitted. */
+/**
+ * Retainers are archived or ended, never hard-deleted, so `delete` is omitted.
+ *
+ * `create`, `update`, `activate` and `resume` also maintain the retainer's
+ * projected income schedule (generate, or regenerate keeping received and
+ * partial rows); `end` cancels upcoming rows. Any implementation must do the
+ * same in the same call.
+ */
 export interface IRetainerAgreementRepository
   extends Omit<BaseRepository<RetainerAgreement, Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>>, 'delete'> {
   list(filters?: { profileId?: string; clientId?: string; projectId?: string; status?: string }): Promise<RetainerAgreementDisplay[]>;
@@ -258,6 +297,8 @@ export interface IRetainerAgreementRepository
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
   end(id: string): Promise<void>;
+  /** Totals for the Retainers page; `currency` narrows both counts and amounts. */
+  getSummary(profileId?: string, currency?: Currency): Promise<RetainerSummary>;
 }
 
 // ============================================================================
@@ -266,7 +307,8 @@ export interface IRetainerAgreementRepository
 
 /**
  * Projected income rows are generated from a retainer's schedule, so this
- * repository has no `create` and no `delete` — it extends nothing.
+ * repository has no `create` and no `delete` — it extends nothing. Matching
+ * writes both the item and the transaction's `linkedProjectedIncomeId`.
  */
 export interface IProjectedIncomeRepository {
   get(id: string): Promise<ProjectedIncome | undefined>;
@@ -275,6 +317,16 @@ export interface IProjectedIncomeRepository {
   getByRetainer(retainerId: string): Promise<ProjectedIncome[]>;
   getDueItems(currency?: Currency): Promise<ProjectedIncomeDisplay[]>;
   getForForecast(dateFrom: string, dateTo: string, currency?: Currency): Promise<ProjectedIncome[]>;
+  /** Upcoming items whose expected date has arrived become due (run on app load). */
+  refreshDueStates(): Promise<void>;
+  markMissed(id: string): Promise<void>;
+  /** Up to ten scored suggestions for a paid income transaction, best first. */
+  getMatchSuggestions(transactionId: string): Promise<RetainerMatchSuggestion[]>;
+  /** Suggestions for every paid, unlinked, live income transaction that has any. */
+  getAllMatchSuggestions(): Promise<Array<{ transaction: TransactionDisplay; suggestions: RetainerMatchSuggestion[] }>>;
+  /** Links the transaction to the item and recomputes the item's received amount and state. */
+  match(projectedIncomeId: string, transactionId: string): Promise<void>;
+  unmatch(projectedIncomeId: string, transactionId: string): Promise<void>;
 }
 
 // ============================================================================
@@ -289,6 +341,135 @@ export interface IPaymentRecordRepository {
   create(data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }): Promise<PaymentRecord>;
   update(id: string, data: { amountMinor?: number; paidAt?: string; notes?: string }): Promise<void>;
   delete(id: string): Promise<void>;
+}
+
+// ============================================================================
+// Plan Repository Interfaces (Financial Planning, an optional area)
+// ============================================================================
+
+/** Plans are archived, never deleted, so `delete` is omitted. */
+export interface IPlanRepository {
+  list(filters?: PlanFilters): Promise<Plan[]>;
+  get(id: string): Promise<Plan | undefined>;
+  create(data: Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>): Promise<Plan>;
+  update(id: string, data: Partial<Plan>): Promise<void>;
+  archive(id: string): Promise<void>;
+  /** Copies the plan with its assumptions and scenarios; `undefined` when the source is missing. */
+  duplicate(id: string, newName?: string): Promise<Plan | undefined>;
+  activate(id: string): Promise<void>;
+}
+
+export interface IPlanAssumptionRepository {
+  getByPlan(planId: string): Promise<PlanAssumption[]>;
+  getByPlanAndCategory(planId: string, category: AssumptionCategory): Promise<PlanAssumption[]>;
+  getForScenario(planId: string, scenarioId?: string): Promise<PlanAssumption[]>;
+  get(id: string): Promise<PlanAssumption | undefined>;
+  create(data: Omit<PlanAssumption, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlanAssumption>;
+  update(id: string, data: Partial<PlanAssumption>): Promise<void>;
+  delete(id: string): Promise<void>;
+  deleteByPlan(planId: string): Promise<void>;
+  /** Count and total per category, counting only assumptions in `currency`. */
+  getCategorySummary(
+    planId: string,
+    currency: Currency
+  ): Promise<Record<AssumptionCategory, { count: number; totalMinor: number }>>;
+}
+
+export interface IPlanScenarioRepository {
+  getByPlan(planId: string): Promise<PlanScenario[]>;
+  getDefault(planId: string): Promise<PlanScenario | undefined>;
+  get(id: string): Promise<PlanScenario | undefined>;
+  create(data: Omit<PlanScenario, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlanScenario>;
+  update(id: string, data: Partial<PlanScenario>): Promise<void>;
+  /** `false` when the scenario is missing or is the plan's default, which cannot be deleted. */
+  delete(id: string): Promise<boolean>;
+  setDefault(id: string): Promise<void>;
+  createDefaultScenarios(planId: string, profileId: string): Promise<void>;
+}
+
+// ============================================================================
+// Dataset Repository Interface (whole-database operations, MUT-47)
+// ============================================================================
+
+/** Rows a per-business export carries (Settings → Export data). */
+export interface ProfileExportRows {
+  profile: BusinessProfile;
+  documents: Document[];
+  documentSequences: DocumentSequence[];
+  clients: Client[];
+  projects: Project[];
+  transactions: Transaction[];
+  fxRates: FxRate[];
+}
+
+/** A pre-v2 JSON export: flat arrays for the six tables it replaces. */
+export interface LegacyImportFile {
+  clients?: unknown[];
+  projects?: unknown[];
+  categories?: unknown[];
+  transactions?: unknown[];
+  fxRates?: unknown[];
+  settings?: unknown[];
+}
+
+/**
+ * Operations over the whole database rather than one entity: backup and
+ * restore, export and import, wipe, and the integrity and orphan checks.
+ */
+export interface IDatasetRepository {
+  /** Every table as plain rows, tagged with the schema version. */
+  serializeBackup(): Promise<BackupData>;
+  /** Replace everything with a backup; refuses one from a newer schema. */
+  restoreBackup(backupJson: string): Promise<{ recordsRestored: number; backupVersion: number }>;
+  exportProfile(profileId: string): Promise<ProfileExportRows>;
+  /** Fresh IDs for every row, every link remapped (MUT-158). */
+  importProfile(file: ProfileExportFile, target: ProfileImportTarget): Promise<ProfileImportResult>;
+  /** All or nothing: a failing write leaves the six tables as they were. */
+  importLegacyV1(file: LegacyImportFile): Promise<{ transactions: number }>;
+  csvValidationContext(): Promise<{ clientNames: string[]; projectNames: string[] }>;
+  importCsvRows(rows: CsvImportRow[], options: CsvImportOptions): Promise<{ transactions: number }>;
+  exportCoreTables(): Promise<{ clients: Client[]; projects: Project[]; transactions: Transaction[] }>;
+  /** Clears transactions, projects, clients, categories and FX rates; everything else is kept (TODOS #10). */
+  wipeCoreData(): Promise<void>;
+  integrityCheck(): Promise<IntegrityResult>;
+  findOrphanedRecords(): Promise<OrphanedRecordSet>;
+  /** Switch on the optional areas loaded data belongs to; never throws. */
+  reconcileFeaturesAfterLoad(source: 'restore' | 'import' | 'demo'): Promise<void>;
+}
+
+// ============================================================================
+// Demo Data Repository Interface (?demo=1 and the visitor sample, MUT-47)
+// ============================================================================
+
+/** One generated sample, every id prefixed `demo_`. */
+export interface DemoSeedRows {
+  businessProfiles: BusinessProfile[];
+  clients: Client[];
+  projects: Project[];
+  categories: Category[];
+  expenseCategories: ExpenseCategory[];
+  retainers: RetainerAgreement[];
+  projectedIncome: ProjectedIncome[];
+  transactions: Transaction[];
+  recurringRules: RecurringRule[];
+  expenses: Expense[];
+}
+
+/** Storage for the sample data; sample rows are told apart by their `demo_` id. */
+export interface IDemoDataRepository {
+  hasDemoData(): Promise<boolean>;
+  /** Deletes every `demo_` row and nothing else. */
+  removeDemoData(): Promise<void>;
+  /** Whether a live, non-sample default business exists. */
+  hasUserDefaultProfile(): Promise<boolean>;
+  /** Writes the sample in one transaction; returns the optional areas it switched on. */
+  seed(rows: DemoSeedRows): Promise<FeatureKey[]>;
+  /** Any non-sample client, project, entry, expense or document. */
+  hasOwnData(): Promise<boolean>;
+  listUnpaidSampleIncome(): Promise<Transaction[]>;
+  /** Non-sample rows created at or after `startedAt` in the tables a visitor can edit. */
+  countSessionAdditions(startedAt: string): Promise<number>;
+  removeSessionAdditions(startedAt: string): Promise<void>;
 }
 
 // ============================================================================
@@ -318,4 +499,9 @@ export interface IRepositoryProvider {
   recurringOccurrences: IRecurringOccurrenceRepository;
   retainerAgreements: IRetainerAgreementRepository;
   projectedIncome: IProjectedIncomeRepository;
+  plans: IPlanRepository;
+  planAssumptions: IPlanAssumptionRepository;
+  planScenarios: IPlanScenarioRepository;
+  dataset: IDatasetRepository;
+  demoData: IDemoDataRepository;
 }

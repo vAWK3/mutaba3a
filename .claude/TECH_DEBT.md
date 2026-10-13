@@ -494,6 +494,7 @@
 **Impact**: Three suites fail intermittently in a full run and pass every time in isolation. `migration-mut59.test.ts` (5 tests) times out at the 5,000 ms default in `npm run test:db` but passes 5/5 with `--testTimeout=60000`; it shells out to `createdb`/`dropdb` and applies the whole migration history per test. `IncomeDrawer.test.tsx` times out in the root run and passes 54/54 alone, where it alone takes 12.7 s. Separately, `routes-m6`'s audit-pagination assertion failed once in four full runs: it writes `payment.recorded` then `payment.reversed`, both stamped `createdAt: new Date()` by the memory store, and when the two land in the same millisecond the keyset tiebreaker is a random UUID, making the order a coin flip. None of these is a product defect, but they make a green run a matter of luck and train the eye to ignore red.
 **Remediation**: Raise `testTimeout` for the DB-backed and heavy component suites (per-file `describe` options or a vitest project config) rather than globally. For `routes-m6`, advance the harness clock between the two audited writes so the ordering is determined by time rather than by UUID.
 **Update 2026-10-13**: `make release full`'s `release-web` leg hit the same pattern — `ConversionDrawer.test.tsx`, `ExpenseDrawer.oneTimeFields.test.tsx`, `visitorSample.test.ts`, `ProfileSwitcher.test.tsx` and `SavedFlashAnnouncer.test.tsx` all timed out in the root `npm run test:run` (238 files on 11 cores) and passed every time alone or in a small group. Applied the same `vi.setConfig({ testTimeout: 15_000 })` per-file override already used by the `migration-mut*` suites (the DB suites' 60 s is tuned for `createdb`/`dropdb`; 15 s is proportionate for a Dexie round-trip + userEvent render). Still open: `IncomeDrawer.test.tsx` and the `routes-m6` ordering race are untouched, and more component/demo tests can hit the same ceiling as the suite grows — a vitest `projects` config with a higher default timeout for `src/**` component/demo tests would close this for good instead of patching file by file.
+**Update 2026-10-13 (MUT-47, D9 bounded investigation)**: `IncomeDrawer.test.tsx`'s MUT-89 AC4 case ("offers to create a new client only once a business is chosen") failed once in a root run on main a48f72d: `findByRole('option', { name: /Brand New Co/ })` not found, the file taking 78 s in a run that took 227 s overall. The same suite on the MUT-47 branch ran green in 49 s (246 files, 3536 tests); the file passed alone, in `src/components src/pages` runs twice, and three times under 22 busy-loop processes on 11 cores (17–23 s per file). Not a component race: `ClientTypeahead`'s "Create new" option is computed synchronously from `inputValue` and `canCreate`, with no query or timer between `selectOptions` and the click. The failing wait is `asyncUtilTimeout` (3 s, `src/test/setup.ts:10`), not the 5 s test timeout, so the per-file `testTimeout` patch does not cover it; the remediation above (a vitest `projects` config for component suites, or a higher `asyncUtilTimeout` there) is still the fix. The 227 s run coincided with other sessions' suites on the same machine.
 ### TD-063: Sample part-paid entries have a received amount but no payment record, so paying one raises Owed now
 **Status**: Open
 **Added**: 2026-10-12 (MUT-86, found in the browser on `/app/clients?sample=1`)
@@ -892,81 +893,29 @@ Test coverage has been significantly improved. Core pages and repositories now m
 **Status**: In Progress
 **Priority**: Medium
 **Introduced**: 2024-06
-**Updated**: 2026-03-13
+**Updated**: 2026-10-13 (MUT-47)
 **Impact**: Desktop app uses IndexedDB instead of native SQLite
 
 **Description**:
 Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds for better performance and native file system integration. Currently, both web and desktop use IndexedDB via Dexie.
 
-**Current State (2026-10-10, MUT-35)**:
-- ✅ Repository interfaces created (`src/db/interfaces.ts`)
-- ✅ All repository operations documented with TypeScript interfaces
-- ✅ **Conformance is now enforced by the compiler** — `src/db/provider.ts`
-  applies `satisfies` to all 21 base repositories and all 8 synced decorators
-  (the 8 decorators were deleted with device sync in MUT-73, ADR-053).
-  Deleting or renaming a repository method fails `npm run typecheck`.
-- ✅ Migration Safety Layer implemented (`src/db/migration-safety.ts`)
-- Schema version at 14 with all tables defined
+**Current State (2026-10-13, MUT-47)**:
+- ✅ Repository interfaces (`src/db/interfaces.ts`) and one provider slot per storage concern: **23 slots** in `IRepositoryProvider`.
+- ✅ **Conformance is enforced by the compiler**: `src/db/provider.ts` applies `satisfies IRepositoryProvider` to the Dexie registry, so deleting or renaming a method fails `npm run typecheck`.
+- ✅ **The seam is complete and lint-enforced (MUT-47, ADR-071).** Outside `src/db`, nothing imports `db`, a repository object or a storage helper module; `eslint.config.js` rejects it. The single exception is `initDatabase()` in `src/main.tsx` (Dexie opens before React mounts).
+- ✅ Migration Safety Layer (`src/db/migration-safety.ts`).
 
-> **Correction (MUT-35).** The entry previously claimed "Current Dexie
-> implementation satisfies the interfaces". That was an assertion no check
-> enforced: before MUT-35 the `satisfies` count in the codebase was 0. When
-> conformance was actually applied, **7 interfaces turned out to have drifted**
-> — every case an interface declaring a method the implementation never had:
-> `transactionRepo.delete`, `receiptRepo.getByExpense`, `vendorRepo.findByName`,
-> `monthCloseRepo.set`, `retainerRepo.delete`,
-> `projectedIncomeRepo.{getBySource,getByPeriod,create,delete}`, plus
-> `expenseRepo.{getYearlyTotals,getAllProfilesTotals,getReceiptCount}` missing
-> from the interface and three wrong parameter/return types. All were fixed by
-> correcting the interface to describe reality, never by adding runtime code.
-> Lesson: "documented" and "checked" are different states; only the second
-> survives contact with a refactor.
+**Slots** (`getRepositories().base.*`): `clients`, `projects`, `categories`, `transactions`, `projectSummaries`, `clientSummaries`, `fxRates`, `settings`, `businessProfiles`, `paymentRecords`, `expenses`, `expenseCategories`, `receipts`, `vendors`, `recurringRules`, `recurringOccurrences`, `retainerAgreements`, `projectedIncome`, `plans`, `planAssumptions`, `planScenarios`, `dataset` (backup/restore, export/import, wipe, integrity and orphan checks), `demoData` (`?demo=1` and the visitor sample).
 
-> **Resolved by deletion (2026-10-12, MUT-73).** The gap below no longer
-> exists: device sync was retired (ADR-053), the `synced` family and its
-> decorators are gone, and `getRepositories()` returns `{ base }` only, which
-> `setRepositories()` swaps completely.
+**Repository interfaces** (generated from `interfaces.ts`, 2026-10-13): `IClientRepository`, `IProjectRepository`, `ICategoryRepository`, `ITransactionRepository`, `IProjectSummaryRepository`, `IClientSummaryRepository`, `IFxRateRepository`, `ISettingsRepository`, `IBusinessProfileRepository`, `IExpenseRepository`, `IExpenseCategoryRepository`, `IReceiptRepository`, `IVendorRepository`, `IRecurringRuleRepository`, `IRecurringOccurrenceRepository`, `IRetainerAgreementRepository`, `IProjectedIncomeRepository`, `IPaymentRecordRepository`, `IPlanRepository`, `IPlanAssumptionRepository`, `IPlanScenarioRepository`, `IDatasetRepository`, `IDemoDataRepository`, and `IRepositoryProvider`. (The previous list named `IDocumentRepository`, `IDocumentSequenceRepository` and `IMonthCloseStatusRepository`, deleted by MUT-145/MUT-14: another drifted claim, corrected here.)
 
-**Known gap — the seam is only half swappable.** *(historical, see above)*
-`gstack-shortcut(dec-5f2c2123)`: the decorators in
-`src/sync/core/synced-repository.ts` bind the Dexie singletons at module load
-(`clientRepo.list.bind(clientRepo)`), so `setRepositories()` redirects `base`
-but **not** `synced.*`. Harmless today — nothing calls `setRepositories` outside
-tests — but a hosted data source injected by MUT-43 would be silently bypassed
-on every synced write path. Upgrade when MUT-43 lands: resolve the decorators
-lazily through `getRepositories().base`, with a test asserting ops are captured
-against a swapped base.
+**What a second implementation must also do** (documented on the interfaces): retainer `create`/`update`/`activate`/`resume` maintain the projected schedule (Dexie: `scheduleGenerator`, internal); `dataset.importLegacyV1` is all or nothing; `recurringOccurrences.runAtomically` is one unit of work (ADR-052).
 
-> **Re-homed (2026-10-11, MUT-36).** The hosted portal does not inject into
-> the registry (ADR-037 decision 10: it is a separate build target with its own
-> HTTP client), so MUT-43 will not trigger this. The upgrade is now due when a
-> second implementation is actually injected — the SQLite/Tauri swap this
-> entry tracks.
+**Every declared slot has a real caller.** Verified by grepping `base.<slot>.<method>` across `src/` (2026-10-13). A slot nothing reads would make a future swap silently leave that domain on Dexie.
 
-**Every declared slot has a real caller.** Verified by grepping
-`base.<slot>.<method>` across `src/`: nine consumers resolve through the
-provider, including `useRetainerQueries`. A slot that nothing reads would make
-a future `setRepositories` swap silently leave that domain on Dexie — the
-registry must never advertise coverage it does not have.
+> **History.** MUT-35 (2026-10-10) found 7 interfaces had drifted while a comment here asserted the Dexie code satisfied them, and applied `satisfies`. Its "Outside the seam" note (21 repositories; plans and two retainer helpers uncovered) was itself drifted by 2026-10-13: 18 slots, and the bypasses were wider (CSV import, export, delete-all, migration wizard, demo seeding, integrity/orphan/backup/cross-profile/seed helpers). MUT-47 closed all of them. The MUT-73 note below stays for its record of the retired sync decorators.
 
-**Outside the seam.** `IRepositoryProvider` covers 21 repositories. Not covered:
-`planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`planRepository.ts`),
-`scheduleGenerator`, `retainerMatching` (`retainerRepository.ts`) — the last two
-are not repositories. `moneyEventRepo` was left alone pending MUT-11, which
-kept it because three mounted Overview components imported it (ADR-029); MUT-8
-deleted those components and MUT-58 deleted the repository (2026-10-12), so it
-no longer needs a slot. `engagementRepo` was deleted with its module in MUT-10.
-See TODOS.md item 2.
-
-**Repository Interfaces Created**:
-- `IClientRepository`, `IProjectRepository`, `ICategoryRepository`
-- `ITransactionRepository`, `IProjectSummaryRepository`, `IClientSummaryRepository`
-- `IFxRateRepository`, `ISettingsRepository`, `IBusinessProfileRepository`
-- `IDocumentRepository`, `IDocumentSequenceRepository`
-- `IExpenseRepository`, `IExpenseCategoryRepository`, `IReceiptRepository`
-- `IVendorRepository`, `IMonthCloseStatusRepository`, `IRecurringRuleRepository`
-- `IRetainerAgreementRepository`, `IProjectedIncomeRepository`
-- `IRepositoryProvider` (factory interface)
+> **Resolved by deletion (2026-10-12, MUT-73).** Device sync was retired (ADR-053), the `synced` family and its decorators are gone, and `getRepositories()` returns `{ base }` only, which `setRepositories()` swaps completely.
 
 **Remaining**:
 1. Create SQLite schema matching Dexie tables

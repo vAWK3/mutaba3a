@@ -769,6 +769,20 @@ export interface MatchScoreBreakdown {
 }
 
 // Retainer match suggestion (for matching transactions to projected income)
+/** Retainer totals with amounts broken down by currency (Retainers page). */
+export interface RetainerSummary {
+  activeCount: number;
+  // Monthly expected by currency
+  totalExpectedMonthlyUsdMinor: number;
+  totalExpectedMonthlyIlsMinor: number;
+  // Due by currency
+  totalDueUsdMinor: number;
+  totalDueIlsMinor: number;
+  // Overdue by currency
+  totalOverdueUsdMinor: number;
+  totalOverdueIlsMinor: number;
+}
+
 export interface RetainerMatchSuggestion {
   projectedIncomeId: string;
   score: number; // 0-100

@@ -1,3 +1,4 @@
+import { getCrossProfileClientStats, type ProfileStat } from './crossProfileStats';
 import { db } from './database';
 import { DEFAULT_SETTINGS } from './defaultSettings';
 import { resolveFeatures } from '../lib/features/features';
@@ -534,6 +535,24 @@ export const transactionRepo = {
     // applies to its own receivables (MUT-82), defined once
     return selectAttentionReceivables(transactions, today);
   },
+  /** Rows the v17 migration flagged for the user to file under a business (MigrationWizard). */
+  async listNeedsReview(): Promise<Transaction[]> {
+    // A filter, not the needsReview index: booleans are not valid IndexedDB keys.
+    return db.transactions.filter((tx) => tx.needsReview === true).toArray();
+  },
+
+  /**
+   * File each reviewed row under its chosen business and clear its flag. The
+   * write is exactly what the wizard wrote before MUT-47 (no updatedAt, TODOS #11).
+   */
+  async resolveNeedsReview(assignments: Record<string, string>): Promise<void> {
+    for (const [txId, profileId] of Object.entries(assignments)) {
+      await db.transactions.update(txId, {
+        profileId,
+        needsReview: undefined,
+      });
+    }
+  },
 };
 
 // Project Summary Repository
@@ -657,6 +676,12 @@ export const projectSummaryRepo = {
 
 // Client Summary Repository
 export const clientSummaryRepo = {
+  /** Per-business entry counts and totals for clients with entries in two or more businesses. */
+  async getCrossProfileStats(): Promise<Map<string, ProfileStat[]>> {
+    // Called through the module binding so a test spy on it still applies.
+    return getCrossProfileClientStats();
+  },
+
   /**
    * One row per non-archived client: totals, activity and the MUT-7 collection
    * fields (owed now, oldest overdue age, last payment), each counted over the

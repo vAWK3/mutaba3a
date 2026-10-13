@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../db';
-import { findOrphanedRecords, type OrphanTable } from '../db/orphanedRecords';
+import type { OrphanTable } from '../db/orphanedRecords';
 
 export const orphanedRecordsQueryKey = ['orphanedRecords'] as const;
 
@@ -18,7 +18,7 @@ export interface AssignResult {
 export function useOrphanedRecords() {
   return useQuery({
     queryKey: orphanedRecordsQueryKey,
-    queryFn: findOrphanedRecords,
+    queryFn: () => getRepositories().base.dataset.findOrphanedRecords(),
   });
 }
 

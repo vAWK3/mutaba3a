@@ -1,3 +1,4 @@
+import { getCategoryTemplates, type CategoryPreset } from './defaultExpenseCategories';
 import { db } from './database';
 import { excludeDeleted } from './baseQuery';
 import type {
@@ -402,6 +403,24 @@ export const expenseCategoryRepo = {
 
   async delete(id: string): Promise<void> {
     await db.expenseCategories.delete(id);
+  },
+
+  /**
+   * Seed a preset's default categories for a business, named in `language`.
+   * Not de-duplicated: running it twice creates the set twice.
+   */
+  async seedDefaults(
+    profileId: string,
+    preset: CategoryPreset = 'general',
+    language: 'en' | 'ar' = 'en'
+  ): Promise<void> {
+    for (const cat of getCategoryTemplates(preset, language)) {
+      await this.create({
+        profileId,
+        name: cat.name,
+        color: cat.color,
+      });
+    }
   },
 };
 

@@ -27,7 +27,7 @@ import {
 } from '../../components/clients/clientsSplitView';
 import { useClientOwedIndex, useClients, useBusinessProfiles } from '../../hooks/useQueries';
 import { useFxRate } from '../../hooks/useFxRate';
-import { getCrossProfileClientStats } from '../../db/crossProfileStats';
+import { getRepositories } from '../../db';
 import { combineOwed } from '../../db/aggregations';
 import type { SortDir } from '../../hooks/useSortState';
 import { useOwedLens } from '../../hooks/useActiveProfile';
@@ -117,7 +117,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
   const hasMultipleProfiles = profiles.filter((p) => !p.archivedAt).length > 1;
   const { data: crossProfileStats } = useQuery({
     queryKey: ['crossProfileClientStats'],
-    queryFn: getCrossProfileClientStats,
+    queryFn: () => getRepositories().base.clientSummaries.getCrossProfileStats(),
     enabled: hasMultipleProfiles && !isAll,
   });
 

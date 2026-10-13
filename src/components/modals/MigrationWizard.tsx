@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { db } from '../../db/database';
-import { exportBackup } from '../../db/backup';
+import { getRepositories } from '../../db';
+import { downloadBackup } from '../../utils/backupDownload';
 import { Button } from '../ui/Button';
 import { Select } from '../ui';
 import './MigrationWizard.css';
@@ -45,9 +45,7 @@ export function MigrationWizard() {
   const { data: needsReviewRecords = [], isLoading: loadingRecords } = useQuery({
     queryKey: ['migration-needs-review'],
     queryFn: async () => {
-      const txs = await db.transactions
-        .filter(tx => tx.needsReview === true)
-        .toArray();
+      const txs = await getRepositories().base.transactions.listNeedsReview();
       return txs as NeedsReviewRecord[];
     },
   });
@@ -56,8 +54,7 @@ export function MigrationWizard() {
   const { data: profiles = [] } = useQuery({
     queryKey: ['migration-profiles'],
     queryFn: async () => {
-      const all = await db.businessProfiles.toArray();
-      return all.filter(p => !p.archivedAt) as Profile[];
+      return (await getRepositories().base.businessProfiles.list()) as Profile[];
     },
   });
 
@@ -65,12 +62,7 @@ export function MigrationWizard() {
   const confirmMutation = useMutation({
     mutationFn: async (updates: Record<string, string>) => {
       // Only clear needsReview on records the user explicitly reviewed
-      for (const [txId, profileId] of Object.entries(updates)) {
-        await db.transactions.update(txId, {
-          profileId,
-          needsReview: undefined,
-        });
-      }
+      await getRepositories().base.transactions.resolveNeedsReview(updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['migration-needs-review'] });
@@ -119,7 +111,7 @@ export function MigrationWizard() {
   }
 
   const handleBackup = async () => {
-    await exportBackup();
+    downloadBackup(await getRepositories().base.dataset.serializeBackup());
     setBackupDone(true);
   };
 

@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useT, type LanguageContextValue } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
-import { runIntegrityCheck } from '../../db/integrityCheck';
-import { exportBackup, restoreFromBackup } from '../../db/backup';
 import { getRepositories } from '../../db/provider';
+import { downloadBackup } from '../../utils/backupDownload';
 import { exportAllProfilesReceiptsAsZip } from '../../lib/zipExport';
 
 interface IntegritySummary {
@@ -34,7 +33,7 @@ export function DataToolsSection() {
   const handleIntegrityCheck = async () => {
     setIsChecking(true);
     try {
-      const result = await runIntegrityCheck();
+      const result = await getRepositories().base.dataset.integrityCheck();
       // A scan that stopped part-way comes back with `error`, not a throw.
       if (result.error) throw new Error(result.error);
       const issues = result.orphanedRecords.length + result.brokenReferences.length;
@@ -54,7 +53,7 @@ export function DataToolsSection() {
 
   const handleExportBackup = async () => {
     try {
-      await exportBackup();
+      downloadBackup(await getRepositories().base.dataset.serializeBackup());
       showToast(t('settings.backupDone'), { type: 'success' });
     } catch {
       showToast(t('settings.backupFailed'), { type: 'error' });
@@ -89,7 +88,7 @@ export function DataToolsSection() {
       if (!file) return;
       try {
         const json = await file.text();
-        const { recordsRestored: count, backupVersion: version } = await restoreFromBackup(json);
+        const { recordsRestored: count, backupVersion: version } = await getRepositories().base.dataset.restoreBackup(json);
         const key = count === 1 ? 'settings.importBackupDoneSingular' : 'settings.importBackupDonePlural';
         showToast(t(key, { count, version }), { type: 'success' });
         window.location.reload();

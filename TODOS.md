@@ -1,20 +1,6 @@
 # TODOS
 
-> Items 1 (MUT-46) and 3 (MUT-55) were retired with device sync on 2026-10-12 (MUT-73, ADR-053): both were sync bugs, and sync was deleted rather than fixed. The other items keep their numbers because they are cited elsewhere.
-
-## 2. Documented data layer does not match the real one — ticketed as MUT-47
-
-**What:** Two documented claims that nothing checks: CLAUDE.md's mandatory Phase 4 verification names `npm run test:integration`, which has never existed; and `IRepositoryProvider` covers 20 slots while the db layer exports 25 repository objects (26 until MUT-58 deleted `moneyEventRepo`).
-
-**Why:** `package.json` has no `test:integration` script (MUT-35 adds `typecheck`, closing the other half). `planRepo`, `planAssumptionRepo`, `planScenarioRepo` (`src/db/planRepository.ts:33,191,301`), `scheduleGenerator` and `retainerMatching` (`src/db/retainerRepository.ts:470,620`) have no declared interface and no provider slot, so "every repository object is conformance-checked" stays false after MUT-35 ships.
-
-**Pros of fixing:** Keeps the documented architecture honest, which is the entire thesis of MUT-35 applied one layer up.
-
-**Cons / cost / risk:** Neither item causes a runtime failure. `scheduleGenerator` and `retainerMatching` are not repositories, so they need a design call rather than a mechanical slot.
-
-**Context:** Found 2026-10-10 during the MUT-35 eng review. Either give the five objects contracts and slots, or write an explicit note in `interfaces.ts` saying they sit outside the seam and why.
-
-**Depends on / blocked by:** Nothing. Cheap; do it next time CLAUDE.md or `interfaces.ts` is open.
+> Items 1 (MUT-46) and 3 (MUT-55) were retired with device sync on 2026-10-12 (MUT-73, ADR-053): both were sync bugs, and sync was deleted rather than fixed. Item 2 was resolved by MUT-47 on 2026-10-13. The other items keep their numbers because they are cited elsewhere.
 
 ## 4. A failed refetch after a successful write is completely silent
 
@@ -99,3 +85,46 @@
 **Context:** Decided in MUT-145's eng review (2026-10-13, D10). Start by grepping `plugin-fs` across `src` to confirm no consumer appeared since. Then remove the four pieces above and build the desktop app.
 
 **Depends on / blocked by:** MUT-145 merged (it deletes `pdfArchival.ts`).
+
+## 10. "Delete all data" keeps businesses, expenses, payment records, retainers and plans
+
+**What:** `dataset.wipeCoreData()` (`src/db/seed.ts` `deleteAllData`) clears transactions, projects, clients, categories and FX rates only. Business profiles, expenses, expense categories, payment records, receipts, vendors, recurring rules and occurrences, retainers, projected income and plans all survive.
+
+**Why:** The Settings button and its modal promise to delete all data.
+
+**Pros of fixing:** The button does what it says; a person handing the machine on gets a clean app.
+
+**Cons / cost / risk:** Product call first. Keeping businesses may be deliberate (so the app still opens on a business), and a fuller wipe is irreversible. The pre-delete CSV export would also need to cover the extra tables.
+
+**Context:** Found in MUT-47's eng review (2026-10-13, D8). MUT-47 moved it behind the dataset slot unchanged; `src/db/__tests__/dataset.test.ts` pins the current table set, so changing it is a deliberate test change.
+
+**Depends on / blocked by:** A product decision on what "all data" means.
+
+## 11. The migration wizard writes no `updatedAt`
+
+**What:** `transactions.resolveNeedsReview` (moved from `MigrationWizard.tsx` in MUT-47) writes `{ profileId, needsReview: undefined }` and nothing else.
+
+**Why:** Every other write stamps `updatedAt`, which sorting and "last activity" read.
+
+**Pros of fixing:** Consistent audit fields; a re-filed entry shows as recently changed.
+
+**Cons / cost / risk:** None known. `src/db/__tests__/transactionsNeedsReview.test.ts` pins the current write, so the fix flips one assertion.
+
+**Context:** Found in MUT-47's eng review (2026-10-13, D8). Start at `resolveNeedsReview` in `src/db/repository.ts`.
+
+**Depends on / blocked by:** Nothing.
+
+## 12. CSV import: conversion rows get no business, and name lookups ignore the business
+
+**What:** In `src/db/csvImport.ts` `importCsvRows` (moved from `ImportDataPage.tsx` in MUT-47), conversion rows are written without `profileId`, and clients and projects are matched by name across every business (`db.clients.where('name')`), so an import can attach entries to another business's client of the same name.
+
+**Why:** Clients belong to one business (ADR-049); an import should never cross that line. A conversion with no business is invisible on every business-scoped view.
+
+**Pros of fixing:** Imports land where the person chose.
+
+**Cons / cost / risk:** Changes import results for existing CSVs that relied on the global match. Needs tests through `ImportDataPage.test.tsx`.
+
+**Context:** Found in MUT-47's eng review (2026-10-13, D8). Moved unchanged; the income and expense loops also still assume base-100 amounts (TD-112).
+
+**Depends on / blocked by:** Nothing.
+

@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { withErrorToast } from './useMutationWithFeedback';
-// Standalone helpers, not repositories — they stay direct imports.
-import { seedExpenseCategories, type CategoryPreset } from '../db/defaultExpenseCategories';
+import type { CategoryPreset } from '../db/defaultExpenseCategories';
 import { getRepositories } from '../db';
 import type {
   Expense,
@@ -262,7 +261,7 @@ export function useSeedExpenseCategories() {
       profileId: string;
       preset: CategoryPreset;
       language: 'en' | 'ar';
-    }) => seedExpenseCategories(profileId, preset, language),
+    }) => getRepositories().base.expenseCategories.seedDefaults(profileId, preset, language),
     onSuccess: () => invalidateExpenseCategoryQueries(queryClient),
   });
 }

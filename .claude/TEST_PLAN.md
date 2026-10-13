@@ -2083,3 +2083,25 @@ New `kind: 'conversion'` on `Transaction`, excluded from P&L totals, on a new de
 
 **What was run (Node 22):** `npm run lint` 0 errors (13 pre-existing warnings, unrelated — the `react-hooks/incompatible-library` `watch()` warning already exists on every other React Hook Form drawer) · `npm run typecheck` clean · `npm run build` succeeded (new `ConversionsPage` chunk code-split as expected) · full `vitest run` (no path filter): 3,536 passed / 4 skipped, after the `/qa-reconcile` fix above.
 
+
+## MUT-47 — The storage seam made complete and linted (2026-10-13, ADR-071)
+
+Every storage call outside `src/db` now goes through `getRepositories()`; moves were characterized before they were made (D8).
+
+| File | Added | Covers |
+|---|---|---|
+| `src/db/__tests__/provider.test.ts` | +2 | The `plans`, `planAssumptions`, `planScenarios`, `dataset` and `demoData` slots resolve to the Dexie objects |
+| `src/hooks/__tests__/usePlanQueries.test.tsx` | rewritten mock, +1 | Mocks the `db` barrel instead of `planRepository`; `usePlanCategorySummary` summarises through the injected `planAssumptions` in the plan's currency |
+| `src/db/__tests__/retainerRepo.test.ts` | +4, 4 re-pointed | Characterization (run green against the old helpers first): `refreshDueStates` flips only upcoming rows dated today or earlier; `markMissed`; `getAllMatchSuggestions` skips unpaid, linked and deleted income; regenerating keeps received rows and drops upcoming ones. Match/unmatch/suggestions/summary tests now call the repository methods |
+| `src/hooks/__tests__/useRetainerQueries.test.tsx` | +3 | Every retainer hook (summary, suggestions, mark missed, due states, match, unmatch) calls `getRepositories()` |
+| `src/db/__tests__/dataset.test.ts` (new) | 5 | `importLegacyV1` replaces the six tables; **a failing write leaves the database unchanged** (D8, proven red without the transaction); `exportCoreTables` returns archived and deleted rows; `wipeCoreData` clears exactly five tables and keeps profiles, expenses and settings; `csvValidationContext` lists names across businesses |
+| `src/db/__tests__/csvImport.test.ts` | moved from `src/utils/__tests__/` | Unchanged assertions; module moved into `src/db` |
+| `src/db/__tests__/transactionsNeedsReview.test.ts` (new) | 2 | `listNeedsReview`; `resolveNeedsReview` writes exactly `{ profileId, needsReview: undefined }` (no `updatedAt`, TODOS #11) |
+| `src/db/__tests__/demoData.test.ts` (new) | 1 | `removeDemoData` deletes `demo_` rows and keeps the person's own clients, entries and business |
+| `src/db/__tests__/expenseCategoriesSeedDefaults.test.ts` (new) | 2 | `seedDefaults` creates the preset in the chosen language; it is not de-duplicated |
+| `src/__tests__/seamLint.test.ts` (new) | 14 | The ESLint seam rule rejects 8 bypass shapes outside `src/db` and allows `getRepositories`, constants, pure helpers, types and aggregations; it does not apply inside `src/db` or to tests |
+| `src/pages/settings/__tests__/DataToolsSection.test.tsx` | updated | Mocks `serializeAllTables` + `downloadBackup` instead of the removed `exportBackup`; asserts the download gets the serialized backup |
+
+Regression net kept unchanged and green: `ImportDataPage.test`, `ImportExportModals.test`, `OrphanedRecordsBanner.test`, `ClientsPage.test` (its spy on `getCrossProfileClientStats` still applies through the slot), `visitorSample.test`, `crossProfileBadges.test`.
+
+**Gate (Node 22, worktree, 2026-10-13):** `npm run lint` 0 errors (6 pre-existing warnings) · `npm run typecheck` clean · `npm run test:run` 246/246 files, 3536 passed, 4 skipped · `npm run build` succeeds. The IncomeDrawer load failure seen on main (TD-073) did not recur in two full runs.

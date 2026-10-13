@@ -7,17 +7,22 @@ import {
   usePlanAssumption,
   usePlanDefaultScenario,
   usePlanScenario,
+  usePlanCategorySummary,
 } from '../usePlanQueries';
-import { planRepo, planAssumptionRepo, planScenarioRepo } from '../../db/planRepository';
+import { getRepositories } from '../../db';
 
-// The plan hooks import their repositories directly (they sit outside the
-// getRepositories() seam), so the module itself is mocked. Only the lookups
-// exercised below are faked.
-vi.mock('../../db/planRepository', () => ({
-  planRepo: { get: vi.fn() },
-  planAssumptionRepo: { get: vi.fn() },
-  planScenarioRepo: { get: vi.fn(), getDefault: vi.fn() },
-}));
+// The plan hooks resolve their repositories through getRepositories() (MUT-47),
+// so the barrel is mocked. Only the lookups exercised below are faked.
+vi.mock('../../db', () => {
+  const base = {
+    plans: { get: vi.fn() },
+    planAssumptions: { get: vi.fn(), getCategorySummary: vi.fn() },
+    planScenarios: { get: vi.fn(), getDefault: vi.fn() },
+  };
+  return { getRepositories: () => ({ base }) };
+});
+
+const { plans, planAssumptions, planScenarios } = getRepositories().base;
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -44,10 +49,10 @@ type MockedGet = ReturnType<typeof vi.fn>;
 // absence to `null` and succeed. `usePlanDefaultScenario` is the one that
 // legitimately has no row yet (a plan whose scenarios were never seeded).
 const lookups = [
-  { name: 'usePlan', hook: usePlan, get: () => planRepo.get as MockedGet },
-  { name: 'usePlanAssumption', hook: usePlanAssumption, get: () => planAssumptionRepo.get as MockedGet },
-  { name: 'usePlanScenario', hook: usePlanScenario, get: () => planScenarioRepo.get as MockedGet },
-  { name: 'usePlanDefaultScenario', hook: usePlanDefaultScenario, get: () => planScenarioRepo.getDefault as MockedGet },
+  { name: 'usePlan', hook: usePlan, get: () => plans.get as MockedGet },
+  { name: 'usePlanAssumption', hook: usePlanAssumption, get: () => planAssumptions.get as MockedGet },
+  { name: 'usePlanScenario', hook: usePlanScenario, get: () => planScenarios.get as MockedGet },
+  { name: 'usePlanDefaultScenario', hook: usePlanDefaultScenario, get: () => planScenarios.getDefault as MockedGet },
 ] as const;
 
 describe.each(lookups)('$name', ({ hook, get }) => {
@@ -85,5 +90,23 @@ describe.each(lookups)('$name', ({ hook, get }) => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+});
+
+describe('usePlanCategorySummary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('summarises through the injected repositories in the plan currency', async () => {
+    const summary = { revenue: { count: 1, totalMinor: 500 } };
+    (plans.get as MockedGet).mockResolvedValue({ id: 'plan-1', currency: 'ILS' });
+    (planAssumptions.getCategorySummary as MockedGet).mockResolvedValue(summary);
+
+    const { result } = renderHook(() => usePlanCategorySummary('plan-1'), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(summary);
+    expect(planAssumptions.getCategorySummary).toHaveBeenCalledWith('plan-1', 'ILS');
   });
 });

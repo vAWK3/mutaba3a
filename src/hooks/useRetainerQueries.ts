@@ -7,13 +7,6 @@ function useRetainerMutationWithToast<TData, TError extends Error, TVariables>(
   return useMutation(withErrorToast(opts));
 }
 import { getRepositories } from '../db';
-// Not repositories — these stay direct imports and sit outside the seam.
-import {
-  scheduleGenerator,
-  retainerMatching,
-  markProjectedIncomeMissed,
-  getRetainerSummary,
-} from '../db/retainerRepository';
 import type {
   RetainerAgreement,
   RetainerFilters,
@@ -115,7 +108,7 @@ export function useRetainerDisplay(id: string) {
 export function useRetainerSummary(profileId?: string, currency?: Currency) {
   return useQuery({
     queryKey: retainerQueryKeys.retainerSummary(profileId, currency),
-    queryFn: () => getRetainerSummary(profileId, currency),
+    queryFn: () => getRepositories().base.retainerAgreements.getSummary(profileId, currency),
   });
 }
 
@@ -266,7 +259,7 @@ export function useMarkProjectedIncomeMissed() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: (id: string) => markProjectedIncomeMissed(id),
+    mutationFn: (id: string) => getRepositories().base.projectedIncome.markMissed(id),
     onSuccess: () => invalidateProjectedIncomeQueries(queryClient),
   });
 }
@@ -278,7 +271,7 @@ export function useUpdateDueStates() {
   const queryClient = useQueryClient();
 
   return useRetainerMutationWithToast({
-    mutationFn: () => scheduleGenerator.updateDueStates(),
+    mutationFn: () => getRepositories().base.projectedIncome.refreshDueStates(),
     onSuccess: () => invalidateProjectedIncomeQueries(queryClient),
   });
 }
@@ -293,7 +286,7 @@ export function useUpdateDueStates() {
 export function useRetainerMatchSuggestions(transactionId: string | undefined) {
   return useQuery({
     queryKey: retainerQueryKeys.matchSuggestions(transactionId || ''),
-    queryFn: () => retainerMatching.getSuggestionsForTransaction(transactionId!),
+    queryFn: () => getRepositories().base.projectedIncome.getMatchSuggestions(transactionId!),
     enabled: !!transactionId,
   });
 }
@@ -304,7 +297,7 @@ export function useRetainerMatchSuggestions(transactionId: string | undefined) {
 export function useAllRetainerMatchSuggestions() {
   return useQuery({
     queryKey: retainerQueryKeys.allMatchSuggestions(),
-    queryFn: () => retainerMatching.getAllSuggestionsForUnlinkedTransactions(),
+    queryFn: () => getRepositories().base.projectedIncome.getAllMatchSuggestions(),
   });
 }
 
@@ -325,7 +318,7 @@ export function useMatchTransaction() {
     }: {
       projectedIncomeId: string;
       transactionId: string;
-    }) => retainerMatching.matchTransaction(projectedIncomeId, transactionId),
+    }) => getRepositories().base.projectedIncome.match(projectedIncomeId, transactionId),
     onSuccess: () => {
       invalidateAllRetainerQueries(queryClient);
       // Also invalidate transaction queries
@@ -348,7 +341,7 @@ export function useUnmatchTransaction() {
     }: {
       projectedIncomeId: string;
       transactionId: string;
-    }) => retainerMatching.unmatchTransaction(projectedIncomeId, transactionId),
+    }) => getRepositories().base.projectedIncome.unmatch(projectedIncomeId, transactionId),
     onSuccess: () => {
       invalidateAllRetainerQueries(queryClient);
       // Also invalidate transaction queries

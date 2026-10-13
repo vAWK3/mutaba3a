@@ -10,6 +10,9 @@ import "./index.css";
 import { createAppQueryClient } from "./lib/queryClient";
 
 import { router } from "./router";
+// The one storage call outside the seam (MUT-47): Dexie must open, and run
+// its migrations, before React mounts and anything resolves getRepositories().
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports
 import { initDatabase } from "./db";
 import { LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";

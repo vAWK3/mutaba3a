@@ -6,13 +6,18 @@ import en from '../../../lib/i18n/translations/en.json';
 import ar from '../../../lib/i18n/translations/ar.json';
 import { DataToolsSection } from '../DataToolsSection';
 
-const { runIntegrityCheck, exportBackup, restoreFromBackup } = vi.hoisted(() => ({
+// The section reaches these through getRepositories().base.dataset (MUT-47);
+// the Dexie dataset delegates to these modules, so mocking them still stubs
+// the storage. The browser download is its own helper.
+const { runIntegrityCheck, serializeAllTables, restoreFromBackup, downloadBackup } = vi.hoisted(() => ({
   runIntegrityCheck: vi.fn(),
-  exportBackup: vi.fn(),
+  serializeAllTables: vi.fn(),
   restoreFromBackup: vi.fn(),
+  downloadBackup: vi.fn(),
 }));
 vi.mock('../../../db/integrityCheck', () => ({ runIntegrityCheck }));
-vi.mock('../../../db/backup', () => ({ exportBackup, restoreFromBackup }));
+vi.mock('../../../db/backup', () => ({ serializeAllTables, restoreFromBackup }));
+vi.mock('../../../utils/backupDownload', () => ({ downloadBackup }));
 
 type Dict = Record<string, unknown>;
 type Copy = Record<string, string>;
@@ -163,12 +168,15 @@ describe('DataToolsSection', () => {
     });
 
     it('confirms a backup download, or says it failed', async () => {
-      exportBackup.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('quota'));
+      serializeAllTables
+        .mockResolvedValueOnce({ version: 20, timestamp: 'now', tables: {} })
+        .mockRejectedValueOnce(new Error('quota'));
       renderWithProviders(<DataToolsSection />);
       const button = screen.getByRole('button', { name: settings.backupExport });
 
       fireEvent.click(button);
       expect(await nextToast()).toMatchObject({ type: 'success', message: fill(settings.backupDone, {}) });
+      expect(downloadBackup).toHaveBeenCalledWith({ version: 20, timestamp: 'now', tables: {} });
 
       useToastStore.setState({ toasts: [] });
       fireEvent.click(button);

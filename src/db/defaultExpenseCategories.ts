@@ -1,4 +1,3 @@
-import { expenseCategoryRepo } from './expenseRepository';
 
 interface CategoryTemplate {
   name: string;
@@ -101,28 +100,6 @@ const PRESET_MAP: Record<CategoryPreset, CategoryTemplate[]> = {
   lawFirm: LAW_FIRM_CATEGORIES,
   freelancer: FREELANCER_CATEGORIES,
 };
-
-/**
- * Seed default expense categories for a profile
- * @param profileId - The business profile ID
- * @param preset - Which category preset to use
- * @param language - 'en' or 'ar' for category names
- */
-export async function seedExpenseCategories(
-  profileId: string,
-  preset: CategoryPreset = 'general',
-  language: 'en' | 'ar' = 'en'
-): Promise<void> {
-  const categories = PRESET_MAP[preset];
-
-  for (const cat of categories) {
-    await expenseCategoryRepo.create({
-      profileId,
-      name: language === 'ar' ? cat.nameAr : cat.name,
-      color: cat.color,
-    });
-  }
-}
 
 /**
  * Get category templates for a preset (without creating them)

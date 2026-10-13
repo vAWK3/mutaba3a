@@ -28,6 +28,39 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — The storage seam is complete and linted (MUT-47, ADR-071)
+
+**Why:** CLAUDE.md's done-gate named a `test:integration` script that never existed, and TD-013 claimed only five objects sat outside the repository provider. In the code, plans, retainer matching, CSV import, export, delete-all, the migration wizard, demo seeding and five more helpers all reached Dexie around the seam, and nothing checked it.
+
+### Changed
+- **CLAUDE.md Phase 4** lists commands that exist and pass: `lint`, `typecheck`, `test:run`, `build`, under Node 22. It adds a line for `server/` that mirrors server CI, and closes the code fence that rendered the rest of the file as code.
+- **Provider: 18 → 23 slots.**
+  - New slots: `plans`, `planAssumptions`, `planScenarios`, `dataset` (whole-database operations) and `demoData` (`?demo=1` and the visitor sample).
+  - New methods: `projectedIncome.refreshDueStates/markMissed/getMatchSuggestions/getAllMatchSuggestions/match/unmatch`, `retainerAgreements.getSummary`, `transactions.listNeedsReview/resolveNeedsReview`, `clientSummaries.getCrossProfileStats` and `expenseCategories.seedDefaults`.
+- **Callers:** usePlanQueries, useRetainerQueries, useExpenseQueries, useOrphanedRecords, ClientsPage, DataToolsSection, ImportDataPage, ExportDataModal, DeleteAllDataModal, MigrationWizard, OrphanedRecordsBanner, `src/demo/seedData` and `src/demo/visitorSample` now resolve storage through `getRepositories()`.
+- **MigrationWizard's business picker** lists businesses sorted by name, because it now uses `businessProfiles.list()`.
+
+### Fixed
+- A legacy (pre-v2) JSON import clears and refills its six tables in one transaction. A failing write now leaves the database as it was, instead of half emptied (D8). Before the fix, the test failed without the transaction.
+
+### Technical
+- An ESLint rule (`@typescript-eslint/no-restricted-imports`, app scope) rejects `db`, repository objects and storage modules outside `src/db`. `initDatabase()` in `main.tsx` is the one documented exception. `src/__tests__/seamLint.test.ts` proves the rule.
+- New `src/db/dataset.ts` and `src/db/demoData.ts`.
+- `src/utils/csvImport.ts` moved to `src/db/csvImport.ts` together with the page's CSV loop, byte-identical apart from one variable name.
+- The backup file download moved to `src/utils/backupDownload.ts`.
+- `RetainerSummary` moved to `types`.
+- `calculateMatchScore` is now a pure export.
+- `scheduleGenerator` stays Dexie-internal.
+- ExportDataModal derives its single-profile default at render instead of setting it in an effect.
+- Main chunk: 205,417 → 207,568 B gzipped (+2.1 KB), from export and import code that moved out of lazy chunks.
+- Knowledge files:
+  - TD-013 rewritten from the code. Its interface list still named deleted `IDocument*` and `IMonthCloseStatus*` interfaces.
+  - TD-073 updated with the D9 IncomeDrawer findings: contention, not a race.
+  - PATTERNS and COMPONENT_REGISTRY updated.
+- TODOS: item 2 removed; #10–#12 added (the delete-all table set, migration wizard `updatedAt`, and CSV import business scoping).
+
+---
+
 ## [Unreleased] - 2026-10-13 — Privacy policy covers the iPhone and Android apps
 
 **Why:** `/privacy` covered only the local-only Mac, Windows and browser apps, and said there was no account, no server and that data never leaves the device. None of that holds for the Flutter iPhone/Android apps (`mutaba3a-flutter`). They sign in with email and password against the hosted API (device sessions, MUT-64), store entries on Cloud Run/Cloud SQL (`me-west1`), upload receipts to a private GCS bucket, and keep a Drift cache plus an offline outbox on the phone. Facts were taken from that app's code and `server/infrastructure/terraform`. The apps have no analytics or crash SDKs, and no push or exchange-rate calls.
