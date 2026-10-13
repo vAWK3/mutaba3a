@@ -2781,7 +2781,7 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 
 **Consequences**:
 - `GET /v1/me`'s `access` map gains a `conversions` key for free — `sessionAccessFor` iterates `WRITABILITY_MATRIX` generically, so no serializer change was needed; nothing reads it yet (the hosted nav/route join the other six sections unconditionally, matching existing behavior — none of them gate on `access` today).
-- Regenerating `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` (both MUT-161 ACs) exposed a dormant, unrelated `tsc` failure in `src/hosted/components/ExpenseDrawer.tsx` (JOD added to `Currency` since MUT-140, never caught because nothing had regenerated+typechecked the hosted schema since). Patched with a one-line type cast (TD-116) to keep `npm run build`/`typecheck` green; not a MUT-161 feature change.
+- Regenerating `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` (both MUT-161 ACs) exposed a dormant, unrelated `tsc` failure in `src/hosted/components/ExpenseDrawer.tsx` (JOD added to `Currency` since MUT-140, never caught because nothing had regenerated+typechecked the hosted schema since). This branch's first patch was a one-line type cast; superseded the same day by `7428c63` ("hosted currency fix", landed on `main` independently), which gives `ExpenseDrawer` real JOD support instead — the cast was dropped on rebase (TD-117 narrowed accordingly: conversions is now the one hold-out).
 - A regression test (`server/src/__tests__/routes-conversions.test.ts`) asserts a created conversion leaves `/v1/summaries/organization` and `/v1/summaries/expenses` byte-identical — the proof that "excluded by construction" is real, not just believed.
 
 **Alternatives considered**:

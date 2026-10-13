@@ -18,21 +18,13 @@
 
 ## Open Debt
 
-### TD-117: Hosted portal has no JOD support at all (expenses or conversions)
+### TD-117: Hosted conversions have no JOD support (expenses now do)
 **Status**: Open
-**Ticket**: MUT-161 (found, not fixed — pre-existing since MUT-140)
+**Ticket**: MUT-161 (found during build), narrowed after `7428c63` ("hosted currency fix", same day) gave `ExpenseDrawer` full JOD support
 **Added**: 2026-10-13
 **Priority**: Low
-**Impact**: `src/hosted/components/ExpenseDrawer.tsx`'s `CURRENCY_OPTIONS`, `src/hosted/components/conversionFormSchema.ts`'s `CURRENCY_OPTIONS`, and `src/hosted/data/filters.ts`'s `CURRENCIES` are all hardcoded to USD/ILS/EUR, while the server's `Currency` type (and the local app) have included JOD since MUT-140. A JOD expense or conversion created another way (device-session bearer, MUT-64) can't be filtered for in the hosted portal and can't be edited through `ExpenseDrawer` (its local form schema would reject re-saving a JOD row's amount at 3 decimals). MUT-161 built conversions to the same 3-currency scope for consistency rather than fixing this for one new surface only.
-**Fix**: Widen all three `CURRENCY_OPTIONS`/`CURRENCIES` constants to the full `Currency` enum and make the two local-only decimal-precision assumptions (`DECIMAL_AMOUNT` regex in `src/components/expenses/expenseFormSchema.ts`, used by both hosted drawers) currency-aware, the way ADR-065 already requires server-side.
-
-### TD-116: `ExpenseDrawer.tsx`'s edit-mode reset casts `existingExpense.currency` past a 3-currency enum
-**Status**: Open
-**Ticket**: MUT-161 (incidental fix during build, not resolved)
-**Added**: 2026-10-13
-**Priority**: Low
-**Impact**: `src/hosted/components/ExpenseDrawer.tsx`'s `reset({ currency: existingExpense.currency as (typeof CURRENCY_OPTIONS)[number], ... })` was a dormant `tsc` failure, unrelated to MUT-161, exposed only because this ticket regenerated `schema.d.ts` (the server's `Currency` type gained `JOD` in MUT-140; nothing had regenerated+typechecked the hosted schema since). Patched with a type-only cast so `npm run build`/`npm run typecheck` pass again — this hides rather than fixes the real gap: if a JOD expense is ever opened in this edit form, the cast lets a stale/wrong currency type through silently instead of erroring at compile time.
-**Fix**: Resolved together with TD-117 — once the hosted portal supports JOD, remove this cast; the types will agree again without one.
+**Impact**: `src/hosted/components/conversionFormSchema.ts`'s `CURRENCY_OPTIONS` and `src/hosted/data/filters.ts`'s `CURRENCIES` are still hardcoded to USD/ILS/EUR, matching `ExpenseDrawer`'s scope as it stood when MUT-161 was built. `ExpenseDrawer.tsx` was fixed independently the same day (widened `CURRENCY_OPTIONS` to include JOD, currency-aware decimal precision via `currencyExponent`) — conversions is now the one hold-out. A JOD conversion created another way (device-session bearer, MUT-64) can't be filtered for in the hosted portal.
+**Fix**: Apply `7428c63`'s exact pattern to `conversionFormSchema.ts` (widen `CURRENCY_OPTIONS`, replace the fixed-precision regex with a currency-aware `superRefine`, mirroring `currencyExponent`) and to `filters.ts`'s `CURRENCIES` / the shared `CurrencyFilter` component it feeds.
 
 ### TD-115: `server/` audit: 3 highs from `deepmerge-ts` via Prisma's config package
 **Status**: Open

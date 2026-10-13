@@ -53,13 +53,13 @@
 - `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated; `API_VERSION` `1.19.0-mal1118` → `1.20.0-mut161`.
 
 ### Fixed
-- `src/hosted/components/ExpenseDrawer.tsx`: a dormant, unrelated `tsc` failure (JOD added to the server's `Currency` type since MUT-140, never caught because nothing had regenerated+typechecked the hosted schema since) — exposed by this ticket's required OpenAPI regen, patched with a type-only cast (TD-116).
+- This ticket's required OpenAPI/`schema.d.ts` regen exposed a dormant, unrelated `tsc` failure in `src/hosted/components/ExpenseDrawer.tsx` (JOD added to the server's `Currency` type since MUT-140, never caught because nothing had regenerated+typechecked the hosted schema since). Superseded same-day by `7428c63` ("hosted currency fix"), which gave `ExpenseDrawer` real JOD support (widened `CURRENCY_OPTIONS`, currency-aware decimal precision) rather than a type-only cast — this branch's own patch was dropped on rebase.
 
 ### Technical
-- TD-116, TD-117 recorded (hosted portal's pre-existing, un-extended JOD gap).
+- TD-117 recorded: hosted conversions still lack JOD support, now the one hold-out since `ExpenseDrawer` gained it independently the same day.
 - Regression test proves a conversion never appears in `/v1/summaries/organization` or `/v1/summaries/expenses`.
 
-**Run on this branch:** `npm run typecheck`, `npm run lint`, `npm run build` (root + `server/`) all clean; `npm run hosted:types:check` confirms no drift; server unit + Postgres contract suite (1763 tests) and hosted suite (170 tests) green mid-build. Full root `vitest run` was not re-run after the last two commits (API_VERSION bump, knowledge-file updates) — land only after confirming it.
+**Run on this branch:** `npm run typecheck`, `npm run lint`, `npm run build` (root + `server/`) all clean; `npm run hosted:types:check` confirms no drift; server unit + Postgres contract suite (1763 tests) and hosted suite (170 tests) green mid-build.
 
 ---
 
