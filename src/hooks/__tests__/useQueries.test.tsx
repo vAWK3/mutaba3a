@@ -148,15 +148,19 @@ describe('Business Profile Hooks', () => {
       }
     });
 
-    it('resolves to null when profiles exist but none is the default', async () => {
-      await businessProfileRepo.create(createTestProfile());
+    // While any active business exists, one is the default (MUT-88,
+    // ADR-072): the data layer enforces this on every write, so the lone
+    // profile created here becomes the default even though isDefault was
+    // never set on it.
+    it('makes the lone profile the default, even when isDefault was never set', async () => {
+      const created = await businessProfileRepo.create(createTestProfile());
 
       const { result } = renderHook(() => useDefaultBusinessProfile(), {
         wrapper: createWrapper(),
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toBeNull();
+      expect(result.current.data?.id).toBe(created.id);
     });
 
     it('should return the default profile', async () => {

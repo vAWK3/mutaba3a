@@ -74,9 +74,10 @@ describe('Profile Association - Auto-assignment', () => {
       expect(client.profileId).toBeUndefined();
     });
 
-    it('should not assign profile when no default is set', async () => {
-      // Create profile without isDefault flag
-      await businessProfileRepo.create({
+    // MUT-88 (ADR-072): the only active business is always the default, so a
+    // client created next to it is assigned to it instead of left orphaned.
+    it('assigns the only business even when it was created without the default flag', async () => {
+      const only = await businessProfileRepo.create({
         name: 'Only Profile',
         email: 'only@example.com',
         businessType: 'none',
@@ -89,8 +90,7 @@ describe('Profile Association - Auto-assignment', () => {
         name: 'Test Client',
       });
 
-      // Should not auto-assign if no default profile exists
-      expect(client.profileId).toBeUndefined();
+      expect(client.profileId).toBe(only.id);
     });
   });
 

@@ -50,13 +50,22 @@ vi.mock('../../../lib/stores', () => ({
 
 vi.mock('../../../components/modals', () => ({
   DeleteAllDataModal: () => null,
-  ExportDataModal: () => null,
 }));
 
-// Sections with their own tests
-vi.mock('../AdvancedFeaturesSection', () => ({ AdvancedFeaturesSection: () => null }));
-vi.mock('../DataToolsSection', () => ({ DataToolsSection: () => null }));
-vi.mock('../AboutSection', () => ({ AboutSection: () => null }));
+// Sections with their own tests render only their card and title here, so
+// the page's order is observable without their hooks (MUT-88).
+vi.mock('../AdvancedFeaturesSection', async () => {
+  const { settings } = (await import('../../../lib/i18n/translations/en.json')).default;
+  return { AdvancedFeaturesSection: () => <div className="settings-section"><h2 className="settings-section-title">{settings.features.title}</h2></div> };
+});
+vi.mock('../AboutSection', async () => {
+  const { settings } = (await import('../../../lib/i18n/translations/en.json')).default;
+  return { AboutSection: () => <div className="settings-section"><h2 className="settings-section-title">{settings.about.title}</h2></div> };
+});
+vi.mock('../YourDataSection', async () => {
+  const { settings } = (await import('../../../lib/i18n/translations/en.json')).default;
+  return { YourDataSection: () => <div className="settings-section"><h2 className="settings-section-title">{settings.yourData.title}</h2></div> };
+});
 
 import { SettingsPage } from '../SettingsPage';
 
@@ -117,7 +126,9 @@ describe('SettingsPage accessibility', () => {
     for (const title of [
       en.settings.profile.title,
       en.settings.preferences.title,
-      en.settings.data.title,
+      en.settings.features.title,
+      en.settings.about.title,
+      en.settings.yourData.title,
     ]) {
       expect(screen.getByRole('heading', { level: 2, name: title })).toBeInTheDocument();
     }
@@ -127,22 +138,49 @@ describe('SettingsPage accessibility', () => {
     }
   });
 
-  it('puts Business Profiles first and Data last, among the sections rendered inline', () => {
-    // Advanced Features, About and Data Tools are mocked to null here (they
-    // have their own placement/heading tests) so only these three sections'
-    // h2s are observable in this render. Language, Theme and Currency merged
-    // into one "Preferences" heading (MUT-139).
+  // MUT-88 (ADR-072) replaces MUT-139's "Business Profiles first, Data last":
+  // Businesses, General, Features, About, Your data, then Delete all data
+  // alone, outside every card.
+  it('orders the sections Businesses, General, Features, About, Your data', () => {
     const { container } = renderPage();
 
     const titles = Array.from(container.querySelectorAll('.settings-section-title')).map((el) => el.textContent);
     expect(titles).toEqual([
       en.settings.profile.title,
       en.settings.preferences.title,
-      en.settings.data.title,
+      en.settings.features.title,
+      en.settings.about.title,
+      en.settings.yourData.title,
     ]);
   });
 
-  it('keeps Language, Theme and Currency as plain text inside the merged Preferences card', () => {
+  it('sets Delete all data apart: last on the page and outside every card', () => {
+    const { container } = renderPage();
+
+    const zone = screen.getByRole('region', { name: en.settings.yourData.deleteZoneLabel });
+    const sections = container.querySelectorAll('.settings-section');
+    expect(zone.closest('.settings-section')).toBeNull();
+    expect(sections[sections.length - 1].compareDocumentPosition(zone) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: en.settings.data.deleteAllBtn })).toHaveLength(1);
+  });
+
+  it('keeps one scroll area: every section inside the column, and the scroller itself uncapped', () => {
+    const { container } = renderPage();
+
+    const scroller = container.querySelector('.page-content') as HTMLElement;
+    const column = scroller.querySelector('.settings-column') as HTMLElement;
+    expect(scroller.style.maxWidth).toBe('');
+    for (const section of container.querySelectorAll('.settings-section, .settings-danger-zone')) {
+      expect(column.contains(section)).toBe(true);
+    }
+  });
+
+  it('carries no Sync row: device sync is retired (MUT-73)', () => {
+    const { container } = renderPage();
+    expect(container.textContent).not.toMatch(/\bsync/i);
+  });
+
+  it('keeps Language, Theme and Currency as plain text inside the General card', () => {
     renderPage();
 
     expect(screen.getByText(en.settings.preferences.description)).toBeInTheDocument();

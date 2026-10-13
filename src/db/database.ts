@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { enforceSingleDefaultProfile } from './profileDefault';
 import { reconcileFeaturesWithData } from '../lib/features/features';
 import type { MonthCloseStatus } from './retained/monthCloseSchema';
 import type { Document, DocumentSequence } from './retained/documentSchema';
@@ -937,6 +938,18 @@ export class MiniCrmDatabase extends Dexie {
       moneyEventVersions: null,
       conflictQueue: null,
       syncHistory: null,
+    });
+
+    // V22 (MUT-88, ADR-072): no schema change. Repair devices holding more
+    // than one default business (the demo-seed race left two Default badges);
+    // every profile writer settles this itself from now on. Like v20, a
+    // failure is logged, never thrown: it must not leave the app unable to open.
+    this.version(22).upgrade(async (tx) => {
+      try {
+        await enforceSingleDefaultProfile(tx.table('businessProfiles'));
+      } catch (error) {
+        console.error('[db] v22: could not repair the default business:', error);
+      }
     });
   }
 }

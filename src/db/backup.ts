@@ -4,6 +4,8 @@
  */
 
 import { db } from './database';
+import { enforceSingleDefaultProfile } from './profileDefault';
+import { settingsRepo } from './repository';
 import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 
 export interface BackupData {
@@ -71,6 +73,11 @@ export async function restoreFromBackup(backupJson: string): Promise<{ recordsRe
         }
       }
     }
+
+    // An older backup can carry two defaults (MUT-88, ADR-072).
+    await enforceSingleDefaultProfile(db.businessProfiles);
+    // The device now holds exactly this backup, so it is the last one made.
+    if (data.timestamp) await settingsRepo.update({ lastBackupAt: data.timestamp });
   });
 
   // A backup from an older build carries a settings row without `features`;

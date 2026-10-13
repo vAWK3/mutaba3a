@@ -4,3 +4,4 @@ export { ExportDataModal } from './ExportDataModal';
 export { ProfilePickerModal } from './ProfilePickerModal';
 export { WelcomeModal } from './WelcomeModal';
 export { MigrationWizard } from './MigrationWizard';
+export { RestoreBackupModal } from './RestoreBackupModal';

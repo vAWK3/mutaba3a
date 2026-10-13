@@ -20,7 +20,7 @@
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income), useClientsSearch (URL model for the Clients list) |
-| **Feedback** | Toast, Modal, ConfirmModal |
+| **Feedback** | Toast, Modal, RestoreBackupModal, DeleteAllDataModal |
 | **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, CurrencyAmounts, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
@@ -217,7 +217,7 @@ Tests: `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx`.
 **Purpose**: Settings › Advanced features — one `Switch` per `FEATURE_KEYS` entry, labels and descriptions from `settings.features.items.*`. Reads `useFeatureFlags()`, writes `useSetFeatureEnabled()`; never touches the settings row. A small grid-of-squares icon sits beside the title (MUT-139 visual pass) — it signals "this reshapes your nav," not a warning colour, since the toggle isn't destructive.
 
 ```tsx
-<AdvancedFeaturesSection />   // rendered by SettingsPage between Preferences and AboutSection
+<AdvancedFeaturesSection />   // rendered by SettingsPage between General and AboutSection (titled "Features" since MUT-88)
 ```
 
 Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
@@ -226,28 +226,60 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ### AboutSection
 **Location**: `src/pages/settings/AboutSection.tsx`
-**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, unlike `DataToolsSection`, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, and the mac/Windows download links. Uses `.settings-section-quiet` (MUT-139 visual pass): no card chrome, smaller title — the least load-bearing content on the page gets the least visual weight.
+**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, and the mac/Windows download links. Uses `.settings-section-quiet` (MUT-139 visual pass): no card chrome, smaller title — the least load-bearing content on the page gets the least visual weight.
 
 ```tsx
-<AboutSection />   // rendered by SettingsPage between AdvancedFeaturesSection and the Data+DataToolsSection family
+<AboutSection />   // rendered by SettingsPage between AdvancedFeaturesSection and YourDataSection
 ```
 
 Tests: `src/pages/settings/__tests__/AboutSection.test.tsx`.
 
 ---
 
-### DataToolsSection
-**Location**: `src/pages/settings/DataToolsSection.tsx`
-**Purpose**: Settings › Data Tools: integrity check, JSON backup export/import (`getRepositories().base.dataset.integrityCheck` / `serializeBackup` + `downloadBackup` / `restoreBackup`, MUT-47) and the receipts ZIP. Every message comes from `integrity.*` or `settings.*`. The check's result is kept as numbers (`{ total, issues }`) and worded at render, so it follows a language switch. Deliberately kept as its own component/heading rather than merged into "Data" (MUT-139 IA pass) — it has its own standalone heading test. Uses `.settings-section-nested` (MUT-139 visual pass) and is wrapped together with the Data section in a `.settings-family` div in `SettingsPage.tsx`, which collapses both cards' margins to one tight gap so the pair reads as one unit — verified against a real screenshot; a tint alone didn't read as "nested."
+### YourDataSection
+**Location**: `src/pages/settings/YourDataSection.tsx`
+**Purpose**: Settings › Your data (MUT-88, ADR-072), the one home for every data action, in this order:
+- **Back up**: `useBackUp` → `backUpNow` (`src/utils/backupDownload.ts`); the row shows "Last backed up: <date>" from `settings.lastBackupAt`.
+- **Restore**: one picker; `classifyDataFile` routes a full backup to `RestoreBackupModal`, and a business export or CSV to `/settings/import` via `setPendingImport`.
+- **Export a business**: `ExportDataModal`.
+- **Export receipts**: ZIP.
+- **Check data**: `getRepositories().base.dataset.integrityCheck()` (MUT-47 seam); the result is kept as numbers and worded at render, so it follows a language switch.
+
+It replaced `DataToolsSection` and the inline Data block (two exports, two restores). Delete all data is *not* here: `SettingsPage` renders it alone below every card (`.settings-danger-zone`). Reaches storage only through `getRepositories()`, per the MUT-47 seam — never a direct `db/*` import.
 
 ```tsx
-<div className="settings-family">
-  <div className="settings-section">{/* Data */}</div>
-  <DataToolsSection />
-</div>
+<YourDataSection />   // last card on SettingsPage, before the Delete zone
 ```
 
-Tests: `src/pages/settings/__tests__/DataToolsSection.test.tsx`.
+Tests: `src/pages/settings/__tests__/YourDataSection.test.tsx` (every DataToolsSection case, ported).
+
+---
+
+### RestoreBackupModal
+**Location**: `src/components/modals/RestoreBackupModal.tsx`
+**Purpose**: Asks before a full backup replaces everything on the device (MUT-88). Names the backup by date (`formatDate` + `getLocale`) and record count (`useTp('settings.restore.records')`, all six Arabic forms). Replace calls `getRepositories().base.dataset.restoreBackup(backupJson)` (MUT-47 seam). A failure shows inline (`role="alert"`, `settings.data.importFailed`) and the dialog stays open. The caller owns the toast and the reload (`onRestored`). Reuses the `DeleteAllDataModal.css` shell.
+
+```tsx
+<RestoreBackupModal backupJson={text} summary={kind} onClose={…} onRestored={(r) => { toast; reload(); }} />
+```
+
+Tests: `src/components/modals/__tests__/RestoreBackupModal.test.tsx`.
+
+---
+
+### dataFiles (classify + hand-off)
+**Location**: `src/lib/dataFiles.ts`
+**Purpose**: `classifyDataFile(name, text)` → `fullBackup {timestamp, version, records}` | `businessExport` | `csv` | `unknown`. `isFullBackup` and `hasLegacyRows` are shared with `ImportDataPage`. `setPendingImport(file)` / `takePendingImport()` is a one-slot, read-once hand-off from Restore to `/settings/import`.
+
+Tests: `src/lib/__tests__/dataFiles.test.ts`.
+
+---
+
+### profileDefault (one default business)
+**Location**: `src/db/profileDefault.ts`
+**Purpose**: `pickDefaultProfileId(profiles, preferId?)` and `enforceSingleDefaultProfile(table, preferId?)` (MUT-88, ADR-072). Every profile writer calls `enforce` inside its own transaction. Use it in any new path that writes `businessProfiles`.
+
+Tests: `src/db/__tests__/profileDefault.test.ts`, `migration-v22.test.ts`, `src/demo/__tests__/seedDefault.test.ts`.
 
 ---
 
@@ -1387,24 +1419,6 @@ const isFlashed = useSavedFlashRows('my-list-id', rows.map((r) => r.id), { isLoa
   <p>Are you sure?</p>
   <Button onClick={handleConfirm}>Confirm</Button>
 </Modal>
-```
-
----
-
-### ConfirmModal
-**Location**: `src/components/modals/ConfirmModal.tsx`
-**Purpose**: Confirmation dialog with standard layout.
-
-```tsx
-<ConfirmModal
-  open={isOpen}
-  onClose={handleClose}
-  onConfirm={handleDelete}
-  title="Delete Transaction"
-  description="This action cannot be undone."
-  confirmLabel="Delete"
-  variant="danger"
-/>
 ```
 
 ---

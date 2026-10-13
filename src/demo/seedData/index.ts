@@ -76,7 +76,9 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
 
   // Insert all data in a transaction, then switch on the areas the demo
   // exercises (retainers, expenses, projects) so a fresh install does not show
-  // a mostly empty app (MUT-12).
+  // a mostly empty app (MUT-12). The existingDefault read above ran outside
+  // this transaction; demoData.seed settles the default inside it, so a
+  // profile created meanwhile keeps it (MUT-88, ADR-072).
   const featuresEnabled = await getRepositories().base.demoData.seed({
     businessProfiles: profiles,
     clients,

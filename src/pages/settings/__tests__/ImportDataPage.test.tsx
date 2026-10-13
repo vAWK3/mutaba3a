@@ -14,6 +14,7 @@ import * as csvUtils from '../../../utils/csv';
 import type { BusinessProfile, Client, FxRate, Project, Transaction } from '../../../types';
 import type { Document, DocumentSequence } from '../../../db/retained/documentSchema';
 import { ImportDataPage } from '../ImportDataPage';
+import { setPendingImport, takePendingImport } from '../../../lib/dataFiles';
 
 /**
  * Settings → Import (/settings/import), the one live import path. Ported from
@@ -140,6 +141,39 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await clearAll();
+});
+
+// MUT-88 (ADR-072): Settings › Your data › Restore hands a CSV or a
+// one-business export straight to this page, so it is never picked twice.
+describe('ImportDataPage: a file handed over from Restore', () => {
+  afterEach(() => {
+    takePendingImport();
+  });
+
+  it('opens on the preview of the handed-over file', async () => {
+    setPendingImport(mockFile(JSON.stringify(v2File()), 'studio.json'));
+    renderPage();
+
+    expect(await screen.findByText('studio.json')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import JSON/i })).toBeInTheDocument();
+  });
+
+  it('matches the handed-over file against profiles loaded after the page opened', async () => {
+    await db.businessProfiles.add(profile);
+    setPendingImport(mockFile(JSON.stringify(v2File()), 'studio.json'));
+    renderPage();
+
+    await screen.findByText('studio.json');
+    expect(screen.getByLabelText(/Merge into an existing profile/i)).toBeChecked();
+  });
+
+  it('takes the file once: nothing is left for the next visit', async () => {
+    setPendingImport(mockFile(JSON.stringify(v2File()), 'studio.json'));
+    renderPage();
+    await screen.findByText('studio.json');
+
+    expect(takePendingImport()).toBeUndefined();
+  });
 });
 
 describe('ImportDataPage: choosing a file', () => {

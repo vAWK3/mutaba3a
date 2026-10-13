@@ -132,6 +132,12 @@ export interface Settings {
   features?: Partial<Record<FeatureKey, boolean>>;
   /** Areas that were auto-enabled and not yet shown to the user; cleared once told. */
   featureNotice?: FeatureKey[];
+  /**
+   * When the last full backup was made on this device (ISO), shown in
+   * Settings › Your data (MUT-88, ADR-072). Set by `backUpNow` once the file
+   * was produced, and by a restore to that backup's own timestamp.
+   */
+  lastBackupAt?: string;
 }
 
 /** What `settingsRepo.get()` returns: the row with `features` fully resolved. */

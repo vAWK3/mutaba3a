@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { backUpNow } from '../utils/backupDownload';
 import { getRepositories, type Repositories } from '../db';
 import type {
   QueryFilters,
@@ -472,6 +473,21 @@ export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings(),
     queryFn: () => getRepositories().base.settings.get(),
+  });
+}
+
+/**
+ * Settings › Your data › Back up (MUT-88): download a full backup and record
+ * its date; the settings query refreshes so "Last backed up" updates.
+ */
+export function useBackUp() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => backUpNow(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
   });
 }
 

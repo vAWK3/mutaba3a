@@ -3025,32 +3025,11 @@ a.project-tag:hover {
   font-size: var(--text-md);
 }
 
-/* Data + Data Tools (MUT-139): wrapping both in one family collapses their
-   individual card margins to a tight, deliberate gap instead of the usual
-   section spacing, so the pair reads as bound together, not two unrelated
-   cards that happen to be adjacent. */
-.settings-family {
-  margin-bottom: var(--space-5);
-}
-
-.settings-family > .settings-section {
-  margin-bottom: 0;
-}
-
-.settings-family > .settings-section + .settings-section {
-  margin-top: var(--space-2);
-}
-
-/* Data Tools: a quieter sub-card directly under Data. Stays a separate
-   component/heading (it has its own standalone test) — this is page-order
-   + tone only, not a DOM merge. */
-.settings-section-nested {
-  background: var(--surface-2);
-  box-shadow: none;
-}
-
-.settings-section-nested .settings-section-title {
-  font-size: var(--text-md);
+/* Settings column (MUT-88): caps the reading width only. .page-content stays
+   the one full-width scroll area, so the scrollbar sits at the window edge
+   and no section renders outside the column. */
+.settings-column {
+  max-width: 600px;
 }
 
 .settings-section-title {
@@ -3148,12 +3127,23 @@ a.project-tag:hover {
   background: var(--accent-muted);
 }
 
-.settings-row.settings-row-danger {
-  background: var(--error-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  margin-top: var(--space-3);
-  border-top: none;
+/* Delete all data (MUT-88): alone below every card, set apart by space and a
+   rule; the modal behind it asks for a backup and a typed word. */
+.settings-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-danger-zone-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 /* Business Profiles List */

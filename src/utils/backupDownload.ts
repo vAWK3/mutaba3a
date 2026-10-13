@@ -1,3 +1,4 @@
+import { getRepositories } from '../db';
 import type { BackupData } from '../db/backup';
 
 /**
@@ -17,4 +18,16 @@ export function downloadBackup(data: BackupData): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Settings › Your data › Back up (MUT-88, ADR-072): download a full backup,
+ * then record when. Nothing is recorded if the download could not be
+ * produced. A browser can't confirm the person kept the file; producing it
+ * is the best signal available (MUT-90 builds its reminder on this date).
+ */
+export async function backUpNow(): Promise<void> {
+  const { dataset, settings } = getRepositories().base;
+  downloadBackup(await dataset.serializeBackup());
+  await settings.update({ lastBackupAt: new Date().toISOString() });
 }

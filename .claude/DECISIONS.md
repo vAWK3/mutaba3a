@@ -2813,3 +2813,44 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - *Rewrite the retainer helpers as services over primitive repository methods*: rejected at D3; `retainerRepo` itself calls the schedule generator, so a service resolving storage through the provider would invert the layering.
 - *A guard test grepping for imports* (the repo's `no*Modules` style): rejected at D6 in favour of lint, which flags a bypass in the editor before commit.
 - *A `test:integration` script*: rejected at D1; integration tests live beside unit tests, so an alias would be a check that checks nothing new.
+
+---
+
+## ADR-072: Settings "Your Data": One Back Up, One Type-Sniffing Restore; the Data Layer Owns "Exactly One Default Business"
+
+**Status**: Active
+**Date**: 2026-10-13
+**Context**: MUT-88 (decision S1 in `.claude/designs/landing-apple-redesign.md`; plan and eng review in `.claude/designs/mut-88-settings-five-groups.md`). After MUT-139, Settings still offered two exports ("Export Data" and "Export Backup") and two restores ("Import Data" and "Import Backup"). Delete all data sat in the same card. Its "back up first" step downloaded three CSVs that Restore can't read, and they left out businesses, expenses and receipts. Two Default badges could appear because three writers bypassed the repo's default handling: the demo seed, `importProfileFile` and `restoreFromBackup`. The seed also read "is there a default?" outside its transaction, so a welcome-modal profile created in that gap became a second default.
+
+**Decision**:
+1. **Order (Basel, 2026-10-13):** Businesses → General → Features → About → Your data, then Delete all data alone below every card. This keeps ADR-063's spine (Businesses first, data last), not S1's literal order.
+2. **Your data has five rows, each once:** Back up · Restore · Export a business · Export receipts · Check data (`YourDataSection`, which replaces the inline Data block and `DataToolsSection`).
+   - **Back up** is the whole database. **Export a business** (`ExportDataModal`, per-business CSV/JSON) stays a separate row because it does a different job.
+   - **Restore** is one picker. `classifyDataFile` reads the file once and routes it:
+     - a full backup → `RestoreBackupModal` (date and record count), then replace;
+     - a one-business export or a CSV → `/settings/import`, through a one-slot hand-off (`setPendingImport` / `takePendingImport`) taken once the profiles query has loaded;
+     - anything else → an error toast.
+3. **`settings.lastBackupAt`** (ISO, on the settings row) is stamped by `backUpNow()`, but only after the file was produced. A restore sets it to the restored backup's own `timestamp`. MUT-90 builds its reminder on this field.
+   - **Merged onto MUT-47/ADR-071's seam:** `backUpNow` lives in `src/utils/backupDownload.ts` (the browser-only download helper, not `src/db`) and calls `getRepositories().base.dataset.serializeBackup()` / `.settings.update()`. `YourDataSection` and `RestoreBackupModal` reach `integrityCheck` and `restoreBackup` the same way, never a direct `db/*` import.
+4. **Exactly one default business, enforced in the data layer.** There is one rule, `pickDefaultProfileId(profiles, preferId?)`:
+   - exactly one active default → keep it;
+   - otherwise the caller's `preferId` (a caller making a default flags its row first and passes its id);
+   - otherwise, among the active defaults (or every active profile when none is default), a real profile before a `demo_` one, then the earliest `createdAt`;
+   - archived profiles never qualify.
+
+   `enforceSingleDefaultProfile` runs inside every writer's own transaction: repo create/update/setDefault/archive, `demoData.seed()` (MUT-47's seam, not a raw `db.transaction` in `src/demo`), `importProfileFile` and `restoreFromBackup`. **Dexie v22** (no schema change) repairs existing devices; like v20 it logs a failure and never throws.
+5. **Delete all data** asks for a real backup (`useBackUp`) and then a typed word (`DELETE` / «حذف», trimmed, case-insensitive) instead of a checkbox.
+
+**Amends**: ADR-063 §2 (`DataToolsSection` "stays a separate component"). The component is gone, and its test cases moved to `YourDataSection.test.tsx` case for case, which removes the churn ADR-063 wanted to avoid. Also amends ADR-064 §4 (the `.settings-family` / `.settings-section-nested` pairing is removed).
+
+**Consequences**:
+- While any active business exists, one is the default. A client created next to a lone business that was saved as non-default is now assigned to it (`profileAssociation.test.ts` updated). Turning a default off hands it to the best *other* profile.
+- `.page-content` is the one full-width scroll area; `.settings-column` caps only the reading width.
+- `deleteAllData()` still clears 5 of 24 tables. Filed as **MUT-164**, not fixed here.
+
+**Alternatives considered**:
+- S1's literal order (General first, About last): Basel kept ADR-063's spine.
+- Dropping the per-business export ("backup only"): loses CSV-to-spreadsheet export and the MUT-158 move-one-business path.
+- One Back up button with a format picker: a dialog in front of the most common action.
+- Fixing only the seed's race (eng review D2 option B): the restore and the v22 repair could still keep a sample default.
+- Repairing in `db.on('ready')`: it blocks every open and reruns forever. A one-time `version(22).upgrade(tx)` is the Dexie-documented place for a data-only fix.

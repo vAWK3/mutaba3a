@@ -2105,3 +2105,20 @@ Every storage call outside `src/db` now goes through `getRepositories()`; moves 
 Regression net kept unchanged and green: `ImportDataPage.test`, `ImportExportModals.test`, `OrphanedRecordsBanner.test`, `ClientsPage.test` (its spy on `getCrossProfileClientStats` still applies through the slot), `visitorSample.test`, `crossProfileBadges.test`.
 
 **Gate (Node 22, worktree, 2026-10-13):** `npm run lint` 0 errors (6 pre-existing warnings) · `npm run typecheck` clean · `npm run test:run` 246/246 files, 3536 passed, 4 skipped · `npm run build` succeeds. The IncomeDrawer load failure seen on main (TD-073) did not recur in two full runs.
+
+## MUT-88 — Settings in five groups, one home per action (2026-10-13, ADR-072)
+
+| AC | Tests |
+|---|---|
+| Each action exactly once; duplicates removed | `SettingsPage.structure.test.tsx` (real sections: six buttons once each; the old Export JSON / Export Backup / Import Data / Import Backup and the Data Tools heading are gone), `YourDataSection.test.tsx` (row order, once each) |
+| Last backup date stored and shown | `backup.test.ts` (stamp on success only; restore sets the backup's timestamp; newer-version refusal keeps data), `YourDataSection.test.tsx` ("Last backed up" / "Not backed up yet", EN + AR) |
+| One scroll area | `SettingsPage.a11y.test.tsx` (every section inside `.settings-column`; `.page-content` uncapped). Browser check: one scroller, at full width |
+| Exactly one default | `profileDefault.test.ts` (pick rules + enforce), `businessProfileRepo.test.ts` (two creates, archive hands the default to the earliest real profile, unset moves it, repair on next write), `profileImport.test.ts` (makeDefault), `seedDefault.test.ts` (the welcome-modal race), `backup.test.ts` (restore with two defaults), `migration-v22.test.ts` |
+| No Sync row | `SettingsPage.a11y.test.tsx` |
+| Order + typed confirmation | `SettingsPage.a11y.test.tsx` (Businesses, General, Features, About, Your data; Delete last and outside every card), `DeleteAllDataModal.test.tsx` (locked until backup + word; case and space tolerant; Arabic حذف; backup failure keeps step 2 locked; real backup, not CSV) |
+| Restore routing | `dataFiles.test.ts`, `RestoreBackupModal.test.tsx` (date, count, plural, cancel, failure inline), `YourDataSection.test.tsx` (full → confirm → restore; CSV / business export → import page; unknown → toast), `ImportDataPage.test.tsx` (hand-off preview, profile match after load, taken once) |
+
+Regression contract (review D3): all 6 DataToolsSection cases are ported to `YourDataSection.test.tsx`, and all 9 SettingsPage.a11y cases are kept (the order case is rewritten on purpose).
+QA: `qa/specs/web/settings.spec.ts` `@web.settings.export` follows "Export a business". It was not run here; run it on a preview build. The language and theme specs are already broken by MUT-139's radios (MUT-160).
+
+**Merged onto MUT-47 (qa-reconcile, 2026-10-13):** `DataToolsSection.test.tsx` (the version MUT-47 updated, line above) is deleted along with the component; its cases are the ones ported into `YourDataSection.test.tsx`. `YourDataSection`, `RestoreBackupModal` and `demoData.seed` were adjusted to call `getRepositories().base.dataset.*` instead of the direct `db/*` imports MUT-88 was built against, per ADR-071's seam; `backUpNow`'s test moved to `src/utils/__tests__/backupDownload.test.ts` alongside its new home. Gate re-run post-merge (Node 22, per Basel no full suite): `lint` 0 errors, `typecheck` clean, targeted suite (profileDefault, migration-v22, businessProfileRepo, profileImport, backup, dataFiles, RestoreBackupModal, ImportDataPage, SettingsPage, DeleteAllDataModal, YourDataSection, seedDefault) 155/155 passed.

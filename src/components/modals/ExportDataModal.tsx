@@ -114,7 +114,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
       >
         <div className="modal-header">
           <h2 id="modal-title" className="modal-title">
-            {t('settings.data.export')}
+            {t('settings.yourData.exportBusiness')}
           </h2>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <XIcon />

@@ -1,6 +1,7 @@
 import { getCrossProfileClientStats, type ProfileStat } from './crossProfileStats';
 import { db } from './database';
 import { DEFAULT_SETTINGS } from './defaultSettings';
+import { enforceSingleDefaultProfile, pickDefaultProfileId } from './profileDefault';
 import { resolveFeatures } from '../lib/features/features';
 import type {
   ResolvedSettings,
@@ -927,47 +928,47 @@ export const businessProfileRepo = {
     return profiles[0];
   },
 
+  // Every write below settles "exactly one default" in the same transaction
+  // (MUT-88, ADR-072): a profile made default passes its id as the preference.
   async create(data: Omit<BusinessProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<BusinessProfile> {
     const now = nowISO();
-
-    // If this is the first profile or marked as default, ensure only one default
-    if (data.isDefault) {
-      await db.businessProfiles.toCollection().modify({ isDefault: false });
-    }
-
     const profile: BusinessProfile = {
       ...data,
       id: generateId(),
       createdAt: now,
       updatedAt: now,
     };
-    await db.businessProfiles.add(profile);
-    return profile;
+    return db.transaction('rw', db.businessProfiles, async () => {
+      await db.businessProfiles.add(profile);
+      await enforceSingleDefaultProfile(db.businessProfiles, data.isDefault ? profile.id : undefined);
+      return (await db.businessProfiles.get(profile.id)) ?? profile;
+    });
   },
 
   async update(id: string, data: Partial<BusinessProfile>): Promise<void> {
-    // If setting as default, unset all others first
-    if (data.isDefault) {
-      await db.businessProfiles.toCollection().modify({ isDefault: false });
-    }
-    await db.businessProfiles.update(id, { ...data, updatedAt: nowISO() });
+    await db.transaction('rw', db.businessProfiles, async () => {
+      await db.businessProfiles.update(id, { ...data, updatedAt: nowISO() });
+      // Turning a default off hands the flag to the best of the *other*
+      // profiles; otherwise the same rule could pick this one straight back.
+      const preferId =
+        data.isDefault === true
+          ? id
+          : data.isDefault === false
+            ? pickDefaultProfileId((await db.businessProfiles.toArray()).filter((p) => p.id !== id))
+            : undefined;
+      await enforceSingleDefaultProfile(db.businessProfiles, preferId);
+    });
   },
 
   async setDefault(id: string): Promise<void> {
-    await db.businessProfiles.toCollection().modify({ isDefault: false });
-    await db.businessProfiles.update(id, { isDefault: true, updatedAt: nowISO() });
+    await this.update(id, { isDefault: true });
   },
 
   async archive(id: string): Promise<void> {
-    const profile = await this.get(id);
-    if (profile?.isDefault) {
-      // If archiving default, try to set another as default
-      const others = await db.businessProfiles.filter((p) => p.id !== id && !p.archivedAt).toArray();
-      if (others.length > 0) {
-        await db.businessProfiles.update(others[0].id, { isDefault: true });
-      }
-    }
-    await db.businessProfiles.update(id, { archivedAt: nowISO(), updatedAt: nowISO(), isDefault: false });
+    await db.transaction('rw', db.businessProfiles, async () => {
+      await db.businessProfiles.update(id, { archivedAt: nowISO(), updatedAt: nowISO(), isDefault: false });
+      await enforceSingleDefaultProfile(db.businessProfiles);
+    });
   },
 
   async delete(id: string): Promise<void> {

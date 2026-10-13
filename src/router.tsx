@@ -219,7 +219,7 @@ const profileExpensesRoute = createRoute({
   },
 });
 
-// Legacy route (MUT-14): the receipts page (files are exportable from Settings › Data tools) was removed; old links land on the ledger,
+// Legacy route (MUT-14): the receipts page (files are exportable from Settings › Your data) was removed; old links land on the ledger,
 // which then applies the Expenses switch.
 const profileReceiptsRoute = createRoute({
   getParentRoute: () => rootRoute,

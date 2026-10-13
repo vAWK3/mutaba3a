@@ -10,10 +10,10 @@ import {
 } from '../../hooks/useQueries';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useTheme, THEME_MODES } from '../../lib/theme';
-import { DeleteAllDataModal, ExportDataModal } from '../../components/modals';
+import { DeleteAllDataModal } from '../../components/modals';
 import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
 import { AboutSection } from './AboutSection';
-import { DataToolsSection } from './DataToolsSection';
+import { YourDataSection } from './YourDataSection';
 import { useDrawerStore } from '../../lib/stores';
 import { Select } from '../../components/ui';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
@@ -149,7 +149,6 @@ export function SettingsPage() {
   const { language, setLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string>('');
 
   // Business profiles
@@ -207,207 +206,173 @@ export function SettingsPage() {
   return (
     <>
       <TopBar title={t('settings.title')} hideAddMenu />
-      <div className="page-content" style={{ maxWidth: 600 }}>
-        {/* Business Profiles */}
-        <div className="settings-section">
-          <div className="settings-section-header">
-            <div>
-              <h2 className="settings-section-title">{t('settings.profile.title')}</h2>
-              <p className="settings-section-description">{t('settings.profile.description')}</p>
-            </div>
-            <button
-              className="btn btn-sm btn-secondary"
-              onClick={() => openBusinessProfileDrawer({ mode: 'create' })}
-            >
-              {t('settings.profile.addProfile')}
-            </button>
-          </div>
-
-          {businessProfiles.length === 0 ? (
-            <div className="text-muted text-sm">
-              {t('settings.profile.empty')}
-            </div>
-          ) : (
-            <div className="business-profiles-list">
-              {businessProfiles.map((profile) => (
-                <div key={profile.id} className="business-profile-item">
-                  <div className="business-profile-info">
-                    {profile.logoDataUrl ? (
-                      <img
-                        src={profile.logoDataUrl}
-                        alt=""
-                        className="business-profile-logo"
-                      />
-                    ) : (
-                      <ProfileBadge profile={profile} size="md" decorative />
-                    )}
-                    <div className="business-profile-details">
-                      <button
-                        type="button"
-                        className="business-profile-name business-profile-name-button"
-                        onClick={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
-                      >
-                        {profile.name}
-                        {profile.nameEn && <span className="text-muted"> ({profile.nameEn})</span>}
-                      </button>
-                      <div className="business-profile-meta text-muted text-sm">
-                        {profile.email}
-                        {profile.isDefault && (
-                          <span className="badge badge-primary" style={{ marginInlineStart: 8 }}>
-                            {t('settings.profile.default')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <ProfileActionsMenu
-                    profile={profile}
-                    onEdit={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
-                    onSetDefault={() => setDefaultMutation.mutate(profile.id)}
-                    onArchive={() => archiveMutation.mutate(profile.id)}
-                    isSetDefaultPending={setDefaultMutation.isPending}
-                    isArchivePending={archiveMutation.isPending}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Preferences (MUT-139): language, theme and currency merged — all three
-            are quick, low-stakes, personal-ish defaults, so one card earns its
-            header instead of three. The "Currency" label below is plain text,
-            not a heading (SettingsPage.a11y.test.tsx forbids h3s). */}
-        <div className="settings-section">
-          <div className="settings-section-header">
-            <div>
-              <h2 className="settings-section-title">{t('settings.preferences.title')}</h2>
-              <p className="settings-section-description">{t('settings.preferences.description')}</p>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-label" id={languageLabelId}>{t('settings.language.title')}</div>
-            <SegmentedControl
-              labelledBy={languageLabelId}
-              value={language}
-              onChange={setLanguage}
-              options={LANGUAGE_OPTIONS}
-            />
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-label" id={themeLabelId}>{t('settings.theme.title')}</div>
-            <SegmentedControl
-              labelledBy={themeLabelId}
-              value={theme}
-              onChange={setTheme}
-              options={THEME_MODES.map((mode) => ({ value: mode, label: t(`settings.theme.${mode}`) }))}
-            />
-          </div>
-
-          <div className="settings-subdivider">{t('settings.currency.title')}</div>
-
-          <div className="settings-row">
-            <div className="settings-label">{t('settings.currency.enabled')}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {(['USD', 'ILS'] as Currency[]).map((curr) => (
-                <button
-                  key={curr}
-                  className={`btn btn-sm ${settings?.enabledCurrencies.includes(curr) ? 'currency-toggle-on' : 'btn-secondary'}`}
-                  aria-pressed={settings?.enabledCurrencies.includes(curr)}
-                  onClick={() => handleCurrencyToggle(curr)}
-                >
-                  {curr}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div>
-              {/* A real <label>, not aria-labelledby: axe's label-title-only treats a
-                  labelledby target scrolled out of the clipped shell as hidden (TD-009) */}
-              <label className="settings-label" htmlFor={defaultCurrencyId}>{t('settings.currency.default')}</label>
-              <div className="settings-description" id={defaultCurrencyDescId}>{t('settings.currency.defaultDesc')}</div>
-            </div>
-            <Select
-              id={defaultCurrencyId}
-              aria-describedby={defaultCurrencyDescId}
-              value={settings?.defaultCurrency}
-              onChange={(e) => handleDefaultCurrencyChange(e.target.value as Currency)}
-            >
-              {settings?.enabledCurrencies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-
-        {/* Advanced features (MUT-12) */}
-        <AdvancedFeaturesSection />
-
-        {/* About, Updates, Desktop App (MUT-139: merged, one topic) */}
-        <AboutSection />
-
-        {/* Data Management + Data Tools: one family, not two unrelated cards
-            (MUT-139) — wrapping them collapses the usual section gap to a
-            tight, deliberate one (.settings-family in index.css). */}
-        <div className="settings-family">
+      {/* One scroll area (MUT-88): .page-content scrolls at full width and
+          .settings-column only caps the reading width, so the scrollbar sits
+          at the window edge and nothing renders outside the column. */}
+      <div className="page-content">
+        <div className="settings-column">
+          {/* Businesses */}
           <div className="settings-section">
             <div className="settings-section-header">
               <div>
-                <h2 className="settings-section-title">{t('settings.data.title')}</h2>
-                <p className="settings-section-description">{t('settings.data.description')}</p>
+                <h2 className="settings-section-title">{t('settings.profile.title')}</h2>
+                <p className="settings-section-description">{t('settings.profile.description')}</p>
+              </div>
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => openBusinessProfileDrawer({ mode: 'create' })}
+              >
+                {t('settings.profile.addProfile')}
+              </button>
+            </div>
+
+            {businessProfiles.length === 0 ? (
+              <div className="text-muted text-sm">
+                {t('settings.profile.empty')}
+              </div>
+            ) : (
+              <div className="business-profiles-list">
+                {businessProfiles.map((profile) => (
+                  <div key={profile.id} className="business-profile-item">
+                    <div className="business-profile-info">
+                      {profile.logoDataUrl ? (
+                        <img
+                          src={profile.logoDataUrl}
+                          alt=""
+                          className="business-profile-logo"
+                        />
+                      ) : (
+                        <ProfileBadge profile={profile} size="md" decorative />
+                      )}
+                      <div className="business-profile-details">
+                        <button
+                          type="button"
+                          className="business-profile-name business-profile-name-button"
+                          onClick={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
+                        >
+                          {profile.name}
+                          {profile.nameEn && <span className="text-muted"> ({profile.nameEn})</span>}
+                        </button>
+                        <div className="business-profile-meta text-muted text-sm">
+                          {profile.email}
+                          {profile.isDefault && (
+                            <span className="badge badge-primary" style={{ marginInlineStart: 8 }}>
+                              {t('settings.profile.default')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <ProfileActionsMenu
+                      profile={profile}
+                      onEdit={() => openBusinessProfileDrawer({ mode: 'edit', profileId: profile.id })}
+                      onSetDefault={() => setDefaultMutation.mutate(profile.id)}
+                      onArchive={() => archiveMutation.mutate(profile.id)}
+                      isSetDefaultPending={setDefaultMutation.isPending}
+                      isArchivePending={archiveMutation.isPending}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* General (MUT-139 merged language, theme and currency into one card;
+              MUT-88 named it General). The "Currency" label below is plain text,
+              not a heading (SettingsPage.a11y.test.tsx forbids h3s). */}
+          <div className="settings-section">
+            <div className="settings-section-header">
+              <div>
+                <h2 className="settings-section-title">{t('settings.preferences.title')}</h2>
+                <p className="settings-section-description">{t('settings.preferences.description')}</p>
+              </div>
+            </div>
+
+            <div className="settings-row">
+              <div className="settings-label" id={languageLabelId}>{t('settings.language.title')}</div>
+              <SegmentedControl
+                labelledBy={languageLabelId}
+                value={language}
+                onChange={setLanguage}
+                options={LANGUAGE_OPTIONS}
+              />
+            </div>
+
+            <div className="settings-row">
+              <div className="settings-label" id={themeLabelId}>{t('settings.theme.title')}</div>
+              <SegmentedControl
+                labelledBy={themeLabelId}
+                value={theme}
+                onChange={setTheme}
+                options={THEME_MODES.map((mode) => ({ value: mode, label: t(`settings.theme.${mode}`) }))}
+              />
+            </div>
+
+            <div className="settings-subdivider">{t('settings.currency.title')}</div>
+
+            <div className="settings-row">
+              <div className="settings-label">{t('settings.currency.enabled')}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['USD', 'ILS'] as Currency[]).map((curr) => (
+                  <button
+                    key={curr}
+                    className={`btn btn-sm ${settings?.enabledCurrencies.includes(curr) ? 'currency-toggle-on' : 'btn-secondary'}`}
+                    aria-pressed={settings?.enabledCurrencies.includes(curr)}
+                    onClick={() => handleCurrencyToggle(curr)}
+                  >
+                    {curr}
+                  </button>
+                ))}
               </div>
             </div>
 
             <div className="settings-row">
               <div>
-                <div className="settings-label">{t('settings.data.export')}</div>
-                <div className="settings-description">{t('settings.data.exportDesc')}</div>
+                {/* A real <label>, not aria-labelledby: axe's label-title-only treats a
+                    labelledby target scrolled out of the clipped shell as hidden (TD-009) */}
+                <label className="settings-label" htmlFor={defaultCurrencyId}>{t('settings.currency.default')}</label>
+                <div className="settings-description" id={defaultCurrencyDescId}>{t('settings.currency.defaultDesc')}</div>
               </div>
-              <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
-                {t('settings.data.exportBtn')}
-              </button>
-            </div>
-
-            <div className="settings-row">
-              <div>
-                <div className="settings-label">{t('settings.data.import')}</div>
-                <div className="settings-description">{t('settings.data.importDesc')}</div>
-              </div>
-              <button className="btn btn-secondary" onClick={() => navigate({ to: '/settings/import' })}>
-                {t('settings.data.importBtn')}
-              </button>
-            </div>
-
-            <div className="settings-row settings-row-danger">
-              <div>
-                <div className="settings-label text-danger">{t('settings.data.deleteAll')}</div>
-                <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {deleteSuccessMessage && (
-                  <span className="text-sm text-success">{deleteSuccessMessage}</span>
-                )}
-                <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
-                  {t('settings.data.deleteAllBtn')}
-                </button>
-              </div>
+              <Select
+                id={defaultCurrencyId}
+                aria-describedby={defaultCurrencyDescId}
+                value={settings?.defaultCurrency}
+                onChange={(e) => handleDefaultCurrencyChange(e.target.value as Currency)}
+              >
+                {settings?.enabledCurrencies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 
-          <DataToolsSection />
+          {/* Features: optional areas (MUT-12) */}
+          <AdvancedFeaturesSection />
+
+          {/* About, Updates, Desktop App (MUT-139: merged, one topic) */}
+          <AboutSection />
+
+          {/* Your data (MUT-88): Back up, Restore, Export a business, Export
+              receipts, Check data: each action once. */}
+          <YourDataSection />
+
+          {/* Delete all data (MUT-88): alone at the very bottom, outside every
+              card, behind a backup and a typed word (DeleteAllDataModal). */}
+          <section className="settings-danger-zone" aria-label={t('settings.yourData.deleteZoneLabel')}>
+            <div className="settings-description">{t('settings.data.deleteAllDesc')}</div>
+            <div className="settings-danger-zone-action">
+              {deleteSuccessMessage && (
+                <span className="text-sm text-success">{deleteSuccessMessage}</span>
+              )}
+              <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
+                {t('settings.data.deleteAllBtn')}
+              </button>
+            </div>
+          </section>
         </div>
       </div>
-
-      {/* Export Data Modal */}
-      {showExportModal && (
-        <ExportDataModal onClose={() => setShowExportModal(false)} />
-      )}
 
       {/* Delete All Data Modal */}
       {showDeleteModal && (

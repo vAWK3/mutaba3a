@@ -10,6 +10,7 @@
 
 import type { Table } from 'dexie';
 import { db } from './database';
+import { enforceSingleDefaultProfile } from './profileDefault';
 import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 import { DEMO_ID_PREFIX, DEMO_PREFIXES } from '../demo/constants';
 import type { FeatureKey, Transaction } from '../types';
@@ -132,6 +133,10 @@ export const demoDataRepo = {
       async () => {
         // Insert in dependency order
         await db.businessProfiles.bulkPut(rows.businessProfiles);
+        // The caller's hasUserDefaultProfile() read ran outside this
+        // transaction; settle the default here so a profile created in that
+        // window (e.g. the welcome modal) keeps it (MUT-88, ADR-072).
+        await enforceSingleDefaultProfile(db.businessProfiles);
         await db.clients.bulkPut(rows.clients);
         await db.projects.bulkPut(rows.projects);
         await db.categories.bulkPut(rows.categories);

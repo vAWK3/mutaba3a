@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { getRepositories, findMatchingProfile, type ProfileExportFile } from '../../db';
@@ -8,6 +8,7 @@ import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
 import { CSVValidationPreview } from '../../components/csv/CSVValidationPreview';
 import { Select } from '../../components/ui';
+import { isFullBackup, hasLegacyRows, takePendingImport } from '../../lib/dataFiles';
 import type { BusinessProfile } from '../../types';
 import './ImportDataPage.css';
 
@@ -37,23 +38,13 @@ interface CSVPreviewData {
   expenses: number;
 }
 
-/** A full Data-tools backup (`src/db/backup.ts`): restored from Data tools, never here. */
-function isFullBackup(data: unknown): boolean {
-  return typeof data === 'object' && data !== null && 'tables' in data && typeof (data as { tables: unknown }).tables === 'object';
-}
-
-/** A legacy (v1) export carries at least one array of rows to restore. */
-function hasLegacyRows(data: FileData): boolean {
-  return [data.clients, data.projects, data.transactions].some((rows) => Array.isArray(rows) && rows.length > 0);
-}
-
 export function ImportDataPage() {
   const t = useT();
   const { language } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { data: existingProfiles = [] } = useBusinessProfiles();
+  const { data: existingProfiles = [], isSuccess: profilesLoaded } = useBusinessProfiles();
 
   const [step, setStep] = useState<ImportStep>('select');
   const [fileData, setFileData] = useState<FileData | null>(null);
@@ -102,9 +93,9 @@ export function ImportDataPage() {
         // Parse JSON
         const data = JSON.parse(text) as FileData;
 
-        // A full Data-tools backup ({ version, tables }) is restored from Data
-        // tools; the legacy path below would clear the database and restore
-        // nothing from it (review F5). Refuse anything with no rows to import.
+        // A full backup ({ version, tables }) is restored from Settings › Your
+        // data › Restore; the legacy path below would clear the database and
+        // restore nothing from it (review F5). Refuse anything with no rows.
         if (isFullBackup(data)) {
           setError(t('settings.import.fullBackup'));
           return;
@@ -135,6 +126,16 @@ export function ImportDataPage() {
       console.error('File read error:', err);
     }
   }, [existingProfiles, t]);
+
+  // A file handed over from Settings › Your data › Restore (MUT-88). Taken
+  // only once the profiles have loaded, so a one-business export is matched
+  // against the real list (merge vs create), and taken once, so a remount
+  // never re-imports it.
+  useEffect(() => {
+    if (!profilesLoaded) return;
+    const file = takePendingImport();
+    if (file) void handleFileSelect(file);
+  }, [profilesLoaded, handleFileSelect]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
