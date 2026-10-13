@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-13 — Backfill personal profiles for users provisioned before MUT-120
+
+**Why:** MUT-120 shipped with **no backfill** (ADR-037 amendment: "There were no existing users at the time"). One user has since been provisioned in production without a personal profile, so `/v1/me` lists no `isPersonalDefault` profile for them and the capture app (MUT-121) falls back to Unsorted.
+
+**Run on this branch (Node 22):** `npm run typecheck` clean, eslint on touched files clean, `npm run build` clean, `npm run test:db` 95 files / 1,671 passed.
+
+### Added
+- `backfillPersonalProfiles(db)` in `server/src/scripts/post-roll.ts`, run by `npm run post-roll` and so by `deploy.sh` step 6 on every deploy. For each user with no personal profile it creates one exactly as `POST /admin/v1/users` does: named `Personal`/`شخصي` by locale, `personal-<uuid>` slug, currency and timezone from the user's oldest firm, plus the membership. All of this runs in one transaction with two `SYSTEM` audit rows (`organization.created` with `backfill: 'post-roll'`, and `membership.granted`). It is idempotent. A concurrent create loses on the unique `personalOwnerUserId` index and is skipped. Users with no firm (`NO_FIRM`) or a non-IANA firm zone (`INVALID_TIMEZONE`, TD-091) are skipped and printed for hand provisioning.
+
+### Technical
+- `PERSONAL_PROFILE_NAME`/`personalProfileFor` moved from `routes/admin-users.ts` to `server/src/personal-profile.ts`, shared by the route and the backfill.
+- `server/src/scripts/__tests__/post-roll.test.ts`: three DB cases (legacy `ar` user backfilled from the firm with audit, then a no-op the second run; a current user left alone; a firmless legacy user skipped `NO_FIRM`).
+- `server/DEPLOYMENT.md` step 7 now lists the backfill's output.
+
+---
+
 ## [Unreleased] - 2026-10-13 — Remove the dead mark-paid income hooks (MUT-98)
 
 **Why:** `useMarkIncomePaid` and `useRecordIncomePartialPayment` (`useIncomeQueries.ts`) were exported and documented but had no caller outside tests -- every live "mark paid" path has gone through `PartialPaymentDrawer` → `useCreatePaymentRecord` since MUT-18/ADR-038 and MUT-86. A second, undocumented-as-dead way to mark income paid (writing `status`/`paidAt` via `transactionRepo.markPaid` directly, bypassing payment records) is exactly the split ADR-039 exists to prevent -- the risk was the next contributor finding a documented hook and wiring it back up.

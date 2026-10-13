@@ -1,4 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { isValidTimezone } from '../dates.js';
+import { personalProfileFor } from '../personal-profile.js';
+import type { UserLocale } from '../repositories/ports.js';
 
 /**
  * Data repairs that must run after the new revision serves (deploy.sh step 6).
@@ -22,6 +25,79 @@ export async function repairCaptureOrigins(db: PrismaClient): Promise<number> {
   return db.$executeRaw`UPDATE "payments" SET "origin" = 'CAPTURE' WHERE "origin" = 'INTEGRATION' AND "createdByUserId" IS NOT NULL`;
 }
 
+export interface PersonalProfileBackfill {
+  created: { userId: string; organizationId: string }[];
+  /** NO_FIRM: nothing to take a currency and timezone from. INVALID_TIMEZONE: the firm's zone is not IANA (TD-091). */
+  skipped: { userId: string; reason: 'NO_FIRM' | 'INVALID_TIMEZONE' }[];
+}
+
+/**
+ * MUT-120: every user has exactly one personal profile, but the migration
+ * shipped with no backfill (ADR-037 amendment), so a user provisioned before
+ * it — or by the old revision during a roll — has none. Creates it exactly as
+ * `POST /admin/v1/users` does, taking currency and timezone from the user's
+ * oldest firm. The unique `personalOwnerUserId` index makes a concurrent
+ * create lose cleanly, so a user is never given two.
+ */
+export async function backfillPersonalProfiles(db: PrismaClient, at = new Date()): Promise<PersonalProfileBackfill> {
+  const users = await db.user.findMany({
+    where: { personalProfile: null },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      locale: true,
+      memberships: {
+        where: { organization: { personalOwnerUserId: null } },
+        orderBy: [{ createdAt: 'asc' }, { organizationId: 'asc' }],
+        take: 1,
+        select: { organization: { select: { defaultCurrency: true, timezone: true } } },
+      },
+    },
+  });
+  const result: PersonalProfileBackfill = { created: [], skipped: [] };
+  for (const user of users) {
+    const firm = user.memberships[0]?.organization;
+    if (!firm) {
+      result.skipped.push({ userId: user.id, reason: 'NO_FIRM' });
+      continue;
+    }
+    if (!isValidTimezone(firm.timezone)) {
+      result.skipped.push({ userId: user.id, reason: 'INVALID_TIMEZONE' });
+      continue;
+    }
+    const organizationId = await createPersonalProfile(db, user.id, user.locale as UserLocale, firm, at);
+    if (organizationId) result.created.push({ userId: user.id, organizationId });
+  }
+  return result;
+}
+
+/** Organization, membership and audit in one transaction; null when a concurrent create got there first. */
+async function createPersonalProfile(
+  db: PrismaClient,
+  userId: string,
+  locale: UserLocale,
+  settings: { defaultCurrency: string; timezone: string },
+  at: Date,
+): Promise<string | null> {
+  try {
+    return await db.$transaction(async (tx) => {
+      const organization = await tx.organization.create({ data: { ...personalProfileFor(locale, settings), personalOwnerUserId: userId } });
+      await tx.membership.create({ data: { userId, organizationId: organization.id, createdAt: at } });
+      const audit = { organizationId: organization.id, actorType: 'SYSTEM' as const, actorId: null, createdAt: at };
+      await tx.auditEvent.createMany({
+        data: [
+          { ...audit, action: 'organization.created', entityType: 'organization', entityId: organization.id, metadata: { personal: true, ownerUserId: userId, backfill: 'post-roll' } },
+          { ...audit, action: 'membership.granted', entityType: 'user', entityId: userId },
+        ],
+      });
+      return organization.id;
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return null;
+    throw err;
+  }
+}
+
 const isMain = process.argv[1]?.endsWith('post-roll.ts') || process.argv[1]?.endsWith('post-roll.js');
 if (isMain) {
   const url = process.env.DATABASE_URL;
@@ -33,6 +109,10 @@ if (isMain) {
   try {
     const captures = await repairCaptureOrigins(db);
     console.log(`post-roll: ${captures} captured payment(s) re-marked origin CAPTURE`);
+    const personal = await backfillPersonalProfiles(db);
+    for (const { userId, organizationId } of personal.created) console.log(`post-roll: personal profile ${organizationId} created for user ${userId}`);
+    for (const { userId, reason } of personal.skipped) console.warn(`post-roll: user ${userId} still has no personal profile (${reason}); provision one by hand`);
+    console.log(`post-roll: ${personal.created.length} personal profile(s) backfilled, ${personal.skipped.length} skipped`);
   } catch (err) {
     console.error('post-roll: failed', err);
     process.exitCode = 1;

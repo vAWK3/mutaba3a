@@ -1,12 +1,12 @@
-import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError, personalProfileConflict } from '../errors.js';
+import { personalProfileFor } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
-import type { CreateUserInput, JsonObject, LedgerStore, Organization, UserLocale, UserRecord } from '../repositories/ports.js';
+import type { JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -52,9 +52,6 @@ const MembershipParams = UserIdParam.extend({
 
 type AuditAction = 'user.created' | 'user.password_reset' | 'user.disabled' | 'user.enabled' | 'membership.granted' | 'membership.revoked';
 
-/** MUT-120: the personal profile is named in the user's language; a server-generated name, so no i18n layer (precedent: expenses/presets.ts). */
-const PERSONAL_PROFILE_NAME: Record<UserLocale, string> = { en: 'Personal', ar: 'شخصي' };
-
 /**
  * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
  * with neither there is nothing to default to, so the request is invalid.
@@ -66,11 +63,6 @@ function resolvePersonalSettings(
   const defaultCurrency = request.defaultCurrency ?? firm?.defaultCurrency;
   const timezone = request.timezone ?? firm?.timezone;
   return defaultCurrency && timezone ? { defaultCurrency, timezone } : null;
-}
-
-function personalProfileFor(locale: UserLocale, settings: { defaultCurrency: string; timezone: string }): CreateUserInput['personal'] {
-  // slugify() strips Arabic, and the user id does not exist until the store creates it: a random, ASCII, never-shown slug.
-  return { name: PERSONAL_PROFILE_NAME[locale], slug: `personal-${randomUUID()}`, ...settings };
 }
 
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
