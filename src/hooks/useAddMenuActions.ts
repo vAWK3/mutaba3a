@@ -22,6 +22,7 @@ import { visibleAddMenuActions, type AddMenuAction } from '../components/layout/
  *     ))}
  *     <ProfileQuickPicker {...pickers.income.pickerProps} />
  *     <ProfileQuickPicker {...pickers.expense.pickerProps} />
+ *     <ProfileQuickPicker {...pickers.conversion.pickerProps} />
  *     <ProfileQuickPicker {...pickers.client.pickerProps} />
  *     <ProfileQuickPicker {...pickers.project.pickerProps} />
  *   </>
@@ -34,6 +35,7 @@ export function useAddMenuActions() {
 
   const openIncomeDrawer = useDrawerStore((s) => s.openIncomeDrawer);
   const openExpenseDrawer = useDrawerStore((s) => s.openExpenseDrawer);
+  const openConversionDrawer = useDrawerStore((s) => s.openConversionDrawer);
   const openClientDrawer = useDrawerStore((s) => s.openClientDrawer);
   const openProjectDrawer = useDrawerStore((s) => s.openProjectDrawer);
 
@@ -56,6 +58,13 @@ export function useAddMenuActions() {
     },
   });
 
+  const conversion = useProfileAwareAction({
+    onExecute: (profileId) => {
+      setWorkingProfile(profileId);
+      openConversionDrawer({ mode: 'create', defaultProfileId: profileId });
+    },
+  });
+
   const client = useProfileAwareAction({
     onExecute: (profileId) => {
       openClientDrawer({ mode: 'create', defaultProfileId: profileId });
@@ -68,7 +77,7 @@ export function useAddMenuActions() {
     },
   });
 
-  const pickers = { income, expense, client, project };
+  const pickers = { income, expense, conversion, client, project };
 
   const run = (
     action: AddMenuAction,

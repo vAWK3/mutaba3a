@@ -10,12 +10,13 @@
 import type { FeatureKey } from '../../types';
 import type { FeatureFlags } from '../../lib/features/features';
 
-export type AddMenuAction = 'income' | 'client' | 'expense' | 'project';
+export type AddMenuAction = 'income' | 'client' | 'expense' | 'conversion' | 'project';
 
 const ADD_MENU_ACTIONS: readonly { action: AddMenuAction; feature?: FeatureKey }[] = [
   { action: 'income' },
   { action: 'client' },
   { action: 'expense', feature: 'expenses' },
+  { action: 'conversion', feature: 'conversions' },
   { action: 'project', feature: 'projects' },
 ];
 

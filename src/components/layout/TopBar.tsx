@@ -69,6 +69,7 @@ const addMenuEntries: Record<AddMenuAction, { labelKey: string; icon: React.Comp
   income: { labelKey: 'addMenu.income', icon: DollarIcon },
   client: { labelKey: 'addMenu.client', icon: UserPlusIcon },
   expense: { labelKey: 'addMenu.expense', icon: MinusIcon },
+  conversion: { labelKey: 'addMenu.conversion', icon: SwapIcon },
   project: { labelKey: 'addMenu.project', icon: FolderPlusIcon },
 };
 
@@ -116,6 +117,7 @@ function AddMenu() {
       {/* Profile quick pickers for each action type */}
       <ProfileQuickPicker {...pickers.income.pickerProps} />
       <ProfileQuickPicker {...pickers.expense.pickerProps} />
+      <ProfileQuickPicker {...pickers.conversion.pickerProps} />
       <ProfileQuickPicker {...pickers.client.pickerProps} />
       <ProfileQuickPicker {...pickers.project.pickerProps} />
     </>
@@ -183,6 +185,14 @@ function UserPlusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+    </svg>
+  );
+}
+
+function SwapIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5h6m-6 0 2.25-2.25M7.5 7.5l2.25 2.25m6.75 6.75h-6m6 0-2.25 2.25m2.25-2.25-2.25-2.25M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
   );
 }
