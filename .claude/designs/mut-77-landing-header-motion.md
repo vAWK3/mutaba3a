@@ -709,6 +709,17 @@ None.
 - (4/10, Scope) `color-mix` tripping the MUT-103 literal guard. Disproved: `COLOR_LITERAL` (`src/test/css/brandCss.ts:563`) doesn't match `color-mix(`.
 - Stale design doc: gstack's design-doc finder returned `basel-main-design-20260524-100930.md` ("Recording Flow Redesign", May 2026). It is unrelated to MUT-77 and was ignored.
 
+## Build deviations (eng-build, 2026-10-14)
+These changes were made during the build. Each one either follows from an approved decision or fixes a bug the new tests found.
+- **`useDocumentTitle` extracted after all.** D1 inlined it while the landing page was its only caller. D8 added `/privacy` and `/download`, which makes three callers, so it is a hook again.
+- **`useHeroCta` is called in both `HeroSection` and `LandingHeader`**, not once in `LandingPage` and passed down. §3.2 said to keep whichever is cheaper. With R1's in-flight dedupe both calls share one GitHub request, and the hero keeps its no-props API and tests.
+- **`LandingHeader` owns the `#top` sentinel and the scroll-edge state.** `PrivacyPolicyPage` renders the bar too. `showCta` defaults to true there, because that page has no hero.
+- **The hover bug's new form was fixed (found by `@web.landing.hover-light`).** The global `a:hover` out-ranks single-class controls. The landing controls now hold their hover colours, and the app-wide rule is TD-122 (task chip offered).
+- **The 375 wordmark was clipped under the switch (found by the screenshot review).** Below 480px the wordmark shows the active language's name (`landing.header.wordmarkShort`). The spec now checks clipping and overlap inside the bar.
+- **The language switch's accessible name** is its visible letters plus a screen-reader-only `landing.langToggle.label` (WCAG 2.5.3). The plan's `aria-label` would have hidden the letters from its name.
+- **The brand link has no `landing.header.home` key.** Its name is the wordmark text.
+- **Not done: the T7 LCP measurement and scroll trace.** They were skipped at Basel's instruction to keep the gate to lint, typecheck and the OpenAPI check.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
