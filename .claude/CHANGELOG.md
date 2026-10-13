@@ -46,6 +46,7 @@
 ### Fixed
 - Expense and conversion creates were not retry-safe: a Save retried after a timeout that landed recorded twice. All portal creates now reuse one Idempotency-Key per save attempt (D5).
 - Expense and conversion drawers default the date to the profile's calendar day (the server checks dates in that zone).
+- Pre-landing review (qa-reconcile): Record payment kept its form keyed by receivable *version*, so the re-read after a race (or a focus refetch) remounted it, dropped the typed amount and the "more than what's left now" error, and refilled the new outstanding. The amount now lives in the drawer (keyed by receivable), the sent value is pinned on submit, and Save stays blocked against the fresh figure. Also: an error in collapsed More details reopens it; pending Save is `aria-disabled` (a disabled focused button loses focus in Chromium); after Add, focus returns to the header Add button; an empty Paid on says "Choose a date"; identical Saved messages are re-announced; row buttons name the client.
 
 ### Technical
 - en/ar keys under `hosted.income.*` and `hosted.settle.*`. ADR-037 MUT-133 amendment; hosted-portal.md §7.4 rewritten; PATTERNS (attempt key, pages own drawers, zone dates, lenient money input, focus before close, pre-rendered live region); TD-056 resolved; TD-123..TD-126 added.
