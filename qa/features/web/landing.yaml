@@ -5,6 +5,7 @@ tier: secondary
 paths:
   - src/pages/landing/**
   - src/content/download-config.ts
+  - src/content/malafatLinks.ts
 features:
   - id: header-cta
     title: The header button appears only once the hero button has scrolled away, and goes to the same place (MUT-77)
@@ -121,3 +122,12 @@ features:
       - The chapter says the phone app is for logging and the portal, your hosted account in a browser, is where you see every client, what they owe and what they paid; it claims no reports
       - Today iPhone is named with "with your hosted account" and no link, and Android says "coming soon"; a store link appears only once one is configured, and then presses and keeps its colour like every landing control
       - The laptop-and-phone picture stays whole, also on a phone; the underlined link opens /hosted
+  - id: malafat
+    title: The Malafat band tells law firms and accounting offices that Mutaba3a connects to Malafat, and links to Malafat in the page's language (MUT-174)
+    tier: secondary
+    legacy: [MUT-174]
+    steps:
+      - Open the landing page, scroll past the phone chapter to the dark Malafat band, read it, hover and tab to "See Malafat"; same in Arabic, also at 375 px
+    expect:
+      - The band speaks to law firms and accounting offices on Malafat (both named in Arabic too), ties the payment claim to a hosted account linked to the firm's Malafat and the phone app, and claims nothing automatic, no sync and no reports
+      - The link reads at least 4.5:1 on the band, keeps its colour on hover, shows a ring in its own colour on keyboard focus in light and dark, and points at malafat.app in the page's language with Mutaba3a's referral tags in a new tab, which its accessible name announces

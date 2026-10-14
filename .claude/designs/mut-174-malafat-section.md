@@ -1,6 +1,6 @@
 # MUT-174 — Landing: "fully integrated with Malafat", for lawyers and accountants
 
-Status: **PLANNED (2026-10-14)**, branch `feature/mut-171-landing` (epic worktree `.claude/worktrees/mut-171-landing`; MUT-173 merged to main c4ed50d from the same worktree).
+Status: **BUILT and reconciled (2026-10-14)**; the qa-reconcile record is at the end of this file, branch `feature/mut-171-landing` (epic worktree `.claude/worktrees/mut-171-landing`; MUT-173 merged to main c4ed50d from the same worktree).
 Ticket: MUT-174 (Story) · parent epic MUT-171 (landing: hosted, mobile, Malafat). Siblings: MUT-172 (merged), MUT-173 (merged). Relates to MUT-25 (shared money core, In Progress: not to be claimed), MUT-61 / MUT-123 (Received capture on Malafat profiles, Done), MUT-100 / MUT-107 (contingency agreements and proposals, In Review; the ticket counts them as shipped), MUT-189 (the in-app Malafat upsell, next epic). No `is blocked by` link and none in the prose.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = planning allowed when Basel asks (he asked for the whole epic) · finished → In Review after /qa-reconcile.
 
@@ -254,3 +254,35 @@ Worktree parallelization: Sequential implementation, no parallelization opportun
 **UNRESOLVED DECISIONS:**
 - D1 structure: band classes reused inline, no Band component (auto)
 - D2 landing link extends MUT-189's UTM vocabulary (auto)
+
+
+---
+
+# qa-reconcile record (2026-10-14, non-interactive)
+
+Branch `feature/mut-171-landing` vs `main` (c4ed50d, which carries MUT-173). Reviewer: Claude + an independent in-host reviewer on the diff (Opus; ran the landing/content suites and typecheck).
+
+| Criterion (ticket) | In plan? | In code? | Verdict |
+|---|---|---|---|
+| New section framed for both lawyers and accountants | yes (D5) | `MalafatSection.tsx`; EN title "a law firm or accounting office", AR title "مكتب المحاماة أو المحاسبة" | MET (after fix 1; the first build's Arabic named neither) |
+| Copy describes only shipped Malafat capability, not MUT-25 | yes (D4, amended R2/R3) | copy; `BANNED_CLAIMS_*` + `MONEY_CORE_*` (EN, AR with diacritics stripped); capture claim names a hosted account linked to the firm's Malafat and the phone app; production verified at eb4a9c8 | MET (DRIFT, flagged: the ticket's scope line says money moves in "automatically"; the shipped capture stores the payment unallocated for the firm, so the copy says that instead) |
+| i18n EN/AR; tests added | yes | `landing.malafat.*` (parity), unit (EN/AR, honesty, self-test, builder), CSS, QA `@web.landing.malafat` EN/AR | MET |
+| Guardrails: Brand v2, one idea, RTL | yes | band classes reused, tokens only, `landingCss.test` (dim, focus ring), QA 375 EN/AR with `dir` | MET |
+
+Scope creep: none beyond the plan's conscious inclusions (the link and its builder, D3; the allowlist entry, O3).
+
+Pre-landing review findings and what changed:
+1. **P1, fixed** — the Arabic band named neither lawyers nor accountants (title "مكتبك", body "كل مكتب"), so A1 failed in Arabic and no test caught it. Title now "هل يعمل مكتب المحاماة أو المحاسبة لديك على Malafat؟ متابعة يتّصل به."; the AR test asserts المحاماة and المحاسبة in the heading.
+2. **P2, fixed** — the capture claim dropped the Malafat-linked condition (self-service and personal hosted profiles never reach Malafat). EN "With a hosted account linked to your firm's Malafat, …", AR "ومع حساب مستضاف مربوط بـ Malafat مكتبك، …"; both tested.
+3. **P2, fixed** — the QA feature and spec were uncommitted; committed with this record after passing.
+4. **P2, fixed** — the dark-mode QA step read the link colour mid-transition (global `a { transition: color }`); it now emulates reduced motion for those reads.
+5. **P2, fixed** — the honesty regexes missed automated/automation/realtime/pricing/per month/sign-up/currency amounts and, in Arabic, singular/plural forms and any word carrying a diacritic; the AR list also false-positived on رسوم (fees) and آليّة. Rebuilt with `bare()`, a self-test of the slipped spellings and the allowed ones.
+6. **P3, fixed** — the MUT-25 words now apply to the Malafat block only (`MONEY_CORE_*`), so future phone copy can say "inside the portal".
+7. **P3, fixed** — AR gender/register: "متابعة يتّصل به" (masculine, as the privacy policy treats the product) and a proper هل question (folded into 1).
+8. **P3, fixed** — the link announces the new tab (`common.opensInNewTab`, visually hidden); the landing's other new-tab links (release notes, store links) still don't, a project-wide follow-up.
+9. **P3, fixed** — the QA copy check now asserts Arabic terms in Arabic.
+10. **P3, fixed** — the AR test asserts "غير مخصَّصة".
+
+Gate (Node 22), on the tree before the review fixes: lint 0 errors (6 pre-existing warnings), typecheck, `test:run` 306 files (one test failed once under parallel Playwright load, then 306/306 = 4355 passed on a clean rerun), build, `test:bundles` (passes with malafat.app allowlisted), `release-qa lint` no errors, Playwright landing spec 21/21. After the review fixes: landing/content suites 15 files / 268 tests, Playwright `@web.landing.malafat` + `@web.landing.phone` EN/AR 4/4, lint and typecheck (see the commit). Browser pane: the Arabic band at 1280 checked by eye (title wraps cleanly, ؟ after Malafat in reading order, link underlined on ink).
+
+**Verdict: PASS.** Readings for Basel are on the ticket: the link (not in the AC) with the landing UTM extension, the band reuse, and the "automatically" drift. Jira → In Review.

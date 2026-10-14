@@ -23,7 +23,8 @@ export function MalafatSection() {
         <p className="landing-privacy-body">{t('landing.malafat.body')}</p>
         <p className="landing-malafat-link-line">
           <a className="landing-band-link" href={href} target="_blank" rel="noopener noreferrer">
-            {t('landing.malafat.link')}
+            {t('landing.malafat.link')}{' '}
+            <span className="sr-only">{t('common.opensInNewTab')}</span>
           </a>
         </p>
       </div>
