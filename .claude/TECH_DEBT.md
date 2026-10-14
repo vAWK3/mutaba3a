@@ -123,7 +123,7 @@
 **Fix**: Basel: install the `build-windows.yml` MSI and NSIS artifacts and check the taskbar, Start menu and installer icons; after the next web deploy, paste `https://mutaba3a.app/` into LinkedIn Post Inspector / opengraph.xyz. If a pre-Tahoe Mac shows an oversized icon and that matters, revisit D2.
 
 ### TD-117: Hosted conversions have no JOD support (expenses now do)
-**Status**: Open
+**Status**: Resolved 2026-10-14 by MUT-194 (eng D7). `conversionFormSchema.ts` offers USD/ILS/EUR/JOD with a per-leg `superRefine` on `currencyExponent` (7428c63's pattern), and `filters.ts` `CURRENCIES` plus `FilterControls`' `CurrencyFilter` offer JOD. Proofs: `conversionFormSchema.test.ts` (JOD 3 decimals valid, 4 invalid, USD 3 invalid), `ConversionDrawer.test.tsx` (a JOD conversion edits and saves), `ConversionsList.test.tsx` (the filter offers JOD). Side effect: the receivables currency filter offers JOD too.
 **Ticket**: MUT-161 (found during build), narrowed after `7428c63` ("hosted currency fix", same day) gave `ExpenseDrawer` full JOD support
 **Added**: 2026-10-13
 **Priority**: Low

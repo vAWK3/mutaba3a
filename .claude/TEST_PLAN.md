@@ -2286,3 +2286,21 @@ Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 
 
 Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 704 tests green after the review fixes. Full suite not run at the user's request; `lint`, `typecheck` and `openapi:check` run.
 
+## MUT-194 — edit and delete a logged currency conversion (2026-10-14, ADR-075)
+
+| Suite | Cases |
+|---|---|
+| `server/src/repositories/__tests__/store-contract-conversions.ts` (memory + Postgres) | new row at version 1, updatedAt = createdAt, not deleted; update at the expected version bumps it and stamps updatedAt, absent keys unchanged, stale returns the current record; not_found for unknown id, other org, deleted row; softDelete changed → unchanged → null (unknown id, other org); get and list hide deleted rows |
+| `server/src/repositories/__tests__/migration-mut194.test.ts` (Postgres) | pre-migration rows get version 1, updatedAt = createdAt, deletedAt null; the history ends at the schema (`migrate diff --exit-code`) |
+| `server/src/conversions/__tests__/compose.test.ts` › conversionPatch | only sent fields; `notes:null` clears; currency/toCurrency without its amount → AMOUNT_REQUIRED on that field (G1); amount-only on a JOD leg uses 3 digits (G1); amount re-parsed in a new currency; merged same-currency and lone `toCurrency` collision → SAME_CURRENCY; leg swap accepted; bad date / zero amount |
+| `server/src/__tests__/routes-conversions.test.ts` | PATCH 200 version+1 with audit `{fields, version}`; device session; stale If-Match → 409 + currentVersion, nothing changed; missing If-Match → 422; AMOUNT_REQUIRED ×2, SAME_CURRENCY, AMOUNT_INVALID, future date → 422; notes-only edit of a 2020 row OK; 404 unknown / other profile / after DELETE. DELETE 204 + 204, audited once, gone from get/list, anchor → 404 ANCHOR_NOT_FOUND; device session; 404 unknown / other profile (G2). Summaries byte-identical after an edit and a delete. API-key sweep covers PATCH and DELETE; full shape includes version/updatedAt |
+| `server/src/__tests__/route-security.test.ts` | `CONVERSION_OPERATIONS` includes PATCH and DELETE |
+| `server/src/__tests__/conversions-invisible.test.ts` | after create, update and delete, Malafat's `/v1/audit` lists none, also by `entityType`, `entityId` and `action`; the store recorded all three |
+| `src/hosted/components/__tests__/HostedTable.test.tsx` | row button in the first cell, Tab-reachable, `.press`; Enter and Space fire once each; mouse click fires once (no double fire); rows unchanged with no role/tabindex; no button without `onRowClick`; `.row-link` CSS has the focus ring |
+| `src/hosted/components/__tests__/conversionFormSchema.test.ts` | JOD on either leg; JOD 3 decimals valid, 4 invalid; USD 3 decimals invalid beside a JOD leg; JOD→JOD refused; implied rate across JOD |
+| `src/hosted/components/__tests__/ConversionDrawer.test.tsx` › edit mode | prefill + edit title; Save/Delete hidden while loading; load error → Unreachable; PATCH both legs at the loaded version, `notes:null`; 409 → toast, stays open, refetch, refill, next Save at the new version (D6); Delete confirm names both legs (D7) then DELETE + `onDeleted`; cancelled confirm sends nothing; JOD edit; Arabic title and confirm (AC9) |
+| `src/hosted/pages/__tests__/ConversionsList.test.tsx` | row click and Enter on the row button open `?conversion=`; close clears it; deleting the anchored conversion drops `anchor`; the currency filter offers JOD |
+| `src/hosted/data/__tests__/filters.test.ts` | `?conversion=` uuid kept, malformed dropped; `newConversion` kept; JOD kept, unknown currency dropped |
+| Regression | `ExpensesList.test.tsx` row-click test unchanged and green |
+
+Run so far: server `typecheck`, `lint`, `openapi:check`, `npm test` (86 files, 1675 passed, 21 skipped) and `test:db` against a scratch Postgres database (107 files, 1819 passed); `npx vitest run src/hosted` (31 files, 311 passed). The root `lint`/`typecheck`/`test:run`/`build`/`hosted:types:check` set was not run on the final tree in this pass.
