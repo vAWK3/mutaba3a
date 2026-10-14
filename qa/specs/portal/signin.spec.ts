@@ -17,9 +17,10 @@ const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
 
 /** The portal's own sign-in title, read from its translation files so a copy change needs no spec change. */
 const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
-const title = (language: 'en' | 'ar') =>
-  (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as { hosted: { auth: { title: string } } }).hosted.auth.title;
-const HEADING = { en: title('en'), ar: title('ar') } as const;
+type AuthCopy = { hosted: { auth: { title: string; request: { lead: string; link: string } } } };
+const auth = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as AuthCopy).hosted.auth;
+const HEADING = { en: auth('en').title, ar: auth('ar').title } as const;
+const REQUEST = { en: auth('en').request, ar: auth('ar').request } as const;
 
 async function openSignIn(page: Page, language: 'en' | 'ar') {
   await page.route('**/v1/**', (route) =>
@@ -75,4 +76,29 @@ for (const scheme of SCHEMES) {
       await expectOnlyKnownAxeViolations(page, 'portalSignIn');
     });
   });
+}
+
+for (const language of ['en', 'ar'] as const) {
+  test(
+    `${language === 'en' ? 'English' : 'Arabic'}: sign-in offers one outward "Request one" link to /hosted (MUT-188)`,
+    { tag: '@portal.signin.request-link' },
+    async ({ page, step }) => {
+      await step('Open sign-in signed out', async () => {
+        await openSignIn(page, language);
+      });
+
+      await step('One outward link, same tab, under the help line', async () => {
+        const link = page.getByRole('link', { name: REQUEST[language].link });
+        await expect(link).toBeVisible();
+        await expect(link).toHaveAttribute('href', /^https:\/\/[^/]+\/hosted$/);
+        await expect(link).not.toHaveAttribute('target', /./);
+        await expect(page.getByText(REQUEST[language].lead)).toBeVisible();
+        await expect(page.getByRole('link')).toHaveCount(1);
+      });
+
+      await step('Still accessible', async () => {
+        await expectOnlyKnownAxeViolations(page, 'portalSignIn');
+      });
+    },
+  );
 }
