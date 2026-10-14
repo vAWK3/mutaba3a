@@ -55,6 +55,14 @@ Nothing in `server/`, the router, the session code, the local app or the landing
 
 Gate (Node 22): `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm run build`, `npm run test:bundles`. No `server/` change, so the server gate is not owed.
 
+## 4b. QA scenarios (release-qa, `qa/features/portal/signin.yaml` → `@portal.signin.request-link`)
+
+| Flow | Steps, as the user would say them | Promised outcome |
+|---|---|---|
+| Reach the portal without an account | Open the portal's sign-in page (signed out), in English, then switch to Arabic | Under "Can't sign in?" there is a line "No account? Request one" / "ليس لديك حساب؟ اطلب حسابًا"; "Request one" is a link whose address is the landing's `/hosted` page; it is the only link on the page; it opens in the same tab; the page still passes axe |
+
+Paths covered by the feature file: `src/hosted/pages/auth/**`, `src/hosted/hosted.css` (already listed). Spec: `qa/specs/portal/signin.spec.ts`, one `test` per language, every action in `step(...)`.
+
 ## 5. Reuse analysis
 
 | Need | Reused | New |
