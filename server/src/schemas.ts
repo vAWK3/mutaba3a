@@ -291,6 +291,9 @@ export const SignInRequestSchema = z
 
 const AccessSchema = z.enum(['read-write', 'read', 'none']);
 
+/** MUT-182: an owned profile's kind. It only picks the expense categories; BUSINESS is not a firm or a Malafat tenant. */
+export const ProfileTypeSchema = z.enum(['PERSONAL', 'BUSINESS']).openapi('ProfileType');
+
 /** One organization the signed-in user may open (hosted-portal.md §6). Local profiles never reach the server. */
 export const HostedProfileSchema = z
   .object({
@@ -315,16 +318,64 @@ export const HostedProfileSchema = z
       .openapi('IncomeCaptureRules'),
     /** MUT-120: true on the signed-in user's own personal profile (exactly one), false everywhere else. Clients read this, not writerOfRecord. */
     isPersonalDefault: z.boolean(),
+    /** MUT-182: true on a profile the caller owns (their personal one and any they created) — theirs to rename and retype with PATCH /v1/profiles/{id}. */
+    owned: z.boolean(),
+    /** MUT-182: PERSONAL or BUSINESS on an owned profile (it picks the expense categories); null on a firm. */
+    type: ProfileTypeSchema.nullable(),
+    /** MUT-182: send as If-Match on PATCH /v1/profiles/{id}. */
+    version: z.number().int().min(1),
   })
   .openapi('HostedProfile');
 
 export const MeSchema = z
   .object({
     user: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), locale: UserLocaleSchema }),
-    /** Firm profiles in membership order (oldest first), then the caller's own personal profile last (MUT-120). */
+    /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
+    /** MUT-182: how many profiles the caller owns (the personal one included) and how many they may. */
+    limits: z.object({ ownedProfiles: z.number().int().min(0), maxOwnedProfiles: z.number().int().min(1) }).openapi('ProfileLimits'),
   })
   .openapi('Me');
+
+const profileName = z.string().trim().min(1).max(80);
+
+/** MUT-182: POST /v1/profiles — a standalone profile the caller will own. Never a Malafat organization; nothing here can link one. */
+export const CreateProfileRequestSchema = z
+  .object({
+    name: profileName,
+    type: ProfileTypeSchema,
+    defaultCurrency: CurrencySchema,
+    timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }),
+  })
+  .strict()
+  .openapi('CreateProfileRequest');
+
+/** MUT-182: PATCH /v1/profiles/{id}. A changed `type` replaces the profile's expense categories (preview it first). */
+export const UpdateProfileRequestSchema = z
+  .object({ name: profileName.optional(), defaultCurrency: CurrencySchema.optional(), type: ProfileTypeSchema.optional() })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'Send at least one of name, defaultCurrency, type' })
+  .openapi('UpdateProfileRequest');
+
+export const ProfileIdParamSchema = z.object({ profileId: z.string().uuid().openapi({ param: { name: 'profileId', in: 'path' } }) });
+
+export const ProfileTypeChangeQuerySchema = z.object({ to: ProfileTypeSchema });
+
+/** MUT-182: what changing a profile's type does — or did — to its expenses and categories. */
+export const ProfileTypeChangeSchema = z
+  .object({
+    /** Live expenses that had a category and are left uncategorized. */
+    uncategorizedExpenses: z.number().int().min(0),
+    /** Every category the profile had, custom and archived ones included. */
+    deletedCategories: z.number().int().min(0),
+    /** The preset that replaces them. */
+    preset: z.enum(['lawFirm', 'personal', 'general']),
+  })
+  .openapi('ProfileTypeChange');
+
+export const UpdateProfileResponseSchema = z
+  .object({ profile: HostedProfileSchema, typeChange: ProfileTypeChangeSchema.nullable() })
+  .openapi('UpdateProfileResponse');
 
 /** POST /v1/device-sessions response (MUT-64): the bearer token a native app stores, plus the same Me payload the portal gets from its cookie. */
 export const DeviceSessionSchema = MeSchema.extend({

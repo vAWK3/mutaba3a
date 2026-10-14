@@ -27,8 +27,9 @@ const categoryJson = { content: { 'application/json': { schema: ExpenseCategoryS
  * /v1/expense-categories — a hosted profile's categories (MUT-42 D2), as the
  * offline ExpenseCategory. The first list on a profile with none seeds a
  * preset in the user's language, as SYSTEM: law-firm where Malafat is the
- * writer of record, personal on a person's own profile (MUT-120), general on
- * any other firm. Archived, never deleted.
+ * writer of record, personal on a PERSONAL profile, general on a BUSINESS one
+ * or any other firm. Archived, never deleted — except that changing a profile's
+ * type replaces them all (MUT-182, PATCH /v1/profiles/{id}).
  */
 export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
@@ -44,7 +45,7 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/expense-categories',
       tags: ['Expenses'],
       summary: 'The profile’s expense categories, in creation order',
-      description: 'The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on the user’s own personal profile, the general one on any other organization. Archived categories only with includeArchived=true.',
+      description: 'The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on a PERSONAL profile, the general one on a BUSINESS profile or any other organization. Archived categories only with includeArchived=true.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListExpenseCategoriesQuerySchema },
@@ -54,7 +55,7 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization, user, writerOfRecord } = sessionAuth(c);
       const now = c.get('now')();
       if ((await store.expenseCategories.list(organization.id, { includeArchived: true })).length === 0) {
-        const { preset, categories } = presetFor({ writerOfRecord, personal: organization.personalOwnerUserId !== null }, user.locale);
+        const { preset, categories } = presetFor({ writerOfRecord, profileType: organization.profileType }, user.locale);
         if (await store.expenseCategories.seed(organization.id, categories, now)) {
           await store.audit.append({ organizationId: organization.id, actorType: 'SYSTEM', actorId: null, action: 'expense_category.seeded', entityType: 'expense_category', entityId: null, metadata: { preset, count: categories.length, locale: user.locale }, requestId: c.get('requestId') });
         }

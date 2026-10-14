@@ -179,6 +179,22 @@ describe('POST /v1/expenses', () => {
     expect((await read(res)).error.details.reason).toBe(reason);
   });
 
+  it('answers 422 CATEGORY_NOT_FOUND, not a 500, when a type change deletes the category between the check and the write (MUT-182 R17)', async () => {
+    const { h, a, p, create } = await setup();
+    // The race made deterministic: the route's check still finds the category, the write's foreign key does not.
+    const ghost = '00000000-0000-4000-8000-0000000000c4';
+    const getById = h.store.expenseCategories.getById;
+    h.store.expenseCategories.getById = async (organizationId, id) =>
+      id === ghost ? { id: ghost, organizationId, name: 'Gone', color: null, archivedAt: null, version: 1, createdAt: h.clock.now, updatedAt: h.clock.now } : getById(organizationId, id);
+    const created = await create({ categoryId: ghost });
+    expect(created.status).toBe(422);
+    expect((await read(created)).error.details).toMatchObject({ reason: 'CATEGORY_NOT_FOUND', field: 'categoryId' });
+    const plain = await read(await create({}));
+    const patched = await h.app.request(`/v1/expenses/${plain.id}`, json({ categoryId: ghost }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(patched.status).toBe(422);
+    expect((await read(patched)).error.details).toMatchObject({ reason: 'CATEGORY_NOT_FOUND', field: 'categoryId' });
+  });
+
   it('refuses an unsupported currency at the schema', async () => {
     const { create } = await setup();
     const res = await create({ currency: 'GBP' });

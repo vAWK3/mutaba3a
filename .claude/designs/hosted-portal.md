@@ -194,7 +194,7 @@ An API key still implies its organization, and no API-key request accepts an org
 | audit | audit:read | /v1/audit | read | none | — | device |
 | expenses | expenses:read, expenses:write | /v1/expenses*, /v1/expense-categories*, /v1/summaries/expenses | none | read-write | USER | device |
 | capture | capture:write | /v1/income* | none | read-write | USER | device |
-| identity | — | /v1/me, /v1/sessions/current | none | read-write | USER | device |
+| identity | — | /v1/me, /v1/sessions/current, /v1/profiles* | none | read-write | USER | device |
 | conversions | conversions:read, conversions:write | /v1/conversions* | none | read-write | USER | device |
 <!-- writability-matrix:end -->
 

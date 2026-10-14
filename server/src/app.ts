@@ -21,6 +21,7 @@ import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
 import { expenseCategoryRoutes } from './routes/expense-categories.js';
+import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, profileRoutes } from './routes/profiles.js';
 import { conversionRoutes } from './routes/conversions.js';
 import { expenseRoutes } from './routes/expenses.js';
 import { incomeRoutes } from './routes/income.js';
@@ -111,7 +112,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.21.0-mut91';
+export const API_VERSION = '1.22.0-mut182';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -181,7 +182,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -232,6 +233,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', incomeRoutes(store));
   app.route('/', conversionRoutes(store));
   app.route('/', inboxRoutes(store));
+  app.route('/', profileRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
@@ -319,6 +321,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Receivables', description: 'What is owed, and credits against it' },
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
+      { name: 'Profiles', description: 'A signed-in person\'s own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
       { name: 'Income', description: 'Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },

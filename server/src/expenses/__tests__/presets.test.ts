@@ -26,13 +26,15 @@ describe('expense category presets', () => {
     expect(LAW_FIRM_PRESET.length).toBeGreaterThan(10);
   });
 
-  it('picks law-firm for a Malafat-fed profile, personal for a personal profile and general for any other firm, in the user’s language', () => {
-    expect(presetFor({ writerOfRecord: 'MALAFAT', personal: false }, 'ar')).toEqual({ preset: 'lawFirm', categories: LAW_FIRM_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
-    expect(presetFor({ writerOfRecord: null, personal: true }, 'en')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
-    expect(presetFor({ writerOfRecord: null, personal: true }, 'ar')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
-    expect(presetFor({ writerOfRecord: null, personal: false }, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
-    // ADR-066: Malafat as writer of record wins, even over the personal mark.
-    expect(presetFor({ writerOfRecord: 'MALAFAT', personal: true }, 'en').preset).toBe('lawFirm');
+  it('picks law-firm for a Malafat-fed profile, personal for a PERSONAL profile and general for a BUSINESS one or any firm, in the user’s language', () => {
+    expect(presetFor({ writerOfRecord: 'MALAFAT', profileType: null }, 'ar')).toEqual({ preset: 'lawFirm', categories: LAW_FIRM_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
+    expect(presetFor({ writerOfRecord: null, profileType: 'PERSONAL' }, 'en')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+    expect(presetFor({ writerOfRecord: null, profileType: 'PERSONAL' }, 'ar')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
+    // MUT-182: a BUSINESS profile a person owns gets the general preset, exactly as an operator firm does.
+    expect(presetFor({ writerOfRecord: null, profileType: 'BUSINESS' }, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+    expect(presetFor({ writerOfRecord: null, profileType: null }, 'en')).toEqual({ preset: 'general', categories: GENERAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
+    // ADR-066: Malafat as writer of record wins, even over a PERSONAL type.
+    expect(presetFor({ writerOfRecord: 'MALAFAT', profileType: 'PERSONAL' }, 'en').preset).toBe('lawFirm');
   });
 
   /**

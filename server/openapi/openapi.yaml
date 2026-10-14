@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.21.0-mut91
+  version: 1.22.0-mut182
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -65,6 +65,8 @@ tags:
     description: Money received, its allocations, reversals, and the operations lookup
   - name: Sessions
     description: Hosted-portal sign-in, sign-out and the signed-in person
+  - name: Profiles
+    description: "A signed-in person's own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)"
   - name: Expenses
     description: A hosted profile's expenses, categories, receipts and expense summary (sessions only)
   - name: Income
@@ -161,9 +163,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HostedProfile"
+        limits:
+          $ref: "#/components/schemas/ProfileLimits"
       required:
         - user
         - profiles
+        - limits
     UserLocale:
       type: string
       enum:
@@ -203,6 +208,13 @@ components:
           $ref: "#/components/schemas/IncomeCaptureRules"
         isPersonalDefault:
           type: boolean
+        owned:
+          type: boolean
+        type:
+          $ref: "#/components/schemas/ProfileType"
+        version:
+          type: integer
+          minimum: 1
       required:
         - id
         - name
@@ -213,6 +225,9 @@ components:
         - access
         - income
         - isPersonalDefault
+        - owned
+        - type
+        - version
     Currency:
       type: string
       enum:
@@ -236,6 +251,25 @@ components:
         - received
         - owed
         - customer
+    ProfileType:
+      type: string
+      nullable: true
+      enum:
+        - PERSONAL
+        - BUSINESS
+        - null
+    ProfileLimits:
+      type: object
+      properties:
+        ownedProfiles:
+          type: integer
+          minimum: 0
+        maxOwnedProfiles:
+          type: integer
+          minimum: 1
+      required:
+        - ownedProfiles
+        - maxOwnedProfiles
     ErrorEnvelope:
       type: object
       properties:
@@ -4672,6 +4706,68 @@ components:
       required:
         - kind
       additionalProperties: false
+    CreateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        type:
+          $ref: "#/components/schemas/ProfileType"
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
+      required:
+        - name
+        - type
+        - defaultCurrency
+        - timezone
+      additionalProperties: false
+    UpdateProfileResponse:
+      type: object
+      properties:
+        profile:
+          $ref: "#/components/schemas/HostedProfile"
+        typeChange:
+          $ref: "#/components/schemas/ProfileTypeChange"
+      required:
+        - profile
+        - typeChange
+    ProfileTypeChange:
+      type: object
+      nullable: true
+      properties:
+        uncategorizedExpenses:
+          type: integer
+          minimum: 0
+        deletedCategories:
+          type: integer
+          minimum: 0
+        preset:
+          type: string
+          enum:
+            - lawFirm
+            - personal
+            - general
+      required:
+        - uncategorizedExpenses
+        - deletedCategories
+        - preset
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        type:
+          $ref: "#/components/schemas/ProfileType"
+      additionalProperties: false
     CreateOrganizationRequest:
       type: object
       properties:
@@ -5193,7 +5289,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Bound to a different tenant, the tenant is bound to another organization, or this is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
+          description: Bound to a different tenant, the tenant is bound to another organization, or this is a profile a person owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)
           content:
             application/json:
               schema:
@@ -9739,7 +9835,7 @@ paths:
       tags:
         - Expenses
       summary: The profile’s expense categories, in creation order
-      description: "The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on the user’s own personal profile, the general one on any other organization. Archived categories only with includeArchived=true."
+      description: "The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on a PERSONAL profile, the general one on a BUSINESS profile or any other organization. Archived categories only with includeArchived=true."
       security:
         - session: []
         - deviceSession: []
@@ -10604,6 +10700,198 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles:
+    post:
+      tags:
+        - Profiles
+      summary: Create a standalone profile you own
+      description: "Hosted entirely on Mutaba3a: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to 6 owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostedProfile"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}:
+    patch:
+      tags:
+        - Profiles
+      summary: Rename a profile you own, change its default currency or its type
+      description: One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE).
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateProfileResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/type-change:
+    get:
+      tags:
+        - Profiles
+      summary: Preview what changing a profile’s type would do
+      description: "The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            $ref: "#/components/schemas/ProfileType"
+          required: true
+          name: to
+          in: query
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileTypeChange"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /admin/v1/organizations:
     post:
       tags:
@@ -10715,7 +11003,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: A personal profile cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE)
+          description: A profile a person owns cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE on the built-in personal profile, OWNED_PROFILE on one they created)
           content:
             application/json:
               schema:
@@ -10839,7 +11127,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Email already in use, or organizationId is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
+          description: Email already in use, or organizationId is a profile a person owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)
           content:
             application/json:
               schema:
@@ -10962,7 +11250,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: The organization is another user’s personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
+          description: The organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)
           content:
             application/json:
               schema:
@@ -11007,7 +11295,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE)
+          description: The organization is a profile this user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)
           content:
             application/json:
               schema:
