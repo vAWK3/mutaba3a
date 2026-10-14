@@ -10,9 +10,11 @@
 
 | Target | Host | Defined in |
 |--------|------|------------|
-| PWA + landing | Netlify (`mutaba3a.app`) | `netlify.toml` |
+| PWA + landing | Netlify (`mutaba3a.netlify.app`; `mutaba3a.app` has no DNS yet, MUT-112) | `netlify.toml` |
 | macOS / Windows installers | GitHub Releases, Tauri updater | `.github/workflows/build-windows.yml`, `deploy.sh` (macOS, operator) |
 | `/hosted` request form | Netlify Forms (free tier: 100 submissions/month) | `vite.config.ts` `netlifyForms()` emits `__forms.html` (MUT-186) |
+
+> **Public origin (MUT-188).** `MUTABA3A_PUBLIC_ORIGIN` names where the landing is served. The **web** build puts it in the link-preview tags and the `/hosted` canonical; the **hosted** build puts it in the portal sign-in's "No account? Request one" link. Neither pipeline sets it today (Netlify's UI env for web; `server-ci.yml` / `server/scripts/deploy.sh` for hosted), so `DEFAULT_PUBLIC_ORIGIN` in `vite.config.ts` is what ships: the Netlify origin until the custom domain has DNS (MUT-112). A staging override on Netlify alone does not move the portal's link.
 
 **Netlify Forms — operator steps, not settable from `netlify.toml` (MUT-186):**
 1. Site → Forms → **Enable form detection**, once, before the deploy that first ships `__forms.html`; otherwise `hosted-request` is never registered and every POST 404s (visitors see the retry state).

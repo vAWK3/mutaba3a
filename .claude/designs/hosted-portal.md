@@ -314,7 +314,7 @@ If the server ever answers `READ_ONLY_PROFILE` (a stale UI), the toast uses the 
 ### 7.6 Sign-in page
 
 - Email, password, submit. That is the whole form.
-- **No** "create account", "forgot password" or "invite" affordance, and no route to any of them.
+- **No** "create account", "forgot password" or "invite" affordance, and no route to any of them. One **outward** link is allowed (MUT-188, 2026-10-14): "No account? Request one" → the landing's public `/hosted` page, whose address is a build-time value (`__HOSTED_OFFER_URL__` from `MUTABA3A_PUBLIC_ORIGIN`).
 - A failed attempt shows one sentence for every cause: "That email and password don't match." A 429 shows "Too many attempts. Try again in a few minutes."
 - Language switch in the corner. The page is RTL-correct.
 
