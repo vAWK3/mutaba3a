@@ -1256,10 +1256,11 @@ function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
   };
 }
 
-/** Newest first: rows strictly before the cursor in (occurredOn, id) descending order. */
+/** Newest first: rows before the cursor in (occurredOn, id) descending order; an inclusive cursor keeps its own row (MUT-91 anchor). */
 function expenseCursorWhere(cursor: ExpenseCursor | null): Prisma.ExpenseWhereInput {
   if (!cursor) return {};
-  return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: { lt: cursor.id } }] }] };
+  const sameDay = cursor.inclusive ? { lte: cursor.id } : { lt: cursor.id };
+  return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: sameDay }] }] };
 }
 
 function conversionWhere(f: ConversionFilter): Prisma.ConversionWhereInput {
@@ -1269,10 +1270,11 @@ function conversionWhere(f: ConversionFilter): Prisma.ConversionWhereInput {
   };
 }
 
-/** Newest first: rows strictly before the cursor in (occurredOn, id) descending order. */
+/** Newest first: rows before the cursor in (occurredOn, id) descending order; an inclusive cursor keeps its own row (MUT-91 anchor). */
 function conversionCursorWhere(cursor: ConversionCursor | null): Prisma.ConversionWhereInput {
   if (!cursor) return {};
-  return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: { lt: cursor.id } }] }] };
+  const sameDay = cursor.inclusive ? { lte: cursor.id } : { lt: cursor.id };
+  return { AND: [{ OR: [{ occurredOn: { lt: cursor.occurredOn } }, { occurredOn: cursor.occurredOn, id: sameDay }] }] };
 }
 
 function toExpenseCategory(row: Prisma.ExpenseCategoryGetPayload<object>): ExpenseCategoryRecord {

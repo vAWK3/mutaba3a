@@ -53,7 +53,7 @@ export function DrawerFrame({ title, onClose, children, footer, closeLabel }: Dr
           <h2 id={titleId} className="drawer-title">
             {title}
           </h2>
-          <button type="button" className="drawer-close" onClick={onClose} aria-label={closeLabel}>
+          <button type="button" className="drawer-close press" onClick={onClose} aria-label={closeLabel}>
             <CloseIcon />
           </button>
         </div>

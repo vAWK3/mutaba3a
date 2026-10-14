@@ -6,6 +6,7 @@ import {
   matchesFlash,
   FLASH_MS,
   BACKSTOP_MS,
+  MAX_WAIT_MS,
   type SavedFlash,
 } from '../savedFlashStore';
 
@@ -158,6 +159,76 @@ describe('useSavedFlashStore', () => {
       act(() => vi.advanceTimersByTime(BACKSTOP_MS));
       expect(result.current.claimed).toBe(true); // not flipped back to false
     });
+
+    // MUT-91 (eng review D3): the portal refetches over the network, so a list
+    // can still be loading when the backstop fires. It must not answer "not
+    // claimed" for a row that is about to arrive.
+    it('the backstop waits while a registered list is still fetching; the row arriving later claims it', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-a', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBeNull();
+      act(() => vi.advanceTimersByTime(1800));
+      act(() => result.current.reportSettled('list-a', ['tx-0', 'tx-1'], true));
+      expect(result.current.claimed).toBe(true);
+      expect(result.current.flashIds).toEqual(['tx-1']);
+    });
+
+    it('a list still fetching at the backstop that settles without the row resolves not claimed then', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-a', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBeNull();
+      act(() => result.current.reportSettled('list-a', ['tx-0'], true));
+      expect(result.current.claimed).toBe(false);
+    });
+
+    it('after the backstop, a list that settled before the save and never re-reported does not hold resolution', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-quiet');
+        result.current.reportSettled('list-quiet', ['tx-0'], true);
+        result.current.registerList('list-busy');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-busy', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBeNull();
+      act(() => result.current.reportSettled('list-busy', ['tx-0'], true));
+      expect(result.current.claimed).toBe(false);
+    });
+
+    it('a list that never settles cannot hold the save forever: MAX_WAIT_MS answers not claimed (review)', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.markSaved(income());
+        result.current.reportSettled('list-a', ['tx-0'], false);
+      });
+      act(() => vi.advanceTimersByTime(MAX_WAIT_MS - 1));
+      expect(result.current.claimed).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      expect(result.current.claimed).toBe(false);
+    });
+
+    it('the backstop still answers not claimed when every registered list is settled but none re-reported', () => {
+      const { result } = renderHook(() => useSavedFlashStore());
+      act(() => {
+        result.current.registerList('list-a');
+        result.current.reportSettled('list-a', ['tx-0'], true);
+        result.current.markSaved(income());
+      });
+      act(() => vi.advanceTimersByTime(BACKSTOP_MS));
+      expect(result.current.claimed).toBe(false);
+    });
   });
 
   describe('tint lifetime', () => {
@@ -197,6 +268,44 @@ describe('useSavedFlashStore', () => {
       act(() => result.current.rearm({ ...income(), messaged: true }));
       expect(result.current.pending?.messaged).toBe(true);
     });
+  });
+
+  it('settleMessage marks that save messaged and keeps its resolution; a stale flash is ignored (MUT-91)', () => {
+    const { result } = renderHook(() => useSavedFlashStore());
+    const first = income();
+    act(() => {
+      result.current.markSaved(first);
+      result.current.registerList('list-a');
+      result.current.reportSettled('list-a', ['tx-0'], true);
+    });
+    expect(result.current.claimed).toBe(false);
+    act(() => result.current.settleMessage(first));
+    expect(result.current.pending).toMatchObject({ ids: ['tx-1'], messaged: true });
+    expect(result.current.claimed).toBe(false);
+
+    const second = income({ ids: ['tx-2'] });
+    act(() => result.current.markSaved(second));
+    act(() => result.current.settleMessage(first));
+    expect(result.current.pending).toBe(second);
+
+    // Unresolved when settled (its page was left): resolved as not claimed, so a later visit can't tint it.
+    act(() => result.current.settleMessage(second));
+    expect(result.current.claimed).toBe(false);
+    act(() => result.current.reportSettled('list-a', ['tx-2'], true));
+    expect(result.current.flashIds).toEqual([]);
+  });
+
+  it('a claimed save settled before its tint ends still clears the tint on time (MUT-91 re-review)', () => {
+    const { result } = renderHook(() => useSavedFlashStore());
+    act(() => {
+      result.current.registerList('list-a');
+      result.current.reportSettled('list-a', ['tx-1'], true);
+      result.current.markSaved(income());
+    });
+    expect(result.current.flashIds).toEqual(['tx-1']);
+    act(() => result.current.settleMessage(result.current.pending!));
+    act(() => vi.advanceTimersByTime(FLASH_MS));
+    expect(result.current.flashIds).toEqual([]);
   });
 
   it('clear resets everything', () => {

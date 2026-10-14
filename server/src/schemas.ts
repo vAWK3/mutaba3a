@@ -1643,6 +1643,7 @@ export const UpdateExpenseRequestSchema = z
 
 export const ListExpensesQuerySchema = z.object({
   ...pageQuery,
+  anchor: uuid.optional().openapi({ description: 'Start the page at this expense, inclusive (MUT-91). Filters still apply. Not with `cursor`.' }),
   from: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
   to: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
   currency: CurrencySchema.optional(),
@@ -1690,6 +1691,7 @@ export const CreateConversionRequestSchema = z
 
 export const ListConversionsQuerySchema = z.object({
   ...pageQuery,
+  anchor: uuid.optional().openapi({ description: 'Start the page at this conversion, inclusive (MUT-91). Filters still apply. Not with `cursor`.' }),
   from: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
   to: IsoDateSchema.optional().openapi({ description: 'Inclusive' }),
   currency: CurrencySchema.optional().openapi({ description: 'Matches either leg' }),

@@ -9,6 +9,7 @@ import { useLanguage } from '../../lib/i18n/core';
 import { currencyExponent } from '../../lib/utils';
 import { useCreateExpense, useDeleteExpense, useExpense, useExpenseCategories, useUpdateExpense } from '../data/expenseQueries';
 import { useToast } from './Toast';
+import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ClientPicker } from './ClientPicker';
 import { ProjectPicker } from './ProjectPicker';
 import { ReceiptUploader } from './ReceiptUploader';
@@ -72,9 +73,14 @@ export interface ExpenseDrawerProps {
   onClose: () => void;
   /** The profile's IANA zone, for the default date (MUT-133 D5); the browser calendar when absent. */
   timezone?: string;
+  /** Called instead of `onClose` after a delete, so the list can drop an anchor on the deleted record (MUT-91). */
+  onDeleted?: (expenseId: string) => void;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted }: ExpenseDrawerProps) {
+  // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
+  // place that knows a save happened (ADR-057 §4). Delete marks nothing.
+  const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
   const { t } = useLanguage();
   const showToast = useToast();
 
@@ -154,6 +160,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone }:
           notes: values.notes || null,
         };
         await updateMutation.mutateAsync({ expenseId: existingExpense.id, body, version: String(existingExpense.version) });
+        markSaved(existingExpense.id);
       } else {
         const body: CreateExpenseRequest = {
           occurredOn: values.occurredAt,
@@ -166,8 +173,9 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone }:
           projectId: values.projectId || undefined,
           notes: values.notes || undefined,
         };
-        await createMutation.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
+        const created = await createMutation.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
         attempt.succeeded();
+        markSaved(created.id);
       }
       onClose();
     } catch (error) {
@@ -180,7 +188,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone }:
     if (!confirm(t('common.delete'))) return;
     try {
       await deleteMutation.mutateAsync(existingExpense.id);
-      onClose();
+      if (onDeleted) onDeleted(existingExpense.id);
+      else onClose();
     } catch (error) {
       applyExpenseApiError(error, setError, errorLabels, showToast);
     }

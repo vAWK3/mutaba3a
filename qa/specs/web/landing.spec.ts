@@ -60,7 +60,7 @@ async function pointAt(page: Page, target: Locator) {
 }
 
 /** Holds the pointer down on `target` until `property` settles to `expected`, then lets go elsewhere (no click). */
-async function expectPressed(page: Page, target: Locator, property: 'transform' | 'opacity', expected: RegExp, name: string) {
+async function expectPressed(page: Page, target: Locator, property: 'scale' | 'opacity', expected: RegExp, name: string) {
   if (target !== headerCtaLocatorFor(page)) await target.scrollIntoViewIfNeeded();
   const box = (await target.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -75,8 +75,9 @@ async function expectPressed(page: Page, target: Locator, property: 'transform' 
   }
 }
 
-const PRESSED = /^matrix\(0\.96, 0, 0, 0\.96,/;
-const NOT_SCALED = /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/;
+// The press is the CSS `scale` property (ADR-074, MUT-91), so it reads from computed `scale`, not `transform`.
+const PRESSED = /^0\.96$/;
+const NOT_SCALED = /^(none|1)$/;
 
 /** Problems inside the bar: the wordmark clipped, or the wordmark and the actions overlapping. */
 function barProblems(page: Page): Promise<string[]> {
@@ -155,17 +156,17 @@ test('every landing button gives press feedback, and nothing scales under reduce
 
   await step('Motion allowed: buttons press in to the brand scale; the full-width FAQ rows dim', async () => {
     await openLanding(page);
-    for (const [name, button] of Object.entries(buttons(page))) await expectPressed(page, button, 'transform', PRESSED, name);
+    for (const [name, button] of Object.entries(buttons(page))) await expectPressed(page, button, 'scale', PRESSED, name);
     await expectPressed(page, faq(page), 'opacity', /^0\.6$/, 'FAQ question');
     await scrollPastHero(page);
     await expectHeaderCtaShown(page);
-    await expectPressed(page, headerCta(page), 'transform', PRESSED, 'header button');
+    await expectPressed(page, headerCta(page), 'scale', PRESSED, 'header button');
   });
 
   await step('Reduced motion: nothing scales', async () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await scrollTo(page, 0);
-    for (const [name, button] of Object.entries(buttons(page))) await expectPressed(page, button, 'transform', NOT_SCALED, name);
+    for (const [name, button] of Object.entries(buttons(page))) await expectPressed(page, button, 'scale', NOT_SCALED, name);
   });
 });
 

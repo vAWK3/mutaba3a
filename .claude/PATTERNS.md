@@ -2029,7 +2029,7 @@ A list inside a card that is narrow on a phone and also in a two-column layout o
 ## App patterns added by MUT-81 (2026-10-12)
 
 ### A save is claimed by whichever list renders it, resolved from what the lists report -- never a global fetch counter
-When a save needs to be found again by any one of several lists that might render it (a client profile's entry row and its payment row; a page that might or might not currently show it), give every list a `useSavedFlashRows(listId, ids, queryResult)` call that registers itself and reports `settled = !isLoading && !isFetching` on its own render. A shared store resolves "claimed" the instant any registered list's settled ids intersect the pending save, and "not claimed" only once **every** registered list has reported settled with no match. Watching a single global `useIsFetching()` for 1→0 looks simpler but is wrong: it counts every unrelated query on the page, and TanStack Query has a documented case where invalidating during an in-flight initial fetch reuses that fetch's promise and settles with no trailing refetch, so the global counter can hit zero while a list still holds pre-save data. Derive `settled` inside the hook, not from a value the caller passes in, so no list can get it wrong by using `!isLoading` alone. See `src/lib/savedFlashStore.ts`, `src/hooks/useSavedFlash.ts` (ADR-057).
+When a save needs to be found again by any one of several lists that might render it (a client profile's entry row and its payment row; a page that might or might not currently show it), give every list a `useSavedFlashRows(listId, ids, queryResult)` call that registers itself and reports `settled = !isLoading && !isFetching` on its own render. A shared store resolves "claimed" the instant any registered list's settled ids intersect the pending save, and "not claimed" only once **every** registered list has reported settled with no match. Watching a single global `useIsFetching()` for 1→0 looks simpler but is wrong: it counts every unrelated query on the page, and TanStack Query has a documented case where invalidating during an in-flight initial fetch reuses that fetch's promise and settles with no trailing refetch, so the global counter can hit zero while a list still holds pre-save data. Derive `settled` inside the hook, not from a value the caller passes in, so no list can get it wrong by using `!isLoading` alone. See `src/lib/savedFlashStore.ts`, `src/lib/useSavedFlash.ts` (ADR-057; moved from `hooks/` by MUT-91 so the portal can import it).
 
 ### An unconditional drawer call covers callers that pass no opt-in callback
 Some callers of a shared drawer pass an optional callback for a side effect (Home's `onRecorded`, for Undo); others pass none at all. If a second feature needs the same "a save happened" signal for every caller, it cannot ride the optional callback -- it must call from inside the drawer itself, unconditionally, after the mutation resolves. A caller that needs to suppress that signal for one specific case (Home's full-payment row, which already has complete feedback from its own slide-out) does so by undoing the effect synchronously in its own optional callback, which runs in the same tick right after -- not by asking the drawer to skip the call in the first place. Confirm which callers actually pass the optional callback with a grep before assuming it is a universal hook point (MUT-81 eng review: `ClientWorkSection` and `IncomePage` pass none).
@@ -2151,6 +2151,20 @@ Export → Import round trip in `ImportDataPage.test.tsx`).
 
 **Never**: put file contents in the URL or history state, or ask the person to pick the same file twice.
 
+---
+
+### Pattern: Press feedback is `Button` or `.press`, with `scale`, never `transform` (MUT-91, ADR-074)
+
+A control that should respond to a tap is a `Button` (`.btn`) or carries `.press`; one rule in `src/index.css` scales both to `--press-scale` on `:active`. Use the individual `scale` property: `transform` would replace a control's own positioning transform, and a positioned control would jump on press. Never write a per-component `:active` transform or a literal 0.97; reduced motion is handled by the tokens. Tabs and text links don't press.
+
+### Pattern: A list can start AT a record: `anchor` = inclusive keyset start (MUT-91, ADR-074)
+
+To land on a record that may sit past the first page, pass `anchor=<id>` instead of a cursor. The server reads it through the tenant-scoped getter (404 otherwise) and starts the page at it with an `inclusive` keyset cursor; filters still apply and `nextCursor` continues as normal. On the portal the anchor is a URL search param on the list (`ExpenseFilters.anchor`), sent on the first page only.
+
+### Pattern: Re-arm an after-save only once the page shows the new filters (MUT-91)
+
+When Show changes the same page's filters instead of navigating, re-arm the saved flash in an effect that sees the new filter value, not in the click handler. Otherwise the list's next render, still on its old filters, reports "settled, not here" and resolves the save as unclaimed. See `SavedNotice` (`src/hosted/components/SavedNotice.tsx`).
+
 ### Pattern: Visibility from IntersectionObserver, never from scroll listeners (MUT-77)
 
 **When**: UI reacts to whether something is on screen. Examples: a header button that appears once the hero's has scrolled away, a scroll-edge fade, a reveal on entry.
@@ -2170,7 +2184,7 @@ Export → Import round trip in `ImportDataPage.test.tsx`).
 ### Pattern: Press feedback comes from the motion tokens; text links dim instead (MUT-77)
 
 **How**:
-- Buttons and button-like links add `transform var(--duration-press) var(--ease-spring)` to their own `transition` list and `:active { transform: scale(var(--press-scale)) }`.
+- Buttons and button-like links add `scale var(--duration-press) var(--ease-spring)` to their own `transition` list and `:active { scale: var(--press-scale) }`: the `scale` property, never `transform` (ADR-074; moved off `transform` when MUT-91 merged). In the app and portal, a `Button` or `.press` gets this from `src/index.css`; the landing keeps its own selectors because its controls are not `Button`s.
 - The tokens zero under reduced motion, so a rule needs no reduced-motion override.
 - Text links and full-width rows (the FAQ questions) use `:active { opacity: var(--landing-press-dim) }`. Scaling a line of text, or a row whose text is start-aligned, reads as a glitch.
 - On iOS, `:active` needs a touch listener on the page: a passive no-op `touchstart` on `document`.

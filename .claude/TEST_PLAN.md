@@ -607,6 +607,22 @@ test.describe('Transaction Management', () => {
 
 ---
 
+## MUT-91 — portal press feedback and after-save (added 2026-10-14)
+
+| Area | Tests | Proves |
+|---|---|---|
+| Press CSS | `src/styles/__tests__/pressFeedback.test.ts` | one `:is(.btn,.press):active` rule on `scale: var(--press-scale)`; `.btn` transitions `scale`; no `transform: scale(var(--press-scale))` anywhere; reduced motion zeroes the tokens |
+| Portal buttons | `src/hosted/pages/__tests__/pressFeedback.test.tsx` | every button in the signed-in shell (open menus, a payments row) and on sign-in carries `btn` or `press` (tabs exempt) |
+| Row tint CSS | `src/styles/__tests__/rowFlash.test.ts` | `tr.row-flash > td` (any table), rail mirrored under `[dir="rtl"]`, reduced motion holds the tint |
+| Store | `src/lib/__tests__/savedFlashStore.test.ts` (+5) | backstop waits for a fetching list; a late row still claims; a late no-match resolves then; a quiet settled list doesn't hold resolution after the backstop; `settleMessage` is identity-guarded |
+| Portal after-save | `src/hosted/pages/__tests__/afterSave.test.tsx`, `src/hosted/components/__tests__/SavedNotice.test.tsx` | visible save tints + "Saved"; hidden save → notice → Show anchors (`anchor=`, no cursor) → tint → "Show latest"; edit tints; delete nothing; conversions both ways; other profile/kind ignored; notice settles on timeout/unmount/Show |
+| Drawer reuse (AC1) | `src/hosted/components/__tests__/Drawer.test.tsx` (+2) | the portal Drawer is `DrawerFrame`; no portal source builds its own dialog; close presses |
+| Lint boundary | `scripts/__tests__/hosted-lint.test.ts` (+1) | portal may import `lib/useSavedFlash`, not `hooks/useSavedFlash` |
+| Bundles (AC2) | `scripts/__tests__/check-bundles.test.ts` (+2), `npm run test:bundles` | no app profile store / Show route in dist-hosted; no `hp-toast` in dist-web/desktop |
+| Server anchor | `server/src/repositories/__tests__/store-contract-{expenses,conversions}.ts` (+1 each, memory + Prisma), `server/src/__tests__/routes-{expenses,conversions}.test.ts` (+2 each) | inclusive start with a same-day tie, exclusive continuation, filters apply, 422 with cursor, 404 unknown/deleted/other org, 422 non-uuid |
+| MUT-43 (AC3) | `src/hosted/session/__tests__/auth-states.test.tsx` | unchanged byte-for-byte, green |
+| Browser | throwaway Playwright on preview builds | toggle 0.96 with translate kept; app Button 0.96; AR hidden save (1.6s refetch) → notice → Show → anchored, tinted, rail on the right |
+
 ## Critical Test Scenarios
 
 ### Must-Have Coverage (Updated 2026-02-09)

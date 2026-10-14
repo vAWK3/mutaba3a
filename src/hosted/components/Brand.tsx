@@ -29,7 +29,7 @@ export function LanguageSwitch() {
           type="button"
           lang={option.value}
           aria-pressed={language === option.value}
-          className={language === option.value ? 'hp-lang-on' : undefined}
+          className={language === option.value ? 'press hp-lang-on' : 'press'}
           onClick={() => setLanguage(option.value)}
         >
           {option.label}

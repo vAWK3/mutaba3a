@@ -9,7 +9,7 @@
 
 import { useNavigate } from '@tanstack/react-router';
 import { useRecentPayments } from '../../hooks/useQueries';
-import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatPaymentDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';

@@ -92,6 +92,8 @@ export interface ExpenseFilters {
   currency?: Currency;
   from?: string;
   to?: string;
+  /** Start the list at this expense (MUT-91): set by Show after a save the list didn't show. */
+  anchor?: string;
 }
 export const parseExpenses = (raw: Raw): ExpenseFilters =>
   compact({
@@ -100,6 +102,7 @@ export const parseExpenses = (raw: Raw): ExpenseFilters =>
     currency: oneOf(raw.currency, CURRENCIES),
     from: day(raw.from),
     to: day(raw.to),
+    anchor: id(raw.anchor),
   });
 
 /** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create. */
@@ -118,12 +121,15 @@ export interface ConversionFilters {
   currency?: Currency;
   from?: string;
   to?: string;
+  /** Start the list at this conversion (MUT-91): set by Show after a save the list didn't show. */
+  anchor?: string;
 }
 export const parseConversions = (raw: Raw): ConversionFilters =>
   compact({
     currency: oneOf(raw.currency, CURRENCIES),
     from: day(raw.from),
     to: day(raw.to),
+    anchor: id(raw.anchor),
   });
 
 /** The conversions drawer's own URL state: `?newConversion=1` to create. Create-only (MUT-161) — no `?conversion=<id>` to edit. */
@@ -197,4 +203,15 @@ export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
 /** Whether any filter narrows the list (so an empty result means "nothing matches", not "nothing yet"). */
 export function isNarrowed(filters: object, defaults: object = {}): boolean {
   return Object.entries(filters).some(([key, value]) => value !== undefined && (defaults as Raw)[key] !== value);
+}
+
+/**
+ * The server's answer when a list's `anchor` names a record that is gone
+ * (deleted, another profile's, a stale bookmark): a 404 with this reason, so it
+ * is never mistaken for a removed profile. The list drops the anchor (MUT-91).
+ */
+export function isStaleAnchor(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('status' in error) || (error as { status: unknown }).status !== 404) return false;
+  const details = (error as { details?: unknown }).details;
+  return Boolean(details && typeof details === 'object' && (details as { reason?: unknown }).reason === 'ANCHOR_NOT_FOUND');
 }

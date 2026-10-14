@@ -5953,6 +5953,8 @@ export interface paths {
                     limit?: number;
                     /** @description Opaque `nextCursor` from the previous page. */
                     cursor?: string;
+                    /** @description Start the page at this expense, inclusive (MUT-91). Filters still apply. Not with `cursor`. */
+                    anchor?: string;
                     /** @description Inclusive */
                     from?: string;
                     /** @description Inclusive */
@@ -5990,6 +5992,15 @@ export interface paths {
                 };
                 /** @description Key lacks the required scope */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -7222,6 +7233,8 @@ export interface paths {
                     limit?: number;
                     /** @description Opaque `nextCursor` from the previous page. */
                     cursor?: string;
+                    /** @description Start the page at this conversion, inclusive (MUT-91). Filters still apply. Not with `cursor`. */
+                    anchor?: string;
                     /** @description Inclusive */
                     from?: string;
                     /** @description Inclusive */
@@ -7255,6 +7268,15 @@ export interface paths {
                 };
                 /** @description Key lacks the required scope */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };

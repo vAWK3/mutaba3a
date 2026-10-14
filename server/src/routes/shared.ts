@@ -46,6 +46,28 @@ export function encodeNextCursor(cursor: PageCursor | null): string | null {
   return cursor ? encodeCursor(cursor) : null;
 }
 
+/**
+ * Where a dated, newest-first ledger page starts (MUT-91): after `cursor`, or
+ * AT `anchor` (inclusive) so a client can land on a record it just saved. The
+ * anchor is read through the tenant-scoped getter, so another organization's id
+ * is a plain 404, the same answer as an unknown one.
+ */
+export async function ledgerPageStart<C extends { occurredOn: string; id: string; inclusive?: boolean }>(
+  query: { cursor?: string | undefined; anchor?: string | undefined },
+  decode: (encoded: string) => C,
+  loadAnchor: (id: string) => Promise<{ occurredOn: string; id: string } | null>,
+  notFoundMessage: string,
+): Promise<C | null> {
+  if (query.anchor && query.cursor) throw new ApiError('VALIDATION_FAILED', 'anchor and cursor cannot be combined', { field: 'anchor' });
+  if (query.anchor) {
+    const record = await loadAnchor(query.anchor);
+    // A reason, so a client can tell a stale anchor from a removed profile (both 404) and just drop it.
+    if (!record) throw new ApiError('NOT_FOUND', notFoundMessage, { field: 'anchor', reason: 'ANCHOR_NOT_FOUND' });
+    return { occurredOn: record.occurredOn, id: record.id, inclusive: true } as C;
+  }
+  return query.cursor ? decode(query.cursor) : null;
+}
+
 /** One lookup for a whole page: entity id → its reference (if any). */
 export async function referencesByEntity(
   store: LedgerStore,

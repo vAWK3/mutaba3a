@@ -6,8 +6,11 @@ import { CategoryFilter, ClientFilter, DateFilter, FilterBar } from '../../compo
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ExpenseDrawer } from '../../components/ExpenseDrawer';
+import { AnchoredNote, SavedNotice } from '../../components/SavedNotice';
+import { useSavedFlashRows } from '../../../lib/useSavedFlash';
 import { isNarrowed, type ExpensesPageSearch } from '../../data/filters';
 import { useCustomerDirectory } from '../../data/queries';
+import { useAnchoredList } from '../../data/anchoredList';
 import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -69,6 +72,21 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
     [list.data, categoriesQuery.data, customers.data, categoriesById, language],
   );
 
+  // After-save (MUT-91): the list claims a save once every query it renders
+  // from has settled. A query in error counts as settled, so the notice still
+  // confirms the write behind the Unreachable card (eng review D4).
+  const queries = [list, categoriesQuery, customers];
+  // A list in error shows no rows (QueryView), so its stale rows can't claim a save either.
+  const listInError = queries.some((q) => q.isError);
+  const ids = useMemo(() => (listInError ? [] : rows?.map((r) => r.id) ?? []), [rows, listInError]);
+  const anchored = useAnchoredList(filters, setFilters, list.error);
+  // The list's own filters only: opening the drawer is not a filter change.
+  const filtersKey = JSON.stringify({ ...filters, expense: undefined, newExpense: undefined });
+  const flashed = useSavedFlashRows('hosted-expenses', ids, {
+    isLoading: !rows && !queries.some((q) => q.isError),
+    isFetching: queries.some((q) => q.isFetching),
+  });
+
   const columns = useMemo<Column<ExpenseRow>[]>(
     () => [
       { key: 'date', header: t('hosted.expenses.columns.date'), cell: (r) => r.date },
@@ -84,6 +102,9 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const openNew = () => setFilters({ ...filters, newExpense: true, expense: undefined });
   const openEdit = (row: ExpenseRow) => setFilters({ ...filters, expense: row.id, newExpense: undefined });
   const closeDrawer = () => setFilters({ ...filters, expense: undefined, newExpense: undefined });
+  // An anchored list can't start at a record that no longer exists (the server would 404): drop the anchor with it.
+  const afterDelete = (id: string) =>
+    setFilters({ ...filters, expense: undefined, newExpense: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
 
   const recordButton = (
     <Button variant="primary" size="sm" onClick={openNew}>
@@ -100,9 +121,10 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
         <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
         <DateFilter label={t('hosted.filters.to')} value={filters.to} onChange={(to) => patch({ to })} />
       </FilterBar>
+      {filters.anchor && !anchored.staleAnchor && <AnchoredNote onShowLatest={anchored.showLatest} focusRequest={anchored.focusRequest} />}
       <QueryView
-        queries={[list, categoriesQuery, customers]}
-        data={rows}
+        queries={anchored.staleAnchor ? [] : queries}
+        data={anchored.staleAnchor ? undefined : rows}
         isEmpty={(r) => r.length === 0}
         empty={
           isNarrowed(filters, { newExpense: undefined, expense: undefined }) ? (
@@ -114,11 +136,19 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
       >
         {(r) => (
           <>
-            <HostedTable label={t('hosted.expenses.title')} columns={columns} rows={r} rowKey={(row) => row.id} onRowClick={openEdit} />
+            <HostedTable
+              label={t('hosted.expenses.title')}
+              columns={columns}
+              rows={r}
+              rowKey={(row) => row.id}
+              onRowClick={openEdit}
+              rowClassName={(row) => (flashed(row.id) ? 'row-flash' : undefined)}
+            />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={listInError} />
       {(filters.newExpense || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}
@@ -126,6 +156,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           mode={filters.expense ? 'edit' : 'create'}
           expenseId={filters.expense}
           onClose={closeDrawer}
+          onDeleted={afterDelete}
         />
       )}
     </>

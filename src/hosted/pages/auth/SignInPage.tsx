@@ -175,7 +175,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
               />
               <button
                 type="button"
-                className="hp-password-toggle"
+                className="hp-password-toggle press"
                 aria-pressed={showPassword}
                 aria-controls={`${ids}-password`}
                 onClick={() => setShowPassword((shown) => !shown)}

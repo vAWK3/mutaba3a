@@ -74,7 +74,9 @@ describe('landing CSS', () => {
     ['a.landing-get-it-option:active', 'LandingPage.css'],
   ])('presses %s in with the brand press tokens', (selector, fileName) => {
     const root = landingRoots.find(({ file }) => file.endsWith(`/${fileName}`))!.root;
-    expect(baseDeclarations(root, selector)).toMatchObject({ transform: 'scale(var(--press-scale))' });
+    // The `scale` property, never transform (ADR-074, MUT-91): it composes with any transform the control has.
+    expect(baseDeclarations(root, selector)).toMatchObject({ scale: 'var(--press-scale)' });
+    expect(baseDeclarations(root, selector)).not.toHaveProperty('transform');
   });
 
   it('writes no literal press scale or duration: the tokens zero them under reduced motion', () => {
@@ -82,6 +84,9 @@ describe('landing CSS', () => {
     for (const { file, root } of landingRoots) {
       root.walkDecls('transform', (decl) => {
         if (/scale\(\s*0?\.\d/.test(decl.value)) offenders.push(`${file}: ${decl.value}`);
+      });
+      root.walkDecls('scale', (decl) => {
+        if (/^\s*0?\.\d/.test(decl.value)) offenders.push(`${file}: scale ${decl.value}`);
       });
     }
     expect(offenders).toEqual([]);
@@ -93,6 +98,7 @@ describe('landing CSS', () => {
       const all = landingRoots.flatMap(({ root }) => rulesFor(root, selector).map((r) => declarations(r.rule)));
       expect(Object.assign({}, ...all)).toMatchObject({ opacity: 'var(--landing-press-dim)' });
       expect(Object.assign({}, ...all)).not.toHaveProperty('transform');
+      expect(Object.assign({}, ...all)).not.toHaveProperty('scale');
     },
   );
 

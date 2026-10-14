@@ -206,7 +206,7 @@ html:has(.landing-header) {
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
-    transform var(--duration-press) var(--ease-spring);
+    scale var(--duration-press) var(--ease-spring);
 }
 
 .landing-lang-toggle:hover {
@@ -215,7 +215,7 @@ html:has(.landing-header) {
 }
 
 .landing-lang-toggle:active {
-  transform: scale(var(--press-scale));
+  scale: var(--press-scale);
 }
 
 .landing-lang-toggle span.active {
@@ -246,7 +246,7 @@ html:has(.landing-header) {
   transition:
     opacity var(--duration-toggle) ease,
     visibility 0s linear 0s,
-    transform var(--duration-press) var(--ease-spring);
+    scale var(--duration-press) var(--ease-spring);
 }
 
 .landing-header-cta[data-visible="false"] {
@@ -264,11 +264,11 @@ html:has(.landing-header) {
   /* The hover dim is quick like the hero's; the show/hide fade above keeps its own length */
   transition:
     opacity 0.15s ease,
-    transform var(--duration-press) var(--ease-spring);
+    scale var(--duration-press) var(--ease-spring);
 }
 
 .landing-header-cta[data-visible="true"]:active {
-  transform: scale(var(--press-scale));
+  scale: var(--press-scale);
 }
 
 .landing-header-cta:focus-visible {
@@ -746,7 +746,7 @@ html:has(.landing-header) {
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
-    transform var(--duration-press) var(--ease-spring);
+    scale var(--duration-press) var(--ease-spring);
 }
 
 a.landing-get-it-option:hover {
@@ -757,7 +757,7 @@ a.landing-get-it-option:hover {
 }
 
 a.landing-get-it-option:active {
-  transform: scale(var(--press-scale));
+  scale: var(--press-scale);
 }
 
 a.landing-get-it-option:focus-visible {

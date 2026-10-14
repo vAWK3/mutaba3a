@@ -25,7 +25,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useReceivables } from '../../hooks/useIncomeQueries';
 import { usePaymentUndo } from '../../hooks/usePaymentUndo';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
-import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useDrawerStore } from '../../lib/stores';
 import { toWorkRow, type WorkRow } from '../clients/clientProfileRows';

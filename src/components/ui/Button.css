@@ -12,7 +12,7 @@
     background-color 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease,
-    transform 0.1s ease;
+    scale var(--duration-press) var(--ease-spring);
   position: relative;
   user-select: none;
 }
@@ -89,7 +89,6 @@
 .btn-primary:active:not(:disabled) {
   background-color: var(--accent-solid-active);
   box-shadow: var(--shadow-1);
-  transform: translateY(1px);
 }
 
 /* Secondary Variant */
@@ -184,10 +183,6 @@
 @media (prefers-reduced-motion: reduce) {
   .btn {
     transition: none;
-  }
-
-  .btn:active:not(:disabled) {
-    transform: none;
   }
 
   .btn-spinner {

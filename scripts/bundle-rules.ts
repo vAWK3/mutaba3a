@@ -30,6 +30,8 @@ export const LOCAL_RULES: Rule[] = [
   { name: 'sync bundle extension', pattern: /\.msync\b/ },
   { name: 'sync server command', pattern: /start_sync_server/ },
   { name: 'sync bundle export', pattern: /Export Sync Bundle/ },
+  // MUT-91: the portal's stylesheet and its after-save notice stay out of the local builds.
+  { name: 'portal stylesheet', pattern: /\bhp-toast\b/ },
 ];
 
 /**
@@ -51,6 +53,10 @@ export const HOSTED_RULES: Rule[] = [
   { name: 'ar: reset', pattern: /إعادة تعيين/ },
   { name: 'ar: invite', pattern: /دعوة/ },
   { name: 'ar: subscribe', pattern: /اشترك/ },
+  // MUT-91: the portal imports the app's after-save store; nothing of the app's
+  // profile store or its Show routes may come along with it.
+  { name: 'app profile store', pattern: /mutaba3a-active-profile/ },
+  { name: 'app saved-flash route', pattern: /\/clients\/\$clientId/ },
 ];
 
 export function findForbidden(text: string, rules: Rule[]): Finding[] {

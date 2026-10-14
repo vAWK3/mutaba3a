@@ -67,7 +67,7 @@
   color: var(--bg);
   text-decoration: none;
   transition:
-    transform var(--duration-press) var(--ease-spring),
+    scale var(--duration-press) var(--ease-spring),
     opacity 0.15s ease;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .hero-cta-primary:active {
-  transform: scale(var(--press-scale));
+  scale: var(--press-scale);
 }
 
 .hero-cta-primary:focus-visible {

@@ -1304,6 +1304,8 @@ export interface ExpenseFilter {
 export interface ExpenseCursor {
   occurredOn: IsoDate;
   id: string;
+  /** Include the cursor's own row: the page starts AT it (MUT-91 `anchor`). Absent = strictly after, as every issued cursor is. */
+  inclusive?: boolean;
 }
 
 export interface ExpensePage {
@@ -1361,6 +1363,8 @@ export interface ConversionFilter {
 export interface ConversionCursor {
   occurredOn: IsoDate;
   id: string;
+  /** Include the cursor's own row: the page starts AT it (MUT-91 `anchor`). Absent = strictly after, as every issued cursor is. */
+  inclusive?: boolean;
 }
 
 export interface ConversionPage {

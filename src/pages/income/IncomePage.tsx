@@ -24,7 +24,7 @@ import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, Pay
 import { CheckIcon, CopyIcon, PencilIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
-import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useIncomeFilters } from '../../hooks/useIncomeFilters';
 import type { IncomeFilters } from '../../hooks/useIncomeQueries';

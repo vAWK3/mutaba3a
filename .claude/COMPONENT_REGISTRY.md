@@ -1423,7 +1423,7 @@ toast.info('Syncing...');
 
 ### SavedFlash (store + hook + announcer) — MUT-81, ADR-057
 **Store**: `src/lib/savedFlashStore.ts`
-**Hook**: `src/hooks/useSavedFlash.ts`
+**Hook**: `src/lib/useSavedFlash.ts` (moved from `hooks/` by MUT-91 so the portal may import it)
 **Announcer**: `src/components/layout/SavedFlashAnnouncer.tsx` (mounted once in `AppShell`)
 **Purpose**: After saving income or a payment, tint the row if it is on screen, or say where it went if it is not. One mechanism for every save path and every list, so no list reimplements the claim logic.
 
@@ -1434,7 +1434,7 @@ const markSaved = useSavedFlashStore((s) => s.markSaved);
 markSaved({ kind: 'income', ids: [newTx.id], clientId, clientName, profileId });
 
 // A list that renders rows with ids
-import { useSavedFlashRows } from '@/hooks/useSavedFlash';
+import { useSavedFlashRows } from '@/lib/useSavedFlash';
 const isFlashed = useSavedFlashRows('my-list-id', rows.map((r) => r.id), { isLoading, isFetching });
 // <tr className={cn('clickable', isFlashed(row.id) && 'row-flash')}>
 ```
@@ -1442,10 +1442,25 @@ const isFlashed = useSavedFlashRows('my-list-id', rows.map((r) => r.id), { isLoa
 - `markSaved` is unconditional in both `IncomeDrawer` and `PartialPaymentDrawer`: ClientWorkSection and IncomePage open the payment drawer with no callback, so the drawer is the only place that can know.
 - A list's `settled` state is derived inside `useSavedFlashRows` from the query result (`!isLoading && !isFetching`), never passed in loose, so no caller can race a refetch.
 - Resolution is list-reported settled (every registered list must report before an unclaimed save raises its message) — never a global `useIsFetching()` count, which races TanStack invalidation (see ADR-057).
-- `tr.row-flash` (`src/index.css`): a 1.5s `--accent-subtle` fade plus a 3px leading rail (an inset box-shadow on the logical inline-start edge, so it mirrors in RTL); `--accent-subtle` alone is already the app's "selected" look in 15 other places. Reduced motion holds the tint, skips the fade.
+- `:is(.data-table, .table) tr.row-flash > td` (`src/index.css`; the app's and the portal's tables, MUT-91): a 1.5s `--accent-subtle` fade plus a 3px leading rail. The rail is an inset box-shadow, which has no logical form, so an explicit `[dir="rtl"]` rule mirrors it. `--accent-subtle` alone is already the app's "selected" look in 15 other places. Reduced motion holds the tint, skips the fade; the selector's specificity keeps that held tint above `.data-table tr:hover td`.
 - The announcer renders a visually-hidden `role="status" aria-live="polite"` "Saved" when claimed; otherwise it raises the existing `Toast` with a Show action that switches the active profile (via the raw `profileStore`, never `useActiveProfile`'s wrapper), navigates, and re-arms the flash so the message can't repeat.
 - **Not yet built** (see TD-077, TD-078): the design review's anchored-strip presentation, the Owed-now tick, currency-block collapse, pagination for the two unbounded lists, and a dedicated focus chain outside Home.
-- Tests: `src/lib/__tests__/savedFlashStore.test.ts`, `src/hooks/__tests__/useSavedFlash.test.tsx`, `src/components/layout/__tests__/SavedFlashAnnouncer.test.tsx`, plus integration coverage in `IncomeDrawer.test.tsx`, `PartialPaymentDrawer.test.tsx` and `HomeNeedsAttention.test.tsx`.
+- Tests: `src/lib/__tests__/savedFlashStore.test.ts`, `src/lib/__tests__/useSavedFlash.test.tsx`, `src/components/layout/__tests__/SavedFlashAnnouncer.test.tsx`, plus integration coverage in `IncomeDrawer.test.tsx`, `PartialPaymentDrawer.test.tsx` and `HomeNeedsAttention.test.tsx`.
+- **Portal (MUT-91):**
+  - `src/hosted/components/SavedNotice.tsx` is the portal's view of the same store. It shows a page-local "Expense saved · Show" / "Conversion saved · Show" notice (`hp-toast hp-toast-info`, `role="status"`).
+    - It lasts `NOTICE_MS` (6s) and holds while hovered or focused.
+    - It settles a save when it times out, Show is pressed, or the page is left.
+    - It re-arms after Show once `filtersKey` changes.
+  - `AnchoredNote` reads "Showing from a saved entry · Show latest" and takes focus after Show.
+  - `src/hosted/data/anchoredList.ts` `useAnchoredList(filters, setFilters, listError)` gives both lists `show`, `showLatest`, `focusRequest`, and drops a stale anchor (the server's `ANCHOR_NOT_FOUND` 404, `isStaleAnchor` in `data/filters.ts`).
+  - `HostedTable` takes `rowClassName` for the tint.
+  - Store actions: `settleMessage(flash)` marks a save shown and resolves it if unresolved; `MAX_WAIT_MS` (10s) caps how long a fetching list can hold a save.
+  - Tests: `src/hosted/components/__tests__/SavedNotice.test.tsx`, `src/hosted/pages/__tests__/afterSave.test.tsx`, `src/hosted/session/__tests__/endSession.test.ts`.
+
+### Press feedback (`.press`) — MUT-91, ADR-074
+**Location**: `src/index.css` (`:is(.btn, .press):active:not(:disabled)`), `src/components/ui/Button.css` (`.btn` transition)
+**Usage**: every `Button` presses already; add `className="… press"` to any other control that acts (the portal's menu, switcher, language, expand and password-toggle buttons, the drawer's close). Not on tabs or text links.
+**Tests**: `src/styles/__tests__/pressFeedback.test.ts` (CSS contract, bans `transform: scale(var(--press-scale))`), `src/hosted/pages/__tests__/pressFeedback.test.tsx` (every portal button carries `btn` or `press`).
 
 ---
 
