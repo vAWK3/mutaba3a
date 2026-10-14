@@ -261,6 +261,15 @@ The page speaks as "we" throughout, like the rest of the landing page. The migra
 - **Changed from the approved states table (2A row "Error"):** the failure alert sits directly above the submit button, not above the form. In the browser it was off-screen for a visitor at the button.
 - **Not done as planned:** no `qa/features/web/landing.yaml`. No landing spec is catalogued yet, so this is TD-130 instead of a one-feature area.
 - **Found by axe in QA:** in-text links on the page are underlined (`link-in-text-block`).
+- **/qa-reconcile (Basel's answers, 2026-10-14):**
+  - Honeypot renamed to `bot-field` and hidden with `hidden`.
+  - `request-id` field added.
+  - Length limits added.
+  - Trailing slash accepted.
+  - `/hosted` gets its own link-preview HTML (`hosted-offer.html`).
+  - Privacy copy completed, with 12-month retention.
+  - Spam handled with operator steps now; Turnstile is MUT-197. reCAPTCHA was declined: Google keys plus a third-party script on a no-tracking page.
+  - Fields sent are now `HOSTED_REQUEST_FIELDS` + `request-id`, with `bot-field` as the honeypot.
 
 ---
 

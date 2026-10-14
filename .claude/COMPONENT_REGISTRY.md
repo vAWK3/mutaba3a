@@ -448,6 +448,10 @@ Tests: `src/pages/landing/__tests__/`.
 **Location**: `src/pages/landing/hostedRequest.ts`
 **Purpose**: The one definition of the request form for both the page and the build: `HOSTED_REQUEST_FORM_NAME`, `HOSTED_REQUEST_FIELDS`, `HONEYPOT_FIELD`, `NETLIFY_FORMS_PATH`, `SUBMIT_TIMEOUT_MS`, `PROFESSIONS`, `DEVICES`, plus pure `validateHostedRequest`, `encodeHostedRequest` and `submitHostedRequest(values, fetchImpl?)` (never throws; `'ok' | 'error'`). No React or DOM imports: `vite.config.ts` loads it to emit `__forms.html`.
 
+### marketingPath
+**Location**: `src/pages/landing/marketingPath.ts`
+**Purpose**: `marketingPath(pathname)` drops one trailing slash (not from `/`). `src/main.tsx` matches the marketing pages against it, so `/hosted/` opens `/hosted`.
+
 ### LandingProviders
 **Location**: `src/pages/landing/LandingProviders.tsx`
 **Purpose**: The one wrapper `src/main.tsx` gives the web build's marketing routes (`/`, `/download`, `/privacy`, `/hosted`): `ThemeProvider` + `LanguageProvider`, nothing of the app's (no React Query, router or database). Tests render those pages through it, so a component that needs app context fails in Vitest as it does in production.

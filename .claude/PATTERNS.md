@@ -2214,6 +2214,8 @@ Netlify registers only forms it finds in deployed HTML, and a React form isn't t
 - The page POSTs `application/x-www-form-urlencoded` (Netlify takes no JSON) to `/__forms.html`, a real file, so no SPA rewrite catches the POST.
 - Netlify UI steps (form detection, notifications) are recorded in INFRA §1, because `netlify.toml` can't set them.
 **Instances**: the `/hosted` request form; guarded by `vite-config.test.ts` (the twin names exactly `HOSTED_REQUEST_FIELDS`) and `hostedRequest.test.ts`.
+**Honeypot**: name it `bot-field` and hide it with `hidden` (display: none). A contact-looking name (`company-website`) that is merely off-screen gets autofilled for real visitors, and Netlify then drops their request without a word while the page shows success.
+**Per-page link previews**: crawlers run no JavaScript, so a marketing page that will be shared needs its own HTML copy. `hostedOfferHtml()` derives `hosted-offer.html` from the built `index.html` with `withPageMeta()` (new card tags and title, the scripts untouched). `netlify.toml` serves it at the page's path, above the `/*` fallback, and it stays out of the SW precache.
 **Gotcha**: in dev, Vite's HTML fallback serves `/<name>` from a root `<name>.html`. `/hosted` hit the portal's `hosted.html`, so `hostedOfferDevRoute()` rewrites it to the app shell. Check for a same-named root HTML file before adding a marketing route.
 
 
