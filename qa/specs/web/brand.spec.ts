@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { openFreshApp, logIncome, openNewIncomeDrawer, localDateFromToday, switchToArabic, enableOptionalArea } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { ar } from '../../support/i18n';
+import { ar, chooseLanguageScript, LANGUAGE_KEYS } from '../../support/i18n';
 import {
   CANVAS,
   SCHEMES,
@@ -170,6 +170,8 @@ for (const language of ['en', 'ar'] as const) {
       });
 
       await step('Open the landing page: body Thmanyah Sans, the headline and its inner lines Serif Display (TD-048)', async () => {
+        // The app stored its language by detection; only a chosen one carries onto the Arabic-first landing (MUT-202)
+        await page.evaluate(chooseLanguageScript, [LANGUAGE_KEYS, language] as [typeof LANGUAGE_KEYS, 'en' | 'ar']);
         await page.goto('/');
         await expect(page.locator('html')).toHaveAttribute('lang', language);
         expect((await computedFont(page.locator('body'))).family).toBe('Thmanyah Sans');

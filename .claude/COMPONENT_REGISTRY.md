@@ -469,7 +469,7 @@ Tests: `src/pages/landing/__tests__/`.
 
 ### LandingProviders
 **Location**: `src/pages/landing/LandingProviders.tsx`
-**Purpose**: The one wrapper `src/main.tsx` gives the web build's marketing routes (`/`, `/download`, `/privacy`, `/hosted`): `ThemeProvider` + `LanguageProvider`, nothing of the app's (no React Query, router or database). Tests render those pages through it, so a component that needs app context fails in Vitest as it does in production.
+**Purpose**: The one wrapper `src/main.tsx` gives the web build's marketing routes (`/`, `/download`, `/privacy`, `/hosted`): `ThemeProvider` + `LanguageProvider`, nothing of the app's (no React Query, router or database). Tests render those pages through it, so a component that needs app context fails in Vitest as it does in production. Since MUT-202 it opens them in Arabic (`LANDING_DEFAULT_LANGUAGE`, passed as `LanguageProvider`'s `defaultLanguage`) unless a person chose a language (marked by `mutaba3a-language-chosen`); the default is never stored, and a language the app stored by detection doesn't count (ADR-077). Tests that need English call `chooseLanguage('en')` (`src/test/language.ts`) first.
 
 ```tsx
 render(<LandingProviders><DownloadPage /></LandingProviders>);

@@ -12,44 +12,81 @@ const translations: Record<Language, Dictionary> = {
   ar: arTranslations,
 };
 
-const STORAGE_KEY = 'mutaba3a-language';
-
+/** The language last used, written by every surface that shares it (the app stores even a detected one). */
+export const LANGUAGE_STORAGE_KEY = 'mutaba3a-language';
 /**
- * Get the initial language from localStorage or system preference
+ * Set only when a person picks a language (the switch, Settings), never by detection (MUT-202). A surface
+ * with its own default trusts the stored language only alongside this mark: before it existed, the
+ * landing and the app stored whatever they detected, so a stored value alone is not a choice.
  */
-function getInitialLanguage(): Language {
-  if (typeof window === 'undefined') return 'en';
+export const LANGUAGE_CHOSEN_KEY = 'mutaba3a-language-chosen';
 
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === 'en' || stored === 'ar') {
-    return stored;
+/** Storage can throw (blocked cookies, some private modes); the language must still render. */
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
   }
+}
 
-  return detectSystemLanguage();
+function writeStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice holds for this visit only
+  }
+}
+
+interface InitialLanguage {
+  language: Language;
+  /** Whether the language is stored on mount: always without a default (the app), only a real choice with one. */
+  chosen: boolean;
+}
+
+function initialLanguage(defaultLanguage: Language | undefined): InitialLanguage {
+  if (typeof window === 'undefined') return { language: defaultLanguage ?? 'en', chosen: false };
+  const value = readStorage(LANGUAGE_STORAGE_KEY);
+  const stored = value === 'en' || value === 'ar' ? value : null;
+  if (defaultLanguage === undefined) return { language: stored ?? detectSystemLanguage(), chosen: true };
+  const madeByAPerson = stored !== null && readStorage(LANGUAGE_CHOSEN_KEY) !== null;
+  return madeByAPerson ? { language: stored, chosen: true } : { language: defaultLanguage, chosen: false };
 }
 
 // Provider Props
 interface LanguageProviderProps {
   children: ReactNode;
+  /**
+   * The language to open in unless a person chose one, instead of the
+   * system's (MUT-202: the marketing site opens in Arabic). It is a default,
+   * not a preference: nothing is stored until someone chooses, so it never
+   * changes the language of another surface that shares the key (the web
+   * app), and a language some surface stored by detection does not beat it.
+   */
+  defaultLanguage?: Language;
 }
 
 /**
  * LanguageProvider - Provides language context to the entire app
  *
  * Features:
- * - Auto-detects system language on first visit
- * - Persists language choice to localStorage
+ * - Auto-detects system language on first visit, unless given a defaultLanguage
+ * - Persists language choice to localStorage (a defaultLanguage only once someone chooses)
  * - Updates <html> lang and dir attributes (via I18nProvider)
  * - Provides t() function for translations with interpolation
  */
-export function LanguageProvider({ children }: LanguageProviderProps) {
-  const [language, setLanguageState] = useState<Language>(getInitialLanguage);
+export function LanguageProvider({ children, defaultLanguage }: LanguageProviderProps) {
+  const [initial] = useState(() => initialLanguage(defaultLanguage));
+  const [language, setLanguageState] = useState<Language>(initial.language);
+  const [chosen, setChosen] = useState(initial.chosen);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, language);
-  }, [language]);
+    if (chosen) writeStorage(LANGUAGE_STORAGE_KEY, language);
+  }, [language, chosen]);
 
   const setLanguage = useCallback((lang: Language) => {
+    writeStorage(LANGUAGE_CHOSEN_KEY, '1');
+    setChosen(true);
     setLanguageState(lang);
   }, []);
 

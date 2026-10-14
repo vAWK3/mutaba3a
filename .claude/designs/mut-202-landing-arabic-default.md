@@ -1,6 +1,6 @@
 # MUT-202 — Landing: open in Arabic by default, whatever the system language
 
-Status: **PLANNED (2026-10-14)**, branch `feature/mut-171-landing` (epic worktree; MUT-173 and MUT-174 merged to main from it).
+Status: **BUILT and reconciled (2026-10-14)**; the qa-reconcile record is at the end of this file, branch `feature/mut-171-landing` (epic worktree; MUT-173 and MUT-174 merged to main from it).
 Ticket: MUT-202 (Story) · parent epic MUT-171. Filed from Basel's message mid-epic: "the landing page should default to arabic regardless of system language". No blockers.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · finished → In Review after /qa-reconcile.
 
@@ -57,3 +57,29 @@ Scope: 3 source files, 2 test files + QA + catalogue; no new module beyond a tes
 
 Business / product impact
 - Every first visit to the marketing site is in Arabic, the product's primary market, without touching what returning visitors chose or what the web app shows.
+
+
+---
+
+# qa-reconcile record (2026-10-14, non-interactive)
+
+Branch `feature/mut-171-landing` vs `main` (7b67a64, which carries MUT-173/174). Reviewer: Claude + an independent in-host reviewer on the diff (Opus).
+
+| Criterion (ticket) | In plan? | In code? | Verdict |
+|---|---|---|---|
+| No stored choice + any system language → Arabic, rtl, on `/`, `/hosted`, `/privacy`, `/download` | yes | `LandingProviders` `defaultLanguage="ar"`; `LanguageProvider` | MET (core + `LandingProviders.test` + QA `@web.landing.arabic-default` in an en-US browser, all four pages) |
+| A stored choice still wins; the switch stores it | yes | `setLanguage` stores the language and the chosen mark | MET (DRIFT, conscious: only a *marked* choice wins; a language the app or the pre-MUT-202 landing stored by detection doesn't, because Basel's "regardless of system language" would otherwise fail for every earlier visitor) |
+| A landing visit leaves the key unset; `/app` keeps its system default | yes | nothing stored while defaulted | MET (unit + QA: key `null` after the four pages; `/app` opens `en` and stores it as before) |
+| Unit tests; QA case; English-asserting QA cases set English | yes | as listed; `@web.brand.type` (English) now chooses English before the landing step | MET |
+
+Pre-landing review findings and what changed:
+1. **P2, fixed** — a stored `en` written by detection (the app always; the landing before this change) would have kept those visitors in English. A separate `mutaba3a-language-chosen` mark, written only by `setLanguage`, now distinguishes a choice; the landing ignores an unmarked value; the app reads the plain key as before. Unit tests for both, and the QA case now proves the landing stays Arabic after `/app` stored `en`. Consequence recorded in ADR-077: someone who explicitly chose English before MUT-202 sees Arabic once, until they press EN.
+2. **P3, fixed** — the `LandingProviders` docblock had slid onto the constant; reordered.
+3. **P3, fixed** — the QA case now polls that `/app` stores its detected language (the app's behaviour, unchanged).
+4. **P3, fixed** — unit cases for an invalid stored value and `afterEach(vi.restoreAllMocks)` in the new describe.
+5. **P3, fixed** — storage reads/writes are guarded (`readStorage`/`writeStorage`); storage is read once per mount; a test proves the provider renders and switches when storage throws.
+6. **Product notes, not changed (for Basel):** `index.html` keeps `lang="en"` (D4); the `LandingLoader` "Loading..." text in `main.tsx` is English; the hosted portal has its own language key and still follows the system language; whether `/app` should default to Arabic is open.
+
+Gate (Node 22): lint 0 errors (6 pre-existing warnings); typecheck clean; i18n/landing/download/content suites 29 files / 341 tests; `test:bundles` passes; `release-qa lint` no errors; Playwright (built web preview): the whole landing spec + `@web.brand.type` + `@web.brand.contrast-landing` + `@web.brand.link-hover` = 32 passed. Full `test:run`: the first run had 8 failures in unrelated suites (IncomeDrawer, Home, portal drawers) while the reviewer ran vitest in the same worktree; those 7 files pass in isolation (151 tests); the clean full run is in the merge commit.
+
+**Verdict: PASS.** Jira → In Review.

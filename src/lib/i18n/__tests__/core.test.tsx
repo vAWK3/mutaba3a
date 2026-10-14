@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { LanguageProvider, useLanguage } from '../context';
 import { I18nProvider, createTranslator, useT } from '../core';
@@ -81,5 +81,85 @@ describe('LanguageProvider (the app) behaves as before the split', () => {
     );
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
     expect(localStorage.getItem('mutaba3a-language')).toBe('ar');
+  });
+});
+
+describe('LanguageProvider with a defaultLanguage (the marketing site, MUT-202)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('opens in the default whatever the system language, and stores nothing until someone chooses', () => {
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-US');
+    render(
+      <LanguageProvider defaultLanguage="ar">
+        <Probe />
+      </LanguageProvider>,
+    );
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+    expect(screen.getByTestId('dir')).toHaveTextContent('rtl');
+    expect(localStorage.getItem('mutaba3a-language')).toBeNull();
+  });
+
+  it('lets a person\'s stored choice win over the default', () => {
+    localStorage.setItem('mutaba3a-language', 'en');
+    localStorage.setItem('mutaba3a-language-chosen', '1');
+    render(
+      <LanguageProvider defaultLanguage="ar">
+        <Probe />
+      </LanguageProvider>,
+    );
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+  });
+
+  it('stores the language once someone presses the switch', () => {
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-US');
+    render(
+      <LanguageProvider defaultLanguage="ar">
+        <Probe />
+      </LanguageProvider>,
+    );
+    act(() => screen.getByText('switch').click());
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+    expect(localStorage.getItem('mutaba3a-language')).toBe('en');
+    expect(localStorage.getItem('mutaba3a-language-chosen')).toBe('1');
+  });
+
+  it('does not let a language stored by detection beat the default', () => {
+    localStorage.setItem('mutaba3a-language', 'en');
+    render(
+      <LanguageProvider defaultLanguage="ar">
+        <Probe />
+      </LanguageProvider>,
+    );
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+    expect(localStorage.getItem('mutaba3a-language')).toBe('en');
+  });
+
+  it('ignores a stored value that is not a language', () => {
+    localStorage.setItem('mutaba3a-language', 'fr');
+    localStorage.setItem('mutaba3a-language-chosen', '1');
+    render(
+      <LanguageProvider defaultLanguage="ar">
+        <Probe />
+      </LanguageProvider>,
+    );
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+  });
+
+  it('still renders, in the default, when storage throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    render(
+      <LanguageProvider defaultLanguage="ar">
+        <Probe />
+      </LanguageProvider>,
+    );
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+    act(() => screen.getByText('switch').click());
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
   });
 });

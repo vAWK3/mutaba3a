@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot, expectNoHorizontalOverflow } from '../../support/brand';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { ar, en } from '../../support/i18n';
+import { ar, chooseLanguageScript, en, LANGUAGE_KEYS } from '../../support/i18n';
 import { contrast, parseColor } from '../../../src/test/css/brandCss';
 import { MOBILE_APP_LINKS } from '../../../src/content/download-config';
 import { malafatUrl } from '../../../src/content/malafatLinks';
@@ -21,9 +21,14 @@ const RELEASE = {
   assets: [{ name: 'Mutaba3a_0.1.4_aarch64.dmg' }, { name: 'Mutaba3a_0.1.4_x64_en-US.msi' }],
 };
 
+/** A stored language choice, as the EN/AR switch leaves it; without one the marketing site opens in Arabic (MUT-202). */
+async function preferLanguage(page: Page, language: 'en' | 'ar') {
+  await page.addInitScript(chooseLanguageScript, [LANGUAGE_KEYS, language] as [typeof LANGUAGE_KEYS, 'en' | 'ar']);
+}
+
 async function openLanding(page: Page, language: 'en' | 'ar' = 'en') {
   await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
-  await page.addInitScript((lang) => localStorage.setItem('mutaba3a-language', lang), language);
+  await preferLanguage(page, language);
   await page.goto('/');
   await expect(page.locator('#hero-title')).toBeVisible();
 }
@@ -312,6 +317,7 @@ test('the download page renders with the landing bar and footer, not the app’s
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+  await preferLanguage(page, 'en');
   await page.goto('/download');
   await expect(page.getByRole('heading', { level: 1, name: 'Download' })).toBeVisible();
   await expect(page.locator('a.download-cta').first()).toBeVisible();
@@ -331,6 +337,8 @@ test('the hosted offer page explains the trade, then takes a request through eve
     posts.push(route.request().postData() ?? '');
     await route.fulfill({ status: answer, body: '' });
   });
+
+  await preferLanguage(page, 'en');
 
   await step('it renders in landing chrome and passes axe in light and dark', async () => {
     for (const colorScheme of ['light', 'dark'] as const) {
@@ -397,6 +405,7 @@ test('at 375 in Arabic the hosted page fits, stacks the comparison and keeps 44p
 });
 
 test('a /hosted link that gained a trailing slash still opens the offer page', { tag: '@web.landing.hosted-slash' }, async ({ page }) => {
+  await preferLanguage(page, 'en');
   await page.goto('/hosted/');
   await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
   await expect(page.locator('input[name="bot-field"]')).toBeHidden();
@@ -581,3 +590,44 @@ for (const language of ['en', 'ar'] as const) {
     },
   );
 }
+
+test.describe('in an English browser with no stored choice', () => {
+  test.use({ locale: 'en-US' });
+
+  test('the marketing site opens in Arabic, leaves the web app in English, and keeps a chosen language (MUT-202)', { tag: '@web.landing.arabic-default' }, async ({ page, step }) => {
+    await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+    const stored = () => page.evaluate(() => localStorage.getItem('mutaba3a-language'));
+
+    await step('Every marketing page is in Arabic, right to left, and nothing is stored', async () => {
+      for (const path of ['/', '/hosted', '/privacy', '/download']) {
+        await page.goto(path);
+        await expect(page.locator('html'), path).toHaveAttribute('lang', 'ar');
+        await expect(page.locator('html'), path).toHaveAttribute('dir', 'rtl');
+        await expect(page.getByRole('heading', { level: 1 }), path).toBeVisible();
+        expect(await stored(), path).toBeNull();
+      }
+      await attachScreenshot(page, 'arabic-default-download');
+    });
+
+    await step('The web app still follows the browser, opens in English and stores it as it always has', async () => {
+      await page.goto('/app/clients');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+      await expect.poll(stored).toBe('en');
+    });
+
+    await step('Back on the landing, that detected English does not count as a choice: still Arabic', async () => {
+      await page.goto('/');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    });
+
+    await step('Pressing EN switches to English and it stays after a reload', async () => {
+      await page.locator('.landing-lang-toggle').click();
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      expect(await stored()).toBe('en');
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      await expect(page.locator('#hero-title')).toBeVisible();
+    });
+  });
+});
