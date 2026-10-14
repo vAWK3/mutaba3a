@@ -2390,3 +2390,15 @@ Run: `npx vitest run src/hosted` — 304 files, 4312 passed, 4 skipped (post qa-
 | QA `qa/specs/portal/signin.spec.ts` `@portal.signin.request-link` | EN and AR on the hosted dev/preview build: link visible, href matches `^https://[^/]+/hosted$`, no `target`, lead text visible, exactly one link, axe clean |
 
 Run: `npx vitest run scripts/__tests__/vite-config.test.ts src/hosted/session/__tests__/auth-states.test.tsx scripts/__tests__/brand-head.test.ts src/hosted/i18n`; `npm run test:bundles`.
+
+## MUT-172 — landing free vs. paid split (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `src/pages/landing/__tests__/LandingPage.test.tsx` → "Get it, free vs paid" | EN: `get-it-paid` says "Unlike the apps above" and "paid plan", its only link is "See hosted accounts" → `/hosted` with no `target`, and the block matches no banned word (price, /month, checkout, sign up, $, android, ios); the free line "Free during early access" is still in `get-it` and "stay free" never appears; AR: "خطة مدفوعة", link "اطّلع على الحسابات المستضافة" → `/hosted`, no سعر/اشترك/إنشاء حساب. The seven-part structure test and the earlier Get it cases are untouched |
+| `src/pages/landing/__tests__/landingCopy.test.ts`, `landingCss.test.ts` | unchanged; parity covers `landing.getIt.paid.*`; the CSS contract bans literal scale/opacity (the CTA uses tokens) |
+| `release-qa lint` | 0 errors with `qa/features/web/landing.yaml` (13 features) |
+| QA `qa/specs/web/landing.spec.ts` `@web.landing.get-it-paid` | EN and AR on a built web preview: lead visible, one link, height ≥ 44 px, press scale 0.96, hover keeps colour and no underline, click → `/hosted` with `#hosted-title` visible |
+
+Run: `npx vitest run src/pages/landing`; `release-qa lint`.
+

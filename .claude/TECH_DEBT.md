@@ -69,7 +69,7 @@
 **Fix**: Run `initDatabase()` only on the app branch (after the marketing-path checks), keeping MUT-47's "Dexie opens before anything resolves `getRepositories()`" guarantee for the app.
 
 ### TD-130: The landing page's QA specs aren't in the release-qa catalog
-**Status**: Open
+**Status**: Resolved (2026-10-14, MUT-172: `qa/features/web/landing.yaml` catalogues all 13 `@web.landing.*` tags; `release-qa lint` reports no errors)
 **Added**: 2026-10-14 (MUT-186)
 **Priority**: Low
 **Impact**: `qa/specs/web/landing.spec.ts` tags its tests `@web.landing.*` (header CTA, transparency, press, 375, privacy bar, download and, since MUT-186, `hosted` and `hosted-375`), but there is no `qa/features/web/landing.yaml`. Release QA can't map a landing change to these tests or list them in a release report.

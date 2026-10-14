@@ -428,7 +428,7 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 ### GetItSection / PrivacyBand / PlatformIcons
 **Location**: `src/pages/landing/components/`
-**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`, and since MUT-186 `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS`), shared with `DownloadPage` and `/hosted`.
+**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); since MUT-172 it ends with the paid half (`data-part="get-it-paid"`: hosted account + phone app come with a paid plan, one `.landing-get-it-paid-cta` link to `/hosted`, no heading, no box); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`, and since MUT-186 `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS`), shared with `DownloadPage` and `/hosted`.
 
 ### PrivacyPolicyPage
 **Location**: `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`

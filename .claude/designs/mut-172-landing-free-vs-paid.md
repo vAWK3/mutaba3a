@@ -1,6 +1,6 @@
 # MUT-172 — Landing: state the free vs. paid split, with the CTA to `/hosted`
 
-Status: **Planned, eng-reviewed (2026-10-14)**. Not built. Review ledger at the end of this file. Branch `feature/mut-185-go-hosted` (epic worktree, after MUT-188).
+Status: **BUILT (2026-10-14)**, branch `feature/mut-185-go-hosted` (epic worktree). Review ledger and the qa-reconcile record are at the end of this file. Branch `feature/mut-185-go-hosted` (epic worktree, after MUT-188).
 Ticket: MUT-172 (Story) · parent epic MUT-171 (landing) · the third CTA door of epic MUT-185 ("a CTA in the sidebar, in Settings › Profiles, or on the landing page"). Blocked by MUT-186 (merged to local main a7d5068, Jira In Review → gate passes). Siblings under MUT-171: MUT-173 (phone + portal section, Backlog, unplanned), MUT-174 (Malafat section, Backlog). Basel's re-cut comment (2026-10-14): the CTA links to the `/hosted` page and its request form, not `mailto:`.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = planning allowed · finished → In Review after /qa-reconcile.
 
