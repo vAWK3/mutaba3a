@@ -45,6 +45,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Landing: drop the GitHub footer link, add a header sign-in
+
+**Why:** the footer's "GitHub" link pointed at the source repo, which has no place on a product landing page; separately, the landing page had no way for an existing hosted-account holder to get to the portal — only Settings › Businesses (`HostedAccountEntry`) had a sign-in link.
+
+### Added
+- `LandingHeader` now shows a "Sign in now" link to the hosted portal (`landing-header-signin`, `landing.header.signIn`), reusing the existing `hostedPortalUrl()` gate from `lib/goHosted.ts` (MUT-187's build-time `__PORTAL_URL__`) — same pattern as `HostedAccountEntry`, no new config. Sits before the lang toggle in `.landing-header-actions`, so the toggle keeps the end edge; opens in a new tab.
+
+### Removed
+- `LandingFooter`'s "GitHub" link (`https://github.com/vAWK3/mutaba3a`) and the `landing.footer.github` EN/AR string. Scoped to the cosmetic link only — the functional GitHub Releases integration (download page version checks, desktop update checks, `netlify.toml` download redirects, and the privacy-policy disclosure of the GitHub network call) is unrelated infrastructure and was left in place.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Landing: the phone logs, the portal shows (MUT-173)
 
 **Why:** since MUT-172 the Get it section says a phone app and a hosted account exist, then stops: nothing on the landing said what the phone app is for, what the portal is for, or where to get the phone app. Epic MUT-171. Brief, eng review and outside voice: `.claude/designs/mut-173-phone-portal-section.md`.

@@ -1183,6 +1183,7 @@
     "header": {
       "wordmark": "Mutaba3a · متابعة",
       "wordmarkShort": "Mutaba3a",
+      "signIn": "Sign in now",
       "cta": {
         "mac": "Download",
         "windows": "Download",
@@ -1297,7 +1298,6 @@
     },
     "footer": {
       "copyright": "Mutaba3a",
-      "github": "GitHub",
       "privacy": "Privacy",
       "buyMeACoffee": "Buy Me a Coffee",
       "kofi": "Ko-fi"

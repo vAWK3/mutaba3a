@@ -192,6 +192,26 @@ html:has(.landing-header) {
   flex: none;
 }
 
+.landing-header-signin {
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.landing-header-signin:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.landing-header-signin:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-md);
+}
+
 .landing-lang-toggle {
   display: flex;
   align-items: center;

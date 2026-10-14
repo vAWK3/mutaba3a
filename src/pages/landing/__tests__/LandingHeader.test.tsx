@@ -6,6 +6,7 @@ import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { LandingHeader } from '../components/LandingHeader';
 import { HeroSection } from '../components/HeroSection';
 import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
+import en from '../../../lib/i18n/translations/en.json';
 
 /**
  * The frosted bar (MUT-77, brief L9): wordmark, language switch, and a
@@ -163,6 +164,21 @@ describe('LandingHeader', () => {
     renderHeader();
     const actions = document.querySelector('.landing-header-actions')!;
     expect(actions.lastElementChild).toHaveClass('landing-lang-toggle');
+  });
+
+  it('links to the hosted portal when the build set a portal URL, opening in a new tab', () => {
+    const PORTAL = 'https://portal.test';
+    vi.stubGlobal('__PORTAL_URL__', PORTAL);
+    renderHeader();
+    const signIn = screen.getByRole('link', { name: `${en.landing.header.signIn} ${en.common.opensInNewTab}` });
+    expect(signIn).toHaveAttribute('href', PORTAL);
+    expect(signIn).toHaveAttribute('target', '_blank');
+    expect(signIn).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('leaves out the sign-in link when the build set no portal URL', () => {
+    renderHeader();
+    expect(screen.queryByRole('link', { name: /Sign in now/ })).not.toBeInTheDocument();
   });
 
   it('shows the scroll-edge fade only once the top of the page has scrolled away', () => {

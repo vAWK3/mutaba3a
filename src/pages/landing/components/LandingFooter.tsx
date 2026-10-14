@@ -11,13 +11,6 @@ export function LandingFooter() {
           <div className="landing-footer-links">
             <a href="/privacy">{t('landing.footer.privacy')}</a>
             <a
-              href="https://github.com/vAWK3/mutaba3a"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('landing.footer.github')}
-            </a>
-            <a
               href="https://buymeacoffee.com/elmokhtbr"
               target="_blank"
               rel="noopener noreferrer"
