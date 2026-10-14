@@ -23,6 +23,8 @@ export const KNOWN_AXE_VIOLATIONS = {
   landing: [],
   // The language switch sits above <main>, outside any landmark (MUT-43 layout; TD-082)
   portalSignIn: ['region'],
+  // The signed-in portal (MUT-191). The account menu holds the Language row, which is no menu child (MUT-43 layout; TD-142)
+  portalSignedIn: ['aria-required-children'],
 } satisfies Record<string, string[]>;
 
 export type AxeSurface = keyof typeof KNOWN_AXE_VIOLATIONS;
