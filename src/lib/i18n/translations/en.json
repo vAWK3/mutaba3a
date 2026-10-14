@@ -1268,12 +1268,12 @@
     },
     "privacyPolicy": {
       "title": "Privacy Policy",
-      "updated": "Last updated October 13, 2026",
+      "updated": "Last updated October 14, 2026",
       "intro": "This policy covers Mutaba3a's apps for Mac, Windows, the browser, iPhone, and Android. They handle your data in two different ways, so we explain each one. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
         "title": "The short version",
-        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter is sent to us. The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use analytics, ads, or tracking, and we never sell your data."
+        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter in the app is sent to us. The one thing our website can send us is the hosted-account request form, and only if you fill it in and press Send. The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use analytics, ads, or tracking, and we never sell your data."
       },
       "dataStorage": {
         "title": "Mac, Windows, and the browser: your data stays on your device",
@@ -1289,11 +1289,11 @@
       },
       "network": {
         "title": "What reaches the network",
-        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
+        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Separately, the website's hosted-account request form sends what you type in it to Netlify when you press Send. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
       },
       "sharing": {
         "title": "Who else handles your data",
-        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the hosted-account request form and checks each request for spam with Akismet (made by Automattic). If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
       },
       "security": {
         "title": "Keeping the mobile apps secure",
@@ -1319,9 +1319,118 @@
         "title": "Changes to this policy",
         "body": "If this policy changes, we'll update this page and the \"Last updated\" date above."
       },
+      "hostedRequest": {
+        "title": "When you ask for a hosted account",
+        "body": "If you send the request form on our website, Netlify, which hosts the website, receives what you type: your name, your email and anything else you choose to add, plus the language the page was in and a random request number. Netlify also records technical details such as your IP address and browser, and checks the request for spam with Akismet. Netlify then emails it to us. We use it only to reply with an offer and, if you go ahead, to set up your account. We delete requests within 12 months; write to info@malafat.app and we'll delete yours sooner."
+      },
       "contact": {
         "title": "Contact",
         "body": "Questions about this policy can be sent to info@malafat.app. Mutaba3a is made by Barmajiyat Ltd."
+      }
+    },
+    "hostedOffer": {
+      "meta": {
+        "title": "Hosted accounts"
+      },
+      "hero": {
+        "title": "Your records, on every device.",
+        "sub": "The free app keeps everything on this one device. Hosted keeps it on our servers, behind your sign-in, so your phone and your laptop show the same numbers.",
+        "cta": "Request an account",
+        "noPrice": "No price list. Tell us what you need and we'll send you an offer."
+      },
+      "devices": {
+        "caption": "Logged on the phone, there on the laptop."
+      },
+      "compare": {
+        "title": "Free or hosted",
+        "lead": "Same app, same screens. What changes is where your records live.",
+        "colTopic": "What changes",
+        "colFree": "Free app",
+        "colHosted": "Hosted",
+        "none": "Not included",
+        "rows": {
+          "where": {
+            "label": "Where your records live",
+            "free": "In this browser or on this computer",
+            "hosted": "On our servers, behind your sign-in"
+          },
+          "devices": {
+            "label": "Devices",
+            "free": "This one device",
+            "hosted": "Every device you sign in on"
+          },
+          "phone": {
+            "label": "Phone app",
+            "hosted": "An app for logging income and expenses in seconds"
+          },
+          "lost": {
+            "label": "If your laptop is lost",
+            "free": "Your records go with it, unless you exported them",
+            "hosted": "Sign in anywhere and they're there"
+          },
+          "malafat": {
+            "label": "Malafat",
+            "hosted": "Connected to Malafat, for lawyers and accountants"
+          },
+          "account": {
+            "label": "Account",
+            "free": "None",
+            "hosted": "We set one up for you"
+          },
+          "price": {
+            "label": "Price",
+            "free": "Free",
+            "hosted": "An offer for what you need"
+          }
+        }
+      },
+      "platform": {
+        "ios": "iPhone",
+        "android": "Android",
+        "comingSoon": "{platform} coming soon"
+      },
+      "band": {
+        "title": "Already using the free app? Your records come with you.",
+        "body": "We'll move them into your hosted account with you, by hand. Nothing to type again."
+      },
+      "form": {
+        "title": "Request an account",
+        "lead": "Tell us about your work. We'll reply by email within 2 working days with an offer.",
+        "name": "Name",
+        "email": "Email",
+        "phone": "WhatsApp or phone",
+        "optional": "(optional)",
+        "profession": "What do you do?",
+        "professionPlaceholder": "Choose…",
+        "professions": {
+          "freelancer": "Freelancer",
+          "lawyer": "Lawyer",
+          "accountant": "Accountant",
+          "other": "Something else"
+        },
+        "devices": "Where do you want to use it?",
+        "deviceOptions": {
+          "iphone": "iPhone",
+          "android": "Android",
+          "computer": "Computer"
+        },
+        "message": "Anything else we should know?",
+        "honeypot": "Leave this empty",
+        "send": "Send request",
+        "sending": "Sending…",
+        "retry": "Try again",
+        "errName": "Enter your name.",
+        "errEmail": "Enter an email address like {example}.",
+        "errTooLong": "Use {max} characters or fewer.",
+        "errorAlert": "Couldn't send. Check your connection and try again. Your answers are still here.",
+        "notice": "We use these details only to reply with an offer.",
+        "privacyLink": "Privacy policy"
+      },
+      "success": {
+        "title": "Request sent.",
+        "body": "Thanks, {name}. We'll reply to {email} within 2 working days with an offer.",
+        "edit": "Wrong email? Edit and send again",
+        "freeApp": "Keep using the free app meanwhile"
       }
     }
   },

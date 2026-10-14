@@ -17,6 +17,8 @@ import { initDatabase } from "./db";
 import { LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
+import { HOSTED_OFFER_URL } from "./content/download-config";
+import { marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import "./components/ui/ErrorBoundary.css";
@@ -57,6 +59,15 @@ const PrivacyPolicyPage =
       )
     : null;
 
+const HostedOfferPage =
+  __BUILD_MODE__ === "web"
+    ? lazy(() =>
+        import("./pages/landing/HostedOfferPage").then((m) => ({
+          default: m.HostedOfferPage,
+        })),
+      )
+    : null;
+
 const queryClient = createAppQueryClient();
 
 // Simple loading fallback for landing pages
@@ -78,7 +89,7 @@ const LandingLoader = () => (
 function App() {
   // Web build: handle landing routes outside router
   if (__BUILD_MODE__ === "web") {
-    const path = window.location.pathname;
+    const path = marketingPath(window.location.pathname);
 
     if (path === "/" && LandingPage) {
       return (
@@ -105,6 +116,16 @@ function App() {
         <LandingProviders>
           <Suspense fallback={<LandingLoader />}>
             <PrivacyPolicyPage />
+          </Suspense>
+        </LandingProviders>
+      );
+    }
+
+    if (path === HOSTED_OFFER_URL && HostedOfferPage) {
+      return (
+        <LandingProviders>
+          <Suspense fallback={<LandingLoader />}>
+            <HostedOfferPage />
           </Suspense>
         </LandingProviders>
       );

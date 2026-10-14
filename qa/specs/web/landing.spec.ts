@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot, expectNoHorizontalOverflow } from '../../support/brand';
+import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar } from '../../support/i18n';
 import { contrast, parseColor } from '../../../src/test/css/brandCss';
 
@@ -317,4 +318,84 @@ test('the download page renders with the landing bar and footer, not the app’s
   await expect(page.getByRole('contentinfo')).toBeVisible();
   await expect(page.locator('.topbar')).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('the hosted offer page explains the trade, then takes a request through every state (MUT-186)', { tag: '@web.landing.hosted' }, async ({ page, step }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const posts: string[] = [];
+  let answer = 200;
+  await page.route('**/__forms.html', async (route) => {
+    posts.push(route.request().postData() ?? '');
+    await route.fulfill({ status: answer, body: '' });
+  });
+
+  await step('it renders in landing chrome and passes axe in light and dark', async () => {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto('/hosted');
+      await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.locator('.topbar')).toHaveCount(0);
+      await expectOnlyKnownAxeViolations(page, 'landing');
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await attachScreenshot(page, 'hosted-en');
+  });
+
+  await step('an empty request is stopped with both errors and focus on the name', async () => {
+    await page.getByRole('button', { name: 'Send request' }).click();
+    await expect(page.getByText('Enter your name.')).toBeVisible();
+    await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
+    expect(posts).toHaveLength(0);
+  });
+
+  await step('a failed send keeps the answers and shows the alert beside Try again', async () => {
+    answer = 500;
+    await page.getByLabel('Name', { exact: true }).fill('QA Visitor');
+    await page.getByLabel('Email', { exact: true }).fill('qa.visitor@example.test');
+    await page.getByRole('button', { name: 'Send request' }).click();
+    await expect(page.getByRole('alert')).toContainText("Couldn't send");
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeInViewport();
+    await expect(page.getByRole('alert')).toBeInViewport();
+  });
+
+  await step('a retry that lands confirms with the visitor’s own email, focused', async () => {
+    answer = 200;
+    await page.getByRole('button', { name: 'Try again' }).click();
+    const heading = page.getByRole('heading', { name: 'Request sent.' });
+    await expect(heading).toBeFocused();
+    await expect(page.getByRole('status')).toContainText('qa.visitor@example.test');
+    const body = new URLSearchParams(posts.at(-1));
+    expect(body.get('form-name')).toBe('hosted-request');
+    expect(body.get('language')).toBe('en');
+    expect(posts).toHaveLength(2);
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('at 375 in Arabic the hosted page fits, stacks the comparison and keeps 44px device pills', { tag: '@web.landing.hosted-375' }, async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.addInitScript(() => localStorage.setItem('mutaba3a-language', 'ar'));
+  await page.goto('/hosted');
+  await expect(page.getByRole('heading', { level: 1, name: ar.landing.hostedOffer.hero.title })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expectNoHorizontalOverflow(page, 'hosted 375 ar');
+  await expect(page.locator('.hosted-devices-laptop')).toBeHidden();
+  await expect(page.locator('.hosted-devices-phone')).toBeVisible();
+  await expect(page.locator('.hosted-compare-table thead')).toBeHidden();
+  const rowHeader = page.getByRole('rowheader').first();
+  const row = rowHeader.locator('xpath=..');
+  expect(Math.round((await rowHeader.boundingBox())!.width)).toBe(Math.round((await row.boundingBox())!.width));
+  for (const pill of await page.locator('.hosted-device-pill').all()) {
+    expect((await pill.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  await attachScreenshot(page, 'hosted-ar-375');
+});
+
+test('a /hosted link that gained a trailing slash still opens the offer page', { tag: '@web.landing.hosted-slash' }, async ({ page }) => {
+  await page.goto('/hosted/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
+  await expect(page.locator('input[name="bot-field"]')).toBeHidden();
 });

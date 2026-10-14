@@ -18,6 +18,20 @@
 
 ## Open Debt
 
+### TD-131: Marketing pages open IndexedDB on load
+**Status**: Open
+**Added**: 2026-10-14 (MUT-186 eng review)
+**Priority**: Low
+**Impact**: `src/main.tsx` calls `initDatabase()` before choosing a route, so `/`, `/download`, `/privacy` and `/hosted` open Dexie and run migrations for visitors who never use the app. It costs load time on the pages meant to convert, and creates an empty database in a browser that only read the landing page.
+**Fix**: Run `initDatabase()` only on the app branch (after the marketing-path checks), keeping MUT-47's "Dexie opens before anything resolves `getRepositories()`" guarantee for the app.
+
+### TD-130: The landing page's QA specs aren't in the release-qa catalog
+**Status**: Open
+**Added**: 2026-10-14 (MUT-186)
+**Priority**: Low
+**Impact**: `qa/specs/web/landing.spec.ts` tags its tests `@web.landing.*` (header CTA, transparency, press, 375, privacy bar, download and, since MUT-186, `hosted` and `hosted-375`), but there is no `qa/features/web/landing.yaml`. Release QA can't map a landing change to these tests or list them in a release report.
+**Fix**: Add `qa/features/web/landing.yaml` (paths `src/pages/landing/**`, `src/pages/download/**`, `src/content/download-config.ts`) with one feature per existing tag.
+
 ### TD-129: `DownloadPage` still carries a dead checksum toast and unused CSS
 **Status**: Open
 **Added**: 2026-10-14 (the /download crash fix)

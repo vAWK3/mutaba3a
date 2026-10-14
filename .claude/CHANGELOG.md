@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — /hosted: the case for a hosted account, and a request form (MUT-186)
+
+**Why:** free users had no way to learn that a paid hosted tier exists or to ask for it (epic MUT-185, "one front door, not one bundle"). Brief, eng review (D1–D5), design review (1A–9A) and the approved wireframe: `.claude/designs/mut-186-hosted-offer-page.md`, `mut-186-hosted-offer-wireframe.html`.
+
+### Added
+- `/hosted` on the web build (`HostedOfferPage`, mounted in `src/main.tsx` like `/privacy`): a hero that names the trade, beside the same client balance on a laptop and a phone (`HostedDevicesMock`); a free-vs-hosted comparison table that stacks per row on phones; the migration promise ("we'll move them… by hand") in the inverted privacy band; the request form.
+- `HostedRequestForm`: name and email required, everything else optional; inline errors with focus on the first; a disabled "Sending…" button; on failure an alert beside "Try again" with the answers kept; on success the visitor's own name and email, the 2-working-day reply promise, "edit and send again" and a link back to the free app; a privacy notice under the button; 44px device pills; a hidden honeypot; the page language sent as a hidden field.
+- `hostedRequest.ts`: the form's contract with Netlify Forms (name, fields, honeypot, POST to `/__forms.html`, 15 s timeout).
+- `vite.config.ts` (web only): `netlifyForms()` emits the hidden static twin `__forms.html` (noindex, out of the SW precache); `hostedOfferDevRoute()` serves the app shell for `/hosted` in dev, where Vite's HTML fallback would otherwise serve the portal's `hosted.html`.
+- `download-config.ts`: `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS` (availability flags; `/hosted` never links a store, 9A).
+- Privacy policy: a section on what the request form collects, that Netlify receives and emails it, and what it is for.
+
+### Technical
+- **Tests:** `hostedRequest.test.ts` (20), `HostedOfferPage.test.tsx` (27, under `LandingProviders`), `hostedOfferKeys.test.ts` (EN/AR parity and placeholders), `PrivacyPolicyPage.test.tsx` (+1), `vite-config.test.ts` (+7; the web snapshot gains two plugin names). QA: `@web.landing.hosted` (axe light and dark, every form state) and `@web.landing.hosted-375` (Arabic at 375).
+- **Found in the browser, fixed:** the dev `/hosted`→`hosted.html` collision; the failure alert off-screen above the form (moved beside the button); two phone rules out-ranked by two-class base selectors; an in-text link told apart by colour alone (axe `link-in-text-block`).
+- **Manual, before the first deploy:** Netlify form detection and the `hosted-request` email notification (INFRA §1).
+- **/qa-reconcile fixes (2026-10-14):**
+  - **Spam-trap field.** The honeypot is now Netlify's `bot-field`, hidden with `hidden`. Off-screen `company-website` could be autofilled, silently dropping real requests.
+  - **Request id.** A hidden `request-id` is shared by retries and "edit and send again", so duplicates can be matched.
+  - **Length limits.** name 200, email 254, phone 40, message 4000, both as `maxLength` and in validation.
+  - **Language.** It's read once, at send time.
+  - **Trailing slash.** `/hosted/`, `/privacy/` and `/download/` open their pages (`marketingPath`).
+  - **Link preview.** `/hosted` gets its own card: `hosted-offer.html`, served by a `netlify.toml` rewrite.
+  - **Privacy policy.** It names Netlify and Akismet, the IP and browser details, and 12-month retention. Scope and Network now treat the website form as the explicit exception.
+  - **Design.** Success-panel link colour after a visit, hover and keyboard-only focus rings, laptop mock row alignment, and the hero stacks at ≤900px.
+  - **Operator steps.** INFRA §1 adds the Spam tab, a usage alert and deletion steps. Spam protection with Turnstile is ticketed as MUT-197.
+- **Files:** `src/main.tsx`, `vite.config.ts`, `src/content/download-config.ts`, `src/pages/landing/{HostedOfferPage.tsx,HostedOfferPage.css,hostedRequest.ts,PrivacyPolicyPage.tsx}`, `src/pages/landing/components/{HostedRequestForm.tsx,mocks/HostedDevicesMock.tsx,mocks/index.ts}`, `en.json`, `ar.json`, tests above, `qa/specs/web/landing.spec.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — /download renders again: landing chrome instead of the app's TopBar
 
 **Why:** in the web build `/download` crashed into the error boundary ("No QueryClient set"). `src/main.tsx` mounts the marketing routes outside the router and React Query, but `DownloadPage` rendered the app's `TopBar`, which since MUT-79 reads React Query (`FxRateReadout`) and the router (`useActiveProfile` → `useMatches`). The component test mocked TopBar away, so nothing caught it. Brief: `.claude/designs/download-page-crash.md`.

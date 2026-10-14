@@ -30,3 +30,30 @@ export const DOWNLOAD_URLS = {
  * browser that already holds the person's own data just opens on it.
  */
 export const WEB_APP_URL = '/app/clients?sample=1';
+
+/**
+ * The hosted offer page and its request form (MUT-186). One constant so the
+ * landing page's paid callout (MUT-172) and the free app's "Go hosted" card
+ * (MUT-187) can link here once they are built.
+ */
+export const HOSTED_OFFER_URL = '/hosted';
+
+/** The built page copy with /hosted's own link preview; netlify.toml serves it at HOSTED_OFFER_URL. */
+export const HOSTED_OFFER_FILE = 'hosted-offer.html';
+
+export interface MobileAppLink {
+  /** Whether the app can be installed today. /hosted reads only this. */
+  available: boolean;
+  /** Store listing, for people who already have an account (MUT-173, welcome emails). */
+  url: string | null;
+}
+
+/**
+ * The phone apps. Both sign in with a hosted account only, so a page aimed at
+ * people without one (/hosted) shows availability and never links a store:
+ * installing first would end at a sign-in screen they cannot pass (MUT-186, 9A).
+ */
+export const MOBILE_APP_LINKS: Record<'ios' | 'android', MobileAppLink> = {
+  ios: { available: true, url: null },
+  android: { available: false, url: null },
+};
