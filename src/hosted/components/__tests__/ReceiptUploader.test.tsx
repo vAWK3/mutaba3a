@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,6 +7,9 @@ import { HostedLanguageProvider } from '../../i18n/HostedLanguageProvider';
 import { ToastProvider } from '../Toast';
 import { ReceiptUploader } from '../ReceiptUploader';
 import type { ExpenseReceipt } from '../../api/client';
+
+// The portal opens in Arabic until a person chooses (MUT-209); these cases speak English, so choose it as a person would
+beforeEach(() => localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en'));
 
 const fetchMock = vi.fn();
 const putMock = vi.fn();

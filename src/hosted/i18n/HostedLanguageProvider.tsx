@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { I18nProvider, detectSystemLanguage, type Dictionary } from '../../lib/i18n/core';
+import { DEFAULT_LANGUAGE, I18nProvider, type Dictionary } from '../../lib/i18n/core';
 import type { Language } from '../../lib/i18n/types';
 import en from './en.json';
 import ar from './ar.json';
@@ -36,7 +36,8 @@ function persistChoice(language: Language) {
 const AdoptContext = createContext<(locale: Language) => void>(() => {});
 
 export function HostedLanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(() => storedChoice() ?? detectSystemLanguage());
+  // Arabic until a choice here or the account's locale says otherwise (MUT-209), never the browser's language
+  const [language, setLanguageState] = useState<Language>(() => storedChoice() ?? DEFAULT_LANGUAGE);
 
   const choose = useCallback((next: Language) => {
     persistChoice(next);

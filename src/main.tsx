@@ -14,7 +14,7 @@ import { router } from "./router";
 // its migrations, before React mounts and anything resolves getRepositories().
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports
 import { initDatabase } from "./db";
-import { LanguageProvider } from "./lib/i18n";
+import { DEFAULT_LANGUAGE, LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
 import { HOSTED_OFFER_URL } from "./content/download-config";
@@ -135,7 +135,8 @@ function App() {
   // Main app with router
   return (
     <ThemeProvider>
-      <LanguageProvider>
+      {/* Arabic until a person chooses; a language stored by detection doesn't count (MUT-209, ADR-077) */}
+      <LanguageProvider defaultLanguage={DEFAULT_LANGUAGE}>
         <QueryClientProvider client={queryClient}>
           <RouterProvider router={router} />
           <ToastContainer />

@@ -65,6 +65,12 @@ export function getLocale(lang: Language): string {
 }
 
 /** Browser language, reduced to the two the app supports. */
+/**
+ * The language every surface opens in until a person chooses one (MUT-202, MUT-209,
+ * ADR-077): the marketing site, the web app and the hosted portal.
+ */
+export const DEFAULT_LANGUAGE: Language = 'ar';
+
 export function detectSystemLanguage(): Language {
   const browserLang = navigator.language.split('-')[0].toLowerCase();
   return browserLang === 'ar' ? 'ar' : 'en';

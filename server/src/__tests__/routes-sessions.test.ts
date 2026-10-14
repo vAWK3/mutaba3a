@@ -223,7 +223,7 @@ describe('GET /v1/me', () => {
     const res = await h.app.request('/v1/me', { headers: withSession(token) });
     expect(res.status).toBe(200);
     const me = await read(res);
-    expect(me.user).toMatchObject({ id: p.id, email: p.email, displayName: 'Nour Haddad', locale: 'en' });
+    expect(me.user).toMatchObject({ id: p.id, email: p.email, displayName: 'Nour Haddad', locale: 'ar' });
     const byId = Object.fromEntries(me.profiles.map((x: Loose) => [x.id, x]));
     expect(byId[a.org.id]).toMatchObject({ name: a.org.name, source: 'hosted', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', writerOfRecord: 'MALAFAT' });
     expect(byId[b.org.id]).toMatchObject({ source: 'hosted', writerOfRecord: null });
@@ -243,7 +243,7 @@ describe('GET /v1/me', () => {
     const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
     const byId = Object.fromEntries(me.profiles.map((x: Loose) => [x.id, x]));
     expect(Object.keys(byId).sort()).toEqual([p.personalId, a.org.id].sort());
-    expect(byId[p.personalId]).toMatchObject({ name: 'Personal', writerOfRecord: null, isPersonalDefault: true });
+    expect(byId[p.personalId]).toMatchObject({ name: 'شخصي', writerOfRecord: null, isPersonalDefault: true });
     expect(byId[p.personalId].access).toMatchObject({ customers: 'read-write', projects: 'read-write', payments: 'read-write' });
     expect(byId[a.org.id].isPersonalDefault).toBe(false);
   });

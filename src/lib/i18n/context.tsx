@@ -5,7 +5,7 @@ import { I18nProvider, detectSystemLanguage, type Dictionary } from './core';
 import enTranslations from './translations/en.json';
 import arTranslations from './translations/ar.json';
 
-export { useLanguage, useT, useDirection, getLocale } from './core';
+export { useLanguage, useT, useDirection, getLocale, DEFAULT_LANGUAGE } from './core';
 
 const translations: Record<Language, Dictionary> = {
   en: enTranslations,
