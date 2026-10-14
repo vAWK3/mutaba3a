@@ -41,6 +41,11 @@ export type IncomeResponse = Schemas['IncomeResponse'];
 export type PaymentMethod = Schemas['PaymentMethod'];
 export type SettleReceivableRequest = Schemas['SettleReceivableRequest'];
 export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
+export type ProfileType = Schemas['ProfileType'];
+export type CreateProfileRequest = Schemas['CreateProfileRequest'];
+export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
+export type UpdateProfileResponse = Schemas['UpdateProfileResponse'];
+export type ProfileTypeChange = Schemas['ProfileTypeChange'];
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
 export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
@@ -264,6 +269,15 @@ export const api = {
     request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
+
+  // Profiles (MUT-182/183): session routes, no X-Mutaba3a-Profile header. Create carries an
+  // attempt-scoped Idempotency-Key; the PATCH sends the version read when the edit opened.
+  createProfile: (body: CreateProfileRequest, idempotencyKey: string) =>
+    request<HostedProfile>('POST', '/v1/profiles', { body, idempotencyKey }),
+  updateProfile: (profileId: string, body: UpdateProfileRequest, version: number) =>
+    request<UpdateProfileResponse>('PATCH', `/v1/profiles/${encodeURIComponent(profileId)}`, { body, ifMatchVersion: String(version) }),
+  profileTypeChangePreview: (profileId: string, to: ProfileType) =>
+    request<ProfileTypeChange>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/type-change`, { query: { to } }),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>
