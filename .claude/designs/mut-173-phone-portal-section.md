@@ -25,18 +25,18 @@ The nearest thing built the same way is a chapter: `ChapterSection` (a big line,
 | File | Change |
 |---|---|
 | `src/pages/landing/components/ChapterSection.tsx` | One optional prop, `extra?: ReactNode`, rendered after the body inside `.landing-chapter-copy`. Nothing else changes; the three existing chapters pass nothing. (Registry rule: 70%+ overlap → extend, don't duplicate.) |
-| `src/pages/landing/components/PhoneSection.tsx` (new) | `<ChapterSection part="phone" title body visual={<HostedDevicesMock />} flip extra={<PhoneExtra />} />`. `PhoneExtra` renders: a hint `<p className="landing-phone-hint">` = `landing.phone.hint` + one inline `<a href={HOSTED_OFFER_URL}>` = `landing.phone.hintLink`; then `<ul className="landing-phone-stores" aria-label={t('landing.phone.storesLabel')}>` with one `<li>` per platform in `PLATFORMS = ['ios','android']`, each decided from `MOBILE_APP_LINKS[platform]`: (a) `url` → `<a className="landing-phone-store" href={url} target="_blank" rel="noopener noreferrer">` icon + `landing.phone.store.<platform>`; (b) `available && !url` → `<span className="landing-phone-store landing-phone-store--plain">` icon + `landing.hostedOffer.platform.<platform>`; (c) `!available` → `<span className="landing-phone-store landing-phone-store--soon">` icon + `landing.hostedOffer.platform.comingSoon`. The names and the coming-soon phrase are the strings `/hosted` already uses for the same facts, so the two pages can never disagree. |
-| `src/pages/landing/components/PlatformIcons.tsx` | `AndroidIcon` (the Android robot head, `fill="currentColor"`, `aria-hidden`), same `IconProps` as the others. |
+| `src/pages/landing/components/PhoneSection.tsx` (new) | `<ChapterSection part="phone" title body visual={<HostedDevicesMock />} flip extra={<PhoneExtra />} />`. `PhoneExtra` renders: a hint `<p className="landing-phone-hint">` = `landing.phone.hint` + one inline `<a href={HOSTED_OFFER_URL}>` = `landing.phone.hintLink`; then `<ul className="landing-phone-stores" aria-label={t('landing.phone.storesLabel')}>` with one `<li>` per platform in `PLATFORMS = ['ios','android']`, each decided from `MOBILE_APP_LINKS[platform]`: (a) `url` → `<a className="landing-phone-store" href={url} target="_blank" rel="noopener noreferrer">` icon + `landing.phone.store.<platform>` (the only state that looks like a control: a bordered pill); (b) `available && !url` → `<span className="landing-phone-platform">` icon + `landing.hostedOffer.platform.<platform>` + a muted `landing.phone.withAccount` ("with your hosted account"), plain text, no pill (O4: a chip shaped like a button that does nothing is a dead control); (c) `!available` → `<span className="landing-phone-platform landing-phone-platform--soon">` icon + `landing.hostedOffer.platform.comingSoon`, plain muted text. The names and the coming-soon phrase are the strings `/hosted` already uses for the same facts, so the two pages can never disagree about availability. |
+| `src/pages/landing/components/PlatformIcons.tsx` | `IosIcon` (an outlined phone, stroke like `BrowserIcon`) and `AndroidIcon` (the Android robot head, `fill="currentColor"`; docblock carries Google's CC BY 3.0 attribution line), both `aria-hidden`, same `IconProps` as the others (O10: `AppleIcon` already means "Download for Mac" one section above, and the AC asks for new iOS/Android icons). |
 | `src/pages/landing/components/index.ts` | export `PhoneSection`. |
 | `src/pages/landing/LandingPage.tsx` | `<PhoneSection />` between `<GetItSection />` and `<FAQSection />`; the docblock's list of parts gains "the phone and the portal". |
-| `src/pages/landing/LandingPage.css` | `.landing-phone-hint` (`--text-label`, `--muted`, `margin: var(--space-5) 0 0`, `max-width: 40ch`), its `a` underlined like `.landing-get-it-meta a` (axe link-in-text-block; dims on press with `--landing-press-dim`); `.landing-phone-stores` (`list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2-5); margin: var(--space-4) 0 0; padding: 0`); `.landing-phone-store` (an `inline-flex` pill, `min-height: 44px`, `gap: var(--space-2)`, `padding-inline: var(--space-3)`, `border: 1px solid var(--border)`, `border-radius: var(--radius-pill)`, `background: var(--surface)`, `color: var(--text)`, `text-decoration: none`); `a.landing-phone-store` hover keeps colour and no underline and sets `border-color: var(--border-strong)` (the global `a:hover` out-ranks a lone class otherwise, TD-122), `:active { scale: var(--press-scale) }` with the `scale var(--duration-press) var(--ease-spring)` transition, `:focus-visible { box-shadow: var(--focus-ring) }`; `--plain` is the same pill without a border colour change; `--soon` is dashed, `--muted`, like `.landing-get-it-option--unavailable`. **Also**: every `.hosted-devices*` rule moves here from `HostedOfferPage.css` (D3), unchanged, including the `≤640px` block that keeps only the phone frame. |
-| `src/pages/landing/HostedOfferPage.css` | The `.hosted-devices*` rules removed (they now load with `LandingPage.css`, which `HostedOfferPage.tsx` imports first). No other change. |
-| `src/lib/i18n/translations/en.json`, `ar.json` | `landing.phone.title` = "Log it on your phone. See it all in the portal." / "سجّل من هاتفك. وشاهد كل شيء في البوابة."; `body` = "The phone app does one thing: an income or an expense logged in seconds, even with no signal. The hosted portal is where you see it: every client, what they owe and what they've paid, in your browser on any computer." / "تطبيق الهاتف يفعل شيئًا واحدًا: دخل أو مصروف يُسجَّل في ثوانٍ، حتى دون إشارة. أما البوابة المستضافة فهي حيث ترى كل شيء: كل عميل، وما عليه، وما دفعه، في متصفحك على أي حاسوب."; `hint` = "Both come with a hosted account." / "كلاهما يأتي مع حساب مستضاف."; `hintLink` = "See hosted accounts" / "اطّلع على الحسابات المستضافة" (the same words as the Get it CTA and Settings › Businesses: one door, one name); `storesLabel` = "Phone apps" / "تطبيقات الهاتف"; `store.ios` = "iPhone, on the App Store" / "iPhone، على App Store"; `store.android` = "Android, on Google Play" / "Android، على Google Play". The platform names and "{platform} coming soon" are reused from `landing.hostedOffer.platform.*`. |
-| `src/pages/landing/__tests__/LandingPage.test.tsx` | structure: eight parts, `phone` after `get-it`; new `describe('LandingPage phone and portal (MUT-173)')`, see §4. `MOBILE_APP_LINKS` is swapped through a hoisted `vi.mock('../../../content/download-config', …)` that spreads the real module and replaces only `MOBILE_APP_LINKS` with a mutable object, the same shape as the `release` mock above it. |
+| `src/pages/landing/LandingPage.css` | `.landing-phone-hint` (`--text-label`, `--muted`, `margin: var(--space-5) 0 0`, `max-width: 40ch`), its `a` underlined like `.landing-get-it-meta a` (axe link-in-text-block; dims on press with `--landing-press-dim`); `.landing-phone-stores` (`list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2-5); margin: var(--space-4) 0 0; padding: 0`); `.landing-phone-store` (an `inline-flex` pill, `min-height: 44px`, `gap: var(--space-2)`, `padding-inline: var(--space-3)`, `border: 1px solid var(--border)`, `border-radius: var(--radius-pill)`, `background: var(--surface)`, `color: var(--text)`, `text-decoration: none`); `a.landing-phone-store` hover keeps colour and no underline and sets `border-color: var(--border-strong)` (the global `a:hover` out-ranks a lone class otherwise, TD-122), `:active { scale: var(--press-scale) }` with the `scale var(--duration-press) var(--ease-spring)` transition, `:focus-visible { box-shadow: var(--focus-ring) }`; `.landing-phone-platform` is plain `inline-flex` text with the icon (`gap: var(--space-2)`, `min-height: 44px` so the row keeps the tap rhythm, `color: var(--text)`); `--soon` and the `withAccount` hint are `--muted` at `--text-label`. **Also (D3, amended by R1/O1/O2)**: the mock's base rules move here from `HostedOfferPage.css:48-128` (`.hosted-devices`, `.hosted-devices .landing-mock`, laptop, chrome, screen, phone, client, caption; **not** `.hosted-devices-field`, which is the request form's fieldset), **appended at the end of the file** so they keep winning over `.landing-mock` (`:374`) and the `≤640px` `.landing-mock { padding }` (`:942`) by source order as they do today; the two frame rules are written `.hosted-devices .hosted-devices-laptop` / `.hosted-devices .hosted-devices-phone` (0,2,0) so position stops mattering (O2). `.hosted-devices` gains `width: 100%; max-width: 560px` (O1: inside the flex `figure.landing-chapter-visual` a box whose children are all absolute has intrinsic width 0; on `/hosted` a grid item at `width: 100%` is what stretch already gave it; the cap also keeps laptop and phone together in the 641–900 px single column). Then the landing's own `≤640px` rule, scoped `.landing-chapter .hosted-devices`: `position: static; min-height: 0; display: grid; gap: var(--space-4); justify-items: center`; `.landing-chapter .hosted-devices .landing-mock { position: static }`; laptop `width: 100%`; caption `position: static; max-width: none` (R1/O3: the portal half of the picture and its gloss stay on phones). |
+| `src/pages/landing/HostedOfferPage.css` | The base `.hosted-devices*` rules (`:47-128`) removed; the `≤640px` block (`:379-392`) **stays** (it is the hosted hero's own choice to show the phone frame only; `@web.landing.hosted-375` asserts it) and `.hosted-devices-field` stays. No other change. |
+| `src/lib/i18n/translations/en.json`, `ar.json` | `landing.phone.title` = "Log it on your phone. See it all in your hosted account." / "سجّل من هاتفك. شاهد كل شيء في حسابك المستضاف." (O9: the visitor has met "hosted account" in Get it and on `/hosted`; no third name for one thing, and no sentence-initial "و"); `body` = "The phone app is for logging: an income or an expense in seconds, even with no signal. The portal, your hosted account in a browser, is where you see it all: every client, what they owe and what they've paid, on any computer." / "تطبيق الهاتف للتسجيل: دخل أو مصروف في ثوانٍ، حتى دون إشارة. أما البوابة، أي حسابك المستضاف في المتصفح، فهي حيث ترى كل شيء: كل عميل، وما عليه، وما دفعه، على أي حاسوب." (O3: "is for logging", not "does one thing", so it does not contradict `/hosted`'s "your phone and your laptop show the same numbers"; the ticket's word "portal" is introduced once, defined); `hint` = "Both come with a hosted account." / "كلاهما يأتي مع حساب مستضاف."; `hintLink` = "See hosted accounts" / "اطّلع على الحسابات المستضافة" (the same words as the Get it CTA and Settings › Businesses: one door, one name); `storesLabel` = "Phone apps" / "تطبيقات الهاتف"; `store.ios` = "iPhone, on the App Store" / "iPhone، على App Store"; `store.android` = "Android, on Google Play" / "Android، على Google Play"; `withAccount` = "with your hosted account" / "مع حسابك المستضاف". The platform names and "{platform} coming soon" are reused from `landing.hostedOffer.platform.*`. |
+| `src/pages/landing/__tests__/LandingPage.test.tsx` | structure: eight parts, `phone` after `get-it`; new `describe('LandingPage phone and portal (MUT-173)')`, see §4. `MOBILE_APP_LINKS` is swapped exactly as `HostedOfferPage.test.tsx:8-19` does it: a hoisted `apps.links` object exposed through a `get MOBILE_APP_LINKS()` getter on a `vi.mock` that spreads `importOriginal`, reset in `beforeEach` (S2/O5: a factory returning the object captures one reference and every later reassignment is lost). The honesty case strips `[data-part="devices-mock"]` before matching, as `HostedOfferPage.test.tsx:40-44` does (O8: the mock's sample amounts are not prices). |
 | `src/pages/landing/__tests__/ChapterSection.test.tsx` | one case: `extra` renders inside the copy column after the body; absent by default. |
-| `src/pages/landing/__tests__/landingCss.test.ts` | if the press-token case enumerates selectors, `a.landing-phone-store` joins it; the moved `.hosted-devices` rules need no new case. |
-| `qa/features/web/landing.yaml` | feature `phone` (§4b), `tier: secondary`. The area's paths already cover `src/pages/landing/**` and `src/content/download-config.ts`. |
-| `qa/specs/web/landing.spec.ts` | `@web.landing.phone`, EN then AR (§4). |
+| `src/pages/landing/__tests__/landingCss.test.ts` | `['a.landing-phone-store:active', 'LandingPage.css']` joins the press `it.each` (`:70-74`); `.landing-phone-hint a:active` joins the dim `it.each` (`:95`) (O6). The moved `.hosted-devices` rules need no new case. |
+| `qa/features/web/landing.yaml` | feature `phone` (§4b), `tier: secondary`. The area's paths already cover `src/pages/landing/**` and `src/content/download-config.ts`. The expectation is worded for what runs today (O7): iPhone is named without a link, Android says coming soon; the store-link branch is proved by the unit test. |
+| `qa/specs/web/landing.spec.ts` | `@web.landing.phone`, EN then AR (§4). The spec imports `MOBILE_APP_LINKS` and asserts each platform's state from it (a store link when `url` is set, else plain text; coming soon when not available), so it keeps passing the day Basel sets a URL; when a store link exists it also gets the press (`scale` 0.96) and hover (colour kept) checks the `press`/`hover-light` cases run on the other controls (O6). The hint link is checked for its permanent underline. On `/` at 375 px the laptop and caption stay visible (R1), while `@web.landing.hosted-375` keeps asserting the phone-only hero on `/hosted`. |
 | Knowledge files | CHANGELOG; COMPONENT_REGISTRY (`ChapterSection` gains `extra`; `PhoneSection` registered beside `GetItSection`; `PlatformIcons` lists `AndroidIcon`; `HostedDevicesMock` note that its CSS lives in `LandingPage.css`); TEST_PLAN; SYSTEM_OVERVIEW landing row (one clause). No new ADR: the only durable rule (store links on `/`, never on `/hosted`) is MUT-186's 9A, restated in the component docblock. No new debt. |
 
 Nothing in `server/`, the app, the portal, `vite.config.ts`, `netlify.toml` or `download-config.ts` changes. No new dependency. The store URLs stay `null` until Basel fills them in (the ticket says he does, once each listing is live).
@@ -45,9 +45,10 @@ Nothing in `server/`, the app, the portal, `vite.config.ts`, `netlify.toml` or `
 
 - **D1 — A new top-level section after Get it, before the FAQ.** The ticket asks for a new section and MUT-172 explicitly left it to this ticket ("MUT-173 owns the per-platform section"). Order: the privacy band ("On your device. No account.") describes the free apps and must keep reading that way, and the paid half of Get it has just introduced the hosted account and the phone app, so the section that explains those two things follows it. The structure test's list grows from seven to eight; MUT-174 will add a ninth in the same place.
 - **D2 — Reuse `MOBILE_APP_LINKS`, no `app-store-config.ts`.** The ticket's "e.g." file does not exist; MUT-186 already added `MOBILE_APP_LINKS` to `download-config.ts` with `available` and `url` fields and a comment naming MUT-173 as the consumer. A second file for the same two facts would drift. Three states fall out of the two fields: a store link when `url` is set, a plain chip when the app exists but no public listing is wanted (`available`, `url: null`, iOS today), "coming soon" when it does not exist (Android today). The "coming soon" and platform strings are `/hosted`'s own, so the two pages agree by construction.
-- **D3 — The visual is `HostedDevicesMock`, and its CSS moves to `LandingPage.css`.** The mock is the same client's Owed now on a laptop and on a phone with the caption "Logged on the phone, there on the laptop", which is this section's idea in a picture; `/hosted` keeps using it. Its rules live in `HostedOfferPage.css`, which `/` does not load, so they move (not copy) into `LandingPage.css`, which both pages import. A visitor who goes from Get it to `/hosted` sees the picture twice; accepted, the pages make the same promise.
+- **D3 — The visual is `HostedDevicesMock`, and its base CSS moves to `LandingPage.css`; each page owns its `≤640px` rule.** The mock is the same client's Owed now on a laptop and on a phone with the caption "Logged on the phone, there on the laptop", which is this section's idea in a picture; `/hosted` keeps using it. Its base rules live in `HostedOfferPage.css`, which `/` does not load, so they move (not copy) into `LandingPage.css`, which both pages import, appended last and with the frame rules at (0,2,0) so the cascade does not depend on where they sit (O2), and with a width on the root so a flex figure gives it room (O1). The hosted hero's phone-only rule at `≤640px` stays in `HostedOfferPage.css`; on `/` the chapter keeps laptop, phone and caption at every width (R1/O3), because a phone visitor must still see the portal half of the picture. A visitor who goes from Get it to `/hosted` sees the picture twice; accepted, the pages make the same promise. The picture shows the phone displaying a balance, which is `/hosted`'s "same numbers everywhere" promise; the copy therefore says the phone "is for logging", not that it does nothing else (O3). A phone frame with an entry form would be a new mock, not a reuse, and is *flagged for Basel* as an option, not built.
 - **D4 — `ChapterSection` grows an `extra` slot** instead of a new section component with a copied layout. Three callers pass nothing and are untouched.
-- **D5 — `AndroidIcon` is new; the iPhone chip uses `AppleIcon`.** The Apple mark is what the App Store badge itself carries; a separate "iOS icon" would be the same glyph. *Flagged for Basel* as a reading of the AC's "iOS/Android icons".
+- **D5 — `IosIcon` and `AndroidIcon` are new.** `AppleIcon` already means "Download for Mac" one section above, so the same glyph for "iPhone" 200 px away would put one icon on two products (O10); the AC asks for new iOS/Android icons. The iOS glyph is an outlined phone in `BrowserIcon`'s stroke style; the Android glyph is the robot head with Google's CC BY 3.0 attribution in the docblock (S3).
+- **D9 — Only a store link looks like a control.** The ticket's AC3 models the "coming soon" state on `GetItSection`'s Windows note, a sentence, not a bare name (O4). So state (b), the app exists but no public listing is configured (iPhone today), renders the name with "with your hosted account" beside it as plain text, and state (c) renders "{platform} coming soon" as plain text; neither is a pill. *Flagged for Basel*: the alternative is two states only (a link, or "coming soon"), which would say "iPhone coming soon" while `/hosted` says iPhone is available.
 - **D6 — Store links open in a new tab** with `rel="noopener noreferrer"`, like the release-notes link in Get it: they leave the site for a store.
 - **D7 — One inline `/hosted` link in the hint.** The section says the apps come with a hosted account; a reader then needs the door. It is the same label and destination as the Get it CTA just above, so it is one door with one name, not a second funnel. The `get-it-paid` QA case counts links inside its own block only, so it stays green.
 - **D8 — Copy claims only what ships.** Offline capture ("even with no signal") is in the privacy policy's mobile section and MUT-63; the portal's "every client, what they owe and what they've paid" is its ledger and client views. No reports, no analytics, no price, no platform promise beyond the chips.
@@ -57,12 +58,12 @@ Nothing in `server/`, the app, the portal, `vite.config.ts`, `netlify.toml` or `
 | Test | Cases |
 |---|---|
 | `LandingPage.test.tsx` › structure | eight parts: `… 'get-it', 'phone', 'faq'` |
-| `LandingPage.test.tsx` › phone and portal (MUT-173) | (1) EN: `part('phone')` has the heading `landing.phone.title`, its text contains "phone app" and "portal", and the hint's link is named "See hosted accounts" with `href="/hosted"` and no `target`; (2) store link: with `ios.url = 'https://apps.apple.com/…'` the list has a link named "iPhone, on the App Store" with that href, `target="_blank"`, `rel` containing `noopener`; (3) plain chip: with `ios = { available: true, url: null }` the list shows "iPhone" and has no link to a store; (4) coming soon: with `android = { available: false, url: null }` the list shows "Android coming soon" and no link; once `available` with a url, the link appears and the note goes; (5) AR: the heading is the Arabic title and the link is named "اطّلع على الحسابات المستضافة"; (6) honesty: the part's text matches none of `/report|analytic|dashboard|statistic|chart/i`, `/\bprice\b|\/month|checkout|sign ?up|\$\d/i`, and in AR none of `/تقارير|تحليل|إحصاء|رسوم|سعر|اشترك/` |
+| `LandingPage.test.tsx` › phone and portal (MUT-173) | (1) EN: `part('phone')` has the heading `landing.phone.title`, its text contains "phone app" and "portal", and the hint's link is named "See hosted accounts" with `href="/hosted"` and no `target`; (2) store link: with `ios.url = 'https://apps.apple.com/…'` the list has a link named "iPhone, on the App Store" with that href, `target="_blank"`, `rel` containing `noopener`; (3) plain: with `ios = { available: true, url: null }` the list shows "iPhone" and "with your hosted account", and has no link to a store; (4) coming soon: with `android = { available: false, url: null }` the list shows "Android coming soon" and no link; once `available` with a url, the link appears and the note goes; (5) AR: the heading is the Arabic title and the link is named "اطّلع على الحسابات المستضافة"; (6) honesty, with `[data-part="devices-mock"]` stripped first: the part's text matches none of `/report|analytic|dashboard|statistic|chart/i`, `/\bprice\b|\/month|checkout|sign ?up|\$\d/i`, and in AR none of `/تقارير|تحليل|إحصاء|رسوم|سعر|اشترك/` |
 | `ChapterSection.test.tsx` | `extra` renders after the body inside `.landing-chapter-copy`; nothing extra by default |
-| `landingCss.test.ts` | the press enumeration includes `a.landing-phone-store` if it enumerates; no literal scale/opacity (existing) |
+| `landingCss.test.ts` | `a.landing-phone-store:active` in the press `it.each`; `.landing-phone-hint a:active` in the dim `it.each`; no literal scale/opacity (existing) |
 | `landingCopy.test.ts` | unchanged; covers `landing.phone.*` parity automatically |
 | `release-qa lint` | 0 errors; no new unmapped file |
-| QA `@web.landing.phone` | EN and AR: the section is visible after `#get-it`, with the title from the dictionary; the hint's link has `href="/hosted"`; the chips match `MOBILE_APP_LINKS` imported in the spec (a link when `url` is set, else a non-link chip; "coming soon" when not available); every chip is at least 44 px tall; at 375 px in AR no horizontal overflow; axe reports only known violations; screenshot attached |
+| QA `@web.landing.phone` | EN and AR: the section is visible after `#get-it`, with the title from the dictionary; the hint's link has `href="/hosted"` and a permanent underline; each platform's state matches `MOBILE_APP_LINKS` imported in the spec (a store link when `url` is set, which then also presses to 0.96 and keeps its colour on hover; else the name as plain text; "coming soon" when not available); every store link is at least 44 px tall; the laptop, phone and caption of the mock are all visible, also at 375 px in AR with no horizontal overflow; axe reports only known violations; screenshot attached |
 
 Gate (Node 22): `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm run build`, `release-qa lint`, Playwright `--project=web` landing spec on a built web preview (throwaway config as for MUT-172). No `server/` change, so the server gate is not owed.
 
@@ -70,7 +71,7 @@ Gate (Node 22): `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm ru
 
 | Flow | Steps, as the user would say them | Promised outcome |
 |---|---|---|
-| Learn what the phone app and the portal each do, and where the phone app stands | Open the landing page, scroll past Get Mutaba3a to the phone section, read it, look at the two platform chips, press "See hosted accounts"; same in Arabic, also at 375 px | The section says the phone logs income and expenses and the portal is where you see clients, what they owe and what they paid; it claims no reports; iPhone shows a store link only when one is configured, otherwise its name; Android says "coming soon" until it is available; the link opens `/hosted` |
+| Learn what the phone app and the portal each do, and where the phone app stands | Open the landing page, scroll past Get Mutaba3a to the phone section, read it, look at the two platform lines, press "See hosted accounts"; same in Arabic, also at 375 px | The section says the phone logs income and expenses and your hosted account's portal is where you see clients, what they owe and what they paid; it claims no reports; today iPhone is named with "with your hosted account" and no link, and Android says "coming soon" (a store link appears only once one is configured); the laptop-and-phone picture stays whole on a phone; the link opens `/hosted` |
 
 ## 5. Reuse analysis
 
@@ -90,8 +91,8 @@ Covers A1–A6 and the guardrail. Conscious inclusion: moving the `.hosted-devic
 
 ## 7. Follow-ups to note on tickets
 
-- MUT-173: D2 (no new config file; `MOBILE_APP_LINKS` is the config) and D5 (`AppleIcon` for iPhone) are readings of the AC's literal text; recorded in a comment.
-- The store URLs are `null` on both platforms until Basel sets them; the landing shows "iPhone" (plain) and "Android coming soon" meanwhile.
+- MUT-173: D2 (no new config file; `MOBILE_APP_LINKS` is the config), D9 (three states; the plain state says "iPhone, with your hosted account" rather than "coming soon") and D3's picture (the phone shows a balance; an entry-form phone mock would be new work) are readings of the AC's literal text; recorded in a comment.
+- The store URLs are `null` on both platforms until Basel sets them; the landing shows "iPhone, with your hosted account" and "Android coming soon" meanwhile.
 
 Business / product impact
 - Every visitor now learns the one thing that makes the paid tier different from the free apps in practice: log on the phone, see it in the portal. Without it, "phone app" in Get it is a name with no job.
@@ -206,3 +207,154 @@ Test gaps identified: 11, all planned.
 
 ## 4. Performance review
 No issues found. Static markup; the landing chunk grows by one component, one icon and ~60 lines of CSS, of which ~80 lines leave `HostedOfferPage.css` (loaded on `/hosted` only), so `/hosted` loads the same bytes and `/` a few more.
+
+## Outside voice (native fallback, Claude Plan subagent; Codex not installed)
+
+Provider: codex not installed → native in-host fallback. Outside coverage: **unavailable** (no external provider). Ten findings and their dispositions:
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| O1 | Critical | `.hosted-devices` has no width and all its children are absolute; inside the flex `figure.landing-chapter-visual` its intrinsic width is 0, so the laptop (72% of 0, `overflow: hidden`) vanishes and the caption wraps one character per line. The plan's QA case would not catch it. | **accepted (R2, factual)**: `width: 100%; max-width: 560px` on `.hosted-devices`; the QA case asserts laptop, phone and caption visible |
+| O2 | High | The moved rules win over `.landing-mock` (`LandingPage.css:374`, `:942`) only by source order; the plan named no insertion point. "No other change" to `HostedOfferPage.css` was false: the `≤640px` block mixes mock and table rules, and the glob would have moved `.hosted-devices-field` (the form's fieldset). | **accepted (R2, factual)**: append at the end of `LandingPage.css`, frame rules at (0,2,0), `.hosted-devices-field` stays; with R1 the `≤640px` block stays whole in `HostedOfferPage.css` |
+| O3 | High | The picture shows the phone displaying a balance while the copy said the phone "does one thing"; on phones the moved rules would hide the laptop and the caption. | **accepted (R1 already; R3 copy)**: "is for logging" instead of "does one thing"; the landing keeps laptop and caption at every width; an entry-form phone mock is flagged for Basel, not built |
+| O4 | High | AC3 models "coming soon" on a sentence; a bordered 44 px pill reading "iPhone" that does nothing is a dead control, and it is what ships with today's config. | **accepted (R4)**: D9, only a store link is a pill; the plain state adds "with your hosted account"; flagged in §7 |
+| O5 | Medium | "Same shape as the `release` mock" is the wrong model; a factory returning the object captures one reference. | **accepted**: §2 names `HostedOfferPage.test.tsx:8-19`'s getter mock (same as S2) |
+| O6 | Medium | `landingCss.test.ts:70-74` does enumerate press selectors; the QA press/hover cases enumerate controls by hand and the plan added neither for the chips. | **accepted**: both unit enumerations gain the new selectors; the QA case presses and hovers a store link whenever one exists |
+| O7 | Medium | With both URLs `null`, the browser can never exercise the store-link branch; the yaml promised an outcome QA cannot observe. | **accepted**: yaml worded for what runs today; the link branch is the unit test's; the spec derives from the config import so it follows a future URL |
+| O8 | Low | The honesty regex would match the aria-hidden mock's sample amounts; passes today only because the samples are ILS. | **accepted**: strip `[data-part="devices-mock"]` first, as `HostedOfferPage.test.tsx:40-44` does |
+| O9 | Low | "Portal" is a third name for the thing the visitor knows as "hosted account"; the AR title opened a sentence with "و". | **accepted (R3)**: title says "hosted account"; the body defines "portal" once; the "و" is gone |
+| O10 | Low | `AppleIcon` already means "Download for Mac" one section above; the AC asks for new iOS/Android icons. | **accepted**: `IosIcon` (outlined phone) added; D5 rewritten |
+
+Checked and found honoured by the outside voice: tokens only, no `Button.css` on `/`, the structure list, `get-it-paid` link counts scoped to its block, `landing.yaml` paths, the `extra` slot's safety with the reveal, no reports/analytics claim, no price words, no desktop work, `/hosted` still links no store.
+
+Cross-model tension: none; the native pass had found S1 (= O3's phone half) and the outside voice found O1/O2, which the native pass missed.
+
+### R2: the mock's CSS move (O1, O2)
+Finding: O1 Critical 9/10, O2 High 8/10, plan §2, subagent
+Plan baseline: move every `.hosted-devices*` rule unchanged, insertion point unspecified
+Runtime evidence: `LandingPage.css:349-353` (`.landing-chapter-visual { display: flex; justify-content: center }`), `:374-385` (`.landing-mock { width: 100%; max-width: 440px; padding }`), `:942-944`; `HostedOfferPage.css:48-58` (no width on `.hosted-devices`; children absolute), `:10-15` (grid on `/hosted` stretches it), `:219-223` (`.hosted-devices-field` is the form's), `:383` (the file's own comment on doubling selectors for order).
+Factual corrections that change only where and how the same declarations are written, plus one width. No question.
+State: approved
+Accepted scope: §2 `LandingPage.css` and `HostedOfferPage.css` rows as amended.
+
+### R3: copy (O3, O9)
+Finding: O3 High 7/10, O9 Low 5/10, plan §2 dictionary row, subagent
+Plan baseline: "does one thing", "portal" as the section's name, AR title with sentence-initial "و"
+Runtime evidence: `landing.hostedOffer.hero.sub` ("your phone and your laptop show the same numbers"); `landing.getIt.paid.lead` ("a hosted account and the phone app"); `/hosted` throughout says "hosted account"; `HostedDevicesMock.tsx:53-55` shows a balance on the phone.
+Wording only; the behaviour (state the split, one link, no price) is the ticket's. No question.
+State: approved
+Accepted scope: the dictionary row as amended.
+
+### R4: the plain state (O4)
+Finding: O4 High 7/10, plan A3/D2, subagent
+Plan baseline: three states, the plain state a bordered pill reading only "iPhone"
+Runtime evidence: `GetItSection.tsx:40-43` (the AC's model renders a sentence); `download-config.ts:56-59` (iOS `available: true, url: null` today); `HostedOfferPage.tsx:33-41` (`/hosted` renders "iPhone" as available).
+Comparison grid:
+
+| Choice | Current plan | A) Two states: link or "coming soon" | B) Three states; only the link is a pill, the plain state says "with your hosted account" |
+|---|---|---|---|
+| iPhone today | a pill that does nothing | "iPhone coming soon" while `/hosted` says it is available | "iPhone · with your hosted account", plain text |
+| Android today | "Android coming soon" pill | same words, plain | same words, plain |
+| When Basel sets a URL | link pill | link pill | link pill |
+
+Question D3: What should the landing say about a phone app that exists but has no public store link yet?
+Header: Plain state
+Options:
+A) Two states ✅ one fewer branch and one fewer string ✅ exactly the AC's words ❌ contradicts `/hosted` about iPhone until a URL is set.
+B) Three states, plain text with a hint (recommended) ✅ true today and the day a URL lands ✅ nothing button-shaped that does nothing ❌ one more string and one more test case.
+Completeness: A=7/10, B=10/10.
+State: approved
+Actual answer: B (auto, non-interactive run)
+Accepted scope: D9; §2 `PhoneSection.tsx` and dictionary rows as amended.
+
+## Final planning decisions
+
+TODOS.md updates: none proposed. The one deferred idea (an entry-form phone mock, O3) is a copy/visual option for Basel on the ticket, not debt.
+
+Approval readiness: PASS — R1 (D2 auto B), R2 (factual), R3 (factual), R4 (D3 auto B), S2/S3/S4, O5–O8, O10 applied to the working plan. Checked IDs: R1–R4; actual answers: D1 structure A (auto), D2 B (auto), D3 B (auto).
+
+## NOT in scope
+- An entry-form phone mock (new work; the reuse of `HostedDevicesMock` with honest copy is the plan; Basel's call).
+- The store URLs (Basel sets them per the ticket); the FAQ; the portal reports view (MUT-175); Android publishing (MUT-114); retiring the desktop cards (TD-135, unfiled).
+
+## What already exists
+- `ChapterSection`, `HostedDevicesMock` (+ `.hosted-devices*` rules), `MOBILE_APP_LINKS`, `landing.hostedOffer.platform.*`, `HOSTED_OFFER_URL`, the `.hosted-device-pill` recipe, `HostedOfferPage.test.tsx`'s getter mock and mock-stripping helper, the landing QA harness, `landing.yaml`.
+
+## Failure modes
+| Path | Failure | Handling | User sees |
+|---|---|---|---|
+| Store `url` set to a listing that is not public | the store's own "not available" page | none possible in code; URL is Basel's, `null` until live | the store's message (not silent) |
+| A `landing.phone.*` key missing in one language | raw key rendered | `landingCopy.test.ts` parity fails before merge | n/a |
+| `.hosted-devices` rules inserted before `.landing-mock` | laptop padded/440 px, phone padding changes at ≤640 on both pages | appended last + (0,2,0) frame rules; QA phone case asserts all three parts visible; `hosted-375` unchanged | n/a |
+No critical gaps (every failure is caught by a test or is not silent).
+
+Worktree parallelization: Sequential implementation, no parallelization opportunity (one component, one stylesheet, two dictionaries).
+
+## Implementation Tasks
+Synthesized from this review's findings. Each task derives from a specific finding above.
+
+- [ ] **T1 (P1, human: ~2h / CC: ~10min)** — LandingPage.css / HostedOfferPage.css — Move the mock's base rules to the end of `LandingPage.css` at (0,2,0), add `width: 100%; max-width: 560px`, keep the `≤640px` block and `.hosted-devices-field` in `HostedOfferPage.css`, add the landing's own `≤640px` stacking rule
+  - Surfaced by: Scope Challenge S1 (R1); Outside voice O1, O2 (R2)
+  - Files: `src/pages/landing/LandingPage.css`, `src/pages/landing/HostedOfferPage.css`
+  - Verify: `@web.landing.phone` (laptop/phone/caption visible at 375), `@web.landing.hosted-375` unchanged
+- [ ] **T2 (P1, human: ~1h / CC: ~5min)** — PhoneSection — Three states where only the store link is a pill; plain state carries "with your hosted account"
+  - Surfaced by: Outside voice O4 (R4)
+  - Files: `src/pages/landing/components/PhoneSection.tsx`, `LandingPage.css`, `en.json`, `ar.json`
+  - Verify: `LandingPage.test.tsx` cases (2)–(4)
+- [ ] **T3 (P2, human: ~30min / CC: ~3min)** — Copy — "is for logging"; title says "hosted account"; body defines "portal" once; AR title without the leading "و"
+  - Surfaced by: Outside voice O3, O9 (R3)
+  - Files: `en.json`, `ar.json`
+  - Verify: `LandingPage.test.tsx` case (1), (5); honesty case
+- [ ] **T4 (P2, human: ~30min / CC: ~3min)** — Tests — getter mock as in `HostedOfferPage.test.tsx`; strip the mock before honesty matching; press/dim enumerations in `landingCss.test.ts`; QA presses/hovers a store link when one exists and checks the hint underline
+  - Surfaced by: S2/O5, O6, O8
+  - Files: `src/pages/landing/__tests__/LandingPage.test.tsx`, `landingCss.test.ts`, `qa/specs/web/landing.spec.ts`
+  - Verify: `npx vitest run src/pages/landing`; the QA case
+- [ ] **T5 (P3, human: ~20min / CC: ~2min)** — PlatformIcons — `IosIcon` (outlined phone) and `AndroidIcon` with the CC BY 3.0 attribution in its docblock
+  - Surfaced by: S3, O10
+  - Files: `src/pages/landing/components/PlatformIcons.tsx`
+  - Verify: render in `LandingPage.test.tsx` (chips carry an `svg[aria-hidden]`)
+- [ ] **T6 (P3, human: ~15min / CC: ~2min)** — landing.yaml — `phone` feature worded for what runs today
+  - Surfaced by: Outside voice O7
+  - Files: `qa/features/web/landing.yaml`
+  - Verify: `release-qa lint`
+_No new tasks from Performance review._
+
+## Unresolved decisions that may bite you later
+Auto-decided on the recommended option (non-interactive run), for Basel to confirm or reverse:
+- D1 — structure: original arrangement (a `PhoneSection` component; no smaller arrangement keeps Phase 5).
+- D2 — on `/` at ≤640 px the mock keeps laptop, phone and caption (`/hosted` stays phone-only).
+- D3 — three chip states; the plain state reads "iPhone · with your hosted account", not "coming soon".
+- Open option, not a decision: an entry-form phone mock instead of the balance mock (new work).
+
+## Completion summary
+- Step 0: Scope Challenge — scope accepted as-is (4 findings: S1 P1, S2 P2, S3 P3, S4 P3; all accepted)
+- Architecture Review: 1 issue found (R1)
+- Code Quality Review: 3 issues found (S2, S3, S4)
+- Test Review: diagram produced, 11 gaps identified (all planned)
+- Performance Review: 0 issues found
+- NOT in scope: written
+- What already exists: written
+- TODOS.md updates: 0 items proposed to user
+- Failure modes: 0 critical gaps flagged
+- Unresolved decisions: 3 in this review (auto-decided, listed for Basel)
+- Outside voice: provider codex not installed; native fallback (Claude Plan subagent) completed, 10 findings, all accepted; outside coverage unavailable
+- Parallelization: 1 lane, 0 parallel / 1 sequential
+- Lake Score: 3/3 = answers picking a 10/10 option / answers scored for Completeness
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | not run | — |
+| Outside Review | native fallback (Claude Plan subagent); codex not installed | Independent 2nd opinion | 1 | unavailable (native fallback completed) | 10 findings, 10 accepted |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | ISSUES OPEN (all mapped to tasks T1–T6) | 15 issues, 0 critical gaps |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | not run | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | not run | — |
+
+- **OUTSIDE COVERAGE:** provider codex, phase plan-review, not installed → native fallback completed with 10 findings (no external coverage credit).
+- **VERDICT:** ENG REVIEWED — issues all mapped to tasks; ready to implement with T1–T6 folded into the plan above. eng review required (status issues_open, mapped work).
+
+**UNRESOLVED DECISIONS:**
+- D1 structure: original arrangement (auto)
+- D2 mock on phones on `/`: keep laptop + caption (auto)
+- D3 plain chip state: three states with "with your hosted account" (auto)
