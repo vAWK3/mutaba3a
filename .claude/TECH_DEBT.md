@@ -18,6 +18,20 @@
 
 ## Open Debt
 
+### TD-137: No `qa/` catalog entry for profile management (MUT-183)
+**Status**: Open
+**Added**: 2026-10-14 (MUT-183 qa-reconcile)
+**Priority**: Low
+**Impact**: the plan (§5) called for a `qa/` catalog entry mapping `src/hosted/shell/**` and the new Profile* components to a portal "profiles" spec (create → lands on the new profile; type-change confirm), run against a preview build per the QA-on-preview-builds convention. `qa/specs/portal/` and `qa/features/portal/` still only cover sign-in.
+**Fix**: add `qa/features/portal/profiles.feature`-equivalent coverage (whatever this repo's `qa/` pattern is) for: creating a profile from the switcher, hitting the 6-profile cap, renaming/re-currencying from Manage, and a type change's confirm step. Run it on a `vite preview` build with `QA_CONTEXT` like the existing portal specs.
+
+### TD-136: Minor profile-form cleanup from the MUT-183 qa-reconcile pass
+**Status**: Open
+**Added**: 2026-10-14 (MUT-183 qa-reconcile)
+**Priority**: Low
+**Impact**: six small findings in the new profile forms, none blocking: (1) `ProfileEditForm.tsx` has no synchronous `submitting.current` double-submit guard — `ProfileCreateDrawer.tsx` added one specifically for this race, so a literal double-click on Save can send two PATCHes with the same stale `version` and surface a spurious 409 "changed elsewhere" banner for one intended save; (2) `profileApiErrors.ts:46` falls back to `count: undefined` when the server's PROFILE_LIMIT `details.limit` isn't a number, which would call `t()` on a plural-only key — low risk today since the create drawer renders its own `me.limits`-derived banner instead of this branch; (3) `profileRules.ts`'s `ProfileEditValues` duplicates `profileFormSchema.ts`'s zod-inferred `EditProfileValues` with no type-level link, so the two could drift silently; (4) `ProfileEditForm.tsx:66` recomputes `typeLocked` inline instead of reusing `profileEditability(opened).typeLocked`; (5) `profileApiErrors.ts:61` re-reads `error.details.field` inline rather than a shared `fieldOf` (folded into TD-125's remaining scope); (6) `fieldError()` is copy-pasted verbatim between `ProfileCreateDrawer.tsx` and `ProfileEditForm.tsx`.
+**Fix**: add the same submit guard to `ProfileEditForm`; default the PROFILE_LIMIT count defensively; derive `ProfileEditValues` from `EditProfileValues` (or vice versa); call `profileEditability` once and reuse its `typeLocked`; extract one `fieldError()` shared by both drawers. None are urgent enough to hold up MUT-183 landing.
+
 ### TD-135: The web app still offers the retired Mac app beside the Go hosted card
 **Status**: Open
 **Added**: 2026-10-14 (MUT-187 browser check)
@@ -106,11 +120,11 @@
 **Fix**: a session-side reversal (or correction) for a person's own captured payments on a personal profile — server route + phone + portal — then remove the drawer note (`hosted.settle.honest`).
 
 ### TD-125: Portal money-input helpers exist in several local copies
-**Status**: Open
+**Status**: In Progress
 **Added**: 2026-10-14 (MUT-133, eng review D1 chose not to extract)
 **Priority**: Low
-**Impact**: four portal currency lists (`FilterControls` and `conversionFormSchema` lack JOD; `ExpenseDrawer` and `incomeForm` include it), two amount validators (ExpenseDrawer's strict currency-aware regex vs `incomeForm.parseIncomeAmount`'s lenient parse, R5), and three copies of `reasonOf`/`fieldOf` (`expenseApiErrors`, `conversionApiErrors`, `incomeApiErrors`). The expense and conversion drawers also pass English zod messages straight to Arabic users (income uses i18n keys), and `ExpenseDrawer`'s client/matter `<label htmlFor>` still names nothing (the pickers accept an `id` since MUT-133; ExpenseDrawer doesn't pass it).
-**Fix**: one `src/hosted/format/currencies.ts` (the wire enum), move expense/conversion to `parseIncomeAmount`'s lenient-in/canonical-out helper and i18n-key messages, share `reasonOf`/`fieldOf`, and pass `id` to the pickers in ExpenseDrawer. Overlaps TD-117 (conversion JOD).
+**Impact**: ~~four portal currency lists (`FilterControls` and `conversionFormSchema` lack JOD; `ExpenseDrawer` and `incomeForm` include it)~~ **MUT-183 (R4) resolved three of these**: `FilterControls`, `ExpenseDrawer` and the new profile forms now share one `HOSTED_CURRENCIES` (`src/hosted/format/currencies.ts`) with a compile-time exhaustiveness check. `incomeForm.ts`'s own `INCOME_CURRENCIES` (confirmed still present, qa-reconcile) is the one copy left. Two amount validators remain (ExpenseDrawer's strict currency-aware regex vs `incomeForm.parseIncomeAmount`'s lenient parse, R5). ~~three copies of `reasonOf`/`fieldOf`~~ **MUT-183 (R3) resolved `reasonOf`** → `apiErrorReason` in `src/hosted/api/client.ts`, used by all four error mappers (expense, conversion, income, profile) with the three pre-existing mapper test suites passing unmodified. `fieldOf` is still three separate inline reads (`expenseApiErrors`, `conversionApiErrors`, and now a fourth in `profileApiErrors.ts:61`, qa-reconcile finding). The expense and conversion drawers also pass English zod messages straight to Arabic users (income uses i18n keys), and `ExpenseDrawer`'s client/matter `<label htmlFor>` still names nothing (the pickers accept an `id` since MUT-133; ExpenseDrawer doesn't pass it).
+**Fix**: fold `incomeForm.ts`'s currency list into `HOSTED_CURRENCIES`, move expense/conversion to `parseIncomeAmount`'s lenient-in/canonical-out helper and i18n-key messages, extract and share one `fieldOf` (four call sites now, not three), and pass `id` to the pickers in ExpenseDrawer. Overlaps TD-117 (conversion JOD).
 
 ### TD-124: Only the portal's row action grows to 44px on touch screens
 **Status**: Open

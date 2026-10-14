@@ -1797,6 +1797,18 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `components/ClientPicker.tsx`, `ProjectPicker.tsx`, `components/ui/EntityTypeahead.tsx` `id` prop | Lets a `<label htmlFor>` name the typeahead input. |
 | `format/dates.ts` `todayInZone(timeZone, now?)` | Today's calendar date in an IANA zone; browser-calendar fallback for an unknown zone. |
 
+### Profile management (MUT-183, ADR-037 amendment)
+
+| Unit | Purpose |
+|---|---|
+| `shell/ProfileDrawers.tsx` | Mounts the create/manage/edit drawers for every page (ADR-008, URL-driven: `?newProfile=`/`?manageProfiles=`/`?editProfile=<id>`). Its `go()` merges the shell's own keys back into the URL rather than replacing it — the pattern `router.tsx`'s `useReplaceSearch` now also follows (qa-reconcile fix, see PATTERNS). |
+| `components/ProfileCreateDrawer.tsx` | New profile: name/type (required radio cards, `ProfileTypeCards`)/currency/timezone (browser-prefilled fact row, Change reveals the select); attempt-scoped Idempotency-Key (`data/profileQueries.ts`'s `createAttempt`); disabled + "N of M" explanation at the owned-profile cap. |
+| `components/ProfilesManageDrawer.tsx`, `ProfileEditForm.tsx` | One drawer, list → edit pane. The list (`hp-profile-row`) shows every profile in `me` order; owned rows are clickable, Malafat/firm rows show their reason instead. The edit pane snapshots `version` at open (`If-Match`), renames/changes currency directly, and a type change runs an inline confirm step (`TypeChangeConfirm`) against the server's uncategorized-expense preview before PATCHing. |
+| `data/profileRules.ts` `canCreateProfile`, `profileEditability`, `profileKindKey`, `changedFields` | The one source for "can this profile be created/edited here, and why not" and the switcher/Manage-list sub-line text (`profileKindKey`), so the two surfaces can't disagree. |
+| `format/timezones.ts` `browserTimezone`, `timezoneOptions` | Browser-detected IANA zone for the create drawer's prefill; `Intl.supportedValuesOf` with a `[zone]` fallback when unsupported, so an unlisted zone is still offered. |
+| `format/currencies.ts` `HOSTED_CURRENCIES`, `HostedCurrency` | The one portal currency list, `satisfies readonly Currency[]` so a server-side addition fails typecheck here instead of silently excluding a currency. Shared by `FilterControls`, `ExpenseDrawer` and the profile forms (not yet `incomeForm.ts` — TD-125). |
+| `api/client.ts` `apiErrorReason(error)` | The one `details.reason` string extractor, replacing three near-identical inline reads in the expense/conversion/income error mappers (`fieldOf` is not yet shared the same way — TD-125/TD-136). |
+
 ## Hosted API modules (`server/src`) — reusable across milestones
 
 | Module | Purpose | Reuse |
